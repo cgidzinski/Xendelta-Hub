@@ -1,0 +1,46 @@
+{
+  "name": "xendelta-hub",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "nodemon -w src/server -x tsx src/server/server.ts",
+    "start": "cross-env NODE_ENV=production tsx src/server/server.ts",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.2",
+    "@mui/material": "^7.3.2",
+    "bcrypt-nodejs": "^0.0.3",
+    "body-parser": "^2.2.0",
+    "cookie-parser": "~1.4.4",
+    "cross-env": "^7.0.3",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.18.1",
+    "morgan": "~1.9.1",
+    "notistack": "^3.0.2",
+    "passport": "^0.7.0",
+    "passport-local": "^1.0.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.9.1",
+    "resend": "^6.1.0",
+    "socket.io": "^4.8.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "vite-express": "*"
+  },
+  "devDependencies": {
+    "@mui/types": "^7.4.6",
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.15.2",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^4.4.1",
+    "nodemon": "^3.1.10",
+    "vite": "^6.3.3"
+  }
+}
