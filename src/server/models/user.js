@@ -20,8 +20,10 @@ var userSchema = new mongoose.Schema({
   roles: [{ type: String }],
   password: { type: String },
   notifications: [notificationSchema],
-  resetPasswordToken: { type: String },
-  resetPasswordExpires: { type: Date },
+  resetPassword: {
+    token: { type: String },
+    expires: { type: Date },
+  },
 });
 userSchema.methods.generateHash = function (password) {
   return bcrypt.hashSync(password, bcrypt.genSaltSync(8), null);

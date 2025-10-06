@@ -2,9 +2,9 @@ import express = require("express");
 const { User } = require("../models/user");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-import { Resend } from "resend";
 import { authenticateToken } from "../middleware/auth";
 import { generateToken, verifyToken } from "../utils/tokenUtils";
+import { sendPasswordResetEmail } from "../utils/emailUtils";
 
 module.exports = function (app: express.Application) {
   app.get("/api/user/profile", authenticateToken, async function (req: express.Request, res: express.Response) {
@@ -154,40 +154,21 @@ module.exports = function (app: express.Application) {
       const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
 
       // Save the token and expiry to the user
-      user.resetPasswordToken = resetToken;
-      user.resetPasswordExpires = resetTokenExpiry;
+      user.resetPassword.token = resetToken;
+      user.resetPassword.expires = resetTokenExpiry;
       await user.save();
 
-      const resend = new Resend(process.env.RESEND_API_KEY);
       const resetUrl = `${
         process.env.CLIENT_URL || "http://localhost:3000"
       }/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
 
-      const msg = {
-        to: user.email,
-        from: "no-reply@xendelta.com",
-        subject: "Xendelta Hub - Password Reset",
-        text: `Click the link below to reset your password. This link will expire in 1 hour.\n\n${resetUrl}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #333;">Password Reset Request</h2>
-            <p>Hello ${user.username},</p>
-            <p>You requested a password reset for your Xendelta Hub account. Click the button below to reset your password:</p>
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${resetUrl}" style="background: linear-gradient(45deg, #667eea 30%, #764ba2 90%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
-            </div>
-            <p>Or copy and paste this link into your browser:</p>
-            <p style="word-break: break-all; color: #666;">${resetUrl}</p>
-            <p><strong>This link will expire in 1 hour for security reasons.</strong></p>
-            <p>If you didn't request this password reset, please ignore this email.</p>
-            <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
-            <p style="color: #666; font-size: 12px;">This is an automated message from Xendelta Hub.</p>
-          </div>
-        `,
-      };
+      const emailResult = await sendPasswordResetEmail({
+        username: user.username,
+        email: user.email,
+        resetUrl: resetUrl,
+      });
 
-      const { data, error } = await resend.emails.send(msg);
-      if (error) {
+      if (!emailResult.success) {
         return res.json({
           status: false,
           message: "Failed to send reset password email.",
@@ -225,8 +206,8 @@ module.exports = function (app: express.Application) {
     }
 
     const user = await User.findOne({
-      resetPasswordToken: token,
-      resetPasswordExpires: { $gt: Date.now() },
+      "resetPassword.token": token,
+      "resetPassword.expires": { $gt: Date.now() },
       email: email.toLowerCase(),
     }).exec();
 
@@ -272,8 +253,8 @@ module.exports = function (app: express.Application) {
     }
 
     const user = await User.findOne({
-      resetPasswordToken: token,
-      resetPasswordExpires: { $gt: Date.now() },
+      "resetPassword.token": token,
+      "resetPassword.expires": { $gt: Date.now() },
       email: email.toLowerCase(),
     }).exec();
 
@@ -286,8 +267,8 @@ module.exports = function (app: express.Application) {
 
     // Update password and clear reset token
     user.password = user.generateHash(newPassword);
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpires = undefined;
+    user.resetPassword.token = undefined;
+    user.resetPassword.expires = undefined;
 
     // Add notification
     user.notifications.unshift({
