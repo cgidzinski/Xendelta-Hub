@@ -3,7 +3,7 @@ const { User } = require("../models/user");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 import { authenticateToken } from "../middleware/auth";
-import { generateToken, verifyToken } from "../utils/tokenUtils";
+import { generateToken } from "../utils/tokenUtils";
 import { sendPasswordResetEmail } from "../utils/emailUtils";
 import passport from "../config/passport";
 
@@ -330,12 +330,6 @@ module.exports = function (app: express.Application) {
     return res.json({
       status: true,
       message: "Password has been reset successfully.",
-    });
-  });
-
-  app.post("/api/change-password", function (req: express.Request, res: express.Response) {
-    return res.json({
-      status: true,
     });
   });
 

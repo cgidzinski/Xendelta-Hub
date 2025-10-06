@@ -9,11 +9,6 @@ interface TokenData {
   avatar: string;
 }
 
-interface JWTPayload extends TokenData {
-  iat?: number;
-  exp?: number;
-}
-
 export const generateToken = (userData: TokenData): string => {
   const tokenData = {
     _id: userData._id,
@@ -23,8 +18,4 @@ export const generateToken = (userData: TokenData): string => {
   };
   
   return jwt.sign(tokenData, process.env.JWT_SECRET || 'fallback-secret-key-for-development', { expiresIn: TOKEN_EXPIRATION });
-};
-
-export const verifyToken = (token: string): JWTPayload => {
-  return jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-key-for-development') as JWTPayload;
 };

@@ -2,7 +2,6 @@ import passport from 'passport';
 import { Strategy as JwtStrategy, ExtractJwt } from 'passport-jwt';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as GitHubStrategy } from 'passport-github2';
-import axios from 'axios';
 const { User } = require('../models/user');
 import { generateToken } from '../utils/tokenUtils';
 
@@ -145,20 +144,5 @@ passport.use(new GitHubStrategy(githubOptions, async (accessToken, refreshToken,
     return done(error, false);
   }
 }));
-
-// Serialize user for session (if using sessions)
-passport.serializeUser((user: any, done) => {
-  done(null, user._id);
-});
-
-// Deserialize user from session (if using sessions)
-passport.deserializeUser(async (id: string, done) => {
-  try {
-    const user = await User.findById(id).exec();
-    done(null, user);
-  } catch (error) {
-    done(error, null);
-  }
-});
 
 export default passport;

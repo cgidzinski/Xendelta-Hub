@@ -25,7 +25,7 @@ import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { OverlaySpinner } from "../../components/LoadingSpinner";
 import { useSnackbar } from "notistack";
 import { useNavigate } from "react-router-dom";
-import AuthProviderManager from "../../components/AuthProviderManager";
+import AuthProviderManager from "./components/AuthProviderManager";
 export default function Profile() {
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(true);
@@ -223,26 +223,11 @@ export default function Profile() {
                       Manage
                     </Button>
                   </Box>
-
-                  <Divider sx={{ my: 2 }} />
-
-                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <Box>
-                      <Typography variant="body1">Logout</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Logout of your account
-                      </Typography>
-                    </Box>
-                    <Button variant="outlined" size="small" color="error" onClick={() => navigate("/logout")}>
-                      Logout
-                    </Button>
-                  </Box>
                 </Box>
               </CardContent>
             </Card>
           </Grid>
-          
-          {/* Authentication Methods */}
+
           <Grid size={{ xs: 12 }}>
             <Card elevation={2}>
               <CardContent sx={{ p: 3 }}>
@@ -251,6 +236,24 @@ export default function Profile() {
                   <Typography variant="h6">Authentication Methods</Typography>
                 </Box>
                 <AuthProviderManager />
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid size={{ xs: 12 }}>
+            <Card elevation={2}>
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Box>
+                    <Typography variant="body1">Logout</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Logout of your account
+                    </Typography>
+                  </Box>
+                  <Button variant="outlined" size="small" color="error" onClick={() => navigate("/logout")}>
+                    Logout
+                  </Button>
+                </Box>
               </CardContent>
             </Card>
           </Grid>

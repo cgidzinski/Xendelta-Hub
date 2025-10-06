@@ -141,39 +141,6 @@ export const useAuthProviders = () => {
     }
   };
 
-  const setPrimaryProvider = async (provider: string) => {
-    try {
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-
-      const response = await fetch('/api/user/set-primary-provider', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ provider }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        // Refresh the auth providers list
-        await fetchAuthProviders();
-        return { success: true, message: data.message };
-      } else {
-        throw new Error(data.message || 'Failed to set primary authentication provider');
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
-      setError(errorMessage);
-      return { success: false, message: errorMessage };
-    }
-  };
-
   const addPassword = async (password: string) => {
     try {
       const token = localStorage.getItem('token');
