@@ -5,10 +5,21 @@ const crypto = require("crypto");
 import { authenticateToken } from "../middleware/auth";
 import { generateToken, verifyToken } from "../utils/tokenUtils";
 import { sendPasswordResetEmail } from "../utils/emailUtils";
+import passport from "../config/passport";
+
+// Extend Request interface for authenticated routes
+interface AuthenticatedRequest extends express.Request {
+  user?: {
+    _id: string;
+    username: string;
+    email: string;
+    avatar: string;
+  };
+}
 
 module.exports = function (app: express.Application) {
   app.get("/api/user/profile", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const user = await User.findOne({ _id: req.user!._id }).exec();
+    const user = await User.findOne({ _id: (req as any).user._id }).exec();
     return res.json({
       status: true,
       message: "",
@@ -25,7 +36,7 @@ module.exports = function (app: express.Application) {
   });
 
   app.put("/api/user/profile", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const user = await User.findOne({ _id: req.user!._id }).exec();
+    const user = await User.findOne({ _id: (req as any).user._id }).exec();
     const { avatar } = req.body;
 
     if (avatar !== undefined) user.avatar = avatar;
@@ -54,18 +65,9 @@ module.exports = function (app: express.Application) {
     });
   });
 
-  app.post("/api/auth/verify", async function (req: express.Request, res: express.Response) {
-    const token = req.headers.authorization;
+  app.post("/api/auth/verify", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const user = await User.findOne({ _id: (req as any).user._id }).exec();
     
-    if (!token) {
-      return res.json({
-        status: false,
-        message: "Token is required.",
-      });
-    }
-    
-    const decoded = verifyToken(token);
-    const user = await User.findOne({ _id: decoded._id }).exec();
     if (user) {
       // Generate new token for automatic refresh
       const newToken = generateToken({
@@ -79,7 +81,7 @@ module.exports = function (app: express.Application) {
         status: true,
         message: "",
         user: {
-          _id: user._id,
+          id: user._id,
           username: user.username,
           email: user.email,
           avatar: user.avatar,
@@ -109,7 +111,12 @@ module.exports = function (app: express.Application) {
       return res.json({
         success: true,
         token: token,
-        user: user,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          avatar: user.avatar,
+        },
       });
     } else {
       return res.json({
@@ -133,14 +140,53 @@ module.exports = function (app: express.Application) {
       newUser.username = username;
       newUser.roles = [];
       await newUser.save();
+      
+      // Add local authentication provider
+      await newUser.addAuthProvider('local', null, email);
+      
+      // Generate token for new user
+      var token = generateToken({
+        _id: newUser._id,
+        username: newUser.username,
+        email: newUser.email,
+        avatar: newUser.avatar,
+      });
+      
       return res.json({
         success: true,
+        token: token,
+        user: {
+          id: newUser._id,
+          username: newUser.username,
+          email: newUser.email,
+          avatar: newUser.avatar,
+        },
       });
     } else {
-      return res.json({
-        success: false,
-        message: "Registration Failed!",
-      });
+      // User exists - check what authentication providers they have
+      const activeProviders = user.getActiveProviders();
+      const hasGoogle = user.hasAuthProvider('google');
+      const hasLocal = user.hasAuthProvider('local');
+      
+      if (hasGoogle && !hasLocal) {
+        return res.json({
+          success: false,
+          message: "An account with this email already exists through Google. Please sign in with Google or use a different email.",
+          existingProvider: 'google'
+        });
+      } else if (hasLocal) {
+        return res.json({
+          success: false,
+          message: "An account with this email already exists. Please sign in or use a different email.",
+          existingProvider: 'local'
+        });
+      } else {
+        return res.json({
+          success: false,
+          message: "An account with this email already exists. Please sign in or use a different email.",
+          existingProvider: 'unknown'
+        });
+      }
     }
   });
 
@@ -292,4 +338,275 @@ module.exports = function (app: express.Application) {
       status: true,
     });
   });
+
+  // Get user's linked authentication providers
+  app.get("/api/user/auth-providers", authenticateToken, async function (req: express.Request, res: express.Response) {
+    try {
+      const user = (req as any).user;
+      const fullUser = await User.findById(user._id).exec();
+      
+      if (!fullUser) {
+        return res.json({
+          success: false,
+          message: "User not found"
+        });
+      }
+      
+      const activeProviders = fullUser.getActiveProviders();
+      
+      return res.json({
+        success: true,
+        providers: activeProviders,
+        canUnlinkLocal: activeProviders.length > 1 || !fullUser.hasAuthProvider('local')
+      });
+    } catch (error) {
+      console.error("Get auth providers error:", error);
+      return res.json({
+        success: false,
+        message: "Failed to get authentication providers"
+      });
+    }
+  });
+
+  // Link Google account to existing account
+  app.post("/api/user/link-google", authenticateToken, async function (req: express.Request, res: express.Response) {
+    try {
+      const user = (req as any).user;
+      
+      // Check if Google is already linked
+      const fullUser = await User.findById(user._id).exec();
+      if (fullUser.hasAuthProvider('google')) {
+        return res.json({
+          success: false,
+          message: "Google account is already linked"
+        });
+      }
+      
+      return res.json({
+        success: true,
+        message: "Redirect to Google OAuth for account linking",
+        redirectUrl: `/api/auth/google?state=link&userId=${user._id}`
+      });
+    } catch (error) {
+      console.error("Link Google account error:", error);
+      return res.json({
+        success: false,
+        message: "Failed to initiate Google account linking"
+      });
+    }
+  });
+
+  // Link GitHub account to existing account
+  app.post("/api/user/link-github", authenticateToken, async function (req: express.Request, res: express.Response) {
+    try {
+      const user = (req as any).user;
+      
+      // Check if GitHub is already linked
+      const fullUser = await User.findById(user._id).exec();
+      if (fullUser.hasAuthProvider('github')) {
+        return res.json({
+          success: false,
+          message: "GitHub account is already linked"
+        });
+      }
+      
+      return res.json({
+        success: true,
+        message: "Redirect to GitHub OAuth for account linking",
+        redirectUrl: `/api/auth/github?state=link&userId=${user._id}`
+      });
+    } catch (error) {
+      console.error("Link GitHub account error:", error);
+      return res.json({
+        success: false,
+        message: "Failed to initiate GitHub account linking"
+      });
+    }
+  });
+
+  // Unlink authentication provider
+  app.post("/api/user/unlink-provider", authenticateToken, async function (req: express.Request, res: express.Response) {
+    try {
+      const user = (req as any).user;
+      const { provider } = req.body;
+      
+      if (!provider) {
+        return res.json({
+          success: false,
+          message: "Provider is required"
+        });
+      }
+      
+      const fullUser = await User.findById(user._id).exec();
+      
+      if (!fullUser.hasAuthProvider(provider)) {
+        return res.json({
+          success: false,
+          message: `${provider} account is not linked`
+        });
+      }
+      
+      // Prevent unlinking if it's the only authentication method
+      const activeProviders = fullUser.getActiveProviders();
+      if (activeProviders.length <= 1) {
+        return res.json({
+          success: false,
+          message: "Cannot unlink the only authentication method. Please add another method first."
+        });
+      }
+      
+      await fullUser.removeAuthProvider(provider);
+      
+      return res.json({
+        success: true,
+        message: `${provider} account unlinked successfully`,
+        providers: fullUser.getActiveProviders()
+      });
+    } catch (error) {
+      console.error("Unlink provider error:", error);
+      return res.json({
+        success: false,
+        message: "Failed to unlink authentication provider"
+      });
+    }
+  });
+
+  // Add password to Google-only account
+  app.post("/api/user/add-password", authenticateToken, async function (req: express.Request, res: express.Response) {
+    try {
+      const user = (req as any).user;
+      const { password } = req.body;
+      
+      if (!password) {
+        return res.json({
+          success: false,
+          message: "Password is required"
+        });
+      }
+      
+      const fullUser = await User.findById(user._id).exec();
+      
+      if (fullUser.password) {
+        return res.json({
+          success: false,
+          message: "Account already has a password"
+        });
+      }
+      
+      fullUser.password = fullUser.generateHash(password);
+      await fullUser.addAuthProvider('local', null, fullUser.email);
+      
+      return res.json({
+        success: true,
+        message: "Password added successfully. You can now sign in with email and password.",
+        providers: fullUser.getActiveProviders()
+      });
+    } catch (error) {
+      console.error("Add password error:", error);
+      return res.json({
+        success: false,
+        message: "Failed to add password"
+      });
+    }
+  });
+
+  // Google OAuth Routes
+  app.get("/api/auth/google", 
+    passport.authenticate('google', { scope: ['profile', 'email'], session: false })
+  );
+
+  app.get("/api/auth/google/callback", 
+    passport.authenticate('google', { failureRedirect: '/login', session: false }),
+    async function (req: express.Request, res: express.Response) {
+      try {
+        const user = req.user as any;
+        const state = req.query.state;
+        const userId = req.query.userId;
+        
+        // Check if this is an account linking request
+        if (state === 'link' && userId) {
+          // Link Google account to existing local account
+          const existingUser = await User.findById(userId).exec();
+          if (existingUser) {
+            await existingUser.addAuthProvider('google', user.googleId, user.email);
+            
+            // Generate token for the linked account
+            const token = generateToken({
+              _id: existingUser._id,
+              username: existingUser.username,
+              email: existingUser.email,
+              avatar: existingUser.avatar,
+            });
+            
+            res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/auth/callback?token=${token}&linked=true`);
+            return;
+          }
+        }
+        
+        // Regular Google OAuth flow
+        const token = generateToken({
+          _id: user._id,
+          username: user.username,
+          email: user.email,
+          avatar: user.avatar,
+        });
+
+        // Redirect to frontend with token
+        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/auth/callback?token=${token}`);
+      } catch (error) {
+        console.error("Google OAuth callback error:", error);
+        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/login?error=oauth_failed`);
+      }
+    }
+  );
+
+  // GitHub OAuth Routes
+  app.get("/api/auth/github", 
+    passport.authenticate('github', { scope: ['user:email'], session: false })
+  );
+
+  app.get("/api/auth/github/callback", 
+    passport.authenticate('github', { failureRedirect: '/login', session: false }),
+    async function (req: express.Request, res: express.Response) {
+      try {
+        const user = req.user as any;
+        const state = req.query.state;
+        const userId = req.query.userId;
+        
+        // Check if this is an account linking request
+        if (state === 'link' && userId) {
+          // Link GitHub account to existing local account
+          const existingUser = await User.findById(userId).exec();
+          if (existingUser) {
+            await existingUser.addAuthProvider('github', user.authProviders.find((p: any) => p.provider === 'github')?.providerId, user.email);
+            
+            // Generate token for the linked account
+            const token = generateToken({
+              _id: existingUser._id,
+              username: existingUser.username,
+              email: existingUser.email,
+              avatar: existingUser.avatar,
+            });
+            
+            res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/auth/callback?token=${token}&linked=true`);
+            return;
+          }
+        }
+        
+        // Regular GitHub OAuth flow
+        const token = generateToken({
+          _id: user._id,
+          username: user.username,
+          email: user.email,
+          avatar: user.avatar,
+        });
+
+        // Redirect to frontend with token
+        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/auth/callback?token=${token}`);
+      } catch (error) {
+        console.error("GitHub OAuth callback error:", error);
+        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/login?error=oauth_failed`);
+      }
+    }
+  );
 };

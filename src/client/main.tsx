@@ -14,6 +14,7 @@ import Login from "./routes/Auth/Login";
 import Signup from "./routes/Auth/Signup";
 import Reset from "./routes/Auth/Reset";
 import Logout from "./routes/Auth/Logout";
+import AuthCallback from "./routes/Auth/AuthCallback";
 // import LoadingBox from "./components/LoadingBox";
 import { NavBarProvider } from "./contexts/NavBarContext";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -53,6 +54,11 @@ const router = createBrowserRouter(
         errorElement={<ErrorPage />}
       />
       <Route path="/logout" element={<Logout />} errorElement={<ErrorPage />} />
+      <Route
+        path="/auth/callback"
+        element={<AuthCallback />}
+        errorElement={<ErrorPage />}
+      />
       {/* Protected routes - require authentication */}
       <Route
         path="/"

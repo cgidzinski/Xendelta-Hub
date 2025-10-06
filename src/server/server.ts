@@ -9,6 +9,9 @@ import ViteExpress from "vite-express";
 import { SocketManager } from "./infrastructure/SocketManager.js";
 var Mongo = require("./infrastructure/mongoDB.js");
 
+// Import Passport configuration AFTER dotenv has loaded
+require("./config/passport");
+
 const socket = require("socket.io");
 
 const app = express();
@@ -18,6 +21,12 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
+
+// Initialize Passport
+app.use(passport.initialize());
+
+// Serve static files for avatars
+app.use('/avatars', express.static('src/server/public/avatars'));
 
 const port = process.env.PORT || "3000";
 const server = ViteExpress.listen(app, Number(port), () => console.log(`>>> Server is listening on port ${port}...`));

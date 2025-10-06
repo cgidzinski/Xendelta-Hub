@@ -1,19 +1,14 @@
 import { Request, Response, NextFunction } from "express";
-const jwt = require("jsonwebtoken");
-const {User} = require("../models/user");
-import { verifyToken } from "../utils/tokenUtils";
+import passport from "../config/passport";
 
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        _id: string;
-        username: string;
-        email: string;
-        avatar: string;
-      };
-    }
-  }
+// Extend Request interface locally
+interface AuthenticatedRequest extends Request {
+  user?: {
+    _id: string;
+    username: string;
+    email: string;
+    avatar: string;
+  };
 }
 
 interface JWTPayload {
@@ -25,43 +20,26 @@ interface JWTPayload {
   exp?: number;
 }
 
-export const authenticateToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    // Get token from Authorization header
-    const token = req.headers.authorization;
-
-    if (!token) {
-      res.status(401).json({
+// Passport JWT authentication middleware
+export const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
+  passport.authenticate('jwt', { session: false }, (err: any, user: any, info: any) => {
+    if (err) {
+      console.error("Authentication error:", err);
+      return res.status(500).json({
         status: false,
-        message: "Access token required",
+        message: "Authentication failed",
       });
-      return;
     }
-
-    // Verify JWT token
-    const decoded = verifyToken(token);
-
-    if (!decoded._id) {
-      res.status(401).json({
-        status: false,
-        message: "Invalid token payload",
-      });
-      return;
-    }
-
-    // Check if user still exists in database
-    const user = await User.findOne({ _id: decoded._id }).exec();
 
     if (!user) {
-      res.status(401).json({
+      return res.status(401).json({
         status: false,
-        message: "User not found",
+        message: info?.message || "Access token required",
       });
-      return;
     }
 
-    // Attach user data to request object
-    req.user = {
+    // Attach user data to request object (same format as before)
+    (req as any).user = {
       _id: user._id,
       username: user.username,
       email: user.email,
@@ -69,28 +47,5 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
     };
 
     next();
-  } catch (error) {
-    console.error("Authentication error:", error);
-
-    if (error instanceof jwt.JsonWebTokenError) {
-      res.status(401).json({
-        status: false,
-        message: "Invalid or expired token",
-      });
-      return;
-    }
-
-    if (error instanceof jwt.TokenExpiredError) {
-      res.status(401).json({
-        status: false,
-        message: "Token has expired",
-      });
-      return;
-    }
-
-    res.status(500).json({
-      status: false,
-      message: "Authentication failed",
-    });
-  }
+  })(req, res, next);
 };

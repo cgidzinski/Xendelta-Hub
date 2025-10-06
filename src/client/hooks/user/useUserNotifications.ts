@@ -30,7 +30,7 @@ const fetchUserNotifications = async (): Promise<Notification[]> => {
   const response = await fetch("/api/user/notifications", {
     method: "GET",
     headers: {
-      Authorization: token || "",
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
   });
@@ -53,7 +53,7 @@ const markAllNotificationsAsRead = async (): Promise<Notification[]> => {
   const response = await fetch("/api/user/notifications/mark-read", {
     method: "PUT",
     headers: {
-      Authorization: token || "",
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
   });
@@ -76,7 +76,7 @@ const markNotificationAsRead = async (notificationId: string): Promise<Notificat
   const response = await fetch(`/api/user/notifications/${notificationId}/mark-read`, {
     method: "PUT",
     headers: {
-      Authorization: token || "",
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
   });

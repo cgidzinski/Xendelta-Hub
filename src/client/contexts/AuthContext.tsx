@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await fetch("/api/auth/verify", {
         method: "POST",
         headers: {
-          Authorization: token,
+          Authorization: `Bearer ${token}`,
         },
       });
       const data = await response.json();
@@ -79,9 +79,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (response.ok) {
         const data = await response.json();
-        localStorage.setItem("token", data.token);
-        setUser(data.user);
-        return true;
+        if (data.success) {
+          localStorage.setItem("token", data.token);
+          setUser(data.user);
+          return true;
+        } else {
+          return false;
+        }
       } else {
         return false;
       }
@@ -103,9 +107,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (response.ok) {
         const responseData = await response.json();
-        localStorage.setItem("token", responseData.token);
-        setUser(responseData.user);
-        return true;
+        if (responseData.success) {
+          localStorage.setItem("token", responseData.token);
+          setUser(responseData.user);
+          return true;
+        } else {
+          return false;
+        }
       } else {
         return false;
       }

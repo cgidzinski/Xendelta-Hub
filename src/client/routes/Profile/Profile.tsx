@@ -25,6 +25,7 @@ import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { OverlaySpinner } from "../../components/LoadingSpinner";
 import { useSnackbar } from "notistack";
 import { useNavigate } from "react-router-dom";
+import AuthProviderManager from "../../components/AuthProviderManager";
 export default function Profile() {
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(true);
@@ -237,6 +238,19 @@ export default function Profile() {
                     </Button>
                   </Box>
                 </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          {/* Authentication Methods */}
+          <Grid size={{ xs: 12 }}>
+            <Card elevation={2}>
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                  <Security color="primary" sx={{ mr: 1 }} />
+                  <Typography variant="h6">Authentication Methods</Typography>
+                </Box>
+                <AuthProviderManager />
               </CardContent>
             </Card>
           </Grid>

@@ -32,7 +32,7 @@ const fetchCurrentUserProfile = async (): Promise<UserProfile> => {
   const response = await fetch("/api/user/profile", {
     method: "GET",
     headers: {
-      Authorization: token || "",
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
   });
@@ -55,7 +55,7 @@ const updateCurrentUserProfile = async (data: UpdateProfileData) => {
   const response = await fetch("/api/user/profile", {
     method: "PUT",
     headers: {
-      Authorization: token || "",
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(data),
