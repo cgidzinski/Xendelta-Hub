@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 import { Resend } from "resend";
 import { authenticateToken } from "../middleware/auth";
+import { generateToken, verifyToken } from "../utils/tokenUtils";
 
 module.exports = function (app: express.Application) {
   app.get("/api/user/profile", authenticateToken, async function (req: express.Request, res: express.Response) {
@@ -55,9 +56,25 @@ module.exports = function (app: express.Application) {
 
   app.post("/api/auth/verify", async function (req: express.Request, res: express.Response) {
     const token = req.headers.authorization;
-    const decoded = await jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (!token) {
+      return res.json({
+        status: false,
+        message: "Token is required.",
+      });
+    }
+    
+    const decoded = verifyToken(token);
     const user = await User.findOne({ _id: decoded._id }).exec();
     if (user) {
+      // Generate new token for automatic refresh
+      const newToken = generateToken({
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        avatar: user.avatar,
+      });
+      
       return res.json({
         status: true,
         message: "",
@@ -67,6 +84,7 @@ module.exports = function (app: express.Application) {
           email: user.email,
           avatar: user.avatar,
         },
+        token: newToken,
       });
     } else {
       return res.json({
@@ -82,14 +100,12 @@ module.exports = function (app: express.Application) {
     const user = await User.findOne({ username: username }).exec();
 
     if (user && user.validPassword(password)) {
-      var tokenData = {
+      var token = generateToken({
         _id: user._id,
         username: user.username,
-        name: user.name,
         email: user.email,
         avatar: user.avatar,
-      };
-      var token = jwt.sign(tokenData, process.env.JWT_SECRET, { expiresIn: "24hr" });
+      });
       return res.json({
         success: true,
         token: token,

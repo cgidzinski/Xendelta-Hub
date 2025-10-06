@@ -50,6 +50,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       if (data.status) {
         setUser(data.user);
+        // Save new token if provided (automatic refresh)
+        if (data.token) {
+          localStorage.setItem("token", data.token);
+        }
       } else {
         localStorage.removeItem("token");
         setUser(null);

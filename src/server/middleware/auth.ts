@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 const jwt = require("jsonwebtoken");
 const {User} = require("../models/user");
+import { verifyToken } from "../utils/tokenUtils";
 
 declare global {
   namespace Express {
@@ -38,7 +39,7 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
     }
 
     // Verify JWT token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload;
+    const decoded = verifyToken(token);
 
     if (!decoded._id) {
       res.status(401).json({
