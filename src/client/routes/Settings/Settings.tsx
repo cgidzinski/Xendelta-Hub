@@ -1,11 +1,11 @@
-import { 
-  Box, 
-  Container, 
-  Typography, 
-  Card, 
-  CardContent, 
-  Paper, 
-  Switch, 
+import {
+  Box,
+  Container,
+  Typography,
+  Card,
+  CardContent,
+  Paper,
+  Switch,
   FormControlLabel,
   Slider,
   Select,
@@ -13,18 +13,18 @@ import {
   FormControl,
   InputLabel,
   Button,
-  Divider
+  Divider,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import { 
-  Settings as SettingsIcon, 
-  Notifications, 
-  Security, 
-  Palette, 
+import {
+  Settings as SettingsIcon,
+  Notifications,
+  Security,
+  Palette,
   Language,
   VolumeUp,
   Wifi,
-  Lock
+  Lock,
 } from "@mui/icons-material";
 import TitleBar from "../../components/TitleBar";
 import { useAuth } from "../../contexts/AuthContext";
@@ -36,7 +36,7 @@ export default function Settings() {
   const [darkMode, setDarkMode] = useState(true);
   const [autoSave, setAutoSave] = useState(true);
   const [volume, setVolume] = useState(70);
-  const [language, setLanguage] = useState('en');
+  const [language, setLanguage] = useState("en");
 
   return (
     <Box>
@@ -53,7 +53,7 @@ export default function Settings() {
         </Box>
 
         {/* Settings Sections */}
-        <Grid container spacing={3}>
+        <Grid container spacing={3} sx={{ opacity: 0.25 }}>
           {/* Notifications */}
           <Grid size={{ xs: 12, md: 6 }}>
             <Card elevation={2}>
@@ -64,12 +64,7 @@ export default function Settings() {
                 </Box>
                 <Box sx={{ mt: 2 }}>
                   <FormControlLabel
-                    control={
-                      <Switch
-                        checked={notifications}
-                        onChange={(e) => setNotifications(e.target.checked)}
-                      />
-                    }
+                    control={<Switch checked={notifications} onChange={(e) => setNotifications(e.target.checked)} />}
                     label="Enable notifications"
                   />
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
@@ -90,12 +85,7 @@ export default function Settings() {
                 </Box>
                 <Box sx={{ mt: 2 }}>
                   <FormControlLabel
-                    control={
-                      <Switch
-                        checked={darkMode}
-                        onChange={(e) => setDarkMode(e.target.checked)}
-                      />
-                    }
+                    control={<Switch checked={darkMode} onChange={(e) => setDarkMode(e.target.checked)} />}
                     label="Dark mode"
                   />
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
@@ -116,25 +106,16 @@ export default function Settings() {
                 </Box>
                 <Box sx={{ mt: 2 }}>
                   <FormControlLabel
-                    control={
-                      <Switch
-                        checked={autoSave}
-                        onChange={(e) => setAutoSave(e.target.checked)}
-                      />
-                    }
+                    control={<Switch checked={autoSave} onChange={(e) => setAutoSave(e.target.checked)} />}
                     label="Auto-save changes"
                   />
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 2 }}>
                     Automatically save your work as you type
                   </Typography>
-                  
+
                   <FormControl fullWidth size="small" sx={{ mt: 2 }}>
                     <InputLabel>Language</InputLabel>
-                    <Select
-                      value={language}
-                      label="Language"
-                      onChange={(e) => setLanguage(e.target.value)}
-                    >
+                    <Select value={language} label="Language" onChange={(e) => setLanguage(e.target.value)}>
                       <MenuItem value="en">English</MenuItem>
                       <MenuItem value="es">Spanish</MenuItem>
                       <MenuItem value="fr">French</MenuItem>
@@ -192,9 +173,9 @@ export default function Settings() {
                       Enable
                     </Button>
                   </Box>
-                  
+
                   <Divider sx={{ my: 2 }} />
-                  
+
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
                     <Box>
                       <Typography variant="body1">Change Password</Typography>
@@ -206,9 +187,9 @@ export default function Settings() {
                       Change
                     </Button>
                   </Box>
-                  
+
                   <Divider sx={{ my: 2 }} />
-                  
+
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <Box>
                       <Typography variant="body1">Active Sessions</Typography>
@@ -225,13 +206,6 @@ export default function Settings() {
             </Card>
           </Grid>
         </Grid>
-
-        {/* Save Button */}
-        <Box sx={{ mt: 4, display: "flex", justifyContent: "center" }}>
-          <Button variant="contained" size="large" sx={{ px: 4 }}>
-            Save Settings
-          </Button>
-        </Box>
       </Container>
     </Box>
   );

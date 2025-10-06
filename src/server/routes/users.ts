@@ -1,16 +1,54 @@
 import express = require("express");
-const User = require("../models/user");
+const { User } = require("../models/user");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 import { Resend } from "resend";
+import { authenticateToken } from "../middleware/auth";
 
 module.exports = function (app: express.Application) {
-  app.get("/api/users", async function (req: express.Request, res: express.Response, next: express.NextFunction) {
-    const user = await User.findOne({}).exec();
+  app.get("/api/user/profile", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const user = await User.findOne({ _id: req.user!._id }).exec();
     return res.json({
       status: true,
       message: "",
       data: {
-        user: user,
+        user: {
+          username: user.username,
+          email: user.email,
+          avatar: user.avatar,
+          unread_messages: false,
+          unread_notifications: user.notifications.some((notification: any) => notification.unread),
+        },
+      },
+    });
+  });
+
+  app.put("/api/user/profile", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const user = await User.findOne({ _id: req.user!._id }).exec();
+    const { avatar } = req.body;
+
+    if (avatar !== undefined) user.avatar = avatar;
+
+    user.notifications.unshift({
+      title: "Profile updated",
+      message: "Your profile has been successfully updated",
+      time: new Date().toISOString(),
+      icon: "person",
+      unread: true,
+    });
+
+    await user.save();
+    return res.json({
+      status: true,
+      message: "",
+      data: {
+        user: {
+          username: user.username,
+          email: user.email,
+          avatar: user.avatar,
+          unread_messages: false,
+          unread_notifications: true,
+        },
       },
     });
   });
@@ -90,22 +128,49 @@ module.exports = function (app: express.Application) {
     }
   });
 
-  app.post("/api/auth/reset-password", async function (req: express.Request, res: express.Response) {
+  app.post("/api/auth/forgot-password", async function (req: express.Request, res: express.Response) {
     const email = req.body.email;
     const user = await User.findOne({ email: email }).exec();
+
     if (user) {
+      // Generate a secure random token
+      const resetToken = crypto.randomBytes(32).toString("hex");
+      const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
+
+      // Save the token and expiry to the user
+      user.resetPasswordToken = resetToken;
+      user.resetPasswordExpires = resetTokenExpiry;
+      await user.save();
+
       const resend = new Resend(process.env.RESEND_API_KEY);
-      const new_password = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      const resetUrl = `${
+        process.env.CLIENT_URL || "http://localhost:3000"
+      }/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+
       const msg = {
         to: user.email,
         from: "no-reply@xendelta.com",
         subject: "Xendelta Hub - Password Reset",
-        text: `Your reset password is ${new_password}`,
-        html: `Your reset password is <br/><strong>${new_password}</strong><br/>`,
+        text: `Click the link below to reset your password. This link will expire in 1 hour.\n\n${resetUrl}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Password Reset Request</h2>
+            <p>Hello ${user.username},</p>
+            <p>You requested a password reset for your Xendelta Hub account. Click the button below to reset your password:</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${resetUrl}" style="background: linear-gradient(45deg, #667eea 30%, #764ba2 90%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
+            </div>
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; color: #666;">${resetUrl}</p>
+            <p><strong>This link will expire in 1 hour for security reasons.</strong></p>
+            <p>If you didn't request this password reset, please ignore this email.</p>
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+            <p style="color: #666; font-size: 12px;">This is an automated message from Xendelta Hub.</p>
+          </div>
+        `,
       };
 
       const { data, error } = await resend.emails.send(msg);
-      console.log(data, error);
       if (error) {
         return res.json({
           status: false,
@@ -113,17 +178,116 @@ module.exports = function (app: express.Application) {
         });
       }
 
-      user.password = user.generateHash(new_password);
-      // await user.save();
       return res.json({
         status: true,
+        message: "Password reset email sent successfully.",
       });
     } else {
+      // Always return success to prevent email enumeration attacks
       return res.json({
-        status: false,
-        message: "User Not Found.",
+        status: true,
+        message: "If an account with that email exists, a password reset link has been sent.",
       });
     }
+  });
+
+  app.post("/api/auth/verify-reset-token", async function (req: express.Request, res: express.Response) {
+    const { token, email } = req.body;
+
+    if (!token) {
+      return res.json({
+        status: false,
+        message: "Reset token is required.",
+      });
+    }
+
+    if (!email) {
+      return res.json({
+        status: false,
+        message: "Email is required for token verification.",
+      });
+    }
+
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() },
+      email: email.toLowerCase(),
+    }).exec();
+
+    if (!user) {
+      return res.json({
+        status: false,
+        message: "Invalid or expired reset token, or email does not match.",
+      });
+    }
+
+    return res.json({
+      status: true,
+      message: "Reset token is valid.",
+      user: {
+        email: user.email,
+        username: user.username,
+      },
+    });
+  });
+
+  app.post("/api/auth/reset-password", async function (req: express.Request, res: express.Response) {
+    const { token, newPassword, email } = req.body;
+
+    if (!token || !newPassword) {
+      return res.json({
+        status: false,
+        message: "Reset token and new password are required.",
+      });
+    }
+
+    if (!email) {
+      return res.json({
+        status: false,
+        message: "Email is required for password reset.",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.json({
+        status: false,
+        message: "Password must be at least 6 characters long.",
+      });
+    }
+
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() },
+      email: email.toLowerCase(),
+    }).exec();
+
+    if (!user) {
+      return res.json({
+        status: false,
+        message: "Invalid or expired reset token, or email does not match.",
+      });
+    }
+
+    // Update password and clear reset token
+    user.password = user.generateHash(newPassword);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+
+    // Add notification
+    user.notifications.unshift({
+      title: "Password Reset",
+      message: "Your password has been successfully reset",
+      time: new Date().toISOString(),
+      icon: "lock",
+      unread: true,
+    });
+
+    await user.save();
+
+    return res.json({
+      status: true,
+      message: "Password has been reset successfully.",
+    });
   });
 
   app.post("/api/change-password", function (req: express.Request, res: express.Response) {

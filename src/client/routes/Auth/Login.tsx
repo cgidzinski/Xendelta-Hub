@@ -257,7 +257,7 @@ export default function Login() {
             <Button
               variant="text"
               color="primary"
-              onClick={() => navigate("/forgot-password")}
+              onClick={() => navigate("/reset-password")}
               sx={{ textTransform: "none" }}
             >
               Reset it here

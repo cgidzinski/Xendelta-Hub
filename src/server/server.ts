@@ -31,16 +31,5 @@ console.log(">>> Initializing Socket...");
 const socketManager = SocketManager.getInstance();
 socketManager.initialize(io);
 
-// require("./api/routes/tasks.js")(app, io);
-// require("./api/routes/bookmarks.js")(app, io);
-// require("./api/routes/tags.js")(app);
-// require("./api/routes/user.js")(app);
-// require("./api/routes/domains.js")(app);
-// require("./api/routes/media.js")(app);
-// require("./api/routes/tracker.js")(app);
-// require("./api/routes/extension.js")(app, io);
-// require("./api/routes/playlist.js")(app);
-// require("./api/routes/socket.js")(app, io);
-// require("./api/routes/organizer.js")(app, io);
-// require("./api/routes/settings.js")(app, io);
 require("./routes/users.ts")(app);
+require("./routes/notifications.ts")(app);

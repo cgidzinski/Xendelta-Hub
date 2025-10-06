@@ -20,6 +20,8 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<boolean>;
   signup: (data: SignupData) => Promise<boolean>;
   resetPassword: (email: string) => Promise<boolean>;
+  verifyResetToken: (token: string, email: string) => Promise<{ status: boolean; user?: any; message?: string }>;
+  resetPasswordWithToken: (token: string, newPassword: string, email: string) => Promise<{ status: boolean; message?: string }>;
   logout: () => void;
   checkAuth: () => Promise<void>;
 }
@@ -111,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetPassword = async (email: string): Promise<boolean> => {
     try {
-      const response = await fetch("/api/auth/reset-password", {
+      const response = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -126,6 +128,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Reset password failed:", error);
       return false;
+    }
+  };
+
+  const verifyResetToken = async (token: string, email: string): Promise<{ status: boolean; user?: any; message?: string }> => {
+    try {
+      const response = await fetch("/api/auth/verify-reset-token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ token, email }),
+      });
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Verify reset token failed:", error);
+      return { status: false, message: "Failed to verify reset token." };
+    }
+  };
+
+  const resetPasswordWithToken = async (token: string, newPassword: string, email: string): Promise<{ status: boolean; message?: string }> => {
+    try {
+      const response = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ token, newPassword, email }),
+      });
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Reset password with token failed:", error);
+      return { status: false, message: "Failed to reset password." };
     }
   };
 
@@ -145,6 +181,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     signup,
     resetPassword,
+    verifyResetToken,
+    resetPasswordWithToken,
     logout,
     checkAuth,
   };

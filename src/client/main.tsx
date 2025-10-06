@@ -3,6 +3,7 @@ import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route, N
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import { SnackbarProvider } from "notistack";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ErrorPage from "./components/ErrorPage";
 import NavBar from "./components/NavBar";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -18,6 +19,7 @@ import { NavBarProvider } from "./contexts/NavBarContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import Profile from "./routes/Profile/Profile";
 import Settings from "./routes/Settings/Settings";
+import Messages from "./routes/Messages/Messages";
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -42,7 +44,7 @@ const router = createBrowserRouter(
         errorElement={<ErrorPage />}
       />
       <Route
-        path="/forgot-password"
+        path="/reset-password"
         element={
           <UnprotectedRoute>
             <Reset />
@@ -72,6 +74,9 @@ const router = createBrowserRouter(
           <Route path="settings">
             <Route path="" element={<Settings />} />
           </Route>
+          <Route path="messages">
+            <Route path="" element={<Messages />} />
+          </Route>
         </Route>
       </Route>
     </>
@@ -84,20 +89,41 @@ const theme = createTheme({
   },
 });
 
+// Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      retry: (failureCount, error) => {
+        // Don't retry on 401 errors
+        if (error.message.includes('Unauthorized')) {
+          return false;
+        }
+        return failureCount < 3;
+      },
+    },
+    mutations: {
+      retry: false,
+    },
+  },
+});
+
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Failed to find the root element");
 
 ReactDOM.createRoot(rootElement).render(
-  <ThemeProvider theme={theme}>
-    <CssBaseline />
-    <AuthProvider>
-      <NavBarProvider>
-        <SnackbarProvider maxSnack={10}>
-          {/* <LoadingBox> */}
-          <RouterProvider router={router} />
-          {/* </LoadingBox> */}
-        </SnackbarProvider>
-      </NavBarProvider>
-    </AuthProvider>
-  </ThemeProvider>
+  <QueryClientProvider client={queryClient}>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <AuthProvider>
+        <NavBarProvider>
+          <SnackbarProvider maxSnack={10}>
+            {/* <LoadingBox> */}
+            <RouterProvider router={router} />
+            {/* </LoadingBox> */}
+          </SnackbarProvider>
+        </NavBarProvider>
+      </AuthProvider>
+    </ThemeProvider>
+  </QueryClientProvider>
 );
