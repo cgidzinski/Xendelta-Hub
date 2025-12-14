@@ -11,6 +11,7 @@ import {
   Alert,
   Link,
   Box,
+  Pagination,
 } from "@mui/material";
 import { CalendarToday, Person, Star } from "@mui/icons-material";
 import { format } from "date-fns";
@@ -56,15 +57,24 @@ function extractExcerpt(markdown: string): string {
   return firstParagraph.substring(0, 200) + "...";
 }
 
+export interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
 interface BlogContentProps {
   blogBasePath: string;
   posts: BlogPost[];
   isLoading: boolean;
   error: string | null;
   onPostClick: (slug: string) => void;
+  pagination?: PaginationInfo;
+  onPageChange?: (page: number) => void;
 }
 
-export default function BlogContent({ blogBasePath, posts, isLoading, error, onPostClick }: BlogContentProps) {
+export default function BlogContent({ blogBasePath, posts, isLoading, error, onPostClick, pagination, onPageChange }: BlogContentProps) {
   return (
     <Container maxWidth="lg" sx={{ py: 2, flex: 1 }}>
       {isLoading ? (
@@ -192,6 +202,17 @@ export default function BlogContent({ blogBasePath, posts, isLoading, error, onP
               </CardContent>
             </Card>
           ))}
+          {pagination && onPageChange && (
+            <Box sx={{ display: "flex", justifyContent: "center", mt: 4, mb: 2 }}>
+              <Pagination
+                count={pagination.totalPages}
+                page={pagination.page}
+                onChange={(_, page) => onPageChange(page)}
+                color="primary"
+                size="large"
+              />
+            </Box>
+          )}
         </Stack>
       )}
     </Container>

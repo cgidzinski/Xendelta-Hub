@@ -11,20 +11,29 @@ export async function initializeDefaultUsers(): Promise<void> {
     const newSystemBot = new User({
       username: "System",
       email: "system@xendelta.com",
-      roles: ["Bot"],
+      roles: ["bot"],
       avatar: "/avatars/default-avatar.png",
       notifications: [],
       conversations: [],
+      canRespond: false, // System bot cannot be selected for conversations
     });
     await newSystemBot.save();
     console.log(">>> System bot user created");
   } else {
-    // Ensure System bot has Bot role
-    if (!systemBot.roles || !systemBot.roles.includes("Bot")) {
+    // Ensure System bot has Bot role and canRespond is false
+    let needsUpdate = false;
+    if (!systemBot.roles || !systemBot.roles.includes("bot")) {
       if (!systemBot.roles) systemBot.roles = [];
-      systemBot.roles.push("Bot");
+      systemBot.roles.push("bot");
+      needsUpdate = true;
+    }
+    if (systemBot.canRespond !== false) {
+      systemBot.canRespond = false;
+      needsUpdate = true;
+    }
+    if (needsUpdate) {
       await systemBot.save();
-      console.log(">>> System bot role updated");
+      console.log(">>> System bot updated");
     }
   }
   

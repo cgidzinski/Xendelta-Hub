@@ -21,8 +21,9 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
     });
   }
 
-  // Check if user has admin role
-  if (!fullUser.roles || !fullUser.roles.includes("admin")) {
+  // Check if user has admin role (case-insensitive)
+  const hasAdminRole = fullUser.roles && fullUser.roles.some((role: string) => role.toLowerCase() === "admin");
+  if (!hasAdminRole) {
     return res.status(403).json({
       status: false,
       message: "Admin access required",

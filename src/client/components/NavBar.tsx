@@ -71,13 +71,17 @@ export default function Root() {
     };
 
     // Listen for new messages to update unread count
-    const handleNewMessage = () => {
+    const handleNewMessage = (data?: { conversationId: string; message: any }) => {
       refetchProfile();
+      // Note: System message notifications are handled in Messages.tsx
+      // This ensures the profile unread count is updated globally
     };
 
     // Listen for new conversations to update unread count
-    const handleNewConversation = () => {
+    const handleNewConversation = (data?: { conversation: any }) => {
       refetchProfile();
+      // Note: System conversation notifications are handled in Messages.tsx
+      // This ensures the profile unread count is updated globally
     };
 
     socket.on("notification:new", handleNewNotification);
@@ -190,7 +194,7 @@ export default function Root() {
             </Typography>
           </Box>
           <List>
-            <ListItem key={"home"} disablePadding>
+            <ListItem key={"/"} disablePadding>
               <ListItemButton
                 onClick={() => navigate("/internal")}
                 selected={location.pathname === "/internal" || location.pathname === "/internal/"}
@@ -216,7 +220,7 @@ export default function Root() {
 
           <Box sx={{ marginTop: "auto" }}>
             <List>
-              {profile?.roles?.includes("admin") && (
+              {profile?.roles?.some((role: string) => role.toLowerCase() === "admin") && (
                 <ListItem key={"admin"} disablePadding>
                   <ListItemButton onClick={() => navigate("/admin")} selected={location.pathname.endsWith("/admin")}>
                     <ListItemIcon>

@@ -24,3 +24,28 @@ export function getLastMessageInfo(
   };
 }
 
+/**
+ * Generate default conversation name from participant usernames
+ * Includes all participants including the current user
+ */
+export function generateDefaultConversationName(
+  participantInfo: Array<{ _id: string; username: string }>,
+  currentUserId: string,
+  systemBotId?: string
+): string {
+  // Include all participants except system bot
+  const allParticipants = participantInfo.filter(
+    (p) => p._id !== systemBotId
+  );
+
+  if (allParticipants.length === 0) {
+    return participantInfo.some((p) => p._id === systemBotId) ? "System" : "Chat";
+  }
+
+  if (allParticipants.length === 1) {
+    return allParticipants[0].username;
+  }
+
+  return allParticipants.map((p) => p.username).join(", ");
+}
+

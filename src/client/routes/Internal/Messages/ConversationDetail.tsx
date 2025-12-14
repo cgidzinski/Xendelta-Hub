@@ -52,8 +52,8 @@ export default function ConversationDetail() {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [messageText, setMessageText] = useState("");
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
+  const [messageOptionsOpen, setMessageOptionsOpen] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [usersModalOpen, setUsersModalOpen] = useState(false);
 
@@ -182,7 +182,6 @@ export default function ConversationDetail() {
       from: profile?._id || "",
       message: messageToSend,
       time: new Date().toISOString(),
-      unread: false,
       senderUsername: profile?.username,
     };
     
@@ -197,17 +196,17 @@ export default function ConversationDetail() {
     });
   };
 
-  const handleDeleteClick = (messageId: string) => {
-    setMessageToDelete(messageId);
-    setDeleteDialogOpen(true);
+  const handleMessageOptions = (message: Message) => {
+    setSelectedMessage(message);
+    setMessageOptionsOpen(true);
   };
 
   const handleDeleteConfirm = () => {
-    if (!conversationId || !messageToDelete) return;
+    if (!conversationId || !selectedMessage?._id) return;
 
-    deleteMessage(conversationId, messageToDelete);
-    setDeleteDialogOpen(false);
-    setMessageToDelete(null);
+    deleteMessage(conversationId, selectedMessage._id);
+    setMessageOptionsOpen(false);
+    setSelectedMessage(null);
   };
 
   const handleRemoveParticipant = (participantId: string) => {
@@ -219,21 +218,31 @@ export default function ConversationDetail() {
   const handleUpdateName = async (name: string) => {
     if (!conversationId) return;
     await updateConversationName(conversationId, name);
+    // Update local conversation state immediately
+    setConversation((prevConv) => {
+      if (!prevConv) return prevConv;
+      return {
+        ...prevConv,
+        name: name || undefined,
+      };
+    });
   };
 
   const handleLeaveConversation = async () => {
     if (!conversationId) return;
-    const success = await leaveConversationMutation(conversationId);
-    if (success) {
+    // Attempt to leave conversation, then navigate regardless of result
+    leaveConversationMutation(conversationId).finally(() => {
       navigate("/internal/messages");
-    }
+    });
   };
 
   const getMessageSenderName = (message: Message): string => {
     if (message.from === "system" || message.isSystemMessage) {
       return message.from === "system" ? "System" : message.from;
     }
-    if (message.from === profile?._id) return "You";
+    if (message.from === profile?._id) {
+      return message.senderUsername || profile?.username || "You";
+    }
     return message.senderUsername || `User ${message.from.substring(0, 8)}`;
   };
 
@@ -330,7 +339,7 @@ export default function ConversationDetail() {
         isMyMessage={isMyMessage}
         shouldShowAvatar={shouldShowAvatar}
         shouldShowTimestamp={shouldShowTimestamp}
-        onDeleteMessage={handleDeleteClick}
+        onMessageOptions={handleMessageOptions}
       />
 
       {conversation.canReply !== false && (
@@ -342,17 +351,54 @@ export default function ConversationDetail() {
         />
       )}
 
-        {/* Delete confirmation dialog */}
-        <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-          <DialogTitle>Delete Message</DialogTitle>
+        {/* Message Options Dialog */}
+        <Dialog open={messageOptionsOpen} onClose={() => setMessageOptionsOpen(false)} maxWidth="md" fullWidth>
+          <DialogTitle>Message Options</DialogTitle>
           <DialogContent>
-            <Typography>Are you sure you want to delete this message? This action cannot be undone.</Typography>
+            <Box sx={{ mb: 3 }}>
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={handleDeleteConfirm}
+                disabled={isDeletingMessage}
+                fullWidth
+                sx={{ mb: 2 }}
+              >
+                {isDeletingMessage ? "Deleting..." : "Delete Message"}
+              </Button>
+            </Box>
+            <Box>
+              <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600, mb: 1 }}>
+                Message JSON:
+              </Typography>
+              <Box
+                sx={{
+                  backgroundColor: "background.default",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 1,
+                  p: 2,
+                  maxHeight: "400px",
+                  overflow: "auto",
+                }}
+              >
+                <Typography
+                  component="pre"
+                  sx={{
+                    fontFamily: "monospace",
+                    fontSize: "0.75rem",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                    margin: 0,
+                  }}
+                >
+                  {selectedMessage ? JSON.stringify(selectedMessage, null, 2) : ""}
+                </Typography>
+              </Box>
+            </Box>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleDeleteConfirm} color="error" disabled={isDeletingMessage}>
-              Delete
-            </Button>
+            <Button onClick={() => setMessageOptionsOpen(false)}>Close</Button>
           </DialogActions>
         </Dialog>
 

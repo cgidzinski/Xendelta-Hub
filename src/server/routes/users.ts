@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 import path from "path";
 import { authenticateToken } from "../middleware/auth";
+import { requireAdmin } from "../middleware/admin";
 import { generateToken } from "../utils/tokenUtils";
 import { sendPasswordResetEmail } from "../utils/emailUtils";
 import passport from "../config/passport";
@@ -30,7 +31,7 @@ module.exports = function (app: express.Application) {
       status: true,
       message: "",
       data: {
-        roles: user.roles || [],
+        roles: (user.roles || []).map((role: string) => role.toLowerCase()),
       },
     });
   });
@@ -53,7 +54,7 @@ module.exports = function (app: express.Application) {
           username: user.username,
           email: user.email,
           avatar: user.avatar,
-          roles: user.roles || [],
+          roles: (user.roles || []).map((role: string) => role.toLowerCase()),
           unread_messages: hasUnreadMessages,
           unread_notifications: user.notifications.some((notification: any) => notification.unread),
         },
@@ -135,6 +136,37 @@ module.exports = function (app: express.Application) {
     return res.json({
       status: true,
       message: "Avatar uploaded successfully",
+      data: {
+        avatar: user.avatar,
+      },
+    });
+  });
+
+  // Reset avatar to default
+  app.post("/api/user/avatar/reset", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const user = await User.findOne({ _id: (req as any).user._id }).exec();
+    
+    user.avatar = "/avatars/default-avatar.png";
+    await user.save();
+
+    const newNotification = {
+      title: "Avatar reset",
+      message: "Your avatar has been reset to default",
+      time: new Date().toISOString(),
+      icon: "person",
+      unread: true,
+    };
+
+    user.notifications.unshift(newNotification);
+    await user.save();
+
+    const savedNotification = user.notifications[0];
+    const socketManager = SocketManager.getInstance();
+    socketManager.sendNotification(user._id.toString(), savedNotification);
+
+    return res.json({
+      status: true,
+      message: "Avatar reset successfully",
       data: {
         avatar: user.avatar,
       },
@@ -739,7 +771,8 @@ module.exports = function (app: express.Application) {
 
   // Get all users (for admin and message participant selection)
   app.get("/api/users", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const users = await User.find({}, "username email _id roles avatar").exec();
+    // Filter out users where canRespond is false
+    const users = await User.find({ canRespond: { $ne: false } }, "username email _id roles avatar canRespond").exec();
     
     return res.json({
       status: true,
@@ -749,8 +782,9 @@ module.exports = function (app: express.Application) {
           _id: user._id,
           username: user.username,
           email: user.email,
-          roles: user.roles || [],
+          roles: (user.roles || []).map((role: string) => role.toLowerCase()),
           avatar: user.avatar,
+          canRespond: user.canRespond !== false, // Default to true if not set
         })),
       },
     });
@@ -779,6 +813,154 @@ module.exports = function (app: express.Application) {
           roles: user.roles,
         },
       },
+    });
+  });
+
+  // Admin: Get all users (including those with canRespond: false)
+  app.get("/api/admin/users", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+    const users = await User.find({}, "username email _id roles avatar canRespond").exec();
+    
+    return res.json({
+      status: true,
+      message: "",
+      data: {
+        users: users.map((user: any) => ({
+          _id: user._id,
+          username: user.username,
+          email: user.email,
+          roles: (user.roles || []).map((role: string) => role.toLowerCase()),
+          avatar: user.avatar,
+          canRespond: user.canRespond !== false, // Default to true if not set
+        })),
+      },
+    });
+  });
+
+  // Admin: Update user roles
+  app.put("/api/admin/users/:userId/roles", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+    const { userId } = req.params;
+    const { roles } = req.body;
+
+    if (!Array.isArray(roles)) {
+      return res.status(400).json({
+        status: false,
+        message: "Roles must be an array",
+      });
+    }
+
+    const user = await User.findOne({ _id: userId }).exec();
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    // Normalize all roles to lowercase
+    user.roles = roles.map((role: string) => role.toLowerCase());
+    await user.save();
+
+    return res.json({
+      status: true,
+      message: "User roles updated successfully",
+      data: {
+        user: {
+          _id: user._id,
+          username: user.username,
+          email: user.email,
+          roles: user.roles,
+        },
+      },
+    });
+  });
+
+  // Admin: Update user boolean fields
+  app.put("/api/admin/users/:userId/booleans", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+    const { userId } = req.params;
+    const { canRespond } = req.body;
+
+    const user = await User.findOne({ _id: userId }).exec();
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    if (canRespond !== undefined) {
+      user.canRespond = canRespond;
+    }
+
+    await user.save();
+
+    return res.json({
+      status: true,
+      message: "User updated successfully",
+      data: {
+        user: {
+          _id: user._id,
+          username: user.username,
+          email: user.email,
+          canRespond: user.canRespond !== false,
+        },
+      },
+    });
+  });
+
+  // Admin: Reset user avatar
+  app.post("/api/admin/users/:userId/avatar/reset", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+    const { userId } = req.params;
+
+    const user = await User.findOne({ _id: userId }).exec();
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    user.avatar = "/avatars/default-avatar.png";
+    await user.save();
+
+    return res.json({
+      status: true,
+      message: "Avatar reset successfully",
+      data: {
+        user: {
+          _id: user._id,
+          username: user.username,
+          email: user.email,
+          avatar: user.avatar,
+        },
+      },
+    });
+  });
+
+  // Admin: Delete user
+  app.delete("/api/admin/users/:userId", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+    const { userId } = req.params;
+
+    const adminUser = (req as any).adminUser;
+    if (userId === adminUser._id.toString()) {
+      return res.status(400).json({
+        status: false,
+        message: "Cannot delete yourself",
+      });
+    }
+
+    const user = await User.findOne({ _id: userId }).exec();
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    await User.deleteOne({ _id: userId }).exec();
+
+    return res.json({
+      status: true,
+      message: "User deleted successfully",
     });
   });
 };

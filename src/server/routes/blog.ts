@@ -19,9 +19,16 @@ import { successResponse, notFoundResponse, badRequestResponse } from "../utils/
 module.exports = function (app: express.Application) {
   // Public: Get all published blog posts (sorted by featured first, then publishDate desc)
   app.get("/api/blog", async function (req: express.Request, res: express.Response) {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+
+    const totalCount = await BlogPost.countDocuments({}).exec();
     const posts = await BlogPost.find({})
       .populate("author", "username avatar")
       .sort({ featured: -1, publishDate: -1 })
+      .skip(skip)
+      .limit(limit)
       .exec();
 
     const formattedPosts = posts.map((post: any) => ({
@@ -52,6 +59,12 @@ module.exports = function (app: express.Application) {
       message: "",
       data: {
         posts: formattedPosts,
+        pagination: {
+          page,
+          limit,
+          total: totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+        },
       },
     });
   });

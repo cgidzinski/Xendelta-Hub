@@ -29,8 +29,10 @@ import { useUserMessages, Conversation } from "../../../hooks/user/useUserMessag
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
 import { useSocket } from "../../../hooks/useSocket";
 import { useQueryClient } from "@tanstack/react-query";
-import { getParticipantDisplay, getParticipantInitials } from "../../../utils/conversationUtils";
+import { getParticipantDisplay } from "../../../utils/conversationUtils";
+import StackedAvatars from "./components/StackedAvatars";
 import { get } from "../../../utils/apiClient";
+import { useSnackbar } from "notistack";
 
 interface User {
   _id: string;
@@ -43,8 +45,9 @@ export default function Messages() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { conversations, isLoading, isFetching, isError, error, createConversation, isCreatingConversation } = useUserMessages();
-  const { profile } = useUserProfile();
+  const { profile, refetch: refetchProfile } = useUserProfile();
   const { socket } = useSocket();
+  const { enqueueSnackbar } = useSnackbar();
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
   const [initialMessage, setInitialMessage] = useState("");
@@ -62,15 +65,38 @@ export default function Messages() {
     if (!socket) return;
 
     const handleNewMessage = (data: { conversationId: string; message: any }) => {
+      // Check if this is a system message - backend sends senderUsername: "System" for system messages
+      const isSystemMessage = data.message.senderUsername === "System" || data.message.isSystemMessage || data.message.from === "system";
+      
       // Force refetch conversations list when new message arrives
       queryClient.invalidateQueries({ queryKey: ["userConversations"], exact: false });
-      queryClient.invalidateQueries({ queryKey: ["userProfile"], exact: false });
+      refetchProfile();
+      
+      // Show notification for system messages
+      if (isSystemMessage) {
+        const messagePreview = data.message.message?.substring(0, 50) || "New system message";
+        enqueueSnackbar(`System message: ${messagePreview}${data.message.message?.length > 50 ? '...' : ''}`, {
+          variant: "info",
+          autoHideDuration: 5000,
+        });
+      }
     };
 
     const handleNewConversation = (data: { conversation: Conversation }) => {
+      // Check if this is a system conversation
+      const isSystemConversation = data.conversation.participants?.includes("system") || data.conversation.name === "System Messages";
+      
       // Force refetch conversations list when new conversation is created
       queryClient.invalidateQueries({ queryKey: ["userConversations"], exact: false });
-      queryClient.invalidateQueries({ queryKey: ["userProfile"], exact: false });
+      refetchProfile();
+      
+      // Show notification for system conversations
+      if (isSystemConversation) {
+        enqueueSnackbar("You have received a new system message", {
+          variant: "info",
+          autoHideDuration: 5000,
+        });
+      }
     };
 
     socket.on("message:new", handleNewMessage);
@@ -80,7 +106,7 @@ export default function Messages() {
       socket.off("message:new", handleNewMessage);
       socket.off("conversation:new", handleNewConversation);
     };
-  }, [socket, queryClient]);
+  }, [socket, queryClient, refetchProfile, enqueueSnackbar]);
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
@@ -169,45 +195,55 @@ export default function Messages() {
                       <ListItem
                         onClick={() => navigate(`/internal/messages/${conversation._id}`)}
                         sx={{
+                          position: "relative",
                           "&:hover": { 
                             backgroundColor: "rgba(255, 255, 255, 0.1)", 
                             cursor: "pointer",
                             transform: "translateX(4px)",
                             transition: "all 0.2s ease",
                           },
-                          backgroundColor: conversation.unread 
-                            ? "rgba(144, 202, 249, 0.15)" 
-                            : "rgba(255, 255, 255, 0.05)",
+                          backgroundColor: "rgba(255, 255, 255, 0.05)",
                           py: 1.5,
                           px: 2,
                           mb: 0.5,
                           borderRadius: 1,
                           border: "1px solid",
-                          borderColor: conversation.unread 
-                            ? "rgba(144, 202, 249, 0.3)" 
-                            : "rgba(255, 255, 255, 0.1)",
+                          borderColor: "rgba(255, 255, 255, 0.1)",
                         }}
                       >
+                        {conversation.unread && (
+                          <Box
+                            sx={{
+                              position: "absolute",
+                              top: 8,
+                              right: 8,
+                              width: 8,
+                              height: 8,
+                              borderRadius: "50%",
+                              backgroundColor: "error.main",
+                              zIndex: 1,
+                            }}
+                          />
+                        )}
                         <ListItemIcon>
-                          <Badge
-                            badgeContent={conversation.unread ? 1 : 0}
-                            variant="dot"
-                            color="error"
-                          >
-                            <Avatar sx={{ width: 48, height: 48, borderRadius: 2 }}>
-                              {getParticipantInitials(conversation, profile?._id)}
-                            </Avatar>
-                          </Badge>
+                          <StackedAvatars
+                            conversation={conversation}
+                            currentUserId={profile?._id}
+                            maxAvatars={10}
+                            size={48}
+                          />
                         </ListItemIcon>
                         <ListItemText
+                          primaryTypographyProps={{ component: "div" }}
+                          secondaryTypographyProps={{ component: "div" }}
                           primary={
                             <Box component="div" sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
                               <Typography
                                 variant="body1"
                                 sx={{
-                                  fontWeight: conversation.unread ? "bold" : "600",
+                                  fontWeight: "600",
                                   flex: 1,
-                                  color: conversation.unread ? "primary.light" : "text.primary",
+                                  color: "text.primary",
                                 }}
                               >
                                 {conversation.name || getParticipantDisplay(conversation, profile?._id)}
@@ -225,7 +261,7 @@ export default function Messages() {
                                 {conversation.lastMessage || "No messages yet"}
                               </Typography>
                               <Typography variant="caption" sx={{ color: "text.secondary", opacity: 0.8 }}>
-                                {getParticipantDisplay(conversation, profile?._id)}
+                                {getParticipantDisplay(conversation)}
                               </Typography>
                             </Box>
                           }

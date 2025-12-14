@@ -20,10 +20,15 @@ import PeopleIcon from "@mui/icons-material/People";
 import ArticleIcon from "@mui/icons-material/Article";
 import CssBaseline from "@mui/material/CssBaseline";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ProfileListItem from "./ProfileListItem";
 import { Divider } from "@mui/material";
 import { useNavBar } from "../contexts/NavBarContext";
+import { useSocket } from "../hooks/useSocket";
+import { useUserProfile } from "../hooks/user/useUserProfile";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSnackbar } from "notistack";
+import { Conversation } from "../hooks/user/useUserMessages";
 
 const DRAWER_WIDTH = 240;
 
@@ -32,6 +37,58 @@ export default function AdminNavBar() {
   const navigate = useNavigate();
   const [isNavBarOpen, setIsNavBarOpen] = useState(true);
   const { title } = useNavBar();
+  const { socket } = useSocket();
+  const { refetch: refetchProfile } = useUserProfile();
+  const queryClient = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
+
+  // Set up socket listeners for system message notifications
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewMessage = (data: { conversationId: string; message: any }) => {
+      // Check if this is a system message - backend sends senderUsername: "System" for system messages
+      const isSystemMessage = data.message.senderUsername === "System" || data.message.isSystemMessage || data.message.from === "system";
+      
+      // Force refetch conversations list when new message arrives
+      queryClient.invalidateQueries({ queryKey: ["userConversations"], exact: false });
+      refetchProfile();
+      
+      // Show notification for system messages
+      if (isSystemMessage) {
+        const messagePreview = data.message.message?.substring(0, 50) || "New system message";
+        enqueueSnackbar(`System message: ${messagePreview}${data.message.message?.length > 50 ? '...' : ''}`, {
+          variant: "info",
+          autoHideDuration: 5000,
+        });
+      }
+    };
+
+    const handleNewConversation = (data: { conversation: Conversation }) => {
+      // Check if this is a system conversation
+      const isSystemConversation = data.conversation.participants?.includes("system") || data.conversation.name === "System Messages";
+      
+      // Force refetch conversations list when new conversation is created
+      queryClient.invalidateQueries({ queryKey: ["userConversations"], exact: false });
+      refetchProfile();
+      
+      // Show notification for system conversations
+      if (isSystemConversation) {
+        enqueueSnackbar("You have received a new system message", {
+          variant: "info",
+          autoHideDuration: 5000,
+        });
+      }
+    };
+
+    socket.on("message:new", handleNewMessage);
+    socket.on("conversation:new", handleNewConversation);
+
+    return () => {
+      socket.off("message:new", handleNewMessage);
+      socket.off("conversation:new", handleNewConversation);
+    };
+  }, [socket, queryClient, refetchProfile, enqueueSnackbar]);
 
   const toggleNavBar = () => {
     setIsNavBarOpen(!isNavBarOpen);

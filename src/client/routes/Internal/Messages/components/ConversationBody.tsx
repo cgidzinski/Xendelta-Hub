@@ -10,7 +10,7 @@ interface ConversationBodyProps {
   isMyMessage: (message: Message) => boolean;
   shouldShowAvatar: (currentMessage: Message, previousMessage: Message | null) => boolean;
   shouldShowTimestamp: (currentMessage: Message, nextMessage: Message | null) => boolean;
-  onDeleteMessage: (messageId: string) => void;
+  onMessageOptions: (message: Message) => void;
 }
 
 export default function ConversationBody({
@@ -20,7 +20,7 @@ export default function ConversationBody({
   isMyMessage,
   shouldShowAvatar,
   shouldShowTimestamp,
-  onDeleteMessage,
+  onMessageOptions,
 }: ConversationBodyProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -99,17 +99,17 @@ export default function ConversationBody({
             No messages yet. Start the conversation!
           </Typography>
         </Box>
-        ) : (
-          messages.map((message, index) => {
-            const previousMessage = index > 0 ? messages[index - 1] : null;
-            const nextMessage = index < messages.length - 1 ? messages[index + 1] : null;
-            const myMessage = isMyMessage(message);
-            const showAvatar = shouldShowAvatar(message, previousMessage);
-            const showTimestamp = shouldShowTimestamp(message, nextMessage);
+      ) : (
+        messages.map((message, index) => {
+          const previousMessage = index > 0 ? messages[index - 1] : null;
+          const nextMessage = index < messages.length - 1 ? messages[index + 1] : null;
+          const myMessage = isMyMessage(message);
+          const showAvatar = shouldShowAvatar(message, previousMessage);
+          const showTimestamp = shouldShowTimestamp(message, nextMessage);
 
-            return (
+          return (
               <MessageBlock
-                key={message._id}
+                key={message._id || `message-${index}`}
                 message={message}
                 previousMessage={previousMessage}
                 nextMessage={nextMessage}
@@ -117,12 +117,12 @@ export default function ConversationBody({
                 showAvatar={showAvatar}
                 showTimestamp={showTimestamp}
                 getMessageSenderName={getMessageSenderName}
-                onDeleteMessage={onDeleteMessage}
+                onMessageOptions={onMessageOptions}
                 profileId={profileId}
               />
-            );
-          })
-        )}
+          );
+        })
+      )}
       <div ref={messagesEndRef} />
     </Box>
   );

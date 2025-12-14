@@ -24,7 +24,7 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
 
       try {
         const data = await get<{ roles: string[] }>("/api/user/roles/verify");
-        setIsAdmin(data.roles?.includes("admin") || false);
+        setIsAdmin(data.roles?.some((role: string) => role.toLowerCase() === "admin") || false);
       } catch (error) {
         // On error, assume not admin for security
         setIsAdmin(false);
@@ -65,7 +65,7 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
 
   // If not admin or verification error, redirect to home
   if (!isAdmin || verificationError) {
-    return <Navigate to="/home" replace />;
+    return <Navigate to="/" replace />;
   }
 
   // If admin, render the protected content

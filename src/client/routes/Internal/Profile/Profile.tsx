@@ -108,6 +108,13 @@ export default function Profile() {
         setMainAvatarUrl(`/avatar/${profile._id}?t=${Date.now()}`);
         setAvatarKey((prev) => prev + 1); // Force Avatar component to re-render
       }
+      // Update profile cache immediately with new avatar path
+      if (profile && data.data?.avatar) {
+        queryClient.setQueryData(["userProfile"], {
+          ...profile,
+          avatar: data.data.avatar,
+        });
+      }
       // Invalidate and refetch profile to update all components using the profile (NavBar, ProfileListItem, etc.)
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
       refetch();
@@ -163,7 +170,7 @@ export default function Profile() {
                       </Typography>
                     </Box>
                   )}
-                  {!profile?.roles?.includes("admin") && (
+                  {!profile?.roles?.some((role: string) => role.toLowerCase() === "admin") && (
                     <Button
                       variant="outlined"
                       color="primary"

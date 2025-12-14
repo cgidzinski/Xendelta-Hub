@@ -18,7 +18,7 @@ import {
 } from "../utils/validation";
 import { UserConversationMetadata, Message, ConversationDocument } from "../types";
 import { successResponse, notFoundResponse, forbiddenResponse, badRequestResponse } from "../utils/responseHelpers";
-import { getLastMessageInfo } from "../utils/conversationUtils";
+import { getLastMessageInfo, generateDefaultConversationName } from "../utils/conversationUtils";
 
 
 module.exports = function (app: express.Application) {
@@ -41,6 +41,10 @@ module.exports = function (app: express.Application) {
       conversationMetadataMap.set(uc.conversationId.toString(), uc);
     });
 
+    // Find System bot user once for default name generation
+    const systemBot = await User.findOne({ username: "System", roles: "bot" }).select("_id").exec();
+    const systemBotId = systemBot?._id.toString();
+
     // Format conversations for response with participant usernames
     const formattedConversations = await Promise.all(conversations.map(async (conv: ConversationDocument) => {
       // Fetch usernames for participants
@@ -57,11 +61,14 @@ module.exports = function (app: express.Application) {
       const metadata = conversationMetadataMap.get(conv._id.toString()) || { unread: false };
       const lastMessageInfo = getLastMessageInfo(conv);
       
+      // Generate default name if no name is set
+      const conversationName = conv.name || generateDefaultConversationName(participantInfo, user._id.toString(), systemBotId);
+      
       return {
         _id: conv._id.toString(),
         participants: conv.participants,
         participantInfo: participantInfo,
-        name: conv.name,
+        name: conversationName,
         canReply: conv.canReply,
         createdBy: conv.createdBy,
         lastMessage: lastMessageInfo.lastMessage,
@@ -99,7 +106,7 @@ module.exports = function (app: express.Application) {
     }
 
     // Find System bot user for username lookup
-    const systemBot = await User.findOne({ username: "System", roles: "Bot" }).select("_id username").exec();
+    const systemBot = await User.findOne({ username: "System", roles: "bot" }).select("_id username").exec();
     const systemBotId = systemBot?._id.toString();
 
     // Fetch usernames for participants and message senders
@@ -142,6 +149,9 @@ module.exports = function (app: express.Application) {
     // Get user's conversation metadata
     const userConvMetadata = (user.conversations || []).find((uc: UserConversationMetadata) => uc.conversationId.toString() === conversationId);
     const lastMessageInfo = getLastMessageInfo(conversation);
+    
+    // Generate default name if no name is set
+    const conversationName = conversation.name || generateDefaultConversationName(participantInfo, user._id.toString(), systemBotId);
 
     return res.json({
       status: true,
@@ -151,7 +161,7 @@ module.exports = function (app: express.Application) {
           _id: conversation._id.toString(),
           participants: conversation.participants,
           participantInfo: participantInfo,
-          name: conversation.name,
+          name: conversationName,
           canReply: conversation.canReply,
           createdBy: conversation.createdBy,
           lastMessage: lastMessageInfo.lastMessage,
@@ -179,9 +189,28 @@ module.exports = function (app: express.Application) {
     // Ensure current user is included in participants
     const allParticipants = [...new Set([user._id.toString(), ...participants])];
 
+    // Fetch usernames for participants to generate default name
+    const participantInfoForName = await Promise.all(
+      allParticipants.map(async (p: string) => {
+        if (p === user._id.toString()) {
+          return { _id: user._id.toString(), username: user.username };
+        }
+        const participantUser = await User.findOne({ _id: p }).select("username _id").exec();
+        return participantUser ? { _id: participantUser._id.toString(), username: participantUser.username } : { _id: p, username: "Unknown" };
+      })
+    );
+    
+    // Find System bot user for default name generation
+    const systemBot = await User.findOne({ username: "System", roles: "Bot" }).select("_id").exec();
+    const systemBotId = systemBot?._id.toString();
+    
+    // Generate default name from participant usernames
+    const defaultName = generateDefaultConversationName(participantInfoForName, user._id.toString(), systemBotId);
+
     // Create new conversation in separate collection
     const newConversation = new Conversation({
       participants: allParticipants,
+      name: defaultName, // Set default name from usernames
       canReply: true,
       createdBy: user._id.toString(), // Store creator ID
       updatedAt: new Date().toISOString(),
@@ -189,7 +218,6 @@ module.exports = function (app: express.Application) {
         from: user._id.toString(),
         message: message,
         time: new Date().toISOString(),
-        unread: true,
       }] : [],
     });
     await newConversation.save();
@@ -221,6 +249,7 @@ module.exports = function (app: express.Application) {
       socketManager.notifyNewConversation(participantId, {
         _id: savedConversation._id.toString(),
         participants: savedConversation.participants,
+        name: defaultName,
         lastMessage: lastMessageInfo.lastMessage,
         lastMessageTime: lastMessageInfo.lastMessageTime,
         unread: true,
@@ -235,7 +264,7 @@ module.exports = function (app: express.Application) {
         conversation: {
           _id: savedConversation._id.toString(),
           participants: savedConversation.participants,
-          name: savedConversation.name,
+          name: defaultName,
           canReply: savedConversation.canReply,
           lastMessage: lastMessageInfo.lastMessage,
           lastMessageTime: lastMessageInfo.lastMessageTime,
@@ -290,7 +319,6 @@ module.exports = function (app: express.Application) {
       from: user._id.toString(),
       message: message,
       time: new Date().toISOString(),
-      unread: true,
       parentMessageId: parentMessageId || undefined,
     };
 
@@ -391,7 +419,6 @@ module.exports = function (app: express.Application) {
       from: user._id.toString(),
       message: message,
       time: new Date().toISOString(),
-      unread: true,
       parentMessageId: messageId,
     };
 
@@ -780,8 +807,8 @@ module.exports = function (app: express.Application) {
       });
     }
 
-    // Get real participants (excluding bots - users with Bot role)
-    const systemBot = await User.findOne({ username: "System", roles: "Bot" }).exec();
+    // Get real participants (excluding bots - users with bot role)
+    const systemBot = await User.findOne({ username: "System", roles: "bot" }).exec();
     const systemBotId = systemBot?._id.toString();
     const realParticipants = conversation.participants.filter((p: string) => {
       if (p === systemBotId) return false;
@@ -865,7 +892,7 @@ module.exports = function (app: express.Application) {
     }
 
     // Find System bot user
-    const systemBot = await User.findOne({ username: "System", roles: "Bot" }).exec();
+    const systemBot = await User.findOne({ username: "System", roles: "bot" }).exec();
     if (!systemBot) {
       return res.status(500).json({
         status: false,
@@ -884,9 +911,14 @@ module.exports = function (app: express.Application) {
         continue;
       }
 
+      // Determine the conversation title to use
+      const conversationTitleToUse = conversationTitle || "System Messages";
+      
       // Find or create conversation with System bot for this user
+      // Match by both participants AND conversation title
       let systemConversation = await Conversation.findOne({
-        participants: { $all: [targetUser._id.toString(), systemBotId], $size: 2 }
+        participants: { $all: [targetUser._id.toString(), systemBotId], $size: 2 },
+        name: conversationTitleToUse
       }).exec();
 
       // Create the message object
@@ -894,7 +926,6 @@ module.exports = function (app: express.Application) {
         from: systemBotId,
         message: message,
         time: new Date().toISOString(),
-        unread: true,
       };
 
       if (!systemConversation) {
@@ -903,7 +934,7 @@ module.exports = function (app: express.Application) {
           participants: [targetUser._id.toString(), systemBotId],
           canReply: false, // System bot conversations are not replyable
           createdBy: systemBotId, // System bot is the creator
-          name: conversationTitle || "System Messages", // Use provided title or default
+          name: conversationTitleToUse, // Use provided title or default
           updatedAt: new Date().toISOString(),
           messages: [newMessage],
         });

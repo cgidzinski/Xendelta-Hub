@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Typography, Avatar, IconButton } from "@mui/material";
-import DeleteIcon from "@mui/icons-material/Delete";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { format } from "date-fns";
 import DOMPurify from "dompurify";
 import { Message } from "../../../types";
@@ -13,7 +13,7 @@ interface MessageBlockProps {
   showAvatar: boolean;
   showTimestamp: boolean;
   getMessageSenderName: (message: Message) => string;
-  onDeleteMessage: (messageId: string) => void;
+  onMessageOptions: (message: Message) => void;
   profileId?: string;
 }
 
@@ -25,33 +25,23 @@ export default function MessageBlock({
   showAvatar,
   showTimestamp,
   getMessageSenderName,
-  onDeleteMessage,
+  onMessageOptions,
   profileId,
 }: MessageBlockProps) {
   const [avatarError, setAvatarError] = React.useState(false);
   const isSystemMessage = message.isSystemMessage || message.from === "system";
   const avatarSrc = !isSystemMessage && message.from ? `/avatar/${message.from}` : undefined;
 
-  // Determine spacing based on message grouping (same sender, close time)
-  const isGroupedWithNext = nextMessage && 
-    nextMessage.from === message.from && 
-    new Date(nextMessage.time).getTime() - new Date(message.time).getTime() < 5 * 60 * 1000;
-  
-  const isGroupedWithPrevious = previousMessage && 
-    previousMessage.from === message.from && 
-    new Date(message.time).getTime() - new Date(previousMessage.time).getTime() < 5 * 60 * 1000;
-
   return (
     <Box
       sx={{
         width: "100%",
-        mb: isGroupedWithNext ? 0.5 : 1.5,
-        mt: isGroupedWithPrevious && !showAvatar ? 0.25 : 0,
-        border: "2px solid",
-        borderColor: "purple",
+        mb: 1.5,
+        border: "1px solid",
+        borderColor: "divider",
         borderRadius: 2,
-        p: 1,
-        backgroundColor: isMyMessage ? "primary.main" : "background.paper",
+        p: 1.5,
+        backgroundColor: "background.paper",
         position: "relative",
         "&:hover .message-actions": {
           opacity: 1,
@@ -68,10 +58,10 @@ export default function MessageBlock({
         </Avatar>
         <Box sx={{ flex: 1 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
-            <Typography variant="subtitle2" sx={{ color: isMyMessage ? "primary.contrastText" : "text.secondary", opacity: 0.9, fontWeight: 600 }}>
+            <Typography variant="subtitle2" sx={{ color: isMyMessage ? "primary.main" : "text.secondary", opacity: 0.9, fontWeight: 600 }}>
               {getMessageSenderName(message)}
             </Typography>
-            <Typography variant="caption" sx={{ color: isMyMessage ? "primary.contrastText" : "text.secondary", opacity: 0.7 }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", opacity: 0.7 }}>
               - {format(new Date(message.time), "h:mm a")}
             </Typography>
           </Box>
@@ -80,7 +70,7 @@ export default function MessageBlock({
             sx={{
               wordBreak: "break-word",
               whiteSpace: "pre-wrap",
-              color: isMyMessage ? "primary.contrastText" : "text.primary",
+              color: "text.primary",
             }}
           >
             {DOMPurify.sanitize(message.message, {
@@ -106,13 +96,13 @@ export default function MessageBlock({
         >
           <IconButton
             size="small"
-            onClick={() => onDeleteMessage(message._id)}
+            onClick={() => onMessageOptions(message)}
             sx={{
               backgroundColor: "background.paper",
               "&:hover": { backgroundColor: "action.hover" },
             }}
           >
-            <DeleteIcon fontSize="small" />
+            <MoreVertIcon fontSize="small" />
           </IconButton>
         </Box>
       )}

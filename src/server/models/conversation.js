@@ -6,7 +6,6 @@ var messageSchema = new mongoose.Schema({
   from: { type: String }, // user ID
   message: { type: String },
   time: { type: String },
-  unread: { type: Boolean, default: true },
   parentMessageId: { type: String }, // optional - for threaded replies
 });
 

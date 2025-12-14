@@ -43,7 +43,7 @@ export default function Admin() {
     const verifyAdminRole = async () => {
       try {
         const data = await get<{ roles: string[] }>("/api/user/roles/verify");
-        if (!data.roles?.includes("admin")) {
+        if (!data.roles?.some((role: string) => role.toLowerCase() === "admin")) {
           // Admin role was removed, redirect to internal
           navigate("/internal");
           enqueueSnackbar("Your admin access has been revoked", { variant: "warning" });

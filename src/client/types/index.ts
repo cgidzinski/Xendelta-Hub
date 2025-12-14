@@ -10,7 +10,6 @@ export interface Message {
   from: string;
   message: string;
   time: string;
-  unread?: boolean;
   parentMessageId?: string;
   senderUsername?: string;
   isSystemMessage?: boolean;
