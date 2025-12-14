@@ -1,5 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
+import { get, put } from "../../utils/apiClient";
+import { useSocket } from "../useSocket";
+import { useEffect } from "react";
 
 export interface Notification {
   _id: string;
@@ -25,77 +28,24 @@ interface UseUserNotificationsReturn {
 }
 
 const fetchUserNotifications = async (): Promise<Notification[]> => {
-  const token = localStorage.getItem("token");
-
-  const response = await fetch("/api/user/notifications", {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error("Unauthorized - please log in again");
-    } else {
-      throw new Error(`Failed to fetch notifications: ${response.statusText}`);
-    }
-  }
-
-  const data = await response.json();
-  return data.data.notifications;
+  const data = await get<{ notifications: Notification[] }>("/api/user/notifications");
+  return data.notifications;
 };
 
 const markAllNotificationsAsRead = async (): Promise<Notification[]> => {
-  const token = localStorage.getItem("token");
-
-  const response = await fetch("/api/user/notifications/mark-read", {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error("Unauthorized - please log in again");
-    } else {
-      throw new Error(`Failed to mark notifications as read: ${response.statusText}`);
-    }
-  }
-
-  const data = await response.json();
-  return data.data.notifications;
+  const data = await put<{ notifications: Notification[] }>("/api/user/notifications/mark-read");
+  return data.notifications;
 };
 
 const markNotificationAsRead = async (notificationId: string): Promise<Notification> => {
-  const token = localStorage.getItem("token");
-
-  const response = await fetch(`/api/user/notifications/${notificationId}/mark-read`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error("Unauthorized - please log in again");
-    } else {
-      throw new Error(`Failed to mark notification as read: ${response.statusText}`);
-    }
-  }
-
-  const data = await response.json();
-  return data.data.notification;
+  const data = await put<{ notification: Notification }>(`/api/user/notifications/${notificationId}/mark-read`);
+  return data.notification;
 };
 
 export const useUserNotifications = (): UseUserNotificationsReturn => {
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
+  const { socket } = useSocket();
 
   // Query for fetching user notifications - lazy by default
   const {
@@ -118,6 +68,83 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
       return failureCount < 3;
     },
   });
+
+  // Set up socket listeners for real-time notification updates
+  useEffect(() => {
+    if (!socket || !isAuthenticated) return;
+
+    const handleNewNotification = (data: { notification: Notification }) => {
+      // Add new notification to cache
+      queryClient.setQueryData(["userNotifications"], (oldData: Notification[] | undefined) => {
+        if (!oldData) return [data.notification];
+        return [data.notification, ...oldData].slice(0, 10);
+      });
+
+      // Update user profile to reflect unread notification
+      queryClient.setQueryData(["userProfile"], (oldProfileData: any) => {
+        if (oldProfileData) {
+          return {
+            ...oldProfileData,
+            unread_notifications: true,
+          };
+        }
+        return oldProfileData;
+      });
+    };
+
+    const handleNotificationUpdate = (data: { notificationId: string; update: any }) => {
+      if (data.notificationId === "all") {
+        // All notifications marked as read
+        queryClient.setQueryData(["userNotifications"], (oldData: Notification[] | undefined) => {
+          if (!oldData) return oldData;
+          return oldData.map(notif => ({ ...notif, unread: false }));
+        });
+        queryClient.setQueryData(["userProfile"], (oldProfileData: any) => {
+          if (oldProfileData) {
+            return {
+              ...oldProfileData,
+              unread_notifications: false,
+            };
+          }
+          return oldProfileData;
+        });
+      } else {
+        // Single notification updated
+        queryClient.setQueryData(["userNotifications"], (oldData: Notification[] | undefined) => {
+          if (!oldData) return oldData;
+          return oldData.map(notif => 
+            notif._id === data.notificationId ? { ...notif, ...data.update } : notif
+          );
+        });
+
+        // Check if all notifications are now read
+        queryClient.setQueryData(["userNotifications"], (oldData: Notification[] | undefined) => {
+          if (!oldData) return oldData;
+          const hasUnreadNotifications = oldData.some(notification => notification.unread);
+          
+          queryClient.setQueryData(["userProfile"], (oldProfileData: any) => {
+            if (oldProfileData) {
+              return {
+                ...oldProfileData,
+                unread_notifications: hasUnreadNotifications,
+              };
+            }
+            return oldProfileData;
+          });
+          
+          return oldData;
+        });
+      }
+    };
+
+    socket.on("notification:new", handleNewNotification);
+    socket.on("notification:update", handleNotificationUpdate);
+
+    return () => {
+      socket.off("notification:new", handleNewNotification);
+      socket.off("notification:update", handleNotificationUpdate);
+    };
+  }, [socket, isAuthenticated, queryClient]);
 
   // Function to manually trigger the notifications fetch
   const fetchNotifications = () => {

@@ -8,19 +8,32 @@ import ErrorPage from "./components/ErrorPage";
 import NavBar from "./components/NavBar";
 import ProtectedRoute from "./components/ProtectedRoute";
 import UnprotectedRoute from "./components/UnprotectedRoute";
+import AdminRoute from "./components/AdminRoute";
+import AdminNavBar from "./components/AdminNavBar";
 import React from "react";
-import Home from "./routes/Home/Home";
-import Login from "./routes/Auth/Login";
-import Signup from "./routes/Auth/Signup";
-import Reset from "./routes/Auth/Reset";
-import Logout from "./routes/Auth/Logout";
-import AuthCallback from "./routes/Auth/AuthCallback";
+import Home from "./routes/Internal/Home/Home";
+import Login from "./routes/External/Auth/Login";
+import Signup from "./routes/External/Auth/Signup";
+import Reset from "./routes/External/Auth/Reset";
+import Logout from "./routes/External/Auth/Logout";
+import AuthCallback from "./routes/External/Auth/AuthCallback";
 // import LoadingBox from "./components/LoadingBox";
 import { NavBarProvider } from "./contexts/NavBarContext";
 import { AuthProvider } from "./contexts/AuthContext";
-import Profile from "./routes/Profile/Profile";
-import Settings from "./routes/Settings/Settings";
-import Messages from "./routes/Messages/Messages";
+import Profile from "./routes/Internal/Profile/Profile";
+import Settings from "./routes/Internal/Settings/Settings";
+import Messages from "./routes/Internal/Messages/Messages";
+import ConversationDetail from "./routes/Internal/Messages/ConversationDetail";
+import Admin from "./routes/Admin/Admin";
+import Users from "./routes/Admin/Users";
+import AdminBlog from "./routes/Admin/Blog";
+import BlogPostForm from "./routes/Admin/BlogPostForm";
+import Landing from "./routes/External/Landing/Landing";
+import Features from "./routes/External/Features/Features";
+import Blog from "./routes/External/BlogPublic/Blog";
+import BlogPostDetail from "./routes/External/BlogPublic/BlogPostDetail";
+import InternalBlog from "./routes/Internal/Blog/InternalBlog";
+import InternalBlogPostDetail from "./routes/Internal/Blog/InternalBlogPostDetail";
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -59,9 +72,46 @@ const router = createBrowserRouter(
         element={<AuthCallback />}
         errorElement={<ErrorPage />}
       />
-      {/* Protected routes - require authentication */}
+      {/* Landing page - public, redirects authenticated users */}
       <Route
         path="/"
+        element={
+          <UnprotectedRoute>
+            <Landing />
+          </UnprotectedRoute>
+        }
+        errorElement={<ErrorPage />}
+      />
+      <Route
+        path="/features"
+        element={
+          <UnprotectedRoute>
+            <Features />
+          </UnprotectedRoute>
+        }
+        errorElement={<ErrorPage />}
+      />
+      <Route
+        path="/blog"
+        element={
+          <UnprotectedRoute>
+            <Blog />
+          </UnprotectedRoute>
+        }
+        errorElement={<ErrorPage />}
+      />
+      <Route
+        path="/blog/:slug"
+        element={
+          <UnprotectedRoute>
+            <BlogPostDetail />
+          </UnprotectedRoute>
+        }
+        errorElement={<ErrorPage />}
+      />
+      {/* Internal routes - require authentication */}
+      <Route
+        path="/internal"
         element={
           <ProtectedRoute>
             <NavBar />
@@ -69,21 +119,29 @@ const router = createBrowserRouter(
         }
         errorElement={<ErrorPage />}
       >
-        <Route errorElement={<ErrorPage />}>
-          <Route index element={<Navigate to="home" replace />} />
-          <Route path="home">
-            <Route path="" element={<Home />} />
-          </Route>
-          <Route path="profile">
-            <Route path="" element={<Profile />} />
-          </Route>
-          <Route path="settings">
-            <Route path="" element={<Settings />} />
-          </Route>
-          <Route path="messages">
-            <Route path="" element={<Messages />} />
-          </Route>
-        </Route>
+        <Route index element={<Home />} />
+        <Route path="profile" element={<Profile />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="messages" element={<Messages />} />
+        <Route path="messages/:conversationId" element={<ConversationDetail />} />
+        <Route path="blog" element={<InternalBlog />} />
+        <Route path="blog/:slug" element={<InternalBlogPostDetail />} />
+      </Route>
+      {/* Admin routes - require admin role and use AdminNavBar */}
+      <Route
+        path="/admin"
+        element={
+          <AdminRoute>
+            <AdminNavBar />
+          </AdminRoute>
+        }
+        errorElement={<ErrorPage />}
+      >
+        <Route path="" element={<Admin />} />
+        <Route path="users" element={<Users />} />
+        <Route path="blog" element={<AdminBlog />} />
+        <Route path="blog/new" element={<BlogPostForm />} />
+        <Route path="blog/:id/edit" element={<BlogPostForm />} />
       </Route>
     </>
   )
@@ -123,7 +181,7 @@ ReactDOM.createRoot(rootElement).render(
       <CssBaseline />
       <AuthProvider>
         <NavBarProvider>
-          <SnackbarProvider maxSnack={10}>
+          <SnackbarProvider maxSnack={10} autoHideDuration={2500}>
             {/* <LoadingBox> */}
             <RouterProvider router={router} />
             {/* </LoadingBox> */}

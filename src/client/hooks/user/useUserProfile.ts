@@ -1,11 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
+import { get, put } from "../../utils/apiClient";
 
 export interface UserProfile {
   _id: string;
   username: string;
   email: string;
   avatar: string;
+  roles?: string[];
   unread_messages: boolean;
   unread_notifications: boolean;
 }
@@ -50,30 +52,8 @@ const fetchCurrentUserProfile = async (): Promise<UserProfile> => {
 };
 
 const updateCurrentUserProfile = async (data: UpdateProfileData) => {
-  const token = localStorage.getItem("token");
-
-  const response = await fetch("/api/user/profile", {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error("Unauthorized - please log in again");
-    } else if (response.status === 400) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || "Invalid profile data");
-    } else {
-      throw new Error(`Failed to update profile: ${response.statusText}`);
-    }
-  }
-
-  const responseData = await response.json();
-  return responseData.data.user;
+  const responseData = await put<{ user: UserProfile }>("/api/user/profile", data);
+  return responseData.user;
 };
 
 export const useUserProfile = (): UseUserProfileReturn => {

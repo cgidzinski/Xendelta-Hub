@@ -12,7 +12,7 @@ var Mongo = require("./infrastructure/mongoDB.js");
 // Import Passport configuration AFTER dotenv has loaded
 require("./config/passport");
 
-const socket = require("socket.io");
+const { Server: SocketIOServer } = require("socket.io");
 
 const app = express();
 app.use(cors());
@@ -28,17 +28,37 @@ app.use(passport.initialize());
 // Serve static files for avatars
 app.use('/avatars', express.static('src/server/public/avatars'));
 
+// Serve static files for blog images
+app.use('/blog-images', express.static('src/server/public/blog-images'));
+
 const port = process.env.PORT || "3000";
 const server = ViteExpress.listen(app, Number(port), () => console.log(`>>> Server is listening on port ${port}...`));
-const io = socket(server);
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
 
 console.log(">>> Starting Ark Stash in", process.env.NODE_ENV, "mode");
 console.log(">>> ------------------");
 console.log(">>> Initializing Mongo...");
-Mongo.getConnection();
+const mongoConnection = Mongo.getConnection();
+
+// Initialize default users after MongoDB connection
+import { initializeDefaultUsers } from "./utils/defaultUsers";
+
+mongoConnection.on("connected", async () => {
+  console.log(">>> MongoDB connected");
+  await initializeDefaultUsers();
+});
+
 console.log(">>> Initializing Socket...");
 const socketManager = SocketManager.getInstance();
 socketManager.initialize(io);
 
 require("./routes/users.ts")(app);
 require("./routes/notifications.ts")(app);
+require("./routes/messages.ts")(app);
+require("./routes/blog.ts")(app);

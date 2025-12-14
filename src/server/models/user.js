@@ -11,6 +11,13 @@ var notificationSchema = new mongoose.Schema({
   unread: { type: Boolean },
 });
 
+// User-specific conversation metadata (references Conversation collection)
+var userConversationMetadataSchema = new mongoose.Schema({
+  conversationId: { type: Schema.Types.ObjectId, ref: "Conversation", required: true },
+  unread: { type: Boolean, default: true }, // true if user has unread messages in this conversation
+  lastReadAt: { type: String }, // timestamp of last read
+});
+
 // AUTHENTICATION PROVIDER SCHEMA
 var authProviderSchema = new mongoose.Schema({
   provider: { type: String, required: true }, // 'local', 'google', 'facebook', etc.
@@ -30,6 +37,7 @@ var userSchema = new mongoose.Schema({
   password: { type: String }, // For local authentication
   authProviders: [authProviderSchema], // Multiple authentication methods
   notifications: [notificationSchema],
+  conversations: [userConversationMetadataSchema], // References to conversations with user-specific metadata
   resetPassword: {
     token: { type: String },
     expires: { type: Date },

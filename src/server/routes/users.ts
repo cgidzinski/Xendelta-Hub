@@ -2,54 +2,88 @@ import express = require("express");
 const { User } = require("../models/user");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+import path from "path";
 import { authenticateToken } from "../middleware/auth";
 import { generateToken } from "../utils/tokenUtils";
 import { sendPasswordResetEmail } from "../utils/emailUtils";
 import passport from "../config/passport";
-
-// Extend Request interface for authenticated routes
-interface AuthenticatedRequest extends express.Request {
-  user?: {
-    _id: string;
-    username: string;
-    email: string;
-    avatar: string;
-  };
-}
+import { SocketManager } from "../infrastructure/SocketManager";
+import fsPromises from "fs/promises";
+import { saveAvatarFile, getLocalAvatarPath, getAvatarMimeType, getAvatarExtension, isLocalAvatar, AVATARS_DIR } from "../utils/avatarUtils";
+import { validate, signupSchema, loginSchema, updateProfileSchema } from "../utils/validation";
+import { AuthenticatedRequest } from "../types";
+import { upload } from "../config/multer";
 
 module.exports = function (app: express.Application) {
+  // Role verification endpoint - returns user's roles from database
+  app.get("/api/user/roles/verify", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const user = await User.findOne({ _id: (req as any).user._id }).exec();
+    
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+    
+    return res.json({
+      status: true,
+      message: "",
+      data: {
+        roles: user.roles || [],
+      },
+    });
+  });
+
   app.get("/api/user/profile", authenticateToken, async function (req: express.Request, res: express.Response) {
     const user = await User.findOne({ _id: (req as any).user._id }).exec();
+    
+    // Check if user has any unread messages in any conversation
+    // user.conversations now contains metadata with unread flag
+    const hasUnreadMessages = (user.conversations || []).some((convMetadata: any) => {
+      return convMetadata.unread === true;
+    });
+    
     return res.json({
       status: true,
       message: "",
       data: {
         user: {
+          _id: user._id.toString(),
           username: user.username,
           email: user.email,
           avatar: user.avatar,
-          unread_messages: false,
+          roles: user.roles || [],
+          unread_messages: hasUnreadMessages,
           unread_notifications: user.notifications.some((notification: any) => notification.unread),
         },
       },
     });
   });
 
-  app.put("/api/user/profile", authenticateToken, async function (req: express.Request, res: express.Response) {
+  app.put("/api/user/profile", authenticateToken, validate(updateProfileSchema), async function (req: express.Request, res: express.Response) {
     const user = await User.findOne({ _id: (req as any).user._id }).exec();
     const { avatar } = req.body;
 
     if (avatar !== undefined) user.avatar = avatar;
 
-    user.notifications.unshift({
+    const newNotification = {
       title: "Profile updated",
       message: "Your profile has been successfully updated",
       time: new Date().toISOString(),
       icon: "person",
       unread: true,
-    });
+    };
 
+    user.notifications.unshift(newNotification);
     await user.save();
+
+    // Get the saved notification with _id
+    const savedNotification = user.notifications[0];
+
+    // Send socket notification
+    const socketManager = SocketManager.getInstance();
+    socketManager.sendNotification(user._id.toString(), savedNotification);
     return res.json({
       status: true,
       message: "",
@@ -63,6 +97,97 @@ module.exports = function (app: express.Application) {
         },
       },
     });
+  });
+
+  // Avatar upload endpoint
+  app.post("/api/user/avatar", authenticateToken, upload.single("avatar"), async function (req: express.Request, res: express.Response) {
+    const user = await User.findOne({ _id: (req as any).user._id }).exec();
+    
+    if (!req.file) {
+      return res.status(400).json({
+        status: false,
+        message: "No file uploaded",
+      });
+    }
+
+    const avatarPath = await saveAvatarFile(req.file, user._id.toString());
+    user.avatar = avatarPath;
+    await user.save();
+
+    const newNotification = {
+      title: "Avatar updated",
+      message: "Your avatar has been successfully updated",
+      time: new Date().toISOString(),
+      icon: "person",
+      unread: true,
+    };
+
+    user.notifications.unshift(newNotification);
+    await user.save();
+
+    // Get the saved notification with _id
+    const savedNotification = user.notifications[0];
+
+    // Send socket notification
+    const socketManager = SocketManager.getInstance();
+    socketManager.sendNotification(user._id.toString(), savedNotification);
+
+    return res.json({
+      status: true,
+      message: "Avatar uploaded successfully",
+      data: {
+        avatar: user.avatar,
+      },
+    });
+  });
+
+  // Serve avatar image
+  app.get("/avatar/:userId", async function (req: express.Request, res: express.Response) {
+    const { userId } = req.params;
+    
+    // Check user record first to get the correct file extension
+    const user = await User.findOne({ _id: userId }).exec();
+    
+    if (!user) {
+      // Return default avatar if user not found
+      const defaultAvatarPath = path.join(AVATARS_DIR, "default-avatar.png");
+      res.setHeader("Content-Type", "image/png");
+      return res.sendFile(defaultAvatarPath);
+    }
+
+    // Check if avatar is a local file
+    if (isLocalAvatar(user.avatar)) {
+      const localPath = await getLocalAvatarPath(user.avatar).catch(() => null);
+      if (localPath) {
+        const mimeType = getAvatarMimeType(localPath);
+        res.setHeader("Content-Type", mimeType);
+        return res.sendFile(localPath);
+      }
+    }
+
+    // Try common extensions (jpg, png, gif) in order
+    const extensions = ["jpg", "png", "gif"];
+    for (const ext of extensions) {
+      const userAvatarPath = path.join(AVATARS_DIR, `${userId}.${ext}`);
+      try {
+        await fsPromises.access(userAvatarPath);
+        const mimeType = getAvatarMimeType(userAvatarPath);
+        res.setHeader("Content-Type", mimeType);
+        return res.sendFile(userAvatarPath);
+      } catch {
+        // Continue to next extension
+      }
+    }
+
+    // If external URL (legacy), redirect to external URL
+    if (user.avatar && (user.avatar.startsWith("http://") || user.avatar.startsWith("https://"))) {
+      return res.redirect(user.avatar);
+    }
+
+    // Fallback to default avatar
+    const defaultAvatarPath = path.join(AVATARS_DIR, "default-avatar.png");
+    res.setHeader("Content-Type", "image/png");
+    return res.sendFile(defaultAvatarPath);
   });
 
   app.post("/api/auth/verify", authenticateToken, async function (req: express.Request, res: express.Response) {
@@ -96,7 +221,7 @@ module.exports = function (app: express.Application) {
     }
   });
 
-  app.post("/api/auth/login", async function (req: express.Request, res: express.Response) {
+  app.post("/api/auth/login", validate(loginSchema), async function (req: express.Request, res: express.Response) {
     var username = req.body.username;
     var password = req.body.password;
     const user = await User.findOne({ username: username }).exec();
@@ -126,7 +251,7 @@ module.exports = function (app: express.Application) {
     }
   });
 
-  app.post("/api/auth/signup", async function (req: express.Request, res: express.Response) {
+  app.post("/api/auth/signup", validate(signupSchema), async function (req: express.Request, res: express.Response) {
     var email = req.body.email.toLowerCase();
     var username = req.body.username;
     var password = req.body.password;
@@ -317,15 +442,23 @@ module.exports = function (app: express.Application) {
     user.resetPassword.expires = undefined;
 
     // Add notification
-    user.notifications.unshift({
+    const newNotification = {
       title: "Password Reset",
       message: "Your password has been successfully reset",
       time: new Date().toISOString(),
       icon: "lock",
       unread: true,
-    });
+    };
 
+    user.notifications.unshift(newNotification);
     await user.save();
+
+    // Get the saved notification with _id
+    const savedNotification = user.notifications[0];
+
+    // Send socket notification
+    const socketManager = SocketManager.getInstance();
+    socketManager.sendNotification(user._id.toString(), savedNotification);
 
     return res.json({
       status: true,
@@ -603,4 +736,49 @@ module.exports = function (app: express.Application) {
       }
     }
   );
+
+  // Get all users (for admin and message participant selection)
+  app.get("/api/users", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const users = await User.find({}, "username email _id roles avatar").exec();
+    
+    return res.json({
+      status: true,
+      message: "",
+      data: {
+        users: users.map((user: any) => ({
+          _id: user._id,
+          username: user.username,
+          email: user.email,
+          roles: user.roles || [],
+          avatar: user.avatar,
+        })),
+      },
+    });
+  });
+
+  // Add admin role to current user (for development/testing)
+  app.post("/api/user/make-admin", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const user = await User.findOne({ _id: (req as any).user._id }).exec();
+    
+    if (!user.roles) {
+      user.roles = [];
+    }
+    
+    if (!user.roles.includes("admin")) {
+      user.roles.push("admin");
+      await user.save();
+    }
+    
+    return res.json({
+      status: true,
+      message: "Admin role added successfully",
+      data: {
+        user: {
+          username: user.username,
+          email: user.email,
+          roles: user.roles,
+        },
+      },
+    });
+  });
 };

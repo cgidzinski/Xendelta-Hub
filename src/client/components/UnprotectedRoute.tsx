@@ -15,10 +15,15 @@ const UnprotectedRoute: React.FC<UnprotectedRouteProps> = ({ children }) => {
   // Redirect if already authenticated
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      const from = location.state?.from?.pathname || '/home';
-      navigate(from, { replace: true });
+      // For landing page, always redirect to internal
+      if (location.pathname === '/') {
+        navigate('/internal', { replace: true });
+      } else {
+        const from = location.state?.from?.pathname || '/internal';
+        navigate(from, { replace: true });
+      }
     }
-  }, [isAuthenticated, isLoading, navigate, location.state]);
+  }, [isAuthenticated, isLoading, navigate, location.state, location.pathname]);
 
   // Show loading while checking authentication
   if (isLoading) {

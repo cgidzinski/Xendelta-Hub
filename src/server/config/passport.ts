@@ -4,6 +4,7 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as GitHubStrategy } from 'passport-github2';
 const { User } = require('../models/user');
 import { generateToken } from '../utils/tokenUtils';
+import { downloadAvatarFromUrl } from '../utils/avatarUtils';
 
 // Check for required environment variables
 if (!process.env.JWT_SECRET) {
@@ -73,12 +74,27 @@ passport.use(new GoogleStrategy(googleOptions, async (accessToken, refreshToken,
     user = new User({
       username: profile.displayName || profile.emails?.[0]?.value?.split('@')[0],
       email: profile.emails?.[0]?.value,
-      avatar: profile.photos?.[0]?.value || '/avatars/default-avatar.png',
+      avatar: '/avatars/default-avatar.png', // Default, will update if download succeeds
       notifications: []
     });
     
     // Add Google as auth provider
     await user.addAuthProvider('google', profile.id, profile.emails?.[0]?.value);
+    
+    // Save user first to get _id
+    await user.save();
+    
+    // Download and save OAuth avatar if available
+    if (profile.photos?.[0]?.value) {
+      const avatarUrl = await downloadAvatarFromUrl(profile.photos[0].value, user._id.toString()).catch((error) => {
+        console.warn('Failed to download Google avatar:', error);
+        return null;
+      });
+      if (avatarUrl) {
+        user.avatar = avatarUrl;
+        await user.save();
+      }
+    }
     
     return done(null, user);
   } catch (error) {
@@ -131,12 +147,27 @@ passport.use(new GitHubStrategy(githubOptions, async (accessToken, refreshToken,
     user = new User({
       username: profile.username || profile.displayName || userEmail?.split('@')[0] || 'github-user',
       email: userEmail || `${profile.username}@github.local`, // Fallback email if no email available
-      avatar: profile.photos?.[0]?.value || '/avatars/default-avatar.png',
+      avatar: '/avatars/default-avatar.png', // Default, will update if download succeeds
       notifications: []
     });
     
     // Add GitHub as auth provider
     await user.addAuthProvider('github', profile.id, userEmail);
+    
+    // Save user first to get _id
+    await user.save();
+    
+    // Download and save OAuth avatar if available
+    if (profile.photos?.[0]?.value) {
+      const avatarUrl = await downloadAvatarFromUrl(profile.photos[0].value, user._id.toString()).catch((error) => {
+        console.warn('Failed to download GitHub avatar:', error);
+        return null;
+      });
+      if (avatarUrl) {
+        user.avatar = avatarUrl;
+        await user.save();
+      }
+    }
     
     return done(null, user);
   } catch (error) {
