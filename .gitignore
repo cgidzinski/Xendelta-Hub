@@ -23,4 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 .env
-src/server/public/*
+# Ignore everything in public directory except default avatar
+src/server/public/**
+!src/server/public/avatars/
+src/server/public/avatars/**
+!src/server/public/avatars/default-avatar.png
