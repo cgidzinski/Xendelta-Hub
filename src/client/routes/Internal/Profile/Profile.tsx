@@ -42,15 +42,23 @@ export default function Profile() {
   const { profile, isLoading, updateProfile, isUpdating, refetch } = useUserProfile();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  
+  useTitle("Profile");
+  
   useEffect(() => {
-    if (profile?._id) {
-      // Always use the /avatar/:userId endpoint for consistency
-      // This endpoint handles both local and external avatars
-      setMainAvatarUrl(`/avatar/${profile._id}?t=${Date.now()}`);
+    // Update avatar URL from profile (ignore query params when comparing)
+    if (profile?.avatar) {
+      setMainAvatarUrl((current) => {
+        const currentUrlWithoutParams = current?.split('?')[0];
+        if (profile.avatar !== currentUrlWithoutParams) {
+          return profile.avatar;
+        }
+        return current;
+      });
     } else {
       setMainAvatarUrl(null);
     }
-  }, [profile?._id, profile?.avatar]);
+  }, [profile?.avatar]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -99,24 +107,26 @@ export default function Profile() {
 
     const data = await response.json();
 
-    if (data.status) {
+    if (data.status && data.data?.avatar) {
+      const newAvatarUrl = data.data.avatar;
       enqueueSnackbar("Avatar uploaded successfully!", { variant: "success" });
       setSelectedFile(null);
       setFilePreviewUrl(null);
-      // Force avatar refresh immediately with cache-busting timestamp
-      if (profile?._id) {
-        setMainAvatarUrl(`/avatar/${profile._id}?t=${Date.now()}`);
-        setAvatarKey((prev) => prev + 1); // Force Avatar component to re-render
-      }
+      
       // Update profile cache immediately with new avatar path
-      if (profile && data.data?.avatar) {
+      if (profile) {
         queryClient.setQueryData(["userProfile"], {
           ...profile,
-          avatar: data.data.avatar,
+          avatar: newAvatarUrl,
         });
       }
-      // Invalidate and refetch profile to update all components using the profile (NavBar, ProfileListItem, etc.)
-      queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+      
+      // Update avatar URL immediately with cache-busting timestamp
+      const avatarUrlWithCache = `${newAvatarUrl}?t=${Date.now()}`;
+      setMainAvatarUrl(avatarUrlWithCache);
+      setAvatarKey((prev) => prev + 1);
+      
+      // Refetch profile to update all components using the profile (NavBar, ProfileListItem, etc.)
       refetch();
     } else {
       enqueueSnackbar(data.message || "Failed to upload avatar", { variant: "error" });
@@ -127,8 +137,6 @@ export default function Profile() {
   if (isLoading) {
     return <OverlaySpinner message="Loading your profile..." />;
   }
-
-  useTitle("Profile");
 
   return (
     <Box sx={{ position: "relative" }}>
@@ -142,7 +150,7 @@ export default function Profile() {
                 <Box sx={{ textAlign: "center", mb: 4 }}>
                   <Avatar
                     key={avatarKey}
-                    src={mainAvatarUrl || undefined}
+                    src={mainAvatarUrl || profile?.avatar}
                     alt={profile?.username || "User"}
                     sx={{
                       width: 120,

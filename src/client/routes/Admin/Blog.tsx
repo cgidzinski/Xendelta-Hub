@@ -22,27 +22,7 @@ import { useSnackbar } from "notistack";
 import { format } from "date-fns";
 import { get, del } from "../../utils/apiClient";
 import { useTitle } from "../../hooks/useTitle";
-
-interface BlogPost {
-  _id: string;
-  title: string;
-  slug: string;
-  markdown: string;
-  publishDate: string;
-  image?: string;
-  images?: string[];
-  featuredImage?: string;
-  categories: string[];
-  tags: string[];
-  featured: boolean;
-  author: {
-    _id: string;
-    username: string;
-    avatar?: string;
-  } | null;
-  createdAt: string;
-  updatedAt: string;
-}
+import { BlogPost } from "../../types";
 
 export default function Blog() {
   const navigate = useNavigate();

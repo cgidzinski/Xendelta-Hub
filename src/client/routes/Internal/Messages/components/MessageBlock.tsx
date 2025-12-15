@@ -13,6 +13,7 @@ interface MessageBlockProps {
   showAvatar: boolean;
   showTimestamp: boolean;
   getMessageSenderName: (message: Message) => string;
+  getMessageSenderAvatar?: (message: Message) => string | undefined;
   onMessageOptions: (message: Message) => void;
   profileId?: string;
 }
@@ -25,12 +26,15 @@ export default function MessageBlock({
   showAvatar,
   showTimestamp,
   getMessageSenderName,
+  getMessageSenderAvatar,
   onMessageOptions,
   profileId,
 }: MessageBlockProps) {
   const [avatarError, setAvatarError] = React.useState(false);
   const isSystemMessage = message.isSystemMessage || message.from === "system";
-  const avatarSrc = !isSystemMessage && message.from ? `/avatar/${message.from}` : undefined;
+  const avatarSrc = !isSystemMessage && getMessageSenderAvatar 
+    ? getMessageSenderAvatar(message)
+    : undefined;
 
   return (
     <Box

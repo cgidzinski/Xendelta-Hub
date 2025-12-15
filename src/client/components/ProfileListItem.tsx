@@ -8,15 +8,10 @@ export default function ProfileListItem() {
   const location = useLocation();
   const { profile } = useUserProfile();
   
-  // Generate avatar URL with cache-busting timestamp that updates when avatar changes
+  // Use direct avatar URL from profile
   const avatarUrl = useMemo(() => {
-    if (profile?._id) {
-      // Use cache-busting timestamp to ensure avatar updates immediately
-      // Include avatar path in the key to force update when avatar changes
-      return `/avatar/${profile._id}?t=${Date.now()}&v=${profile?.avatar || 'none'}`;
-    }
-    return null;
-  }, [profile?._id, profile?.avatar]);
+    return profile?.avatar;
+  }, [profile?.avatar]);
 
   return (
     <ListItem disablePadding>
@@ -29,7 +24,7 @@ export default function ProfileListItem() {
         <ListItemAvatar>
           <Avatar
             key={avatarUrl || profile?._id} // Force re-render when avatar URL changes
-            src={avatarUrl || undefined}
+            src={avatarUrl}
             sx={{ width: 48, height: 48, borderRadius: 2 }}
           >
             {profile?.username?.charAt(0).toUpperCase()}

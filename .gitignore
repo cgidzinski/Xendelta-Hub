@@ -26,3 +26,4 @@ src/server/public/**
 !src/server/public/avatars/
 src/server/public/avatars/**
 !src/server/public/avatars/default-avatar.png
+gcs-service-account.json

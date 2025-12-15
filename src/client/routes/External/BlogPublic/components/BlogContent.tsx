@@ -15,27 +15,9 @@ import {
 } from "@mui/material";
 import { CalendarToday, Person, Star } from "@mui/icons-material";
 import { format } from "date-fns";
+import { BlogPost } from "../../../types";
 
-export interface BlogPost {
-  _id: string;
-  title: string;
-  slug: string;
-  markdown: string;
-  publishDate: string;
-  image?: string;
-  images?: string[];
-  featuredImage?: string;
-  categories: string[];
-  tags: string[];
-  featured: boolean;
-  author: {
-    _id: string;
-    username: string;
-    avatar?: string;
-  } | null;
-  createdAt: string;
-  updatedAt: string;
-}
+export type { BlogPost };
 
 // Extract excerpt from markdown (first paragraph or first 200 chars)
 function extractExcerpt(markdown: string): string {
@@ -107,11 +89,11 @@ export default function BlogContent({ blogBasePath, posts, isLoading, error, onP
               }}
               onClick={() => onPostClick(post.slug)}
             >
-              {post.image && (
+              {post.featuredImage && (
                 <CardMedia
                   component="img"
                   height="300"
-                  image={post.image}
+                  image={post.featuredImage}
                   alt={post.title}
                   sx={{ objectFit: "cover" }}
                 />

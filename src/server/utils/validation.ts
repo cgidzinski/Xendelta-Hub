@@ -95,19 +95,28 @@ export const validate = (schema: z.ZodSchema) => {
       schema.parse(req.body);
       next();
     } catch (error) {
+      // Check if it's a ZodError
       if (error instanceof z.ZodError) {
         return res.status(400).json({
           status: false,
           message: "Validation error",
-          errors: error.errors.map((err) => ({
+          errors: error.issues.map((err: z.ZodIssue) => ({
             path: err.path.join("."),
             message: err.message,
           })),
         });
       }
+      
+      // Log unexpected errors for debugging
+      console.error("Unexpected validation error:", error);
+      console.error("Error type:", error?.constructor?.name);
+      console.error("Request body:", JSON.stringify(req.body, null, 2));
+      
       return res.status(500).json({
         status: false,
         message: "Validation failed",
+        error: error instanceof Error ? error.message : "Unknown error",
+        details: process.env.NODE_ENV === "development" ? String(error) : undefined,
       });
     }
   };
@@ -124,7 +133,7 @@ export const validateParams = (schema: z.ZodSchema) => {
         return res.status(400).json({
           status: false,
           message: "Invalid parameter",
-          errors: error.errors.map((err) => ({
+          errors: error.issues.map((err: z.ZodIssue) => ({
             path: err.path.join("."),
             message: err.message,
           })),
@@ -133,6 +142,7 @@ export const validateParams = (schema: z.ZodSchema) => {
       return res.status(500).json({
         status: false,
         message: "Parameter validation failed",
+        error: error instanceof Error ? error.message : "Unknown error",
       });
     }
   };
@@ -168,12 +178,15 @@ export const createBlogPostSchema = z.object({
     .min(10, "Content must be at least 10 characters")
     .max(100000, "Content too long"),
   publishDate: z.string().datetime("Invalid date format"),
-  image: z.string().optional(),
-  images: z.array(z.string()).optional(),
-  featuredImage: z.string().optional(),
-  categories: z.array(z.string().max(50, "Category too long")).optional(),
-  tags: z.array(z.string().max(30, "Tag too long")).optional(),
-  featured: z.boolean().optional(),
+  assets: z.array(z.object({
+    path: z.string(),
+    type: z.string(),
+  })).nullish(),
+  featuredImage: z.string().nullish(),
+  categories: z.array(z.string().max(50, "Category too long")).nullish(),
+  tags: z.array(z.string().max(30, "Tag too long")).nullish(),
+  featured: z.boolean().nullish(),
+  published: z.boolean().nullish(),
 });
 
 export const updateBlogPostSchema = z.object({
@@ -191,12 +204,12 @@ export const updateBlogPostSchema = z.object({
     .max(100000, "Content too long")
     .optional(),
   publishDate: z.string().datetime("Invalid date format").optional(),
-  image: z.string().optional(),
-  images: z.array(z.string()).optional(),
-  featuredImage: z.string().optional(),
-  categories: z.array(z.string().max(50, "Category too long")).optional(),
-  tags: z.array(z.string().max(30, "Tag too long")).optional(),
-  featured: z.boolean().optional(),
+  images: z.array(z.string()).nullish(),
+  featuredImage: z.string().nullish(),
+  categories: z.array(z.string().max(50, "Category too long")).nullish(),
+  tags: z.array(z.string().max(30, "Tag too long")).nullish(),
+  featured: z.boolean().nullish(),
+  published: z.boolean().nullish(),
 });
 
 export const blogPostIdParamSchema = z.object({

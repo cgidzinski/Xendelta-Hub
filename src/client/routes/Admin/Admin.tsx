@@ -39,28 +39,35 @@ export default function Admin() {
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Periodic role verification - check every 30 seconds
+  // Note: AdminRoute already handles initial admin verification, so we only do periodic checks here
   useEffect(() => {
+    let isMounted = true;
+
     const verifyAdminRole = async () => {
       try {
         const data = await get<{ roles: string[] }>("/api/user/roles/verify");
-        if (!data.roles?.some((role: string) => role.toLowerCase() === "admin")) {
+        if (isMounted && !data.roles?.some((role: string) => role.toLowerCase() === "admin")) {
           // Admin role was removed, redirect to internal
           navigate("/internal");
           enqueueSnackbar("Your admin access has been revoked", { variant: "warning" });
         }
       } catch (error) {
-        // On error, redirect for security
-        navigate("/internal");
+        // Don't redirect on error during HMR or temporary network issues
+        // Only log the error - AdminRoute already handles initial verification
+        if (process.env.NODE_ENV === "development") {
+          console.warn("Admin role verification failed (this is normal during HMR):", error);
+        }
       }
     };
 
-    // Verify on mount
-    verifyAdminRole();
-
-    // Set up periodic verification every 30 seconds
+    // Skip initial verification on mount - AdminRoute already handles this
+    // Only set up periodic verification every 30 seconds
     const interval = setInterval(verifyAdminRole, 30000);
 
-    return () => clearInterval(interval);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [navigate, enqueueSnackbar]);
 
   const handleSendToAll = async () => {

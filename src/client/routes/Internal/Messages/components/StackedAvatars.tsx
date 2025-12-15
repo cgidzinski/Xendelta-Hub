@@ -19,7 +19,7 @@ export default function StackedAvatars({
   const { profile } = useUserProfile();
   
   // Get all participants excluding system, but including current user
-  let participants: Array<{ _id: string; username: string }> = [];
+  let participants: Array<{ _id: string; username: string; avatar?: string }> = [];
   
   if (conversation.participantInfo) {
     participants = conversation.participantInfo.filter(
@@ -32,7 +32,7 @@ export default function StackedAvatars({
       .filter((p) => p !== "system")
       .map((p) => {
         if (p === currentUserId && profile) {
-          return { _id: p, username: profile.username };
+          return { _id: p, username: profile.username, avatar: profile.avatar };
         }
         return { _id: p, username: `User ${p.substring(0, 8)}` };
       });
@@ -47,7 +47,7 @@ export default function StackedAvatars({
     const isSystem = conversation.participants.includes("system");
     return (
       <Avatar 
-        src={isSystem ? undefined : `/avatar/${currentUserId}`}
+        src={isSystem ? undefined : participants.find(p => p._id === currentUserId)?.avatar}
         sx={{ width: size, height: size, borderRadius: 2 }}
       >
         {isSystem ? "S" : (currentUserId ? currentUserId.charAt(0).toUpperCase() : "?")}
@@ -62,7 +62,7 @@ export default function StackedAvatars({
   return (
     <Box sx={{ position: "relative", width: containerWidth, height: size, overflow: "visible", mr: 3 }}>
       {displayParticipants.map((participant, index) => {
-        const avatarSrc = `/avatar/${participant._id}`;
+        const avatarSrc = participant.avatar;
         const offset = index * (size * 0.5); // 50% overlap
         const zIndex = displayParticipants.length - index; // Later avatars on top
 

@@ -1,18 +1,23 @@
 import fs from "fs/promises";
 import path from "path";
-import { createWriteStream } from "fs";
-import { pipeline } from "stream/promises";
-import { Readable } from "stream";
 import { fileTypeFromBuffer } from "file-type";
 import sharp from "sharp";
+import {
+  uploadToGCS,
+  deleteFromGCS,
+  getGcsPath,
+} from "./gcsUtils";
+import {
+  AVATAR_WIDTH,
+  AVATAR_HEIGHT,
+  AVATAR_QUALITY,
+  AVATAR_COMPRESSION_LEVEL,
+  ALLOWED_IMAGE_MIMES,
+  DEFAULT_AVATAR_PATH,
+} from "../constants";
 
 export const AVATARS_DIR = path.join(process.cwd(), "src", "server", "public", "avatars");
-const DEFAULT_AVATAR = "/avatars/default-avatar.png";
-
-// Ensure avatars directory exists
-async function ensureAvatarsDir() {
-  await fs.mkdir(AVATARS_DIR, { recursive: true });
-}
+const DEFAULT_AVATAR = DEFAULT_AVATAR_PATH;
 
 // Get file extension from URL or filename
 function getFileExtension(urlOrFilename: string): string {
@@ -48,13 +53,11 @@ function getExtensionFromMime(mime: string): string {
   return mimeToExt[mime] || "png";
 }
 
-// Download avatar from external URL and save to local storage with security validation
+// Download avatar from external URL and save to GCS with security validation
 export async function downloadAvatarFromUrl(
   url: string,
   userId: string
 ): Promise<string> {
-  await ensureAvatarsDir();
-
   // Delete old avatar if exists
   await deleteAvatarFile(userId);
 
@@ -86,112 +89,105 @@ export async function downloadAvatarFromUrl(
   }
 
   const ext = getExtensionFromMime(fileType.mime);
-  const filePath = path.join(AVATARS_DIR, `${userId}.${ext}`);
+  const gcsPath = getGcsPath("avatars", `${userId}.${ext}`);
 
   // For GIFs, preserve the original file (including animation)
   // For JPEG/PNG, use sharp to resize and strip metadata for security
+  let processedBuffer: Buffer;
   if (fileType.mime === "image/gif") {
-    // Save GIF as-is to preserve animation
-    await fs.writeFile(filePath, buffer);
+    // Use GIF as-is to preserve animation
+    processedBuffer = buffer;
   } else {
     // Re-encode JPEG/PNG using sharp to strip metadata and resize
-    try {
-      const sharpInstance = sharp(buffer)
-        .resize(AVATAR_WIDTH, AVATAR_HEIGHT, {
-          fit: "cover",
-          position: "center",
-        });
+    const sharpInstance = sharp(buffer)
+      .resize(AVATAR_WIDTH, AVATAR_HEIGHT, {
+        fit: "cover",
+        position: "center",
+      });
 
-      if (fileType.mime === "image/jpeg") {
-        await sharpInstance.jpeg({ quality: AVATAR_QUALITY }).toFile(filePath);
-      } else if (fileType.mime === "image/png") {
-        await sharpInstance.png({ quality: AVATAR_QUALITY, compressionLevel: AVATAR_COMPRESSION_LEVEL }).toFile(filePath);
-      }
-    } catch (error) {
-      throw new Error("Invalid or corrupted image file");
+    if (fileType.mime === "image/jpeg") {
+      processedBuffer = await sharpInstance.jpeg({ quality: AVATAR_QUALITY }).toBuffer();
+    } else if (fileType.mime === "image/png") {
+      processedBuffer = await sharpInstance.png({ quality: AVATAR_QUALITY, compressionLevel: AVATAR_COMPRESSION_LEVEL }).toBuffer();
+    } else {
+      processedBuffer = buffer;
     }
   }
 
-  return `/avatars/${userId}.${ext}`;
+  // Upload to GCS
+  await uploadToGCS(processedBuffer, gcsPath, fileType.mime);
+
+  return gcsPath;
 }
 
-// Save uploaded file to local storage with security validation
+// Save uploaded file to GCS with security validation
 export async function saveAvatarFile(
   file: Express.Multer.File,
   userId: string
 ): Promise<string> {
-  await ensureAvatarsDir();
-
   // Delete old avatar if exists
   await deleteAvatarFile(userId);
 
-  // Read file buffer to validate magic bytes
-  const fileBuffer = await fs.readFile(file.path);
-  
+  // With memory storage, file.buffer is available directly
+  if (!file.buffer) {
+    throw new Error("File buffer is missing");
+  }
+
   // Validate file type using magic bytes (not just MIME type)
-  const fileType = await fileTypeFromBuffer(fileBuffer);
+  const fileType = await fileTypeFromBuffer(file.buffer);
   
   if (!fileType) {
-    await fs.unlink(file.path).catch(() => {}); // Clean up temp file
     throw new Error("Unable to determine file type");
   }
 
   // Only allow image types
   const allowedMimes = ["image/jpeg", "image/png", "image/gif"];
   if (!allowedMimes.includes(fileType.mime)) {
-    await fs.unlink(file.path).catch(() => {}); // Clean up temp file
     throw new Error(`Invalid file type: ${fileType.mime}. Only images are allowed.`);
   }
 
   // Preserve original format
   const ext = getExtensionFromMime(fileType.mime);
-  const filePath = path.join(AVATARS_DIR, `${userId}.${ext}`);
+  const gcsPath = getGcsPath("avatars", `${userId}.${ext}`);
 
   // For GIFs, preserve the original file (including animation)
   // For JPEG/PNG, use sharp to resize and strip metadata for security
+  let processedBuffer: Buffer;
   if (fileType.mime === "image/gif") {
-    // Save GIF as-is to preserve animation
-    await fs.copyFile(file.path, filePath);
-    await fs.unlink(file.path).catch(() => {}); // Clean up temp file
+    // Use GIF as-is to preserve animation
+    processedBuffer = file.buffer;
   } else {
     // Re-encode JPEG/PNG using sharp to strip metadata and resize
-    try {
-      const sharpInstance = sharp(fileBuffer)
-        .resize(500, 500, {
-          fit: "cover",
-          position: "center",
-        });
+    const sharpInstance = sharp(file.buffer)
+      .resize(AVATAR_WIDTH, AVATAR_HEIGHT, {
+        fit: "cover",
+        position: "center",
+      });
 
-      if (fileType.mime === "image/jpeg") {
-        await sharpInstance.jpeg({ quality: 90 }).toFile(filePath);
-      } else if (fileType.mime === "image/png") {
-        await sharpInstance.png({ quality: 90, compressionLevel: 9 }).toFile(filePath);
-      }
-
-      // Clean up temp file
-      await fs.unlink(file.path).catch(() => {});
-    } catch (error) {
-      // If sharp fails, the file is likely corrupted or not a valid image
-      await fs.unlink(file.path).catch(() => {});
-      throw new Error("Invalid or corrupted image file");
+    if (fileType.mime === "image/jpeg") {
+      processedBuffer = await sharpInstance.jpeg({ quality: AVATAR_QUALITY }).toBuffer();
+    } else if (fileType.mime === "image/png") {
+      processedBuffer = await sharpInstance.png({ quality: AVATAR_QUALITY, compressionLevel: AVATAR_COMPRESSION_LEVEL }).toBuffer();
+    } else {
+      processedBuffer = file.buffer;
     }
   }
 
-  return `/avatars/${userId}.${ext}`;
+  // Upload to GCS
+  await uploadToGCS(processedBuffer, gcsPath, fileType.mime);
+
+  return gcsPath;
 }
 
-// Delete old avatar file
+// Delete old avatar file from GCS
 export async function deleteAvatarFile(userId: string): Promise<void> {
-  await ensureAvatarsDir();
-
-  // Try to find and delete any existing avatar file for this user
+  // Try to delete any existing avatar file for this user
   // Check for all possible extensions (jpg, png, gif)
-  const files = await fs.readdir(AVATARS_DIR);
-  const userAvatarFiles = files.filter((file) => file.startsWith(`${userId}.`));
-
-  for (const file of userAvatarFiles) {
-    const filePath = path.join(AVATARS_DIR, file);
-    await fs.unlink(filePath).catch(() => {
+  const extensions = ["jpg", "png", "gif"];
+  
+  for (const ext of extensions) {
+    const gcsPath = getGcsPath("avatars", `${userId}.${ext}`);
+    await deleteFromGCS(gcsPath).catch(() => {
       // Ignore errors if file doesn't exist
     });
   }
@@ -208,7 +204,15 @@ export function getAvatarUrl(avatarField: string | undefined): string {
     return DEFAULT_AVATAR;
   }
 
-  // If it's already a local path, return it
+  // If it's a GCS path, return server proxy URL
+  if (isGcsPath(avatarField)) {
+    // Extract userId from path like "avatars/userId.ext"
+    const filename = avatarField.split("/").pop() || "";
+    const userId = filename.split(".")[0];
+    return `/assets/avatar/${userId}`;
+  }
+
+  // If it's already a local path, return it (for default avatar)
   if (avatarField.startsWith("/avatars/")) {
     return avatarField;
   }
@@ -222,10 +226,19 @@ export function getAvatarUrl(avatarField: string | undefined): string {
   return DEFAULT_AVATAR;
 }
 
-// Check if avatar is local file
+// Check if avatar is local file (not GCS)
 export function isLocalAvatar(avatarField: string | undefined): boolean {
   if (!avatarField) return false;
+  // Local paths start with /avatars/ (for default avatar)
+  // GCS paths are like "avatars/userId.ext" (no leading slash)
   return avatarField.startsWith("/avatars/");
+}
+
+// Check if avatar is stored in GCS
+export function isGcsPath(avatarField: string | undefined): boolean {
+  if (!avatarField) return false;
+  // GCS paths are like "avatars/userId.ext" or "blog-assets/assetId.ext"
+  return avatarField.startsWith("avatars/") || avatarField.startsWith("blog-assets/");
 }
 
 // Get local file path for serving

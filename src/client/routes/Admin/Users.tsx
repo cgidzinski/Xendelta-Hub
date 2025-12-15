@@ -188,7 +188,7 @@ export default function Users() {
       // Update selected user
       const updatedUser = users.find(u => u._id === selectedUser._id);
       if (updatedUser) {
-        setSelectedUser({ ...updatedUser, avatar: "/avatars/default-avatar.png" });
+        setSelectedUser({ ...updatedUser, avatar: undefined });
       }
       // If it's the current user, refetch profile to update sidebar
       if (selectedUser._id === profile?._id) {
@@ -259,7 +259,7 @@ export default function Users() {
                       <TableCell>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
                           <Avatar
-                            src={user._id ? `/avatar/${user._id}` : undefined}
+                            src={user.avatar || undefined}
                             sx={{ width: 40, height: 40, borderRadius: 1.5 }}
                           >
                             {user.username?.charAt(0).toUpperCase()}
@@ -332,7 +332,7 @@ export default function Users() {
               <Stack spacing={3}>
                 <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 2 }}>
                   <Avatar
-                    src={selectedUser._id ? `/avatar/${selectedUser._id}` : undefined}
+                    src={selectedUser.avatar || undefined}
                     sx={{ width: 120, height: 120, borderRadius: 2, mb: 2 }}
                   >
                     {selectedUser.username?.charAt(0).toUpperCase()}

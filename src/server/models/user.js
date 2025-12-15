@@ -32,7 +32,7 @@ var userSchema = new mongoose.Schema({
   name: { type: String },
   username: { type: String },
   email: { type: String },
-  avatar: { type: String, default: "/avatars/default-avatar.png" },
+  avatar: { type: String, default: "/avatars/default-avatar.png" }, // Direct GCS public URL or local default
   roles: [{ type: String }],
   password: { type: String }, // For local authentication
   authProviders: [authProviderSchema], // Multiple authentication methods

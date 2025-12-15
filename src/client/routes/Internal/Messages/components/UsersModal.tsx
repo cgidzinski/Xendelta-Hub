@@ -77,12 +77,13 @@ export default function UsersModal({
           {conversation.participants.map((participantId) => {
             if (participantId === "system") return null;
             const isCurrentUser = participantId === profileId;
+            const participant = conversation.participantInfo?.find(p => p._id === participantId);
             return (
               <React.Fragment key={participantId}>
                 <ListItem>
                   <ListItemAvatar>
                     <Avatar 
-                      src={`/avatar/${participantId}`}
+                      src={participant?.avatar || undefined}
                       sx={{ borderRadius: 1.5 }}
                     >
                       {getParticipantDisplay(participantId).charAt(0).toUpperCase()}

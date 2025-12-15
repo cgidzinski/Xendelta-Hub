@@ -1,4 +1,4 @@
-require("dotenv").config({ quiet: false });
+require("dotenv").config({ quiet: true });
 import express from "express";
 var passport = require("passport");
 var cors = require("cors");
@@ -25,13 +25,19 @@ app.use(bodyParser.urlencoded({ extended: false }));
 // Initialize Passport
 app.use(passport.initialize());
 
-// Serve static files for avatars
+// Serve static files for default avatar only (local file)
 app.use('/avatars', express.static('src/server/public/avatars'));
 
-// Serve static files for blog images
-app.use('/blog-images', express.static('src/server/public/blog-images'));
+// Note: Blog images are now served through proxy endpoints, not static files
 
 const port = process.env.PORT || "3000";
+
+// Explicitly configure ViteExpress for production mode when NODE_ENV is production
+// ViteExpress doesn't automatically detect NODE_ENV - it requires explicit configuration
+// to switch from development mode (using Vite's dev server) to production mode (serving pre-built static files)
+if (process.env.NODE_ENV === "production") {
+  ViteExpress.config({ mode: "production" });
+}
 
 const server = ViteExpress.listen(app, Number(port), () => console.log(`>>> Server is listening on port ${port}...`));
 const io = new SocketIOServer(server, {
@@ -63,3 +69,7 @@ require("./routes/users.ts")(app);
 require("./routes/notifications.ts")(app);
 require("./routes/messages.ts")(app);
 require("./routes/blog.ts")(app);
+require("./routes/media.ts")(app);
+require("./routes/admin/blog.ts")(app);
+require("./routes/admin/users.ts")(app);
+require("./routes/admin/messages.ts")(app);

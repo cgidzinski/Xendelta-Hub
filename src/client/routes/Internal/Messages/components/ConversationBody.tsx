@@ -7,6 +7,7 @@ interface ConversationBodyProps {
   messages: Message[];
   profileId?: string;
   getMessageSenderName: (message: Message) => string;
+  getMessageSenderAvatar?: (message: Message) => string | undefined;
   isMyMessage: (message: Message) => boolean;
   shouldShowAvatar: (currentMessage: Message, previousMessage: Message | null) => boolean;
   shouldShowTimestamp: (currentMessage: Message, nextMessage: Message | null) => boolean;
@@ -17,6 +18,7 @@ export default function ConversationBody({
   messages,
   profileId,
   getMessageSenderName,
+  getMessageSenderAvatar,
   isMyMessage,
   shouldShowAvatar,
   shouldShowTimestamp,
@@ -117,6 +119,7 @@ export default function ConversationBody({
                 showAvatar={showAvatar}
                 showTimestamp={showTimestamp}
                 getMessageSenderName={getMessageSenderName}
+                getMessageSenderAvatar={getMessageSenderAvatar}
                 onMessageOptions={onMessageOptions}
                 profileId={profileId}
               />

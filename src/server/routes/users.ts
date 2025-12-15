@@ -2,15 +2,14 @@ import express = require("express");
 const { User } = require("../models/user");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-import path from "path";
 import { authenticateToken } from "../middleware/auth";
 import { requireAdmin } from "../middleware/admin";
 import { generateToken } from "../utils/tokenUtils";
 import { sendPasswordResetEmail } from "../utils/emailUtils";
 import passport from "../config/passport";
 import { SocketManager } from "../infrastructure/SocketManager";
-import fsPromises from "fs/promises";
-import { saveAvatarFile, getLocalAvatarPath, getAvatarMimeType, getAvatarExtension, isLocalAvatar, AVATARS_DIR } from "../utils/avatarUtils";
+import { uploadAvatarFile } from "../utils/mediaUtils";
+import { deleteFromPublicGCS } from "../utils/gcsUtils";
 import { validate, signupSchema, loginSchema, updateProfileSchema } from "../utils/validation";
 import { AuthenticatedRequest } from "../types";
 import { upload } from "../config/multer";
@@ -53,7 +52,7 @@ module.exports = function (app: express.Application) {
           _id: user._id.toString(),
           username: user.username,
           email: user.email,
-          avatar: user.avatar,
+          avatar: user.avatar || "/avatars/default-avatar.png",
           roles: (user.roles || []).map((role: string) => role.toLowerCase()),
           unread_messages: hasUnreadMessages,
           unread_notifications: user.notifications.some((notification: any) => notification.unread),
@@ -64,9 +63,6 @@ module.exports = function (app: express.Application) {
 
   app.put("/api/user/profile", authenticateToken, validate(updateProfileSchema), async function (req: express.Request, res: express.Response) {
     const user = await User.findOne({ _id: (req as any).user._id }).exec();
-    const { avatar } = req.body;
-
-    if (avatar !== undefined) user.avatar = avatar;
 
     const newNotification = {
       title: "Profile updated",
@@ -92,7 +88,7 @@ module.exports = function (app: express.Application) {
         user: {
           username: user.username,
           email: user.email,
-          avatar: user.avatar,
+          avatar: user.avatar || "/avatars/default-avatar.png",
           unread_messages: false,
           unread_notifications: true,
         },
@@ -111,8 +107,24 @@ module.exports = function (app: express.Application) {
       });
     }
 
-    const avatarPath = await saveAvatarFile(req.file, user._id.toString());
-    user.avatar = avatarPath;
+    const userId = user._id.toString();
+    
+    // Delete old avatar from public GCS if it exists (only if it's a GCS URL, not local default)
+    if (user.avatar && user.avatar.startsWith("http")) {
+      // Extract filename from URL (e.g., "https://storage.googleapis.com/bucket/avatar/userid.jpg" -> "avatar/userid.jpg")
+      const urlParts = user.avatar.split("/");
+      const filename = urlParts[urlParts.length - 1];
+      const gcsPath = `avatar/${filename}`;
+      await deleteFromPublicGCS(gcsPath).catch(() => {
+        // Ignore errors if file doesn't exist
+      });
+    }
+
+    // Upload new avatar to public GCS and get direct URL
+    const { url } = await uploadAvatarFile(req.file, userId);
+    
+    // Store direct URL in user model
+    user.avatar = url;
     await user.save();
 
     const newNotification = {
@@ -137,7 +149,7 @@ module.exports = function (app: express.Application) {
       status: true,
       message: "Avatar uploaded successfully",
       data: {
-        avatar: user.avatar,
+        avatar: url,
       },
     });
   });
@@ -146,6 +158,18 @@ module.exports = function (app: express.Application) {
   app.post("/api/user/avatar/reset", authenticateToken, async function (req: express.Request, res: express.Response) {
     const user = await User.findOne({ _id: (req as any).user._id }).exec();
     
+    // Delete avatar file from public GCS if it exists (only if it's a GCS URL, not local default)
+    if (user.avatar && user.avatar.startsWith("http")) {
+      // Extract filename from URL (e.g., "https://storage.googleapis.com/bucket/avatar/userid.jpg" -> "avatar/userid.jpg")
+      const urlParts = user.avatar.split("/");
+      const filename = urlParts[urlParts.length - 1];
+      const gcsPath = `avatar/${filename}`;
+      await deleteFromPublicGCS(gcsPath).catch(() => {
+        // Ignore errors if file doesn't exist
+      });
+    }
+    
+    // Reset avatar to default
     user.avatar = "/avatars/default-avatar.png";
     await user.save();
 
@@ -167,60 +191,10 @@ module.exports = function (app: express.Application) {
     return res.json({
       status: true,
       message: "Avatar reset successfully",
-      data: {
-        avatar: user.avatar,
-      },
+      data: {},
     });
   });
 
-  // Serve avatar image
-  app.get("/avatar/:userId", async function (req: express.Request, res: express.Response) {
-    const { userId } = req.params;
-    
-    // Check user record first to get the correct file extension
-    const user = await User.findOne({ _id: userId }).exec();
-    
-    if (!user) {
-      // Return default avatar if user not found
-      const defaultAvatarPath = path.join(AVATARS_DIR, "default-avatar.png");
-      res.setHeader("Content-Type", "image/png");
-      return res.sendFile(defaultAvatarPath);
-    }
-
-    // Check if avatar is a local file
-    if (isLocalAvatar(user.avatar)) {
-      const localPath = await getLocalAvatarPath(user.avatar).catch(() => null);
-      if (localPath) {
-        const mimeType = getAvatarMimeType(localPath);
-        res.setHeader("Content-Type", mimeType);
-        return res.sendFile(localPath);
-      }
-    }
-
-    // Try common extensions (jpg, png, gif) in order
-    const extensions = ["jpg", "png", "gif"];
-    for (const ext of extensions) {
-      const userAvatarPath = path.join(AVATARS_DIR, `${userId}.${ext}`);
-      try {
-        await fsPromises.access(userAvatarPath);
-        const mimeType = getAvatarMimeType(userAvatarPath);
-        res.setHeader("Content-Type", mimeType);
-        return res.sendFile(userAvatarPath);
-      } catch {
-        // Continue to next extension
-      }
-    }
-
-    // If external URL (legacy), redirect to external URL
-    if (user.avatar && (user.avatar.startsWith("http://") || user.avatar.startsWith("https://"))) {
-      return res.redirect(user.avatar);
-    }
-
-    // Fallback to default avatar
-    const defaultAvatarPath = path.join(AVATARS_DIR, "default-avatar.png");
-    res.setHeader("Content-Type", "image/png");
-    return res.sendFile(defaultAvatarPath);
-  });
 
   app.post("/api/auth/verify", authenticateToken, async function (req: express.Request, res: express.Response) {
     const user = await User.findOne({ _id: (req as any).user._id }).exec();
@@ -231,7 +205,6 @@ module.exports = function (app: express.Application) {
         _id: user._id,
         username: user.username,
         email: user.email,
-        avatar: user.avatar,
       });
       
       return res.json({
@@ -241,7 +214,7 @@ module.exports = function (app: express.Application) {
           id: user._id,
           username: user.username,
           email: user.email,
-          avatar: user.avatar,
+          avatar: user.avatar || "/avatars/default-avatar.png",
         },
         token: newToken,
       });
@@ -263,7 +236,6 @@ module.exports = function (app: express.Application) {
         _id: user._id,
         username: user.username,
         email: user.email,
-        avatar: user.avatar,
       });
       return res.json({
         success: true,
@@ -272,7 +244,7 @@ module.exports = function (app: express.Application) {
           id: user._id,
           username: user.username,
           email: user.email,
-          avatar: user.avatar,
+          avatar: user.avatar || "/avatars/default-avatar.png",
         },
       });
     } else {
@@ -306,7 +278,6 @@ module.exports = function (app: express.Application) {
         _id: newUser._id,
         username: newUser.username,
         email: newUser.email,
-        avatar: newUser.avatar,
       });
       
       return res.json({
@@ -694,7 +665,6 @@ module.exports = function (app: express.Application) {
               _id: existingUser._id,
               username: existingUser.username,
               email: existingUser.email,
-              avatar: existingUser.avatar,
             });
             
             res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/auth/callback?token=${token}&linked=true`);
@@ -707,7 +677,6 @@ module.exports = function (app: express.Application) {
           _id: user._id,
           username: user.username,
           email: user.email,
-          avatar: user.avatar,
         });
 
         // Redirect to frontend with token
@@ -744,7 +713,6 @@ module.exports = function (app: express.Application) {
               _id: existingUser._id,
               username: existingUser.username,
               email: existingUser.email,
-              avatar: existingUser.avatar,
             });
             
             res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/auth/callback?token=${token}&linked=true`);
@@ -757,7 +725,6 @@ module.exports = function (app: express.Application) {
           _id: user._id,
           username: user.username,
           email: user.email,
-          avatar: user.avatar,
         });
 
         // Redirect to frontend with token
@@ -782,185 +749,38 @@ module.exports = function (app: express.Application) {
           _id: user._id,
           username: user.username,
           email: user.email,
+          avatar: user.avatar || "/avatars/default-avatar.png",
           roles: (user.roles || []).map((role: string) => role.toLowerCase()),
-          avatar: user.avatar,
           canRespond: user.canRespond !== false, // Default to true if not set
         })),
       },
     });
   });
 
-  // Add admin role to current user (for development/testing)
-  app.post("/api/user/make-admin", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const user = await User.findOne({ _id: (req as any).user._id }).exec();
+  // // Add admin role to current user (for development/testing)
+  // app.post("/api/user/make-admin", authenticateToken, async function (req: express.Request, res: express.Response) {
+  //   const user = await User.findOne({ _id: (req as any).user._id }).exec();
     
-    if (!user.roles) {
-      user.roles = [];
-    }
+  //   if (!user.roles) {
+  //     user.roles = [];
+  //   }
     
-    if (!user.roles.includes("admin")) {
-      user.roles.push("admin");
-      await user.save();
-    }
+  //   if (!user.roles.includes("admin")) {
+  //     user.roles.push("admin");
+  //     await user.save();
+  //   }
     
-    return res.json({
-      status: true,
-      message: "Admin role added successfully",
-      data: {
-        user: {
-          username: user.username,
-          email: user.email,
-          roles: user.roles,
-        },
-      },
-    });
-  });
+  //   return res.json({
+  //     status: true,
+  //     message: "Admin role added successfully",
+  //     data: {
+  //       user: {
+  //         username: user.username,
+  //         email: user.email,
+  //         roles: user.roles,
+  //       },
+  //     },
+  //   });
+  // });
 
-  // Admin: Get all users (including those with canRespond: false)
-  app.get("/api/admin/users", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
-    const users = await User.find({}, "username email _id roles avatar canRespond").exec();
-    
-    return res.json({
-      status: true,
-      message: "",
-      data: {
-        users: users.map((user: any) => ({
-          _id: user._id,
-          username: user.username,
-          email: user.email,
-          roles: (user.roles || []).map((role: string) => role.toLowerCase()),
-          avatar: user.avatar,
-          canRespond: user.canRespond !== false, // Default to true if not set
-        })),
-      },
-    });
-  });
-
-  // Admin: Update user roles
-  app.put("/api/admin/users/:userId/roles", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
-    const { userId } = req.params;
-    const { roles } = req.body;
-
-    if (!Array.isArray(roles)) {
-      return res.status(400).json({
-        status: false,
-        message: "Roles must be an array",
-      });
-    }
-
-    const user = await User.findOne({ _id: userId }).exec();
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
-
-    // Normalize all roles to lowercase
-    user.roles = roles.map((role: string) => role.toLowerCase());
-    await user.save();
-
-    return res.json({
-      status: true,
-      message: "User roles updated successfully",
-      data: {
-        user: {
-          _id: user._id,
-          username: user.username,
-          email: user.email,
-          roles: user.roles,
-        },
-      },
-    });
-  });
-
-  // Admin: Update user boolean fields
-  app.put("/api/admin/users/:userId/booleans", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
-    const { userId } = req.params;
-    const { canRespond } = req.body;
-
-    const user = await User.findOne({ _id: userId }).exec();
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
-
-    if (canRespond !== undefined) {
-      user.canRespond = canRespond;
-    }
-
-    await user.save();
-
-    return res.json({
-      status: true,
-      message: "User updated successfully",
-      data: {
-        user: {
-          _id: user._id,
-          username: user.username,
-          email: user.email,
-          canRespond: user.canRespond !== false,
-        },
-      },
-    });
-  });
-
-  // Admin: Reset user avatar
-  app.post("/api/admin/users/:userId/avatar/reset", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
-    const { userId } = req.params;
-
-    const user = await User.findOne({ _id: userId }).exec();
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
-
-    user.avatar = "/avatars/default-avatar.png";
-    await user.save();
-
-    return res.json({
-      status: true,
-      message: "Avatar reset successfully",
-      data: {
-        user: {
-          _id: user._id,
-          username: user.username,
-          email: user.email,
-          avatar: user.avatar,
-        },
-      },
-    });
-  });
-
-  // Admin: Delete user
-  app.delete("/api/admin/users/:userId", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
-    const { userId } = req.params;
-
-    const adminUser = (req as any).adminUser;
-    if (userId === adminUser._id.toString()) {
-      return res.status(400).json({
-        status: false,
-        message: "Cannot delete yourself",
-      });
-    }
-
-    const user = await User.findOne({ _id: userId }).exec();
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
-
-    await User.deleteOne({ _id: userId }).exec();
-
-    return res.json({
-      status: true,
-      message: "User deleted successfully",
-    });
-  });
 };

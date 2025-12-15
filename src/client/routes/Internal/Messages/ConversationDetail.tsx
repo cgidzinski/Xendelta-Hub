@@ -246,6 +246,17 @@ export default function ConversationDetail() {
     return message.senderUsername || `User ${message.from.substring(0, 8)}`;
   };
 
+  const getMessageSenderAvatar = (message: Message): string | undefined => {
+    if (message.from === "system" || message.isSystemMessage) {
+      return undefined;
+    }
+    if (message.from === profile?._id) {
+      return profile?.avatar;
+    }
+    const participant = conversation?.participantInfo?.find(p => p._id === message.from);
+    return participant?.avatar;
+  };
+
   const isSystemMessage = (message: Message): boolean => {
     return message.from === "system" || message.isSystemMessage === true;
   };
@@ -336,6 +347,7 @@ export default function ConversationDetail() {
         messages={messages}
         profileId={profile?._id}
         getMessageSenderName={getMessageSenderName}
+        getMessageSenderAvatar={getMessageSenderAvatar}
         isMyMessage={isMyMessage}
         shouldShowAvatar={shouldShowAvatar}
         shouldShowTimestamp={shouldShowTimestamp}

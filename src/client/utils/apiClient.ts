@@ -49,16 +49,22 @@ export function isNotFoundError(response: Response): boolean {
  * Handle API error responses and throw appropriate errors
  */
 export async function handleApiError(response: Response): Promise<never> {
+  const data = await response.json().catch(() => ({}));
+  
   if (isUnauthorizedError(response)) {
     throw new Error("Unauthorized - please log in again");
   } else if (isForbiddenError(response)) {
-    const data = await response.json().catch(() => ({}));
     throw new Error(data.message || "You are not authorized to perform this action");
   } else if (isNotFoundError(response)) {
-    const data = await response.json().catch(() => ({}));
     throw new Error(data.message || "Resource not found");
   } else {
-    const data = await response.json().catch(() => ({}));
+    // For validation errors (400), include error details
+    if (response.status === 400 && data.errors && Array.isArray(data.errors)) {
+      const errorMessages = data.errors.map((err: { path: string; message: string }) => err.message).join(", ");
+      const error = new Error(errorMessages || data.message || "Validation failed");
+      (error as any).validationErrors = data.errors;
+      throw error;
+    }
     throw new Error(data.message || `Request failed: ${response.statusText}`);
   }
 }

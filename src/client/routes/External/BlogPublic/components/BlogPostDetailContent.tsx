@@ -16,7 +16,7 @@ import { CalendarToday, Person, ArrowBack, Star } from "@mui/icons-material";
 import { format } from "date-fns";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { BlogPost } from "./BlogContent";
+import { BlogPost } from "../../../types";
 
 interface BlogPostDetailContentProps {
   blogBasePath: string;
@@ -75,11 +75,11 @@ export default function BlogPostDetailContent({
             </Typography>
           </Box>
 
-          {post.image && (
+          {post.featuredImage && (
             <CardMedia
               component="img"
               height="400"
-              image={post.image}
+              image={post.featuredImage}
               alt={post.title}
               sx={{ objectFit: "cover", borderRadius: 2, mb: 4 }}
             />

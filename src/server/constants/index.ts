@@ -18,6 +18,16 @@ export const ALLOWED_IMAGE_MIMES = [
   "image/gif",
 ] as const;
 
+// Image file extensions
+export const IMAGE_EXTENSIONS = [
+  "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico", "tiff", "tif"
+] as const;
+
+// Video file extensions
+export const VIDEO_EXTENSIONS = [
+  "mp4", "webm", "ogg", "ogv", "avi", "mov", "wmv", "flv", "mkv", "m4v", "3gp", "3g2"
+] as const;
+
 // Default avatar path
 export const DEFAULT_AVATAR_PATH = "/avatars/default-avatar.png";
 
