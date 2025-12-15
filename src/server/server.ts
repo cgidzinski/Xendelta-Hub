@@ -7,7 +7,7 @@ var bodyParser = require("body-parser");
 var logger = require("morgan");
 import ViteExpress from "vite-express";
 import { SocketManager } from "./infrastructure/SocketManager.js";
-var Mongo = require("./infrastructure/mongoDB.js");
+var Mongo = require("./infrastructure/MongoDB.js");
 
 // Import Passport configuration AFTER dotenv has loaded
 require("./config/passport");
