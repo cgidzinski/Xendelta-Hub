@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ quiet: false });
 import express from "express";
 var passport = require("passport");
 var cors = require("cors");
@@ -32,11 +32,7 @@ app.use('/avatars', express.static('src/server/public/avatars'));
 app.use('/blog-images', express.static('src/server/public/blog-images'));
 
 const port = process.env.PORT || "3000";
-// Explicitly configure ViteExpress for production mode when NODE_ENV is production
-// process.cwd() returns the project root (where package.json is) when run from npm scripts
-if (process.env.NODE_ENV === "production") {
-  ViteExpress.config({ mode: "production", root: process.cwd() });
-}
+
 const server = ViteExpress.listen(app, Number(port), () => console.log(`>>> Server is listening on port ${port}...`));
 const io = new SocketIOServer(server, {
   cors: {
