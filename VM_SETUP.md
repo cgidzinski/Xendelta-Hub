@@ -403,37 +403,4 @@ Certbot automatically renews certificates, but you can test renewal manually:
 sudo certbot renew --dry-run
 ```
 
----
-
-## Troubleshooting
-
-### Application Not Starting
-
-1. Check PM2 logs: `pm2 logs`
-2. Verify Node.js version: `node -v`
-3. Check if port 3000 is in use: `sudo netstat -tulpn | grep 3000`
-
-### Nginx Issues
-
-1. Test configuration: `sudo nginx -t`
-2. Check error logs: `sudo tail -f /var/log/nginx/error.log`
-3. Verify site is enabled: `ls -la /etc/nginx/sites-enabled/`
-
-### SSL Certificate Issues
-
-1. Check certificate status: `sudo certbot certificates`
-2. Test renewal: `sudo certbot renew --dry-run`
-3. Verify DNS records are correct
-
----
-
-## Security Notes
-
-- Keep your system updated: `sudo apt-get update && sudo apt-get upgrade`
-- Configure firewall rules to only allow necessary ports
-- Regularly update Node.js and npm packages
-- Monitor PM2 logs for any suspicious activity
-- Use strong passwords and SSH keys for authentication
-
----
 

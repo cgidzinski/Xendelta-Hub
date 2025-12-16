@@ -1,6 +1,8 @@
 # Xendelta Hub
 
-A full-stack collaboration platform built with React and Express, featuring real-time messaging, blog management, and team collaboration tools.
+A demo full-stack collaboration platform built with React and Express, featuring real-time messaging, blog management, and team collaboration tools. This is a demo website for testing and development purposes.
+
+> **Note**: This is a demonstration project for testing and development. Features may be experimental and data may be reset periodically.
 
 ## Features
 
@@ -31,6 +33,8 @@ A full-stack collaboration platform built with React and Express, featuring real
 ## Setup
 
 For detailed setup and deployment instructions, see [VM_SETUP.md](./VM_SETUP.md).
+
+> **Note**: This setup is intended for testing and development environments. Production deployment should include additional security and performance considerations.
 
 ## Project Structure
 
