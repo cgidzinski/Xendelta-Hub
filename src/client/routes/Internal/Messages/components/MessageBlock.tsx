@@ -3,7 +3,8 @@ import { Box, Typography, Avatar, IconButton, Paper } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { format } from "date-fns";
 import DOMPurify from "dompurify";
-import { Message } from "../../../types";
+import { Message } from "../../../../types";
+import { useTheme } from "../../../../contexts/ThemeContext";
 
 interface MessageBlockProps {
   message: Message;
@@ -31,6 +32,7 @@ export default function MessageBlock({
   profileId,
 }: MessageBlockProps) {
   const [avatarError, setAvatarError] = React.useState(false);
+  const { mode } = useTheme();
   const isSystemMessage = message.isSystemMessage || message.from === "system";
   const avatarSrc = !isSystemMessage && getMessageSenderAvatar 
     ? getMessageSenderAvatar(message)
@@ -43,6 +45,18 @@ export default function MessageBlock({
         mb: 1.5,
         p: 1.5,
         position: "relative",
+        borderRadius: 2,
+        ...(mode === "light"
+          ? {
+              backgroundColor: "#ffffff",
+              border: "1px solid rgba(33, 150, 243, 0.1)",
+              boxShadow: "0 2px 8px rgba(33, 150, 243, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06)",
+            }
+          : {
+              backgroundColor: "rgba(255, 255, 255, 0.05)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2)",
+            }),
         "&:hover .message-actions": {
           opacity: 1,
         },

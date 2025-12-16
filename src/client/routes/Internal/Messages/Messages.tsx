@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import {
   Box,
   Container,
-  Card,
   Typography,
   List,
   ListItem,
@@ -33,6 +32,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getParticipantDisplay } from "../../../utils/conversationUtils";
 import StackedAvatars from "./components/StackedAvatars";
 import { useSnackbar } from "notistack";
+import { useTheme } from "../../../contexts/ThemeContext";
 
 
 export default function Messages() {
@@ -43,6 +43,7 @@ export default function Messages() {
   const { profile, refetch: refetchProfile } = useUserProfile();
   const { socket } = useSocket();
   const { enqueueSnackbar } = useSnackbar();
+  const { mode } = useTheme();
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
   const [initialMessage, setInitialMessage] = useState("");
@@ -125,115 +126,125 @@ export default function Messages() {
           </Button>
         </Box>
 
-        <Card elevation={0} sx={{ backgroundColor: "transparent" }}>
-          <Box>
-            {isLoading && (
-              <Box sx={{ py: 3, display: "flex", justifyContent: "center" }}>
-                <LoadingSpinner />
-              </Box>
-            )}
-            
-            {isError && (
+        {isLoading && (
+          <Box sx={{ py: 3, display: "flex", justifyContent: "center" }}>
+            <LoadingSpinner />
+          </Box>
+        )}
+        
+        {isError && (
+          <Box sx={{ py: 3, textAlign: "center" }}>
+            <Typography variant="body2" color="error">
+              {error?.message || "Failed to load conversations"}
+            </Typography>
+          </Box>
+        )}
+
+        {!isLoading && !isError && (
+          <List sx={{ p: 1 }}>
+            {conversations && conversations.length > 0 ? (
+              conversations.map((conversation, index) => (
+                <Box key={conversation._id} sx={{p:0  ,m:0}}>
+                  <ListItem
+                    onClick={() => navigate(`/internal/messages/${conversation._id}`)}
+                    sx={{
+                      position: "relative",
+                      py: 1.5,
+                      px: 2,
+                      mb: 1.5,
+                      borderRadius: 2,
+                      border: "1px solid",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                      ...(mode === "light"
+                        ? {
+                            backgroundColor: "#ffffff",
+                            borderColor: "rgba(33, 150, 243, 0.1)",
+                            boxShadow: "0 2px 8px rgba(33, 150, 243, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06)",
+                            "&:hover": {
+                              backgroundColor: "#ffffff",
+                              transform: "translateX(4px)",
+                              boxShadow: "0 4px 12px rgba(33, 150, 243, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08)",
+                            },
+                          }
+                        : {
+                            backgroundColor: "rgba(255, 255, 255, 0.05)",
+                            borderColor: "rgba(255, 255, 255, 0.1)",
+                            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2)",
+                            "&:hover": {
+                              backgroundColor: "rgba(255, 255, 255, 0.1)",
+                              transform: "translateX(4px)",
+                            },
+                          }),
+                    }}
+                  >
+                    {conversation.unread && (
+                      <Box
+                        sx={{
+                          position: "absolute",
+                          top: 8,
+                          right: 8,
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          backgroundColor: "error.main",
+                          zIndex: 1,
+                        }}
+                      />
+                    )}
+                    <ListItemIcon>
+                      <StackedAvatars
+                        conversation={conversation}
+                        currentUserId={profile?._id}
+                        maxAvatars={10}
+                        size={48}
+                      />
+                    </ListItemIcon>
+                    <ListItemText
+                      primaryTypographyProps={{ component: "div" }}
+                      secondaryTypographyProps={{ component: "div" }}
+                      primary={
+                        <Box component="div" sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+                          <Typography
+                            variant="body1"
+                            sx={{
+                              fontWeight: "600",
+                              flex: 1,
+                              color: "text.primary",
+                            }}
+                          >
+                            {conversation.name || getParticipantDisplay(conversation, profile?._id)}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: "text.secondary", opacity: 0.9 }}>
+                            {formatDistance(new Date(conversation.lastMessageTime), new Date(), {
+                              addSuffix: true,
+                            })}
+                          </Typography>
+                        </Box>
+                      }
+                      secondary={
+                        <Box component="div" sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mt: 0.5 }}>
+                          <Typography variant="body2" color="text.secondary" noWrap sx={{ flex: 1, opacity: 0.95 }}>
+                            {conversation.lastMessage || "No messages yet"}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: "text.secondary", opacity: 0.8 }}>
+                            {getParticipantDisplay(conversation)}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </ListItem>
+                </Box>
+              ))
+            ) : (
               <Box sx={{ py: 3, textAlign: "center" }}>
-                <Typography variant="body2" color="error">
-                  {error?.message || "Failed to load conversations"}
+                <Typography variant="body2" color="text.secondary">
+                  No conversations yet
                 </Typography>
               </Box>
             )}
-
-            {!isLoading && !isError && (
-              <List sx={{ p: 1 }}>
-                {conversations && conversations.length > 0 ? (
-                  conversations.map((conversation, index) => (
-                    <Box key={conversation._id} sx={{p:0  ,m:0}}>
-                      <ListItem
-                        onClick={() => navigate(`/internal/messages/${conversation._id}`)}
-                        sx={{
-                          position: "relative",
-                          "&:hover": { 
-                            backgroundColor: "rgba(255, 255, 255, 0.1)", 
-                            cursor: "pointer",
-                            transform: "translateX(4px)",
-                            transition: "all 0.2s ease",
-                          },
-                          backgroundColor: "rgba(255, 255, 255, 0.05)",
-                          py: 1.5,
-                          px: 2,
-                          mb: 0.5,
-                          borderRadius: 1,
-                          border: "1px solid",
-                          borderColor: "rgba(255, 255, 255, 0.1)",
-                        }}
-                      >
-                        {conversation.unread && (
-                          <Box
-                            sx={{
-                              position: "absolute",
-                              top: 8,
-                              right: 8,
-                              width: 8,
-                              height: 8,
-                              borderRadius: "50%",
-                              backgroundColor: "error.main",
-                              zIndex: 1,
-                            }}
-                          />
-                        )}
-                        <ListItemIcon>
-                          <StackedAvatars
-                            conversation={conversation}
-                            currentUserId={profile?._id}
-                            maxAvatars={10}
-                            size={48}
-                          />
-                        </ListItemIcon>
-                        <ListItemText
-                          primaryTypographyProps={{ component: "div" }}
-                          secondaryTypographyProps={{ component: "div" }}
-                          primary={
-                            <Box component="div" sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-                              <Typography
-                                variant="body1"
-                                sx={{
-                                  fontWeight: "600",
-                                  flex: 1,
-                                  color: "text.primary",
-                                }}
-                              >
-                                {conversation.name || getParticipantDisplay(conversation, profile?._id)}
-                              </Typography>
-                              <Typography variant="caption" sx={{ color: "text.secondary", opacity: 0.9 }}>
-                                {formatDistance(new Date(conversation.lastMessageTime), new Date(), {
-                                  addSuffix: true,
-                                })}
-                              </Typography>
-                            </Box>
-                          }
-                          secondary={
-                            <Box component="div" sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mt: 0.5 }}>
-                              <Typography variant="body2" color="text.secondary" noWrap sx={{ flex: 1, opacity: 0.95 }}>
-                                {conversation.lastMessage || "No messages yet"}
-                              </Typography>
-                              <Typography variant="caption" sx={{ color: "text.secondary", opacity: 0.8 }}>
-                                {getParticipantDisplay(conversation)}
-                              </Typography>
-                            </Box>
-                          }
-                        />
-                      </ListItem>
-                    </Box>
-                  ))
-                ) : (
-                  <Box sx={{ py: 3, textAlign: "center" }}>
-                    <Typography variant="body2" color="text.secondary">
-                      No conversations yet
-                    </Typography>
-                  </Box>
-                )}
-              </List>
-            )}
-          </Box>
-        </Card>
+          </List>
+        )}
 
         {/* New Conversation Dialog */}
         <Dialog open={newConversationOpen} onClose={() => setNewConversationOpen(false)} maxWidth="sm" fullWidth>

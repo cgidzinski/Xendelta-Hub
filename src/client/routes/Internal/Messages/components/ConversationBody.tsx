@@ -88,7 +88,7 @@ export default function ConversationBody({
         overflowY: "auto",
         overflowX: "hidden",
         p: 2,
-        backgroundColor: "#1e1e1e",
+        backgroundColor: "background.default",
         display: "flex",
         flexDirection: "column",
         minHeight: 0,

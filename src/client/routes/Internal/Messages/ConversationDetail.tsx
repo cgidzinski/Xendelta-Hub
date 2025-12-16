@@ -218,7 +218,7 @@ export default function ConversationDetail() {
         flexDirection: "column",
         height: "calc(100vh - 64px)",
         overflow: "hidden",
-        backgroundColor: "#1e1e1e",
+        backgroundColor: "background.default",
         position: "relative",
         maxHeight: "calc(100vh - 64px)",
       }}
