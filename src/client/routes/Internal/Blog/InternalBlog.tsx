@@ -1,0 +1,35 @@
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useTitle } from "../../../hooks/useTitle";
+import BlogContent from "../../../components/blog/BlogContent";
+import { useBlog } from "../../../hooks/blog/useBlog";
+
+export default function InternalBlog() {
+  useTitle("Blog");
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const page = parseInt(searchParams.get("page") || "1");
+  const limit = parseInt(searchParams.get("limit") || "10");
+  const { posts, pagination, isLoading, isError, error } = useBlog({ page, limit });
+
+  const handlePostClick = (slug: string) => {
+    navigate(`/internal/blog/${slug}`);
+  };
+
+  const handlePageChange = (page: number) => {
+    const newSearchParams = new URLSearchParams(searchParams);
+    newSearchParams.set("page", page.toString());
+    setSearchParams(newSearchParams);
+  };
+
+  return (
+    <BlogContent
+      blogBasePath="/internal/blog"
+      posts={posts}
+      isLoading={isLoading}
+      error={isError ? (error?.message || "Failed to load blog posts") : null}
+      onPostClick={handlePostClick}
+      pagination={pagination}
+      onPageChange={handlePageChange}
+    />
+  );
+}
