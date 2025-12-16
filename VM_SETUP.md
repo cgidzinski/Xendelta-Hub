@@ -257,6 +257,9 @@ server {
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
+    # Increase client body size limit for file uploads (avatars, blog assets, etc.)
+    client_max_body_size 10M;
+
     # WebSocket route
     location /socket.io/ {
         proxy_pass http://localhost:3000;

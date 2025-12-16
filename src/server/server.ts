@@ -15,8 +15,9 @@ const { Server: SocketIOServer } = require("socket.io");
 
 const app = express();
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+// Increase body size limits for file uploads (10MB should be enough for avatars and blog assets)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 // app.use(logger("dev"));
 app.use(cookieParser());
 app.use(passport.initialize());

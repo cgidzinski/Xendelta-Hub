@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../contexts/AuthContext';
 import { Container, Typography, CircularProgress, Alert } from '@mui/material';
 
@@ -7,6 +8,7 @@ export default function AuthCallback() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { checkAuth } = useAuth();
+  const queryClient = useQueryClient();
   const token = searchParams.get('token');
   const error = searchParams.get('error');
 
@@ -20,6 +22,9 @@ export default function AuthCallback() {
       }
 
       if (token) {
+        // Clear all queries first to remove any previous user's data
+        queryClient.clear();
+        
         // Store the token and verify authentication
         localStorage.setItem('token', token);
         await checkAuth();
@@ -31,7 +36,7 @@ export default function AuthCallback() {
     };
 
     handleCallback();
-  }, [token, error, navigate, checkAuth]);
+  }, [token, error, navigate, checkAuth, queryClient]);
 
   if (error) {
     return (

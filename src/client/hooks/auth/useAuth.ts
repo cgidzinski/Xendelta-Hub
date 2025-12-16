@@ -157,6 +157,9 @@ export const useAuthHook = () => {
       loginUser(username, password),
     onSuccess: (data) => {
       if (data.success && data.user) {
+        // Clear all queries first to remove any previous user's data
+        queryClient.clear();
+        
         // Convert user to AuthUser format
         const authUser: AuthUser = {
           id: data.user.id || (data.user as any)._id || "",
@@ -177,6 +180,9 @@ export const useAuthHook = () => {
     mutationFn: signupUser,
     onSuccess: (data) => {
       if (data.success && data.user) {
+        // Clear all queries first to remove any previous user's data
+        queryClient.clear();
+        
         // Convert user to AuthUser format
         const authUser: AuthUser = {
           id: data.user.id || (data.user as any)._id || "",
@@ -220,8 +226,9 @@ export const useAuthHook = () => {
 
   const logout = () => {
     localStorage.removeItem("token");
+    // Clear all queries to remove any cached user data
+    queryClient.clear();
     queryClient.setQueryData(authKeys.status(), null);
-    queryClient.invalidateQueries({ queryKey: authKeys.status() });
   };
 
   const login = async (username: string, password: string): Promise<boolean> => {
