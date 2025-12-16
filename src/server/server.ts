@@ -43,7 +43,7 @@ const mongoConnection = Mongo.getConnection();
 
 mongoConnection.on("connected", async () => {
   console.log(">>> MongoDB connected");
-  await initializeDefaultUsers();
+  // await initializeDefaultUsers();
 });
 
 console.log(">>> Initializing Socket...");

@@ -27,7 +27,7 @@ export default function Profile() {
   const [isUploading, setIsUploading] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
   const { profile, isLoading, refetch } = useUserProfile();
-  const { uploadAvatar, isUploading: isUploadingAvatar, makeAdmin, isMakingAdmin } = useUserAvatar();
+  const { uploadAvatar, isUploading: isUploadingAvatar } = useUserAvatar();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   
@@ -137,24 +137,6 @@ export default function Profile() {
                   profile={profile}
                   avatarUrl={mainAvatarUrl}
                   avatarKey={avatarKey}
-                  isMakingAdmin={isMakingAdmin}
-                  onMakeAdmin={async () => {
-                    try {
-                      const data = await makeAdmin();
-                      if (data.status) {
-                        enqueueSnackbar("Admin role added successfully! Please refresh the page.", {
-                          variant: "success",
-                        });
-                        setTimeout(() => {
-                          window.location.reload();
-                        }, 1500);
-                      } else {
-                        enqueueSnackbar(data.message || "Failed to add admin role", { variant: "error" });
-                      }
-                    } catch (error: any) {
-                      enqueueSnackbar(error.message || "Failed to add admin role", { variant: "error" });
-                    }
-                  }}
                 />
               </CardContent>
             </Card>

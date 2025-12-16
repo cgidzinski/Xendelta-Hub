@@ -1,20 +1,16 @@
-import { Box, Avatar, Typography, Button } from "@mui/material";
+import { Box, Avatar, Typography } from "@mui/material";
 import { UserProfile } from "../../../../hooks/user/useUserProfile";
 
 interface ProfileHeaderProps {
   profile: UserProfile | undefined;
   avatarUrl: string | null;
   avatarKey: number;
-  isMakingAdmin: boolean;
-  onMakeAdmin: () => void;
 }
 
 export default function ProfileHeader({
   profile,
   avatarUrl,
   avatarKey,
-  isMakingAdmin,
-  onMakeAdmin,
 }: ProfileHeaderProps) {
   return (
     <Box sx={{ textAlign: "center", mb: 4 }}>
@@ -47,17 +43,6 @@ export default function ProfileHeader({
             Roles: {profile.roles.join(", ")}
           </Typography>
         </Box>
-      )}
-      {!profile?.roles?.some((role: string) => role.toLowerCase() === "admin") && (
-        <Button
-          variant="outlined"
-          color="primary"
-          onClick={onMakeAdmin}
-          disabled={isMakingAdmin}
-          sx={{ mt: 1 }}
-        >
-          {isMakingAdmin ? "Adding..." : "Make Me Admin"}
-        </Button>
       )}
     </Box>
   );

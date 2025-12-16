@@ -5,14 +5,7 @@ import {
   Card,
   Typography,
   Button,
-  TextField,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Alert,
 } from "@mui/material";
-import SendIcon from "@mui/icons-material/Send";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import AnnouncementIcon from "@mui/icons-material/Announcement";
 import SecurityIcon from "@mui/icons-material/Security";
@@ -30,17 +23,11 @@ export default function Admin() {
   const { enqueueSnackbar } = useSnackbar();
   const {
     verifyAdminRole,
-    sendMessageToAll,
-    isSendingMessage,
     sendNotificationToAll,
     isSendingNotification,
     deleteAllMessages,
     isDeletingMessages,
   } = useAdmin();
-  const [messageDialogOpen, setMessageDialogOpen] = useState(false);
-  const [testMessage, setTestMessage] = useState("Test Message");
-  const [conversationTitle, setConversationTitle] = useState("");
-  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Periodic role verification - check every 30 seconds
   // Note: AdminRoute already handles initial admin verification, so we only do periodic checks here
@@ -66,36 +53,6 @@ export default function Admin() {
       clearInterval(interval);
     };
   }, [navigate, enqueueSnackbar, verifyAdminRole]);
-
-  const handleSendToAll = async () => {
-    if (!testMessage.trim()) return;
-
-    setResult(null);
-
-    sendMessageToAll(
-      { message: testMessage, conversationTitle: conversationTitle.trim() || undefined },
-      {
-        onSuccess: (data) => {
-          setResult({
-            success: true,
-            message: data.message || `Message sent successfully`,
-          });
-          setTestMessage("Test Message");
-          setConversationTitle("");
-          setTimeout(() => {
-            setMessageDialogOpen(false);
-            setResult(null);
-          }, 3000);
-        },
-        onError: (error) => {
-          setResult({
-            success: false,
-            message: error.message || "Failed to send message",
-          });
-        },
-      }
-    );
-  };
 
   const handleSendNotification = async (title: string, message: string, icon: string = "announcement") => {
     sendNotificationToAll({ title, message, icon }, {
@@ -175,24 +132,6 @@ export default function Admin() {
           </Typography>
         </Box>
 
-        {/* Message All Users Card */}
-        <Card elevation={3} sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h5" gutterBottom>
-            Broadcast Messages
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Send a message to all users in the system. System messages cannot be replied to.
-          </Typography>
-          <Button
-            variant="contained"
-            startIcon={<SendIcon />}
-            onClick={() => setMessageDialogOpen(true)}
-            size="large"
-          >
-            Message All Users
-          </Button>
-        </Card>
-
         {/* Demo Notifications Card */}
         <Card elevation={3} sx={{ p: 3 }}>
           <Typography variant="h5" gutterBottom>
@@ -253,52 +192,6 @@ export default function Admin() {
           </Button>
         </Card>
 
-        {/* Message Dialog */}
-        <Dialog open={messageDialogOpen} onClose={() => setMessageDialogOpen(false)} maxWidth="sm" fullWidth>
-          <DialogTitle>Send Message to All Users</DialogTitle>
-          <DialogContent>
-            {result && (
-              <Alert severity={result.success ? "success" : "error"} sx={{ mb: 2 }}>
-                {result.message}
-              </Alert>
-            )}
-            <TextField
-              fullWidth
-              label="Conversation Title (optional)"
-              placeholder="e.g., Sales, Support, Admin"
-              value={conversationTitle}
-              onChange={(e) => setConversationTitle(e.target.value)}
-              sx={{ mt: 2 }}
-              helperText="Leave empty to use default conversation name"
-            />
-            <TextField
-              fullWidth
-              label="Message"
-              placeholder="Type your message..."
-              value={testMessage}
-              onChange={(e) => setTestMessage(e.target.value)}
-              multiline
-              rows={4}
-              sx={{ mt: 2 }}
-              required
-            />
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-              This message will be sent to all users and cannot be replied to.
-            </Typography>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setMessageDialogOpen(false)} disabled={isSendingMessage}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSendToAll}
-              variant="contained"
-              disabled={isSendingMessage || !testMessage.trim()}
-            >
-              {isSendingMessage ? "Sending..." : "Send to All"}
-            </Button>
-          </DialogActions>
-        </Dialog>
       </Container>
     </Box>
   );

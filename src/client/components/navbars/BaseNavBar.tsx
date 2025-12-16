@@ -12,8 +12,12 @@ import {
   AppBar,
   IconButton,
   Divider,
+  Badge,
+  Menu,
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
+import MailIcon from "@mui/icons-material/Mail";
+import NotificationsIcon from "@mui/icons-material/Notifications";
 import CssBaseline from "@mui/material/CssBaseline";
 import { useNavigate } from "react-router-dom";
 import ProfileListItem from "../ProfileListItem";
@@ -40,6 +44,7 @@ interface BaseNavBarProps {
   onMessagesClick?: () => void;
   unreadMessages?: boolean;
   unreadNotifications?: boolean;
+  notificationMenu?: React.ReactNode;
   children?: React.ReactNode;
 }
 
@@ -55,6 +60,7 @@ export default function BaseNavBar({
   onMessagesClick,
   unreadMessages = false,
   unreadNotifications = false,
+  notificationMenu,
   children,
 }: BaseNavBarProps) {
   const navigate = useNavigate();
@@ -165,9 +171,28 @@ export default function BaseNavBar({
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             {title}
           </Typography>
+          {(showMessages || showNotifications) && (
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              {showMessages && (
+                <IconButton sx={{ width: 50, height: 50 }} onClick={onMessagesClick}>
+                  <Badge badgeContent={unreadMessages ? 1 : 0} color="error" variant="dot">
+                    <MailIcon />
+                  </Badge>
+                </IconButton>
+              )}
+              {showNotifications && (
+                <IconButton sx={{ width: 50, height: 50, p: 0 }} onClick={onNotificationClick}>
+                  <Badge badgeContent={unreadNotifications ? 1 : 0} color="error" variant="dot">
+                    <NotificationsIcon />
+                  </Badge>
+                </IconButton>
+              )}
+            </Box>
+          )}
           {children}
         </Toolbar>
       </AppBar>
+      {notificationMenu}
 
       <Box
         component="main"

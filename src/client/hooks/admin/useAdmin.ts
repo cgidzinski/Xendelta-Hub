@@ -7,13 +7,6 @@ interface RolesResponse {
   roles: string[];
 }
 
-interface SendMessageResponse {
-  message: string;
-  data?: {
-    successCount?: number;
-  };
-}
-
 interface SendNotificationResponse {
   message: string;
   data?: {
@@ -39,14 +32,6 @@ export const adminKeys = {
 const fetchAdminRole = async (): Promise<string[]> => {
   const response = await apiClient.get<ApiResponse<RolesResponse>>("/api/auth/roles/verify");
   return response.data.data!.roles;
-};
-
-const sendMessageToAllUsers = async (message: string, conversationTitle?: string): Promise<SendMessageResponse> => {
-  const response = await apiClient.post<ApiResponse<SendMessageResponse>>("/api/admin/messages/all", {
-    message,
-    conversationTitle: conversationTitle?.trim() || undefined,
-  });
-  return response.data.data!;
 };
 
 const sendNotificationToAllUsers = async (
@@ -86,15 +71,6 @@ export const useAdmin = () => {
     return result;
   };
 
-  // Mutation for sending message to all users
-  const { mutateAsync: sendMessageToAllMutation, isPending: isSendingMessage } = useMutation({
-    mutationFn: ({ message, conversationTitle }: { message: string; conversationTitle?: string }) =>
-      sendMessageToAllUsers(message, conversationTitle),
-    onError: () => {
-      // Error handled by mutation error state
-    },
-  });
-
   // Mutation for sending notification to all users
   const { mutateAsync: sendNotificationToAllMutation, isPending: isSendingNotification } = useMutation({
     mutationFn: ({ title, message, icon }: { title: string; message: string; icon?: string }) =>
@@ -116,8 +92,6 @@ export const useAdmin = () => {
     roles: roles || [],
     isVerifyingRole,
     verifyAdminRole,
-    sendMessageToAll: sendMessageToAllMutation,
-    isSendingMessage,
     sendNotificationToAll: sendNotificationToAllMutation,
     isSendingNotification,
     deleteAllMessages: deleteAllMessagesMutation,

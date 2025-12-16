@@ -3,9 +3,6 @@ const { User } = require("../../models/user");
 const Conversation = require("../../models/conversation");
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
-import { SocketManager } from "../../infrastructure/SocketManager";
-import { validate, adminBroadcastMessageSchema } from "../../utils/validation";
-import { getLastMessageInfo } from "../../utils/conversationUtils";
 
 module.exports = function (app: express.Application) {
   // Admin broadcast messages functionality removed - system user no longer exists
