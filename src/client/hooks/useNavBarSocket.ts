@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 import { useSocket } from "./useSocket";
-import { useUserProfile } from "./user/useUserProfile";
+import { useUserProfile, userProfileKeys } from "./user/useUserProfile";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSnackbar } from "notistack";
 import { Conversation } from "./user/useUserMessages";
+import { userNotificationKeys } from "./user/useUserNotifications";
 
 interface UseNavBarSocketOptions {
   onNewNotification?: () => void;
@@ -24,13 +25,22 @@ export function useNavBarSocket(options: UseNavBarSocketOptions = {}) {
     if (!socket) return;
 
     const handleNewNotification = () => {
+      // Invalidate notifications query to fetch fresh notification data
+      queryClient.invalidateQueries({ queryKey: userNotificationKeys.notifications(), exact: false });
+      queryClient.invalidateQueries({ queryKey: userProfileKeys.profile(), exact: false });
+      // Refetch profile to get updated notification count
+      refetchProfile();
+      
       if (onNewNotification) {
         onNewNotification();
       }
     };
 
     const handleNewMessage = (data?: { conversationId: string; message: any }) => {
+      // Invalidate messages/conversations queries to fetch fresh data
       queryClient.invalidateQueries({ queryKey: ["userConversations"], exact: false });
+      queryClient.invalidateQueries({ queryKey: userProfileKeys.profile(), exact: false });
+      // Refetch profile to get updated unread_messages status
       refetchProfile();
 
       if (showSystemMessageNotifications) {
@@ -50,7 +60,10 @@ export function useNavBarSocket(options: UseNavBarSocketOptions = {}) {
     };
 
     const handleNewConversation = (data?: { conversation: Conversation }) => {
+      // Invalidate messages/conversations queries to fetch fresh data
       queryClient.invalidateQueries({ queryKey: ["userConversations"], exact: false });
+      queryClient.invalidateQueries({ queryKey: userProfileKeys.profile(), exact: false });
+      // Refetch profile to get updated unread_messages status
       refetchProfile();
 
       if (showSystemMessageNotifications) {
