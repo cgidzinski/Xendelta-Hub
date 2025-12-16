@@ -18,11 +18,10 @@ import {
 import MenuIcon from "@mui/icons-material/Menu";
 import MailIcon from "@mui/icons-material/Mail";
 import NotificationsIcon from "@mui/icons-material/Notifications";
-import LightModeIcon from "@mui/icons-material/LightMode";
-import DarkModeIcon from "@mui/icons-material/DarkMode";
 import CssBaseline from "@mui/material/CssBaseline";
 import { useNavigate } from "react-router-dom";
 import ProfileListItem from "../ProfileListItem";
+import ThemeToggle from "../ThemeToggle";
 
 const DRAWER_WIDTH = 240;
 
@@ -48,8 +47,6 @@ interface BaseNavBarProps {
   unreadNotifications?: boolean;
   notificationMenu?: React.ReactNode;
   showThemeToggle?: boolean;
-  onThemeToggle?: () => void;
-  themeMode?: "light" | "dark";
   children?: React.ReactNode;
 }
 
@@ -67,8 +64,6 @@ export default function BaseNavBar({
   unreadNotifications = false,
   notificationMenu,
   showThemeToggle = false,
-  onThemeToggle,
-  themeMode = "dark",
   children,
 }: BaseNavBarProps) {
   const navigate = useNavigate();
@@ -199,22 +194,8 @@ export default function BaseNavBar({
                 </Badge>
               </IconButton>
             )}
-            {showThemeToggle && onThemeToggle && (
-              <>
-                <Divider orientation="vertical" flexItem sx={{ mx: 0.5, height: 24, alignSelf: "center" }} />
-                <IconButton
-                  sx={{ width: 50, height: 50 }}
-                  onClick={onThemeToggle}
-                  aria-label="toggle theme"
-                  color="inherit"
-                >
-                  {themeMode === "dark" ? (
-                    <LightModeIcon sx={{ color: "#ffc107" }} />
-                  ) : (
-                    <DarkModeIcon sx={{ color: "#2196f3" }} />
-                  )}
-                </IconButton>
-              </>
+            {showThemeToggle && (
+              <ThemeToggle showDivider={true} size={50} />
             )}
           </Box>
           {children}

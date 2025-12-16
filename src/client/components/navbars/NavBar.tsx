@@ -152,8 +152,6 @@ export default function Root() {
         unreadMessages={profile?.unread_messages || false}
         unreadNotifications={profile?.unread_notifications || false}
         showThemeToggle={true}
-        onThemeToggle={toggleTheme}
-        themeMode={mode}
         notificationMenu={
           <>
             {/* Notifications Popover */}

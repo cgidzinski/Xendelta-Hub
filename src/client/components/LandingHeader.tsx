@@ -7,6 +7,7 @@ import {
 } from "@mui/material";
 import { Login as LoginIcon } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
+import ThemeToggle from "./ThemeToggle";
 
 export default function LandingHeader() {
   const navigate = useNavigate();
@@ -51,27 +52,29 @@ export default function LandingHeader() {
           >
             Xendelta Hub
           </Typography>
-          {/* Sign In button - shown on mobile in top row */}
-          <Button
-            variant="contained"
-            startIcon={<LoginIcon />}
-            onClick={() => navigate("/login")}
-            sx={{
-              display: { xs: "flex", sm: "none" },
-              px: 2,
-              py: 0.75,
-              fontWeight: 600,
-              backgroundColor: "primary.main",
-              boxShadow: "0 0 20px rgba(33, 150, 243, 0.3)",
-              "&:hover": {
-                backgroundColor: "primary.dark",
-                boxShadow: "0 0 30px rgba(33, 150, 243, 0.5)",
-              },
-              fontSize: "0.875rem",
-            }}
-          >
-            Sign In
-          </Button>
+          {/* Mobile: Theme toggle and Sign In button - shown on mobile in top row */}
+          <Box sx={{ display: { xs: "flex", sm: "none" }, alignItems: "center", gap: 0.5 }}>
+            <ThemeToggle size={40} />
+            <Button
+              variant="contained"
+              startIcon={<LoginIcon />}
+              onClick={() => navigate("/login")}
+              sx={{
+                px: 2,
+                py: 0.75,
+                fontWeight: 600,
+                backgroundColor: "primary.main",
+                boxShadow: "0 0 20px rgba(33, 150, 243, 0.3)",
+                "&:hover": {
+                  backgroundColor: "primary.dark",
+                  boxShadow: "0 0 30px rgba(33, 150, 243, 0.5)",
+                },
+                fontSize: "0.875rem",
+              }}
+            >
+              Sign In
+            </Button>
+          </Box>
         </Box>
 
         {/* Mobile: Blog and Features buttons (bottom row) */}
@@ -160,14 +163,17 @@ export default function LandingHeader() {
           </Button>
         </Box>
 
-        {/* Desktop: Right side - Sign In button */}
+        {/* Desktop: Right side - Theme toggle and Sign In button */}
         <Box
           sx={{
             flex: { xs: 0, sm: 1 },
             display: { xs: "none", sm: "flex" },
             justifyContent: "flex-end",
+            alignItems: "center",
+            gap: 1,
           }}
         >
+          <ThemeToggle size={40} showDivider={true} />
           <Button
             variant="contained"
             startIcon={<LoginIcon />}
