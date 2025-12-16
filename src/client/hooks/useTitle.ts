@@ -11,7 +11,7 @@ export function useTitle(title: string) {
   useEffect(() => {
     if (title) {
       setTitle(title);
-      document.title = `XenHub - ${title}`;
+      document.title = `Xendelta Hub - ${title}`;
     }
   }, [title, setTitle]);
 }
