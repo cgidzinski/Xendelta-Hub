@@ -1,7 +1,7 @@
 import * as ReactDOM from "react-dom/client";
 import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route } from "react-router-dom";
 import CssBaseline from "@mui/material/CssBaseline";
-import { ThemeProvider, createTheme } from "@mui/material/styles";
+import { ThemeProvider as MuiThemeProvider } from "@mui/material/styles";
 import { SnackbarProvider } from "notistack";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -16,6 +16,7 @@ import AdminNavBar from "./components/navbars/AdminNavBar";
 // Contexts
 import { NavBarProvider } from "./contexts/NavBarContext";
 import { AuthProvider } from "./contexts/AuthContext";
+import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 
 // Routes - External
 import Landing from "./routes/External/Landing/Landing";
@@ -151,17 +152,6 @@ const router = createBrowserRouter(
   )
 );
 
-const theme = createTheme({
-  palette: {
-    mode: "dark",
-    primary: {
-      main: "#2196f3",
-      light: "#42a5f5",
-      dark: "#1976d2",
-    },
-  },
-});
-
 // Create a client
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -181,12 +171,12 @@ const queryClient = new QueryClient({
   },
 });
 
-const rootElement = document.getElementById("root");
-if (!rootElement) throw new Error("Failed to find the root element");
+// Component that uses the theme from context
+function AppWithTheme() {
+  const { theme } = useTheme();
 
-ReactDOM.createRoot(rootElement).render(
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider theme={theme}>
+  return (
+    <MuiThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
         <NavBarProvider>
@@ -199,6 +189,17 @@ ReactDOM.createRoot(rootElement).render(
           </SnackbarProvider>
         </NavBarProvider>
       </AuthProvider>
+    </MuiThemeProvider>
+  );
+}
+
+const rootElement = document.getElementById("root");
+if (!rootElement) throw new Error("Failed to find the root element");
+
+ReactDOM.createRoot(rootElement).render(
+  <QueryClientProvider client={queryClient}>
+    <ThemeProvider>
+      <AppWithTheme />
     </ThemeProvider>
   </QueryClientProvider>
 );

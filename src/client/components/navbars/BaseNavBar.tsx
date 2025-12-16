@@ -18,6 +18,8 @@ import {
 import MenuIcon from "@mui/icons-material/Menu";
 import MailIcon from "@mui/icons-material/Mail";
 import NotificationsIcon from "@mui/icons-material/Notifications";
+import LightModeIcon from "@mui/icons-material/LightMode";
+import DarkModeIcon from "@mui/icons-material/DarkMode";
 import CssBaseline from "@mui/material/CssBaseline";
 import { useNavigate } from "react-router-dom";
 import ProfileListItem from "../ProfileListItem";
@@ -45,6 +47,9 @@ interface BaseNavBarProps {
   unreadMessages?: boolean;
   unreadNotifications?: boolean;
   notificationMenu?: React.ReactNode;
+  showThemeToggle?: boolean;
+  onThemeToggle?: () => void;
+  themeMode?: "light" | "dark";
   children?: React.ReactNode;
 }
 
@@ -61,6 +66,9 @@ export default function BaseNavBar({
   unreadMessages = false,
   unreadNotifications = false,
   notificationMenu,
+  showThemeToggle = false,
+  onThemeToggle,
+  themeMode = "dark",
   children,
 }: BaseNavBarProps) {
   const navigate = useNavigate();
@@ -86,11 +94,16 @@ export default function BaseNavBar({
           <Box
             sx={{
               height: 64,
+              boxSizing: (theme) => theme.palette.mode === "light" ? "content-box" : "border-box",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               borderBottom: "1px solid",
               borderColor: "divider",
+              boxShadow: (theme) =>
+                theme.palette.mode === "light"
+                  ? "0 2px 8px rgba(33, 150, 243, 0.1)"
+                  : "0 2px 8px rgba(0, 0, 0, 0.2)",
               cursor: "pointer",
               "&:hover": {
                 backgroundColor: "action.hover",
@@ -171,24 +184,39 @@ export default function BaseNavBar({
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             {title}
           </Typography>
-          {(showMessages || showNotifications) && (
-            <Box sx={{ display: "flex", alignItems: "center" }}>
-              {showMessages && (
-                <IconButton sx={{ width: 50, height: 50 }} onClick={onMessagesClick}>
-                  <Badge badgeContent={unreadMessages ? 1 : 0} color="error" variant="dot">
-                    <MailIcon />
-                  </Badge>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            {showMessages && (
+              <IconButton sx={{ width: 50, height: 50 }} onClick={onMessagesClick}>
+                <Badge badgeContent={unreadMessages ? 1 : 0} color="error" variant="dot">
+                  <MailIcon />
+                </Badge>
+              </IconButton>
+            )}
+            {showNotifications && (
+              <IconButton sx={{ width: 50, height: 50, p: 0 }} onClick={onNotificationClick}>
+                <Badge badgeContent={unreadNotifications ? 1 : 0} color="error" variant="dot">
+                  <NotificationsIcon />
+                </Badge>
+              </IconButton>
+            )}
+            {showThemeToggle && onThemeToggle && (
+              <>
+                <Divider orientation="vertical" flexItem sx={{ mx: 0.5, height: 24, alignSelf: "center" }} />
+                <IconButton
+                  sx={{ width: 50, height: 50 }}
+                  onClick={onThemeToggle}
+                  aria-label="toggle theme"
+                  color="inherit"
+                >
+                  {themeMode === "dark" ? (
+                    <LightModeIcon sx={{ color: "#ffc107" }} />
+                  ) : (
+                    <DarkModeIcon sx={{ color: "#2196f3" }} />
+                  )}
                 </IconButton>
-              )}
-              {showNotifications && (
-                <IconButton sx={{ width: 50, height: 50, p: 0 }} onClick={onNotificationClick}>
-                  <Badge badgeContent={unreadNotifications ? 1 : 0} color="error" variant="dot">
-                    <NotificationsIcon />
-                  </Badge>
-                </IconButton>
-              )}
-            </Box>
-          )}
+              </>
+            )}
+          </Box>
           {children}
         </Toolbar>
       </AppBar>

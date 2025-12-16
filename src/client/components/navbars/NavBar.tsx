@@ -25,6 +25,7 @@ import { formatDistance } from "date-fns";
 import { useNavBar } from "../../contexts/NavBarContext";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { useUserNotifications } from "../../hooks/user/useUserNotifications";
+import { useTheme } from "../../contexts/ThemeContext";
 import { Notification } from "../../types";
 import LoadingSpinner from "../LoadingSpinner";
 import BaseNavBar, { NavItem } from "./BaseNavBar";
@@ -35,6 +36,7 @@ export default function Root() {
   const navigate = useNavigate();
   const { isNavBarOpen, setNavBar, toggleNavBar, title } = useNavBar();
   const { profile } = useUserProfile();
+  const { mode, toggleTheme } = useTheme();
   const [notificationAnchorEl, setNotificationAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const [notificationModalOpen, setNotificationModalOpen] = useState(false);
@@ -149,6 +151,9 @@ export default function Root() {
         onMessagesClick={() => navigate("/internal/messages")}
         unreadMessages={profile?.unread_messages || false}
         unreadNotifications={profile?.unread_notifications || false}
+        showThemeToggle={true}
+        onThemeToggle={toggleTheme}
+        themeMode={mode}
         notificationMenu={
           <>
             {/* Notifications Popover */}

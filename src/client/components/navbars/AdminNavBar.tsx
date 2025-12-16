@@ -23,6 +23,7 @@ import LockIcon from "@mui/icons-material/Lock";
 import CloseIcon from "@mui/icons-material/Close";
 import { formatDistance } from "date-fns";
 import { useNavBar } from "../../contexts/NavBarContext";
+import { useTheme } from "../../contexts/ThemeContext";
 import BaseNavBar, { NavItem } from "./BaseNavBar";
 import { useNavBarSocket } from "../../hooks/useNavBarSocket";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
@@ -36,6 +37,7 @@ export default function AdminNavBar() {
   const { title } = useNavBar();
   const [isNavBarOpen, setIsNavBarOpen] = useState(true);
   const { profile } = useUserProfile();
+  const { mode, toggleTheme } = useTheme();
   const [notificationAnchorEl, setNotificationAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const [notificationModalOpen, setNotificationModalOpen] = useState(false);
@@ -151,6 +153,9 @@ export default function AdminNavBar() {
         onMessagesClick={() => navigate("/internal/messages")}
         unreadMessages={profile?.unread_messages || false}
         unreadNotifications={profile?.unread_notifications || false}
+        showThemeToggle={true}
+        onThemeToggle={toggleTheme}
+        themeMode={mode}
         notificationMenu={
           <>
             {/* Notifications Popover */}

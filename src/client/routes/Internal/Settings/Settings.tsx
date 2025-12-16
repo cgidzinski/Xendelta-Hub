@@ -27,11 +27,12 @@ import {
 } from "@mui/icons-material";
 import { useTitle } from "../../../hooks/useTitle";
 import { useState } from "react";
+import { useTheme } from "../../../contexts/ThemeContext";
 
 export default function Settings() {
   useTitle("Settings");
+  const { mode, toggleTheme } = useTheme();
   const [notifications, setNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(true);
   const [autoSave, setAutoSave] = useState(true);
   const [volume, setVolume] = useState(70);
   const [language, setLanguage] = useState("en");
@@ -85,14 +86,11 @@ export default function Settings() {
                 </Box>
                 <Box sx={{ mt: 2 }}>
                   <FormControlLabel
-                    control={<Switch checked={darkMode} onChange={(e) => setDarkMode(e.target.checked)} disabled />}
+                    control={<Switch checked={mode === "dark"} onChange={toggleTheme} />}
                     label="Dark mode"
                   />
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                     Switch between light and dark themes
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, fontStyle: "italic" }}>
-                    Coming soon
                   </Typography>
                 </Box>
               </CardContent>
