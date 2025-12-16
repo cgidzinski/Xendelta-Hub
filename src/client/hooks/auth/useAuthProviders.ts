@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient, getApiUrl } from "../../config/api";
+import { ApiResponse } from "../../types/api";
 
-interface AuthProvider {
+// Types
+export interface AuthProvider {
   provider: string;
   providerId: string;
   email: string;
@@ -8,180 +11,166 @@ interface AuthProvider {
   isActive: boolean;
 }
 
-interface AuthProvidersData {
+export interface AuthProvidersData {
   providers: AuthProvider[];
   canUnlinkLocal: boolean;
 }
 
+interface LinkProviderResponse {
+  success: boolean;
+  message?: string;
+  redirectUrl?: string;
+}
+
+interface UnlinkProviderResponse {
+  success: boolean;
+  message?: string;
+}
+
+interface AddPasswordResponse {
+  success: boolean;
+  message?: string;
+}
+
+// Query keys
+export const authProviderKeys = {
+  all: ["authProviders"] as const,
+  providers: () => [...authProviderKeys.all, "providers"] as const,
+};
+
+// API functions
+const fetchAuthProvidersData = async (): Promise<AuthProvidersData> => {
+  // Note: This endpoint returns { success, providers, canUnlinkLocal } directly
+  // Not wrapped in data field like standard ApiResponse
+  const response = await apiClient.get<AuthProvidersData>(getApiUrl("api/user/auth-providers"));
+  return response.data;
+};
+
+const linkGoogleAccountRequest = async (): Promise<LinkProviderResponse> => {
+  const response = await apiClient.post<LinkProviderResponse>(getApiUrl("api/user/link-google"));
+  const data = response.data;
+
+  if (data.success && data.redirectUrl) {
+    // Redirect to Google OAuth
+    window.location.href = data.redirectUrl;
+  } else {
+    throw new Error(data.message || "Failed to initiate Google account linking");
+  }
+
+  return data;
+};
+
+const linkGitHubAccountRequest = async (): Promise<LinkProviderResponse> => {
+  const response = await apiClient.post<LinkProviderResponse>(getApiUrl("api/user/link-github"));
+  const data = response.data;
+
+  if (data.success && data.redirectUrl) {
+    // Redirect to GitHub OAuth
+    window.location.href = data.redirectUrl;
+  } else {
+    throw new Error(data.message || "Failed to initiate GitHub account linking");
+  }
+
+  return data;
+};
+
+const unlinkProviderRequest = async (provider: string): Promise<UnlinkProviderResponse> => {
+  const response = await apiClient.post<ApiResponse<UnlinkProviderResponse>>(getApiUrl("api/user/unlink-provider"), {
+    provider,
+  });
+  return response.data.data!;
+};
+
+const addPasswordRequest = async (password: string): Promise<AddPasswordResponse> => {
+  const response = await apiClient.post<ApiResponse<AddPasswordResponse>>(getApiUrl("api/user/add-password"), {
+    password,
+  });
+  return response.data.data!;
+};
+
+// Hooks
 export const useAuthProviders = () => {
-  const [authProviders, setAuthProviders] = useState<AuthProvidersData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const fetchAuthProviders = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        throw new Error('No authentication token found');
+  // Query for fetching auth providers
+  const {
+    data: authProviders,
+    isLoading: loading,
+    isError,
+    error,
+    refetch: fetchAuthProviders,
+  } = useQuery({
+    queryKey: authProviderKeys.providers(),
+    queryFn: fetchAuthProvidersData,
+    retry: (failureCount, error) => {
+      if (error.message.includes("Unauthorized") || error.message.includes("No authentication token")) {
+        return false;
       }
+      return failureCount < 3;
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
 
-      const response = await fetch('/api/user/auth-providers', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+  // Mutation for linking Google account
+  const { mutate: linkGoogleAccount } = useMutation({
+    mutationFn: linkGoogleAccountRequest,
+    onError: () => {
+      // Error handled by mutation error state
+    },
+  });
 
-      const data = await response.json();
+  // Mutation for linking GitHub account
+  const { mutate: linkGitHubAccount } = useMutation({
+    mutationFn: linkGitHubAccountRequest,
+    onError: () => {
+      // Error handled by mutation error state
+    },
+  });
 
-      if (data.success) {
-        setAuthProviders(data);
-        setError(null);
-      } else {
-        throw new Error(data.message || 'Failed to fetch authentication providers');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Mutation for unlinking provider
+  const { mutateAsync: unlinkProviderMutation } = useMutation({
+    mutationFn: unlinkProviderRequest,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: authProviderKeys.providers() });
+    },
+    onError: () => {
+      // Error handled by mutation error state
+    },
+  });
 
-  const linkGoogleAccount = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-
-      const response = await fetch('/api/user/link-google', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        // Redirect to Google OAuth
-        window.location.href = data.redirectUrl;
-      } else {
-        throw new Error(data.message || 'Failed to initiate Google account linking');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    }
-  };
-
-  const linkGitHubAccount = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-
-      const response = await fetch('/api/user/link-github', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        // Redirect to GitHub OAuth
-        window.location.href = data.redirectUrl;
-      } else {
-        throw new Error(data.message || 'Failed to initiate GitHub account linking');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    }
-  };
+  // Mutation for adding password
+  const { mutateAsync: addPasswordMutation } = useMutation({
+    mutationFn: addPasswordRequest,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: authProviderKeys.providers() });
+    },
+    onError: () => {
+      // Error handled by mutation error state
+    },
+  });
 
   const unlinkProvider = async (provider: string) => {
-    try {
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-
-      const response = await fetch('/api/user/unlink-provider', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ provider }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        // Refresh the auth providers list
-        await fetchAuthProviders();
-        return { success: true, message: data.message };
-      } else {
-        throw new Error(data.message || 'Failed to unlink authentication provider');
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
-      setError(errorMessage);
-      return { success: false, message: errorMessage };
+    const result = await unlinkProviderMutation(provider);
+    if (result.success) {
+      return { success: true, message: result.message || "Provider unlinked successfully" };
+    } else {
+      return { success: false, message: result.message || "Failed to unlink provider" };
     }
   };
 
   const addPassword = async (password: string) => {
-    try {
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-
-      const response = await fetch('/api/user/add-password', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ password }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        // Refresh the auth providers list
-        await fetchAuthProviders();
-        return { success: true, message: data.message };
-      } else {
-        throw new Error(data.message || 'Failed to add password');
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
-      setError(errorMessage);
-      return { success: false, message: errorMessage };
+    const result = await addPasswordMutation(password);
+    if (result.success) {
+      return { success: true, message: result.message || "Password added successfully" };
+    } else {
+      return { success: false, message: result.message || "Failed to add password" };
     }
   };
 
-  useEffect(() => {
-    fetchAuthProviders();
-  }, []);
-
   return {
-    authProviders,
+    authProviders: authProviders || null,
     loading,
-    error,
+    error: error ? (error as Error).message : null,
     fetchAuthProviders,
     linkGoogleAccount,
     linkGitHubAccount,

@@ -1,28 +1,17 @@
 import { Request, Response, NextFunction } from "express";
 import passport from "../config/passport";
+import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 
-// Extend Request interface locally
-interface AuthenticatedRequest extends Request {
-  user?: {
-    _id: string;
-    username: string;
-    email: string;
-    avatar: string;
-  };
-}
-
-interface JWTPayload {
+interface UserDocument {
   _id: string;
   username: string;
   email: string;
   avatar: string;
-  iat?: number;
-  exp?: number;
 }
 
 // Passport JWT authentication middleware
 export const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
-  passport.authenticate('jwt', { session: false }, (err: any, user: any, info: any) => {
+  passport.authenticate('jwt', { session: false }, (err: Error | null, user: UserDocument | false, info: { message?: string } | undefined) => {
     if (err) {
       console.error("Authentication error:", err);
       return res.status(500).json({
@@ -38,8 +27,8 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
       });
     }
 
-    // Attach user data to request object (same format as before)
-    (req as any).user = {
+    // Attach user data to request object
+    (req as AuthenticatedRequest).user = {
       _id: user._id,
       username: user.username,
       email: user.email,

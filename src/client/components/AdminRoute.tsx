@@ -2,7 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Box, Typography, CircularProgress } from "@mui/material";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { get } from "../utils/apiClient";
+import { apiClient, getApiUrl } from "../config/api";
+import { ApiResponse } from "../types/api";
 
 interface AdminRouteProps {
   children: React.ReactNode;
@@ -26,36 +27,16 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
         return;
       }
 
-      try {
-        const data = await get<{ roles: string[] }>("/api/user/roles/verify");
-        if (isMounted) {
-          const hasAdminRole = data.roles?.some((role: string) => role.toLowerCase() === "admin") || false;
-          setIsAdmin(hasAdminRole);
-          // Only set error if we got a successful response but user is not admin
-          if (!hasAdminRole) {
-            setVerificationError(true);
-          } else {
-            setVerificationError(false);
-          }
-        }
-      } catch (error) {
-        // On API error, don't change admin status - might be network/server issue during HMR
-        // Only redirect if we've successfully verified the user is NOT admin
-        // In development, be lenient to avoid HMR issues
-        if (process.env.NODE_ENV === "production") {
-          // In production, be strict - if we can't verify, assume not admin
-          if (isMounted && isAdmin === null) {
-            // Only set to false if we've never verified before
-            setIsAdmin(false);
-            setVerificationError(true);
-          }
+      const response = await apiClient.get<ApiResponse<{ roles: string[] }>>(getApiUrl("api/auth/roles/verify"));
+      const data = response.data.data!;
+      if (isMounted) {
+        const hasAdminRole = data.roles?.some((role: string) => role.toLowerCase() === "admin") || false;
+        setIsAdmin(hasAdminRole);
+        // Only set error if we got a successful response but user is not admin
+        if (!hasAdminRole) {
+          setVerificationError(true);
         } else {
-          // In development, if verification fails and we don't know status, assume admin
-          // This prevents HMR from kicking users out
-          if (isMounted && isAdmin === null) {
-            setIsAdmin(true); // Assume admin in dev to prevent HMR redirects
-          }
-          console.warn("Admin verification failed (assuming admin in dev):", error);
+          setVerificationError(false);
         }
       }
 

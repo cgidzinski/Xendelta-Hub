@@ -14,11 +14,12 @@ import {
 import { useParams, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import LoadingSpinner from "../../../components/LoadingSpinner";
-import { useUserMessages } from "../../../hooks/user/useUserMessages";
+import { useUserMessages, useConversation } from "../../../hooks/user/useUserMessages";
 import { Message, Conversation } from "../../../types";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
 import { useSocket } from "../../../hooks/useSocket";
 import { useQueryClient } from "@tanstack/react-query";
+import { useConversationSocket } from "../../../hooks/useConversationSocket";
 import ConversationHeader from "./components/ConversationHeader";
 import ConversationBody from "./components/ConversationBody";
 import ConversationFooter from "./components/ConversationFooter";
@@ -32,7 +33,6 @@ export default function ConversationDetail() {
   const { profile } = useUserProfile();
   const queryClient = useQueryClient();
   const {
-    fetchConversation,
     markConversationAsRead,
     sendMessage,
     isSendingMessage,
@@ -47,10 +47,10 @@ export default function ConversationDetail() {
     leaveConversation: leaveConversationMutation,
     isLeaving,
   } = useUserMessages();
+  
+  const { conversation, isLoading } = useConversation(conversationId);
   const { socket, joinConversation, leaveConversation } = useSocket();
 
-  const [conversation, setConversation] = useState<Conversation | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [messageText, setMessageText] = useState("");
   const [messageOptionsOpen, setMessageOptionsOpen] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
@@ -59,7 +59,6 @@ export default function ConversationDetail() {
 
   useEffect(() => {
     if (conversationId) {
-      loadConversation();
       joinConversation(conversationId);
     }
 
@@ -68,90 +67,10 @@ export default function ConversationDetail() {
         leaveConversation(conversationId);
       }
     };
-  }, [conversationId]);
+  }, [conversationId, joinConversation, leaveConversation]);
 
   // Set up socket listeners for real-time updates
-  useEffect(() => {
-    if (!socket || !conversationId) return;
-
-    const handleNewMessage = (data: { conversationId: string; message: Message }) => {
-      if (data.conversationId === conversationId) {
-        // Update local conversation state directly without triggering loading
-        setConversation((prevConv) => {
-          if (!prevConv) return prevConv;
-          // Check if message already exists to avoid duplicates (including optimistic temp messages)
-          const messageExists = prevConv.messages?.some(
-            (msg) => msg._id === data.message._id || (msg._id?.startsWith("temp-") && msg.message === data.message.message && Math.abs(new Date(msg.time).getTime() - new Date(data.message.time).getTime()) < 5000)
-          );
-          if (messageExists) {
-            // Replace temp message with real one
-            return {
-              ...prevConv,
-              messages: (prevConv.messages || []).map((msg) =>
-                msg._id?.startsWith("temp-") && msg.message === data.message.message ? data.message : msg
-              ).filter((msg, index, arr) => {
-                // Remove duplicate temp messages, keep only the real one
-                if (msg._id === data.message._id) return true;
-                if (msg._id?.startsWith("temp-") && msg.message === data.message.message) {
-                  return false; // Remove temp message
-                }
-                return true;
-              }),
-              lastMessage: data.message.message,
-              lastMessageTime: data.message.time,
-            };
-          }
-          return {
-            ...prevConv,
-            messages: [...(prevConv.messages || []), data.message],
-            lastMessage: data.message.message,
-            lastMessageTime: data.message.time,
-          };
-        });
-        // Invalidate queries to refresh UI (list view, profile)
-        queryClient.invalidateQueries({ queryKey: ["userConversations"] });
-        queryClient.invalidateQueries({ queryKey: ["userProfile"] });
-      }
-    };
-
-    const handleMessageDeleted = (data: { conversationId: string; messageId: string }) => {
-      if (data.conversationId === conversationId) {
-        // Update local conversation state directly
-        setConversation((prevConv) => {
-          if (!prevConv) return prevConv;
-          return {
-            ...prevConv,
-            messages: (prevConv.messages || []).filter((msg) => msg._id !== data.messageId),
-          };
-        });
-        queryClient.invalidateQueries({ queryKey: ["userConversations"] });
-      }
-    };
-
-    const handleConversationUpdate = (data: { conversationId: string; update: Record<string, unknown> }) => {
-      if (data.conversationId === conversationId) {
-        // Update local conversation state directly
-        setConversation((prevConv) => {
-          if (!prevConv) return prevConv;
-          return {
-            ...prevConv,
-            ...data.update,
-          };
-        });
-        queryClient.invalidateQueries({ queryKey: ["userConversations"] });
-      }
-    };
-
-    socket.on("message:new", handleNewMessage);
-    socket.on("message:deleted", handleMessageDeleted);
-    socket.on("conversation:update", handleConversationUpdate);
-
-    return () => {
-      socket.off("message:new", handleNewMessage);
-      socket.off("message:deleted", handleMessageDeleted);
-      socket.off("conversation:update", handleConversationUpdate);
-    };
-  }, [socket, conversationId, queryClient, setConversation]);
+  useConversationSocket({ socket, conversationId });
 
   useEffect(() => {
     if (conversation && conversationId) {
@@ -160,13 +79,6 @@ export default function ConversationDetail() {
   }, [conversation, conversationId]);
 
 
-  const loadConversation = async () => {
-    if (!conversationId) return;
-    setIsLoading(true);
-    const conv = await fetchConversation(conversationId);
-    setConversation(conv || null);
-    setIsLoading(false);
-  };
 
 
   const handleSendMessage = () => {
@@ -177,23 +89,7 @@ export default function ConversationDetail() {
     setMessageText("");
     
     // Optimistically update local conversation state immediately
-    const optimisticMessage: Message = {
-      _id: `temp-${Date.now()}`,
-      from: profile?._id || "",
-      message: messageToSend,
-      time: new Date().toISOString(),
-      senderUsername: profile?.username,
-    };
-    
-    setConversation((prevConv) => {
-      if (!prevConv) return prevConv;
-      return {
-        ...prevConv,
-        messages: [...(prevConv.messages || []), optimisticMessage],
-        lastMessage: messageToSend,
-        lastMessageTime: optimisticMessage.time,
-      };
-    });
+    // Optimistic update is handled by the sendMessage mutation in useUserMessages hook
   };
 
   const handleMessageOptions = (message: Message) => {
@@ -218,14 +114,7 @@ export default function ConversationDetail() {
   const handleUpdateName = async (name: string) => {
     if (!conversationId) return;
     await updateConversationName(conversationId, name);
-    // Update local conversation state immediately
-    setConversation((prevConv) => {
-      if (!prevConv) return prevConv;
-      return {
-        ...prevConv,
-        name: name || undefined,
-      };
-    });
+    // Update is handled by the mutation and socket events
   };
 
   const handleLeaveConversation = async () => {
@@ -354,14 +243,12 @@ export default function ConversationDetail() {
         onMessageOptions={handleMessageOptions}
       />
 
-      {conversation.canReply !== false && (
-        <ConversationFooter
-          messageText={messageText}
-          onMessageTextChange={setMessageText}
-          onSendMessage={handleSendMessage}
-          isSending={isSendingMessage}
-        />
-      )}
+      <ConversationFooter
+        messageText={messageText}
+        onMessageTextChange={setMessageText}
+        onSendMessage={handleSendMessage}
+        isSending={isSendingMessage}
+      />
 
         {/* Message Options Dialog */}
         <Dialog open={messageOptionsOpen} onClose={() => setMessageOptionsOpen(false)} maxWidth="md" fullWidth>

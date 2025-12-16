@@ -47,12 +47,10 @@ export const useSocket = (): UseSocketReturn => {
     });
 
     socket.on("connect", () => {
-      console.log("Socket connected");
       setIsConnected(true);
     });
 
-    socket.on("disconnect", (reason) => {
-      console.log("Socket disconnected:", reason);
+    socket.on("disconnect", () => {
       setIsConnected(false);
       // Only clear ref if it's the current socket
       if (socketRef.current === socket) {
@@ -60,8 +58,7 @@ export const useSocket = (): UseSocketReturn => {
       }
     });
 
-    socket.on("connect_error", (error) => {
-      console.error("Socket connection error:", error);
+    socket.on("connect_error", () => {
       setIsConnected(false);
     });
 

@@ -24,18 +24,24 @@ import { useTitle } from "../../hooks/useTitle";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
-import { get, post, del } from "../../utils/apiClient";
+import { useAdmin } from "../../hooks/admin/useAdmin";
 
 export default function Admin() {
   const { profile } = useUserProfile();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+  const {
+    verifyAdminRole,
+    sendMessageToAll,
+    isSendingMessage,
+    sendNotificationToAll,
+    isSendingNotification,
+    deleteAllMessages,
+    isDeletingMessages,
+  } = useAdmin();
   const [messageDialogOpen, setMessageDialogOpen] = useState(false);
   const [testMessage, setTestMessage] = useState("Test Message");
   const [conversationTitle, setConversationTitle] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const [isSendingNotification, setIsSendingNotification] = useState(false);
-  const [isDeletingMessages, setIsDeletingMessages] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Periodic role verification - check every 30 seconds
@@ -43,83 +49,67 @@ export default function Admin() {
   useEffect(() => {
     let isMounted = true;
 
-    const verifyAdminRole = async () => {
-      try {
-        const data = await get<{ roles: string[] }>("/api/user/roles/verify");
-        if (isMounted && !data.roles?.some((role: string) => role.toLowerCase() === "admin")) {
-          // Admin role was removed, redirect to internal
-          navigate("/internal");
-          enqueueSnackbar("Your admin access has been revoked", { variant: "warning" });
-        }
-      } catch (error) {
-        // Don't redirect on error during HMR or temporary network issues
-        // Only log the error - AdminRoute already handles initial verification
-        if (process.env.NODE_ENV === "development") {
-          console.warn("Admin role verification failed (this is normal during HMR):", error);
-        }
+    const checkAdminRole = async () => {
+      const result = await verifyAdminRole();
+      const rolesData = result.data || [];
+      if (isMounted && !rolesData.some((role: string) => role.toLowerCase() === "admin")) {
+        // Admin role was removed, redirect to internal
+        navigate("/internal");
+        enqueueSnackbar("Your admin access has been revoked", { variant: "warning" });
       }
     };
 
     // Skip initial verification on mount - AdminRoute already handles this
     // Only set up periodic verification every 30 seconds
-    const interval = setInterval(verifyAdminRole, 30000);
+    const interval = setInterval(checkAdminRole, 30000);
 
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [navigate, enqueueSnackbar]);
+  }, [navigate, enqueueSnackbar, verifyAdminRole]);
 
   const handleSendToAll = async () => {
     if (!testMessage.trim()) return;
 
-    setIsSending(true);
     setResult(null);
 
-    try {
-      const data = await post<{ message: string; data?: { successCount?: number } }>("/api/admin/messages/all", {
-        message: testMessage,
-        conversationTitle: conversationTitle.trim() || undefined,
-      });
-
-      setResult({
-        success: true,
-        message: data.message || `Message sent successfully`,
-      });
-      setTestMessage("Test Message");
-      setConversationTitle("");
-      setTimeout(() => {
-        setMessageDialogOpen(false);
-        setResult(null);
-      }, 3000);
-    } catch (error: any) {
-      setResult({
-        success: false,
-        message: error.message || "Failed to send message",
-      });
-    }
-
-    setIsSending(false);
+    sendMessageToAll(
+      { message: testMessage, conversationTitle: conversationTitle.trim() || undefined },
+      {
+        onSuccess: (data) => {
+          setResult({
+            success: true,
+            message: data.message || `Message sent successfully`,
+          });
+          setTestMessage("Test Message");
+          setConversationTitle("");
+          setTimeout(() => {
+            setMessageDialogOpen(false);
+            setResult(null);
+          }, 3000);
+        },
+        onError: (error) => {
+          setResult({
+            success: false,
+            message: error.message || "Failed to send message",
+          });
+        },
+      }
+    );
   };
 
   const handleSendNotification = async (title: string, message: string, icon: string = "announcement") => {
-    setIsSendingNotification(true);
-
-    try {
-      const data = await post<{ message: string; data?: { successCount?: number } }>("/api/admin/notifications/all", {
-        title,
-        message,
-        icon,
-      });
-
-      enqueueSnackbar(data.message || `Notification sent successfully`, {
-        variant: "success",
-      });
-    } catch (error: any) {
-      enqueueSnackbar(error.message || "Failed to send notification", { variant: "error" });
-    }
-
-    setIsSendingNotification(false);
+    sendNotificationToAll({ title, message, icon }, {
+      onSuccess: (data) => {
+        enqueueSnackbar(data.message || `Notification sent successfully`, {
+          variant: "success",
+        });
+      },
+      onError: (error) => {
+        enqueueSnackbar(error.message || "Failed to send notification", { variant: "error" });
+      },
+    });
   };
 
   const handleDeleteAllMessages = async () => {
@@ -127,18 +117,16 @@ export default function Admin() {
       return;
     }
 
-    setIsDeletingMessages(true);
-    try {
-      const data = await del<{ message: string; data?: { messagesDeleted?: number; conversationsDeleted?: number } }>("/api/admin/messages/all");
-
-      enqueueSnackbar(data.message || `Deleted messages and conversations`, {
-        variant: "success",
-      });
-    } catch (error: any) {
-      enqueueSnackbar(error.message || "Failed to delete messages and conversations", { variant: "error" });
-    }
-
-    setIsDeletingMessages(false);
+    deleteAllMessages(undefined, {
+      onSuccess: (data) => {
+        enqueueSnackbar(data.message || `Deleted messages and conversations`, {
+          variant: "success",
+        });
+      },
+      onError: (error) => {
+        enqueueSnackbar(error.message || "Failed to delete messages and conversations", { variant: "error" });
+      },
+    });
   };
 
   const demoNotifications = [
@@ -301,15 +289,15 @@ export default function Admin() {
             </Typography>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setMessageDialogOpen(false)} disabled={isSending}>
+            <Button onClick={() => setMessageDialogOpen(false)} disabled={isSendingMessage}>
               Cancel
             </Button>
             <Button
               onClick={handleSendToAll}
               variant="contained"
-              disabled={isSending || !testMessage.trim()}
+              disabled={isSendingMessage || !testMessage.trim()}
             >
-              {isSending ? "Sending..." : "Send to All"}
+              {isSendingMessage ? "Sending..." : "Send to All"}
             </Button>
           </DialogActions>
         </Dialog>

@@ -1,38 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Box } from "@mui/material";
 import LandingHeader from "../../../components/LandingHeader";
 import BlogPostDetailContent from "./components/BlogPostDetailContent";
-import { BlogPost } from "./components/BlogContent";
-import { get } from "../../../utils/apiClient";
+import { BlogPost } from "../../../types";
+import { useBlogPost } from "../../../hooks/blog/useBlogPost";
 
 export default function BlogPostDetail() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const [post, setPost] = useState<BlogPost | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!slug) {
-      setError("Invalid post slug");
-      setIsLoading(false);
-      return;
-    }
-
-    const fetchPost = async () => {
-      setIsLoading(true);
-      setError(null);
-      const data = await get<{ post: BlogPost }>(`/api/blog/${slug}`);
-      setPost(data.post);
-      setIsLoading(false);
-    };
-
-    fetchPost().catch((err: any) => {
-      setError(err.message || "Failed to load blog post");
-      setIsLoading(false);
-    });
-  }, [slug]);
+  const { post, isLoading, isError, error } = useBlogPost(slug);
 
   const handleBackClick = () => {
     navigate("/blog");
@@ -52,7 +29,7 @@ export default function BlogPostDetail() {
         blogBasePath="/blog"
         post={post}
         isLoading={isLoading}
-        error={error}
+        error={isError ? (error?.message || "Failed to load blog post") : null}
         onBackClick={handleBackClick}
       />
     </Box>

@@ -5,16 +5,14 @@ import { requireAdmin } from "../../middleware/admin";
 import { validate, createBlogPostSchema, updateBlogPostSchema } from "../../utils/validation";
 import { ensureUniqueSlug } from "../../utils/slugUtils";
 import { uploadBlogAsset as multerUploadBlogAsset } from "../../config/multer";
-import { notFoundResponse, badRequestResponse } from "../../utils/responseHelpers";
 import { uploadBlogAsset, generateUniqueFilename } from "../../utils/mediaUtils";
-import { deleteFromPublicGCS } from "../../utils/gcsUtils";
+import { deleteFromGCS } from "../../utils/gcsUtils";
+import { AuthenticatedRequest } from "../../types";
 
 module.exports = function (app: express.Application) {
   app.get("/api/admin/blog", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
     const posts = await BlogPost.find({})
       .populate("author", "username avatar")
-      .populate("assets", "filename mimeType")
-      .populate("featuredImage", "filename")
       .sort({ createdAt: -1 })
       .lean()
       .exec();
@@ -27,7 +25,7 @@ module.exports = function (app: express.Application) {
 
   app.post("/api/admin/blog", authenticateToken, requireAdmin, validate(createBlogPostSchema), async function (req: express.Request, res: express.Response) {
     const { title, slug, markdown, publishDate, assets, featuredImage, categories, tags, featured, published } = req.body;
-    const userId = (req as any).user._id;
+    const userId = (req as AuthenticatedRequest).user!._id;
 
     const uniqueSlug = await ensureUniqueSlug(slug);
 
@@ -61,17 +59,26 @@ module.exports = function (app: express.Application) {
 
   app.post("/api/admin/blog/upload-asset", authenticateToken, requireAdmin, multerUploadBlogAsset.single("asset"), async function (req: express.Request, res: express.Response) {
     if (!req.file) {
-      return badRequestResponse(res, "No asset file provided");
+      return res.status(400).json({
+        status: false,
+        message: "No asset file provided",
+      });
     }
 
     const postId = req.body.postId || req.query.postId;
     if (!postId) {
-      return badRequestResponse(res, "Post ID is required");
+      return res.status(400).json({
+        status: false,
+        message: "Post ID is required",
+      });
     }
 
     const post = await BlogPost.findById(postId).exec();
     if (!post) {
-      return notFoundResponse(res, "Blog post");
+      return res.status(404).json({
+        status: false,
+        message: "Blog post not found",
+      });
     }
 
     // Generate unique filename
@@ -103,16 +110,25 @@ module.exports = function (app: express.Application) {
     const assetUrl = req.query.assetUrl as string;
     
     if (!postId) {
-      return badRequestResponse(res, "Post ID is required");
+      return res.status(400).json({
+        status: false,
+        message: "Post ID is required",
+      });
     }
     
     if (!assetUrl) {
-      return badRequestResponse(res, "Asset URL is required");
+      return res.status(400).json({
+        status: false,
+        message: "Asset URL is required",
+      });
     }
 
     const post = await BlogPost.findById(postId).exec();
     if (!post) {
-      return notFoundResponse(res, "Blog post");
+      return res.status(404).json({
+        status: false,
+        message: "Blog post not found",
+      });
     }
 
     // Remove URL from assets array
@@ -125,7 +141,7 @@ module.exports = function (app: express.Application) {
     const urlParts = assetUrl.split("/");
     const filename = urlParts[urlParts.length - 1];
     const gcsPath = `blog-assets/${filename}`;
-    await deleteFromPublicGCS(gcsPath).catch(() => {
+    await deleteFromGCS(gcsPath).catch(() => {
       // Ignore errors if file doesn't exist
     });
 
@@ -139,7 +155,10 @@ module.exports = function (app: express.Application) {
     const post = await BlogPost.findById(req.params.id).exec();
 
     if (!post) {
-      return notFoundResponse(res, "Blog post");
+      return res.status(404).json({
+        status: false,
+        message: "Blog post not found",
+      });
     }
 
     const { title, slug, markdown, publishDate, assets, featuredImage, categories, tags, featured, published } = req.body;
@@ -177,7 +196,10 @@ module.exports = function (app: express.Application) {
     const post = await BlogPost.findById(req.params.id).exec();
 
     if (!post) {
-      return notFoundResponse(res, "Blog post");
+      return res.status(404).json({
+        status: false,
+        message: "Blog post not found",
+      });
     }
 
     // Delete associated assets from public GCS
@@ -187,7 +209,7 @@ module.exports = function (app: express.Application) {
         const urlParts = assetUrl.split("/");
         const filename = urlParts[urlParts.length - 1];
         const gcsPath = `blog-assets/${filename}`;
-        await deleteFromPublicGCS(gcsPath).catch(() => {
+        await deleteFromGCS(gcsPath).catch(() => {
           // Ignore errors if file doesn't exist
         });
       }
@@ -198,7 +220,7 @@ module.exports = function (app: express.Application) {
       const urlParts = post.featuredImage.split("/");
       const filename = urlParts[urlParts.length - 1];
       const gcsPath = `blog-assets/${filename}`;
-      await deleteFromPublicGCS(gcsPath).catch(() => {
+      await deleteFromGCS(gcsPath).catch(() => {
         // Ignore errors if file doesn't exist
       });
     }

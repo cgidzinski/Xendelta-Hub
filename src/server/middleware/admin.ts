@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from "express";
-import { User } from "../models/user";
+const { User } = require("../models/user");
+import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 
 // Admin middleware - checks if user has admin role
 export const requireAdmin = async (req: Request, res: Response, next: NextFunction) => {
-  const user = (req as any).user;
+  const user = (req as AuthenticatedRequest).user;
   
   if (!user || !user._id) {
     return res.status(401).json({
@@ -30,9 +31,6 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
     });
   }
 
-  // Attach full user to request for admin operations
-  (req as any).adminUser = fullUser;
-  
   next();
 };
 

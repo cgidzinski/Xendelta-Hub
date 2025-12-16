@@ -13,7 +13,6 @@ var messageSchema = new mongoose.Schema({
 var conversationSchema = new mongoose.Schema({
   participants: [{ type: String }], // array of user IDs
   name: { type: String }, // optional group name
-  canReply: { type: Boolean, default: true }, // whether users can reply to messages in this conversation
   createdBy: { type: String }, // user ID of the conversation creator
   updatedAt: { type: String, default: () => new Date().toISOString() },
   messages: [messageSchema], // array of messages in this conversation/group

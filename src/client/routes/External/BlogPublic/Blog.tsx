@@ -1,39 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Box } from "@mui/material";
 import LandingHeader from "../../../components/LandingHeader";
 import BlogContent, { BlogPost, PaginationInfo } from "./components/BlogContent";
-import { get } from "../../../utils/apiClient";
+import { useBlog } from "../../../hooks/blog/useBlog";
 
 export default function Blog() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [posts, setPosts] = useState<BlogPost[]>([]);
-  const [pagination, setPagination] = useState<PaginationInfo | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchPosts = async () => {
-      setIsLoading(true);
-      setError(null);
-      const page = parseInt(searchParams.get("page") || "1");
-      const limit = parseInt(searchParams.get("limit") || "10");
-      const queryParams = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString(),
-      });
-      const data = await get<{ posts: BlogPost[]; pagination: PaginationInfo }>(`/api/blog?${queryParams.toString()}`);
-      setPosts(data.posts || []);
-      setPagination(data.pagination);
-      setIsLoading(false);
-    };
-
-    fetchPosts().catch((err: any) => {
-      setError(err.message || "Failed to load blog posts");
-      setIsLoading(false);
-    });
-  }, [searchParams]);
+  const page = parseInt(searchParams.get("page") || "1");
+  const limit = parseInt(searchParams.get("limit") || "10");
+  const { posts, pagination, isLoading, isError, error } = useBlog({ page, limit });
 
   const handlePostClick = (slug: string) => {
     navigate(`/blog/${slug}`);
@@ -59,7 +36,7 @@ export default function Blog() {
         blogBasePath="/blog"
         posts={posts}
         isLoading={isLoading}
-        error={error}
+        error={isError ? (error?.message || "Failed to load blog posts") : null}
         onPostClick={handlePostClick}
         pagination={pagination}
         onPageChange={handlePageChange}

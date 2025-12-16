@@ -29,23 +29,16 @@ export function getLastMessageInfo(
  * Includes all participants including the current user
  */
 export function generateDefaultConversationName(
-  participantInfo: Array<{ _id: string; username: string }>,
-  currentUserId: string,
-  systemBotId?: string
+  participantInfo: Array<{ _id: string; username: string }>
 ): string {
-  // Include all participants except system bot
-  const allParticipants = participantInfo.filter(
-    (p) => p._id !== systemBotId
-  );
-
-  if (allParticipants.length === 0) {
-    return participantInfo.some((p) => p._id === systemBotId) ? "System" : "Chat";
+  if (participantInfo.length === 0) {
+    return "Chat";
   }
 
-  if (allParticipants.length === 1) {
-    return allParticipants[0].username;
+  if (participantInfo.length === 1) {
+    return participantInfo[0].username;
   }
 
-  return allParticipants.map((p) => p.username).join(", ");
+  return participantInfo.map((p) => p.username).join(", ");
 }
 

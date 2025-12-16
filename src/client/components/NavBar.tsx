@@ -1,108 +1,63 @@
-import { Outlet } from "react-router-dom";
 import {
   Box,
-  Typography,
-  Drawer,
-  Toolbar,
-  List,
-  Divider,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  AppBar,
-  IconButton,
-  ListItemAvatar,
-  Avatar,
   Badge,
   Menu,
   Dialog,
   DialogTitle,
   DialogContent,
+  IconButton,
+  Typography,
+  List,
+  ListItem,
+  Divider,
 } from "@mui/material";
 import HomeIcon from "@mui/icons-material/Home";
-import { useNavBar } from "../contexts/NavBarContext";
-import CssBaseline from "@mui/material/CssBaseline";
-import { useLocation } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
-import NotificationsIcon from "@mui/icons-material/Notifications";
-import MenuIcon from "@mui/icons-material/Menu";
-import MailIcon from "@mui/icons-material/Mail";
-import SettingsIcon from "@mui/icons-material/Settings";
-import LockIcon from "@mui/icons-material/Lock";
-import PersonIcon from "@mui/icons-material/Person";
-import SecurityIcon from "@mui/icons-material/Security";
-import AnnouncementIcon from "@mui/icons-material/Announcement";
-import KeyboardDoubleArrowLeftIcon from "@mui/icons-material/KeyboardDoubleArrowLeft";
-import CloseIcon from "@mui/icons-material/Close";
 import ArticleIcon from "@mui/icons-material/Article";
-const DRAWER_WIDTH = 240;
+import SettingsIcon from "@mui/icons-material/Settings";
+import SecurityIcon from "@mui/icons-material/Security";
+import MailIcon from "@mui/icons-material/Mail";
+import NotificationsIcon from "@mui/icons-material/Notifications";
+import PersonIcon from "@mui/icons-material/Person";
+import AnnouncementIcon from "@mui/icons-material/Announcement";
+import LockIcon from "@mui/icons-material/Lock";
+import CloseIcon from "@mui/icons-material/Close";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useState, useRef } from "react";
+import { formatDistance } from "date-fns";
+import { useNavBar } from "../contexts/NavBarContext";
 import { useUserProfile } from "../hooks/user/useUserProfile";
-import { useState, useRef, useEffect } from "react";
 import { useUserNotifications } from "../hooks/user/useUserNotifications";
 import { Notification } from "../types";
 import LoadingSpinner from "./LoadingSpinner";
-import { formatDistance } from "date-fns";
-import ProfileListItem from "./ProfileListItem";
-import { useSocket } from "../hooks/useSocket";
+import BaseNavBar, { NavItem } from "./BaseNavBar";
+import { useNavBarSocket } from "../hooks/useNavBarSocket";
+
 export default function Root() {
-  let location = useLocation();
+  const location = useLocation();
   const navigate = useNavigate();
   const { isNavBarOpen, setNavBar, toggleNavBar, title } = useNavBar();
   const { profile } = useUserProfile();
-  const { socket } = useSocket();
   const [notificationAnchorEl, setNotificationAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const [notificationModalOpen, setNotificationModalOpen] = useState(false);
   const { notifications, markNotificationAsRead, fetchNotifications, isFetching } = useUserNotifications();
   const markedNotificationsRef = useRef<Set<string>>(new Set());
 
-  const { refetch: refetchProfile } = useUserProfile();
-
-  // Listen for real-time notification updates
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleNewNotification = () => {
-      // If notification menu is open, refresh notifications
+  useNavBarSocket({
+    onNewNotification: () => {
       if (notificationAnchorEl) {
         fetchNotifications();
       }
-    };
-
-    // Listen for new messages to update unread count
-    const handleNewMessage = (data?: { conversationId: string; message: any }) => {
-      refetchProfile();
-      // Note: System message notifications are handled in Messages.tsx
-      // This ensures the profile unread count is updated globally
-    };
-
-    // Listen for new conversations to update unread count
-    const handleNewConversation = (data?: { conversation: any }) => {
-      refetchProfile();
-      // Note: System conversation notifications are handled in Messages.tsx
-      // This ensures the profile unread count is updated globally
-    };
-
-    socket.on("notification:new", handleNewNotification);
-    socket.on("message:new", handleNewMessage);
-    socket.on("conversation:new", handleNewConversation);
-
-    return () => {
-      socket.off("notification:new", handleNewNotification);
-      socket.off("message:new", handleNewMessage);
-      socket.off("conversation:new", handleNewConversation);
-    };
-  }, [socket, notificationAnchorEl, fetchNotifications, refetchProfile]);
+    },
+  });
 
   const handleNotificationClick = (event: React.MouseEvent<HTMLElement>) => {
-    fetchNotifications(); // Fetch notifications when button is clicked
+    fetchNotifications();
     setNotificationAnchorEl(event.currentTarget);
   };
 
   const handleNotificationClose = () => {
     setNotificationAnchorEl(null);
-    // Reset the marked notifications set when closing the menu
     markedNotificationsRef.current.clear();
   };
 
@@ -114,12 +69,10 @@ export default function Root() {
   };
 
   const handleNotificationItemClick = (notification: Notification) => {
-    // Mark as read if unread
     if (notification.unread && !markedNotificationsRef.current.has(notification._id)) {
       markedNotificationsRef.current.add(notification._id);
       markNotificationAsRead(notification._id);
     }
-    // Open modal with full notification details
     setSelectedNotification(notification);
     setNotificationModalOpen(true);
   };
@@ -146,149 +99,72 @@ export default function Root() {
     }
   };
 
-  return (
-    <Box sx={{ display: "flex" }}>
-      <CssBaseline />
-      <Drawer
-        sx={{
-          width: isNavBarOpen ? DRAWER_WIDTH : 0,
-          flexShrink: 0,
-          "& .MuiDrawer-paper": {
-            width: DRAWER_WIDTH,
-            boxSizing: "border-box",
-            top: 0,
-          },
-        }}
-        variant="persistent"
-        anchor="left"
-        open={isNavBarOpen}
-      >
-        <Box sx={{ overflow: "auto", display: "flex", flexDirection: "column", height: "100%" }}>
-          <Box
-            sx={{
-              height: 64, // Same height as AppBar Toolbar
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderBottom: "1px solid",
-              borderColor: "divider",
-              cursor: "pointer",
-              "&:hover": {
-                backgroundColor: "action.hover",
-              },
-            }}
-            onClick={() => navigate("/internal")}
-          >
-            <Typography
-              variant="h5"
-              component="div"
-              sx={{
-                fontWeight: 700,
-                background: "linear-gradient(90deg, #00f5ff 0%, #00d4ff 50%, #00a8ff 100%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-              }}
-            >
-              XenDelta
-            </Typography>
-          </Box>
-          <List>
-            <ListItem key={"/"} disablePadding>
-              <ListItemButton
-                onClick={() => navigate("/internal")}
-                selected={location.pathname === "/internal" || location.pathname === "/internal/"}
-              >
-                <ListItemIcon>
-                  <HomeIcon />
-                </ListItemIcon>
-                <ListItemText primary={"Home"} />
-              </ListItemButton>
-            </ListItem>
-            <ListItem key={"blog"} disablePadding>
-              <ListItemButton
-                onClick={() => navigate("/internal/blog")}
-                selected={location.pathname.startsWith("/internal/blog")}
-              >
-                <ListItemIcon>
-                  <ArticleIcon />
-                </ListItemIcon>
-                <ListItemText primary={"Blog"} />
-              </ListItemButton>
-            </ListItem>
-          </List>
+  const navItems: NavItem[] = [
+    {
+      key: "home",
+      label: "Home",
+      icon: <HomeIcon />,
+      path: "/internal",
+      isSelected: (pathname) => pathname === "/internal" || pathname === "/internal/",
+    },
+    {
+      key: "blog",
+      label: "Blog",
+      icon: <ArticleIcon />,
+      path: "/internal/blog",
+      isSelected: (pathname) => pathname.startsWith("/internal/blog"),
+    },
+  ];
 
-          <Box sx={{ marginTop: "auto" }}>
-            <List>
-              {profile?.roles?.some((role: string) => role.toLowerCase() === "admin") && (
-                <ListItem key={"admin"} disablePadding>
-                  <ListItemButton onClick={() => navigate("/admin")} selected={location.pathname.endsWith("/admin")}>
-                    <ListItemIcon>
-                      <SecurityIcon />
-                    </ListItemIcon>
-                    <ListItemText primary={"Admin"} />
-                  </ListItemButton>
-                </ListItem>
-              )}
-              <ListItem key={"settings"} disablePadding>
-                <ListItemButton
-                  onClick={() => navigate("/internal/settings")}
-                  selected={location.pathname.endsWith("/internal/settings")}
-                >
-                  <ListItemIcon>
-                    <SettingsIcon />
-                  </ListItemIcon>
-                  <ListItemText primary={"Settings"} />
-                </ListItemButton>
-              </ListItem>
-              <Divider variant="middle" component="li" sx={{ my: 1 }} />
-              <ProfileListItem />
-            </List>
-          </Box>
-        </Box>
-      </Drawer>
-      <AppBar
-        position="fixed"
-        sx={{
-          zIndex: (theme) => theme.zIndex.drawer + 1,
-          width: isNavBarOpen ? `calc(100% - ${DRAWER_WIDTH}px)` : "100%",
-          ml: isNavBarOpen ? `${DRAWER_WIDTH}px` : 0,
-          transition: (theme) =>
-            theme.transitions.create(["width", "margin-left"], {
-              easing: theme.transitions.easing.sharp,
-              duration: theme.transitions.duration.enteringScreen,
-            }),
-        }}
+  const footerNavItems: NavItem[] = [
+    ...(profile?.roles?.some((role: string) => role.toLowerCase() === "admin")
+      ? [
+          {
+            key: "admin",
+            label: "Admin",
+            icon: <SecurityIcon />,
+            path: "/admin",
+            isSelected: (pathname) => pathname.endsWith("/admin"),
+          },
+        ]
+      : []),
+    {
+      key: "settings",
+      label: "Settings",
+      icon: <SettingsIcon />,
+      path: "/internal/settings",
+      isSelected: (pathname) => pathname.endsWith("/internal/settings"),
+    },
+  ];
+
+  return (
+    <>
+      <BaseNavBar
+        title={title}
+        isNavBarOpen={isNavBarOpen}
+        onToggleNavBar={toggleNavBar}
+        navItems={navItems}
+        footerNavItems={footerNavItems}
+        showNotifications={true}
+        showMessages={true}
+        onNotificationClick={handleNotificationClick}
+        onMessagesClick={() => navigate("/internal/messages")}
+        unreadMessages={profile?.unread_messages || false}
+        unreadNotifications={profile?.unread_notifications || false}
       >
-        <Toolbar>
-          <IconButton
-            color="inherit"
-            aria-label="open drawer"
-            onClick={toggleNavBar}
-            edge="start"
-            sx={{
-              mr: 2,
-            }}
-          >
-            {isNavBarOpen ? <MenuIcon /> : <MenuIcon />}
+        <Box sx={{ display: "flex", alignItems: "center" }}>
+          <IconButton sx={{ width: 50, height: 50 }} onClick={() => navigate("/internal/messages")}>
+            <Badge badgeContent={profile?.unread_messages ? 1 : 0} color="error" variant="dot">
+              <MailIcon />
+            </Badge>
           </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }} onClick={() => setNavBar(true)}>
-            {title}
-          </Typography>
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <IconButton sx={{ width: 50, height: 50 }} onClick={() => navigate("/internal/messages")}>
-              <Badge badgeContent={profile?.unread_messages ? 1 : 0} color="error" variant="dot">
-                <MailIcon />
-              </Badge>
-            </IconButton>
-            <IconButton sx={{ width: 50, height: 50, p: 0 }} onClick={handleNotificationClick}>
-              <Badge badgeContent={profile?.unread_notifications ? 1 : 0} color="error" variant="dot">
-                <NotificationsIcon />
-              </Badge>
-            </IconButton>
-          </Box>
-        </Toolbar>
-      </AppBar>
+          <IconButton sx={{ width: 50, height: 50, p: 0 }} onClick={handleNotificationClick}>
+            <Badge badgeContent={profile?.unread_notifications ? 1 : 0} color="error" variant="dot">
+              <NotificationsIcon />
+            </Badge>
+          </IconButton>
+        </Box>
+      </BaseNavBar>
 
       {/* Notifications Popover */}
       <Menu
@@ -302,12 +178,6 @@ export default function Root() {
         transformOrigin={{
           vertical: "top",
           horizontal: "right",
-        }}
-        sx={{
-          "& .MuiPopover-paper": {
-            right: 0,
-            left: "auto !important",
-          },
         }}
         slotProps={{
           paper: {
@@ -342,7 +212,6 @@ export default function Root() {
               notifications?.map((notification, index) => (
                 <Box key={notification._id}>
                   <ListItem
-                    key={notification._id}
                     onMouseEnter={() => handleNotificationHover(notification)}
                     onClick={() => handleNotificationItemClick(notification)}
                     sx={{
@@ -356,13 +225,7 @@ export default function Root() {
                     }}
                   >
                     <Box sx={{ display: "flex", alignItems: "center", width: "100%", mb: 0.5 }}>
-                      <Box sx={{ mr: 1, color: "primary.main" }}>
-                        {notification.icon == "person" && <PersonIcon />}
-                        {notification.icon == "security" && <SecurityIcon />}
-                        {notification.icon == "announcement" && <AnnouncementIcon />}
-                        {notification.icon == "mail" && <MailIcon />}
-                        {notification.icon == "lock" && <LockIcon />}
-                      </Box>
+                      <Box sx={{ mr: 1, color: "primary.main" }}>{getNotificationIcon(notification.icon)}</Box>
                       <Typography
                         variant="subtitle2"
                         sx={{ fontWeight: notification.unread ? "bold" : "normal", flexGrow: 1 }}
@@ -377,7 +240,7 @@ export default function Root() {
                       {formatDistance(new Date(notification.time), new Date(), { addSuffix: true })}
                     </Typography>
                   </ListItem>
-                  {index < notifications?.length - 1 && <Divider variant="fullWidth" sx={{}} />}
+                  {index < notifications.length - 1 && <Divider variant="fullWidth" />}
                 </Box>
               ))}
           </List>
@@ -415,7 +278,6 @@ export default function Root() {
                   right: 8,
                   top: "50%",
                   transform: "translateY(-50%)",
-                  color: (theme) => theme.palette.grey[500],
                 }}
               >
                 <CloseIcon />
@@ -434,23 +296,6 @@ export default function Root() {
           </>
         )}
       </Dialog>
-
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          width: "100%",
-          ml: 0,
-          transition: (theme) =>
-            theme.transitions.create(["width", "margin-left"], {
-              easing: theme.transitions.easing.sharp,
-              duration: theme.transitions.duration.enteringScreen,
-            }),
-        }}
-      >
-        <Toolbar />
-        <Outlet />
-      </Box>
-    </Box>
+    </>
   );
 }

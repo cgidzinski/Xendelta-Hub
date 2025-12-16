@@ -5,28 +5,20 @@ import {
   Card,
   CardContent,
   Typography,
-  Avatar,
   Button,
-  Paper,
-  Divider,
   Grid,
-  FormControl,
-  FormControlLabel,
-  InputLabel,
-  MenuItem,
-  Select,
-  Slider,
-  Switch,
-  TextField,
 } from "@mui/material";
-import { Settings as SettingsIcon, Notifications, Security, Palette, VolumeUp } from "@mui/icons-material";
+import { Security } from "@mui/icons-material";
 import { useTitle } from "../../../hooks/useTitle";
-import { useUserProfile } from "../../../hooks/user/useUserProfile";
+import { useUserProfile, userProfileKeys, UserProfile } from "../../../hooks/user/useUserProfile";
 import { OverlaySpinner } from "../../../components/LoadingSpinner";
 import { useSnackbar } from "notistack";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import AuthProviderManager from "./components/AuthProviderManager";
+import { useUserAvatar } from "../../../hooks/user/useUserAvatar";
+import ProfileHeader from "./components/ProfileHeader";
+import AvatarUploadSection from "./components/AvatarUploadSection";
 export default function Profile() {
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(true);
@@ -39,7 +31,8 @@ export default function Profile() {
   const [avatarKey, setAvatarKey] = useState(0); // Key to force Avatar re-render
   const [isUploading, setIsUploading] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
-  const { profile, isLoading, updateProfile, isUpdating, refetch } = useUserProfile();
+  const { profile, isLoading, refetch } = useUserProfile();
+  const { uploadAvatar, isUploading: isUploadingAvatar, makeAdmin, isMakingAdmin } = useUserAvatar();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   
@@ -93,45 +86,45 @@ export default function Profile() {
     }
 
     setIsUploading(true);
-    const formData = new FormData();
-    formData.append("avatar", selectedFile);
-
-    const token = localStorage.getItem("token");
-    const response = await fetch("/api/user/avatar", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    });
-
-    const data = await response.json();
-
-    if (data.status && data.data?.avatar) {
-      const newAvatarUrl = data.data.avatar;
+    try {
+      const data = await uploadAvatar(selectedFile);
+      // Validate response has avatar URL
+      if (!data || !data.avatar || typeof data.avatar !== "string") {
+        enqueueSnackbar("Upload failed: Invalid response from server", { variant: "error" });
+        setIsUploading(false);
+        return;
+      }
+      
+      const newAvatarUrl = data.avatar;
       enqueueSnackbar("Avatar uploaded successfully!", { variant: "success" });
       setSelectedFile(null);
       setFilePreviewUrl(null);
-      
-      // Update profile cache immediately with new avatar path
-      if (profile) {
-        queryClient.setQueryData(["userProfile"], {
-          ...profile,
-          avatar: newAvatarUrl,
-        });
-      }
       
       // Update avatar URL immediately with cache-busting timestamp
       const avatarUrlWithCache = `${newAvatarUrl}?t=${Date.now()}`;
       setMainAvatarUrl(avatarUrlWithCache);
       setAvatarKey((prev) => prev + 1);
       
-      // Refetch profile to update all components using the profile (NavBar, ProfileListItem, etc.)
+      // Update the query cache directly with the new avatar URL (with cache-busting)
+      // This ensures the sidebar and other components using the profile see the new avatar immediately
+      queryClient.setQueryData(userProfileKeys.profile(), (oldProfile: UserProfile | undefined) => {
+        if (!oldProfile) return oldProfile;
+        return {
+          ...oldProfile,
+          avatar: avatarUrlWithCache,
+        };
+      });
+      
+      // Refetch profile to get latest data from server (this will update the cache with server data)
       refetch();
-    } else {
-      enqueueSnackbar(data.message || "Failed to upload avatar", { variant: "error" });
+      setIsUploading(false);
+    } catch (error: any) {
+      const errorMessage = error?.message || error?.toString() || "Failed to upload avatar";
+      enqueueSnackbar(errorMessage, { variant: "error" });
+      // Don't update avatar state on error - keep current avatar
+      // Don't clear selected file so user can try again
+      setIsUploading(false);
     }
-    setIsUploading(false);
   };
 
   if (isLoading) {
@@ -141,159 +134,46 @@ export default function Profile() {
   return (
     <Box sx={{ position: "relative" }}>
       <Container maxWidth="md" sx={{ mt: 4 }}>
-        {isUpdating && <OverlaySpinner message="Updating profile..." />}
         <Grid container spacing={3}>
           <Grid size={{ xs: 12 }}>
             <Card elevation={2}>
               <CardContent sx={{ p: 4 }}>
-                {/* Profile Header */}
-                <Box sx={{ textAlign: "center", mb: 4 }}>
-                  <Avatar
-                    key={avatarKey}
-                    src={mainAvatarUrl || profile?.avatar}
-                    alt={profile?.username || "User"}
-                    sx={{
-                      width: 120,
-                      height: 120,
-                      mx: "auto",
-                      mb: 2,
-                      fontSize: "3rem",
-                      bgcolor: "primary.main",
-                      borderRadius: 2,
-                    }}
-                  >
-                    {profile?.username?.charAt(0).toUpperCase()}
-                  </Avatar>
-
-                  <Typography variant="h4" component="h1" gutterBottom>
-                    {profile?.username}
-                  </Typography>
-                  <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-                    {profile?.email}
-                  </Typography>
-                  {profile?.roles && profile.roles.length > 0 && (
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Roles: {profile.roles.join(", ")}
-                      </Typography>
-                    </Box>
-                  )}
-                  {!profile?.roles?.some((role: string) => role.toLowerCase() === "admin") && (
-                    <Button
-                      variant="outlined"
-                      color="primary"
-                      onClick={async () => {
-                        const token = localStorage.getItem("token");
-                        const response = await fetch("/api/user/make-admin", {
-                          method: "POST",
-                          headers: {
-                            Authorization: `Bearer ${token}`,
-                            "Content-Type": "application/json",
-                          },
+                <ProfileHeader
+                  profile={profile}
+                  avatarUrl={mainAvatarUrl}
+                  avatarKey={avatarKey}
+                  isMakingAdmin={isMakingAdmin}
+                  onMakeAdmin={async () => {
+                    try {
+                      const data = await makeAdmin();
+                      if (data.status) {
+                        enqueueSnackbar("Admin role added successfully! Please refresh the page.", {
+                          variant: "success",
                         });
-                        const data = await response.json();
-                        if (data.status) {
-                          enqueueSnackbar("Admin role added successfully! Please refresh the page.", {
-                            variant: "success",
-                          });
-                          setTimeout(() => {
-                            window.location.reload();
-                          }, 1500);
-                        } else {
-                          enqueueSnackbar("Failed to add admin role", { variant: "error" });
-                        }
-                      }}
-                      sx={{ mt: 1 }}
-                    >
-                      Make Me Admin
-                    </Button>
-                  )}
-                </Box>
-
-                {/* <Divider sx={{ my: 3 }} /> */}
-
-                {/* Profile Details */}
-                {/* <Box sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, gap: 3 }}>
-                  <Box sx={{ flex: 1 }}>
-                    <Paper elevation={1} sx={{ p: 3, height: "100%" }}>
-                      <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                        <PersonIcon color="primary" sx={{ mr: 1 }} />
-                        <Typography variant="h6">Username</Typography>
-                      </Box>
-
-                      <Typography variant="body1" color="text.secondary">
-                        {profile?.username}
-                      </Typography>
-                    </Paper>
-                  </Box>
-
-                  <Box sx={{ flex: 1 }}>
-                    <Paper elevation={1} sx={{ p: 3, height: "100%" }}>
-                      <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                        <EmailIcon color="primary" sx={{ mr: 1 }} />
-                        <Typography variant="h6">Email</Typography>
-                      </Box>
-
-                      <Typography variant="body1" color="text.secondary">
-                        {profile?.email}
-                      </Typography>
-                    </Paper>
-                  </Box>
-                </Box> */}
+                        setTimeout(() => {
+                          window.location.reload();
+                        }, 1500);
+                      } else {
+                        enqueueSnackbar(data.message || "Failed to add admin role", { variant: "error" });
+                      }
+                    } catch (error: any) {
+                      enqueueSnackbar(error.message || "Failed to add admin role", { variant: "error" });
+                    }
+                  }}
+                />
               </CardContent>
             </Card>
           </Grid>
 
-          {/* Avatar */}
           <Grid size={{ xs: 12 }}>
-            <Card elevation={2}>
-              <CardContent sx={{ p: 3 }}>
-                <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                  <Notifications color="primary" sx={{ mr: 1 }} />
-                  <Typography variant="h6">Avatar</Typography>
-                </Box>
-
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-                    <Button variant="outlined" component="label" disabled={isUploading}>
-                      Choose File
-                      <input
-                        type="file"
-                        hidden
-                        accept="image/jpeg,image/jpg,image/png,image/gif"
-                        onChange={handleFileSelect}
-                      />
-                    </Button>
-                    <Button
-                      variant="contained"
-                      onClick={handleUpdateAvatar}
-                      disabled={!selectedFile || isUploading}
-                      sx={{ minWidth: 100 }}
-                    >
-                      {isUploading ? "Uploading..." : "Upload"}
-                    </Button>
-                  </Box>
-                  {selectedFile && (
-                    <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-                      {filePreviewUrl && (
-                        <Avatar src={filePreviewUrl} sx={{ width: 128, height: 128, borderRadius: 2 }} />
-                      )}
-                      <Box>
-                        <Typography variant="body2" color="text.secondary">
-                          Selected: {selectedFile.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {(selectedFile.size / 1024).toFixed(2)} KB - Click "Upload" to apply
-                        </Typography>
-                      </Box>
-                    </Box>
-                  )}
-                  <Typography variant="caption" color="text.secondary">
-                    Supported formats: JPG, PNG, GIF, WEBP (Max 5MB)
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
+            <AvatarUploadSection
+              selectedFile={selectedFile}
+              filePreviewUrl={filePreviewUrl}
+              isUploading={isUploading}
+              isUploadingAvatar={isUploadingAvatar}
+              onFileSelect={handleFileSelect}
+              onUpload={handleUpdateAvatar}
+            />
           </Grid>
 
           <Grid size={{ xs: 12 }}>

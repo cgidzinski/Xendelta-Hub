@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
   Box,
   Container,
@@ -20,35 +20,21 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import { format } from "date-fns";
-import { get, del } from "../../utils/apiClient";
 import { useTitle } from "../../hooks/useTitle";
-import { BlogPost } from "../../types";
+import { useAdminBlog } from "../../hooks/admin/useAdminBlog";
 
 export default function Blog() {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  const [posts, setPosts] = useState<BlogPost[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    fetchPosts();
-  }, []);
-
-  const fetchPosts = async () => {
-    setIsLoading(true);
-    const data = await get<{ posts: BlogPost[] }>("/api/admin/blog");
-    setPosts(data.posts || []);
-    setIsLoading(false);
-  };
+  const { posts, isLoading, deletePost, isDeleting } = useAdminBlog();
 
   const handleDelete = async (postId: string) => {
     if (!window.confirm("Are you sure you want to delete this blog post?")) {
       return;
     }
 
-    await del(`/api/admin/blog/${postId}`);
+    deletePost(postId);
     enqueueSnackbar("Blog post deleted successfully", { variant: "success" });
-    fetchPosts();
   };
 
   const handleEdit = (postId: string) => {

@@ -2,10 +2,11 @@ import express = require("express");
 const { User } = require("../../models/user");
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
+import { AuthenticatedRequest } from "../../types";
 
 module.exports = function (app: express.Application) {
   app.get("/api/admin/users", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
-    const users = await User.find({}, "username email _id roles avatar canRespond").exec();
+    const users = await User.find({}, "username email _id roles avatar").exec();
     
     return res.json({
       status: true,
@@ -17,23 +18,15 @@ module.exports = function (app: express.Application) {
           email: user.email,
           roles: (user.roles || []).map((role: string) => role.toLowerCase()),
           avatar: user.avatar,
-          canRespond: user.canRespond !== false, // Default to true if not set
         })),
       },
     });
   });
 
-  app.put("/api/admin/users/:userId/roles", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+  app.put("/api/admin/users/:userId", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
     const { userId } = req.params;
     const { roles } = req.body;
 
-    if (!Array.isArray(roles)) {
-      return res.status(400).json({
-        status: false,
-        message: "Roles must be an array",
-      });
-    }
-
     const user = await User.findOne({ _id: userId }).exec();
     if (!user) {
       return res.status(404).json({
@@ -42,38 +35,15 @@ module.exports = function (app: express.Application) {
       });
     }
 
-    // Normalize all roles to lowercase
-    user.roles = roles.map((role: string) => role.toLowerCase());
-    await user.save();
-
-    return res.json({
-      status: true,
-      message: "User roles updated successfully",
-      data: {
-        user: {
-          _id: user._id,
-          username: user.username,
-          email: user.email,
-          roles: user.roles,
-        },
-      },
-    });
-  });
-
-  app.put("/api/admin/users/:userId/booleans", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
-    const { userId } = req.params;
-    const { canRespond } = req.body;
-
-    const user = await User.findOne({ _id: userId }).exec();
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
-
-    if (canRespond !== undefined) {
-      user.canRespond = canRespond;
+    if (roles !== undefined) {
+      if (!Array.isArray(roles)) {
+        return res.status(400).json({
+          status: false,
+          message: "Roles must be an array",
+        });
+      }
+      // Normalize all roles to lowercase
+      user.roles = roles.map((role: string) => role.toLowerCase());
     }
 
     await user.save();
@@ -86,7 +56,7 @@ module.exports = function (app: express.Application) {
           _id: user._id,
           username: user.username,
           email: user.email,
-          canRespond: user.canRespond !== false,
+          roles: user.roles,
         },
       },
     });
@@ -123,8 +93,8 @@ module.exports = function (app: express.Application) {
   app.delete("/api/admin/users/:userId", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
     const { userId } = req.params;
 
-    const adminUser = (req as any).adminUser;
-    if (userId === adminUser._id.toString()) {
+    const currentUserId = (req as AuthenticatedRequest).user!._id;
+    if (userId === currentUserId) {
       return res.status(400).json({
         status: false,
         message: "Cannot delete yourself",

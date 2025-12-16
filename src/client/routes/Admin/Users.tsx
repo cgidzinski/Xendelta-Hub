@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Box,
   Container,
@@ -25,17 +25,15 @@ import {
   Divider,
   Stack,
   Autocomplete,
-  Switch,
-  FormControlLabel,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { useSnackbar } from "notistack";
-import { get, put, del, post } from "../../utils/apiClient";
 import { useTitle } from "../../hooks/useTitle";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
+import { useAdminUsers } from "../../hooks/admin/useAdminUsers";
 
 interface User {
   _id: string;
@@ -43,7 +41,6 @@ interface User {
   email: string;
   roles?: string[];
   avatar?: string;
-  canRespond?: boolean;
 }
 
 const AVAILABLE_ROLES = ["admin", "bot", "user"];
@@ -52,51 +49,34 @@ export default function Users() {
   useTitle("Users");
   const { enqueueSnackbar } = useSnackbar();
   const { profile, refetch: refetchProfile } = useUserProfile();
-  const [users, setUsers] = useState<User[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const {
+    users,
+    isLoading,
+    updateUser,
+    isUpdatingUser,
+    deleteUser,
+    isDeletingUser,
+    resetAvatar,
+    isResettingAvatar,
+  } = useAdminUsers();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [editingRoles, setEditingRoles] = useState<string[]>([]);
-  const [editingCanRespond, setEditingCanRespond] = useState<boolean>(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isResettingAvatar, setIsResettingAvatar] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  useEffect(() => {
+  const filteredUsers = useMemo(() => {
     if (searchQuery.trim() === "") {
-      setFilteredUsers(users);
-    } else {
-      const query = searchQuery.toLowerCase();
-      setFilteredUsers(
-        users.filter(
-          (user) =>
-            user.username.toLowerCase().includes(query) ||
-            user.email.toLowerCase().includes(query) ||
-            user.roles?.some((role) => role.toLowerCase().includes(query))
-        )
-      );
+      return users;
     }
+    const query = searchQuery.toLowerCase();
+    return users.filter(
+      (user) =>
+        user.username.toLowerCase().includes(query) ||
+        user.email.toLowerCase().includes(query) ||
+        user.roles?.some((role) => role.toLowerCase().includes(query))
+    );
   }, [searchQuery, users]);
-
-  const fetchUsers = async () => {
-    setIsLoading(true);
-    try {
-      const data = await get<{ users: User[] }>("/api/admin/users");
-      setUsers(data.users || []);
-      setFilteredUsers(data.users || []);
-    } catch (error: any) {
-      enqueueSnackbar(error.message || "Failed to fetch users", { variant: "error" });
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const getRoleColor = (role: string) => {
     const lowerRole = role.toLowerCase();
@@ -113,7 +93,6 @@ export default function Users() {
   const handleUserClick = (user: User) => {
     setSelectedUser(user);
     setEditingRoles(user.roles || []);
-    setEditingCanRespond(user.canRespond !== false);
     setUserModalOpen(true);
   };
 
@@ -121,84 +100,56 @@ export default function Users() {
     setUserModalOpen(false);
     setSelectedUser(null);
     setEditingRoles([]);
-    setEditingCanRespond(true);
   };
 
   const handleSaveRoles = async () => {
     if (!selectedUser) return;
-    setIsSaving(true);
-    try {
-      await put(`/api/admin/users/${selectedUser._id}/roles`, { roles: editingRoles });
-      enqueueSnackbar("Roles updated successfully", { variant: "success" });
-      await fetchUsers();
-      // Update selected user
-      const updatedUser = users.find(u => u._id === selectedUser._id);
-      if (updatedUser) {
-        setSelectedUser({ ...updatedUser, roles: editingRoles });
-      }
-    } catch (error: any) {
-      enqueueSnackbar(error.message || "Failed to update roles", { variant: "error" });
-    } finally {
-      setIsSaving(false);
-    }
+    updateUser(selectedUser._id, { roles: editingRoles })
+      .then(() => {
+        enqueueSnackbar("Roles updated successfully", { variant: "success" });
+        // Update selected user
+        const updatedUser = users.find(u => u._id === selectedUser._id);
+        if (updatedUser) {
+          setSelectedUser({ ...updatedUser, roles: editingRoles });
+        }
+      })
+      .catch((error) => {
+        enqueueSnackbar(error.message || "Failed to update roles", { variant: "error" });
+      });
   };
 
-  const handleSaveCanRespond = async () => {
-    if (!selectedUser) return;
-    setIsSaving(true);
-    try {
-      await put(`/api/admin/users/${selectedUser._id}/booleans`, { canRespond: editingCanRespond });
-      enqueueSnackbar("User updated successfully", { variant: "success" });
-      await fetchUsers();
-      // Update selected user
-      const updatedUser = users.find(u => u._id === selectedUser._id);
-      if (updatedUser) {
-        setSelectedUser({ ...updatedUser, canRespond: editingCanRespond });
-      }
-    } catch (error: any) {
-      enqueueSnackbar(error.message || "Failed to update user", { variant: "error" });
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   const handleDeleteUser = async () => {
     if (!selectedUser) return;
-    setIsDeleting(true);
-    try {
-      await del(`/api/admin/users/${selectedUser._id}`);
-      enqueueSnackbar("User deleted successfully", { variant: "success" });
-      setDeleteConfirmOpen(false);
-      handleCloseModal();
-      await fetchUsers();
-    } catch (error: any) {
-      enqueueSnackbar(error.message || "Failed to delete user", { variant: "error" });
-    } finally {
-      setIsDeleting(false);
-    }
+    deleteUser(selectedUser._id)
+      .then(() => {
+        enqueueSnackbar("User deleted successfully", { variant: "success" });
+        setDeleteConfirmOpen(false);
+        handleCloseModal();
+      })
+      .catch((error) => {
+        enqueueSnackbar(error.message || "Failed to delete user", { variant: "error" });
+      });
   };
 
   const handleResetAvatar = async () => {
     if (!selectedUser) return;
-    setIsResettingAvatar(true);
-    try {
-      await post(`/api/admin/users/${selectedUser._id}/avatar/reset`);
-      enqueueSnackbar("Avatar reset successfully", { variant: "success" });
-      await fetchUsers();
-      // Update selected user
-      const updatedUser = users.find(u => u._id === selectedUser._id);
-      if (updatedUser) {
-        setSelectedUser({ ...updatedUser, avatar: undefined });
-      }
-      // If it's the current user, refetch profile to update sidebar
-      if (selectedUser._id === profile?._id) {
-        refetchProfile();
-      }
-    } catch (error: any) {
-      enqueueSnackbar(error.message || "Failed to reset avatar", { variant: "error" });
-    } finally {
-      setIsResettingAvatar(false);
-    }
+    resetAvatar(selectedUser._id)
+      .then(() => {
+        enqueueSnackbar("Avatar reset successfully", { variant: "success" });
+        // Update selected user
+        const updatedUser = users.find(u => u._id === selectedUser._id);
+        if (updatedUser) {
+          setSelectedUser({ ...updatedUser, avatar: undefined });
+        }
+        // If it's the current user, refetch profile to update sidebar
+        if (selectedUser._id === profile?._id) {
+          refetchProfile();
+        }
+      })
+      .catch((error) => {
+        enqueueSnackbar(error.message || "Failed to reset avatar", { variant: "error" });
+      });
   };
 
   const isCurrentUser = selectedUser?._id === profile?._id;
@@ -393,34 +344,9 @@ export default function Users() {
                       variant="contained"
                       size="small"
                       onClick={handleSaveRoles}
-                      disabled={isSaving || JSON.stringify(editingRoles.sort()) === JSON.stringify((selectedUser.roles || []).sort())}
+                      disabled={isUpdatingUser || JSON.stringify(editingRoles.sort()) === JSON.stringify((selectedUser.roles || []).sort())}
                     >
-                      {isSaving ? "Saving..." : "Save Roles"}
-                    </Button>
-                  </Box>
-                </Box>
-
-                <Divider />
-
-                <Box>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={editingCanRespond}
-                          onChange={(e) => setEditingCanRespond(e.target.checked)}
-                        />
-                      }
-                      label="Can Respond to Messages"
-                      sx={{ flex: 1 }}
-                    />
-                    <Button
-                      variant="contained"
-                      size="small"
-                      onClick={handleSaveCanRespond}
-                      disabled={isSaving || editingCanRespond === (selectedUser.canRespond !== false)}
-                    >
-                      {isSaving ? "Saving..." : "Save Setting"}
+                      {isUpdatingUser ? "Saving..." : "Save Roles"}
                     </Button>
                   </Box>
                 </Box>
@@ -459,7 +385,7 @@ export default function Users() {
               onClick={() => setDeleteConfirmOpen(true)}
               color="error"
               startIcon={<DeleteIcon />}
-              disabled={isDeleting}
+              disabled={isDeletingUser}
             >
               Delete User
             </Button>
@@ -476,11 +402,11 @@ export default function Users() {
             </Typography>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setDeleteConfirmOpen(false)} disabled={isDeleting}>
+            <Button onClick={() => setDeleteConfirmOpen(false)} disabled={isDeletingUser}>
               Cancel
             </Button>
-            <Button onClick={handleDeleteUser} color="error" variant="contained" disabled={isDeleting}>
-              {isDeleting ? "Deleting..." : "Delete"}
+            <Button onClick={handleDeleteUser} color="error" variant="contained" disabled={isDeletingUser}>
+              {isDeletingUser ? "Deleting..." : "Delete"}
             </Button>
           </DialogActions>
         </Dialog>

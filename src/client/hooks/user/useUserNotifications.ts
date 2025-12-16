@@ -1,9 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "../../contexts/AuthContext";
-import { get, put } from "../../utils/apiClient";
-import { useSocket } from "../useSocket";
 import { useEffect } from "react";
+import { useAuth } from "../../contexts/AuthContext";
+import { apiClient, getApiUrl } from "../../config/api";
+import { ApiResponse } from "../../types/api";
+import { useSocket } from "../useSocket";
+import { userProfileKeys } from "./useUserProfile";
 
+// Types
 export interface Notification {
   _id: string;
   title: string;
@@ -27,21 +30,29 @@ interface UseUserNotificationsReturn {
   fetchNotifications: () => void;
 }
 
+// Query keys
+export const userNotificationKeys = {
+  all: ["userNotifications"] as const,
+  notifications: () => [...userNotificationKeys.all, "notifications"] as const,
+};
+
+// API functions
 const fetchUserNotifications = async (): Promise<Notification[]> => {
-  const data = await get<{ notifications: Notification[] }>("/api/user/notifications");
-  return data.notifications;
+  const response = await apiClient.get<ApiResponse<{ notifications: Notification[] }>>(getApiUrl("api/user/notifications"));
+  return response.data.data!.notifications;
 };
 
 const markAllNotificationsAsRead = async (): Promise<Notification[]> => {
-  const data = await put<{ notifications: Notification[] }>("/api/user/notifications/mark-read");
-  return data.notifications;
+  const response = await apiClient.put<ApiResponse<{ notifications: Notification[] }>>(getApiUrl("api/user/notifications/mark-read"));
+  return response.data.data!.notifications;
 };
 
 const markNotificationAsRead = async (notificationId: string): Promise<Notification> => {
-  const data = await put<{ notification: Notification }>(`/api/user/notifications/${notificationId}/mark-read`);
-  return data.notification;
+  const response = await apiClient.put<ApiResponse<{ notification: Notification }>>(getApiUrl(`api/user/notifications/${notificationId}/mark-read`));
+  return response.data.data!.notification;
 };
 
+// Hooks
 export const useUserNotifications = (): UseUserNotificationsReturn => {
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
@@ -56,7 +67,7 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["userNotifications"],
+    queryKey: userNotificationKeys.notifications(),
     queryFn: fetchUserNotifications,
     enabled: false, // Lazy - only runs when manually triggered
     staleTime: 2 * 60 * 1000, // 2 minutes (shorter than profile since notifications change more frequently)
@@ -75,13 +86,13 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
 
     const handleNewNotification = (data: { notification: Notification }) => {
       // Add new notification to cache
-      queryClient.setQueryData(["userNotifications"], (oldData: Notification[] | undefined) => {
+      queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
         if (!oldData) return [data.notification];
         return [data.notification, ...oldData].slice(0, 10);
       });
 
       // Update user profile to reflect unread notification
-      queryClient.setQueryData(["userProfile"], (oldProfileData: any) => {
+      queryClient.setQueryData(userProfileKeys.profile(), (oldProfileData: any) => {
         if (oldProfileData) {
           return {
             ...oldProfileData,
@@ -95,11 +106,11 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
     const handleNotificationUpdate = (data: { notificationId: string; update: any }) => {
       if (data.notificationId === "all") {
         // All notifications marked as read
-        queryClient.setQueryData(["userNotifications"], (oldData: Notification[] | undefined) => {
+        queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
           if (!oldData) return oldData;
           return oldData.map(notif => ({ ...notif, unread: false }));
         });
-        queryClient.setQueryData(["userProfile"], (oldProfileData: any) => {
+        queryClient.setQueryData(userProfileKeys.profile(), (oldProfileData: any) => {
           if (oldProfileData) {
             return {
               ...oldProfileData,
@@ -110,7 +121,7 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
         });
       } else {
         // Single notification updated
-        queryClient.setQueryData(["userNotifications"], (oldData: Notification[] | undefined) => {
+        queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
           if (!oldData) return oldData;
           return oldData.map(notif => 
             notif._id === data.notificationId ? { ...notif, ...data.update } : notif
@@ -118,11 +129,11 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
         });
 
         // Check if all notifications are now read
-        queryClient.setQueryData(["userNotifications"], (oldData: Notification[] | undefined) => {
+        queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
           if (!oldData) return oldData;
           const hasUnreadNotifications = oldData.some(notification => notification.unread);
           
-          queryClient.setQueryData(["userProfile"], (oldProfileData: any) => {
+          queryClient.setQueryData(userProfileKeys.profile(), (oldProfileData: any) => {
             if (oldProfileData) {
               return {
                 ...oldProfileData,
@@ -158,10 +169,10 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
     mutationFn: markAllNotificationsAsRead,
     onSuccess: (updatedNotifications) => {
       // Update the notifications cache with the updated data
-      queryClient.setQueryData(["userNotifications"], updatedNotifications);
+      queryClient.setQueryData(userNotificationKeys.notifications(), updatedNotifications);
 
       // Also update the user profile cache to reflect the unread_notifications change
-      queryClient.setQueryData(["userProfile"], (oldData: any) => {
+      queryClient.setQueryData(userProfileKeys.profile(), (oldData: any) => {
         if (oldData) {
           return {
             ...oldData,
@@ -171,8 +182,8 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
         return oldData;
       });
     },
-    onError: (error) => {
-      console.error("Failed to mark notifications as read:", error);
+    onError: () => {
+      // Error handled by mutation error state
     },
   });
 
@@ -181,7 +192,7 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
     mutationFn: markNotificationAsRead,
     onSuccess: (updatedNotification: Notification) => {
       // Update the notifications cache with the updated notification
-      queryClient.setQueryData(["userNotifications"], (oldData: Notification[] | undefined) => {
+      queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
         if (!oldData) return oldData;
         return oldData.map(notification => 
           notification._id === updatedNotification._id ? updatedNotification : notification
@@ -189,11 +200,11 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
       });
 
       // Check if all notifications are now read to update the user profile cache
-      queryClient.setQueryData(["userNotifications"], (oldData: Notification[] | undefined) => {
+      queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
         if (!oldData) return oldData;
         const hasUnreadNotifications = oldData.some(notification => notification.unread);
         
-        queryClient.setQueryData(["userProfile"], (oldProfileData: any) => {
+        queryClient.setQueryData(userProfileKeys.profile(), (oldProfileData: any) => {
           if (oldProfileData) {
             return {
               ...oldProfileData,
@@ -206,8 +217,8 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
         return oldData;
       });
     },
-    onError: (error) => {
-      console.error("Failed to mark notification as read:", error);
+    onError: () => {
+      // Error handled by mutation error state
     },
   });
 

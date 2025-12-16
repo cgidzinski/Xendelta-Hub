@@ -50,11 +50,9 @@ export default function ConversationHeader({
         <IconButton onClick={onUsersClick}>
           <PeopleIcon />
         </IconButton>
-        {conversation.canReply !== false && (
-          <IconButton onClick={onSettingsClick}>
-            <SettingsIcon />
-          </IconButton>
-        )}
+        <IconButton onClick={onSettingsClick}>
+          <SettingsIcon />
+        </IconButton>
       </Toolbar>
     </Box>
   );

@@ -5,12 +5,13 @@
  */
 
 import multer from "multer";
+import { Request } from "express";
 import { MAX_FILE_SIZE, ALLOWED_IMAGE_MIMES } from "../constants";
 
 // File filter function for images only
-const imageFileFilter = function (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) {
+const imageFileFilter = function (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) {
   // Accept only image files
-  if (ALLOWED_IMAGE_MIMES.includes(file.mimetype as any)) {
+  if (ALLOWED_IMAGE_MIMES.includes(file.mimetype as typeof ALLOWED_IMAGE_MIMES[number])) {
     cb(null, true);
   } else {
     cb(new Error("Invalid file type. Only images are allowed."));
@@ -18,7 +19,7 @@ const imageFileFilter = function (req: any, file: Express.Multer.File, cb: multe
 };
 
 // File filter function for all file types (for blog assets)
-const allFileFilter = function (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) {
+const allFileFilter = function (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) {
   // Accept all file types for blog assets
   cb(null, true);
 };
@@ -40,5 +41,3 @@ export const uploadBlogAsset = multer({
   },
   fileFilter: allFileFilter,
 });
-
-

@@ -1,10 +1,39 @@
 import { Server as SocketIOServer, Socket } from "socket.io";
 import jwt from "jsonwebtoken";
 const { User } = require("../models/user");
+import { Message } from "../types/Message";
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
   username?: string;
+}
+
+interface JWTPayload {
+  _id: string;
+  username?: string;
+  email?: string;
+  avatar?: string;
+  iat?: number;
+  exp?: number;
+}
+
+interface ConversationSummary {
+  _id: string;
+  participants: string[];
+  name?: string;
+  lastMessage?: string;
+  lastMessageTime?: string;
+  unread?: boolean;
+  updatedAt?: string;
+}
+
+interface Notification {
+  _id?: string;
+  title: string;
+  message: string;
+  time: string;
+  icon?: string;
+  unread: boolean;
 }
 
 export class SocketManager {
@@ -38,7 +67,7 @@ export class SocketManager {
       }
 
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-key-for-development') as any;
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-key-for-development') as JWTPayload;
         const user = await User.findOne({ _id: decoded._id }).exec();
         
         if (!user) {
@@ -131,15 +160,21 @@ export class SocketManager {
   }
 
   // Send new message to conversation participants
-  sendNewMessage(conversationId: string, message: any, participants: string[]) {
-    this.io.to(`conversation:${conversationId}`).emit("message:new", {
+  sendNewMessage(conversationId: string, message: Message & { senderUsername?: string }, participants: string[]) {
+    const conversationRoom = `conversation:${conversationId}`;
+    const roomSockets = this.io.sockets.adapter.rooms.get(conversationRoom);
+    
+    // Send to conversation room (users actively viewing)
+    this.io.to(conversationRoom).emit("message:new", {
       conversationId,
       message,
     });
 
     // Also notify participants who aren't in the conversation room
     participants.forEach((participantId) => {
-      if (participantId !== "system") {
+      const userSocketId = this.connectedUsers.get(participantId);
+      // Only send to user room if they're not actively viewing the conversation
+      if (!userSocketId || !roomSockets?.has(userSocketId)) {
         this.io.to(`user:${participantId}`).emit("message:new", {
           conversationId,
           message,
@@ -149,18 +184,9 @@ export class SocketManager {
   }
 
   // Notify user about new conversation
-  notifyNewConversation(userId: string, conversation: any) {
+  notifyNewConversation(userId: string, conversation: ConversationSummary) {
     this.io.to(`user:${userId}`).emit("conversation:new", {
       conversation,
-    });
-  }
-
-  // Notify conversation participants about message update
-  notifyMessageUpdate(conversationId: string, messageId: string, update: any) {
-    this.io.to(`conversation:${conversationId}`).emit("message:update", {
-      conversationId,
-      messageId,
-      update,
     });
   }
 
@@ -173,34 +199,22 @@ export class SocketManager {
   }
 
   // Notify participants about conversation update (e.g., new participant)
-  notifyConversationUpdate(conversationId: string, update: any) {
+  notifyConversationUpdate(conversationId: string, update: { participants?: string[]; name?: string; deleted?: boolean }) {
     this.io.to(`conversation:${conversationId}`).emit("conversation:update", {
       conversationId,
       update,
     });
   }
 
-  getIO() {
-    return this.io;
-  }
-
-  isUserOnline(userId: string): boolean {
-    return this.connectedUsers.has(userId);
-  }
-
-  getSocketId(userId: string): string | undefined {
-    return this.connectedUsers.get(userId);
-  }
-
   // Send new notification to specific user
-  sendNotification(userId: string, notification: any) {
+  sendNotification(userId: string, notification: Notification) {
     this.io.to(`user:${userId}`).emit("notification:new", {
       notification,
     });
   }
 
   // Notify user about notification update (e.g., marked as read)
-  notifyNotificationUpdate(userId: string, notificationId: string, update: any) {
+  notifyNotificationUpdate(userId: string, notificationId: string, update: { unread?: boolean }) {
     this.io.to(`user:${userId}`).emit("notification:update", {
       notificationId,
       update,

@@ -7,17 +7,18 @@ import {
   Button,
   Typography,
   Container,
-  Alert,
   InputAdornment,
-  IconButton,
-  CircularProgress,
   Paper,
   Divider,
 } from "@mui/material";
-import { Visibility, VisibilityOff, PersonAdd as SignupIcon, Person, Lock, Email } from "@mui/icons-material";
+import { PersonAdd as SignupIcon, Person, Email } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../contexts/AuthContext";
 import LandingHeader from "../../../components/LandingHeader";
+import PasswordField from "../../../components/PasswordField";
+import FormErrorAlert from "../../../components/forms/FormErrorAlert";
+import FormLoadingButton from "../../../components/forms/FormLoadingButton";
+import { validateUsername, validateEmail, validateSignupPassword, validatePasswordMatch } from "../../../utils/formValidation";
 
 interface SignupFormData {
   username: string;
@@ -44,8 +45,6 @@ export default function Signup() {
     confirmPassword: "",
   });
   const [errors, setErrors] = useState<SignupErrors>({});
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleInputChange =
@@ -67,36 +66,24 @@ export default function Signup() {
   const validateForm = (): boolean => {
     const newErrors: SignupErrors = {};
 
-    // Username validation
-    if (!formData.username.trim()) {
-      newErrors.username = "Username is required";
-    } else if (formData.username.length < 3) {
-      newErrors.username = "Username must be at least 3 characters";
-    } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
-      newErrors.username = "Username can only contain letters, numbers, and underscores";
+    const usernameError = validateUsername(formData.username);
+    if (usernameError) {
+      newErrors.username = usernameError;
     }
 
-    // Email validation
-    if (!formData.email?.trim()) {
-      newErrors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = "Please enter a valid email address";
+    const emailError = validateEmail(formData.email);
+    if (emailError) {
+      newErrors.email = emailError;
     }
 
-    // Password validation
-    if (!formData.password) {
-      newErrors.password = "Password is required";
-    } else if (formData.password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters";
-    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.password)) {
-      newErrors.password = "Password must contain at least one uppercase letter, one lowercase letter, and one number";
+    const passwordError = validateSignupPassword(formData.password);
+    if (passwordError) {
+      newErrors.password = passwordError;
     }
 
-    // Confirm password validation
-    if (!formData.confirmPassword) {
-      newErrors.confirmPassword = "Please confirm your password";
-    } else if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match";
+    const confirmPasswordError = validatePasswordMatch(formData.password, formData.confirmPassword);
+    if (confirmPasswordError) {
+      newErrors.confirmPassword = confirmPasswordError;
     }
 
     setErrors(newErrors);
@@ -111,34 +98,21 @@ export default function Signup() {
     setIsLoading(true);
     setErrors({});
 
-    try {
-      const success = await signup({
-        username: formData.username,
-        email: formData.email,
-        password: formData.password,
-      });
+    const success = await signup({
+      username: formData.username,
+      email: formData.email,
+      password: formData.password,
+    });
 
-      if (success) {
-        navigate("/internal", { replace: true });
-      } else {
-        setErrors({ general: "Signup failed. Username or email may already be taken." });
-      }
-    } catch (error) {
-      setErrors({
-        general: "Network error. Please check your connection and try again.",
-      });
-    } finally {
-      setIsLoading(false);
+    if (success) {
+      navigate("/internal", { replace: true });
+    } else {
+      setErrors({ general: "Signup failed. Username or email may already be taken." });
     }
+    
+    setIsLoading(false);
   };
 
-  const handleTogglePasswordVisibility = () => {
-    setShowPassword((prev) => !prev);
-  };
-
-  const handleToggleConfirmPasswordVisibility = () => {
-    setShowConfirmPassword((prev) => !prev);
-  };
 
   return (
     <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -219,15 +193,8 @@ export default function Signup() {
         <Card sx={{ width: "100%", maxWidth: 600 }}>
           <CardContent sx={{ padding: 4 }}>
             <Box>
-              {errors.general && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                  {errors.general}
-                </Alert>
-              )}
+              {errors.general && <FormErrorAlert message={errors.general} sx={{ mb: 2 }} />}
 
-              {/* Name Fields */}
-
-              {/* Username and Email */}
               <TextField
                 margin="normal"
                 required
@@ -271,78 +238,40 @@ export default function Signup() {
                 sx={{ mb: 2 }}
               />
 
-              {/* Password Fields */}
-              <TextField
+              <PasswordField
                 margin="normal"
                 required
                 fullWidth
                 name="password"
                 label="Password"
-                type={showPassword ? "text" : "password"}
                 id="password"
                 value={formData.password}
                 onChange={handleInputChange("password")}
                 error={!!errors.password}
                 helperText={errors.password}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Lock color="action" />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        aria-label="toggle password visibility"
-                        onClick={handleTogglePasswordVisibility}
-                        edge="end"
-                      >
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
                 sx={{ mb: 2 }}
               />
 
-              <TextField
+              <PasswordField
                 margin="normal"
                 required
                 fullWidth
                 name="confirmPassword"
                 label="Confirm Password"
-                type={showConfirmPassword ? "text" : "password"}
                 id="confirmPassword"
                 value={formData.confirmPassword}
                 onChange={handleInputChange("confirmPassword")}
                 error={!!errors.confirmPassword}
                 helperText={errors.confirmPassword}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Lock color="action" />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        aria-label="toggle confirm password visibility"
-                        onClick={handleToggleConfirmPasswordVisibility}
-                        edge="end"
-                      >
-                        {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
                 sx={{ mb: 3 }}
               />
 
-              <Button
+              <FormLoadingButton
                 type="submit"
                 fullWidth
                 variant="contained"
-                disabled={isLoading}
+                loading={isLoading}
+                loadingText="Creating account..."
                 onClick={handleSubmit}
                 sx={{
                   mt: 2,
@@ -361,8 +290,8 @@ export default function Signup() {
                   },
                 }}
               >
-                {isLoading ? <CircularProgress size={24} color="inherit" /> : "Create Account"}
-              </Button>
+                Create Account
+              </FormLoadingButton>
 
               <Divider sx={{ my: 2 }}>
                 <Typography variant="body2" color="text.secondary">

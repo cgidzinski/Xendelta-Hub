@@ -27,18 +27,13 @@ import { useTitle } from "../../../hooks/useTitle";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import { useUserMessages, Conversation } from "../../../hooks/user/useUserMessages";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
+import { useUsers, User } from "../../../hooks/user/useUsers";
 import { useSocket } from "../../../hooks/useSocket";
 import { useQueryClient } from "@tanstack/react-query";
 import { getParticipantDisplay } from "../../../utils/conversationUtils";
 import StackedAvatars from "./components/StackedAvatars";
-import { get } from "../../../utils/apiClient";
 import { useSnackbar } from "notistack";
 
-interface User {
-  _id: string;
-  username: string;
-  email: string;
-}
 
 export default function Messages() {
   useTitle("Messages");
@@ -51,14 +46,8 @@ export default function Messages() {
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
   const [initialMessage, setInitialMessage] = useState("");
-  const [users, setUsers] = useState<User[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
+  const { users, isLoading: loadingUsers } = useUsers();
 
-  useEffect(() => {
-    if (newConversationOpen) {
-      fetchUsers();
-    }
-  }, [newConversationOpen]);
 
   // Set up socket listeners for real-time updates
   useEffect(() => {
@@ -108,18 +97,6 @@ export default function Messages() {
     };
   }, [socket, queryClient, refetchProfile, enqueueSnackbar]);
 
-  const fetchUsers = async () => {
-    setLoadingUsers(true);
-    try {
-      const data = await get<{ users: User[] }>("/api/users");
-      // Filter out current user
-      const otherUsers = data.users.filter((user: User) => user._id !== profile?._id);
-      setUsers(otherUsers);
-    } catch (error) {
-      console.error("Failed to fetch users:", error);
-    }
-    setLoadingUsers(false);
-  };
 
 
   const handleCreateConversation = () => {

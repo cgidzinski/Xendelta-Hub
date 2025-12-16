@@ -100,7 +100,7 @@ export default function UsersModal({
           })}
         </List>
 
-        {conversation.canReply !== false && showAddUser && (
+        {showAddUser && (
           <Box sx={{ mt: 2, p: 2, border: 1, borderColor: "divider", borderRadius: 1 }}>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
               Add Participants
@@ -137,7 +137,7 @@ export default function UsersModal({
           </Box>
         )}
 
-        {conversation.canReply !== false && !showAddUser && (
+        {!showAddUser && (
           <Box sx={{ mt: 2 }}>
             <Button
               variant="outlined"

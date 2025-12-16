@@ -53,7 +53,7 @@ export default function Settings() {
         </Box>
 
         {/* Settings Sections */}
-        <Grid container spacing={3} sx={{ opacity: 0.25 }}>
+        <Grid container spacing={3}>
           {/* Notifications */}
           <Grid size={{ xs: 12, md: 6 }}>
             <Card elevation={2}>
@@ -64,11 +64,14 @@ export default function Settings() {
                 </Box>
                 <Box sx={{ mt: 2 }}>
                   <FormControlLabel
-                    control={<Switch checked={notifications} onChange={(e) => setNotifications(e.target.checked)} />}
+                    control={<Switch checked={notifications} onChange={(e) => setNotifications(e.target.checked)} disabled />}
                     label="Enable notifications"
                   />
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                     Receive updates about your projects and activities
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, fontStyle: "italic" }}>
+                    Coming soon
                   </Typography>
                 </Box>
               </CardContent>
@@ -85,11 +88,14 @@ export default function Settings() {
                 </Box>
                 <Box sx={{ mt: 2 }}>
                   <FormControlLabel
-                    control={<Switch checked={darkMode} onChange={(e) => setDarkMode(e.target.checked)} />}
+                    control={<Switch checked={darkMode} onChange={(e) => setDarkMode(e.target.checked)} disabled />}
                     label="Dark mode"
                   />
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                     Switch between light and dark themes
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, fontStyle: "italic" }}>
+                    Coming soon
                   </Typography>
                 </Box>
               </CardContent>
@@ -106,14 +112,14 @@ export default function Settings() {
                 </Box>
                 <Box sx={{ mt: 2 }}>
                   <FormControlLabel
-                    control={<Switch checked={autoSave} onChange={(e) => setAutoSave(e.target.checked)} />}
+                    control={<Switch checked={autoSave} onChange={(e) => setAutoSave(e.target.checked)} disabled />}
                     label="Auto-save changes"
                   />
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 2 }}>
                     Automatically save your work as you type
                   </Typography>
 
-                  <FormControl fullWidth size="small" sx={{ mt: 2 }}>
+                  <FormControl fullWidth size="small" sx={{ mt: 2 }} disabled>
                     <InputLabel>Language</InputLabel>
                     <Select value={language} label="Language" onChange={(e) => setLanguage(e.target.value)}>
                       <MenuItem value="en">English</MenuItem>
@@ -122,6 +128,9 @@ export default function Settings() {
                       <MenuItem value="de">German</MenuItem>
                     </Select>
                   </FormControl>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, fontStyle: "italic" }}>
+                    Coming soon
+                  </Typography>
                 </Box>
               </CardContent>
             </Card>
@@ -147,7 +156,11 @@ export default function Settings() {
                     marks
                     min={0}
                     max={100}
+                    disabled
                   />
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, fontStyle: "italic" }}>
+                    Coming soon
+                  </Typography>
                 </Box>
               </CardContent>
             </Card>
@@ -169,7 +182,7 @@ export default function Settings() {
                         Add an extra layer of security to your account
                       </Typography>
                     </Box>
-                    <Button variant="outlined" size="small">
+                    <Button variant="outlined" size="small" disabled>
                       Enable
                     </Button>
                   </Box>
@@ -183,7 +196,7 @@ export default function Settings() {
                         Update your account password
                       </Typography>
                     </Box>
-                    <Button variant="outlined" size="small">
+                    <Button variant="outlined" size="small" disabled>
                       Change
                     </Button>
                   </Box>
@@ -197,7 +210,7 @@ export default function Settings() {
                         Manage your active login sessions
                       </Typography>
                     </Box>
-                    <Button variant="outlined" size="small">
+                    <Button variant="outlined" size="small" disabled>
                       Manage
                     </Button>
                   </Box>

@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
-import { get, put } from "../../utils/apiClient";
+import { apiClient, getApiUrl } from "../../config/api";
+import { ApiResponse } from "../../types/api";
 
+// Types
 export interface UserProfile {
   _id: string;
   username: string;
@@ -28,34 +30,24 @@ interface UseUserProfileReturn {
   updateError: Error | null;
 }
 
+// Query keys
+export const userProfileKeys = {
+  all: ["userProfile"] as const,
+  profile: () => [...userProfileKeys.all, "profile"] as const,
+};
+
+// API functions
 const fetchCurrentUserProfile = async (): Promise<UserProfile> => {
-  const token = localStorage.getItem("token");
-
-  const response = await fetch("/api/user/profile", {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error("Unauthorized - please log in again");
-    } else {
-      throw new Error(`Failed to fetch profile: ${response.statusText}`);
-    }
-  }
-
-  const data = await response.json();
-  return data.data.user;
+  const response = await apiClient.get<ApiResponse<{ user: UserProfile }>>(getApiUrl("api/user/profile"));
+  return response.data.data!.user;
 };
 
-const updateCurrentUserProfile = async (data: UpdateProfileData) => {
-  const responseData = await put<{ user: UserProfile }>("/api/user/profile", data);
-  return responseData.user;
+const updateCurrentUserProfile = async (data: UpdateProfileData): Promise<UserProfile> => {
+  const response = await apiClient.put<ApiResponse<{ user: UserProfile }>>(getApiUrl("api/user/profile"), data);
+  return response.data.data!.user;
 };
 
+// Hooks
 export const useUserProfile = (): UseUserProfileReturn => {
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
@@ -68,7 +60,7 @@ export const useUserProfile = (): UseUserProfileReturn => {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["userProfile"],
+    queryKey: userProfileKeys.profile(),
     queryFn: fetchCurrentUserProfile,
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -86,10 +78,10 @@ export const useUserProfile = (): UseUserProfileReturn => {
     mutationFn: updateCurrentUserProfile,
     onSuccess: (updatedProfile) => {
       // Update the profile cache with the updated data
-      queryClient.setQueryData(["userProfile"], updatedProfile);
+      queryClient.setQueryData(userProfileKeys.profile(), updatedProfile);
     },
-    onError: (error) => {
-      console.error("Profile update error:", error);
+    onError: () => {
+      // Error handled by mutation error state
     },
   });
 
@@ -98,12 +90,8 @@ export const useUserProfile = (): UseUserProfileReturn => {
       return false;
     }
 
-    try {
-      await updateMutation.mutateAsync(data);
-      return true;
-    } catch (error) {
-      return false;
-    }
+    await updateMutation.mutateAsync(data);
+    return true;
   };
 
   return {

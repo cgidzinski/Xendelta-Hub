@@ -38,7 +38,6 @@ var userSchema = new mongoose.Schema({
   authProviders: [authProviderSchema], // Multiple authentication methods
   notifications: [notificationSchema],
   conversations: [userConversationMetadataSchema], // References to conversations with user-specific metadata
-  canRespond: { type: Boolean, default: true }, // Whether user can be selected for conversations
   resetPassword: {
     token: { type: String },
     expires: { type: Date },

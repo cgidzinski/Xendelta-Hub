@@ -24,7 +24,3 @@ if (!privateBucketName) {
 // Get bucket instances
 export const publicBucket = storage.bucket(publicBucketName);
 export const privateBucket = storage.bucket(privateBucketName);
-
-// Export storage instance for advanced operations if needed
-export { storage };
-

@@ -1,31 +1,12 @@
-/**
- * Media Utilities
- * Functions for handling media uploads and storage
- */
-
-import { fileTypeFromBuffer } from "file-type";
 import sharp from "sharp";
-import { ALLOWED_IMAGE_MIMES, AVATAR_WIDTH, AVATAR_HEIGHT, AVATAR_QUALITY, AVATAR_COMPRESSION_LEVEL } from "../constants";
 import {
-  uploadToPublicGCS,
-  deleteFromPublicGCS,
-} from "./gcsUtils";
-import { MediaType } from "../types";
-
-// Blog asset dimensions (for images)
-const BLOG_ASSET_MAX_WIDTH = 1200;
-const BLOG_ASSET_MAX_HEIGHT = 800;
-const BLOG_ASSET_QUALITY = 85;
-
-// Get file extension from MIME type
-function getExtensionFromMime(mime: string): string {
-  const mimeToExt: Record<string, string> = {
-    "image/jpeg": "jpg",
-    "image/png": "png",
-    "image/gif": "gif",
-  };
-  return mimeToExt[mime] || "png";
-}
+  ALLOWED_IMAGE_MIMES,
+  AVATAR_WIDTH,
+  AVATAR_HEIGHT,
+  AVATAR_QUALITY,
+  AVATAR_COMPRESSION_LEVEL,
+} from "../constants";
+import { uploadToGCS, deleteFromGCS } from "./gcsUtils";
 
 /**
  * Get file extension from filename
@@ -34,6 +15,66 @@ function getFileExtension(filename: string): string {
   const parts = filename.split(".");
   if (parts.length < 2) return "";
   return parts[parts.length - 1].toLowerCase();
+}
+
+/**
+ * Determine content type and extension from file extension
+ */
+function detectFileType(file: Express.Multer.File): { contentType: string; ext: string } {
+  const ext = getFileExtension(file.originalname);
+  const extLower = ext.toLowerCase();
+
+  let contentType: string;
+  if (extLower === "jpg" || extLower === "jpeg") {
+    contentType = "image/jpeg";
+  } else if (extLower === "png") {
+    contentType = "image/png";
+  } else if (extLower === "gif") {
+    contentType = "image/gif";
+  } else {
+    throw new Error(`Unsupported file type. Extension: ${ext || "none"}`);
+  }
+
+  return { contentType, ext };
+}
+
+/**
+ * Process image with Sharp based on content type
+ */
+async function processImage(
+  buffer: Buffer,
+  contentType: string,
+  options: {
+    width: number;
+    height: number;
+    fit: "inside" | "cover";
+    quality: number;
+    compressionLevel?: number;
+  }
+): Promise<Buffer> {
+  // For GIFs, preserve the original file (including animation)
+  if (contentType === "image/gif") {
+    return buffer;
+  }
+
+  const sharpInstance = sharp(buffer).resize(options.width, options.height, {
+    fit: options.fit,
+    position: options.fit === "cover" ? "center" : undefined,
+    withoutEnlargement: options.fit === "inside",
+  });
+
+  if (contentType === "image/jpeg") {
+    return await sharpInstance.jpeg({ quality: options.quality }).toBuffer();
+  } else if (contentType === "image/png") {
+    return await sharpInstance
+      .png({
+        quality: options.quality,
+        compressionLevel: options.compressionLevel || 9,
+      })
+      .toBuffer();
+  }
+
+  return buffer;
 }
 
 /**
@@ -50,73 +91,22 @@ export async function uploadBlogAsset(
     throw new Error("File buffer is missing");
   }
 
-  // Get file extension from filename (primary method)
-  const fileExtension = getFileExtension(file.originalname);
-  
-  // Try to determine file type using magic bytes (optional, for processing)
-  let fileType = await fileTypeFromBuffer(file.buffer).catch(() => null);
-
-  // Determine content type and extension
-  let ext: string;
-  let contentType: string;
-  
-  // Use fileType if available, otherwise fall back to mimetype or extension
-  if (fileType) {
-    contentType = fileType.mime;
-    ext = fileExtension || fileType.ext || "bin";
-  } else {
-    // Fallback to mimetype from multer or infer from extension
-    contentType = file.mimetype || "application/octet-stream";
-    ext = fileExtension || "bin";
-  }
-
-  // Process based on media type
-  let processedBuffer: Buffer;
-  let finalSize: number;
-
-  // For blog assets, process images with sharp, others as-is
-    if (ALLOWED_IMAGE_MIMES.includes(contentType as any)) {
-      if (!ext || !["jpg", "jpeg", "png", "gif"].includes(ext)) {
-        ext = getExtensionFromMime(contentType);
-      }
-
-      // For GIFs, preserve the original file (including animation)
-      if (contentType === "image/gif" || ext === "gif") {
-        processedBuffer = file.buffer;
-      } else {
-        // Re-encode JPEG/PNG using sharp to resize and optimize
-        const sharpInstance = sharp(file.buffer).resize(BLOG_ASSET_MAX_WIDTH, BLOG_ASSET_MAX_HEIGHT, {
-          fit: "inside",
-          withoutEnlargement: true,
-        });
-
-        if (contentType === "image/jpeg" || ext === "jpg" || ext === "jpeg") {
-          processedBuffer = await sharpInstance.jpeg({ quality: BLOG_ASSET_QUALITY }).toBuffer();
-        } else if (contentType === "image/png" || ext === "png") {
-          processedBuffer = await sharpInstance.png({ quality: BLOG_ASSET_QUALITY, compressionLevel: 9 }).toBuffer();
-        } else {
-          processedBuffer = file.buffer;
-        }
-      }
-    } else {
-      // For non-image files, use original buffer
-      processedBuffer = file.buffer;
-    }
-    finalSize = processedBuffer.length;
+  // Detect file type
+  const { contentType, ext } = detectFileType(file);
 
   // Use the provided filename (should already include extension)
   // If filename doesn't have extension, add it
   const finalFilename = filename.includes(".") ? filename : `${filename}.${ext}`;
-  
+
   // Upload to public GCS bucket in blog-assets folder
   const gcsPath = `blog-assets/${finalFilename}`;
-  const publicUrl = await uploadToPublicGCS(processedBuffer, gcsPath, contentType);
+  const publicUrl = await uploadToGCS(file.buffer, gcsPath, contentType) as string;
 
   return {
     url: publicUrl,
     filename: finalFilename,
     mimeType: contentType,
-    size: finalSize,
+    size: file.buffer.length,
   };
 }
 
@@ -146,51 +136,27 @@ export async function uploadAvatarFile(
     throw new Error("File buffer is missing");
   }
 
-  // Get file extension from original filename
-  const fileExtension = getFileExtension(file.originalname);
-  
-  // Try to determine file type using magic bytes
-  let fileType = await fileTypeFromBuffer(file.buffer).catch(() => null);
+  // Detect file type
+  const { contentType, ext } = detectFileType(file);
 
-  // Determine content type and extension
-  let ext: string;
-  let contentType: string;
-  
-  if (fileType) {
-    contentType = fileType.mime;
-    ext = fileExtension || fileType.ext || "png";
-  } else {
-    contentType = file.mimetype || "image/png";
-    ext = fileExtension || "png";
-  }
-
-  // Process avatar image
-  let processedBuffer: Buffer;
-  let finalSize: number;
-
+  // Validate that it's an allowed image type
   if (!ALLOWED_IMAGE_MIMES.includes(contentType as any)) {
-    throw new Error("Avatar must be an image");
+    throw new Error(`Avatar must be an image. Detected type: ${contentType}, extension: ${ext}`);
   }
-  
-  ext = getExtensionFromMime(contentType);
-  const sharpInstance = sharp(file.buffer)
-    .resize(AVATAR_WIDTH, AVATAR_HEIGHT, {
-      fit: "cover",
-      position: "center",
-    });
 
-  if (contentType === "image/jpeg") {
-    processedBuffer = await sharpInstance.jpeg({ quality: AVATAR_QUALITY }).toBuffer();
-  } else if (contentType === "image/png") {
-    processedBuffer = await sharpInstance.png({ quality: AVATAR_QUALITY, compressionLevel: AVATAR_COMPRESSION_LEVEL }).toBuffer();
-  } else {
-    processedBuffer = file.buffer;
-  }
-  finalSize = processedBuffer.length;
+  // Process image with Sharp
+  const processedBuffer = await processImage(file.buffer, contentType, {
+    width: AVATAR_WIDTH,
+    height: AVATAR_HEIGHT,
+    fit: "cover",
+    quality: AVATAR_QUALITY,
+    compressionLevel: AVATAR_COMPRESSION_LEVEL,
+  });
+  const finalSize = processedBuffer.length;
 
   // Upload to public GCS bucket with user_id as filename
   const gcsPath = `avatar/${userId}.${ext}`;
-  const publicUrl = await uploadToPublicGCS(processedBuffer, gcsPath, contentType);
+  const publicUrl = await uploadToGCS(processedBuffer, gcsPath, contentType) as string;
 
   return {
     url: publicUrl,
@@ -198,5 +164,3 @@ export async function uploadAvatarFile(
     size: finalSize,
   };
 }
-
-

@@ -7,17 +7,18 @@ import {
   Button,
   Typography,
   Container,
-  Alert,
   InputAdornment,
-  IconButton,
-  CircularProgress,
   Paper,
   Divider,
 } from "@mui/material";
-import { Visibility, VisibilityOff, Login as LoginIcon, Person, Lock } from "@mui/icons-material";
+import { Login as LoginIcon, Person } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../../contexts/AuthContext";
 import LandingHeader from "../../../components/LandingHeader";
+import PasswordField from "../../../components/PasswordField";
+import FormErrorAlert from "../../../components/forms/FormErrorAlert";
+import FormLoadingButton from "../../../components/forms/FormLoadingButton";
+import { validateUsername, validatePassword } from "../../../utils/formValidation";
 
 interface LoginFormData {
   username: string;
@@ -39,7 +40,6 @@ export default function Login() {
     password: "12345678aA!",
   });
   const [errors, setErrors] = useState<LoginErrors>({});
-  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleInputChange = (field: keyof LoginFormData) => (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -59,16 +59,14 @@ export default function Login() {
   const validateForm = (): boolean => {
     const newErrors: LoginErrors = {};
 
-    if (!formData.username.trim()) {
-      newErrors.username = "Username is required";
-    } else if (formData.username.length < 3) {
-      newErrors.username = "Username must be at least 3 characters";
+    const usernameError = validateUsername(formData.username);
+    if (usernameError) {
+      newErrors.username = usernameError;
     }
 
-    if (!formData.password) {
-      newErrors.password = "Password is required";
-    } else if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
+    const passwordError = validatePassword(formData.password, { minLength: 6 });
+    if (passwordError) {
+      newErrors.password = passwordError;
     }
 
     setErrors(newErrors);
@@ -83,32 +81,23 @@ export default function Login() {
     setIsLoading(true);
     setErrors({});
 
-    try {
-      const success = await login(formData.username, formData.password);
+    const success = await login(formData.username, formData.password);
 
-      if (success) {
-        // Redirect to the page they were trying to access, or internal by default
-        const from = location.state?.from?.pathname;
-        if (from === "/logout") {
-          navigate("/internal");
-        } else {
-          navigate(from || "/internal", { replace: true });
-        }
+    if (success) {
+      // Redirect to the page they were trying to access, or internal by default
+      const from = location.state?.from?.pathname;
+      if (from === "/logout") {
+        navigate("/internal");
       } else {
-        setErrors({ general: "Invalid username or password" });
+        navigate(from || "/internal", { replace: true });
       }
-    } catch (error) {
-      setErrors({
-        general: "Network error. Please check your connection and try again.",
-      });
-    } finally {
-      setIsLoading(false);
+    } else {
+      setErrors({ general: "Invalid username or password" });
     }
+    
+    setIsLoading(false);
   };
 
-  const handleTogglePasswordVisibility = () => {
-    setShowPassword((prev) => !prev);
-  };
 
   return (
     <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -188,11 +177,7 @@ export default function Login() {
         <Card sx={{ width: "100%", maxWidth: 400 }}>
           <CardContent sx={{ padding: 4 }}>
             <Box>
-              {errors.general && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                  {errors.general}
-                </Alert>
-              )}
+              {errors.general && <FormErrorAlert message={errors.general} sx={{ mb: 2 }} />}
 
               <TextField
                 margin="normal"
@@ -216,44 +201,26 @@ export default function Login() {
                 sx={{ mb: 2 }}
               />
 
-              <TextField
+              <PasswordField
                 margin="normal"
                 required
                 fullWidth
                 name="password"
                 label="Password"
-                type={showPassword ? "text" : "password"}
                 id="password"
                 value={formData.password}
                 onChange={handleInputChange("password")}
                 error={!!errors.password}
                 helperText={errors.password}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Lock color="action" />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        aria-label="toggle password visibility"
-                        onClick={handleTogglePasswordVisibility}
-                        edge="end"
-                      >
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
                 sx={{ mb: 3 }}
               />
 
-              <Button
+              <FormLoadingButton
                 type="submit"
                 fullWidth
                 variant="contained"
-                disabled={isLoading}
+                loading={isLoading}
+                loadingText="Signing in..."
                 onClick={handleSubmit}
                 sx={{
                   mt: 2,
@@ -272,8 +239,8 @@ export default function Login() {
                   },
                 }}
               >
-                {isLoading ? <CircularProgress size={24} color="inherit" /> : "Sign In"}
-              </Button>
+                Sign In
+              </FormLoadingButton>
 
               <Divider sx={{ my: 2 }}>
                 <Typography variant="body2" color="text.secondary">

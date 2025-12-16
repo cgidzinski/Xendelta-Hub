@@ -5,10 +5,11 @@ import { requireAdmin } from "../middleware/admin";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { validate, createNotificationSchema } from "../utils/validation";
 import { TIMEOUTS } from "../constants";
+import { AuthenticatedRequest } from "../types";
 
 module.exports = function (app: express.Application) {
   app.get("/api/user/notifications", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const user = await User.findOne({ _id: req.user!._id }).exec();
+    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
     await new Promise((resolve) => setTimeout(resolve, TIMEOUTS.NOTIFICATION_DELAY));
 
     return res.json({
@@ -24,7 +25,7 @@ module.exports = function (app: express.Application) {
     "/api/user/notifications/mark-read",
     authenticateToken,
     async function (req: express.Request, res: express.Response) {
-      const user = await User.findOne({ _id: req.user!._id }).exec();
+      const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
 
       // Mark all notifications as read
       user.notifications.forEach((notification: any) => {
@@ -52,7 +53,7 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     async function (req: express.Request, res: express.Response) {
       const { notificationId } = req.params;
-      const user = await User.findOne({ _id: req.user!._id }).exec();
+      const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
 
       // Find and mark the specific notification as read
       const notification = user.notifications.find((n: any) => n._id.toString() === notificationId);
@@ -111,7 +112,7 @@ module.exports = function (app: express.Application) {
         };
 
         targetUser.notifications.unshift(newNotification);
-        
+
         await targetUser.save();
 
         // Get the saved notification with _id

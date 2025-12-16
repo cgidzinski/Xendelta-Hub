@@ -9,7 +9,6 @@ export interface Conversation {
   participants: string[];
   participantInfo?: ParticipantInfo[];
   name?: string;
-  canReply?: boolean;
   createdBy?: string;
   lastMessage: string;
   lastMessageTime: string;

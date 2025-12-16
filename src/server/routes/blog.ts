@@ -1,6 +1,5 @@
 import express = require("express");
 const { BlogPost } = require("../models/blogPost");
-import { notFoundResponse } from "../utils/responseHelpers";
 
 module.exports = function (app: express.Application) {
   app.get("/api/blog", async function (req: express.Request, res: express.Response) {
@@ -38,7 +37,10 @@ module.exports = function (app: express.Application) {
       .exec();
 
     if (!post) {
-      return notFoundResponse(res, "Blog post");
+      return res.status(404).json({
+        status: false,
+        message: "Blog post not found",
+      });
     }
 
     return res.json({

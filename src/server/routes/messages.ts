@@ -15,15 +15,14 @@ import {
   messageIdParamSchema,
   participantIdParamSchema,
 } from "../utils/validation";
-import { UserConversationMetadata, Message, ConversationDocument } from "../types";
-import { successResponse, notFoundResponse, forbiddenResponse, badRequestResponse } from "../utils/responseHelpers";
+import { UserConversationMetadata, Message, ConversationDocument, AuthenticatedRequest } from "../types";
 import { getLastMessageInfo, generateDefaultConversationName } from "../utils/conversationUtils";
 
 
 module.exports = function (app: express.Application) {
   // Get all conversations for the authenticated user
   app.get("/api/user/messages", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const user = await User.findOne({ _id: req.user!._id }).exec();
+    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
     
     // Get conversation IDs from user's conversation metadata
     const userConversationIds = (user.conversations || []).map((uc: UserConversationMetadata) => uc.conversationId);
@@ -39,10 +38,6 @@ module.exports = function (app: express.Application) {
     (user.conversations || []).forEach((uc: UserConversationMetadata) => {
       conversationMetadataMap.set(uc.conversationId.toString(), uc);
     });
-
-    // Find System bot user once for default name generation
-    const systemBot = await User.findOne({ username: "System", roles: "bot" }).select("_id").exec();
-    const systemBotId = systemBot?._id.toString();
 
     // Format conversations for response with participant usernames
     const formattedConversations = await Promise.all(conversations.map(async (conv: ConversationDocument) => {
@@ -61,14 +56,13 @@ module.exports = function (app: express.Application) {
       const lastMessageInfo = getLastMessageInfo(conv);
       
       // Generate default name if no name is set
-      const conversationName = conv.name || generateDefaultConversationName(participantInfo, user._id.toString(), systemBotId);
+      const conversationName = conv.name || generateDefaultConversationName(participantInfo);
       
       return {
         _id: conv._id.toString(),
         participants: conv.participants,
         participantInfo: participantInfo,
         name: conversationName,
-        canReply: conv.canReply,
         createdBy: conv.createdBy,
         lastMessage: lastMessageInfo.lastMessage,
         lastMessageTime: lastMessageInfo.lastMessageTime,
@@ -78,13 +72,16 @@ module.exports = function (app: express.Application) {
       };
     }));
 
-    return successResponse(res, { conversations: formattedConversations });
+    return res.json({
+      status: true,
+      data: { conversations: formattedConversations },
+    });
   });
 
   // Get a specific conversation with all messages
   app.get("/api/user/messages/:conversationId", authenticateToken, validateParams(conversationIdParamSchema), async function (req: express.Request, res: express.Response) {
     const { conversationId } = req.params;
-    const user = await User.findOne({ _id: req.user!._id }).exec();
+    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
 
     // Find conversation in separate collection
     const conversation = await Conversation.findOne({ _id: conversationId }).exec();
@@ -104,16 +101,9 @@ module.exports = function (app: express.Application) {
       });
     }
 
-    // Find System bot user for username lookup
-    const systemBot = await User.findOne({ username: "System", roles: "bot" }).select("_id username").exec();
-    const systemBotId = systemBot?._id.toString();
-
     // Fetch usernames for participants and message senders
     const participantInfo = await Promise.all(
       conversation.participants.map(async (p: string) => {
-        if (p === systemBotId) {
-          return { _id: systemBotId, username: "System", avatar: "/avatars/default-avatar.png" };
-        }
         if (p === user._id.toString()) {
           return { _id: user._id.toString(), username: user.username, avatar: user.avatar || "/avatars/default-avatar.png" };
         }
@@ -125,21 +115,15 @@ module.exports = function (app: express.Application) {
     // Add username to each message
     const messagesWithUsernames = await Promise.all(
       (conversation.messages || []).map(async (msg: Message) => {
-        if (msg.from === systemBotId) {
-          return {
-            ...msg.toObject(),
-            senderUsername: "System",
-          };
-        }
         if (msg.from === user._id.toString()) {
           return {
-            ...msg.toObject(),
+            ...(msg.toObject ? msg.toObject() : msg),
             senderUsername: user.username,
           };
         }
         const senderUser = await User.findOne({ _id: msg.from }).select("username").exec();
         return {
-          ...msg.toObject(),
+          ...(msg.toObject ? msg.toObject() : msg),
           senderUsername: senderUser ? senderUser.username : "Unknown",
         };
       })
@@ -150,7 +134,7 @@ module.exports = function (app: express.Application) {
     const lastMessageInfo = getLastMessageInfo(conversation);
     
     // Generate default name if no name is set
-    const conversationName = conversation.name || generateDefaultConversationName(participantInfo, user._id.toString(), systemBotId);
+    const conversationName = conversation.name || generateDefaultConversationName(participantInfo);
 
     return res.json({
       status: true,
@@ -161,7 +145,6 @@ module.exports = function (app: express.Application) {
           participants: conversation.participants,
           participantInfo: participantInfo,
           name: conversationName,
-          canReply: conversation.canReply,
           createdBy: conversation.createdBy,
           lastMessage: lastMessageInfo.lastMessage,
           lastMessageTime: lastMessageInfo.lastMessageTime,
@@ -176,7 +159,7 @@ module.exports = function (app: express.Application) {
   // Create a new conversation/group and send initial message
   app.post("/api/user/messages", authenticateToken, validate(createConversationSchema), async function (req: express.Request, res: express.Response) {
     const { participants, message } = req.body;
-    const user = await User.findOne({ _id: req.user!._id }).exec();
+    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
 
     if (!participants || !Array.isArray(participants) || participants.length === 0) {
       return res.status(400).json({
@@ -199,18 +182,13 @@ module.exports = function (app: express.Application) {
       })
     );
     
-    // Find System bot user for default name generation
-    const systemBot = await User.findOne({ username: "System", roles: "Bot" }).select("_id").exec();
-    const systemBotId = systemBot?._id.toString();
-    
     // Generate default name from participant usernames
-    const defaultName = generateDefaultConversationName(participantInfoForName, user._id.toString(), systemBotId);
+    const defaultName = generateDefaultConversationName(participantInfoForName);
 
     // Create new conversation in separate collection
     const newConversation = new Conversation({
       participants: allParticipants,
       name: defaultName, // Set default name from usernames
-      canReply: true,
       createdBy: user._id.toString(), // Store creator ID
       updatedAt: new Date().toISOString(),
       messages: message ? [{
@@ -264,7 +242,6 @@ module.exports = function (app: express.Application) {
           _id: savedConversation._id.toString(),
           participants: savedConversation.participants,
           name: defaultName,
-          canReply: savedConversation.canReply,
           lastMessage: lastMessageInfo.lastMessage,
           lastMessageTime: lastMessageInfo.lastMessageTime,
           updatedAt: savedConversation.updatedAt,
@@ -278,7 +255,7 @@ module.exports = function (app: express.Application) {
   app.post("/api/user/messages/:conversationId", authenticateToken, validateParams(conversationIdParamSchema), validate(sendMessageSchema), async function (req: express.Request, res: express.Response) {
     const { conversationId } = req.params;
     const { message, parentMessageId } = req.body;
-    const user = await User.findOne({ _id: req.user!._id }).exec();
+    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
 
     if (!message) {
       return res.status(400).json({
@@ -302,14 +279,6 @@ module.exports = function (app: express.Application) {
       return res.status(403).json({
         status: false,
         message: "You are not authorized to send messages to this conversation",
-      });
-    }
-
-    // Check if conversation allows replies
-    if (conversation.canReply === false) {
-      return res.status(403).json({
-        status: false,
-        message: "This conversation does not allow replies",
       });
     }
 
@@ -369,7 +338,7 @@ module.exports = function (app: express.Application) {
   app.post("/api/user/messages/:conversationId/reply/:messageId", authenticateToken, validateParams(messageIdParamSchema), validate(sendMessageSchema), async function (req: express.Request, res: express.Response) {
     const { conversationId, messageId } = req.params;
     const { message } = req.body;
-    const user = await User.findOne({ _id: req.user!._id }).exec();
+    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
 
     if (!message) {
       return res.status(400).json({
@@ -393,14 +362,6 @@ module.exports = function (app: express.Application) {
       return res.status(403).json({
         status: false,
         message: "You are not authorized to reply to messages in this conversation",
-      });
-    }
-
-    // Check if conversation allows replies
-    if (conversation.canReply === false) {
-      return res.status(403).json({
-        status: false,
-        message: "This conversation does not allow replies",
       });
     }
 
@@ -468,7 +429,7 @@ module.exports = function (app: express.Application) {
   // Mark conversation as read
   app.put("/api/user/messages/:conversationId/mark-read", authenticateToken, validateParams(conversationIdParamSchema), async function (req: express.Request, res: express.Response) {
     const { conversationId } = req.params;
-    const user = await User.findOne({ _id: req.user!._id }).exec();
+    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
 
     // Find conversation in separate collection
     const conversation = await Conversation.findOne({ _id: conversationId }).exec();
@@ -524,7 +485,7 @@ module.exports = function (app: express.Application) {
   // Delete a message from a conversation
   app.delete("/api/user/messages/:conversationId/messages/:messageId", authenticateToken, validateParams(messageIdParamSchema), async function (req: express.Request, res: express.Response) {
     const { conversationId, messageId } = req.params;
-    const user = await User.findOne({ _id: req.user!._id }).exec();
+    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
 
     // Find conversation in separate collection
     const conversation = await Conversation.findOne({ _id: conversationId }).exec();
@@ -583,7 +544,7 @@ module.exports = function (app: express.Application) {
   app.post("/api/user/messages/:conversationId/participants", authenticateToken, validateParams(conversationIdParamSchema), validate(addParticipantsSchema), async function (req: express.Request, res: express.Response) {
     const { conversationId } = req.params;
     const { participantIds } = req.body;
-    const user = await User.findOne({ _id: req.user!._id }).exec();
+    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
 
     if (!participantIds || !Array.isArray(participantIds) || participantIds.length === 0) {
       return res.status(400).json({
@@ -677,7 +638,7 @@ module.exports = function (app: express.Application) {
   // Remove participants from a conversation/group
   app.delete("/api/user/messages/:conversationId/participants/:participantId", authenticateToken, validateParams(participantIdParamSchema), async function (req: express.Request, res: express.Response) {
     const { conversationId, participantId } = req.params;
-    const user = await User.findOne({ _id: req.user!._id }).exec();
+    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
 
     // Find conversation in separate collection
     const conversation = await Conversation.findOne({ _id: conversationId }).exec();
@@ -742,7 +703,7 @@ module.exports = function (app: express.Application) {
   app.put("/api/user/messages/:conversationId/name", authenticateToken, validateParams(conversationIdParamSchema), validate(updateConversationNameSchema), async function (req: express.Request, res: express.Response) {
     const { conversationId } = req.params;
     const { name } = req.body;
-    const user = await User.findOne({ _id: req.user!._id }).exec();
+    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
 
     // Find conversation in separate collection
     const conversation = await Conversation.findOne({ _id: conversationId }).exec();
@@ -786,7 +747,7 @@ module.exports = function (app: express.Application) {
   // Leave conversation (delete if last user)
   app.post("/api/user/messages/:conversationId/leave", authenticateToken, validateParams(conversationIdParamSchema), async function (req: express.Request, res: express.Response) {
     const { conversationId } = req.params;
-    const user = await User.findOne({ _id: req.user!._id }).exec();
+    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
 
     // Find conversation in separate collection
     const conversation = await Conversation.findOne({ _id: conversationId }).exec();
@@ -806,14 +767,8 @@ module.exports = function (app: express.Application) {
       });
     }
 
-    // Get real participants (excluding bots - users with bot role)
-    const systemBot = await User.findOne({ username: "System", roles: "bot" }).exec();
-    const systemBotId = systemBot?._id.toString();
-    const realParticipants = conversation.participants.filter((p: string) => {
-      if (p === systemBotId) return false;
-      // Could check for other bots here if needed
-      return true;
-    });
+    // Get real participants
+    const realParticipants = conversation.participants;
 
     // If user is the last real participant, delete the conversation
     if (realParticipants.length === 1 && realParticipants[0] === user._id.toString()) {

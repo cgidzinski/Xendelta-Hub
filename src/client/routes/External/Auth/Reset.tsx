@@ -60,29 +60,26 @@ export default function Reset() {
 
   const verifyToken = async () => {
     setIsLoading(true);
-    try {
-      // Extract email from the URL or use the email from the form
-      const emailFromUrl = searchParams.get("email");
-      const emailToUse = emailFromUrl || formData.email;
+    // Extract email from the URL or use the email from the form
+    const emailFromUrl = searchParams.get("email");
+    const emailToUse = emailFromUrl || formData.email;
 
-      if (!emailToUse) {
-        setTokenValid(false);
-        return;
-      }
-
-      const result = await verifyResetToken(token!, emailToUse);
-      if (result.status) {
-        setTokenValid(true);
-        setUserInfo(result.user);
-        setFormData((prev) => ({ ...prev, email: result.user.email }));
-      } else {
-        setTokenValid(false);
-      }
-    } catch (error) {
+    if (!emailToUse) {
       setTokenValid(false);
-    } finally {
       setIsLoading(false);
+      return;
     }
+
+    const result = await verifyResetToken(token!, emailToUse);
+    if (result.status) {
+      setTokenValid(true);
+      setUserInfo(result.user);
+      setFormData((prev) => ({ ...prev, email: result.user.email }));
+    } else {
+      setTokenValid(false);
+    }
+    
+    setIsLoading(false);
   };
 
   const handleInputChange = (field: keyof ResetFormData) => (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -136,33 +133,25 @@ export default function Reset() {
     setIsLoading(true);
     setErrors({});
 
-    try {
-      if (token) {
-        // Token-based password reset
-        const result = await resetPasswordWithToken(token, formData.newPassword, formData.email);
-        if (result.status) {
-          setIsSuccess(true);
-        } else {
-          setErrors({ general: result.message || "Failed to reset password. Please try again." });
-        }
+    if (token) {
+      // Token-based password reset
+      const result = await resetPasswordWithToken(token, formData.newPassword, formData.email);
+      if (result.status) {
+        setIsSuccess(true);
       } else {
-        // Email-based forgot password
-        const success = await resetPassword(formData.email);
-        if (success) {
-          setIsSuccess(true);
-        } else {
-          setErrors({ general: "Failed to send reset email. Please try again later." });
-        }
+        setErrors({ general: result.message || "Failed to reset password. Please try again." });
       }
-    } catch (error) {
-      setErrors({
-        general: token
-          ? "Failed to reset password. Please try again."
-          : "Failed to send reset email. Please try again later.",
-      });
-    } finally {
-      setIsLoading(false);
+    } else {
+      // Email-based forgot password
+      const success = await resetPassword(formData.email);
+      if (success) {
+        setIsSuccess(true);
+      } else {
+        setErrors({ general: "Failed to send reset email. Please try again later." });
+      }
     }
+    
+    setIsLoading(false);
   };
 
   const handleBackToLogin = () => {

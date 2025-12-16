@@ -20,7 +20,8 @@ export default function Logout() {
   useEffect(() => {
     logout();
     navigate("/", { replace: true });
-  }, [logout, navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
   
   return null;
 }

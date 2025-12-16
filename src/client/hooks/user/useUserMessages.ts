@@ -1,7 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { get, post, put, del } from "../../utils/apiClient";
+import { apiClient, getApiUrl } from "../../config/api";
+import { ApiResponse } from "../../types/api";
+import { userProfileKeys } from "./useUserProfile";
 
+// Types
 export interface Message {
   _id: string;
   from: string;
@@ -22,7 +26,6 @@ export interface Conversation {
   participants: string[];
   participantInfo?: ParticipantInfo[];
   name?: string;
-  canReply?: boolean;
   createdBy?: string; // user ID of the conversation creator
   lastMessage: string;
   lastMessageTime: string;
@@ -60,49 +63,78 @@ interface UseUserMessagesReturn {
   isLeaving: boolean;
 }
 
+// Query keys
+export const userMessagesKeys = {
+  all: ["userConversations"] as const,
+  conversations: () => [...userMessagesKeys.all, "conversations"] as const,
+  conversation: (id: string) => [...userMessagesKeys.all, "conversation", id] as const,
+};
+
+// API functions
 const fetchUserConversations = async (): Promise<Conversation[]> => {
-  const data = await get<{ conversations: Conversation[] }>("/api/user/messages");
-  return data.conversations;
+  const response = await apiClient.get<ApiResponse<{ conversations: Conversation[] }>>(getApiUrl("api/user/messages"));
+  return response.data.data!.conversations;
 };
 
 const fetchConversationById = async (conversationId: string): Promise<Conversation> => {
-  const data = await get<{ conversation: Conversation }>(`/api/user/messages/${conversationId}`);
-  return data.conversation;
+  const response = await apiClient.get<ApiResponse<{ conversation: Conversation }>>(getApiUrl(`api/user/messages/${conversationId}`));
+  return response.data.data!.conversation;
 };
 
 const markConversationAsRead = async (conversationId: string): Promise<void> => {
-  await put(`/api/user/messages/${conversationId}/mark-read`);
+  await apiClient.put(getApiUrl(`api/user/messages/${conversationId}/mark-read`));
 };
 
 const sendMessageToConversation = async (conversationId: string, message: string, parentMessageId?: string): Promise<Message> => {
-  const data = await post<{ message: Message }>(`/api/user/messages/${conversationId}`, { message, parentMessageId });
-  return data.message;
+  const response = await apiClient.post<ApiResponse<{ message: Message }>>(getApiUrl(`api/user/messages/${conversationId}`), {
+    message,
+    parentMessageId,
+  });
+  return response.data.data!.message;
 };
 
 const replyToMessage = async (conversationId: string, messageId: string, message: string): Promise<Message> => {
-  const data = await post<{ message: Message }>(`/api/user/messages/${conversationId}/reply/${messageId}`, { message });
-  return data.message;
+  const response = await apiClient.post<ApiResponse<{ message: Message }>>(getApiUrl(`api/user/messages/${conversationId}/reply/${messageId}`), {
+    message,
+  });
+  return response.data.data!.message;
 };
 
 const deleteMessageFromConversation = async (conversationId: string, messageId: string): Promise<void> => {
-  await del(`/api/user/messages/${conversationId}/messages/${messageId}`);
+  await apiClient.delete(getApiUrl(`api/user/messages/${conversationId}/messages/${messageId}`));
 };
 
 const createNewConversation = async (participants: string[], message?: string): Promise<Conversation> => {
-  const data = await post<{ conversation: Conversation }>("/api/user/messages", { participants, message });
-  return data.conversation;
+  const response = await apiClient.post<ApiResponse<{ conversation: Conversation }>>(getApiUrl("api/user/messages"), {
+    participants,
+    message,
+  });
+  return response.data.data!.conversation;
 };
 
 const addParticipantsToConversation = async (conversationId: string, participantIds: string[]): Promise<Conversation> => {
-  const data = await post<{ conversation: Conversation }>(`/api/user/messages/${conversationId}/participants`, { participantIds });
-  return data.conversation;
+  const response = await apiClient.post<ApiResponse<{ conversation: Conversation }>>(getApiUrl(`api/user/messages/${conversationId}/participants`), {
+    participantIds,
+  });
+  return response.data.data!.conversation;
 };
 
 const removeParticipantFromConversation = async (conversationId: string, participantId: string): Promise<Conversation> => {
-  const data = await del<{ conversation: Conversation }>(`/api/user/messages/${conversationId}/participants/${participantId}`);
-  return data.conversation;
+  const response = await apiClient.delete<ApiResponse<{ conversation: Conversation }>>(getApiUrl(`api/user/messages/${conversationId}/participants/${participantId}`));
+  return response.data.data!.conversation;
 };
 
+const updateConversationNameFn = async (conversationId: string, name: string): Promise<boolean> => {
+  const response = await apiClient.put<ApiResponse<{ status: boolean }>>(getApiUrl(`api/user/messages/${conversationId}/name`), { name });
+  return response.data.data!.status;
+};
+
+const leaveConversationFn = async (conversationId: string): Promise<boolean> => {
+  const response = await apiClient.post<ApiResponse<{ status: boolean }>>(getApiUrl(`api/user/messages/${conversationId}/leave`));
+  return response.data.data!.status;
+};
+
+// Hooks
 export const useUserMessages = (): UseUserMessagesReturn => {
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
@@ -116,11 +148,11 @@ export const useUserMessages = (): UseUserMessagesReturn => {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["userConversations"],
+    queryKey: userMessagesKeys.conversations(),
     queryFn: fetchUserConversations,
     enabled: isAuthenticated,
     staleTime: 0, // Always consider data stale to allow refetching
-    cacheTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes (formerly cacheTime)
     retry: (failureCount, error) => {
       if (error.message.includes("Unauthorized")) {
         return false;
@@ -133,14 +165,14 @@ export const useUserMessages = (): UseUserMessagesReturn => {
   const fetchConversation = async (conversationId: string): Promise<Conversation | undefined> => {
     if (!isAuthenticated) return undefined;
     
-    const cached = queryClient.getQueryData<Conversation[]>(["userConversations"]);
+    const cached = queryClient.getQueryData<Conversation[]>(userMessagesKeys.conversations());
     const cachedConv = cached?.find(c => c._id === conversationId);
     if (cachedConv && cachedConv.messages) {
       return cachedConv;
     }
 
     const conversation = await fetchConversationById(conversationId);
-    queryClient.setQueryData(["userConversations"], (oldData: Conversation[] | undefined) => {
+    queryClient.setQueryData(userMessagesKeys.conversations(), (oldData: Conversation[] | undefined) => {
       if (!oldData) return oldData;
       return oldData.map(conv => 
         conv._id === conversationId ? conversation : conv
@@ -153,17 +185,17 @@ export const useUserMessages = (): UseUserMessagesReturn => {
   const { mutate: markConversationAsReadMutation, isPending: isMarkingAsRead } = useMutation({
     mutationFn: markConversationAsRead,
     onSuccess: (_, conversationId) => {
-      queryClient.setQueryData(["userConversations"], (oldData: Conversation[] | undefined) => {
+      queryClient.setQueryData(userMessagesKeys.conversations(), (oldData: Conversation[] | undefined) => {
         if (!oldData) return oldData;
         return oldData.map(conv => 
           conv._id === conversationId ? { ...conv, unread: false } : conv
         );
       });
       // Also invalidate user profile to update unread_messages
-      queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+      queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
     },
-    onError: (error) => {
-      console.error("Failed to mark conversation as read:", error);
+    onError: () => {
+      // Error handled by mutation error state
     },
   });
 
@@ -173,11 +205,11 @@ export const useUserMessages = (): UseUserMessagesReturn => {
       sendMessageToConversation(conversationId, message, parentMessageId),
     onMutate: async ({ conversationId, message, parentMessageId }) => {
       // Cancel any outgoing refetches to avoid overwriting optimistic update
-      await queryClient.cancelQueries({ queryKey: ["userConversations"] });
+      await queryClient.cancelQueries({ queryKey: userMessagesKeys.conversations() });
 
       // Snapshot the previous value
-      const previousConversations = queryClient.getQueryData<Conversation[]>(["userConversations"]);
-      const userProfile = queryClient.getQueryData<any>(["userProfile"]);
+      const previousConversations = queryClient.getQueryData<Conversation[]>(userMessagesKeys.conversations());
+      const userProfile = queryClient.getQueryData<any>(userProfileKeys.profile());
 
       // Optimistically update the conversation
       if (previousConversations && userProfile?._id) {
@@ -186,7 +218,6 @@ export const useUserMessages = (): UseUserMessagesReturn => {
           from: userProfile._id,
           message: message,
           time: new Date().toISOString(),
-          unread: false,
           parentMessageId: parentMessageId,
           senderUsername: userProfile.username,
         };
@@ -203,14 +234,14 @@ export const useUserMessages = (): UseUserMessagesReturn => {
           return conv;
         });
 
-        queryClient.setQueryData(["userConversations"], updatedConversations);
+        queryClient.setQueryData(userMessagesKeys.conversations(), updatedConversations);
       }
 
       return { previousConversations };
     },
     onSuccess: (newMessage, { conversationId }) => {
       // Update with real message from server
-      queryClient.setQueryData<Conversation[]>(["userConversations"], (oldData) => {
+      queryClient.setQueryData<Conversation[]>(userMessagesKeys.conversations(), (oldData) => {
         if (!oldData) return oldData;
         return oldData.map((conv) => {
           if (conv._id === conversationId) {
@@ -229,15 +260,15 @@ export const useUserMessages = (): UseUserMessagesReturn => {
         });
       });
       // Invalidate to ensure consistency
-      queryClient.invalidateQueries({ queryKey: ["userConversations"] });
-      queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+      queryClient.invalidateQueries({ queryKey: userMessagesKeys.conversations() });
+      queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
     },
     onError: (error, variables, context) => {
       // Rollback on error
       if (context?.previousConversations) {
-        queryClient.setQueryData(["userConversations"], context.previousConversations);
+        queryClient.setQueryData(userMessagesKeys.conversations(), context.previousConversations);
       }
-      console.error("Failed to send message:", error);
+      // Error handled by mutation error state
     },
   });
 
@@ -246,11 +277,11 @@ export const useUserMessages = (): UseUserMessagesReturn => {
     mutationFn: ({ conversationId, messageId, message }: { conversationId: string; messageId: string; message: string }) =>
       replyToMessage(conversationId, messageId, message),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["userConversations"] });
-      queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+      queryClient.invalidateQueries({ queryKey: userMessagesKeys.conversations() });
+      queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
     },
-    onError: (error) => {
-      console.error("Failed to reply to message:", error);
+    onError: () => {
+      // Error handled by mutation error state
     },
   });
 
@@ -259,10 +290,10 @@ export const useUserMessages = (): UseUserMessagesReturn => {
     mutationFn: ({ conversationId, messageId }: { conversationId: string; messageId: string }) =>
       deleteMessageFromConversation(conversationId, messageId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["userConversations"] });
+      queryClient.invalidateQueries({ queryKey: userMessagesKeys.conversations() });
     },
-    onError: (error) => {
-      console.error("Failed to delete message:", error);
+    onError: () => {
+      // Error handled by mutation error state
     },
   });
 
@@ -271,13 +302,13 @@ export const useUserMessages = (): UseUserMessagesReturn => {
     mutationFn: ({ participants, message }: { participants: string[]; message?: string }) =>
       createNewConversation(participants, message),
     onSuccess: (newConversation) => {
-      queryClient.invalidateQueries({ queryKey: ["userConversations"] });
-      queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+      queryClient.invalidateQueries({ queryKey: userMessagesKeys.conversations() });
+      queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
       // Store the new conversation ID for navigation
       queryClient.setQueryData(["newConversationId"], newConversation._id);
     },
-    onError: (error) => {
-      console.error("Failed to create conversation:", error);
+    onError: () => {
+      // Error handled by mutation error state
     },
   });
 
@@ -286,10 +317,10 @@ export const useUserMessages = (): UseUserMessagesReturn => {
     mutationFn: ({ conversationId, participantIds }: { conversationId: string; participantIds: string[] }) =>
       addParticipantsToConversation(conversationId, participantIds),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["userConversations"] });
+      queryClient.invalidateQueries({ queryKey: userMessagesKeys.conversations() });
     },
-    onError: (error) => {
-      console.error("Failed to add participants:", error);
+    onError: () => {
+      // Error handled by mutation error state
     },
   });
 
@@ -298,46 +329,34 @@ export const useUserMessages = (): UseUserMessagesReturn => {
     mutationFn: ({ conversationId, participantId }: { conversationId: string; participantId: string }) =>
       removeParticipantFromConversation(conversationId, participantId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["userConversations"] });
+      queryClient.invalidateQueries({ queryKey: userMessagesKeys.conversations() });
     },
-    onError: (error) => {
-      console.error("Failed to remove participant:", error);
+    onError: () => {
+      // Error handled by mutation error state
     },
   });
-
-  // Function to update conversation name
-  const updateConversationNameFn = async (conversationId: string, name: string): Promise<boolean> => {
-    const data = await put<{ status: boolean }>(`/api/user/messages/${conversationId}/name`, { name });
-    return data.status;
-  };
 
   // Mutation for updating conversation name
   const { mutateAsync: updateNameMutation, isPending: isUpdatingName } = useMutation({
     mutationFn: ({ conversationId, name }: { conversationId: string; name: string }) =>
       updateConversationNameFn(conversationId, name),
     onSuccess: (_, { conversationId }) => {
-      queryClient.invalidateQueries({ queryKey: ["userConversations"] });
-      queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
+      queryClient.invalidateQueries({ queryKey: userMessagesKeys.conversations() });
+      queryClient.invalidateQueries({ queryKey: userMessagesKeys.conversation(conversationId) });
     },
-    onError: (error) => {
-      console.error("Failed to update conversation name:", error);
+    onError: () => {
+      // Error handled by mutation error state
     },
   });
-
-  // Function to leave conversation
-  const leaveConversationFn = async (conversationId: string): Promise<boolean> => {
-    const data = await post<{ status: boolean }>(`/api/user/messages/${conversationId}/leave`);
-    return data.status;
-  };
 
   // Mutation for leaving conversation
   const { mutateAsync: leaveConversationMutation, isPending: isLeaving } = useMutation({
     mutationFn: leaveConversationFn,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["userConversations"] });
+      queryClient.invalidateQueries({ queryKey: userMessagesKeys.conversations() });
     },
-    onError: (error) => {
-      console.error("Failed to leave conversation:", error);
+    onError: () => {
+      // Error handled by mutation error state
     },
   });
 
@@ -379,3 +398,45 @@ export const useUserMessages = (): UseUserMessagesReturn => {
   };
 };
 
+// Hook for fetching a single conversation by ID
+export const useConversation = (conversationId: string | undefined) => {
+  const { isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
+
+  const {
+    data: conversation,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: userMessagesKeys.conversation(conversationId!),
+    queryFn: () => fetchConversationById(conversationId!),
+    enabled: !!conversationId && isAuthenticated,
+    staleTime: 0, // Always consider data stale to allow refetching
+    retry: (failureCount, error) => {
+      if (error.message.includes("Unauthorized") || error.message.includes("not found")) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+  });
+
+  // Update the conversations cache when this conversation is fetched
+  useEffect(() => {
+    if (conversation) {
+      queryClient.setQueryData<Conversation[]>(userMessagesKeys.conversations(), (oldData) => {
+        if (!oldData) return oldData;
+        return oldData.map((conv) => (conv._id === conversationId ? conversation : conv));
+      });
+    }
+  }, [conversation, conversationId, queryClient]);
+
+  return {
+    conversation: conversation || null,
+    isLoading,
+    isError,
+    error: error as Error | null,
+    refetch,
+  };
+};

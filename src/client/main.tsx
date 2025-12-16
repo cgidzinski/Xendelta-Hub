@@ -147,9 +147,19 @@ const router = createBrowserRouter(
   )
 );
 
+import { SPACING, BORDER_RADIUS, ANIMATION_DURATION, Z_INDEX } from "./constants/design";
+import "./theme/types";
+
 const theme = createTheme({
   palette: {
     mode: "dark",
+  },
+  // Extend theme with custom design tokens
+  custom: {
+    spacing: SPACING,
+    borderRadius: BORDER_RADIUS,
+    animationDuration: ANIMATION_DURATION,
+    zIndex: Z_INDEX,
   },
 });
 
@@ -181,7 +191,11 @@ ReactDOM.createRoot(rootElement).render(
       <CssBaseline />
       <AuthProvider>
         <NavBarProvider>
-          <SnackbarProvider maxSnack={10} autoHideDuration={2500}>
+          <SnackbarProvider 
+            maxSnack={10} 
+            autoHideDuration={2500}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          >
             {/* <LoadingBox> */}
             <RouterProvider router={router} />
             {/* </LoadingBox> */}
