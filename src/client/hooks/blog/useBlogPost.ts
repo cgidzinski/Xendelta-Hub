@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { apiClient, getApiUrl } from "../../config/api";
+import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 import { BlogPost } from "../../types";
 
@@ -17,7 +17,7 @@ export const blogPostKeys = {
 
 // API functions
 const fetchBlogPost = async (slug: string): Promise<BlogPost> => {
-  const response = await apiClient.get<ApiResponse<BlogPostResponse>>(getApiUrl(`api/blog/${slug}`));
+  const response = await apiClient.get<ApiResponse<BlogPostResponse>>(`/api/blog/${slug}`);
   return response.data.data!.post;
 };
 

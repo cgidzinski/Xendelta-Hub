@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { apiClient, getApiUrl } from "../../config/api";
+import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 import { BlogPost } from "../../types";
 
@@ -31,7 +31,7 @@ export const blogKeys = {
 
 // API functions
 const fetchBlogPosts = async (page: number = 1, limit: number = 10): Promise<BlogResponse> => {
-  const response = await apiClient.get<ApiResponse<BlogResponse>>(getApiUrl("api/blog"), {
+  const response = await apiClient.get<ApiResponse<BlogResponse>>("/api/blog", {
     params: {
       page: page.toString(),
       limit: limit.toString(),

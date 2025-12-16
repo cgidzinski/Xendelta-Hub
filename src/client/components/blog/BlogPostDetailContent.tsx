@@ -14,9 +14,70 @@ import { CalendarToday, Person, ArrowBack, Star } from "@mui/icons-material";
 import { format } from "date-fns";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { BlogPost } from "../../../../types";
-import LoadingSpinner from "../../../../components/LoadingSpinner";
-import ErrorDisplay from "../../../../components/ErrorDisplay";
+import { BlogPost } from "../../../types";
+import LoadingSpinner from "../LoadingSpinner";
+import ErrorDisplay from "../ErrorDisplay";
+
+const markdownStyles = {
+  "& p": {
+    mb: 2,
+    lineHeight: 1.8,
+  },
+  "& h1, & h2, & h3, & h4, & h5, & h6": {
+    mt: 4,
+    mb: 2,
+    fontWeight: 700,
+  },
+  "& h1": { fontSize: "2.5rem" },
+  "& h2": { fontSize: "2rem" },
+  "& h3": { fontSize: "1.75rem" },
+  "& h4": { fontSize: "1.5rem" },
+  "& ul, & ol": {
+    mb: 2,
+    pl: 4,
+  },
+  "& li": {
+    mb: 1,
+  },
+  "& code": {
+    backgroundColor: "action.selected",
+    padding: "2px 6px",
+    borderRadius: 1,
+    fontFamily: "monospace",
+  },
+  "& pre": {
+    backgroundColor: "background.default",
+    padding: 2,
+    borderRadius: 2,
+    overflow: "auto",
+    mb: 2,
+    "& code": {
+      backgroundColor: "transparent",
+      padding: 0,
+    },
+  },
+  "& blockquote": {
+    borderLeft: "4px solid",
+    borderColor: "primary.main",
+    pl: 2,
+    ml: 0,
+    fontStyle: "italic",
+    mb: 2,
+  },
+  "& a": {
+    color: "primary.main",
+    textDecoration: "none",
+    "&:hover": {
+      textDecoration: "underline",
+    },
+  },
+  "& img": {
+    maxWidth: "100%",
+    height: "auto",
+    borderRadius: 2,
+    mb: 2,
+  },
+};
 
 interface BlogPostDetailContentProps {
   blogBasePath: string;
@@ -132,72 +193,10 @@ export default function BlogPostDetailContent({
 
       <Divider sx={{ my: 4 }} />
 
-      <Paper
-        elevation={0}
-        sx={{
-          p: 3,
-          "& p": {
-            mb: 2,
-            lineHeight: 1.8,
-          },
-          "& h1, & h2, & h3, & h4, & h5, & h6": {
-            mt: 4,
-            mb: 2,
-            fontWeight: 700,
-          },
-          "& h1": { fontSize: "2.5rem" },
-          "& h2": { fontSize: "2rem" },
-          "& h3": { fontSize: "1.75rem" },
-          "& h4": { fontSize: "1.5rem" },
-          "& ul, & ol": {
-            mb: 2,
-            pl: 4,
-          },
-          "& li": {
-            mb: 1,
-          },
-          "& code": {
-            backgroundColor: "action.selected",
-            padding: "2px 6px",
-            borderRadius: 1,
-            fontFamily: "monospace",
-          },
-          "& pre": {
-            backgroundColor: "background.default",
-            padding: 2,
-            borderRadius: 2,
-            overflow: "auto",
-            mb: 2,
-            "& code": {
-              backgroundColor: "transparent",
-              padding: 0,
-            },
-          },
-          "& blockquote": {
-            borderLeft: "4px solid",
-            borderColor: "primary.main",
-            pl: 2,
-            ml: 0,
-            fontStyle: "italic",
-            mb: 2,
-          },
-          "& a": {
-            color: "primary.main",
-            textDecoration: "none",
-            "&:hover": {
-              textDecoration: "underline",
-            },
-          },
-          "& img": {
-            maxWidth: "100%",
-            height: "auto",
-            borderRadius: 2,
-            mb: 2,
-          },
-        }}
-      >
+      <Paper elevation={0} sx={{ p: 3, ...markdownStyles }}>
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.markdown}</ReactMarkdown>
       </Paper>
     </Container>
   );
 }
+

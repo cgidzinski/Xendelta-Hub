@@ -24,13 +24,13 @@ import CloseIcon from "@mui/icons-material/Close";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useState, useRef } from "react";
 import { formatDistance } from "date-fns";
-import { useNavBar } from "../contexts/NavBarContext";
-import { useUserProfile } from "../hooks/user/useUserProfile";
-import { useUserNotifications } from "../hooks/user/useUserNotifications";
-import { Notification } from "../types";
-import LoadingSpinner from "./LoadingSpinner";
+import { useNavBar } from "../../contexts/NavBarContext";
+import { useUserProfile } from "../../hooks/user/useUserProfile";
+import { useUserNotifications } from "../../hooks/user/useUserNotifications";
+import { Notification } from "../../types";
+import LoadingSpinner from "../LoadingSpinner";
 import BaseNavBar, { NavItem } from "./BaseNavBar";
-import { useNavBarSocket } from "../hooks/useNavBarSocket";
+import { useNavBarSocket } from "../../hooks/useNavBarSocket";
 
 export default function Root() {
   const location = useLocation();

@@ -1,7 +1,6 @@
-import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useTitle } from "../../../hooks/useTitle";
-import BlogPostDetailContent from "../../External/BlogPublic/components/BlogPostDetailContent";
+import BlogPostDetailContent from "../../../components/blog/BlogPostDetailContent";
 import { BlogPost } from "../../../types";
 import { useBlogPost } from "../../../hooks/blog/useBlogPost";
 

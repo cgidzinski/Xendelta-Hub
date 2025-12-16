@@ -23,15 +23,12 @@ import {
   Palette,
   Language,
   VolumeUp,
-  Wifi,
   Lock,
 } from "@mui/icons-material";
 import { useTitle } from "../../../hooks/useTitle";
-import { useAuth } from "../../../contexts/AuthContext";
 import { useState } from "react";
 
 export default function Settings() {
-  const { user } = useAuth();
   useTitle("Settings");
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(true);

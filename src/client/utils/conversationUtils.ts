@@ -10,10 +10,10 @@ export function getParticipantDisplay(
   if (!conversation.participantInfo) {
     // Fallback if participantInfo is not available
     const otherParticipants = conversation.participants.filter(
-      (p) => p !== currentUserId && p !== "system"
+      (p) => p !== currentUserId
     );
     if (otherParticipants.length === 0) {
-      return conversation.participants.includes("system") ? "System" : "You";
+      return "You";
     }
     if (otherParticipants.length === 1) {
       return `User ${otherParticipants[0].substring(0, 8)}`;
@@ -22,11 +22,11 @@ export function getParticipantDisplay(
   }
 
   const otherParticipants = conversation.participantInfo.filter(
-    (p) => p._id !== currentUserId && p._id !== "system"
+    (p) => p._id !== currentUserId
   );
 
   if (otherParticipants.length === 0) {
-    return conversation.participants.includes("system") ? "System" : "You";
+    return "You";
   }
 
   if (otherParticipants.length === 1) {
@@ -44,7 +44,6 @@ export function getParticipantDisplayById(
   currentUserId?: string,
   participantInfo?: ParticipantInfo[]
 ): string {
-  if (participantId === "system") return "System";
   if (participantId === currentUserId) return "You";
 
   // Try to find in participantInfo
@@ -55,26 +54,3 @@ export function getParticipantDisplayById(
 
   return `User ${participantId.substring(0, 8)}`;
 }
-
-/**
- * Get initials for a conversation avatar
- */
-export function getParticipantInitials(
-  conversation: Conversation,
-  currentUserId?: string
-): string {
-  const otherParticipants = conversation.participants.filter(
-    (p) => p !== currentUserId && p !== "system"
-  );
-
-  if (otherParticipants.length === 0) {
-    return "S";
-  }
-
-  if (otherParticipants.length === 1) {
-    return otherParticipants[0].substring(0, 1).toUpperCase();
-  }
-
-  return "G";
-}
-

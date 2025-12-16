@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { apiClient, getApiUrl } from "../../config/api";
+import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 import { useSocket } from "../useSocket";
 import { userProfileKeys } from "./useUserProfile";
@@ -38,17 +38,17 @@ export const userNotificationKeys = {
 
 // API functions
 const fetchUserNotifications = async (): Promise<Notification[]> => {
-  const response = await apiClient.get<ApiResponse<{ notifications: Notification[] }>>(getApiUrl("api/user/notifications"));
+  const response = await apiClient.get<ApiResponse<{ notifications: Notification[] }>>("/api/user/notifications");
   return response.data.data!.notifications;
 };
 
 const markAllNotificationsAsRead = async (): Promise<Notification[]> => {
-  const response = await apiClient.put<ApiResponse<{ notifications: Notification[] }>>(getApiUrl("api/user/notifications/mark-read"));
+  const response = await apiClient.put<ApiResponse<{ notifications: Notification[] }>>("/api/user/notifications/mark-read");
   return response.data.data!.notifications;
 };
 
 const markNotificationAsRead = async (notificationId: string): Promise<Notification> => {
-  const response = await apiClient.put<ApiResponse<{ notification: Notification }>>(getApiUrl(`api/user/notifications/${notificationId}/mark-read`));
+  const response = await apiClient.put<ApiResponse<{ notification: Notification }>>(`/api/user/notifications/${notificationId}/mark-read`);
   return response.data.data!.notification;
 };
 

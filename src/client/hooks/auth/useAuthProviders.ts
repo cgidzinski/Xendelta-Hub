@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient, getApiUrl } from "../../config/api";
+import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 
 // Types
@@ -42,12 +42,12 @@ export const authProviderKeys = {
 const fetchAuthProvidersData = async (): Promise<AuthProvidersData> => {
   // Note: This endpoint returns { success, providers, canUnlinkLocal } directly
   // Not wrapped in data field like standard ApiResponse
-  const response = await apiClient.get<AuthProvidersData>(getApiUrl("api/user/auth-providers"));
+  const response = await apiClient.get<AuthProvidersData>("/api/user/auth-providers");
   return response.data;
 };
 
 const linkGoogleAccountRequest = async (): Promise<LinkProviderResponse> => {
-  const response = await apiClient.post<LinkProviderResponse>(getApiUrl("api/user/link-google"));
+  const response = await apiClient.post<LinkProviderResponse>("/api/user/link-google");
   const data = response.data;
 
   if (data.success && data.redirectUrl) {
@@ -61,7 +61,7 @@ const linkGoogleAccountRequest = async (): Promise<LinkProviderResponse> => {
 };
 
 const linkGitHubAccountRequest = async (): Promise<LinkProviderResponse> => {
-  const response = await apiClient.post<LinkProviderResponse>(getApiUrl("api/user/link-github"));
+  const response = await apiClient.post<LinkProviderResponse>("/api/user/link-github");
   const data = response.data;
 
   if (data.success && data.redirectUrl) {
@@ -75,14 +75,14 @@ const linkGitHubAccountRequest = async (): Promise<LinkProviderResponse> => {
 };
 
 const unlinkProviderRequest = async (provider: string): Promise<UnlinkProviderResponse> => {
-  const response = await apiClient.post<ApiResponse<UnlinkProviderResponse>>(getApiUrl("api/user/unlink-provider"), {
+  const response = await apiClient.post<ApiResponse<UnlinkProviderResponse>>("/api/user/unlink-provider", {
     provider,
   });
   return response.data.data!;
 };
 
 const addPasswordRequest = async (password: string): Promise<AddPasswordResponse> => {
-  const response = await apiClient.post<ApiResponse<AddPasswordResponse>>(getApiUrl("api/user/add-password"), {
+  const response = await apiClient.post<ApiResponse<AddPasswordResponse>>("/api/user/add-password", {
     password,
   });
   return response.data.data!;

@@ -107,7 +107,7 @@ export default function HeroSection({ mousePosition }: HeroSectionProps) {
               direction={{ xs: "column", sm: "row" }}
               spacing={2}
               justifyContent="center"
-              sx={{ mb: 6 }}
+              sx={{ mb: 2 }}
             >
               <Button
                 variant="contained"
@@ -179,6 +179,21 @@ export default function HeroSection({ mousePosition }: HeroSectionProps) {
                 Get Started
               </Button>
             </Stack>
+            <Typography
+              variant="body1"
+              sx={{
+                color: "text.secondary",
+                opacity: 0.85,
+                textAlign: "center",
+                fontStyle: "italic",
+                mb: 3,
+                mt: 3,
+                fontSize: { xs: "0.95rem", md: "1rem" },
+                fontWeight: 400,
+              }}
+            >
+              Note: This information is fictional and for demonstration purposes only.
+            </Typography>
           </Box>
         </Container>
       </Box>

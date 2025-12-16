@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient, getApiUrl } from "../../config/api";
+import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 
 // Types
@@ -60,7 +60,7 @@ const checkAuthStatus = async (): Promise<AuthUser | null> => {
 
   // Note: Auth verify endpoint doesn't use standard ApiResponse format
   // It returns { status, user, token } directly
-  const response = await apiClient.post<AuthVerifyResponse>(getApiUrl("api/auth/verify"));
+  const response = await apiClient.post<AuthVerifyResponse>("/api/auth/verify");
   const data = response.data;
   
   if (data.status && data.user) {
@@ -83,7 +83,7 @@ const checkAuthStatus = async (): Promise<AuthUser | null> => {
 };
 
 const loginUser = async (username: string, password: string): Promise<LoginResponse> => {
-  const response = await apiClient.post<LoginResponse>(getApiUrl("api/auth/login"), {
+  const response = await apiClient.post<LoginResponse>("/api/auth/login", {
     username,
     password,
   });
@@ -98,7 +98,7 @@ const loginUser = async (username: string, password: string): Promise<LoginRespo
 };
 
 const signupUser = async (signupData: SignupData): Promise<SignupResponse> => {
-  const response = await apiClient.post<SignupResponse>(getApiUrl("api/auth/signup"), signupData);
+  const response = await apiClient.post<SignupResponse>("/api/auth/signup", signupData);
 
   const data = response.data;
   
@@ -110,12 +110,12 @@ const signupUser = async (signupData: SignupData): Promise<SignupResponse> => {
 };
 
 const resetPasswordRequest = async (email: string): Promise<boolean> => {
-  await apiClient.post(getApiUrl("api/auth/forgot-password"), { email });
+  await apiClient.post("/api/auth/forgot-password", { email });
   return true;
 };
 
 const verifyResetTokenRequest = async (token: string, email: string): Promise<VerifyResetTokenResponse> => {
-  const response = await apiClient.post<VerifyResetTokenResponse>(getApiUrl("api/auth/verify-reset-token"), {
+  const response = await apiClient.post<VerifyResetTokenResponse>("/api/auth/verify-reset-token", {
     token,
     email,
   });
@@ -127,7 +127,7 @@ const resetPasswordWithTokenRequest = async (
   newPassword: string,
   email: string
 ): Promise<ResetPasswordResponse> => {
-  const response = await apiClient.post<ResetPasswordResponse>(getApiUrl("api/auth/reset-password"), {
+  const response = await apiClient.post<ResetPasswordResponse>("/api/auth/reset-password", {
     token,
     newPassword,
     email,

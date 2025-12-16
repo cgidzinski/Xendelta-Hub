@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient, getApiUrl } from "../../config/api";
+import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 import { userProfileKeys } from "../user/useUserProfile";
 
@@ -24,20 +24,20 @@ export const adminUsersKeys = {
 
 // API functions
 const fetchUsers = async (): Promise<User[]> => {
-  const response = await apiClient.get<ApiResponse<UsersResponse>>(getApiUrl("api/admin/users"));
+  const response = await apiClient.get<ApiResponse<UsersResponse>>("/api/admin/users");
   return response.data.data!.users;
 };
 
 const updateUser = async (userId: string, updates: { roles?: string[] }): Promise<void> => {
-  await apiClient.put(getApiUrl(`api/admin/users/${userId}`), updates);
+  await apiClient.put(`/api/admin/users/${userId}`, updates);
 };
 
 const deleteUser = async (userId: string): Promise<void> => {
-  await apiClient.delete(getApiUrl(`api/admin/users/${userId}`));
+  await apiClient.delete(`/api/admin/users/${userId}`);
 };
 
 const resetUserAvatar = async (userId: string): Promise<void> => {
-  await apiClient.post(getApiUrl(`api/admin/users/${userId}/avatar/reset`));
+  await apiClient.post(`/api/admin/users/${userId}/avatar/reset`);
 };
 
 // Hooks

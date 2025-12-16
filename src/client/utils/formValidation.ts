@@ -94,11 +94,3 @@ export const validateSignupPassword = (password: string): string | undefined => 
     requireNumber: true,
   });
 };
-
-// Combined password validation for reset (weaker requirements)
-export const validateResetPassword = (password: string): string | undefined => {
-  return validatePassword(password, {
-    minLength: 6,
-  });
-};
-

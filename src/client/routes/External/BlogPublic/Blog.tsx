@@ -1,8 +1,7 @@
-import React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Box } from "@mui/material";
 import LandingHeader from "../../../components/LandingHeader";
-import BlogContent, { BlogPost, PaginationInfo } from "./components/BlogContent";
+import BlogContent, { BlogPost, PaginationInfo } from "../../../components/blog/BlogContent";
 import { useBlog } from "../../../hooks/blog/useBlog";
 
 export default function Blog() {

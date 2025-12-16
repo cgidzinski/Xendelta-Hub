@@ -16,7 +16,7 @@ import {
 import MenuIcon from "@mui/icons-material/Menu";
 import CssBaseline from "@mui/material/CssBaseline";
 import { useNavigate } from "react-router-dom";
-import ProfileListItem from "./ProfileListItem";
+import ProfileListItem from "../ProfileListItem";
 
 const DRAWER_WIDTH = 240;
 
@@ -97,7 +97,7 @@ export default function BaseNavBar({
               component="div"
               sx={{
                 fontWeight: 700,
-                background: "linear-gradient(90deg, #b000b0 0%, #c000c0 50%, #d000d0 100%)",
+                background: "linear-gradient(90deg, #2196f3 0%, #1e88e5 50%, #1976d2 100%)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",

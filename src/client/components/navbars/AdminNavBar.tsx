@@ -4,9 +4,9 @@ import SecurityIcon from "@mui/icons-material/Security";
 import PeopleIcon from "@mui/icons-material/People";
 import ArticleIcon from "@mui/icons-material/Article";
 import HomeIcon from "@mui/icons-material/Home";
-import { useNavBar } from "../contexts/NavBarContext";
+import { useNavBar } from "../../contexts/NavBarContext";
 import BaseNavBar, { NavItem } from "./BaseNavBar";
-import { useNavBarSocket } from "../hooks/useNavBarSocket";
+import { useNavBarSocket } from "../../hooks/useNavBarSocket";
 
 export default function AdminNavBar() {
   const location = useLocation();

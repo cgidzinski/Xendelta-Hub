@@ -1,24 +1,9 @@
 /**
  * API Configuration
- * Centralized API URL helper and axios instance setup
+ * Centralized axios instance setup with authentication and error handling
  */
 
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
-
-/**
- * Get API URL from path
- * Uses relative paths - Vite proxy will handle routing to backend
- */
-export const getApiUrl = (path: string): string => {
-  // Remove leading slash if present
-  let cleanPath = path.startsWith("/") ? path.slice(1) : path;
-  // Remove "api/" prefix if already present (to avoid /api/api/...)
-  if (cleanPath.startsWith("api/")) {
-    cleanPath = cleanPath.slice(4);
-  }
-  // Use relative path - Vite proxy will forward /api/* to backend
-  return `/api/${cleanPath}`;
-};
 
 /**
  * Create axios instance with request interceptor for authentication
@@ -81,9 +66,7 @@ const createAxiosInstance = (): AxiosInstance => {
         } else if (status === 400 && data?.errors && Array.isArray(data.errors)) {
           // Validation errors
           const errorMessages = data.errors.map((err: { path: string; message: string }) => err.message).join(", ");
-          const error = new Error(errorMessages || data.message || "Validation failed");
-          (error as any).validationErrors = data.errors;
-          throw error;
+          throw new Error(errorMessages || data.message || "Validation failed");
         } else {
           throw new Error(data?.message || `Request failed: ${error.response.statusText}`);
         }
@@ -102,4 +85,3 @@ const createAxiosInstance = (): AxiosInstance => {
 
 // Export configured axios instance
 export const apiClient = createAxiosInstance();
-

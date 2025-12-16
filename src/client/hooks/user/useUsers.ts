@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
-import { apiClient, getApiUrl } from "../../config/api";
+import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 
 // Types
@@ -23,7 +23,7 @@ export const usersKeys = {
 
 // API functions
 const fetchUsers = async (): Promise<User[]> => {
-  const response = await apiClient.get<ApiResponse<UsersResponse>>(getApiUrl("api/users"));
+  const response = await apiClient.get<ApiResponse<UsersResponse>>("/api/users");
   return response.data.data!.users;
 };
 

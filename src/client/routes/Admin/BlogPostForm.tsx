@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Container,
@@ -18,7 +18,7 @@ import {
 } from "@mui/icons-material";
 import { useNavigate, useParams } from "react-router-dom";
 import { useSnackbar } from "notistack";
-import { BlogPost as BlogPostType, BlogAssetWithMetadata } from "../../types";
+import { BlogAssetWithMetadata } from "../../types";
 import { useAdminBlog } from "../../hooks/admin/useAdminBlog";
 import FormFields from "./BlogPostForm/components/FormFields";
 import AssetManager from "./BlogPostForm/components/AssetManager";

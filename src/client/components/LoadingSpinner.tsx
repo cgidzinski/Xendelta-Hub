@@ -1,4 +1,3 @@
-import React from "react";
 import { Box, CircularProgress, Typography } from "@mui/material";
 
 interface LoadingSpinnerProps {
@@ -9,13 +8,13 @@ interface LoadingSpinnerProps {
   overlay?: boolean;
 }
 
-export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
+export function LoadingSpinner({
   size = 40,
   color = "primary",
   message,
   fullScreen = false,
   overlay = false,
-}) => {
+}: LoadingSpinnerProps) {
   const spinnerContent = (
     <Box
       sx={{
@@ -33,9 +32,6 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
           height: "100vh",
           zIndex: 9999,
           backgroundColor: "rgba(0, 0, 0, 0.5)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
         }),
         ...(overlay &&
           !fullScreen && {
@@ -107,23 +103,14 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
       {spinnerContent}
     </Box>
   );
-};
+}
 
-// Convenience components for common use cases
-export const FullScreenSpinner: React.FC<{ message?: string }> = ({ message }) => (
-  <LoadingSpinner fullScreen message={message} size={60} />
-);
+interface OverlaySpinnerProps {
+  message?: string;
+}
 
-export const OverlaySpinner: React.FC<{ message?: string }> = ({ message }) => (
-  <LoadingSpinner overlay message={message} />
-);
-
-export const InlineSpinner: React.FC<{ message?: string; size?: number }> = ({ message, size = 24 }) => (
-  <LoadingSpinner message={message} size={size} />
-);
-
-export const ButtonSpinner: React.FC<{ size?: number }> = ({ size = 20 }) => (
-  <CircularProgress size={size} color="inherit" thickness={4} />
-);
+export function OverlaySpinner({ message }: OverlaySpinnerProps) {
+  return <LoadingSpinner overlay message={message} />;
+}
 
 export default LoadingSpinner;

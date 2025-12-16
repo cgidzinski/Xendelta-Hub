@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient, getApiUrl } from "../../config/api";
+import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 import { userProfileKeys } from "./useUserProfile";
 
@@ -23,12 +23,12 @@ const uploadAvatar = async (file: File): Promise<AvatarUploadResponseData> => {
   const formData = new FormData();
   formData.append("avatar", file);
 
-  const response = await apiClient.post<ApiResponse<AvatarUploadResponseData>>(getApiUrl("api/user/avatar"), formData);
+  const response = await apiClient.post<ApiResponse<AvatarUploadResponseData>>("/api/user/avatar", formData);
   return response.data.data!;
 };
 
 const makeAdmin = async (): Promise<MakeAdminResponse> => {
-  const response = await apiClient.post<ApiResponse<MakeAdminResponse>>(getApiUrl("api/user/make-admin"));
+  const response = await apiClient.post<ApiResponse<MakeAdminResponse>>("/api/user/make-admin");
   return response.data.data!;
 };
 

@@ -31,7 +31,7 @@ export default function HighlightsSection({ highlights }: HighlightsSectionProps
 
         <Grid container spacing={3} sx={{ mb: 6 }} justifyContent="center">
           {highlights.map((highlight, index) => (
-            <Grid item xs={12} sm={6} key={index}>
+            <Grid size={{ xs: 12, sm: 6 }} key={index}>
               <Box
                 sx={{
                   display: "flex",

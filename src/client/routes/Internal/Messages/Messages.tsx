@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Container,
@@ -39,7 +39,7 @@ export default function Messages() {
   useTitle("Messages");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { conversations, isLoading, isFetching, isError, error, createConversation, isCreatingConversation } = useUserMessages();
+  const { conversations, isLoading, isError, error, createConversation, isCreatingConversation } = useUserMessages();
   const { profile, refetch: refetchProfile } = useUserProfile();
   const { socket } = useSocket();
   const { enqueueSnackbar } = useSnackbar();
@@ -54,38 +54,15 @@ export default function Messages() {
     if (!socket) return;
 
     const handleNewMessage = (data: { conversationId: string; message: any }) => {
-      // Check if this is a system message - backend sends senderUsername: "System" for system messages
-      const isSystemMessage = data.message.senderUsername === "System" || data.message.isSystemMessage || data.message.from === "system";
-      
       // Force refetch conversations list when new message arrives
       queryClient.invalidateQueries({ queryKey: ["userConversations"], exact: false });
       refetchProfile();
-      
-      // Show notification for system messages
-      if (isSystemMessage) {
-        const messagePreview = data.message.message?.substring(0, 50) || "New system message";
-        enqueueSnackbar(`System message: ${messagePreview}${data.message.message?.length > 50 ? '...' : ''}`, {
-          variant: "info",
-          autoHideDuration: 5000,
-        });
-      }
     };
 
     const handleNewConversation = (data: { conversation: Conversation }) => {
-      // Check if this is a system conversation
-      const isSystemConversation = data.conversation.participants?.includes("system") || data.conversation.name === "System Messages";
-      
       // Force refetch conversations list when new conversation is created
       queryClient.invalidateQueries({ queryKey: ["userConversations"], exact: false });
       refetchProfile();
-      
-      // Show notification for system conversations
-      if (isSystemConversation) {
-        enqueueSnackbar("You have received a new system message", {
-          variant: "info",
-          autoHideDuration: 5000,
-        });
-      }
     };
 
     socket.on("message:new", handleNewMessage);
@@ -95,7 +72,7 @@ export default function Messages() {
       socket.off("message:new", handleNewMessage);
       socket.off("conversation:new", handleNewConversation);
     };
-  }, [socket, queryClient, refetchProfile, enqueueSnackbar]);
+  }, [socket, queryClient, refetchProfile]);
 
 
 

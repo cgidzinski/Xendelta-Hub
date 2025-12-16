@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Box, Typography, CircularProgress } from "@mui/material";
 import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
-import { apiClient, getApiUrl } from "../config/api";
-import { ApiResponse } from "../types/api";
+import { useAuth } from "../../contexts/AuthContext";
+import { apiClient } from "../../config/api";
+import { ApiResponse } from "../../types/api";
 
 interface AdminRouteProps {
   children: React.ReactNode;
@@ -27,7 +27,7 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
         return;
       }
 
-      const response = await apiClient.get<ApiResponse<{ roles: string[] }>>(getApiUrl("api/auth/roles/verify"));
+      const response = await apiClient.get<ApiResponse<{ roles: string[] }>>("/api/auth/roles/verify");
       const data = response.data.data!;
       if (isMounted) {
         const hasAdminRole = data.roles?.some((role: string) => role.toLowerCase() === "admin") || false;

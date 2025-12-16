@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Container,
@@ -21,13 +21,11 @@ import PersonIcon from "@mui/icons-material/Person";
 import LockIcon from "@mui/icons-material/Lock";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { useTitle } from "../../hooks/useTitle";
-import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import { useAdmin } from "../../hooks/admin/useAdmin";
 
 export default function Admin() {
-  const { profile } = useUserProfile();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const {

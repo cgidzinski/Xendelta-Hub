@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiClient, getApiUrl } from "../../config/api";
+import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 
 // Types
@@ -37,12 +37,12 @@ export const adminKeys = {
 
 // API functions
 const fetchAdminRole = async (): Promise<string[]> => {
-  const response = await apiClient.get<ApiResponse<RolesResponse>>(getApiUrl("api/auth/roles/verify"));
+  const response = await apiClient.get<ApiResponse<RolesResponse>>("/api/auth/roles/verify");
   return response.data.data!.roles;
 };
 
 const sendMessageToAllUsers = async (message: string, conversationTitle?: string): Promise<SendMessageResponse> => {
-  const response = await apiClient.post<ApiResponse<SendMessageResponse>>(getApiUrl("api/admin/messages/all"), {
+  const response = await apiClient.post<ApiResponse<SendMessageResponse>>("/api/admin/messages/all", {
     message,
     conversationTitle: conversationTitle?.trim() || undefined,
   });
@@ -54,7 +54,7 @@ const sendNotificationToAllUsers = async (
   message: string,
   icon: string = "announcement"
 ): Promise<SendNotificationResponse> => {
-  const response = await apiClient.post<ApiResponse<SendNotificationResponse>>(getApiUrl("api/admin/notifications/all"), {
+  const response = await apiClient.post<ApiResponse<SendNotificationResponse>>("/api/admin/notifications/all", {
     title,
     message,
     icon,
@@ -63,7 +63,7 @@ const sendNotificationToAllUsers = async (
 };
 
 const deleteAllMessagesData = async (): Promise<DeleteMessagesResponse> => {
-  const response = await apiClient.delete<ApiResponse<DeleteMessagesResponse>>(getApiUrl("api/admin/messages/all"));
+  const response = await apiClient.delete<ApiResponse<DeleteMessagesResponse>>("/api/admin/messages/all");
   return response.data.data!;
 };
 

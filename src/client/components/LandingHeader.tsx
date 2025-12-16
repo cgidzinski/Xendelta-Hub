@@ -1,4 +1,3 @@
-import React from "react";
 import {
   AppBar,
   Toolbar,
@@ -22,7 +21,7 @@ export default function LandingHeader() {
             onClick={() => navigate("/")}
             sx={{
               fontWeight: 700,
-              background: "linear-gradient(90deg, #b000b0 0%, #c000c0 50%, #d000d0 100%)",
+              background: "linear-gradient(90deg, #2196f3 0%, #1e88e5 50%, #1976d2 100%)",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
               backgroundClip: "text",
@@ -76,10 +75,10 @@ export default function LandingHeader() {
               py: 1,
               fontWeight: 600,
               backgroundColor: "primary.main",
-              boxShadow: "0 0 20px rgba(176, 0, 176, 0.3)",
+              boxShadow: "0 0 20px rgba(33, 150, 243, 0.3)",
               "&:hover": {
                 backgroundColor: "primary.dark",
-                boxShadow: "0 0 30px rgba(176, 0, 176, 0.5)",
+                boxShadow: "0 0 30px rgba(33, 150, 243, 0.5)",
               },
             }}
           >

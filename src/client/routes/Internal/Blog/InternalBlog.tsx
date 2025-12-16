@@ -1,7 +1,6 @@
-import React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTitle } from "../../../hooks/useTitle";
-import BlogContent, { BlogPost, PaginationInfo } from "../../External/BlogPublic/components/BlogContent";
+import BlogContent from "../../../components/blog/BlogContent";
 import { useBlog } from "../../../hooks/blog/useBlog";
 
 export default function InternalBlog() {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Box } from "@mui/material";
 import { TrendingUp, Security, Speed, Group } from "@mui/icons-material";
 import LandingHeader from "../../../components/LandingHeader";

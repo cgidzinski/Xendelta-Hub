@@ -26,7 +26,7 @@ export default function StatsSection({ stats }: StatsSectionProps) {
       <Container maxWidth="lg">
         <Grid container spacing={4} justifyContent="center">
           {stats.map((stat, index) => (
-            <Grid item xs={6} md={3} key={index}>
+            <Grid size={{ xs: 6, md: 3 }} key={index}>
               <Card
                 elevation={0}
                 sx={{

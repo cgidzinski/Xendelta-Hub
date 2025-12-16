@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient, getApiUrl } from "../../config/api";
+import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 import { BlogPost, BlogAssetWithMetadata } from "../../types";
 import { blogKeys } from "../blog/useBlog";
@@ -40,22 +40,22 @@ export const adminBlogKeys = {
 
 // API functions
 const fetchAdminBlogPosts = async (): Promise<BlogPost[]> => {
-  const response = await apiClient.get<ApiResponse<BlogPostsResponse>>(getApiUrl("api/admin/blog"));
+  const response = await apiClient.get<ApiResponse<BlogPostsResponse>>("/api/admin/blog");
   return response.data.data!.posts;
 };
 
 const createBlogPost = async (payload: CreateBlogPostPayload): Promise<BlogPost> => {
-  const response = await apiClient.post<ApiResponse<{ post: BlogPost }>>(getApiUrl("api/admin/blog"), payload);
+  const response = await apiClient.post<ApiResponse<{ post: BlogPost }>>("/api/admin/blog", payload);
   return response.data.data!.post;
 };
 
 const updateBlogPost = async (id: string, payload: UpdateBlogPostPayload): Promise<BlogPost> => {
-  const response = await apiClient.put<ApiResponse<{ post: BlogPost }>>(getApiUrl(`api/admin/blog/${id}`), payload);
+  const response = await apiClient.put<ApiResponse<{ post: BlogPost }>>(`/api/admin/blog/${id}`, payload);
   return response.data.data!.post;
 };
 
 const deleteBlogPost = async (id: string): Promise<void> => {
-  await apiClient.delete(getApiUrl(`api/admin/blog/${id}`));
+  await apiClient.delete(`/api/admin/blog/${id}`);
 };
 
 const uploadBlogAsset = async (file: File, postId?: string): Promise<BlogAssetUploadResponse> => {
@@ -65,12 +65,12 @@ const uploadBlogAsset = async (file: File, postId?: string): Promise<BlogAssetUp
     formData.append("postId", postId);
   }
 
-  const response = await apiClient.post<ApiResponse<BlogAssetUploadResponse>>(getApiUrl("api/admin/blog/upload-asset"), formData);
+  const response = await apiClient.post<ApiResponse<BlogAssetUploadResponse>>("/api/admin/blog/upload-asset", formData);
   return response.data.data!;
 };
 
 const deleteBlogAsset = async (postId: string, assetUrl: string): Promise<void> => {
-  await apiClient.delete(getApiUrl(`api/admin/blog/asset?postId=${postId}&assetUrl=${encodeURIComponent(assetUrl)}`));
+  await apiClient.delete(`/api/admin/blog/asset?postId=${postId}&assetUrl=${encodeURIComponent(assetUrl)}`);
 };
 
 // Hooks

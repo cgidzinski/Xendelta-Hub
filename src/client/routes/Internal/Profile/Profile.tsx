@@ -20,11 +20,6 @@ import { useUserAvatar } from "../../../hooks/user/useUserAvatar";
 import ProfileHeader from "./components/ProfileHeader";
 import AvatarUploadSection from "./components/AvatarUploadSection";
 export default function Profile() {
-  const [notifications, setNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(true);
-  const [autoSave, setAutoSave] = useState(true);
-  const [volume, setVolume] = useState(70);
-  const [language, setLanguage] = useState("en");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null); // Preview for selected file only
   const [mainAvatarUrl, setMainAvatarUrl] = useState<string | null>(null); // Main avatar from profile

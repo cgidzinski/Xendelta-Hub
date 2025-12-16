@@ -1,39 +1,47 @@
 import * as ReactDOM from "react-dom/client";
-import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route, Navigate } from "react-router-dom";
+import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route } from "react-router-dom";
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import { SnackbarProvider } from "notistack";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+// Components
 import ErrorPage from "./components/ErrorPage";
-import NavBar from "./components/NavBar";
-import ProtectedRoute from "./components/ProtectedRoute";
-import UnprotectedRoute from "./components/UnprotectedRoute";
-import AdminRoute from "./components/AdminRoute";
-import AdminNavBar from "./components/AdminNavBar";
-import React from "react";
-import Home from "./routes/Internal/Home/Home";
+import NavBar from "./components/navbars/NavBar";
+import ProtectedRoute from "./components/routeguards/ProtectedRoute";
+import UnprotectedRoute from "./components/routeguards/UnprotectedRoute";
+import AdminRoute from "./components/routeguards/AdminRoute";
+import AdminNavBar from "./components/navbars/AdminNavBar";
+
+// Contexts
+import { NavBarProvider } from "./contexts/NavBarContext";
+import { AuthProvider } from "./contexts/AuthContext";
+
+// Routes - External
+import Landing from "./routes/External/Landing/Landing";
+import Features from "./routes/External/Features/Features";
+import Blog from "./routes/External/BlogPublic/Blog";
+import BlogPostDetail from "./routes/External/BlogPublic/BlogPostDetail";
 import Login from "./routes/External/Auth/Login";
 import Signup from "./routes/External/Auth/Signup";
 import Reset from "./routes/External/Auth/Reset";
 import Logout from "./routes/External/Auth/Logout";
 import AuthCallback from "./routes/External/Auth/AuthCallback";
-// import LoadingBox from "./components/LoadingBox";
-import { NavBarProvider } from "./contexts/NavBarContext";
-import { AuthProvider } from "./contexts/AuthContext";
+
+// Routes - Internal
+import Home from "./routes/Internal/Home/Home";
 import Profile from "./routes/Internal/Profile/Profile";
 import Settings from "./routes/Internal/Settings/Settings";
 import Messages from "./routes/Internal/Messages/Messages";
 import ConversationDetail from "./routes/Internal/Messages/ConversationDetail";
+import InternalBlog from "./routes/Internal/Blog/InternalBlog";
+import InternalBlogPostDetail from "./routes/Internal/Blog/InternalBlogPostDetail";
+
+// Routes - Admin
 import Admin from "./routes/Admin/Admin";
 import Users from "./routes/Admin/Users";
 import AdminBlog from "./routes/Admin/Blog";
 import BlogPostForm from "./routes/Admin/BlogPostForm";
-import Landing from "./routes/External/Landing/Landing";
-import Features from "./routes/External/Features/Features";
-import Blog from "./routes/External/BlogPublic/Blog";
-import BlogPostDetail from "./routes/External/BlogPublic/BlogPostDetail";
-import InternalBlog from "./routes/Internal/Blog/InternalBlog";
-import InternalBlogPostDetail from "./routes/Internal/Blog/InternalBlogPostDetail";
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -67,11 +75,7 @@ const router = createBrowserRouter(
         errorElement={<ErrorPage />}
       />
       <Route path="/logout" element={<Logout />} errorElement={<ErrorPage />} />
-      <Route
-        path="/auth/callback"
-        element={<AuthCallback />}
-        errorElement={<ErrorPage />}
-      />
+      <Route path="/auth/callback" element={<AuthCallback />} errorElement={<ErrorPage />} />
       {/* Landing page - public, redirects authenticated users */}
       <Route
         path="/"
@@ -147,19 +151,14 @@ const router = createBrowserRouter(
   )
 );
 
-import { SPACING, BORDER_RADIUS, ANIMATION_DURATION, Z_INDEX } from "./constants/design";
-import "./theme/types";
-
 const theme = createTheme({
   palette: {
     mode: "dark",
-  },
-  // Extend theme with custom design tokens
-  custom: {
-    spacing: SPACING,
-    borderRadius: BORDER_RADIUS,
-    animationDuration: ANIMATION_DURATION,
-    zIndex: Z_INDEX,
+    primary: {
+      main: "#2196f3",
+      light: "#42a5f5",
+      dark: "#1976d2",
+    },
   },
 });
 
@@ -170,7 +169,7 @@ const queryClient = new QueryClient({
       staleTime: 5 * 60 * 1000, // 5 minutes
       retry: (failureCount, error) => {
         // Don't retry on 401 errors
-        if (error.message.includes('Unauthorized')) {
+        if (error.message.includes("Unauthorized")) {
           return false;
         }
         return failureCount < 3;
@@ -191,14 +190,12 @@ ReactDOM.createRoot(rootElement).render(
       <CssBaseline />
       <AuthProvider>
         <NavBarProvider>
-          <SnackbarProvider 
-            maxSnack={10} 
+          <SnackbarProvider
+            maxSnack={10}
             autoHideDuration={2500}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
           >
-            {/* <LoadingBox> */}
             <RouterProvider router={router} />
-            {/* </LoadingBox> */}
           </SnackbarProvider>
         </NavBarProvider>
       </AuthProvider>

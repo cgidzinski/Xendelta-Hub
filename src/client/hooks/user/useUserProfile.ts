@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
-import { apiClient, getApiUrl } from "../../config/api";
+import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 
 // Types
@@ -38,12 +38,12 @@ export const userProfileKeys = {
 
 // API functions
 const fetchCurrentUserProfile = async (): Promise<UserProfile> => {
-  const response = await apiClient.get<ApiResponse<{ user: UserProfile }>>(getApiUrl("api/user/profile"));
+  const response = await apiClient.get<ApiResponse<{ user: UserProfile }>>("/api/user/profile");
   return response.data.data!.user;
 };
 
 const updateCurrentUserProfile = async (data: UpdateProfileData): Promise<UserProfile> => {
-  const response = await apiClient.put<ApiResponse<{ user: UserProfile }>>(getApiUrl("api/user/profile"), data);
+  const response = await apiClient.put<ApiResponse<{ user: UserProfile }>>("/api/user/profile", data);
   return response.data.data!.user;
 };
 
