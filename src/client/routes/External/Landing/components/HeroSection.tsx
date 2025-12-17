@@ -1,4 +1,4 @@
-import { Box, Container, Typography, Button, Stack, Chip } from "@mui/material";
+import { Box, Container, Typography, Button, Stack, Chip, Alert } from "@mui/material";
 import { Login as LoginIcon, PersonAdd, ArrowForward } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 
@@ -199,6 +199,31 @@ export default function HeroSection({ mousePosition }: HeroSectionProps) {
                 Get Started
               </Button>
             </Stack>
+            <Box sx={{ maxWidth: 600, mx: "auto", mt: 4, mb: 2 }}>
+              <Alert 
+                severity="info"
+                icon={false}
+                sx={{
+                  backgroundColor: "rgba(0, 245, 255, 0.1)",
+                  border: "1px solid",
+                  borderColor: "primary.main",
+                  borderRadius: 2,
+                  "& .MuiAlert-message": {
+                    width: "100%",
+                  },
+                }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                  🎯 Demo Account Available
+                </Typography>
+                <Typography variant="body2" component="div">
+                  Want to explore? Use demo credentials: <strong>testuser</strong> / <strong>Password123</strong>
+                </Typography>
+                <Typography variant="caption" sx={{ display: "block", mt: 1, opacity: 0.8 }}>
+                  Click "Sign In" above to get started instantly!
+                </Typography>
+              </Alert>
+            </Box>
             <Typography
               variant="body1"
               sx={{
