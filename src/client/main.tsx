@@ -25,7 +25,6 @@ import BlogPostDetail from "./routes/External/BlogPublic/BlogPostDetail";
 import Login from "./routes/External/Auth/Login";
 import Signup from "./routes/External/Auth/Signup";
 import Reset from "./routes/External/Auth/Reset";
-import Logout from "./routes/External/Auth/Logout";
 import AuthCallback from "./routes/External/Auth/AuthCallback";
 
 // Routes - Internal
@@ -76,7 +75,6 @@ const router = createBrowserRouter(
         }
         errorElement={<ErrorPage />}
       />
-      <Route path="/logout" element={<Logout />} errorElement={<ErrorPage />} />
       <Route path="/auth/callback" element={<AuthCallback />} errorElement={<ErrorPage />} />
       {/* Landing page - public, redirects authenticated users */}
       <Route

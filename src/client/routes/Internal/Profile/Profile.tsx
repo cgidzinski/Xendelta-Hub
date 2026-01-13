@@ -15,6 +15,7 @@ import { OverlaySpinner } from "../../../components/LoadingSpinner";
 import { useSnackbar } from "notistack";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "../../../contexts/AuthContext";
 import AuthProviderManager from "./components/AuthProviderManager";
 import { useUserAvatar } from "../../../hooks/user/useUserAvatar";
 import ProfileHeader from "./components/ProfileHeader";
@@ -27,6 +28,7 @@ export default function Profile() {
   const [isUploading, setIsUploading] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
   const { profile, isLoading, refetch } = useUserProfile();
+  const { logout } = useAuth();
   const { uploadAvatar, isUploading: isUploadingAvatar } = useUserAvatar();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -175,7 +177,14 @@ export default function Profile() {
                       Logout of your account
                     </Typography>
                   </Box>
-                  <Button variant="outlined" size="small" color="error" onClick={() => navigate("/logout")}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="error"
+                    onClick={() => {
+                      logout();
+                    }}
+                  >
                     Logout
                   </Button>
                 </Box>

@@ -87,11 +87,7 @@ export default function Login() {
     if (success) {
       // Redirect to the page they were trying to access, or internal by default
       const from = location.state?.from?.pathname;
-      if (from === "/logout") {
-        navigate("/internal");
-      } else {
-        navigate(from || "/internal", { replace: true });
-      }
+      navigate(from || "/internal", { replace: true });
     } else {
       setErrors({ general: "Invalid username or password" });
     }

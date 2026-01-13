@@ -226,9 +226,20 @@ export const useAuthHook = () => {
 
   const logout = () => {
     localStorage.removeItem("token");
-    // Clear all queries to remove any cached user data
-    queryClient.clear();
+    // Set auth status to null first (this updates isAuthenticated to false)
     queryClient.setQueryData(authKeys.status(), null);
+    // Remove all queries except auth to clear cached user data
+    const allQueries = queryClient.getQueryCache().getAll();
+    const authKey = authKeys.status();
+    allQueries.forEach((query) => {
+      // Compare query keys - if it's not the auth query, remove it
+      if (JSON.stringify(query.queryKey) !== JSON.stringify(authKey)) {
+        queryClient.removeQueries({ queryKey: query.queryKey });
+      }
+    });
+    // Force a refetch/invalidation of the auth query to ensure re-render
+    // But since there's no token, it will return null
+    queryClient.invalidateQueries({ queryKey: authKeys.status() });
   };
 
   const login = async (username: string, password: string): Promise<boolean> => {
