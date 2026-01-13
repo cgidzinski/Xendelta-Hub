@@ -173,14 +173,14 @@ export default function AssetManager({
                                 size="small"
                                 variant="outlined"
                                 onClick={() => {
-                                  const markdownCode = asset.type.startsWith("image/")
-                                    ? `![${title}](${asset.path})`
-                                    : `[${title}](${asset.path})`;
-                                  navigator.clipboard.writeText(markdownCode);
-                                  enqueueSnackbar("Markdown copied to clipboard", { variant: "success" });
+                                  const htmlCode = asset.type.startsWith("image/")
+                                    ? `<div align="center">\n  <img src="${asset.path}" alt="${title}" />\n</div>`
+                                    : `<a href="${asset.path}" target="_blank" rel="noopener noreferrer">${title}</a>`;
+                                  navigator.clipboard.writeText(htmlCode);
+                                  enqueueSnackbar("HTML copied to clipboard", { variant: "success" });
                                 }}
                               >
-                                Copy Markdown
+                                Copy HTML
                               </Button>
                             </Box>
                           </Box>

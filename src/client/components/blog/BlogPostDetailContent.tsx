@@ -14,7 +14,8 @@ import { CalendarToday, Person, ArrowBack, Star } from "@mui/icons-material";
 import { format } from "date-fns";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { BlogPost } from "../../../types";
+import rehypeRaw from "rehype-raw";
+import { BlogPost } from "../../types/BlogPost";
 import LoadingSpinner from "../LoadingSpinner";
 import ErrorDisplay from "../ErrorDisplay";
 
@@ -76,6 +77,14 @@ const markdownStyles = {
     height: "auto",
     borderRadius: 2,
     mb: 2,
+  },
+  "& div": {
+    mb: 2,
+    "&[align='center']": {
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+    },
   },
 };
 
@@ -194,7 +203,9 @@ export default function BlogPostDetailContent({
       <Divider sx={{ my: 4 }} />
 
       <Paper elevation={0} sx={{ p: 3, ...markdownStyles }}>
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.markdown}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+          {post.markdown}
+        </ReactMarkdown>
       </Paper>
     </Container>
   );
