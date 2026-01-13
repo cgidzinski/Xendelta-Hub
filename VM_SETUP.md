@@ -19,6 +19,7 @@ This guide walks you through setting up a production server for Xendelta Hub on 
 6. [SSL Certificate Setup](#ssl-certificate-setup)
 7. [PM2 Startup Configuration](#pm2-startup-configuration)
 8. [SSH Key Setup (Optional)](#ssh-key-setup-optional)
+9. [Adding Additional Subdomains](#adding-additional-subdomains)
 
 ---
 
@@ -85,8 +86,6 @@ MONGODB_URI=mongodb://localhost:27017/xendelta-hub
 # MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/xendelta-hub
 
 # Email Service Configuration
-SENDGRID_API_KEY=your_sendgrid_api_key_here
-# OR use Resend instead:
 RESEND_API_KEY=your_resend_api_key_here
 
 # JWT Configuration
@@ -186,7 +185,8 @@ sudo npm install -g pm2
 Start your application with PM2:
 
 ```bash
-pm2 start server.js
+cd ~/Xendelta-Hub
+pm2 start npm --name "xendelta-hub" -- start
 ```
 
 PM2 will keep your application running in the background and automatically restart it if it crashes.
@@ -282,20 +282,6 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
-
-    # Additional app routes can be added here
-    # Example:
-    # location /app2/ {
-    #     proxy_pass http://localhost:3001;
-    #     proxy_http_version 1.1;
-    #     proxy_set_header Upgrade $http_upgrade;
-    #     proxy_set_header Connection "upgrade";
-    #     proxy_set_header Host $host;
-    #     proxy_set_header X-Real-IP $remote_addr;
-    #     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    #     proxy_set_header X-Forwarded-Proto $scheme;
-    #     proxy_read_timeout 86400;
-    # }
 }
 ```
 
@@ -402,6 +388,133 @@ Certbot automatically renews certificates, but you can test renewal manually:
 ```bash
 sudo certbot renew --dry-run
 ```
+
+---
+
+## Adding Additional Subdomains
+
+To add another subdomain (e.g., `demo.xendelta.com`), follow these steps:
+
+### 1. Update DNS
+
+Add an A record for your subdomain pointing to your server's IP address in your DNS provider.
+
+### 2. Create New Nginx Config File
+
+Create a new config file for the subdomain:
+
+```bash
+sudo vi /etc/nginx/sites-available/demo.xendelta.com.conf
+```
+
+Add this configuration (replace `demo.xendelta.com` with your subdomain and `3001` with your desired port):
+
+```nginx
+# HTTP redirect to HTTPS
+server {
+    listen 80;
+    listen [::]:80;
+    
+    server_name demo.xendelta.com;
+    
+    return 301 https://demo.xendelta.com$request_uri;
+}
+
+# Main HTTPS server block
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    
+    server_name demo.xendelta.com;
+
+    # SSL certificates managed by Certbot
+    # Note: Initially use main domain cert, then update after getting subdomain cert
+    ssl_certificate /etc/letsencrypt/live/xendelta.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/xendelta.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Increase client body size limit for file uploads (if needed)
+    client_max_body_size 100M;
+
+    # WebSocket route (if needed)
+    location /socket.io/ {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+    }
+
+    # Main application route
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### 3. Enable the Site
+
+```bash
+sudo ln -s /etc/nginx/sites-available/demo.xendelta.com.conf /etc/nginx/sites-enabled/
+```
+
+### 4. Test Nginx Configuration
+
+```bash
+sudo nginx -t
+```
+
+### 5. Get SSL Certificate
+
+```bash
+sudo certbot certonly --nginx -d demo.xendelta.com
+```
+
+Certbot will create a new certificate for the subdomain. After it completes, update the certificate paths in your config file.
+
+### 6. Update the Config with New Certificate Path
+
+Edit the config again:
+
+```bash
+sudo vi /etc/nginx/sites-available/demo.xendelta.com.conf
+```
+
+Change the certificate lines to:
+
+```nginx
+ssl_certificate /etc/letsencrypt/live/demo.xendelta.com/fullchain.pem;
+ssl_certificate_key /etc/letsencrypt/live/demo.xendelta.com/privkey.pem;
+```
+
+### 7. Reload Nginx
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### 8. Start Your Application on the New Port
+
+Make sure your application is running on the specified port (e.g., 3001). Update the `PORT` in your `.env` file, then start with PM2:
+
+```bash
+cd /path/to/your/app
+pm2 start npm --name "demo-app" -- start
+pm2 save
+```
+
+> **Note:** Each subdomain can run on a different port. Make sure to make the `PORT` environment variable in the .env and the Nginx `proxy_pass` directive to match.
 
 ---
 
