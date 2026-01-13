@@ -15,9 +15,9 @@ const { Server: SocketIOServer } = require("socket.io");
 
 const app = express();
 app.use(cors());
-// Increase body size limits for file uploads (10MB should be enough for avatars and blog assets)
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: false, limit: '10mb' }));
+// Increase body size limits for file uploads (100MB to accommodate blog/recipaint assets and xenbox chunks (xenbox uses 10MB chunks, ~13-14MB base64 encoded))
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: false, limit: '100mb' }));
 // app.use(logger("dev"));
 app.use(cookieParser());
 app.use(passport.initialize());
@@ -59,3 +59,4 @@ require("./routes/blog.ts")(app);
 require("./routes/admin/blog.ts")(app);
 require("./routes/admin/users.ts")(app);
 require("./routes/admin/messages.ts")(app);
+require("./routes/recipaint.ts")(app);

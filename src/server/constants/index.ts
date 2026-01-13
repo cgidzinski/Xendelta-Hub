@@ -3,7 +3,11 @@
  */
 
 // File upload limits
-export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes (for avatars)
+export const MAX_BLOG_ASSET_SIZE = 50 * 1024 * 1024; // 50MB in bytes (for blog assets)
+export const MAX_RECIPAINT_ASSET_SIZE = 10 * 1024 * 1024; // 10MB in bytes (for recipaint assets)
+export const MAX_XENBOX_SIZE = 5 * 1024 * 1024 * 1024; // 5GB in bytes (for xenbox)
+export const XENBOX_CHUNK_SIZE = 10 * 1024 * 1024; // 10MB in bytes (chunk size for xenbox uploads)
 
 // Image processing constants
 export const AVATAR_WIDTH = 500;

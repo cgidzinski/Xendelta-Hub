@@ -18,7 +18,7 @@ function getFileExtension(filename: string): string {
 }
 
 /**
- * Determine content type and extension from file extension
+ * Determine content type and extension from file extension (for images only)
  */
 function detectFileType(file: Express.Multer.File): { contentType: string; ext: string } {
   const ext = getFileExtension(file.originalname);
@@ -33,6 +33,38 @@ function detectFileType(file: Express.Multer.File): { contentType: string; ext: 
     contentType = "image/gif";
   } else {
     throw new Error(`Unsupported file type. Extension: ${ext || "none"}`);
+  }
+
+  return { contentType, ext };
+}
+
+/**
+ * Determine content type and extension from file extension (for all file types)
+ */
+function detectFileTypeGeneric(file: Express.Multer.File): { contentType: string; ext: string } {
+  const ext = getFileExtension(file.originalname);
+  const extLower = ext.toLowerCase();
+
+  // Use the file's mimetype if available, otherwise detect from extension
+  let contentType = file.mimetype || "application/octet-stream";
+  
+  // Override with more specific types based on extension if mimetype is generic
+  if (contentType === "application/octet-stream" || contentType === "application/x-msdownload") {
+    if (extLower === "jpg" || extLower === "jpeg") {
+      contentType = "image/jpeg";
+    } else if (extLower === "png") {
+      contentType = "image/png";
+    } else if (extLower === "gif") {
+      contentType = "image/gif";
+    } else if (extLower === "pdf") {
+      contentType = "application/pdf";
+    } else if (extLower === "zip") {
+      contentType = "application/zip";
+    } else if (extLower === "txt") {
+      contentType = "text/plain";
+    } else if (extLower === "json") {
+      contentType = "application/json";
+    }
   }
 
   return { contentType, ext };
@@ -91,8 +123,8 @@ export async function uploadBlogAsset(
     throw new Error("File buffer is missing");
   }
 
-  // Detect file type
-  const { contentType, ext } = detectFileType(file);
+  // Detect file type (supports all file types)
+  const { contentType, ext } = detectFileTypeGeneric(file);
 
   // Use the provided filename (should already include extension)
   // If filename doesn't have extension, add it
@@ -120,6 +152,44 @@ export function generateUniqueFilename(originalName: string): string {
   const timestamp = Date.now();
   const random = Math.round(Math.random() * 1e9);
   return `${sanitizedBase}-${timestamp}-${random}.${ext}`;
+}
+
+/**
+ * Upload recipaint asset to public GCS bucket
+ * @param file - The uploaded file
+ * @param filename - Filename with extension (e.g., "image-1234567890.jpg")
+ * @returns Object with URL, filename, mimeType, and size
+ */
+export async function uploadRecipaintAsset(
+  file: Express.Multer.File,
+  filename: string
+): Promise<{ url: string; filename: string; mimeType: string; size: number }> {
+  if (!file.buffer) {
+    throw new Error("File buffer is missing");
+  }
+
+  // Detect file type (images only)
+  const { contentType, ext } = detectFileType(file);
+
+  // Validate that it's an allowed image type
+  if (!ALLOWED_IMAGE_MIMES.includes(contentType as any)) {
+    throw new Error(`Recipaint asset must be an image. Detected type: ${contentType}, extension: ${ext}`);
+  }
+
+  // Use the provided filename (should already include extension)
+  // If filename doesn't have extension, add it
+  const finalFilename = filename.includes(".") ? filename : `${filename}.${ext}`;
+
+  // Upload to public GCS bucket in recipaint-assets folder (no processing, upload as-is)
+  const gcsPath = `recipaint-assets/${finalFilename}`;
+  const publicUrl = await uploadToGCS(file.buffer, gcsPath, contentType) as string;
+
+  return {
+    url: publicUrl,
+    filename: finalFilename,
+    mimeType: contentType,
+    size: file.buffer.length,
+  };
 }
 
 /**

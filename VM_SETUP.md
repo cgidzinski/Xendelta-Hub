@@ -257,8 +257,9 @@ server {
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
-    # Increase client body size limit for file uploads (avatars, blog assets, etc.)
-    client_max_body_size 10M;
+    # Increase client body size limit for file uploads (avatars, blog assets, recipaint assets, xenbox chunks)
+    # Blog/recipaint assets: 50MB/10MB, Xenbox chunks: ~13-14MB base64 encoded
+    client_max_body_size 100M;
 
     # WebSocket route
     location /socket.io/ {
