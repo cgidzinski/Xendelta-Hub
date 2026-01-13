@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Socket } from "socket.io-client";
-import { Conversation, Message } from "../../types";
+import { Conversation } from "../types/Conversation";
+import { Message } from "../types/Message";
 import { userMessagesKeys } from "./user/useUserMessages";
 import { userProfileKeys } from "./user/useUserProfile";
 

@@ -3,7 +3,7 @@ import { Box, Typography, Avatar, IconButton, Paper } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { format } from "date-fns";
 import DOMPurify from "dompurify";
-import { Message } from "../../../types";
+import { Message } from "../../../../types/Message";
 
 interface MessageBlockProps {
   message: Message;

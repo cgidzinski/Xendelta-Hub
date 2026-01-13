@@ -17,7 +17,7 @@ import {
 } from "@mui/material";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import { Conversation } from "../../../types";
+import { Conversation } from "../../../../types/Conversation";
 
 interface UsersModalProps {
   open: boolean;

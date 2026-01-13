@@ -4,7 +4,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SettingsIcon from "@mui/icons-material/Settings";
 import PeopleIcon from "@mui/icons-material/People";
 import { useNavigate } from "react-router-dom";
-import { Conversation } from "../../../types";
+import { Conversation } from "../../../../types/Conversation";
 
 interface ConversationHeaderProps {
   conversation: Conversation;

@@ -299,6 +299,9 @@ module.exports = function (app: express.Application) {
     conversation.markModified('messages');
     await conversation.save();
 
+    // Get the saved message with _id from the array (Mongoose adds _id after save)
+    const savedMessage = conversation.messages[conversation.messages.length - 1];
+
     // Get sender username for socket notification
     const senderUsername = user.username;
 
@@ -320,7 +323,7 @@ module.exports = function (app: express.Application) {
     // Send socket notification to all participants
     const socketManager = SocketManager.getInstance();
     const messageWithUsername = {
-      ...newMessage,
+      ...savedMessage,
       senderUsername: senderUsername,
     };
     socketManager.sendNewMessage(conversationId, messageWithUsername, conversation.participants);
@@ -391,6 +394,9 @@ module.exports = function (app: express.Application) {
     conversation.markModified('messages');
     await conversation.save();
 
+    // Get the saved reply message with _id from the array (Mongoose adds _id after save)
+    const savedReplyMessage = conversation.messages[conversation.messages.length - 1];
+
     // Get sender username for socket notification
     const senderUsername = user.username;
 
@@ -412,7 +418,7 @@ module.exports = function (app: express.Application) {
     // Send socket notification
     const socketManager = SocketManager.getInstance();
     const replyWithUsername = {
-      ...replyMessage,
+      ...savedReplyMessage,
       senderUsername: senderUsername,
     };
     socketManager.sendNewMessage(conversationId, replyWithUsername, conversation.participants);

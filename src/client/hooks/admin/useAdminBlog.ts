@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
-import { BlogPost, BlogAssetWithMetadata } from "../../types";
+import { BlogPost } from "../../types/BlogPost";
+import { BlogAssetWithMetadata } from "../../types/BlogAssetWithMetadata";
 import { blogKeys } from "../blog/useBlog";
 import { blogPostKeys } from "../blog/useBlogPost";
 

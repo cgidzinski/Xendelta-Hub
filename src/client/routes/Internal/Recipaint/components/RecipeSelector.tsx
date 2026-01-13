@@ -61,6 +61,7 @@ export default function RecipeSelector({ open, onClose, onSelect, excludeRecipeI
         />
 
         <RecipieList
+          title="My Recipes"
           recipes={filteredRecipes}
           isLoading={isLoading}
           isError={isError}

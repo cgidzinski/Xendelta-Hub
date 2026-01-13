@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Avatar } from "@mui/material";
-import { Conversation } from "../../../../types";
+import { Conversation } from "../../../../types/Conversation";
 import { useUserProfile } from "../../../../hooks/user/useUserProfile";
 
 interface StackedAvatarsProps {

@@ -12,7 +12,7 @@ import {
   FormControlLabel,
   Divider,
 } from "@mui/material";
-import { Conversation } from "../../../types";
+import { Conversation } from "../../../../types/Conversation";
 
 interface SettingsModalProps {
   open: boolean;

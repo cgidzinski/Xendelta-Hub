@@ -1,5 +1,5 @@
 import { Box, Stack, Typography, FormControlLabel, Switch } from "@mui/material";
-import { BlogAssetWithMetadata } from "../../../../types";
+import { BlogAssetWithMetadata } from "../../../../types/BlogAssetWithMetadata";
 
 interface PublishSettingsProps {
   featured: boolean;

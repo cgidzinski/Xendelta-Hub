@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Box, Typography } from "@mui/material";
-import { Message } from "../../../types";
+import { Message } from "../../../../types/Message";
 import MessageBlock from "./MessageBlock";
 
 interface ConversationBodyProps {

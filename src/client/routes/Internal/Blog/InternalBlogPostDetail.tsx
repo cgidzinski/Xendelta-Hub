@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useTitle } from "../../../hooks/useTitle";
 import BlogPostDetailContent from "../../../components/blog/BlogPostDetailContent";
-import { BlogPost } from "../../../types";
+import { BlogPost } from "../../../types/BlogPost";
 import { useBlogPost } from "../../../hooks/blog/useBlogPost";
 
 export default function InternalBlogPostDetail() {

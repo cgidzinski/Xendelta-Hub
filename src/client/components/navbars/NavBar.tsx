@@ -29,7 +29,7 @@ import { formatDistance } from "date-fns";
 import { useNavBar } from "../../contexts/NavBarContext";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { useUserNotifications } from "../../hooks/user/useUserNotifications";
-import { Notification } from "../../types";
+import { Notification } from "../../types/Notification";
 import LoadingSpinner from "../LoadingSpinner";
 import BaseNavBar, { NavItem } from "./BaseNavBar";
 import { useNavBarSocket } from "../../hooks/useNavBarSocket";

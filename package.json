@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "nodemon -w src/server -x tsx src/server/server.ts",
     "start": "cross-env NODE_ENV=production tsx src/server/server.ts",
-    "build": "vite build"
+    "build": "vite build",
+    "type-check": "npm run type-check:server && npm run type-check:client",
+    "type-check:server": "tsc --noEmit --project src/server/tsconfig.json",
+    "type-check:client": "tsc --noEmit --project src/client/tsconfig.json"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

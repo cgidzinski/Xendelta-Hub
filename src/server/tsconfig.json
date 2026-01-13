@@ -1,11 +1,11 @@
 {
-  "extends": "./tsconfig.base.json",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ESNext"],
     "allowJs": false,
     "module": "NodeNext",
     "moduleResolution": "NodeNext"
   },
-  "include": ["src/server"],
-  "exclude": ["src/client", "node_modules"]
+  "include": ["."],
+  "exclude": ["node_modules"]
 }

@@ -1,6 +1,7 @@
 import { Dialog, Box, Typography } from "@mui/material";
 import BlogPostDetailContent from "../../../../components/blog/BlogPostDetailContent";
-import { BlogPost as BlogPostType, BlogAssetWithMetadata } from "../../../../types";
+import { BlogPost as BlogPostType } from "../../../../types/BlogPost";
+import { BlogAssetWithMetadata } from "../../../../types/BlogAssetWithMetadata";
 
 interface PreviewPanelProps {
   open: boolean;

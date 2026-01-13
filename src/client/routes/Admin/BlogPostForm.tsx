@@ -18,7 +18,7 @@ import {
 } from "@mui/icons-material";
 import { useNavigate, useParams } from "react-router-dom";
 import { useSnackbar } from "notistack";
-import { BlogAssetWithMetadata } from "../../types";
+import { BlogAssetWithMetadata } from "../../types/BlogAssetWithMetadata";
 import { useAdminBlog } from "../../hooks/admin/useAdminBlog";
 import FormFields from "./BlogPostForm/components/FormFields";
 import AssetManager from "./BlogPostForm/components/AssetManager";

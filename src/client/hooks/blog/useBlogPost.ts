@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
-import { BlogPost } from "../../types";
+import { BlogPost } from "../../types/BlogPost";
 
 // Types
 interface BlogPostResponse {

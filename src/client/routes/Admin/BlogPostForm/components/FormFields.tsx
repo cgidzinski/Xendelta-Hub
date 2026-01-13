@@ -1,5 +1,5 @@
 import { Stack, TextField, Box, Typography, Chip, InputAdornment, Button, FormControlLabel, Switch } from "@mui/material";
-import { BlogAssetWithMetadata } from "../../../../types";
+import { BlogAssetWithMetadata } from "../../../../types/BlogAssetWithMetadata";
 
 interface FormFieldsProps {
   title: string;

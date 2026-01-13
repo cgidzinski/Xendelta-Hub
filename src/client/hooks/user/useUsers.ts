@@ -29,7 +29,7 @@ const fetchUsers = async (): Promise<User[]> => {
 
 // Hooks
 export const useUsers = () => {
-  const { profile, isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
   const {
     data: users,
@@ -51,14 +51,7 @@ export const useUsers = () => {
   });
 
   // Filter out current user
-  const otherUsers = users?.filter((user) => user._id !== profile?._id) || [];
+  const otherUsers = users?.filter((user) => user._id !== user._id) || [];
 
-  return {
-    users: otherUsers,
-    allUsers: users || [],
-    isLoading,
-    isError,
-    error: error as Error | null,
-    refetch,
-  };
+  return { users: otherUsers, allUsers: users || [], isLoading, isError, error: error as Error | null, refetch };
 };

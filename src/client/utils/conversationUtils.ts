@@ -1,4 +1,5 @@
-import { Conversation, ParticipantInfo } from "../types";
+import { Conversation } from "../types/Conversation";
+import { ParticipantInfo } from "../types/ParticipantInfo";
 
 /**
  * Get display name for a conversation based on participants

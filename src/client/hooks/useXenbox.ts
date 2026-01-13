@@ -121,9 +121,14 @@ const deleteXenboxFile = async (fileId: string): Promise<void> => {
 };
 
 // Hook for chunked file uploads
+interface UploadFileParams {
+  file: File;
+  onProgress?: (progress: number) => void;
+}
+
 export const useXenboxUpload = () => {
   const { mutateAsync: uploadFile, isPending: isUploading } = useMutation({
-    mutationFn: async (file: File, onProgress?: (progress: number) => void) => {
+    mutationFn: async ({ file, onProgress }: UploadFileParams): Promise<XenboxUploadResponse> => {
       const totalChunks = calculateTotalChunks(file.size);
       
       // Initiate upload session

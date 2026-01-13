@@ -13,7 +13,7 @@ import {
   Switch,
 } from "@mui/material";
 import { CloudUpload as CloudUploadIcon, Close as CloseIcon, Delete as DeleteIcon } from "@mui/icons-material";
-import { BlogAssetWithMetadata } from "../../../../types";
+import { BlogAssetWithMetadata } from "../../../../types/BlogAssetWithMetadata";
 import { useSnackbar } from "notistack";
 
 interface AssetManagerProps {

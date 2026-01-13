@@ -15,7 +15,7 @@ import {
 } from "@mui/material";
 import { CalendarToday, Person, Star } from "@mui/icons-material";
 import { format } from "date-fns";
-import type { BlogPost } from "../../../types/BlogPost";
+import type { BlogPost } from "../../types/BlogPost";
 
 // Re-export for backward compatibility (BlogPost is an interface/type)
 export type { BlogPost };

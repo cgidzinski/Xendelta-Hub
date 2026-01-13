@@ -15,7 +15,9 @@ import { useParams, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import { useUserMessages, useConversation } from "../../../hooks/user/useUserMessages";
-import { Message, Conversation } from "../../../types";
+import { Message } from "../../../types/Message";
+import { Conversation } from "../../../types/Conversation";
+import { ParticipantInfo } from "../../../types/ParticipantInfo";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
 import { useSocket } from "../../../hooks/useSocket";
 import { useQueryClient } from "@tanstack/react-query";
@@ -142,7 +144,7 @@ export default function ConversationDetail() {
     if (message.from === profile?._id) {
       return profile?.avatar;
     }
-    const participant = conversation?.participantInfo?.find(p => p._id === message.from);
+    const participant: ParticipantInfo | undefined = conversation?.participantInfo?.find(p => p._id === message.from);
     return participant?.avatar;
   };
 

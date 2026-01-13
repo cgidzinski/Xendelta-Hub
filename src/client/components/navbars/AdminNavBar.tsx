@@ -27,7 +27,7 @@ import BaseNavBar, { NavItem } from "./BaseNavBar";
 import { useNavBarSocket } from "../../hooks/useNavBarSocket";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { useUserNotifications } from "../../hooks/user/useUserNotifications";
-import { Notification } from "../../types";
+import { Notification } from "../../types/Notification";
 import LoadingSpinner from "../LoadingSpinner";
 
 export default function AdminNavBar() {
