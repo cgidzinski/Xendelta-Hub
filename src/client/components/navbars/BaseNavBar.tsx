@@ -30,6 +30,8 @@ export interface NavItem {
   icon: React.ReactNode;
   path: string;
   isSelected: (pathname: string) => boolean;
+  type?: "item" | "divider" | "header" | "nested";
+  indent?: boolean;
 }
 
 interface BaseNavBarProps {
@@ -113,17 +115,34 @@ export default function BaseNavBar({
             </Typography>
           </Box>
           <List>
-            {navItems.map((item) => (
-              <ListItem key={item.key} disablePadding>
-                <ListItemButton
-                  onClick={() => navigate(item.path)}
-                  selected={item.isSelected(window.location.pathname)}
-                >
-                  <ListItemIcon>{item.icon}</ListItemIcon>
-                  <ListItemText primary={item.label} />
-                </ListItemButton>
-              </ListItem>
-            ))}
+            {navItems.map((item) => {
+              if (item.type === "divider") {
+                return <Divider key={item.key} variant="middle" component="li" sx={{ my: 1 }} />;
+              }
+              if (item.type === "header") {
+                return (
+                  <ListItem key={item.key} disablePadding>
+                    <Box sx={{ px: 2, py: 1, width: "100%" }}>
+                      <Typography variant="overline" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                        {item.label}
+                      </Typography>
+                    </Box>
+                  </ListItem>
+                );
+              }
+              return (
+                <ListItem key={item.key} disablePadding>
+                  <ListItemButton
+                    onClick={() => navigate(item.path)}
+                    selected={item.isSelected(window.location.pathname)}
+                    sx={item.indent ? { pl: 4 } : {}}
+                  >
+                    <ListItemIcon>{item.icon}</ListItemIcon>
+                    <ListItemText primary={item.label} />
+                  </ListItemButton>
+                </ListItem>
+              );
+            })}
           </List>
 
           <Box sx={{ marginTop: "auto" }}>
@@ -200,6 +219,7 @@ export default function BaseNavBar({
           flexGrow: 1,
           width: "100%",
           ml: 0,
+          minHeight: "100vh",
           transition: (theme) =>
             theme.transitions.create(["width", "margin-left"], {
               easing: theme.transitions.easing.sharp,

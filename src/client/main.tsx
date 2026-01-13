@@ -36,6 +36,8 @@ import Messages from "./routes/Internal/Messages/Messages";
 import ConversationDetail from "./routes/Internal/Messages/ConversationDetail";
 import InternalBlog from "./routes/Internal/Blog/InternalBlog";
 import InternalBlogPostDetail from "./routes/Internal/Blog/InternalBlogPostDetail";
+import Recipaint from "./routes/Internal/Recipaint/Recipaint";
+import RecipeDetail from "./routes/Internal/Recipaint/RecipeDetail";
 
 // Routes - Admin
 import Admin from "./routes/Admin/Admin";
@@ -130,6 +132,8 @@ const router = createBrowserRouter(
         <Route path="messages/:conversationId" element={<ConversationDetail />} />
         <Route path="blog" element={<InternalBlog />} />
         <Route path="blog/:slug" element={<InternalBlogPostDetail />} />
+        <Route path="recipaint" element={<Recipaint />} />
+        <Route path="recipaint/:id" element={<RecipeDetail />} />
       </Route>
       {/* Admin routes - require admin role and use AdminNavBar */}
       <Route

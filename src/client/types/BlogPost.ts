@@ -1,4 +1,4 @@
-import { BlogPostAuthor } from "./BlogPostAuthor";
+import { UserInfo } from "./UserInfo";
 
 /**
  * Blog post interface (as returned from API)
@@ -15,7 +15,7 @@ export interface BlogPost {
   tags: string[];
   featured: boolean;
   published: boolean;
-  author: BlogPostAuthor | null;
+  author: UserInfo | null;
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
 }

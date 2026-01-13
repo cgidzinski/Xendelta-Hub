@@ -9,6 +9,9 @@ import {
   List,
   ListItem,
   Divider,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
 } from "@mui/material";
 import HomeIcon from "@mui/icons-material/Home";
 import ArticleIcon from "@mui/icons-material/Article";
@@ -19,6 +22,7 @@ import AnnouncementIcon from "@mui/icons-material/Announcement";
 import MailIcon from "@mui/icons-material/Mail";
 import LockIcon from "@mui/icons-material/Lock";
 import CloseIcon from "@mui/icons-material/Close";
+import BrushIcon from "@mui/icons-material/Brush";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useState, useRef } from "react";
 import { formatDistance } from "date-fns";
@@ -111,6 +115,30 @@ export default function Root() {
       icon: <ArticleIcon />,
       path: "/internal/blog",
       isSelected: (pathname) => pathname.startsWith("/internal/blog"),
+    },
+    {
+      key: "blog-divider",
+      label: "",
+      icon: null,
+      path: "",
+      isSelected: () => false,
+      type: "divider",
+    },
+    {
+      key: "apps-header",
+      label: "Apps",
+      icon: null,
+      path: "",
+      isSelected: () => false,
+      type: "header",
+    },
+    {
+      key: "recipaint",
+      label: "Recipaint",
+      icon: <BrushIcon />,
+      path: "/internal/recipaint",
+      isSelected: (pathname) => pathname.startsWith("/internal/recipaint"),
+      indent: true,
     },
   ];
 

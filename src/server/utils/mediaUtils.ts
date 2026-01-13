@@ -158,7 +158,7 @@ export function generateUniqueFilename(originalName: string): string {
  * Upload recipaint asset to public GCS bucket
  * @param file - The uploaded file
  * @param filename - Filename with extension (e.g., "image-1234567890.jpg")
- * @returns Object with URL, filename, mimeType, and size
+ * @returns Object with public URL, filename, mimeType, and size
  */
 export async function uploadRecipaintAsset(
   file: Express.Multer.File,
