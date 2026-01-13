@@ -78,7 +78,6 @@ Add the following configuration (replace with your actual values):
 ```env
 # Server Configuration
 PORT=3000
-CLIENT_URL=https://xendelta.com
 
 # Database Configuration
 MONGODB_URI=mongodb://localhost:27017/xendelta-hub

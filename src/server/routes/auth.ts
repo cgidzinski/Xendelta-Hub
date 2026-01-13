@@ -165,9 +165,7 @@ module.exports = function (app: express.Application) {
       user.resetPassword.expires = resetTokenExpiry;
       await user.save();
 
-      const resetUrl = `${
-        process.env.CLIENT_URL || "http://localhost:3000"
-      }/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+      const resetUrl = `http://localhost:${process.env.PORT || "3000"}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
 
       const emailResult = await sendPasswordResetEmail({
         username: user.username,
@@ -330,7 +328,7 @@ module.exports = function (app: express.Application) {
           email: existingUser.email,
         });
         
-        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/auth/callback?token=${token}&linked=true`);
+        res.redirect(`http://localhost:${process.env.PORT || '3000'}/auth/callback?token=${token}&linked=true`);
         return;
       }
     }
@@ -343,7 +341,7 @@ module.exports = function (app: express.Application) {
     });
 
     // Redirect to frontend with token
-    res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/auth/callback?token=${token}`);
+    res.redirect(`http://localhost:${process.env.PORT || '3000'}/auth/callback?token=${token}`);
   };
 
   // Google OAuth Routes
@@ -358,7 +356,7 @@ module.exports = function (app: express.Application) {
         await handleOAuthCallback(req, res, 'google');
       } catch (error) {
         console.error("Google OAuth callback error:", error);
-        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/login?error=oauth_failed`);
+        res.redirect(`http://localhost:${process.env.PORT || '3000'}/login?error=oauth_failed`);
       }
     }
   );
@@ -375,7 +373,7 @@ module.exports = function (app: express.Application) {
         await handleOAuthCallback(req, res, 'github');
       } catch (error) {
         console.error("GitHub OAuth callback error:", error);
-        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/login?error=oauth_failed`);
+        res.redirect(`http://localhost:${process.env.PORT || '3000'}/login?error=oauth_failed`);
       }
     }
   );
