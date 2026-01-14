@@ -53,3 +53,17 @@ export function getGcsPath(folder: string, filename: string): string {
   return `${folder}/${filename}`;
 }
 
+/**
+ * Generate a signed URL for a private GCS file
+ * @param filePath - Path to the file in the private bucket
+ * @param expiryMinutes - Number of minutes until the URL expires (default: 15)
+ * @returns Signed URL string
+ */
+export async function generateSignedUrl(filePath: string, expiryMinutes: number = 15): Promise<string> {
+  const file = privateBucket.file(filePath);
+  const [url] = await file.getSignedUrl({
+    action: "read",
+    expires: Date.now() + expiryMinutes * 60 * 1000,
+  });
+  return url;
+}

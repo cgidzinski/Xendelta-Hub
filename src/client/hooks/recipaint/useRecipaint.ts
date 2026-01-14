@@ -101,6 +101,7 @@ export const useRecipaint = (search?: string) => {
     queryKey: recipaintKeys.list(search),
     queryFn: () => fetchRecipes(search),
     staleTime: 2 * 60 * 1000, // 2 minutes
+    placeholderData: (previousData) => previousData,
     retry: (failureCount, error) => {
       if (error.message.includes("Unauthorized")) {
         return false;

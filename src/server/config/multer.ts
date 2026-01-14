@@ -6,9 +6,7 @@
 
 import multer from "multer";
 import { Request } from "express";
-import path from "path";
-import fs from "fs";
-import { MAX_FILE_SIZE, MAX_BLOG_ASSET_SIZE, MAX_RECIPAINT_ASSET_SIZE, MAX_XENBOX_SIZE, ALLOWED_IMAGE_MIMES } from "../constants";
+import { MAX_FILE_SIZE, MAX_BLOG_ASSET_SIZE, MAX_RECIPAINT_ASSET_SIZE, ALLOWED_IMAGE_MIMES } from "../constants";
 
 // File filter function for images only
 const imageFileFilter = function (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) {
@@ -53,26 +51,3 @@ export const uploadRecipaintAsset = multer({
   fileFilter: imageFileFilter,
 });
 
-// Configure temp directory for xenbox uploads
-const xenboxTempDir = path.join(process.cwd(), "temp", "xenbox");
-if (!fs.existsSync(xenboxTempDir)) {
-  fs.mkdirSync(xenboxTempDir, { recursive: true });
-}
-
-// Configured multer instance for xenbox (disk storage) - accepts all file types
-export const uploadXenbox = multer({
-  storage: multer.diskStorage({
-    destination: function (req, file, cb) {
-      cb(null, xenboxTempDir);
-    },
-    filename: function (req, file, cb) {
-      // Filename will be set by xenboxUtils based on upload session
-      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-      cb(null, `xenbox-${uniqueSuffix}-${file.originalname}`);
-    },
-  }),
-  limits: {
-    fileSize: MAX_XENBOX_SIZE,
-  },
-  fileFilter: allFileFilter,
-});

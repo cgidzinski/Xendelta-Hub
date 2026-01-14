@@ -42,6 +42,10 @@ var userSchema = new mongoose.Schema({
     token: { type: String },
     expires: { type: Date },
   },
+  xenbox:{
+    files: [{ type: Schema.Types.ObjectId, ref: "XenBoxMedia" }],
+    spaceAllowed: { type: Number, default: 1024 * 1024 * 1024 * 1 }, // 1GB
+  }
 });
 userSchema.methods.generateHash = function (password) {
   return bcrypt.hashSync(password, bcrypt.genSaltSync(8), null);

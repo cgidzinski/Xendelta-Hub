@@ -6,26 +6,38 @@ import { AuthenticatedRequest } from "../../types";
 
 module.exports = function (app: express.Application) {
   app.get("/api/admin/users", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
-    const users = await User.find({}, "username email _id roles avatar").exec();
+    const users = await User.find({}, "username email _id roles avatar xenbox").populate("xenbox.files").exec();
     
     return res.json({
       status: true,
       message: "",
       data: {
-        users: users.map((user: any) => ({
-          _id: user._id,
-          username: user.username,
-          email: user.email,
-          roles: (user.roles || []).map((role: string) => role.toLowerCase()),
-          avatar: user.avatar,
-        })),
+        users: users.map((user: any) => {
+          // Calculate quota stats
+          const xenboxFiles = user.xenbox?.files || [];
+          const fileCount = xenboxFiles.length;
+          const spaceUsed = xenboxFiles.reduce((acc: number, file: any) => acc + (file?.size || 0), 0);
+          
+          return {
+            _id: user._id,
+            username: user.username,
+            email: user.email,
+            roles: (user.roles || []).map((role: string) => role.toLowerCase()),
+            avatar: user.avatar,
+            xenbox: {
+              fileCount,
+              spaceUsed,
+              spaceAllowed: user.xenbox?.spaceAllowed || 0,
+            },
+          };
+        }),
       },
     });
   });
 
   app.put("/api/admin/users/:userId", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
     const { userId } = req.params;
-    const { roles } = req.body;
+    const { roles, xenboxQuota } = req.body;
 
     const user = await User.findOne({ _id: userId }).exec();
     if (!user) {
@@ -46,7 +58,27 @@ module.exports = function (app: express.Application) {
       user.roles = roles.map((role: string) => role.toLowerCase());
     }
 
+    if (xenboxQuota !== undefined) {
+      if (typeof xenboxQuota !== "number" || xenboxQuota < 0) {
+        return res.status(400).json({
+          status: false,
+          message: "XenBox quota must be a non-negative number",
+        });
+      }
+      // Initialize xenbox if it doesn't exist
+      if (!user.xenbox) {
+        user.xenbox = { files: [], spaceAllowed: 0 };
+      }
+      user.xenbox.spaceAllowed = xenboxQuota;
+    }
+
     await user.save();
+
+    // Get updated quota stats
+    await user.populate("xenbox.files");
+    const xenboxFiles = user.xenbox?.files || [];
+    const fileCount = xenboxFiles.length;
+    const spaceUsed = xenboxFiles.reduce((acc: number, file: any) => acc + (file?.size || 0), 0);
 
     return res.json({
       status: true,
@@ -57,6 +89,11 @@ module.exports = function (app: express.Application) {
           username: user.username,
           email: user.email,
           roles: user.roles,
+          xenbox: {
+            fileCount,
+            spaceUsed,
+            spaceAllowed: user.xenbox?.spaceAllowed || 0,
+          },
         },
       },
     });

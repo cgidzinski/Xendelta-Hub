@@ -26,6 +26,7 @@ import Login from "./routes/External/Auth/Login";
 import Signup from "./routes/External/Auth/Signup";
 import Reset from "./routes/External/Auth/Reset";
 import AuthCallback from "./routes/External/Auth/AuthCallback";
+import XenBoxDownload from "./routes/External/XenBoxDownload/XenBoxDownload";
 
 // Routes - Internal
 import Home from "./routes/Internal/Home/Home";
@@ -37,6 +38,8 @@ import InternalBlog from "./routes/Internal/Blog/InternalBlog";
 import InternalBlogPostDetail from "./routes/Internal/Blog/InternalBlogPostDetail";
 import Recipaint from "./routes/Internal/Recipaint/Recipaint";
 import RecipeDetail from "./routes/Internal/Recipaint/RecipeDetail";
+import XenBox from "./routes/Internal/XenBox/XenBox";
+import FileDetail from "./routes/Internal/XenBox/FileDetail";
 
 // Routes - Admin
 import Admin from "./routes/Admin/Admin";
@@ -113,6 +116,11 @@ const router = createBrowserRouter(
         }
         errorElement={<ErrorPage />}
       />
+      <Route
+        path="/xenbox/:shareToken"
+        element={<XenBoxDownload />}
+        errorElement={<ErrorPage />}
+      />
       {/* Internal routes - require authentication */}
       <Route
         path="/internal"
@@ -132,6 +140,8 @@ const router = createBrowserRouter(
         <Route path="blog/:slug" element={<InternalBlogPostDetail />} />
         <Route path="recipaint" element={<Recipaint />} />
         <Route path="recipaint/:id" element={<RecipeDetail />} />
+        <Route path="xenbox" element={<XenBox />} />
+        <Route path="xenbox/:fileId" element={<FileDetail />} />
       </Route>
       {/* Admin routes - require admin role and use AdminNavBar */}
       <Route

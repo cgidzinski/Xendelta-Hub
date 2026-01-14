@@ -10,6 +10,11 @@ export interface User {
   email: string;
   roles?: string[];
   avatar?: string;
+  xenbox?: {
+    fileCount: number;
+    spaceUsed: number;
+    spaceAllowed: number;
+  };
 }
 
 interface UsersResponse {
@@ -28,7 +33,7 @@ const fetchUsers = async (): Promise<User[]> => {
   return response.data.data!.users;
 };
 
-const updateUser = async (userId: string, updates: { roles?: string[] }): Promise<void> => {
+const updateUser = async (userId: string, updates: { roles?: string[]; xenboxQuota?: number }): Promise<void> => {
   await apiClient.put(`/api/admin/users/${userId}`, updates);
 };
 
@@ -65,7 +70,7 @@ export const useAdminUsers = () => {
 
   // Mutation for updating user
   const { mutateAsync: updateUserMutation, isPending: isUpdatingUser } = useMutation({
-    mutationFn: ({ userId, updates }: { userId: string; updates: { roles?: string[] } }) =>
+    mutationFn: ({ userId, updates }: { userId: string; updates: { roles?: string[]; xenboxQuota?: number } }) =>
       updateUser(userId, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminUsersKeys.users() });
@@ -105,7 +110,7 @@ export const useAdminUsers = () => {
     isError,
     error: error as Error | null,
     refetch,
-    updateUser: (userId: string, updates: { roles?: string[] }) => updateUserMutation({ userId, updates }),
+    updateUser: (userId: string, updates: { roles?: string[]; xenboxQuota?: number }) => updateUserMutation({ userId, updates }),
     isUpdatingUser,
     deleteUser: (userId: string) => deleteUserMutation(userId),
     isDeletingUser,

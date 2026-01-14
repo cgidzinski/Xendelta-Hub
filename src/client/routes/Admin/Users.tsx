@@ -30,18 +30,12 @@ import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import StorageIcon from "@mui/icons-material/Storage";
 import { useSnackbar } from "notistack";
 import { useTitle } from "../../hooks/useTitle";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
-import { useAdminUsers } from "../../hooks/admin/useAdminUsers";
-
-interface User {
-  _id: string;
-  username: string;
-  email: string;
-  roles?: string[];
-  avatar?: string;
-}
+import { useAdminUsers, User } from "../../hooks/admin/useAdminUsers";
+import { formatFileSize } from "../../utils/fileUtils";
 
 const AVAILABLE_ROLES = ["admin", "bot", "user"];
 
@@ -58,11 +52,13 @@ export default function Users() {
     isDeletingUser,
     resetAvatar,
     isResettingAvatar,
+    refetch,
   } = useAdminUsers();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [editingRoles, setEditingRoles] = useState<string[]>([]);
+  const [editingQuota, setEditingQuota] = useState<string>("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const filteredUsers = useMemo(() => {
@@ -93,6 +89,7 @@ export default function Users() {
   const handleUserClick = (user: User) => {
     setSelectedUser(user);
     setEditingRoles(user.roles || []);
+    setEditingQuota(user.xenbox?.spaceAllowed ? formatFileSize(user.xenbox.spaceAllowed) : "");
     setUserModalOpen(true);
   };
 
@@ -100,6 +97,7 @@ export default function Users() {
     setUserModalOpen(false);
     setSelectedUser(null);
     setEditingRoles([]);
+    setEditingQuota("");
   };
 
   const handleSaveRoles = async () => {
@@ -115,6 +113,57 @@ export default function Users() {
       })
       .catch((error) => {
         enqueueSnackbar(error.message || "Failed to update roles", { variant: "error" });
+      });
+  };
+
+  const parseQuotaInput = (input: string): number | null => {
+    const trimmed = input.trim().toUpperCase();
+    if (!trimmed) return null;
+    
+    // Parse format like "5 GB", "1024 MB", etc.
+    const match = trimmed.match(/^([\d.]+)\s*(B|KB|MB|GB|TB)?$/);
+    if (!match) return null;
+    
+    const value = parseFloat(match[1]);
+    if (isNaN(value) || value < 0) return null;
+    
+    const unit = match[2] || "B";
+    const multipliers: { [key: string]: number } = {
+      B: 1,
+      KB: 1024,
+      MB: 1024 * 1024,
+      GB: 1024 * 1024 * 1024,
+      TB: 1024 * 1024 * 1024 * 1024,
+    };
+    
+    return Math.floor(value * (multipliers[unit] || 1));
+  };
+
+  const handleSaveQuota = async () => {
+    if (!selectedUser) return;
+    
+    const quotaBytes = parseQuotaInput(editingQuota);
+    if (quotaBytes === null && editingQuota.trim() !== "") {
+      enqueueSnackbar("Invalid quota format. Use format like '5 GB' or '1024 MB'", { variant: "error" });
+      return;
+    }
+    
+    updateUser(selectedUser._id, { xenboxQuota: quotaBytes || 0 })
+      .then(async () => {
+        enqueueSnackbar("Quota updated successfully", { variant: "success" });
+        // Refetch users list
+        const { data: updatedUsers } = await refetch();
+        if (updatedUsers) {
+          // Update selected user after refetch
+          const updatedUser = updatedUsers.find(u => u._id === selectedUser._id);
+          if (updatedUser) {
+            setSelectedUser(updatedUser);
+            setEditingQuota(updatedUser.xenbox?.spaceAllowed ? formatFileSize(updatedUser.xenbox.spaceAllowed) : "");
+          }
+        }
+      })
+      .catch((error) => {
+        enqueueSnackbar(error.message || "Failed to update quota", { variant: "error" });
       });
   };
 
@@ -347,6 +396,43 @@ export default function Users() {
                       disabled={isUpdatingUser || JSON.stringify(editingRoles.sort()) === JSON.stringify((selectedUser.roles || []).sort())}
                     >
                       {isUpdatingUser ? "Saving..." : "Save Roles"}
+                    </Button>
+                  </Box>
+                </Box>
+
+                <Divider />
+
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontWeight: 600 }}>
+                    XenBox Quota
+                  </Typography>
+                  <Box sx={{ mb: 2 }}>
+                    {selectedUser.xenbox && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Used: {formatFileSize(selectedUser.xenbox.spaceUsed)} / {formatFileSize(selectedUser.xenbox.spaceAllowed)}
+                        {selectedUser.xenbox.fileCount > 0 && ` (${selectedUser.xenbox.fileCount} file${selectedUser.xenbox.fileCount !== 1 ? 's' : ''})`}
+                      </Typography>
+                    )}
+                  </Box>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <TextField
+                      placeholder="e.g., 5 GB or 1024 MB"
+                      value={editingQuota}
+                      onChange={(e) => setEditingQuota(e.target.value)}
+                      size="small"
+                      sx={{ flex: 1 }}
+                      helperText="Enter quota in format like '5 GB', '1024 MB', etc."
+                      InputProps={{
+                        startAdornment: <StorageIcon sx={{ mr: 1, color: "text.secondary" }} />,
+                      }}
+                    />
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={handleSaveQuota}
+                      disabled={isUpdatingUser || editingQuota === (selectedUser.xenbox?.spaceAllowed ? formatFileSize(selectedUser.xenbox.spaceAllowed) : "")}
+                    >
+                      {isUpdatingUser ? "Saving..." : "Save Quota"}
                     </Button>
                   </Box>
                 </Box>

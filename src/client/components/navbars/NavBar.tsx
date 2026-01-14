@@ -3,6 +3,7 @@ import ArticleIcon from "@mui/icons-material/Article";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SecurityIcon from "@mui/icons-material/Security";
 import BrushIcon from "@mui/icons-material/Brush";
+import FolderIcon from "@mui/icons-material/Folder";
 import { useNavBar } from "../../contexts/NavBarContext";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
 import BaseNavBar, { NavItem } from "./BaseNavBar";
@@ -48,7 +49,13 @@ export default function Root() {
       icon: <BrushIcon />,
       path: "/internal/recipaint",
       isSelected: (pathname) => pathname.startsWith("/internal/recipaint"),
-      indent: true,
+    },
+    {
+      key: "xenbox",
+      label: "XenBox",
+      icon: <FolderIcon />,
+      path: "/internal/xenbox",
+      isSelected: (pathname) => pathname.startsWith("/internal/xenbox"),
     },
   ];
 

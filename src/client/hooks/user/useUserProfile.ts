@@ -12,6 +12,11 @@ export interface UserProfile {
   roles?: string[];
   unread_messages: boolean;
   unread_notifications: boolean;
+  xenbox: {
+    fileCount: number;
+    spaceUsed: number;
+    spaceAllowed: number;
+  };
 }
 
 export interface UpdateProfileData {
