@@ -25,7 +25,7 @@ export default function HighlightsSection({ highlights }: HighlightsSectionProps
             Why Choose Xendelta Hub?
           </Typography>
           <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 600, mx: "auto" }}>
-            Experience the difference with our cutting-edge features
+            We're not sure why you're here, but we're glad you're here.
           </Typography>
         </Box>
 

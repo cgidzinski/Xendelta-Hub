@@ -100,15 +100,9 @@ export default function HeroSection({ mousePosition }: HeroSectionProps) {
                 mx: "auto",
               }}
             >
-              The next-generation platform for seamless communication, collaboration, and productivity.
-              Built for teams that demand excellence and innovation.
+              A collection of services, tools and projects that i've built to help me and others be more productive.
             </Typography>
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              spacing={2}
-              justifyContent="center"
-              sx={{ mb: 2 }}
-            >
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="center" sx={{ mb: 2 }}>
               <Button
                 variant="contained"
                 size="large"
@@ -192,7 +186,8 @@ export default function HeroSection({ mousePosition }: HeroSectionProps) {
                 fontWeight: 400,
               }}
             >
-              Note: This information is fictional and for demonstration purposes only.
+              Note: Some information is fictional and for demonstration purposes only. Some apps may not be available
+              yet.
             </Typography>
           </Box>
         </Container>
@@ -200,4 +195,3 @@ export default function HeroSection({ mousePosition }: HeroSectionProps) {
     </>
   );
 }
-

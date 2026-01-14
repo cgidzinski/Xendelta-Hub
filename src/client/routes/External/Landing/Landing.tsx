@@ -20,19 +20,17 @@ export default function Landing() {
   }, []);
 
   const stats = [
-    { value: "10K+", label: "Active Users", icon: <Group /> },
-    { value: "99.9%", label: "Uptime", icon: <Speed /> },
-    { value: "256-bit", label: "Encryption", icon: <Security /> },
-    { value: "24/7", label: "Support", icon: <TrendingUp /> },
+    { value: "10K+", label: "Active Fake Users", icon: <Group /> },
+    { value: "99.9%", label: "Uptime, sometimes", icon: <Speed /> },
+    { value: "256-bit", label: "Encryption, somewhere", icon: <Security /> },
+    { value: "24/7", label: "Emotional Support", icon: <TrendingUp /> },
   ];
 
   const highlights = [
-    "Real-time messaging with end-to-end encryption",
-    "Advanced notification system with smart filtering",
-    "Enterprise-grade security and compliance",
-    "Lightning-fast performance with global CDN",
-    "Seamless team collaboration tools",
-    "Cloud-powered with automatic synchronization",
+    "XenChat - Real-time messaging with end-to-end encryption",
+    "XenBox - File sharing with secure and efficient file sharing system",
+    "Recipaint - Miniature painting planner with step by step paint planner",
+    "XenSpace - Space filler! We needed 4 items to make the page look good.",
   ];
 
   return (

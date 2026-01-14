@@ -216,7 +216,7 @@ export default function Login() {
                       opacity: 0.8,
                     }}
                   >
-                    Experience seamless collaboration, secure messaging, and powerful features designed for modern teams.
+                    We're not sure why you're here, but we're glad you're here.
                   </Typography>
                 </Paper>
               </Box>

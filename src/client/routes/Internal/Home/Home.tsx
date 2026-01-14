@@ -29,7 +29,7 @@ export default function Home() {
                 <CardContent sx={{ textAlign: "center", p: 3 }}>
                   <HomeIcon sx={{ fontSize: 40, color: "primary.main", mb: 1 }} />
                   <Typography variant="h4" component="div">
-                    12
+                    3
                   </Typography>
                   <Typography color="text.secondary">Active Projects</Typography>
                 </CardContent>
@@ -40,7 +40,7 @@ export default function Home() {
                 <CardContent sx={{ textAlign: "center", p: 3 }}>
                   <Dashboard sx={{ fontSize: 40, color: "secondary.main", mb: 1 }} />
                   <Typography variant="h4" component="div">
-                    8
+                    1
                   </Typography>
                   <Typography color="text.secondary">Completed Tasks</Typography>
                 </CardContent>
@@ -51,7 +51,7 @@ export default function Home() {
                 <CardContent sx={{ textAlign: "center", p: 3 }}>
                   <People sx={{ fontSize: 40, color: "success.main", mb: 1 }} />
                   <Typography variant="h4" component="div">
-                    24
+                    3
                   </Typography>
                   <Typography color="text.secondary">Team Members</Typography>
                 </CardContent>
@@ -78,16 +78,13 @@ export default function Home() {
           </Typography>
           <Box sx={{ mt: 2 }}>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
-              • Project "Alpha" was updated 2 hours ago
+              • Project "Recipaint" was added.
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
-              • New team member joined yesterday
+              • Project XenBox was added.
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
-              • Task "Design Review" was completed
-            </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
-              • System maintenance scheduled for tomorrow
+              • Project XenChat was added.
             </Typography>
           </Box>
         </Paper>

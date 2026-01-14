@@ -55,7 +55,7 @@ export default function CTASection() {
               fontWeight: 400,
             }}
           >
-            Join thousands of teams already using Xendelta Hub to revolutionize their collaboration
+            Join thousands of teams who aren't using Xendelta Hub to revolutionize their collaboration
           </Typography>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="center">
             <Button

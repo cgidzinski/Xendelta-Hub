@@ -235,7 +235,7 @@ export default function Signup() {
                       opacity: 0.8,
                     }}
                   >
-                    Join thousands of teams already using Xendelta Hub for seamless collaboration and productivity.
+                    Hopefully you're not a robot.
                   </Typography>
                 </Paper>
               </Box>

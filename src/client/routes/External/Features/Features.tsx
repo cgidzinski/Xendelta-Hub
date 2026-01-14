@@ -1,53 +1,45 @@
-import {
-  Box,
-  Container,
-  Typography,
-  Grid,
-  Card,
-  CardContent,
-} from "@mui/material";
-import {
-  Security,
-  Chat,
-  Notifications,
-  Speed,
-  Group,
-  CloudDone,
-} from "@mui/icons-material";
+import { Box, Container, Typography, Grid, Card, CardContent, CardHeader } from "@mui/material";
+import { Security, Chat, Notifications, Speed, Group, CloudDone } from "@mui/icons-material";
 import LandingHeader from "../../../components/LandingHeader";
 
 export default function Features() {
   const features = [
     {
       icon: <Chat sx={{ fontSize: 40 }} />,
-      title: "Real-time Messaging",
-      description: "Connect with your team through instant messaging and group conversations with end-to-end encryption.",
-    },
-    {
-      icon: <Notifications sx={{ fontSize: 40 }} />,
-      title: "Smart Notifications",
-      description: "Stay updated with intelligent notifications that prioritize what matters most to you.",
-    },
-    {
-      icon: <Security sx={{ fontSize: 40 }} />,
-      title: "Enterprise Security",
-      description: "Your data is protected with industry-standard security measures and compliance certifications.",
+      title: "XenChat",
+      caption: "Real-time Messaging",
+      description: "Connect through instant messaging and group conversations.",
     },
     {
       icon: <Speed sx={{ fontSize: 40 }} />,
-      title: "Lightning Fast",
-      description: "Experience blazing-fast performance with our optimized infrastructure and real-time synchronization.",
+      title: "XenBox",
+      caption: "File Sharing",
+      description: "Share files with people through our secure and efficient file sharing system.",
     },
     {
       icon: <Group sx={{ fontSize: 40 }} />,
-      title: "Team Collaboration",
-      description: "Work seamlessly with your team through organized conversations, file sharing, and more.",
+      title: "Recipaint",
+      caption: "Miniature Painting Planner",
+      description: "Plan your miniature painting projects with ease using our step by step paint planner.",
     },
-    {
-      icon: <CloudDone sx={{ fontSize: 40 }} />,
-      title: "Cloud Powered",
-      description: "Access your workspace from anywhere, on any device, with automatic cloud synchronization.",
-    },
+    // {
+    //   icon: <Notifications sx={{ fontSize: 40 }} />,
+    //   title: "Smart Notifications",
+    //   caption: "Space Filler!",
+    //   description: "Stay updated with intelligent notifications that prioritize what matters most to you.",
+    // },
+    // {
+    //   icon: <Security sx={{ fontSize: 40 }} />,
+    //   title: "Enterprise Security",
+    //   caption: "Space Filler!",
+    //   description: "Your data is protected with industry-standard security measures and compliance certifications.",
+    // },
+    // {
+    //   icon: <CloudDone sx={{ fontSize: 40 }} />,
+    //   title: "Cloud Powered",
+    //   caption: "Space Filler!",
+    //   description: "Access your workspace from anywhere, on any device, with automatic cloud synchronization.",
+    // },
   ];
 
   return (
@@ -134,8 +126,13 @@ export default function Features() {
                   >
                     {feature.icon}
                   </Box>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                      {feature.caption}
+                    </Typography>
+                  </Box>
                   <Typography
-                    variant="h6"
+                    variant="h5"
                     component="h3"
                     sx={{
                       fontWeight: 600,
@@ -163,4 +160,3 @@ export default function Features() {
     </Box>
   );
 }
-
