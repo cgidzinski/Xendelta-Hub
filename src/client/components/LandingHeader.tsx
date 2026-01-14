@@ -1,9 +1,7 @@
 import {
-  AppBar,
-  Toolbar,
+  Box,
   Typography,
   Button,
-  Box,
 } from "@mui/material";
 import { Login as LoginIcon } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
@@ -12,9 +10,32 @@ export default function LandingHeader() {
   const navigate = useNavigate();
 
   return (
-    <AppBar position="static" elevation={0} sx={{ backgroundColor: "background.paper", borderBottom: "1px solid", borderColor: "divider" }}>
-      <Toolbar sx={{ position: "relative" }}>
-        <Box sx={{ flex: 1, display: "flex", alignItems: "center" }}>
+    <>
+      <Box
+        component="header"
+        sx={{
+          position: "sticky",
+          top: 0,
+          zIndex: 1000,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          backdropFilter: "blur(10px)",
+          backgroundColor: "rgba(18, 18, 18, 0.8)",
+        }}
+      >
+        <Box
+          sx={{
+            maxWidth: "1200px",
+            mx: "auto",
+            px: { xs: 2, sm: 3, md: 4 },
+            py: 2,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: { xs: 1, md: 2 },
+            flexWrap: { xs: "wrap", md: "nowrap" },
+          }}
+        >
           <Typography
             variant="h5"
             component="div"
@@ -30,52 +51,69 @@ export default function LandingHeader() {
                 opacity: 0.8,
               },
               transition: "opacity 0.2s ease",
+              flexShrink: 0,
             }}
           >
-            Xendelta Hub
+            XenDelta Hub
           </Typography>
-        </Box>
-        <Box sx={{ position: "absolute", left: "50%", transform: "translateX(-50%)", display: "flex", gap: 4 }}>
-          <Button
-            color="inherit"
-            onClick={() => navigate("/blog")}
+          <Box
             sx={{
-              color: "text.secondary",
-              textTransform: "none",
-              fontWeight: 500,
-              "&:hover": {
-                color: "primary.main",
-              },
+              display: "flex",
+              gap: { xs: 1, sm: 2, md: 4 },
+              alignItems: "center",
+              flex: { xs: "1 1 100%", md: "0 0 auto" },
+              justifyContent: { xs: "center", md: "flex-start" },
+              order: { xs: 3, md: 2 },
+              width: { xs: "100%", md: "auto" },
+              mt: { xs: 1, md: 0 },
             }}
           >
-            Blog
-          </Button>
-          <Button
-            color="inherit"
-            onClick={() => navigate("/features")}
-            sx={{
-              color: "text.secondary",
-              textTransform: "none",
-              fontWeight: 500,
-              "&:hover": {
-                color: "primary.main",
-              },
-            }}
-          >
-            Features
-          </Button>
-        </Box>
-        <Box sx={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
+            <Button
+              color="inherit"
+              onClick={() => navigate("/blog")}
+              sx={{
+                color: "text.secondary",
+                textTransform: "none",
+                fontWeight: 500,
+                fontSize: { xs: "0.875rem", md: "1rem" },
+                px: { xs: 1.5, md: 2 },
+                "&:hover": {
+                  color: "primary.main",
+                },
+              }}
+            >
+              Blog
+            </Button>
+            <Button
+              color="inherit"
+              onClick={() => navigate("/features")}
+              sx={{
+                color: "text.secondary",
+                textTransform: "none",
+                fontWeight: 500,
+                fontSize: { xs: "0.875rem", md: "1rem" },
+                px: { xs: 1.5, md: 2 },
+                "&:hover": {
+                  color: "primary.main",
+                },
+              }}
+            >
+              Features
+            </Button>
+          </Box>
           <Button
             variant="contained"
             startIcon={<LoginIcon />}
             onClick={() => navigate("/login")}
             sx={{
-              px: 3,
+              px: { xs: 2, md: 3 },
               py: 1,
               fontWeight: 600,
+              fontSize: { xs: "0.875rem", md: "1rem" },
               backgroundColor: "primary.main",
               boxShadow: "0 0 20px rgba(33, 150, 243, 0.3)",
+              flexShrink: 0,
+              order: { xs: 2, md: 3 },
               "&:hover": {
                 backgroundColor: "primary.dark",
                 boxShadow: "0 0 30px rgba(33, 150, 243, 0.5)",
@@ -85,8 +123,8 @@ export default function LandingHeader() {
             Sign In
           </Button>
         </Box>
-      </Toolbar>
-    </AppBar>
+      </Box>
+    </>
   );
 }
 

@@ -14,13 +14,30 @@ import {
   Divider,
   Badge,
   Menu,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import MailIcon from "@mui/icons-material/Mail";
 import NotificationsIcon from "@mui/icons-material/Notifications";
+import PersonIcon from "@mui/icons-material/Person";
+import AnnouncementIcon from "@mui/icons-material/Announcement";
+import SecurityIcon from "@mui/icons-material/Security";
+import LockIcon from "@mui/icons-material/Lock";
+import CloseIcon from "@mui/icons-material/Close";
 import CssBaseline from "@mui/material/CssBaseline";
 import { useNavigate } from "react-router-dom";
+import { useState, useRef } from "react";
+import { formatDistance } from "date-fns";
 import ProfileListItem from "../ProfileListItem";
+import { useUserProfile } from "../../hooks/user/useUserProfile";
+import { useUserNotifications } from "../../hooks/user/useUserNotifications";
+import { useNavBarSocket } from "../../hooks/useNavBarSocket";
+import { Notification } from "../../types/Notification";
+import LoadingSpinner from "../LoadingSpinner";
 
 const DRAWER_WIDTH = 240;
 
@@ -42,11 +59,11 @@ interface BaseNavBarProps {
   footerNavItems?: NavItem[];
   showNotifications?: boolean;
   showMessages?: boolean;
-  onNotificationClick?: (event: React.MouseEvent<HTMLElement>) => void;
-  onMessagesClick?: () => void;
-  unreadMessages?: boolean;
-  unreadNotifications?: boolean;
-  notificationMenu?: React.ReactNode;
+  showSystemMessageNotifications?: boolean;
+  messagesPath?: string;
+  drawerHeaderPath?: string;
+  drawerHeaderText?: string;
+  showProfile?: boolean;
   children?: React.ReactNode;
 }
 
@@ -58,14 +75,88 @@ export default function BaseNavBar({
   footerNavItems = [],
   showNotifications = false,
   showMessages = false,
-  onNotificationClick,
-  onMessagesClick,
-  unreadMessages = false,
-  unreadNotifications = false,
-  notificationMenu,
+  showSystemMessageNotifications = false,
+  messagesPath = "/internal/messages",
+  drawerHeaderPath = "/internal",
+  drawerHeaderText = "XenDelta Hub",
+  showProfile = true,
   children,
 }: BaseNavBarProps) {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const { profile } = useUserProfile();
+  
+  // Notification state
+  const [notificationAnchorEl, setNotificationAnchorEl] = useState<null | HTMLElement>(null);
+  const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
+  const [notificationModalOpen, setNotificationModalOpen] = useState(false);
+  const { notifications, markNotificationAsRead, fetchNotifications, isFetching } = useUserNotifications();
+  const markedNotificationsRef = useRef<Set<string>>(new Set());
+
+  useNavBarSocket({
+    showSystemMessageNotifications,
+    onNewNotification: () => {
+      if (notificationAnchorEl) {
+        fetchNotifications();
+      }
+    },
+  });
+
+  const handleNavItemClick = (path: string) => {
+    navigate(path);
+    if (isMobile && isNavBarOpen) {
+      onToggleNavBar();
+    }
+  };
+
+  const handleNotificationClick = (event: React.MouseEvent<HTMLElement>) => {
+    fetchNotifications();
+    setNotificationAnchorEl(event.currentTarget);
+  };
+
+  const handleNotificationClose = () => {
+    setNotificationAnchorEl(null);
+    markedNotificationsRef.current.clear();
+  };
+
+  const handleNotificationHover = (notification: Notification) => {
+    if (notification.unread && !markedNotificationsRef.current.has(notification._id)) {
+      markedNotificationsRef.current.add(notification._id);
+      markNotificationAsRead(notification._id);
+    }
+  };
+
+  const handleNotificationItemClick = (notification: Notification) => {
+    if (notification.unread && !markedNotificationsRef.current.has(notification._id)) {
+      markedNotificationsRef.current.add(notification._id);
+      markNotificationAsRead(notification._id);
+    }
+    setSelectedNotification(notification);
+    setNotificationModalOpen(true);
+  };
+
+  const handleCloseNotificationModal = () => {
+    setNotificationModalOpen(false);
+    setSelectedNotification(null);
+  };
+
+  const getNotificationIcon = (icon: string) => {
+    switch (icon) {
+      case "person":
+        return <PersonIcon />;
+      case "security":
+        return <SecurityIcon />;
+      case "announcement":
+        return <AnnouncementIcon />;
+      case "mail":
+        return <MailIcon />;
+      case "lock":
+        return <LockIcon />;
+      default:
+        return <AnnouncementIcon />;
+    }
+  };
 
   return (
     <Box sx={{ display: "flex" }}>
@@ -98,7 +189,12 @@ export default function BaseNavBar({
                 backgroundColor: "action.hover",
               },
             }}
-            onClick={() => navigate("/internal")}
+            onClick={() => {
+              navigate(drawerHeaderPath);
+              if (isMobile && isNavBarOpen) {
+                onToggleNavBar();
+              }
+            }}
           >
             <Typography
               variant="h5"
@@ -111,7 +207,7 @@ export default function BaseNavBar({
                 backgroundClip: "text",
               }}
             >
-              XenDelta
+              {drawerHeaderText}
             </Typography>
           </Box>
           <List>
@@ -133,7 +229,7 @@ export default function BaseNavBar({
               return (
                 <ListItem key={item.key} disablePadding>
                   <ListItemButton
-                    onClick={() => navigate(item.path)}
+                    onClick={() => handleNavItemClick(item.path)}
                     selected={item.isSelected(window.location.pathname)}
                     sx={item.indent ? { pl: 4 } : {}}
                   >
@@ -150,7 +246,7 @@ export default function BaseNavBar({
               {footerNavItems.map((item) => (
                 <ListItem key={item.key} disablePadding>
                   <ListItemButton
-                    onClick={() => navigate(item.path)}
+                    onClick={() => handleNavItemClick(item.path)}
                     selected={item.isSelected(window.location.pathname)}
                   >
                     <ListItemIcon>{item.icon}</ListItemIcon>
@@ -159,7 +255,13 @@ export default function BaseNavBar({
                 </ListItem>
               ))}
               {footerNavItems.length > 0 && <Divider variant="middle" component="li" sx={{ my: 1 }} />}
-              <ProfileListItem />
+              {showProfile && (
+                <ProfileListItem onNavigate={() => {
+                  if (isMobile && isNavBarOpen) {
+                    onToggleNavBar();
+                  }
+                }} />
+              )}
             </List>
           </Box>
         </Box>
@@ -193,15 +295,15 @@ export default function BaseNavBar({
           {(showMessages || showNotifications) && (
             <Box sx={{ display: "flex", alignItems: "center" }}>
               {showMessages && (
-                <IconButton sx={{ width: 50, height: 50 }} onClick={onMessagesClick}>
-                  <Badge badgeContent={unreadMessages ? 1 : 0} color="error" variant="dot">
+                <IconButton sx={{ width: 50, height: 50 }} onClick={() => navigate(messagesPath)}>
+                  <Badge badgeContent={profile?.unread_messages ? 1 : 0} color="error" variant="dot">
                     <MailIcon />
                   </Badge>
                 </IconButton>
               )}
               {showNotifications && (
-                <IconButton sx={{ width: 50, height: 50, p: 0 }} onClick={onNotificationClick}>
-                  <Badge badgeContent={unreadNotifications ? 1 : 0} color="error" variant="dot">
+                <IconButton sx={{ width: 50, height: 50, p: 0 }} onClick={handleNotificationClick}>
+                  <Badge badgeContent={profile?.unread_notifications ? 1 : 0} color="error" variant="dot">
                     <NotificationsIcon />
                   </Badge>
                 </IconButton>
@@ -211,7 +313,141 @@ export default function BaseNavBar({
           {children}
         </Toolbar>
       </AppBar>
-      {notificationMenu}
+      
+      {/* Notifications Menu */}
+      {showNotifications && (
+        <>
+          <Menu
+            open={Boolean(notificationAnchorEl)}
+            anchorEl={notificationAnchorEl}
+            onClose={handleNotificationClose}
+            anchorOrigin={{
+              vertical: "bottom",
+              horizontal: "right",
+            }}
+            transformOrigin={{
+              vertical: "top",
+              horizontal: "right",
+            }}
+            slotProps={{
+              paper: {
+                sx: {
+                  width: 400,
+                  maxHeight: 400,
+                  mt: 1,
+                },
+              },
+            }}
+          >
+            <Box sx={{ pt: 2 }}>
+              <Typography variant="h6" sx={{ mb: 2, mx: 2, fontWeight: "bold" }}>
+                Notifications
+              </Typography>
+              <Divider variant="fullWidth" />
+              <List sx={{ p: 0 }}>
+                {isFetching && (
+                  <Box sx={{ py: 3 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", pt: 3 }}>
+                      Loading notifications...
+                    </Typography>
+                    <LoadingSpinner />
+                  </Box>
+                )}
+                {!isFetching && notifications?.length === 0 && (
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 3 }}>
+                    No notifications
+                  </Typography>
+                )}
+                {!isFetching &&
+                  notifications?.map((notification, index) => (
+                    <Box key={notification._id}>
+                      <ListItem
+                        onMouseEnter={() => handleNotificationHover(notification)}
+                        onClick={() => handleNotificationItemClick(notification)}
+                        sx={{
+                          backgroundColor: notification.unread ? "transparent" : "background.default",
+                          flexDirection: "column",
+                          alignItems: "flex-start",
+                          py: 1,
+                          px: 2,
+                          cursor: "pointer",
+                          "&:hover": { backgroundColor: "action.selected" },
+                        }}
+                      >
+                        <Box sx={{ display: "flex", alignItems: "center", width: "100%", mb: 0.5 }}>
+                          <Box sx={{ mr: 1, color: "primary.main" }}>{getNotificationIcon(notification.icon)}</Box>
+                          <Typography
+                            variant="subtitle2"
+                            sx={{ fontWeight: notification.unread ? "bold" : "normal", flexGrow: 1 }}
+                          >
+                            {notification.title}
+                          </Typography>
+                        </Box>
+                        <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mb: 0.5 }}>
+                          {notification.message}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ ml: 4 }}>
+                          {formatDistance(new Date(notification.time), new Date(), { addSuffix: true })}
+                        </Typography>
+                      </ListItem>
+                      {index < notifications.length - 1 && <Divider variant="fullWidth" />}
+                    </Box>
+                  ))}
+              </List>
+            </Box>
+          </Menu>
+
+          {/* Notification Detail Modal */}
+          <Dialog
+            open={notificationModalOpen}
+            onClose={handleCloseNotificationModal}
+            maxWidth="sm"
+            fullWidth
+            PaperProps={{
+              sx: {
+                borderRadius: 2,
+              },
+            }}
+          >
+            {selectedNotification && (
+              <>
+                <DialogTitle sx={{ position: "relative", pr: 5 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <Box sx={{ color: "primary.main", display: "flex", alignItems: "center" }}>
+                      {getNotificationIcon(selectedNotification.icon)}
+                    </Box>
+                    <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+                      {selectedNotification.title}
+                    </Typography>
+                  </Box>
+                  <IconButton
+                    aria-label="close"
+                    onClick={handleCloseNotificationModal}
+                    sx={{
+                      position: "absolute",
+                      right: 8,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                    }}
+                  >
+                    <CloseIcon />
+                  </IconButton>
+                </DialogTitle>
+                <DialogContent>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body1" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                      {selectedNotification.message}
+                    </Typography>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary">
+                    {formatDistance(new Date(selectedNotification.time), new Date(), { addSuffix: true })}
+                  </Typography>
+                </DialogContent>
+              </>
+            )}
+          </Dialog>
+        </>
+      )}
 
       <Box
         component="main"

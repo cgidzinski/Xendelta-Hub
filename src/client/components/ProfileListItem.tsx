@@ -3,7 +3,11 @@ import { ListItem, ListItemButton, ListItemAvatar, ListItemText, Avatar } from "
 import { useNavigate, useLocation } from "react-router-dom";
 import { useUserProfile } from "../hooks/user/useUserProfile";
 
-export default function ProfileListItem() {
+interface ProfileListItemProps {
+  onNavigate?: () => void;
+}
+
+export default function ProfileListItem({ onNavigate }: ProfileListItemProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const { profile } = useUserProfile();
@@ -13,12 +17,17 @@ export default function ProfileListItem() {
     return profile?.avatar;
   }, [profile?.avatar]);
 
+  const handleClick = () => {
+    navigate("/internal/profile");
+    onNavigate?.();
+  };
+
   return (
     <ListItem disablePadding>
       <ListItemButton
         sx={{ pl: 1 }}
         disableGutters
-        onClick={() => navigate("/internal/profile")}
+        onClick={handleClick}
         selected={location.pathname.endsWith("/internal/profile")}
       >
         <ListItemAvatar>
