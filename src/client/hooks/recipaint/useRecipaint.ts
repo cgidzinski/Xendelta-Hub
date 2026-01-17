@@ -24,7 +24,7 @@ interface CreateRecipeData {
   showcase?: string[];
   title: string;
   description?: string;
-  steps?: (Recipe["steps"][number])[];
+  steps?: Recipe["steps"][number][];
   isPublic?: boolean;
 }
 
@@ -32,7 +32,7 @@ interface UpdateRecipeData {
   showcase?: string[];
   title?: string;
   description?: string;
-  steps?: (Recipe["steps"][number])[];
+  steps?: Recipe["steps"][number][];
   isPublic?: boolean;
 }
 
@@ -44,6 +44,8 @@ export const recipaintKeys = {
   details: () => [...recipaintKeys.all, "detail"] as const,
   detail: (id: string) => [...recipaintKeys.details(), id] as const,
   public: () => [...recipaintKeys.all, "public"] as const,
+  publicDetails: () => [...recipaintKeys.all, "publicDetail"] as const,
+  publicDetail: (id: string) => [...recipaintKeys.publicDetails(), id] as const,
 };
 
 // API functions
@@ -68,6 +70,11 @@ const createRecipe = async (data: CreateRecipeData): Promise<Recipe> => {
   return response.data.data!.recipe;
 };
 
+const fetchPublicRecipe = async (id: string): Promise<Recipe> => {
+  const response = await apiClient.get<ApiResponse<RecipeResponse>>(`/api/recipaint/public/${id}`);
+  return response.data.data!.recipe;
+};
+
 const updateRecipe = async ({ id, data }: { id: string; data: UpdateRecipeData }): Promise<Recipe> => {
   const response = await apiClient.put<ApiResponse<RecipeResponse>>(`/api/recipaint/${id}`, data);
   return response.data.data!.recipe;
@@ -81,7 +88,10 @@ const uploadRecipaintAsset = async (file: File): Promise<RecipaintAssetUploadRes
   const formData = new FormData();
   formData.append("asset", file);
 
-  const response = await apiClient.post<ApiResponse<RecipaintAssetUploadResponse>>("/api/recipaint/upload-asset", formData);
+  const response = await apiClient.post<ApiResponse<RecipaintAssetUploadResponse>>(
+    "/api/recipaint/upload-asset",
+    formData,
+  );
   return response.data.data!;
 };
 
@@ -91,13 +101,7 @@ const deleteRecipaintAsset = async (assetUrl: string): Promise<void> => {
 
 // Hooks
 export const useRecipaint = (search?: string) => {
-  const {
-    data,
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: recipaintKeys.list(search),
     queryFn: () => fetchRecipes(search),
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -120,13 +124,7 @@ export const useRecipaint = (search?: string) => {
 };
 
 export const usePublicRecipes = () => {
-  const {
-    data,
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: recipaintKeys.public(),
     queryFn: fetchPublicRecipes,
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -160,7 +158,44 @@ export const useRecipaintRecipe = (id: string | undefined) => {
     enabled: !!id,
     staleTime: 2 * 60 * 1000, // 2 minutes
     retry: (failureCount, error) => {
-      if (error.message.includes("Unauthorized") || error.message.includes("not found") || error.message.includes("Access denied")) {
+      if (
+        error.message.includes("Unauthorized") ||
+        error.message.includes("not found") ||
+        error.message.includes("Access denied")
+      ) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+  });
+
+  return {
+    recipe: recipe || null,
+    isLoading,
+    isError,
+    error: error as Error | null,
+    refetch,
+  };
+};
+
+export const usePublicRecipaintRecipe = (id: string | undefined) => {
+  const {
+    data: recipe,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: recipaintKeys.publicDetail(id!),
+    queryFn: () => fetchPublicRecipe(id!),
+    enabled: !!id,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    retry: (failureCount, error) => {
+      if (
+        error.message.includes("Unauthorized") ||
+        error.message.includes("not found") ||
+        error.message.includes("Access denied")
+      ) {
         return false;
       }
       return failureCount < 3;

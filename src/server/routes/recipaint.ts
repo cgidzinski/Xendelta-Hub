@@ -6,23 +6,21 @@ import { deleteFromGCS } from "../utils/gcsUtils";
 import { AuthenticatedRequest } from "../types";
 const { Recipe } = require("../models/recipe");
 const mongoose = require("mongoose");
-const { Types: { ObjectId } } = mongoose;
+const {
+  Types: { ObjectId },
+} = mongoose;
 
 module.exports = function (app: express.Application) {
-
   // Get all recipes for authenticated user
   app.get("/api/recipaint", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = (req as AuthenticatedRequest).user!._id;
     const search = req.query.search as string;
-    
+
     const query: any = { owner: userId };
     if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-      ];
+      query.$or = [{ title: { $regex: search, $options: "i" } }, { description: { $regex: search, $options: "i" } }];
     }
-    
+
     const recipes = await Recipe.find(query)
       .populate("author", "username avatar")
       .populate("owner", "username avatar")
@@ -39,7 +37,7 @@ module.exports = function (app: express.Application) {
   // Get public recipes from other users
   app.get("/api/recipaint/public", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = (req as AuthenticatedRequest).user!._id;
-    
+
     const recipes = await Recipe.find({
       isPublic: true,
       owner: { $ne: userId },
@@ -57,10 +55,9 @@ module.exports = function (app: express.Application) {
   });
 
   // Get single recipe
-  app.get("/api/recipaint/:id",authenticateToken, async function (req: express.Request, res: express.Response) {
-    const userId = (req as AuthenticatedRequest).user!._id;
+  app.get("/api/recipaint/public/:id", async function (req: express.Request, res: express.Response) {
     const recipeId = req.params.id;
-    
+
     const recipe = await Recipe.findById(recipeId)
       .populate("author", "username avatar")
       .populate("owner", "username avatar")
@@ -74,6 +71,40 @@ module.exports = function (app: express.Application) {
       });
     }
 
+    // If recipe is not public, return 401
+    if (!recipe.isPublic) {
+      return res.status(401).json({
+        status: false,
+        message: "Access denied",
+      });
+    }
+
+    return res.json({
+      status: true,
+      data: {
+        recipe,
+      },
+    });
+  });
+
+  // Get single recipe
+  app.get("/api/recipaint/:id", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const userId = (req as AuthenticatedRequest).user!._id;
+    const recipeId = req.params.id;
+
+    const recipe = await Recipe.findById(recipeId)
+      .populate("author", "username avatar")
+      .populate("owner", "username avatar")
+      .lean()
+      .exec();
+
+    if (!recipe) {
+      return res.status(404).json({
+        status: false,
+        message: "Recipe not found",
+      });
+    }
+    console.log(recipe);
     // If recipe is public, allow access to anyone
     if (recipe.isPublic) {
       return res.json({
@@ -100,10 +131,10 @@ module.exports = function (app: express.Application) {
       // Unpopulated owner
       ownerObjectId = new ObjectId(recipe.owner);
     }
-    
+
     const userObjectId = new ObjectId(userId);
     const isOwner = ownerObjectId.equals(userObjectId);
-    
+
     if (!isOwner) {
       return res.status(403).json({
         status: false,
@@ -174,7 +205,7 @@ module.exports = function (app: express.Application) {
     // Check if user is the owner using ObjectId comparison
     const ownerObjectId = new ObjectId(recipe.owner);
     const userObjectId = new ObjectId(userId);
-    
+
     if (!ownerObjectId.equals(userObjectId)) {
       return res.status(403).json({
         status: false,
@@ -287,36 +318,41 @@ module.exports = function (app: express.Application) {
   });
 
   // Upload recipaint asset endpoint
-  app.post("/api/recipaint/upload-asset", authenticateToken, multerUploadRecipaintAsset.single("asset"), async function (req: express.Request, res: express.Response) {
-    if (!req.file) {
-      return res.status(400).json({
-        status: false,
-        message: "No asset file provided",
+  app.post(
+    "/api/recipaint/upload-asset",
+    authenticateToken,
+    multerUploadRecipaintAsset.single("asset"),
+    async function (req: express.Request, res: express.Response) {
+      if (!req.file) {
+        return res.status(400).json({
+          status: false,
+          message: "No asset file provided",
+        });
+      }
+
+      // Generate unique filename
+      const filename = generateUniqueFilename(req.file.originalname);
+
+      // Upload to public GCS bucket (returns public URL)
+      const assetData = await uploadRecipaintAsset(req.file, filename);
+
+      return res.json({
+        status: true,
+        message: "Asset uploaded successfully",
+        data: {
+          url: assetData.url,
+          filename: assetData.filename,
+          mimeType: assetData.mimeType,
+          size: assetData.size,
+        },
       });
-    }
-
-    // Generate unique filename
-    const filename = generateUniqueFilename(req.file.originalname);
-    
-    // Upload to public GCS bucket (returns public URL)
-    const assetData = await uploadRecipaintAsset(req.file, filename);
-
-    return res.json({
-      status: true,
-      message: "Asset uploaded successfully",
-      data: {
-        url: assetData.url,
-        filename: assetData.filename,
-        mimeType: assetData.mimeType,
-        size: assetData.size,
-      },
-    });
-  });
+    },
+  );
 
   // Delete recipaint asset endpoint
   app.delete("/api/recipaint/asset", authenticateToken, async function (req: express.Request, res: express.Response) {
     const assetUrl = req.query.assetUrl as string;
-    
+
     if (!assetUrl) {
       return res.status(400).json({
         status: false,
@@ -350,11 +386,8 @@ module.exports = function (app: express.Application) {
   app.post("/api/recipaint/:id/clone", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = (req as AuthenticatedRequest).user!._id;
     const recipeId = req.params.id;
-    
-    const originalRecipe = await Recipe.findById(recipeId)
-      .populate("author", "username avatar")
-      .lean()
-      .exec();
+
+    const originalRecipe = await Recipe.findById(recipeId).populate("author", "username avatar").lean().exec();
 
     if (!originalRecipe) {
       return res.status(404).json({
@@ -382,9 +415,10 @@ module.exports = function (app: express.Application) {
     // If recipe is public, anyone can clone it
 
     // Get the author ID (could be populated or not)
-    const authorId = originalRecipe.author && typeof originalRecipe.author === "object" && "_id" in originalRecipe.author
-      ? originalRecipe.author._id
-      : originalRecipe.author;
+    const authorId =
+      originalRecipe.author && typeof originalRecipe.author === "object" && "_id" in originalRecipe.author
+        ? originalRecipe.author._id
+        : originalRecipe.author;
 
     // Create cloned recipe
     const clonedRecipe = new Recipe({

@@ -12,6 +12,7 @@ import {
   CardContent,
   Avatar,
   Chip,
+  Badge,
 } from "@mui/material";
 import {
   ArrowBack as ArrowBackIcon,
@@ -20,13 +21,18 @@ import {
   Link as LinkIcon,
 } from "@mui/icons-material";
 import { useTitle } from "../../../hooks/useTitle";
-import { useRecipaintRecipe, useUpdateRecipe, useDeleteRecipe, useCloneRecipe } from "../../../hooks/recipaint/useRecipaint";
+import {
+  useRecipaintRecipe,
+  useUpdateRecipe,
+  useDeleteRecipe,
+  useCloneRecipe,
+} from "../../../hooks/recipaint/useRecipaint";
 import { useSnackbar } from "notistack";
 import { useAuth } from "../../../contexts/AuthContext";
 import RecipeSteps from "./components/RecipeSteps";
 import RecipeForm from "./components/RecipeForm";
 import ImageGallery from "./components/ImageGallery";
-
+import ShareIcon from "@mui/icons-material/Share";
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -40,10 +46,11 @@ export default function RecipeDetail() {
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
 
   // Check if current user is the owner
-  const isOwner = recipe && user && (
-    (recipe.owner && typeof recipe.owner === "object" && recipe.owner._id === user.id) ||
-    (typeof recipe.owner === "string" && recipe.owner === user.id)
-  );
+  const isOwner =
+    recipe &&
+    user &&
+    ((recipe.owner && typeof recipe.owner === "object" && recipe.owner._id === user.id) ||
+      (typeof recipe.owner === "string" && recipe.owner === user.id));
 
   useTitle(recipe?.title || "Recipe");
 
@@ -61,7 +68,7 @@ export default function RecipeDetail() {
 
   const handleCloneClick = async () => {
     if (!id) return;
-    
+
     cloneRecipe.mutate(id, {
       onSuccess: (clonedRecipe) => {
         enqueueSnackbar("Recipe cloned successfully", { variant: "success" });
@@ -75,7 +82,7 @@ export default function RecipeDetail() {
 
   const handleSave = async (formData: any) => {
     if (!id) return;
-    
+
     updateRecipe.mutate(
       {
         id,
@@ -89,7 +96,7 @@ export default function RecipeDetail() {
         onError: (error: Error) => {
           enqueueSnackbar(error.message || "Failed to update recipe", { variant: "error" });
         },
-      }
+      },
     );
   };
 
@@ -176,15 +183,26 @@ export default function RecipeDetail() {
         <IconButton onClick={handleBackClick}>
           <ArrowBackIcon />
         </IconButton>
-        <Typography variant="h4" sx={{ flexGrow: 1, fontWeight: 700 }}>
+        <Typography variant="h4" sx={{ flexGrow: 1, fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
           {recipe.title}
+          <IconButton
+            onClick={() => {
+              const baseUrl = window.location.origin;
+              const shareUrl = `${baseUrl}/recipaint/${id}`;
+              navigator.clipboard.writeText(shareUrl);
+              enqueueSnackbar("Link copied to clipboard", { variant: "success" });
+            }}
+          >
+            <ShareIcon />
+          </IconButton>
+          <Chip
+            color={recipe.isPublic ? "success" : "error"}
+            label={recipe.isPublic ? "Public" : "Private"}
+            variant="outlined"
+          />
         </Typography>
         {isOwner ? (
-          <Button
-            variant="contained"
-            startIcon={<EditIcon />}
-            onClick={handleEditClick}
-          >
+          <Button variant="contained" startIcon={<EditIcon />} onClick={handleEditClick}>
             Edit
           </Button>
         ) : (
@@ -203,11 +221,7 @@ export default function RecipeDetail() {
       <Box sx={{ mb: 3, display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
         {author && (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <Avatar
-              src={author.avatar}
-              alt={author.username}
-              sx={{ width: 32, height: 32 }}
-            >
+            <Avatar src={author.avatar} alt={author.username} sx={{ width: 32, height: 32 }}>
               {author.username.charAt(0).toUpperCase()}
             </Avatar>
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
@@ -262,11 +276,7 @@ export default function RecipeDetail() {
       ) : null}
 
       <Box>
-        <RecipeSteps
-          steps={recipe.steps}
-          completedSteps={completedSteps}
-          onStepToggle={handleStepToggle}
-        />
+        <RecipeSteps steps={recipe.steps} completedSteps={completedSteps} onStepToggle={handleStepToggle} />
       </Box>
     </Container>
   );
