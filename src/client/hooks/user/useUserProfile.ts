@@ -10,6 +10,7 @@ export interface UserProfile {
   email: string;
   avatar: string;
   roles?: string[];
+  points: number;
   unread_messages: boolean;
   unread_notifications: boolean;
   xenbox: {

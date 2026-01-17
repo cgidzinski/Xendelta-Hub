@@ -35,6 +35,7 @@ var userSchema = new mongoose.Schema({
   avatar: { type: String, default: "/avatars/default-avatar.png" }, // Direct GCS public URL or local default
   roles: [{ type: String }],
   password: { type: String }, // For local authentication
+  points: { type: Number, default: 200 },
   authProviders: [authProviderSchema], // Multiple authentication methods
   notifications: [notificationSchema],
   conversations: [userConversationMetadataSchema], // References to conversations with user-specific metadata

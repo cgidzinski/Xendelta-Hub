@@ -35,6 +35,7 @@ module.exports = function (app: express.Application) {
           email: user.email,
           avatar: user.avatar || "/avatars/default-avatar.png",
           roles: (user.roles || []).map((role: string) => role.toLowerCase()),
+          points: user.points || 0,
           unread_messages: hasUnreadMessages,
           unread_notifications: user.notifications.some((notification: any) => notification.unread),
           xenbox: {

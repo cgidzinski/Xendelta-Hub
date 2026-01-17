@@ -53,6 +53,7 @@ socketManager.initialize(io);
 
 require("./routes/auth.ts")(app);
 require("./routes/users.ts")(app);
+require("./routes/points.ts")(app);
 require("./routes/notifications.ts")(app);
 require("./routes/messages.ts")(app);
 require("./routes/blog.ts")(app);

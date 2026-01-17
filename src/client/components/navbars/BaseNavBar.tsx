@@ -38,6 +38,7 @@ import { useUserNotifications } from "../../hooks/user/useUserNotifications";
 import { useNavBarSocket } from "../../hooks/useNavBarSocket";
 import { Notification } from "../../types/Notification";
 import LoadingSpinner from "../LoadingSpinner";
+import PointsListItem from "../PointsListItem";
 
 const DRAWER_WIDTH = 240;
 
@@ -64,6 +65,7 @@ interface BaseNavBarProps {
   drawerHeaderPath?: string;
   drawerHeaderText?: string;
   showProfile?: boolean;
+  showPoints?: boolean;
   children?: React.ReactNode;
 }
 
@@ -80,13 +82,14 @@ export default function BaseNavBar({
   drawerHeaderPath = "/internal",
   drawerHeaderText = "XenDelta Hub",
   showProfile = true,
+  showPoints = true,
   children,
 }: BaseNavBarProps) {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const { profile } = useUserProfile();
-  
+
   // Notification state
   const [notificationAnchorEl, setNotificationAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
@@ -256,11 +259,25 @@ export default function BaseNavBar({
               ))}
               {footerNavItems.length > 0 && <Divider variant="middle" component="li" sx={{ my: 1 }} />}
               {showProfile && (
-                <ProfileListItem onNavigate={() => {
-                  if (isMobile && isNavBarOpen) {
-                    onToggleNavBar();
-                  }
-                }} />
+                <ProfileListItem profile={profile}
+                  isSelected={location.pathname.endsWith("/internal/profile")}
+                  onNavigate={() => {
+                    if (isMobile && isNavBarOpen) {
+                      onToggleNavBar();
+                    }
+                    navigate("/internal/profile");
+                  }} />
+              )}
+              {showProfile && showPoints && <Divider variant="middle" component="li" sx={{ my: 1 }} />}
+              {showPoints && (
+                <PointsListItem profile={profile}
+                  isSelected={location.pathname.endsWith("/internal/shop")}
+                  onNavigate={() => {
+                    if (isMobile && isNavBarOpen) {
+                      onToggleNavBar();
+                    }
+                    navigate("/internal/shop");
+                  }} />
               )}
             </List>
           </Box>
@@ -313,7 +330,7 @@ export default function BaseNavBar({
           {children}
         </Toolbar>
       </AppBar>
-      
+
       {/* Notifications Menu */}
       {showNotifications && (
         <>

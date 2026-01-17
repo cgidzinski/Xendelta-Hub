@@ -40,6 +40,7 @@ import Recipaint from "./routes/Internal/Recipaint/Recipaint";
 import RecipeDetail from "./routes/Internal/Recipaint/RecipeDetail";
 import XenBox from "./routes/Internal/XenBox/XenBox";
 import FileDetail from "./routes/Internal/XenBox/FileDetail";
+import Shop from "./routes/Internal/Shop/Shop";
 
 // Routes - Admin
 import Admin from "./routes/Admin/Admin";
@@ -142,6 +143,7 @@ const router = createBrowserRouter(
         <Route path="recipaint/:id" element={<RecipeDetail />} />
         <Route path="xenbox" element={<XenBox />} />
         <Route path="xenbox/:fileId" element={<FileDetail />} />
+        <Route path="shop" element={<Shop />} />
       </Route>
       {/* Admin routes - require admin role and use AdminNavBar */}
       <Route

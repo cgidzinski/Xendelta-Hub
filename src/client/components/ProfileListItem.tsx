@@ -9,36 +9,29 @@ import {
   Typography,
   Box,
 } from "@mui/material";
-import { useNavigate, useLocation } from "react-router-dom";
-import { useUserProfile } from "../hooks/user/useUserProfile";
+import { UserProfile } from "../hooks/user/useUserProfile";
 import { formatFileSize } from "../utils/fileUtils";
 
 interface ProfileListItemProps {
   onNavigate?: () => void;
+  profile?: UserProfile;
+  isSelected: boolean;
 }
 
-export default function ProfileListItem({ onNavigate }: ProfileListItemProps = {}) {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { profile } = useUserProfile();
+export default function ProfileListItem({ profile, onNavigate, isSelected }: ProfileListItemProps) {
 
   // Use direct avatar URL from profile
   const avatarUrl = useMemo(() => {
     return profile?.avatar;
   }, [profile?.avatar]);
 
-  const handleClick = () => {
-    navigate("/internal/profile");
-    onNavigate?.();
-  };
-
   return (
     <ListItem disablePadding>
       <ListItemButton
         sx={{ pl: 1 }}
         disableGutters
-        onClick={handleClick}
-        selected={location.pathname.endsWith("/internal/profile")}
+        onClick={onNavigate}
+        selected={isSelected}
       >
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
           <Box sx={{ display: "flex", flexDirection: "row", gap: 1 }}>
