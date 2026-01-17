@@ -35,7 +35,7 @@ var userSchema = new mongoose.Schema({
   avatar: { type: String, default: "/avatars/default-avatar.png" }, // Direct GCS public URL or local default
   roles: [{ type: String }],
   password: { type: String }, // For local authentication
-  points: { type: Number, default: 200 },
+  points: { type: Number, default: 1000 },
   authProviders: [authProviderSchema], // Multiple authentication methods
   notifications: [notificationSchema],
   conversations: [userConversationMetadataSchema], // References to conversations with user-specific metadata
@@ -43,10 +43,11 @@ var userSchema = new mongoose.Schema({
     token: { type: String },
     expires: { type: Date },
   },
-  xenbox:{
+  xenbox: {
     files: [{ type: Schema.Types.ObjectId, ref: "XenBoxMedia" }],
-    spaceAllowed: { type: Number, default: 1024 * 1024 * 1024 * 1 }, // 1GB
-  }
+    spaceAllowed: { type: Number, default: 1024 * 1024 * 1024 * 0 }, // 0GB
+  },
+  xenlink: [{ type: Schema.Types.ObjectId, ref: "XenLink" }],
 });
 userSchema.methods.generateHash = function (password) {
   return bcrypt.hashSync(password, bcrypt.genSaltSync(8), null);
@@ -58,7 +59,7 @@ userSchema.methods.validPassword = function (password) {
 // Helper methods for authentication providers
 userSchema.methods.addAuthProvider = function (provider, providerId, email) {
   // Check if provider already exists
-  const existingProvider = this.authProviders.find(p => p.provider === provider);
+  const existingProvider = this.authProviders.find((p) => p.provider === provider);
   if (existingProvider) {
     existingProvider.providerId = providerId;
     existingProvider.email = email;
@@ -70,14 +71,14 @@ userSchema.methods.addAuthProvider = function (provider, providerId, email) {
       providerId: providerId,
       email: email,
       linkedAt: new Date(),
-      isActive: true
+      isActive: true,
     });
   }
   return this.save();
 };
 
 userSchema.methods.removeAuthProvider = function (provider) {
-  const providerIndex = this.authProviders.findIndex(p => p.provider === provider);
+  const providerIndex = this.authProviders.findIndex((p) => p.provider === provider);
   if (providerIndex !== -1) {
     this.authProviders[providerIndex].isActive = false;
     return this.save();
@@ -86,11 +87,11 @@ userSchema.methods.removeAuthProvider = function (provider) {
 };
 
 userSchema.methods.hasAuthProvider = function (provider) {
-  return this.authProviders.some(p => p.provider === provider && p.isActive);
+  return this.authProviders.some((p) => p.provider === provider && p.isActive);
 };
 
 userSchema.methods.getActiveProviders = function () {
-  return this.authProviders.filter(p => p.isActive);
+  return this.authProviders.filter((p) => p.isActive);
 };
 var User = mongoose.model("User", userSchema);
 //

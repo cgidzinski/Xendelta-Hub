@@ -41,7 +41,8 @@ import RecipeDetail from "./routes/Internal/Recipaint/RecipeDetail";
 import XenBox from "./routes/Internal/XenBox/XenBox";
 import FileDetail from "./routes/Internal/XenBox/FileDetail";
 import Shop from "./routes/Internal/Shop/Shop";
-
+import XenLink from "./routes/Internal/XenLink/XenLink";
+import XenLinkRedirect from "./routes/External/XenLinkRedirect/XenLinkRedirect";
 // Routes - Admin
 import Admin from "./routes/Admin/Admin";
 import Users from "./routes/Admin/Users";
@@ -122,6 +123,11 @@ const router = createBrowserRouter(
         element={<XenBoxDownload />}
         errorElement={<ErrorPage />}
       />
+      <Route
+        path="/x/:slug"
+        element={<XenLinkRedirect />}
+        errorElement={<ErrorPage />}
+      />
       {/* Internal routes - require authentication */}
       <Route
         path="/internal"
@@ -143,6 +149,7 @@ const router = createBrowserRouter(
         <Route path="recipaint/:id" element={<RecipeDetail />} />
         <Route path="xenbox" element={<XenBox />} />
         <Route path="xenbox/:fileId" element={<FileDetail />} />
+        <Route path="xenlink" element={<XenLink />} />
         <Route path="shop" element={<Shop />} />
       </Route>
       {/* Admin routes - require admin role and use AdminNavBar */}

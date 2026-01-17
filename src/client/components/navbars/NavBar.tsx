@@ -4,6 +4,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import SecurityIcon from "@mui/icons-material/Security";
 import BrushIcon from "@mui/icons-material/Brush";
 import FolderIcon from "@mui/icons-material/Folder";
+import LinkIcon from "@mui/icons-material/Link";
 import { useNavBar } from "../../contexts/NavBarContext";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
 import BaseNavBar, { NavItem } from "./BaseNavBar";
@@ -56,6 +57,13 @@ export default function Root() {
       icon: <FolderIcon />,
       path: "/internal/xenbox",
       isSelected: (pathname) => pathname.startsWith("/internal/xenbox"),
+    },
+    {
+      key: "xenlink",
+      label: "XenLink",
+      icon: <LinkIcon />,
+      path: "/internal/xenlink",
+      isSelected: (pathname) => pathname.startsWith("/internal/xenlink"),
     },
   ];
 
