@@ -74,6 +74,20 @@ const linkGitHubAccountRequest = async (): Promise<LinkProviderResponse> => {
   return data;
 };
 
+const linkDiscordAccountRequest = async (): Promise<LinkProviderResponse> => {
+  const response = await apiClient.post<LinkProviderResponse>("/api/user/link-discord");
+  const data = response.data;
+
+  if (data.success && data.redirectUrl) {
+    // Redirect to Discord OAuth
+    window.location.href = data.redirectUrl;
+  } else {
+    throw new Error(data.message || "Failed to initiate Discord account linking");
+  }
+
+  return data;
+};
+
 const unlinkProviderRequest = async (provider: string): Promise<UnlinkProviderResponse> => {
   const response = await apiClient.post<ApiResponse<UnlinkProviderResponse>>("/api/user/unlink-provider", {
     provider,
@@ -127,6 +141,14 @@ export const useAuthProviders = () => {
     },
   });
 
+  // Mutation for linking Discord account
+  const { mutate: linkDiscordAccount } = useMutation({
+    mutationFn: linkDiscordAccountRequest,
+    onError: () => {
+      // Error handled by mutation error state
+    },
+  });
+
   // Mutation for unlinking provider
   const { mutateAsync: unlinkProviderMutation } = useMutation({
     mutationFn: unlinkProviderRequest,
@@ -174,6 +196,7 @@ export const useAuthProviders = () => {
     fetchAuthProviders,
     linkGoogleAccount,
     linkGitHubAccount,
+    linkDiscordAccount,
     unlinkProvider,
     addPassword,
   };

@@ -1,5 +1,6 @@
 import express = require("express");
 const { User } = require("../models/user");
+const Notification = require("../models/notification");
 import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { uploadAvatarFile } from "../utils/mediaUtils";
@@ -10,7 +11,8 @@ import { AuthenticatedRequest } from "../types";
 
 module.exports = function (app: express.Application) {
   app.get("/api/user/profile", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id })
+    const userId = (req as AuthenticatedRequest).user!._id;
+    const user = await User.findOne({ _id: userId })
       .populate("xenbox.files")
       .exec();
 
@@ -19,6 +21,10 @@ module.exports = function (app: express.Application) {
     const hasUnreadMessages = (user.conversations || []).some((convMetadata: any) => {
       return convMetadata.unread === true;
     });
+
+    // Check for unread notifications in separate collection
+    const unreadNotificationsCount = await Notification.countDocuments({ userId, unread: true });
+    const hasUnreadNotifications = unreadNotificationsCount > 0;
 
     // Calculate xenbox quota stats from populated files
     const xenboxFiles = user.xenbox?.files || [];
@@ -37,7 +43,7 @@ module.exports = function (app: express.Application) {
           roles: (user.roles || []).map((role: string) => role.toLowerCase()),
           points: user.points || 0,
           unread_messages: hasUnreadMessages,
-          unread_notifications: user.notifications.some((notification: any) => notification.unread),
+          unread_notifications: hasUnreadNotifications,
           xenbox: {
             fileCount: fileCount,
             spaceUsed: spaceUsed,
@@ -53,25 +59,23 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validate(updateProfileSchema),
     async function (req: express.Request, res: express.Response) {
-      const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+      const userId = (req as AuthenticatedRequest).user!._id;
+      const user = await User.findOne({ _id: userId }).exec();
 
-      const newNotification = {
+      const newNotification = new Notification({
+        userId: userId,
         title: "Profile updated",
         message: "Your profile has been successfully updated",
         time: new Date().toISOString(),
         icon: "person",
         unread: true,
-      };
+      });
 
-      user.notifications.unshift(newNotification);
-      await user.save();
-
-      // Get the saved notification with _id
-      const savedNotification = user.notifications[0];
+      await newNotification.save();
 
       // Send socket notification
       const socketManager = SocketManager.getInstance();
-      socketManager.sendNotification(user._id.toString(), savedNotification);
+      socketManager.sendNotification(userId.toString(), newNotification);
       return res.json({
         status: true,
         message: "",
@@ -147,23 +151,20 @@ module.exports = function (app: express.Application) {
       user.avatar = url;
       await user.save();
 
-      const newNotification = {
+      const newNotification = new Notification({
+        userId: user._id,
         title: "Avatar updated",
         message: "Your avatar has been successfully updated",
         time: new Date().toISOString(),
         icon: "person",
         unread: true,
-      };
+      });
 
-      user.notifications.unshift(newNotification);
-      await user.save();
-
-      // Get the saved notification with _id
-      const savedNotification = user.notifications[0];
+      await newNotification.save();
 
       // Send socket notification
       const socketManager = SocketManager.getInstance();
-      socketManager.sendNotification(user._id.toString(), savedNotification);
+      socketManager.sendNotification(user._id.toString(), newNotification);
 
       return res.json({
         status: true,
@@ -256,6 +257,34 @@ module.exports = function (app: express.Application) {
       return res.json({
         success: false,
         message: "Failed to initiate GitHub account linking",
+      });
+    }
+  });
+
+  // Link Discord account to existing account
+  app.post("/api/user/link-discord", authenticateToken, async function (req: express.Request, res: express.Response) {
+    try {
+      const user = (req as AuthenticatedRequest).user!;
+
+      // Check if Discord is already linked
+      const fullUser = await User.findById(user._id).exec();
+      if (fullUser.hasAuthProvider("discord")) {
+        return res.json({
+          success: false,
+          message: "Discord account is already linked",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Redirect to Discord OAuth for account linking",
+        redirectUrl: `/api/auth/discord?state=link&userId=${user._id}`,
+      });
+    } catch (error) {
+      console.error("Link Discord account error:", error);
+      return res.json({
+        success: false,
+        message: "Failed to initiate Discord account linking",
       });
     }
   });

@@ -24,7 +24,7 @@ import { useAuthProviders } from "../../../../hooks/auth/useAuthProviders";
 import AuthButton, { PROVIDER_CONFIG } from "./AuthButton";
 
 export default function AuthProviderManager() {
-  const { authProviders, loading, error, linkGoogleAccount, linkGitHubAccount, unlinkProvider, addPassword } =
+  const { authProviders, loading, error, linkGoogleAccount, linkGitHubAccount, linkDiscordAccount, unlinkProvider, addPassword } =
     useAuthProviders();
 
   const [unlinkDialog, setUnlinkDialog] = useState<{
@@ -166,6 +166,10 @@ export default function AuthProviderManager() {
 
           {!hasProvider("github") && (
             <AuthButton provider="github" onClick={linkGitHubAccount} disabled={actionLoading} />
+          )}
+
+          {!hasProvider("discord") && (
+            <AuthButton provider="discord" onClick={linkDiscordAccount} disabled={actionLoading} />
           )}
 
           {!hasProvider("local") && (

@@ -1,4 +1,5 @@
 import express = require("express");
+const Notification = require("../models/notification");
 const { User } = require("../models/user");
 import { authenticateToken } from "../middleware/auth";
 import { requireAdmin } from "../middleware/admin";
@@ -9,14 +10,19 @@ import { AuthenticatedRequest } from "../types";
 
 module.exports = function (app: express.Application) {
   app.get("/api/user/notifications", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+    const userId = (req as AuthenticatedRequest).user!._id;
     await new Promise((resolve) => setTimeout(resolve, TIMEOUTS.NOTIFICATION_DELAY));
+
+    const notifications = await Notification.find({ userId })
+      .sort({ time: -1 })
+      .limit(10)
+      .exec();
 
     return res.json({
       status: true,
       message: "",
       data: {
-        notifications: (user.notifications || []).slice(0, 10),
+        notifications: notifications,
       },
     });
   });
@@ -25,24 +31,23 @@ module.exports = function (app: express.Application) {
     "/api/user/notifications/mark-read",
     authenticateToken,
     async function (req: express.Request, res: express.Response) {
-      const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+      const userId = (req as AuthenticatedRequest).user!._id;
 
-      // Mark all notifications as read
-      user.notifications.forEach((notification: any) => {
-        notification.unread = false;
-      });
+      await Notification.updateMany({ userId, unread: true }, { unread: false });
 
-      await user.save();
-
-      // Send socket notification about update
       const socketManager = SocketManager.getInstance();
-      socketManager.notifyNotificationUpdate(user._id.toString(), "all", { unread: false });
+      socketManager.notifyNotificationUpdate(userId.toString(), "all", { unread: false });
+
+      const notifications = await Notification.find({ userId })
+        .sort({ time: -1 })
+        .limit(10)
+        .exec();
 
       return res.json({
         status: true,
         message: "All notifications marked as read",
         data: {
-          notifications: (user.notifications || []).slice(0, 10),
+          notifications: notifications,
         },
       });
     }
@@ -53,17 +58,17 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     async function (req: express.Request, res: express.Response) {
       const { notificationId } = req.params;
-      const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+      const userId = (req as AuthenticatedRequest).user!._id;
 
-      // Find and mark the specific notification as read
-      const notification = user.notifications.find((n: any) => n._id.toString() === notificationId);
+      const notification = await Notification.findOneAndUpdate(
+        { _id: notificationId, userId },
+        { unread: false },
+        { new: true }
+      );
+
       if (notification) {
-        notification.unread = false;
-        await user.save();
-
-        // Send socket notification about update
         const socketManager = SocketManager.getInstance();
-        socketManager.notifyNotificationUpdate(user._id.toString(), notificationId, { unread: false });
+        socketManager.notifyNotificationUpdate(userId.toString(), notificationId, { unread: false });
 
         return res.json({
           status: true,
@@ -101,27 +106,25 @@ module.exports = function (app: express.Application) {
       let successCount = 0;
       let errorCount = 0;
       const socketManager = SocketManager.getInstance();
+      const time = new Date().toISOString();
 
       for (const targetUser of allUsers) {
-        const newNotification = {
-          title: title,
-          message: message,
-          time: new Date().toISOString(),
-          icon: icon || "announcement",
-          unread: true,
-        };
+        try {
+          const newNotification = new Notification({
+            userId: targetUser._id,
+            title,
+            message,
+            time,
+            icon: icon || "announcement",
+            unread: true,
+          });
 
-        targetUser.notifications.unshift(newNotification);
-
-        await targetUser.save();
-
-        // Get the saved notification with _id
-        const savedNotification = targetUser.notifications[0];
-
-        // Send socket notification
-        socketManager.sendNotification(targetUser._id.toString(), savedNotification);
-
-        successCount++;
+          await newNotification.save();
+          socketManager.sendNotification(targetUser._id.toString(), newNotification);
+          successCount++;
+        } catch (err) {
+          errorCount++;
+        }
       }
 
       return res.json({

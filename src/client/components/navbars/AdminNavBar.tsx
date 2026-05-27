@@ -57,7 +57,6 @@ export default function AdminNavBar() {
       footerNavItems={footerNavItems}
       showNotifications={true}
       showMessages={true}
-      showSystemMessageNotifications={true}
     />
   );
 }

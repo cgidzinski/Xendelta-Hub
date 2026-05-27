@@ -2,15 +2,6 @@ var mongoose = require("mongoose");
 var bcrypt = require("bcrypt-nodejs");
 var Schema = mongoose.Schema;
 
-// NOTIFICATION SCHEMA
-var notificationSchema = new mongoose.Schema({
-  title: { type: String },
-  message: { type: String },
-  time: { type: String },
-  icon: { type: String },
-  unread: { type: Boolean },
-});
-
 // User-specific conversation metadata (references Conversation collection)
 var userConversationMetadataSchema = new mongoose.Schema({
   conversationId: { type: Schema.Types.ObjectId, ref: "Conversation", required: true },
@@ -37,7 +28,6 @@ var userSchema = new mongoose.Schema({
   password: { type: String }, // For local authentication
   points: { type: Number, default: 1000 },
   authProviders: [authProviderSchema], // Multiple authentication methods
-  notifications: [notificationSchema],
   conversations: [userConversationMetadataSchema], // References to conversations with user-specific metadata
   resetPassword: {
     token: { type: String },

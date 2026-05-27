@@ -34,6 +34,7 @@ import Profile from "./routes/Internal/Profile/Profile";
 import Settings from "./routes/Internal/Settings/Settings";
 import Messages from "./routes/Internal/Messages/Messages";
 import ConversationDetail from "./routes/Internal/Messages/ConversationDetail";
+import Notifications from "./routes/Internal/Notifications/Notifications";
 import InternalBlog from "./routes/Internal/Blog/InternalBlog";
 import InternalBlogPostDetail from "./routes/Internal/Blog/InternalBlogPostDetail";
 import Recipaint from "./routes/Internal/Recipaint/Recipaint";
@@ -137,6 +138,7 @@ const router = createBrowserRouter(
         <Route path="settings" element={<Settings />} />
         <Route path="messages" element={<Messages />} />
         <Route path="messages/:conversationId" element={<ConversationDetail />} />
+        <Route path="notifications" element={<Notifications />} />
         <Route path="blog" element={<InternalBlog />} />
         <Route path="blog/:slug" element={<InternalBlogPostDetail />} />
         <Route path="recipaint" element={<Recipaint />} />

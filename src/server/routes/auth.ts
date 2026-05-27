@@ -1,5 +1,6 @@
 import express = require("express");
 const { User } = require("../models/user");
+const Notification = require("../models/notification");
 const crypto = require("crypto");
 import { authenticateToken } from "../middleware/auth";
 import { generateToken } from "../utils/tokenUtils";
@@ -275,24 +276,21 @@ module.exports = function (app: express.Application) {
     user.resetPassword.token = undefined;
     user.resetPassword.expires = undefined;
 
-    // Add notification
-    const newNotification = {
+    // Add notification to separate collection
+    const newNotification = new Notification({
+      userId: user._id,
       title: "Password Reset",
       message: "Your password has been successfully reset",
       time: new Date().toISOString(),
       icon: "lock",
       unread: true,
-    };
+    });
 
-    user.notifications.unshift(newNotification);
-    await user.save();
-
-    // Get the saved notification with _id
-    const savedNotification = user.notifications[0];
+    await newNotification.save();
 
     // Send socket notification
     const socketManager = SocketManager.getInstance();
-    socketManager.sendNotification(user._id.toString(), savedNotification);
+    socketManager.sendNotification(user._id.toString(), newNotification);
 
     return res.json({
       status: true,
@@ -304,7 +302,7 @@ module.exports = function (app: express.Application) {
   const handleOAuthCallback = async (
     req: express.Request,
     res: express.Response,
-    provider: 'google' | 'github'
+    provider: 'google' | 'github' | 'discord'
   ) => {
     const user = req.user as any; // Passport sets full User document, not AuthenticatedRequest structure
     const state = req.query.state;
@@ -315,9 +313,11 @@ module.exports = function (app: express.Application) {
       // Link OAuth account to existing local account
       const existingUser = await User.findById(userId).exec();
       if (existingUser) {
-        const providerId = provider === 'google' 
-          ? user.googleId 
-          : user.authProviders.find((p: any) => p.provider === 'github')?.providerId;
+        const providerId = provider === 'google'
+          ? user.googleId
+          : provider === 'github'
+          ? user.authProviders.find((p: any) => p.provider === 'github')?.providerId
+          : user.authProviders.find((p: any) => p.provider === 'discord')?.providerId;
         
         await existingUser.addAuthProvider(provider, providerId, user.email);
         
@@ -362,17 +362,34 @@ module.exports = function (app: express.Application) {
   );
 
   // GitHub OAuth Routes
-  app.get("/api/auth/github", 
+  app.get("/api/auth/github",
     passport.authenticate('github', { scope: ['user:email'], session: false })
   );
 
-  app.get("/api/auth/github/callback", 
+  app.get("/api/auth/github/callback",
     passport.authenticate('github', { failureRedirect: '/login', session: false }),
     async function (req: express.Request, res: express.Response) {
       try {
         await handleOAuthCallback(req, res, 'github');
       } catch (error) {
         console.error("GitHub OAuth callback error:", error);
+        res.redirect(`http://localhost:${process.env.PORT || '3000'}/login?error=oauth_failed`);
+      }
+    }
+  );
+
+  // Discord OAuth Routes
+  app.get("/api/auth/discord",
+    passport.authenticate('discord', { session: false })
+  );
+
+  app.get("/api/auth/discord/callback",
+    passport.authenticate('discord', { failureRedirect: '/login', session: false }),
+    async function (req: express.Request, res: express.Response) {
+      try {
+        await handleOAuthCallback(req, res, 'discord');
+      } catch (error) {
+        console.error("Discord OAuth callback error:", error);
         res.redirect(`http://localhost:${process.env.PORT || '3000'}/login?error=oauth_failed`);
       }
     }

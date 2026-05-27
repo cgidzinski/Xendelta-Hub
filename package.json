@@ -36,6 +36,7 @@
     "multer": "^2.0.2",
     "notistack": "^3.0.2",
     "passport": "^0.7.0",
+    "passport-discord": "^0.1.4",
     "passport-github2": "^0.1.12",
     "passport-google-oauth20": "^2.0.0",
     "passport-jwt": "^4.0.1",

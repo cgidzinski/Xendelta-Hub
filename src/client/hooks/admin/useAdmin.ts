@@ -38,13 +38,17 @@ const sendNotificationToAllUsers = async (
   title: string,
   message: string,
   icon: string = "announcement"
-): Promise<SendNotificationResponse> => {
-  const response = await apiClient.post<ApiResponse<SendNotificationResponse>>("/api/admin/notifications/all", {
+): Promise<{ message: string; successCount: number; errorCount: number }> => {
+  const response = await apiClient.post<ApiResponse<{ successCount: number; errorCount: number }>>("/api/admin/notifications/all", {
     title,
     message,
     icon,
   });
-  return response.data.data!;
+  return {
+    message: `Notification sent to ${response.data.data?.successCount || 0} users`,
+    successCount: response.data.data?.successCount || 0,
+    errorCount: response.data.data?.errorCount || 0,
+  };
 };
 
 const deleteAllMessagesData = async (): Promise<DeleteMessagesResponse> => {

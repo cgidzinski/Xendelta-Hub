@@ -37,7 +37,7 @@ import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { useAdminUsers, User } from "../../hooks/admin/useAdminUsers";
 import { formatFileSize } from "../../utils/fileUtils";
 
-const AVAILABLE_ROLES = ["admin", "bot", "user"];
+const AVAILABLE_ROLES = ["admin", "user"];
 
 export default function Users() {
   useTitle("Users");
@@ -79,8 +79,6 @@ export default function Users() {
     switch (lowerRole) {
       case "admin":
         return "error";
-      case "bot":
-        return "info";
       default:
         return "default";
     }
