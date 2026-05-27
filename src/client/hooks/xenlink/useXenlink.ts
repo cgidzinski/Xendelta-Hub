@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "../contexts/AuthContext";
-import { apiClient } from "../config/api";
-import { ApiResponse } from "../types/api";
+import { useAuth } from "../../contexts/AuthContext";
+import { apiClient } from "../../config/api";
+import { ApiResponse } from "../../types/api";
 import { enqueueSnackbar, useSnackbar } from "notistack";
-import { userProfileKeys } from "./user/useUserProfile";
+import { userProfileKeys } from "../user/useUserProfile";
 
 interface XenLinkResponse {
   status: boolean;

@@ -1,59 +1,22 @@
 import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types";
+import { ShopItem } from "../types/shopItem";
 const { User } = require("../models/user");
+const { SHOP_ITEMS } = require("../constants/shopItems");
+const { ITEMS } = require("../constants/items");
 
 module.exports = function (app: express.Application) {
 
-    const pointsShopItems = [
-        {
-            id: "1",
-            name: "Free 1000 Points",
-            description: "Get 1000 points for free",
-            price: -1000,
-            image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQDjzenTPwlSFWa0lUXHTtHLoX18nv8D4fyTA&s",
-            function: async (userId: string) => {
-                console.log("Item 1 function");
-            }
-        },
-        {
-            id: "2",
-            name: "1GB XenBox Space",
-            description: "Get 1GB of XenBox space",
-            price: 1000,
-            image: "https://cdn-icons-png.flaticon.com/512/4008/4008946.png",
-            function: async (userId: string) => {
-                const user = await User.findById(userId).exec();
-                if (!user) {
-                    throw new Error("User not found");
-                }
-                user.xenbox.spaceAllowed += 1024 * 1024 * 1024;
-                await user.save();
-            }
-        },
-        {
-            id: "3",
-            name: "Item 3",
-            description: "Description 3",
-            price: 300,
-            image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSxvaPt8IsliozniJc7g__qxXBMDb3Wzi6E1A&s",
-            function: async (userId: string) => {
-                console.log("Item 3 function");
-            }
-        },
-    ];
     //Get points shop items
     app.get("/api/points/shop", authenticateToken, async function (req: express.Request, res: express.Response) {
-        const items = pointsShopItems.map((item) => ({
-            id: item.id,
-            name: item.name,
-            description: item.description,
-            price: item.price,
-            image: item.image,
+        const itemsWithDetails = SHOP_ITEMS.map((shopItem: ShopItem) => ({
+            ...shopItem,
+            item: ITEMS[shopItem.itemKey],
         }));
         return res.json({
             status: true,
-            data: { items },
+            data: { items: itemsWithDetails },
         });
     });
 
@@ -62,8 +25,8 @@ module.exports = function (app: express.Application) {
         const userId = (req as AuthenticatedRequest).user!._id;
         const { itemId } = req.body;
 
-        const item = pointsShopItems.find((item) => item.id === itemId);
-        if (!item) {
+        const shopItem: ShopItem | undefined = SHOP_ITEMS.find((item: ShopItem) => item.id === itemId);
+        if (!shopItem) {
             return res.status(404).json({
                 status: false,
                 message: "Item not found",
@@ -79,20 +42,33 @@ module.exports = function (app: express.Application) {
             });
         }
 
-        if (user.points < item.price) {
+        if (user.points < shopItem.price) {
             return res.json({
                 status: false,
                 message: "Insufficient points",
             });
         }
 
-        user.points -= item.price;
-        await item.function(userId).catch((error: any) => {
-            return res.status(500).json({
-                status: false,
-                message: error.message,
+        // Run onPurchase if it exists
+        if (shopItem.onPurchase) {
+            await shopItem.onPurchase(user);
+        }
+
+        // Add to inventory if addToInventory is true (default)
+        if (shopItem.addToInventory !== false) {
+            const item = ITEMS[shopItem.itemKey];
+            user.inventory.push({
+                itemKey: shopItem.itemKey,
+                name: item.name,
+                description: item.description,
+                image: item.image,
+                redeemable: item.redeemable,
+                purchasedAt: new Date(),
+                used: false,
             });
-        });
+        }
+
+        user.points -= shopItem.price;
         await user.save();
 
         return res.json({
@@ -100,22 +76,4 @@ module.exports = function (app: express.Application) {
             message: "Points redeemed successfully",
         });
     });
-
-
-    // // Redeem points
-    // app.post("/api/points/redeem", authenticateToken, async function (req: express.Request, res: express.Response) {
-    //     const userId = (req as AuthenticatedRequest).user!._id;
-    //     const { points } = req.body;
-
-    //     const user = await User.findById(userId).exec();
-
-    //     if (!user) {
-    //         return res.status(404).json({
-    //             status: false,
-    //             message: "User not found",
-    //         });
-    //     }
-
-    //     user.points -= points;
-    // });
 };

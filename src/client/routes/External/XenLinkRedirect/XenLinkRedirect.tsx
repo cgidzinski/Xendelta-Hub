@@ -15,7 +15,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import LockIcon from "@mui/icons-material/Lock";
 import { useTitle } from "../../../hooks/useTitle";
 import { formatDistanceToNow } from "date-fns";
-import { XenLink } from "../../../hooks/useXenlink";
+import { XenLink } from "../../../hooks/xenlink/useXenlink";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import LinkIcon from "@mui/icons-material/Link";
 

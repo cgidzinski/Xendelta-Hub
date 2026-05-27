@@ -4,9 +4,13 @@ import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
 import { AuthenticatedRequest } from "../../types";
 
+const { ITEMS } = require("../../constants/items");
+const Notification = require("../../models/notification");
+const { SocketManager } = require("../../infrastructure/SocketManager");
+
 module.exports = function (app: express.Application) {
   app.get("/api/admin/users", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
-    const users = await User.find({}, "username email _id roles avatar xenbox").populate("xenbox.files").exec();
+    const users = await User.find({}, "username email _id roles avatar xenbox points inventory").populate("xenbox.files").exec();
     
     return res.json({
       status: true,
@@ -24,6 +28,8 @@ module.exports = function (app: express.Application) {
             email: user.email,
             roles: (user.roles || []).map((role: string) => role.toLowerCase()),
             avatar: user.avatar,
+            points: user.points || 0,
+            inventory: user.inventory || [],
             xenbox: {
               fileCount,
               spaceUsed,
@@ -151,6 +157,105 @@ module.exports = function (app: express.Application) {
     return res.json({
       status: true,
       message: "User deleted successfully",
+    });
+  });
+
+  app.post("/api/admin/users/:userId/give-item", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+    const { userId } = req.params;
+    const { itemKey } = req.body;
+
+    if (!itemKey) {
+      return res.status(400).json({
+        status: false,
+        message: "Item key is required",
+      });
+    }
+
+    const item = ITEMS[itemKey];
+
+    if (!item) {
+      return res.status(404).json({
+        status: false,
+        message: "Item not found",
+      });
+    }
+
+    const user = await User.findOne({ _id: userId }).exec();
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    user.inventory.push({
+      itemKey: item.key,
+      name: item.name,
+      description: item.description,
+      image: item.image,
+      redeemable: item.redeemable,
+      purchasedAt: new Date(),
+      used: false,
+    });
+
+    await user.save();
+
+    // Apply item effects if it has an apply function (for immediate effects like points)
+    if (item.apply) {
+      await item.apply(user);
+    }
+
+    // Create notification for the user
+    const notification = new Notification({
+      userId: user._id,
+      title: "You got a gift!",
+      message: `You received a ${item.name}`,
+      icon: "announcement",
+      unread: true,
+      time: new Date(),
+    });
+    await notification.save();
+
+    // Emit socket event for real-time notification (non-blocking)
+    try {
+      const socketManager = SocketManager.getInstance();
+      socketManager.emitToUser(user._id.toString(), "notification", notification);
+    } catch (err) {
+      console.error("Failed to emit socket notification:", err);
+    }
+
+    return res.json({
+      status: true,
+      message: `Gave ${item.name} to ${user.username}`,
+    });
+  });
+
+  app.delete("/api/admin/users/:userId/inventory/:itemKey", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+    const { userId, itemKey } = req.params;
+
+    const user = await User.findOne({ _id: userId }).exec();
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    const itemIndex = user.inventory.findIndex((item: any) => item.itemKey === itemKey);
+    if (itemIndex === -1) {
+      return res.status(404).json({
+        status: false,
+        message: "Item not found in user inventory",
+      });
+    }
+
+    user.inventory.splice(itemIndex, 1);
+    await user.save();
+
+    return res.json({
+      status: true,
+      message: `Removed ${itemKey} from ${user.username}`,
     });
   });
 };

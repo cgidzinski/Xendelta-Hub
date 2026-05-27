@@ -22,7 +22,7 @@ import { useTitle } from "../../../hooks/useTitle";
 import { useSnackbar } from "notistack";
 import FileList from "./components/FileList";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
-import { useXenboxUpload, useXenboxFiles } from "../../../hooks/useXenbox";
+import { useXenboxUpload, useXenboxFiles } from "../../../hooks/xenbox/useXenbox";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
 import { formatFileSize } from "../../../utils/fileUtils";
 

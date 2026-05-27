@@ -25,7 +25,7 @@ import LockOpenIcon from "@mui/icons-material/LockOpen";
 import ClearIcon from "@mui/icons-material/Clear";
 import { useTitle } from "../../../hooks/useTitle";
 import { useSnackbar } from "notistack";
-import { useXenbox, useXenboxFileSettings, useXenboxFiles } from "../../../hooks/useXenbox";
+import { useXenbox, useXenboxFileSettings, useXenboxFiles } from "../../../hooks/xenbox/useXenbox";
 import { formatFileSize } from "../../../utils/fileUtils";
 import { format } from "date-fns";
 

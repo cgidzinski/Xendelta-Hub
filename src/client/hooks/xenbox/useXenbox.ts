@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../config/api";
-import { ApiResponse } from "../types/api";
-import { XenBoxFile, XenBoxFileListResponse } from "../types/XenBoxFile";
+import { apiClient } from "../../config/api";
+import { ApiResponse } from "../../types/api";
+import { XenBoxFile, XenBoxFileListResponse } from "../../types/XenBoxFile";
 
 // Chunk size constant (10MB)
 const CHUNK_SIZE = 10 * 1024 * 1024;

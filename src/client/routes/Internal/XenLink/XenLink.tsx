@@ -17,7 +17,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import { useTitle } from "../../../hooks/useTitle";
 import LinkIcon from "@mui/icons-material/Link";
-import { useCreateXenLink, useDeleteXenLink, useUpdateXenLink, useXenLink, XenLink } from "../../../hooks/useXenlink";
+import { useCreateXenLink, useDeleteXenLink, useUpdateXenLink, useXenLink, XenLink } from "../../../hooks/xenlink/useXenlink";
 import LinkList from "./components/LinkList";
 import { format } from "date-fns";
 import { useSnackbar } from "notistack";

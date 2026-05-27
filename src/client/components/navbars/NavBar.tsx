@@ -2,16 +2,41 @@ import HomeIcon from "@mui/icons-material/Home";
 import ArticleIcon from "@mui/icons-material/Article";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SecurityIcon from "@mui/icons-material/Security";
+import InventoryIcon from "@mui/icons-material/Inventory2";
 import BrushIcon from "@mui/icons-material/Brush";
 import FolderIcon from "@mui/icons-material/Folder";
 import LinkIcon from "@mui/icons-material/Link";
+import EditIcon from "@mui/icons-material/Edit";
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import IconButton from "@mui/material/IconButton";
+import { Link } from "react-router-dom";
 import { useNavBar } from "../../contexts/NavBarContext";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
 import BaseNavBar, { NavItem } from "./BaseNavBar";
 
+const APPS_REGISTRY = {
+  recipaint: { label: "Recipaint", icon: <BrushIcon />, path: "/internal/recipaint" },
+  xenbox: { label: "XenBox", icon: <FolderIcon />, path: "/internal/xenbox" },
+  xenlink: { label: "XenLink", icon: <LinkIcon />, path: "/internal/xenlink" },
+};
+
 export default function Root() {
   const { isNavBarOpen, toggleNavBar, title } = useNavBar();
   const { profile } = useUserProfile();
+
+  const pinnedApps = profile?.pinnedApps || [];
+
+  const appNavItems: NavItem[] = pinnedApps.map((appKey) => {
+    const app = APPS_REGISTRY[appKey as keyof typeof APPS_REGISTRY];
+    if (!app) return null;
+    return {
+      key: `pinned-${appKey}`,
+      label: app.label,
+      icon: app.icon,
+      path: app.path,
+      isSelected: (pathname: string) => pathname.startsWith(app.path),
+    };
+  }).filter(Boolean) as NavItem[];
 
   const navItems: NavItem[] = [
     {
@@ -29,12 +54,12 @@ export default function Root() {
       isSelected: (pathname) => pathname.startsWith("/internal/blog"),
     },
     {
-      key: "blog-divider",
+      key: "apps-divider",
       label: "",
       icon: null,
       path: "",
       isSelected: () => false,
-      type: "divider",
+      type: "divider" as const,
     },
     {
       key: "apps-header",
@@ -42,43 +67,26 @@ export default function Root() {
       icon: null,
       path: "",
       isSelected: () => false,
-      type: "header",
+      type: "header" as const,
+      headerAction: (
+        <Link to="/internal/apps" style={{ color: "inherit", display: "flex" }}>
+          <IconButton size="small" sx={{ color: "text.secondary" }}>
+            <EditIcon fontSize="small" />
+          </IconButton>
+        </Link>
+      ),
     },
-    {
-      key: "recipaint",
-      label: "Recipaint",
-      icon: <BrushIcon />,
-      path: "/internal/recipaint",
-      isSelected: (pathname) => pathname.startsWith("/internal/recipaint"),
-    },
-    {
-      key: "xenbox",
-      label: "XenBox",
-      icon: <FolderIcon />,
-      path: "/internal/xenbox",
-      isSelected: (pathname) => pathname.startsWith("/internal/xenbox"),
-    },
-    {
-      key: "xenlink",
-      label: "XenLink",
-      icon: <LinkIcon />,
-      path: "/internal/xenlink",
-      isSelected: (pathname) => pathname.startsWith("/internal/xenlink"),
-    },
+    ...appNavItems,
   ];
 
   const footerNavItems: NavItem[] = [
-    ...(profile?.roles?.some((role: string) => role.toLowerCase() === "admin")
-      ? [
-          {
-            key: "admin",
-            label: "Admin",
-            icon: <SecurityIcon />,
-            path: "/admin",
-            isSelected: (pathname: string) => pathname.endsWith("/admin"),
-          },
-        ]
-      : []),
+    {
+      key: "inventory",
+      label: "Inventory",
+      icon: <InventoryIcon />,
+      path: "/internal/inventory",
+      isSelected: (pathname) => pathname.startsWith("/internal/inventory"),
+    },
     {
       key: "settings",
       label: "Settings",
@@ -87,6 +95,8 @@ export default function Root() {
       isSelected: (pathname) => pathname.endsWith("/internal/settings"),
     },
   ];
+
+  const isAdmin = profile?.roles?.some((role: string) => role.toLowerCase() === "admin");
 
   return (
     <BaseNavBar
@@ -97,6 +107,23 @@ export default function Root() {
       footerNavItems={footerNavItems}
       showNotifications={true}
       showMessages={true}
-    />
+      showPoints={true}
+    >
+      {isAdmin && (
+        <Link to="/admin" style={{ color: "inherit", display: "flex", marginLeft: 4 }}>
+          <IconButton
+            sx={{
+              color: "warning.main",
+              backgroundColor: "rgba(255, 193, 7, 0.1)",
+              "&:hover": {
+                backgroundColor: "rgba(255, 193, 7, 0.2)",
+              },
+            }}
+          >
+            <SecurityIcon />
+          </IconButton>
+        </Link>
+      )}
+    </BaseNavBar>
   );
 }

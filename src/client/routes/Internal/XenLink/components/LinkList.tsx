@@ -2,7 +2,7 @@ import { Box, Typography, CircularProgress, Alert, Card, CardContent, CardAction
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useSnackbar } from "notistack";
 import { format } from "date-fns";
-import { XenLink } from "../../../../hooks/useXenlink";
+import { XenLink } from "../../../../hooks/xenlink/useXenlink";
 
 interface LinkListProps {
   links: XenLink[] | undefined;

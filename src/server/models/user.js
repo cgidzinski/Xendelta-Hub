@@ -18,6 +18,18 @@ var authProviderSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
 });
 
+// INVENTORY ITEM SCHEMA
+var inventoryItemSchema = new mongoose.Schema({
+  itemKey: { type: String, required: true },
+  name: { type: String },
+  description: { type: String },
+  image: { type: String },
+  redeemable: { type: Boolean },
+  purchasedAt: { type: Date, default: Date.now },
+  used: { type: Boolean, default: false },
+  usedAt: { type: Date },
+});
+
 //USER
 var userSchema = new mongoose.Schema({
   name: { type: String },
@@ -38,6 +50,8 @@ var userSchema = new mongoose.Schema({
     spaceAllowed: { type: Number, default: 1024 * 1024 * 1024 * 0 }, // 0GB
   },
   xenlink: [{ type: Schema.Types.ObjectId, ref: "XenLink" }],
+  pinnedApps: [{ type: String }],
+  inventory: [inventoryItemSchema],
 });
 userSchema.methods.generateHash = function (password) {
   return bcrypt.hashSync(password, bcrypt.genSaltSync(8), null);

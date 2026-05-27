@@ -11,7 +11,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Chip,
   CircularProgress,
   Alert,
@@ -22,15 +21,22 @@ import {
   DialogContent,
   DialogActions,
   Button,
-  Divider,
-  Stack,
-  Autocomplete,
+  MenuItem,
+  IconButton,
+  Tabs,
+  Tab,
+  Grid,
+  Tooltip,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import StorageIcon from "@mui/icons-material/Storage";
+import InventoryIcon from "@mui/icons-material/Inventory2";
+import SettingsIcon from "@mui/icons-material/Settings";
+import PersonIcon from "@mui/icons-material/Person";
+import StarsIcon from "@mui/icons-material/Stars";
 import { useSnackbar } from "notistack";
 import { useTitle } from "../../hooks/useTitle";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
@@ -38,6 +44,12 @@ import { useAdminUsers, User } from "../../hooks/admin/useAdminUsers";
 import { formatFileSize } from "../../utils/fileUtils";
 
 const AVAILABLE_ROLES = ["admin", "user"];
+
+const ITEM_OPTIONS = [
+  { value: "1000-point-voucher", label: "1000 Point Voucher" },
+  { value: "1gb-xenbox-voucher", label: "1GB XenBox Voucher" },
+  { value: "golden-badge", label: "Golden Badge" },
+];
 
 export default function Users() {
   useTitle("Users");
@@ -52,6 +64,10 @@ export default function Users() {
     isDeletingUser,
     resetAvatar,
     isResettingAvatar,
+    giveItem,
+    isGivingItem,
+    removeItem,
+    isRemovingItem,
     refetch,
   } = useAdminUsers();
   const [searchQuery, setSearchQuery] = useState("");
@@ -60,6 +76,8 @@ export default function Users() {
   const [editingRoles, setEditingRoles] = useState<string[]>([]);
   const [editingQuota, setEditingQuota] = useState<string>("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [selectedGiftItem, setSelectedGiftItem] = useState<string>("");
+  const [activeTab, setActiveTab] = useState(0);
 
   const filteredUsers = useMemo(() => {
     if (searchQuery.trim() === "") {
@@ -96,6 +114,7 @@ export default function Users() {
     setSelectedUser(null);
     setEditingRoles([]);
     setEditingQuota("");
+    setActiveTab(0);
   };
 
   const handleSaveRoles = async () => {
@@ -196,6 +215,35 @@ export default function Users() {
       })
       .catch((error) => {
         enqueueSnackbar(error.message || "Failed to reset avatar", { variant: "error" });
+      });
+  };
+
+  const handleGiveGift = async () => {
+    if (!selectedUser || !selectedGiftItem) return;
+    giveItem(selectedUser._id, selectedGiftItem)
+      .then(() => {
+        enqueueSnackbar("Gift sent successfully", { variant: "success" });
+        setSelectedGiftItem("");
+      })
+      .catch((error) => {
+        enqueueSnackbar(error.message || "Failed to send gift", { variant: "error" });
+      });
+  };
+
+  const handleRemoveItem = async (userId: string, itemKey: string) => {
+    removeItem(userId, itemKey)
+      .then(() => {
+        enqueueSnackbar("Item removed", { variant: "success" });
+        // Update selected user inventory
+        if (selectedUser) {
+          setSelectedUser({
+            ...selectedUser,
+            inventory: selectedUser.inventory?.filter(i => i.itemKey !== itemKey) || [],
+          });
+        }
+      })
+      .catch((error) => {
+        enqueueSnackbar(error.message || "Failed to remove item", { variant: "error" });
       });
   };
 
@@ -307,121 +355,183 @@ export default function Users() {
         <Dialog
           open={userModalOpen}
           onClose={handleCloseModal}
-          maxWidth="md"
-          fullWidth
           PaperProps={{
             sx: {
-              borderRadius: 3,
+              width: "80vw",
+              height: "80vh",
+              maxWidth: "none",
+              maxHeight: "none",
             },
           }}
         >
-          <DialogTitle>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                User Details
+          <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 2, pb: 1 }}>
+            <Avatar
+              src={selectedUser?.avatar || undefined}
+              sx={{ width: 48, height: 48, fontSize: "1.25rem" }}
+            >
+              {selectedUser?.username?.charAt(0).toUpperCase()}
+            </Avatar>
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                {selectedUser?.username}
               </Typography>
-              <Button onClick={handleCloseModal} sx={{ minWidth: "auto", p: 0.5 }} color="inherit">
-                <CloseIcon />
-              </Button>
+              <Typography variant="body2" color="text.secondary">
+                {selectedUser?.email}
+              </Typography>
             </Box>
+            <IconButton onClick={handleCloseModal} size="small">
+              <CloseIcon />
+            </IconButton>
           </DialogTitle>
-          <DialogContent>
-            {selectedUser && (
-              <Stack spacing={3}>
-                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 2 }}>
-                  <Avatar
-                    src={selectedUser.avatar || undefined}
-                    sx={{ width: 120, height: 120, borderRadius: 2, mb: 2 }}
-                  >
-                    {selectedUser.username?.charAt(0).toUpperCase()}
-                  </Avatar>
-                  <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
-                    {selectedUser.username}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {selectedUser.email}
-                  </Typography>
+          <Tabs
+            value={activeTab}
+            onChange={(e, v) => setActiveTab(v)}
+            sx={{
+              px: 2,
+              borderBottom: 1,
+              borderColor: "divider",
+              "& .MuiTab-root": {
+                textTransform: "none",
+                minHeight: 48,
+              },
+            }}
+          >
+            <Tab icon={<PersonIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Info" />
+            <Tab icon={<InventoryIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Inventory" />
+            <Tab icon={<SettingsIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Misc" />
+          </Tabs>
+          <DialogContent sx={{ p: 3 }}>
+            {activeTab === 0 && selectedUser && (
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <Box sx={{ display: "flex", gap: 4 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>Points</Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: "primary.main" }}>
+                      {selectedUser.points?.toLocaleString() || 0}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>Roles</Typography>
+                    <Box sx={{ display: "flex", gap: 0.5 }}>
+                      {selectedUser.roles?.map((role) => (
+                        <Chip
+                          key={role}
+                          label={role}
+                          size="small"
+                          color={getRoleColor(role) as any}
+                          sx={{ fontWeight: 600, textTransform: "capitalize" }}
+                        />
+                      ))}
+                    </Box>
+                  </Box>
                 </Box>
-
-                <Divider />
-
+                {selectedUser.xenbox && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>XenBox</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {formatFileSize(selectedUser.xenbox.spaceUsed)} / {formatFileSize(selectedUser.xenbox.spaceAllowed)}
+                      <Typography component="span" variant="caption" color="text.secondary"> ({selectedUser.xenbox.fileCount} files)</Typography>
+                    </Typography>
+                  </Box>
+                )}
                 <Box>
-                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontWeight: 600 }}>
-                    User ID
-                  </Typography>
-                  <Typography variant="body2" sx={{ fontFamily: "monospace", wordBreak: "break-all" }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>User ID</Typography>
+                  <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
                     {selectedUser._id}
                   </Typography>
                 </Box>
+              </Box>
+            )}
 
-                <Box>
-                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontWeight: 600 }}>
-                    Roles
+            {activeTab === 1 && selectedUser && (
+              <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    Give Item
                   </Typography>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <Autocomplete
-                      multiple
-                      options={AVAILABLE_ROLES}
-                      value={editingRoles}
-                      onChange={(event, newValue) => {
-                        setEditingRoles(newValue);
-                      }}
-                      renderTags={(value, getTagProps) =>
-                        value.map((option, index) => (
-                          <Chip
-                            {...getTagProps({ index })}
-                            key={option}
-                            label={option}
-                            size="small"
-                            color={getRoleColor(option) as any}
-                            sx={{ fontWeight: 600 }}
-                          />
-                        ))
-                      }
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          placeholder="Select roles"
-                          size="small"
-                        />
-                      )}
+                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                    <TextField
+                      select
+                      size="small"
+                      value={selectedGiftItem}
+                      onChange={(e) => setSelectedGiftItem(e.target.value)}
                       sx={{ flex: 1 }}
-                    />
+                    >
+                      {ITEM_OPTIONS.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </TextField>
                     <Button
                       variant="contained"
+                      color="warning"
                       size="small"
-                      onClick={handleSaveRoles}
-                      disabled={isUpdatingUser || JSON.stringify(editingRoles.sort()) === JSON.stringify((selectedUser.roles || []).sort())}
+                      onClick={handleGiveGift}
+                      disabled={isGivingItem || !selectedGiftItem}
                     >
-                      {isUpdatingUser ? "Saving..." : "Save Roles"}
+                      {isGivingItem ? "Sending..." : "Give"}
                     </Button>
                   </Box>
                 </Box>
 
-                <Divider />
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
+                  Current Inventory ({selectedUser.inventory?.length || 0})
+                </Typography>
+                {!selectedUser.inventory || selectedUser.inventory.length === 0 ? (
+                  <Box sx={{ py: 4, textAlign: "center" }}>
+                    <InventoryIcon sx={{ fontSize: 48, color: "text.disabled", mb: 1 }} />
+                    <Typography color="text.secondary">No items in inventory</Typography>
+                  </Box>
+                ) : (
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1, overflow: "auto", flex: 1 }}>
+                    {selectedUser.inventory.map((item, index) => (
+                      <Box key={index} sx={{ display: "flex", alignItems: "center", gap: 2, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
+                        <Avatar src={item.image} sx={{ width: 40, height: 40 }} variant="rounded" />
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{item.name}</Typography>
+                          <Typography variant="caption" color="text.secondary">{item.description}</Typography>
+                        </Box>
+                        <Box sx={{ textAlign: "right" }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>Received</Typography>
+                          <Typography variant="caption">{new Date(item.purchasedAt).toLocaleDateString()}</Typography>
+                        </Box>
+                        {item.used && <Chip label="Used" size="small" color="default" />}
+                        {item.redeemable && !item.used && <Chip label="Redeemable" size="small" color="success" />}
+                        <Tooltip title="Remove from inventory">
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => {
+                              handleRemoveItem(selectedUser._id, item.itemKey);
+                            }}
+                            disabled={isRemovingItem}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+              </Box>
+            )}
 
+            {activeTab === 2 && selectedUser && (
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 <Box>
-                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontWeight: 600 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
                     XenBox Quota
                   </Typography>
-                  <Box sx={{ mb: 2 }}>
-                    {selectedUser.xenbox && (
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        Used: {formatFileSize(selectedUser.xenbox.spaceUsed)} / {formatFileSize(selectedUser.xenbox.spaceAllowed)}
-                        {selectedUser.xenbox.fileCount > 0 && ` (${selectedUser.xenbox.fileCount} file${selectedUser.xenbox.fileCount !== 1 ? 's' : ''})`}
-                      </Typography>
-                    )}
-                  </Box>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                  <Box sx={{ display: "flex", gap: 1 }}>
                     <TextField
-                      placeholder="e.g., 5 GB or 1024 MB"
+                      placeholder="e.g., 5 GB"
                       value={editingQuota}
                       onChange={(e) => setEditingQuota(e.target.value)}
                       size="small"
-                      sx={{ flex: 1 }}
-                      helperText="Enter quota in format like '5 GB', '1024 MB', etc."
+                      sx={{ width: 200 }}
                       InputProps={{
-                        startAdornment: <StorageIcon sx={{ mr: 1, color: "text.secondary" }} />,
+                        startAdornment: <StorageIcon sx={{ fontSize: 18, mr: 1, color: "text.secondary" }} />,
                       }}
                     />
                     <Button
@@ -430,51 +540,55 @@ export default function Users() {
                       onClick={handleSaveQuota}
                       disabled={isUpdatingUser || editingQuota === (selectedUser.xenbox?.spaceAllowed ? formatFileSize(selectedUser.xenbox.spaceAllowed) : "")}
                     >
-                      {isUpdatingUser ? "Saving..." : "Save Quota"}
+                      {isUpdatingUser ? "Saving..." : "Update"}
                     </Button>
                   </Box>
                 </Box>
 
-                <Divider />
-
                 <Box>
-                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontWeight: 600 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
                     Avatar
                   </Typography>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <Box sx={{ flex: 1 }}>
-                      {selectedUser.avatar && (
-                        <Typography variant="body2" sx={{ fontFamily: "monospace", wordBreak: "break-all" }}>
-                          {selectedUser.avatar}
-                        </Typography>
-                      )}
-                    </Box>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ fontFamily: "monospace", fontSize: "0.75rem", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      title={selectedUser.avatar}
+                    >
+                      {selectedUser.avatar || "No avatar set"}
+                    </Typography>
                     <Button
                       variant="outlined"
                       size="small"
                       startIcon={<RestartAltIcon />}
                       onClick={handleResetAvatar}
-                      disabled={isResettingAvatar}
+                      disabled={isResettingAvatar || !selectedUser.avatar}
                       color="warning"
                     >
-                      {isResettingAvatar ? "Resetting..." : "Reset Avatar"}
+                      Reset
                     </Button>
                   </Box>
                 </Box>
-              </Stack>
+
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
+                    Danger Zone
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    size="small"
+                    startIcon={<DeleteIcon />}
+                    onClick={() => setDeleteConfirmOpen(true)}
+                    disabled={isDeletingUser}
+                  >
+                    Delete User
+                  </Button>
+                </Box>
+              </Box>
             )}
           </DialogContent>
-          <DialogActions>
-            <Button
-              onClick={() => setDeleteConfirmOpen(true)}
-              color="error"
-              startIcon={<DeleteIcon />}
-              disabled={isDeletingUser}
-            >
-              Delete User
-            </Button>
-            <Button onClick={handleCloseModal}>Close</Button>
-          </DialogActions>
         </Dialog>
 
         {/* Delete Confirmation Dialog */}

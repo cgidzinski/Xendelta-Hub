@@ -10,6 +10,16 @@ export interface User {
   email: string;
   roles?: string[];
   avatar?: string;
+  points?: number;
+  inventory?: Array<{
+    itemKey: string;
+    name: string;
+    description: string;
+    image: string;
+    redeemable: boolean;
+    purchasedAt: string;
+    used: boolean;
+  }>;
   xenbox?: {
     fileCount: number;
     spaceUsed: number;
@@ -43,6 +53,14 @@ const deleteUser = async (userId: string): Promise<void> => {
 
 const resetUserAvatar = async (userId: string): Promise<void> => {
   await apiClient.post(`/api/admin/users/${userId}/avatar/reset`);
+};
+
+const giveItemToUser = async (userId: string, itemKey: string): Promise<void> => {
+  await apiClient.post(`/api/admin/users/${userId}/give-item`, { itemKey });
+};
+
+const removeItemFromUser = async (userId: string, itemKey: string): Promise<void> => {
+  await apiClient.delete(`/api/admin/users/${userId}/inventory/${itemKey}`);
 };
 
 // Hooks
@@ -104,6 +122,28 @@ export const useAdminUsers = () => {
     },
   });
 
+  // Mutation for giving item to user
+  const { mutateAsync: giveItemMutation, isPending: isGivingItem } = useMutation({
+    mutationFn: ({ userId, itemKey }: { userId: string; itemKey: string }) => giveItemToUser(userId, itemKey),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminUsersKeys.users() });
+    },
+    onError: () => {
+      // Error handled by mutation error state
+    },
+  });
+
+  // Mutation for removing item from user
+  const { mutateAsync: removeItemMutation, isPending: isRemovingItem } = useMutation({
+    mutationFn: ({ userId, itemKey }: { userId: string; itemKey: string }) => removeItemFromUser(userId, itemKey),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminUsersKeys.users() });
+    },
+    onError: () => {
+      // Error handled by mutation error state
+    },
+  });
+
   return {
     users: users || [],
     isLoading,
@@ -116,5 +156,9 @@ export const useAdminUsers = () => {
     isDeletingUser,
     resetAvatar: (userId: string) => resetAvatarMutation(userId),
     isResettingAvatar,
+    giveItem: (userId: string, itemKey: string) => giveItemMutation({ userId, itemKey }),
+    isGivingItem,
+    removeItem: (userId: string, itemKey: string) => removeItemMutation({ userId, itemKey }),
+    isRemovingItem,
   };
 };

@@ -1,18 +1,14 @@
-import { useState } from "react";
 import SecurityIcon from "@mui/icons-material/Security";
 import PeopleIcon from "@mui/icons-material/People";
 import ArticleIcon from "@mui/icons-material/Article";
 import HomeIcon from "@mui/icons-material/Home";
+import IconButton from "@mui/material/IconButton";
+import { Link } from "react-router-dom";
 import { useNavBar } from "../../contexts/NavBarContext";
 import BaseNavBar, { NavItem } from "./BaseNavBar";
 
 export default function AdminNavBar() {
-  const { title } = useNavBar();
-  const [isNavBarOpen, setIsNavBarOpen] = useState(true);
-
-  const toggleNavBar = () => {
-    setIsNavBarOpen(!isNavBarOpen);
-  };
+  const { isNavBarOpen, toggleNavBar, title } = useNavBar();
 
   const navItems: NavItem[] = [
     {
@@ -38,15 +34,7 @@ export default function AdminNavBar() {
     },
   ];
 
-  const footerNavItems: NavItem[] = [
-    {
-      key: "home",
-      label: "Back to Home",
-      icon: <HomeIcon />,
-      path: "/internal",
-      isSelected: () => false,
-    },
-  ];
+  const footerNavItems: NavItem[] = [];
 
   return (
     <BaseNavBar
@@ -55,8 +43,24 @@ export default function AdminNavBar() {
       onToggleNavBar={toggleNavBar}
       navItems={navItems}
       footerNavItems={footerNavItems}
-      showNotifications={true}
-      showMessages={true}
-    />
+      showNotifications={false}
+      showMessages={false}
+      showPoints={false}
+      showProfile={false}
+    >
+      <Link to="/internal" style={{ color: "inherit", display: "flex" }}>
+        <IconButton
+          sx={{
+            color: "primary.main",
+            backgroundColor: "rgba(33, 150, 243, 0.1)",
+            "&:hover": {
+              backgroundColor: "rgba(33, 150, 243, 0.2)",
+            },
+          }}
+        >
+          <HomeIcon />
+        </IconButton>
+      </Link>
+    </BaseNavBar>
   );
 }

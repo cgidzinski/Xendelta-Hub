@@ -14,10 +14,17 @@ interface BuyPointsItemResponse {
 // Types
 export interface PointsShopItem {
   id: string;
-  name: string;
-  description: string;
+  itemKey: string;
   price: number;
-  image: string;
+  category: string;
+  addToInventory?: boolean;
+  item: {
+    key: string;
+    name: string;
+    description: string;
+    image: string;
+    redeemable: boolean;
+  };
 }
 
 interface PointsShopItemsResponse {
@@ -43,7 +50,7 @@ const buyPointsItem = async (item: PointsShopItem): Promise<BuyPointsItemRespons
 
 // Hooks
 export const usePointsShopItems = () => {
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
   const {
@@ -70,11 +77,12 @@ export const usePointsShopItems = () => {
     onSuccess: (data) => {
       if (data.status) {
         queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
-        enqueueSnackbar(data.message || `Item bought successfully`, {
+        queryClient.invalidateQueries({ queryKey: ["inventory"] });
+        enqueueSnackbar(data.message || `Item purchased successfully`, {
           variant: "success",
         });
       } else {
-        enqueueSnackbar(data.message || `Failed to buy item`, {
+        enqueueSnackbar(data.message || `Failed to purchase item`, {
           variant: "error",
         });
       }

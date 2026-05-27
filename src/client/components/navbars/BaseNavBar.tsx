@@ -30,6 +30,7 @@ import CssBaseline from "@mui/material/CssBaseline";
 import { useNavigate } from "react-router-dom";
 import { useState, useRef } from "react";
 import ProfileListItem from "../ProfileListItem";
+import ShopListItem from "../ShopListItem";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { useUserNotifications, Notification } from "../../hooks/user/useUserNotifications";
 import { useNavBarSocket } from "../../hooks/useNavBarSocket";
@@ -48,6 +49,7 @@ export interface NavItem {
   isSelected: (pathname: string) => boolean;
   type?: "item" | "divider" | "header" | "nested";
   indent?: boolean;
+  headerAction?: React.ReactNode;
 }
 
 interface BaseNavBarProps {
@@ -217,10 +219,14 @@ export default function BaseNavBar({
               if (item.type === "header") {
                 return (
                   <ListItem key={item.key} disablePadding>
-                    <Box sx={{ px: 2, py: 1, width: "100%" }}>
-                      <Typography variant="overline" sx={{ fontWeight: 600, color: "text.secondary" }}>
-                        {item.label}
-                      </Typography>
+                    <Box sx={{ px: 2, py: 1, width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        {item.icon}
+                        <Typography variant="overline" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                          {item.label}
+                        </Typography>
+                      </Box>
+                      {item.headerAction}
                     </Box>
                   </ListItem>
                 );
@@ -264,10 +270,10 @@ export default function BaseNavBar({
                     navigate("/internal/profile");
                   }} />
               )}
-              {showProfile && showPoints && <Divider variant="middle" component="li" sx={{ my: 1 }} />}
+              {showProfile && <Divider variant="middle" component="li" sx={{ my: 1 }} />}
               {showPoints && (
-                <PointsListItem profile={profile}
-                  isSelected={location.pathname.endsWith("/internal/shop")}
+                <ShopListItem
+                  points={profile?.points}
                   onNavigate={() => {
                     if (isMobile && isNavBarOpen) {
                       onToggleNavBar();
@@ -305,31 +311,6 @@ export default function BaseNavBar({
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             {title}
           </Typography>
-          {showPoints && (
-            <Box
-              onClick={() => navigate("/internal/shop")}
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 0.75,
-                px: 1.5,
-                py: 0.5,
-                mr: 1,
-                borderRadius: 2,
-                border: 1,
-                borderColor: "warning.main",
-                backgroundColor: "transparent",
-                cursor: "pointer",
-                "&:hover": { backgroundColor: "warning.dark" },
-                transition: "background-color 0.2s",
-              }}
-            >
-              <PointsIcon sx={{ color: "#FFD700" }} />
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "warning.main" }}>
-                {profile?.points ?? 0}
-              </Typography>
-            </Box>
-          )}
           {(showMessages || showNotifications) && (
             <Box sx={{ display: "flex", alignItems: "center" }}>
               {showMessages && (

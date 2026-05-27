@@ -1,6 +1,7 @@
 import express = require("express");
 const { User } = require("../models/user");
 const Notification = require("../models/notification");
+const { ITEMS } = require("../constants/items");
 import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { uploadAvatarFile } from "../utils/mediaUtils";
@@ -30,7 +31,6 @@ module.exports = function (app: express.Application) {
     const xenboxFiles = user.xenbox?.files || [];
     const fileCount = xenboxFiles.length;
     const spaceUsed = xenboxFiles.reduce((acc: number, file: any) => acc + (file?.size || 0), 0);
-
     return res.json({
       status: true,
       message: "",
@@ -44,6 +44,7 @@ module.exports = function (app: express.Application) {
           points: user.points || 0,
           unread_messages: hasUnreadMessages,
           unread_notifications: hasUnreadNotifications,
+          pinnedApps: user.pinnedApps || [],
           xenbox: {
             fileCount: fileCount,
             spaceUsed: spaceUsed,
@@ -395,6 +396,98 @@ module.exports = function (app: express.Application) {
           roles: (user.roles || []).map((role: string) => role.toLowerCase()),
         })),
       },
+    });
+  });
+
+  // Get user's pinned apps
+  app.get("/api/user/pinned-apps", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const userId = (req as AuthenticatedRequest).user!._id;
+    const user = await User.findById(userId).exec();
+    return res.json({
+      status: true,
+      data: { pinnedApps: user.pinnedApps || [] },
+    });
+  });
+
+  // Update user's pinned apps
+  app.put("/api/user/pinned-apps", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const userId = (req as AuthenticatedRequest).user!._id;
+    const { pinnedApps } = req.body;
+    const user = await User.findById(userId).exec();
+    user.pinnedApps = pinnedApps || [];
+    await user.save();
+    return res.json({
+      status: true,
+      data: { pinnedApps: user.pinnedApps },
+    });
+  });
+
+  // Get user's inventory
+  app.get("/api/user/inventory", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const userId = (req as AuthenticatedRequest).user!._id;
+    const user = await User.findById(userId).exec();
+    return res.json({
+      status: true,
+      data: { inventory: user.inventory || [] },
+    });
+  });
+
+  // Use inventory item
+  app.post("/api/user/inventory/:inventoryItemId/use", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const userId = (req as AuthenticatedRequest).user!._id;
+    const { inventoryItemId } = req.params;
+    const user = await User.findById(userId).exec();
+
+    const item = user.inventory.id(inventoryItemId);
+    if (!item) {
+      return res.status(404).json({
+        status: false,
+        message: "Item not found in inventory",
+      });
+    }
+
+    if (item.used) {
+      return res.status(400).json({
+        status: false,
+        message: "Item already used",
+      });
+    }
+
+    const itemDef = ITEMS[item.itemKey as keyof typeof ITEMS];
+    if (itemDef) {
+      await itemDef.apply(user);
+    }
+
+    item.used = true;
+    item.usedAt = new Date();
+    await user.save();
+
+    return res.json({
+      status: true,
+      message: "Item used successfully",
+    });
+  });
+
+  // Trash inventory item
+  app.delete("/api/user/inventory/:inventoryItemId", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const userId = (req as AuthenticatedRequest).user!._id;
+    const { inventoryItemId } = req.params;
+    const user = await User.findById(userId).exec();
+
+    const item = user.inventory.id(inventoryItemId);
+    if (!item) {
+      return res.status(404).json({
+        status: false,
+        message: "Item not found in inventory",
+      });
+    }
+
+    user.inventory.pull({ _id: inventoryItemId });
+    await user.save();
+
+    return res.json({
+      status: true,
+      message: "Item trashed",
     });
   });
 };

@@ -78,6 +78,7 @@ export default function Shop() {
                                 display: "flex",
                                 flexDirection: "column",
                                 transition: "transform 0.2s, box-shadow 0.2s",
+                                position: "relative",
                                 "&:hover": {
                                     transform: "translateY(-4px)",
                                     boxShadow: 6,
@@ -93,13 +94,26 @@ export default function Shop() {
                                     <CardMedia
                                         component="img"
                                         height="180"
-                                        image={item.image}
-                                        alt={item.name}
+                                        image={item.item.image}
+                                        alt={item.item.name}
                                         sx={{ objectFit: "cover" }}
                                     />
+                                    {item.addToInventory === false && (
+                                        <Chip
+                                            label="Instant"
+                                            color="success"
+                                            size="small"
+                                            sx={{
+                                                position: "absolute",
+                                                top: 8,
+                                                left: 8,
+                                                fontWeight: 700,
+                                            }}
+                                        />
+                                    )}
                                     <CardContent sx={{ flexGrow: 1, width: "100%" }}>
                                         <Typography gutterBottom variant="h6" component="h2" sx={{ fontWeight: 600 }}>
-                                            {item.name}
+                                            {item.item.name}
                                         </Typography>
                                         <Typography variant="body2" color="text.secondary" sx={{
                                             overflow: "hidden",
@@ -108,7 +122,7 @@ export default function Shop() {
                                             WebkitLineClamp: 2,
                                             WebkitBoxOrient: "vertical",
                                         }}>
-                                            {item.description}
+                                            {item.item.description}
                                         </Typography>
                                     </CardContent>
                                     <CardActions sx={{ width: "100%", px: 2, pb: 2 }}>
@@ -146,11 +160,11 @@ export default function Shop() {
                     }}
                 >
                     <Box sx={{ position: "relative" }}>
-                        {selectedItem?.image && (
+                        {selectedItem?.item.image && (
                             <CardMedia
                                 component="img"
                                 height="220"
-                                image={selectedItem.image}
+                                image={selectedItem.item.image}
                                 sx={{ borderTopLeftRadius: 8, borderTopRightRadius: 8 }}
                             />
                         )}
@@ -170,10 +184,10 @@ export default function Shop() {
                     </Box>
                     <DialogContent sx={{ pt: 3 }}>
                         <Typography variant="h5" component="h2" sx={{ fontWeight: 700, mb: 1 }}>
-                            {selectedItem?.name}
+                            {selectedItem?.item.name}
                         </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                            {selectedItem?.description}
+                            {selectedItem?.item.description}
                         </Typography>
                         <Box sx={{
                             display: "flex",
@@ -243,7 +257,7 @@ export default function Shop() {
                             onClick={() => handleBuyItem(selectedItem!)}
                             disabled={(profile?.points ?? 0) < (selectedItem?.price ?? 0)}
                         >
-                            Redeem Now
+                            Purchase Now
                         </Button>
                     </DialogActions>
                 </Dialog>
