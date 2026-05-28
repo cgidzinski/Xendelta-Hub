@@ -8,6 +8,7 @@ import FolderIcon from "@mui/icons-material/Folder";
 import LinkIcon from "@mui/icons-material/Link";
 import EditIcon from "@mui/icons-material/Edit";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import IconButton from "@mui/material/IconButton";
 import { Link } from "react-router-dom";
 import { useNavBar } from "../../contexts/NavBarContext";
@@ -18,6 +19,7 @@ const APPS_REGISTRY = {
   recipaint: { label: "Recipaint", icon: <BrushIcon />, path: "/internal/recipaint" },
   xenbox: { label: "XenBox", icon: <FolderIcon />, path: "/internal/xenbox" },
   xenlink: { label: "XenLink", icon: <LinkIcon />, path: "/internal/xenlink" },
+  xensplit: { label: "Xensplit", icon: <ReceiptLongIcon />, path: "/internal/xensplit" },
 };
 
 export default function Root() {

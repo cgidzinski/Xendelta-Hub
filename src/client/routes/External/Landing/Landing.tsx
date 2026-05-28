@@ -30,7 +30,7 @@ export default function Landing() {
     "XenChat - Real-time messaging with end-to-end encryption",
     "XenBox - File sharing with secure and efficient file sharing system",
     "Recipaint - Miniature painting planner with step by step paint planner",
-    "XenSpace - Space filler! We needed 4 items to make the page look good.",
+    "Xensplit - Split expenses with friends, track balances, settle up easily",
   ];
 
   return (

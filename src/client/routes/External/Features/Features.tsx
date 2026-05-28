@@ -1,5 +1,5 @@
 import { Box, Container, Typography, Grid, Card, CardContent, CardHeader } from "@mui/material";
-import { Security, Chat, Notifications, Speed, Group, CloudDone } from "@mui/icons-material";
+import { Security, Chat, Notifications, Speed, Group, CloudDone, Receipt } from "@mui/icons-material";
 import LandingHeader from "../../../components/LandingHeader";
 
 export default function Features() {
@@ -17,29 +17,17 @@ export default function Features() {
       description: "Share files with people through our secure and efficient file sharing system.",
     },
     {
+      icon: <Receipt sx={{ fontSize: 40 }} />,
+      title: "Xensplit",
+      caption: "Expense Splitting",
+      description: "Split expenses with friends. Track who owes what, settle up easily, support multiple currencies.",
+    },
+    {
       icon: <Group sx={{ fontSize: 40 }} />,
       title: "Recipaint",
       caption: "Miniature Painting Planner",
       description: "Plan your miniature painting projects with ease using our step by step paint planner.",
     },
-    // {
-    //   icon: <Notifications sx={{ fontSize: 40 }} />,
-    //   title: "Smart Notifications",
-    //   caption: "Space Filler!",
-    //   description: "Stay updated with intelligent notifications that prioritize what matters most to you.",
-    // },
-    // {
-    //   icon: <Security sx={{ fontSize: 40 }} />,
-    //   title: "Enterprise Security",
-    //   caption: "Space Filler!",
-    //   description: "Your data is protected with industry-standard security measures and compliance certifications.",
-    // },
-    // {
-    //   icon: <CloudDone sx={{ fontSize: 40 }} />,
-    //   title: "Cloud Powered",
-    //   caption: "Space Filler!",
-    //   description: "Access your workspace from anywhere, on any device, with automatic cloud synchronization.",
-    // },
   ];
 
   return (

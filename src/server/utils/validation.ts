@@ -220,3 +220,66 @@ export const blogPostSlugParamSchema = z.object({
   slug: z.string().min(1, "Slug is required"),
 });
 
+// XenSplit validation schemas
+export const splitSchema = z.object({
+  user_id: objectIdSchema,
+  amount_owed: z.number().min(0).optional(),
+  percentage: z.number().min(0).max(100).optional(),
+});
+
+export const createXenSplitSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100, "Name too long"),
+  memberIds: z.array(objectIdSchema).optional(),
+});
+
+export const updateXenSplitSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+});
+
+export const addXenSplitMembersSchema = z.object({
+  memberIds: z.array(objectIdSchema).min(1, "At least one member required"),
+});
+
+export const createExpenseSchema = z.object({
+  paid_by: objectIdSchema,
+  amount: z.number("Amount must be a number"),
+  currency: z.string().default("USD"),
+  description: z.string().min(1, "Description required").max(500),
+  notes: z.string().max(1000).optional(),
+  date: z.string().datetime().optional(),
+  split_type: z.enum(["equal", "exact", "percent"]),
+  splits: z.array(splitSchema).optional(),
+});
+
+export const updateExpenseSchema = z.object({
+  paid_by: objectIdSchema.optional(),
+  amount: z.number().optional(),
+  currency: z.string().optional(),
+  description: z.string().min(1).max(500).optional(),
+  notes: z.string().max(1000).optional(),
+  date: z.string().datetime().optional(),
+  split_type: z.enum(["equal", "exact", "percent"]).optional(),
+  splits: z.array(splitSchema).optional(),
+});
+
+export const settleDebtSchema = z.object({
+  from: objectIdSchema,
+  to: objectIdSchema,
+  amount: z.number().positive("Amount must be positive"),
+  currency: z.string().default("USD"),
+});
+
+export const xenSplitIdParamSchema = z.object({
+  groupId: objectIdSchema,
+});
+
+export const xenSplitMemberParamSchema = z.object({
+  groupId: objectIdSchema,
+  userId: objectIdSchema,
+});
+
+export const xenSplitExpenseParamSchema = z.object({
+  groupId: objectIdSchema,
+  expenseId: objectIdSchema,
+});
+

@@ -399,6 +399,33 @@ module.exports = function (app: express.Application) {
     });
   });
 
+  // Search users by username (for UserSelect autocomplete)
+  app.get("/api/users/search", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const { q } = req.query;
+    const currentUserId = (req as AuthenticatedRequest).user!._id;
+
+    const query: any = {};
+    if (q && typeof q === "string") {
+      query.username = { $regex: q, $options: "i" };
+    }
+
+    const users = await User.find(query, "username _id avatar").limit(20).exec();
+
+    return res.json({
+      status: true,
+      message: "",
+      data: {
+        users: users
+          .filter((u: any) => u._id.toString() !== currentUserId.toString())
+          .map((user: any) => ({
+            _id: user._id,
+            username: user.username,
+            avatar: user.avatar || "/avatars/default-avatar.png",
+          })),
+      },
+    });
+  });
+
   // Get user's pinned apps
   app.get("/api/user/pinned-apps", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = (req as AuthenticatedRequest).user!._id;
