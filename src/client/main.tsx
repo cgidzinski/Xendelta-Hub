@@ -1,5 +1,5 @@
 import * as ReactDOM from "react-dom/client";
-import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route } from "react-router-dom";
+import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route, Navigate } from "react-router-dom";
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import { SnackbarProvider } from "notistack";
@@ -47,10 +47,8 @@ import Inventory from "./routes/Internal/Inventory/Inventory";
 import XenLink from "./routes/Internal/XenLink/XenLink";
 import XenLinkRedirect from "./routes/External/XenLinkRedirect/XenLinkRedirect";
 // Routes - Xensplit
-import XensplitHome from "./routes/Internal/Xensplit/ExpensesHome";
 import XensplitGroupsList from "./routes/Internal/Xensplit/GroupsList";
 import XensplitGroupDetail from "./routes/Internal/Xensplit/GroupDetail";
-import XensplitAddExpense from "./routes/Internal/Xensplit/AddExpense";
 import XensplitSettleUp from "./routes/Internal/Xensplit/SettleUp";
 // Routes - Admin
 import Admin from "./routes/Admin/Admin";
@@ -156,10 +154,9 @@ const router = createBrowserRouter(
         <Route path="xenlink" element={<XenLink />} />
         <Route path="shop" element={<Shop />} />
         <Route path="inventory" element={<Inventory />} />
-        <Route path="xensplit" element={<XensplitHome />} />
+        <Route path="xensplit" index element={<Navigate to="groups" replace />} />
         <Route path="xensplit/groups" element={<XensplitGroupsList />} />
         <Route path="xensplit/groups/:groupId" element={<XensplitGroupDetail />} />
-        <Route path="xensplit/groups/:groupId/expense/new" element={<XensplitAddExpense />} />
         <Route path="xensplit/groups/:groupId/settle" element={<XensplitSettleUp />} />
         <Route path="apps" element={<Apps />} />
       </Route>

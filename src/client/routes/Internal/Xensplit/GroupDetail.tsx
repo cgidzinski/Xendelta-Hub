@@ -20,17 +20,13 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
   Menu,
   MenuItem,
-  ToggleButton,
-  ToggleButtonGroup,
-  InputAdornment,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import CloseIcon from "@mui/icons-material/Close";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
-import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import GroupRemoveIcon from "@mui/icons-material/GroupRemove";
 import { useXenSplit } from "../../../hooks/xensplit/useGroup";
@@ -42,6 +38,7 @@ import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import UserSelect from "../../../components/UserSelect";
 import { SearchedUser } from "../../../hooks/useUserSearch";
+import ExpenseForm from "./components/ExpenseForm";
 import type { XenSplitExpense } from "../../../hooks/xensplit/types";
 
 export default function GroupDetail() {
@@ -52,19 +49,31 @@ export default function GroupDetail() {
   const { group, isLoading, isError, error, addMembers, isAddingMembers, removeMember, isRemovingMember } = useXenSplit(groupId!);
   const { deleteGroup } = useXenSplits();
   const { balancesData } = useXenSplitBalances(groupId!);
-  const { updateExpense, isUpdatingExpense } = useXenSplitExpenses(groupId!);
+  const { updateExpense, isUpdatingExpense, addExpense, isAddingExpense } = useXenSplitExpenses(groupId!);
   const [activeTab, setActiveTab] = useState(0);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<SearchedUser[]>([]);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [menuMemberId, setMenuMemberId] = useState<string | null>(null);
+  const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
   const [showEditExpenseModal, setShowEditExpenseModal] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<XenSplitExpense | null>(null);
+  const [addDescription, setAddDescription] = useState("");
+  const [addNotes, setAddNotes] = useState("");
+  const [addAmount, setAddAmount] = useState("");
+  const [addCurrency, setAddCurrency] = useState("USD");
+  const [addPaidBy, setAddPaidBy] = useState("");
+  const [addPaidByUser, setAddPaidByUser] = useState<SearchedUser | null>(null);
+  const [addSplitType, setAddSplitType] = useState<"equal" | "exact" | "percent">("equal");
+  const [addSelectedParticipants, setAddSelectedParticipants] = useState<SearchedUser[]>([]);
+  const [addExactSplits, setAddExactSplits] = useState<{ [userId: string]: string }>({});
+  const [addPercentSplits, setAddPercentSplits] = useState<{ [userId: string]: string }>({});
   const [editDescription, setEditDescription] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editAmount, setEditAmount] = useState("");
   const [editCurrency, setEditCurrency] = useState("USD");
   const [editPaidBy, setEditPaidBy] = useState("");
+  const [editPaidByUser, setEditPaidByUser] = useState<SearchedUser | null>(null);
   const [editSplitType, setEditSplitType] = useState<"equal" | "exact" | "percent">("equal");
   const [editSelectedParticipants, setEditSelectedParticipants] = useState<SearchedUser[]>([]);
   const [editExactSplits, setEditExactSplits] = useState<{ [userId: string]: string }>({});
@@ -77,6 +86,20 @@ export default function GroupDetail() {
     confirmAction();
     setShowConfirmDialog(false);
   };
+
+  // Check if exact splits total matches amount
+  const isExactValid = addSplitType !== "exact" || addSelectedParticipants.length === 0 ||
+    Math.abs(Object.values(addExactSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - (parseFloat(addAmount) || 0)) < 0.01;
+
+  // Check if percent splits total equals 100
+  const isPercentValid = addSplitType !== "percent" || addSelectedParticipants.length === 0 ||
+    Math.abs(Object.values(addPercentSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - 100) < 0.01;
+
+  // Same for edit
+  const isEditExactValid = editSplitType !== "exact" || editSelectedParticipants.length === 0 ||
+    Math.abs(Object.values(editExactSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - (parseFloat(editAmount) || 0)) < 0.01;
+  const isEditPercentValid = editSplitType !== "percent" || editSelectedParticipants.length === 0 ||
+    Math.abs(Object.values(editPercentSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - 100) < 0.01;
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorDisplay error={error} />;
@@ -153,6 +176,60 @@ export default function GroupDetail() {
     });
   };
 
+  const handleAddExpense = async () => {
+    if (!addDescription.trim() || !addAmount || !addPaidBy) return;
+
+    const numAmount = parseFloat(addAmount);
+    let splits = undefined;
+
+    if (addSplitType === "equal") {
+      splits = addSelectedParticipants.map((p) => ({
+        user_id: p._id,
+      }));
+    } else if (addSplitType === "exact") {
+      splits = addSelectedParticipants.map((p) => ({
+        user_id: p._id,
+        amount_owed: parseFloat(addExactSplits[p._id] || "0"),
+      }));
+    } else if (addSplitType === "percent") {
+      splits = addSelectedParticipants.map((p) => ({
+        user_id: p._id,
+        percentage: parseFloat(addPercentSplits[p._id] || "0"),
+      }));
+    }
+
+    await new Promise<void>((resolve) => {
+      addExpense(
+        {
+          paid_by: addPaidBy,
+          amount: numAmount,
+          currency: addCurrency,
+          description: addDescription,
+          notes: addNotes.trim() || undefined,
+          split_type: addSplitType,
+          splits,
+        },
+        {
+          onSuccess: () => {
+            enqueueSnackbar("Expense added", { variant: "success" });
+            setShowAddExpenseModal(false);
+            setAddDescription("");
+            setAddNotes("");
+            setAddAmount("");
+            setAddCurrency("USD");
+            setAddPaidBy("");
+            setAddPaidByUser(null);
+            setAddSplitType("equal");
+            setAddSelectedParticipants([]);
+            setAddExactSplits({});
+            setAddPercentSplits({});
+            resolve();
+          },
+        }
+      );
+    });
+  };
+
   const handleEditExpense = async () => {
     if (!selectedExpense || !editDescription.trim() || !editAmount || !editPaidBy) return;
 
@@ -160,8 +237,8 @@ export default function GroupDetail() {
     let splits = undefined;
 
     if (editSplitType === "equal") {
-      splits = group.members.map((m) => ({
-        user_id: m.user_id,
+      splits = editSelectedParticipants.map((p) => ({
+        user_id: p._id,
       }));
     } else if (editSplitType === "exact") {
       splits = editSelectedParticipants.map((p) => ({
@@ -228,13 +305,6 @@ export default function GroupDetail() {
               </Typography>
             </Box>
           </Box>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => navigate(`/internal/xensplit/groups/${groupId}/expense/new`)}
-          >
-            Add Expense
-          </Button>
         </Box>
 
         <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 3 }}>
@@ -246,6 +316,14 @@ export default function GroupDetail() {
 
         {activeTab === 0 && (
           <Box>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>
+                Expenses
+              </Typography>
+              <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setShowAddExpenseModal(true)}>
+                Add Expense
+              </Button>
+            </Box>
             {group.expenses.length === 0 ? (
               <Box sx={{ textAlign: "center", py: 6 }}>
                 <Typography variant="body1" color="text.secondary">
@@ -264,15 +342,15 @@ export default function GroupDetail() {
                       setEditAmount(expense.amount.toString());
                       setEditCurrency(expense.currency);
                       setEditPaidBy(expense.paid_by);
+                      const payerMember = group.members.find((m) => m.user_id === expense.paid_by);
+                      setEditPaidByUser(payerMember ? { _id: payerMember.user_id, username: payerMember.username, avatar: payerMember.avatar } : null);
                       setEditSplitType(expense.split_type as "equal" | "exact" | "percent");
-                      // Build participants from splits
                       if (expense.splits && expense.splits.length > 0) {
                         const participants = expense.splits.map((s) => {
                           const member = group.members.find((m) => m.user_id === s.user_id);
                           return member ? { _id: member.user_id, username: member.username, avatar: member.avatar } : null;
                         }).filter(Boolean) as SearchedUser[];
                         setEditSelectedParticipants(participants);
-                        // Build exact/percent maps
                         const exactMap: { [key: string]: string } = {};
                         const percentMap: { [key: string]: string } = {};
                         expense.splits.forEach((s) => {
@@ -292,6 +370,7 @@ export default function GroupDetail() {
                       borderRadius: 2,
                       mb: 1,
                       cursor: "pointer",
+                      height: 72,
                       "&:hover": { bgcolor: "action.selected" },
                     }}
                   >
@@ -325,9 +404,11 @@ export default function GroupDetail() {
 
         {activeTab === 1 && balancesData && (
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-              Balances
-            </Typography>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>
+                Balances
+              </Typography>
+            </Box>
             {Object.entries(balancesData.balances).map(([userId, balance]) => {
               const nonZeroBalances = Object.entries(balance.balances).filter(([_, amount]) => amount !== 0);
               if (nonZeroBalances.length === 0) return null;
@@ -342,6 +423,7 @@ export default function GroupDetail() {
                     bgcolor: "action.hover",
                     borderRadius: 2,
                     mb: 1,
+                    height: 72,
                   }}
                 >
                   <Avatar src={balance.user.avatar || undefined} sx={{ bgcolor: "primary.main" }}>
@@ -380,9 +462,18 @@ export default function GroupDetail() {
 
         {activeTab === 2 && balancesData && balancesData.settlements.length > 0 && (
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-              Suggested Settlements
-            </Typography>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>
+                Settlements
+              </Typography>
+              <Button
+                variant="contained"
+                color="success"
+                onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settle`)}
+              >
+                Settle Up
+              </Button>
+            </Box>
             {balancesData.settlements.map((settlement, idx) => (
               <Box
                 key={idx}
@@ -395,6 +486,7 @@ export default function GroupDetail() {
                   color: "success.contrastText",
                   borderRadius: 2,
                   mb: 1,
+                  height: 72,
                 }}
               >
                 <Avatar src={settlement.fromUser.avatar || undefined} sx={{ width: 28, height: 28 }}>
@@ -408,21 +500,15 @@ export default function GroupDetail() {
                 </Typography>
               </Box>
             ))}
-            <Box sx={{ mt: 2, textAlign: "center" }}>
-              <Button
-                variant="contained"
-                color="success"
-                onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settle`)}
-              >
-                Settle Up
-              </Button>
-            </Box>
           </Box>
         )}
 
         {activeTab === 3 && (
           <Box>
-            <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>
+                Members
+              </Typography>
               <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setShowAddMemberModal(true)}>
                 Add Members
               </Button>
@@ -431,7 +517,7 @@ export default function GroupDetail() {
               {group.members.map((member) => (
                 <ListItem
                   key={member.user_id}
-                  sx={{ bgcolor: "action.hover", borderRadius: 2, mb: 1, pr: 1 }}
+                  sx={{ bgcolor: "action.hover", borderRadius: 2, mb: 1, pr: 1, height: 72 }}
                 >
                   <ListItemAvatar>
                     <Avatar src={member.avatar || undefined} sx={{ bgcolor: "primary.main" }}>
@@ -540,7 +626,7 @@ export default function GroupDetail() {
 
       <Dialog
         fullWidth
-        maxWidth="xs"
+        maxWidth="sm"
         open={showConfirmDialog}
         onClose={() => setShowConfirmDialog(false)}
         PaperProps={{ sx: { borderRadius: 2 } }}
@@ -562,191 +648,90 @@ export default function GroupDetail() {
       <Dialog
         fullWidth
         maxWidth="sm"
+        open={showAddExpenseModal}
+        onClose={() => setShowAddExpenseModal(false)}
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
+          <DialogTitle sx={{ fontWeight: 700, p: 0 }}>Add Expense</DialogTitle>
+          <IconButton onClick={() => setShowAddExpenseModal(false)} size="small">
+            <CloseIcon />
+          </IconButton>
+        </Box>
+        <DialogContent sx={{ pt: 2 }}>
+          <ExpenseForm
+            description={addDescription}
+            onDescriptionChange={setAddDescription}
+            notes={addNotes}
+            onNotesChange={setAddNotes}
+            amount={addAmount}
+            onAmountChange={setAddAmount}
+            currency={addCurrency}
+            onCurrencyChange={setAddCurrency}
+            paidBy={addPaidBy}
+            onPaidByChange={setAddPaidBy}
+            paidByUser={addPaidByUser}
+            onPaidByUserChange={setAddPaidByUser}
+            splitType={addSplitType}
+            onSplitTypeChange={setAddSplitType}
+            selectedParticipants={addSelectedParticipants}
+            onParticipantsChange={setAddSelectedParticipants}
+            exactSplits={addExactSplits}
+            onExactSplitsChange={setAddExactSplits}
+            percentSplits={addPercentSplits}
+            onPercentSplitsChange={setAddPercentSplits}
+            members={group.members}
+            currencies={group.currencies}
+            onSubmit={handleAddExpense}
+            submitDisabled={!addDescription.trim() || !addAmount || !addPaidBy || !isExactValid || !isPercentValid}
+            loading={isAddingExpense}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        fullWidth
+        maxWidth="sm"
         open={showEditExpenseModal}
         onClose={() => setShowEditExpenseModal(false)}
         PaperProps={{ sx: { borderRadius: 2 } }}
       >
-        <DialogTitle sx={{ fontWeight: 700 }}>Edit Expense</DialogTitle>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
+          <DialogTitle sx={{ fontWeight: 700, p: 0 }}>Edit Expense</DialogTitle>
+          <IconButton onClick={() => setShowEditExpenseModal(false)} size="small">
+            <CloseIcon />
+          </IconButton>
+        </Box>
         <DialogContent sx={{ pt: 2 }}>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <TextField
-              fullWidth
-              label="Description"
-              value={editDescription}
-              onChange={(e) => setEditDescription(e.target.value)}
-            />
-
-            <TextField
-              fullWidth
-              label="Notes (optional)"
-              value={editNotes}
-              onChange={(e) => setEditNotes(e.target.value)}
-              multiline
-              rows={2}
-            />
-
-            <Box sx={{ display: "flex", gap: 2 }}>
-              <TextField
-                fullWidth
-                label="Amount"
-                type="number"
-                value={editAmount}
-                onChange={(e) => setEditAmount(e.target.value)}
-              />
-              <TextField
-                select
-                value={editCurrency}
-                onChange={(e) => setEditCurrency(e.target.value)}
-                SelectProps={{ native: true }}
-                sx={{ width: 100 }}
-              >
-                {group.currencies.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </TextField>
-            </Box>
-
-            <Box>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Paid by
-              </Typography>
-              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                {group.members.map((member) => (
-                  <Box
-                    key={member.user_id}
-                    onClick={() => setEditPaidBy(editPaidBy === member.user_id ? "" : member.user_id)}
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1,
-                      px: 2,
-                      py: 1,
-                      borderRadius: 2,
-                      cursor: "pointer",
-                      bgcolor: editPaidBy === member.user_id ? "primary.main" : "action.hover",
-                      color: editPaidBy === member.user_id ? "primary.contrastText" : "text.primary",
-                      transition: "all 0.2s",
-                    }}
-                  >
-                    <Avatar src={member.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
-                      {member.username[0]?.toUpperCase()}
-                    </Avatar>
-                    <Typography variant="caption">
-                      {member.username}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-            </Box>
-
-            <Box>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Split type
-              </Typography>
-              <ToggleButtonGroup
-                value={editSplitType}
-                exclusive
-                onChange={(_, v) => v && setEditSplitType(v)}
-                fullWidth
-              >
-                <ToggleButton value="equal">Equal</ToggleButton>
-                <ToggleButton value="exact">Exact</ToggleButton>
-                <ToggleButton value="percent">Percent</ToggleButton>
-              </ToggleButtonGroup>
-            </Box>
-
-            {editSplitType !== "equal" && (
-              <Box>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Participants
-                </Typography>
-                <UserSelect
-                  value={editSelectedParticipants}
-                  onChange={setEditSelectedParticipants}
-                  label="Select participants"
-                  placeholder="Who is splitting this?"
-                  excludeUserIds={editSelectedParticipants.map((p) => p._id)}
-                  includeSelf={true}
-                />
-              </Box>
-            )}
-
-            {editSplitType === "exact" && editSelectedParticipants.length > 0 && (
-              <Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                  <Typography variant="subtitle2">Exact amounts</Typography>
-                  <Typography variant="caption" color={Math.abs(Object.values(editExactSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - (parseFloat(editAmount) || 0)) < 0.01 ? "success" : "error"}>
-                    Total: {Object.values(editExactSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0).toFixed(2)} / {editAmount}
-                  </Typography>
-                </Box>
-                {editSelectedParticipants.map((p) => (
-                  <Box key={p._id} sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
-                    <Avatar src={p.avatar || undefined} sx={{ width: 28, height: 28 }}>
-                      {p.username[0]?.toUpperCase()}
-                    </Avatar>
-                    <Typography variant="body2" sx={{ width: 100 }}>
-                      {p.username}
-                    </Typography>
-                    <TextField
-                      size="small"
-                      type="number"
-                      value={editExactSplits[p._id] || ""}
-                      onChange={(e) => setEditExactSplits({ ...editExactSplits, [p._id]: e.target.value })}
-                      sx={{ flexGrow: 1 }}
-                    />
-                  </Box>
-                ))}
-              </Box>
-            )}
-
-            {editSplitType === "percent" && editSelectedParticipants.length > 0 && (
-              <Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                  <Typography variant="subtitle2">Percentages</Typography>
-                  <Typography variant="caption" color={Math.abs(Object.values(editPercentSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - 100) < 0.01 ? "success" : "error"}>
-                    Total: {Object.values(editPercentSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0).toFixed(1)}% / 100%
-                  </Typography>
-                </Box>
-                {editSelectedParticipants.map((p) => (
-                  <Box key={p._id} sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
-                    <Avatar src={p.avatar || undefined} sx={{ width: 28, height: 28 }}>
-                      {p.username[0]?.toUpperCase()}
-                    </Avatar>
-                    <Typography variant="body2" sx={{ width: 100 }}>
-                      {p.username}
-                    </Typography>
-                    <TextField
-                      size="small"
-                      type="number"
-                      value={editPercentSplits[p._id] || ""}
-                      onChange={(e) => setEditPercentSplits({ ...editPercentSplits, [p._id]: e.target.value })}
-                      InputProps={{
-                        endAdornment: <InputAdornment position="end">%</InputAdornment>,
-                      }}
-                      sx={{ flexGrow: 1 }}
-                    />
-                  </Box>
-                ))}
-              </Box>
-            )}
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button fullWidth variant="outlined" onClick={() => setShowEditExpenseModal(false)}>
-            Cancel
-          </Button>
-          <Button
-            fullWidth
-            variant="contained"
-            onClick={handleEditExpense}
-            disabled={!editDescription.trim() || !editAmount || !editPaidBy || isUpdatingExpense}
+          <ExpenseForm
+            description={editDescription}
+            onDescriptionChange={setEditDescription}
+            notes={editNotes}
+            onNotesChange={setEditNotes}
+            amount={editAmount}
+            onAmountChange={setEditAmount}
+            currency={editCurrency}
+            onCurrencyChange={setEditCurrency}
+            paidBy={editPaidBy}
+            onPaidByChange={setEditPaidBy}
+            paidByUser={editPaidByUser}
+            onPaidByUserChange={setEditPaidByUser}
+            splitType={editSplitType}
+            onSplitTypeChange={setEditSplitType}
+            selectedParticipants={editSelectedParticipants}
+            onParticipantsChange={setEditSelectedParticipants}
+            exactSplits={editExactSplits}
+            onExactSplitsChange={setEditExactSplits}
+            percentSplits={editPercentSplits}
+            onPercentSplitsChange={setEditPercentSplits}
+            members={group.members}
+            currencies={group.currencies}
+            onSubmit={handleEditExpense}
+            submitDisabled={!editDescription.trim() || !editAmount || !editPaidBy || !isEditExactValid || !isEditPercentValid}
+            submitLabel="Save Changes"
             loading={isUpdatingExpense}
-          >
-            Save Changes
-          </Button>
-        </DialogActions>
+          />
+        </DialogContent>
       </Dialog>
     </Box>
   );

@@ -12,6 +12,8 @@ export function useXenSplit(groupId: string) {
       return res.data.data as XenSplit;
     },
     enabled: !!groupId,
+    staleTime: 0, // Always refetch in background
+    placeholderData: (prev) => prev,
   });
 
   const updateMutation = useMutation({

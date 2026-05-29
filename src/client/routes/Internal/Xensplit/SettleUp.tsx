@@ -43,7 +43,7 @@ export default function SettleUp() {
     <Box>
       <Container maxWidth="sm" sx={{ mt: 4, mb: 4 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-          <IconButton onClick={() => navigate(`/internal/xensplit/groups/${groupId}`)}>
+          <IconButton onClick={() => navigate(`/internal/xensplit/groups/${groupId}?tab=2`)}>
             <ArrowBackIcon />
           </IconButton>
           <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>

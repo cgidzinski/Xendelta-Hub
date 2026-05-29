@@ -62,7 +62,7 @@ export function calculateBalances(doc: XenSplitDocument): BalanceMap {
         owed = amount_owed;
       } else if (percentage !== undefined) {
         owed = (amount * percentage) / 100;
-      } else {
+      } else if (splits.length > 0) {
         // Equal split - divide by number of participants
         owed = amount / splits.length;
       }
@@ -126,7 +126,7 @@ export function calculateMinimumTransfers(balances: BalanceMap): Transfer[] {
         transfers.push({
           from: debtors[j].id,
           to: creditors[i].id,
-          amount: Math.round(pay * 100) / 100,
+          amount: Number(pay.toFixed(2)),
           currency,
         });
       }

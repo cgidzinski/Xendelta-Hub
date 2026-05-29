@@ -49,7 +49,7 @@ export function UserSelect({
       options={options}
       loading={isLoading}
       value={value}
-      onChange={(_, newValue) => onChange(newValue)}
+      onChange={(_, newValue) => onChange(newValue as SearchedUser[])}
       inputValue={inputValue}
       onInputChange={(_, newInputValue) => setInputValue(newInputValue)}
       getOptionLabel={(option) => option.username}

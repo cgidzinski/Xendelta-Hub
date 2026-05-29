@@ -365,7 +365,6 @@ module.exports = function (app: any) {
   // PUT /api/xensplit/groups/:groupId/expenses/:expenseId - Update expense
   app.put("/api/xensplit/groups/:groupId/expenses/:expenseId", validateParams(xenSplitExpenseParamSchema), validate(updateExpenseSchema), async (req: Request, res: Response) => {
     try {
-      const userId = (req.user as any)._id.toString();
       const { groupId, expenseId } = req.params;
 
       const group = await XenSplit.findById(groupId);
@@ -379,9 +378,7 @@ module.exports = function (app: any) {
       }
 
       const expense = group.expenses[expenseIndex];
-      if (expense.paid_by !== userId) {
-        return res.status(403).json({ status: false, message: "Only the payer can edit this expense" });
-      }
+      // Allow any group member to edit expense
 
       const updates = req.body;
       Object.assign(expense, updates);
@@ -428,7 +425,6 @@ module.exports = function (app: any) {
   // DELETE /api/xensplit/groups/:groupId/expenses/:expenseId - Delete expense
   app.delete("/api/xensplit/groups/:groupId/expenses/:expenseId", validateParams(xenSplitExpenseParamSchema), async (req: Request, res: Response) => {
     try {
-      const userId = (req.user as any)._id.toString();
       const { groupId, expenseId } = req.params;
 
       const group = await XenSplit.findById(groupId);
@@ -441,11 +437,7 @@ module.exports = function (app: any) {
         return res.status(404).json({ status: false, message: "Expense not found" });
       }
 
-      const expense = group.expenses[expenseIndex];
-      if (expense.paid_by !== userId) {
-        return res.status(403).json({ status: false, message: "Only the payer can delete this expense" });
-      }
-
+      // Allow any group member to delete expense
       group.expenses.splice(expenseIndex, 1);
       await group.save();
 

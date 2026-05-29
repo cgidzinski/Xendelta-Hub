@@ -12,6 +12,8 @@ export function useXenSplitBalances(groupId: string) {
       return res.data.data as XenSplitBalancesData;
     },
     enabled: !!groupId,
+    staleTime: 0, // Always refetch in background
+    placeholderData: (prev) => prev,
   });
 
   const settleDebtMutation = useMutation({
