@@ -24,8 +24,10 @@ import {
   MenuItem,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import EastIcon from "@mui/icons-material/East";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import DeleteIcon from "@mui/icons-material/Delete";
 import GroupRemoveIcon from "@mui/icons-material/GroupRemove";
@@ -39,7 +41,7 @@ import ErrorDisplay from "../../../components/ErrorDisplay";
 import UserSelect from "../../../components/UserSelect";
 import { SearchedUser } from "../../../hooks/useUserSearch";
 import ExpenseForm from "./components/ExpenseForm";
-import type { XenSplitExpense } from "../../../hooks/xensplit/types";
+import type { XenSplitExpense, XenSplitSettlementTransfer } from "../../../hooks/xensplit/types";
 
 export default function GroupDetail() {
   const { groupId } = useParams<{ groupId: string }>();
@@ -48,7 +50,7 @@ export default function GroupDetail() {
   const { enqueueSnackbar } = useSnackbar();
   const { group, isLoading, isError, error, addMembers, isAddingMembers, removeMember, isRemovingMember } = useXenSplit(groupId!);
   const { deleteGroup } = useXenSplits();
-  const { balancesData } = useXenSplitBalances(groupId!);
+  const { balancesData, settleDebt, isSettlingDebt } = useXenSplitBalances(groupId!);
   const { updateExpense, isUpdatingExpense, addExpense, isAddingExpense } = useXenSplitExpenses(groupId!);
   const [activeTab, setActiveTab] = useState(0);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
@@ -78,6 +80,8 @@ export default function GroupDetail() {
   const [editSelectedParticipants, setEditSelectedParticipants] = useState<SearchedUser[]>([]);
   const [editExactSplits, setEditExactSplits] = useState<{ [userId: string]: string }>({});
   const [editPercentSplits, setEditPercentSplits] = useState<{ [userId: string]: string }>({});
+  const [showSettleModal, setShowSettleModal] = useState(false);
+  const [selectedSettlement, setSelectedSettlement] = useState<XenSplitSettlementTransfer | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [confirmDialogText, setConfirmDialogText] = useState("");
   const [confirmAction, setConfirmAction] = useState<() => void>(() => {});
@@ -331,10 +335,10 @@ export default function GroupDetail() {
                 </Typography>
               </Box>
             ) : (
-              <List>
+              <List disablePadding>
                 {group.expenses.map((expense) => (
-                  <ListItem
-                    component="div"
+                  <Box
+                    key={expense._id}
                     onClick={() => {
                       setSelectedExpense(expense);
                       setEditDescription(expense.description);
@@ -366,6 +370,10 @@ export default function GroupDetail() {
                       setShowEditExpenseModal(true);
                     }}
                     sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 2,
+                      p: 2,
                       bgcolor: "action.hover",
                       borderRadius: 2,
                       mb: 1,
@@ -374,28 +382,26 @@ export default function GroupDetail() {
                       "&:hover": { bgcolor: "action.selected" },
                     }}
                   >
-                    <ListItemAvatar>
-                      <Avatar src={expense.payer?.avatar || undefined} sx={{ bgcolor: "primary.main" }}>
-                        {expense.payer?.username?.[0]?.toUpperCase() || "?"}
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={expense.description}
-                      secondary={new Date(expense.date).toLocaleString()}
-                      sx={{ pr: 10 }}
-                    />
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mr: 1 }}>
+                    <Avatar src={expense.payer?.avatar || undefined} sx={{ bgcolor: "primary.main", width: 40, height: 40, flexShrink: 0 }}>
+                      {expense.payer?.username?.[0]?.toUpperCase() || "?"}
+                    </Avatar>
+                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                        {expense.description}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" noWrap>
+                        Paid by {expense.payer?.username || "?"} · {new Date(expense.date).toLocaleString()}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: "right", flexShrink: 0 }}>
                       <Typography variant="subtitle2" color="success.main" sx={{ fontWeight: 700 }}>
                         {formatCurrency(expense.amount, expense.currency)}
                       </Typography>
-                      <Chip
-                        label={expense.split_type}
-                        size="small"
-                        variant="outlined"
-                        color="primary"
-                      />
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: "capitalize" }}>
+                        {expense.split_type}
+                      </Typography>
                     </Box>
-                  </ListItem>
+                  </Box>
                 ))}
               </List>
             )}
@@ -441,8 +447,8 @@ export default function GroupDetail() {
                         color: (amount as number) >= 0 ? "success.main" : "error.main",
                       }}
                     >
-                      {(amount as number) >= 0 ? "+" : ""}
-                      {formatCurrency(amount as number, currency)}
+                      {(amount as number) >= 0 ? "Owed " : "Owes "}
+                      {formatCurrency(Math.abs(amount as number), currency)}
                     </Typography>
                   ))}
                 </Box>
@@ -462,42 +468,65 @@ export default function GroupDetail() {
 
         {activeTab === 2 && balancesData && balancesData.settlements.length > 0 && (
           <Box>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
+            <Box sx={{ mb: 2, minHeight: 48, display: "flex", alignItems: "center" }}>
               <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>
                 Settlements
               </Typography>
-              <Button
-                variant="contained"
-                color="success"
-                onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settle`)}
-              >
-                Settle Up
-              </Button>
             </Box>
             {balancesData.settlements.map((settlement, idx) => (
-              <Box
-                key={idx}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 2,
-                  p: 2,
-                  bgcolor: "success.main",
-                  color: "success.contrastText",
-                  borderRadius: 2,
-                  mb: 1,
-                  height: 72,
-                }}
-              >
-                <Avatar src={settlement.fromUser.avatar || undefined} sx={{ width: 28, height: 28 }}>
-                  {settlement.fromUser.username[0]?.toUpperCase()}
-                </Avatar>
-                <Typography variant="body2">
-                  {settlement.fromUser.username} owes {settlement.toUser.username}
-                </Typography>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, ml: "auto" }}>
-                  {formatCurrency(settlement.amount, settlement.currency)}
-                </Typography>
+              <Box key={idx} sx={{ display: "flex", alignItems: "stretch", gap: 1, mb: 1 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 2,
+                    flexGrow: 1,
+                    px: 2,
+                    bgcolor: "action.hover",
+                    borderRadius: 2,
+                    height: 72,
+                  }}
+                >
+                  <Avatar src={settlement.fromUser.avatar || undefined} sx={{ width: 40, height: 40, bgcolor: "primary.main" }}>
+                    {settlement.fromUser.username[0]?.toUpperCase()}
+                  </Avatar>
+                  <Typography variant="body2" sx={{ fontWeight: 500, flexShrink: 0 }}>
+                    {settlement.fromUser.username}
+                  </Typography>
+                  <EastIcon sx={{ fontSize: 16, color: "text.disabled", mx: 1, flexShrink: 0 }} />
+                  <Avatar src={settlement.toUser.avatar || undefined} sx={{ width: 40, height: 40, bgcolor: "success.main" }}>
+                    {settlement.toUser.username[0]?.toUpperCase()}
+                  </Avatar>
+                  <Typography variant="body2" sx={{ fontWeight: 500, flexShrink: 0 }}>
+                    {settlement.toUser.username}
+                  </Typography>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{
+                      fontWeight: 700,
+                      ml: "auto",
+                      flexShrink: 0,
+                      color: settlement.from === user?.id
+                        ? "error.main"
+                        : settlement.to === user?.id
+                        ? "success.main"
+                        : "text.primary",
+                    }}
+                  >
+                    {formatCurrency(settlement.amount, settlement.currency)}
+                  </Typography>
+                </Box>
+                <Button
+                  variant="contained"
+                  color="success"
+                  sx={{ height: 72, borderRadius: 2, px: 3 }}
+                  onClick={() => {
+                    setSelectedSettlement(settlement);
+                    setShowSettleModal(true);
+                  }}
+                >
+                  Settle
+                </Button>
               </Box>
             ))}
           </Box>
@@ -513,7 +542,7 @@ export default function GroupDetail() {
                 Add Members
               </Button>
             </Box>
-            <List>
+            <List disablePadding>
               {group.members.map((member) => (
                 <ListItem
                   key={member.user_id}
@@ -732,6 +761,114 @@ export default function GroupDetail() {
             loading={isUpdatingExpense}
           />
         </DialogContent>
+      </Dialog>
+
+      <Dialog
+        fullWidth
+        maxWidth="xs"
+        open={showSettleModal}
+        onClose={() => setShowSettleModal(false)}
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2.5 }}>
+          <DialogTitle sx={{ fontWeight: 700, p: 0, fontSize: "1.15rem" }}>Confirm Settlement</DialogTitle>
+          <IconButton onClick={() => setShowSettleModal(false)} size="small">
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+        <DialogContent sx={{ px: 3, pt: 2, pb: 1 }}>
+          {selectedSettlement && (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {/* Flow visualization */}
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.5,
+                  p: 2.5,
+                  bgcolor: "action.hover",
+                  borderRadius: 3,
+                }}
+              >
+                {/* From user */}
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.75, flex: 1 }}>
+                  <Avatar
+                    src={selectedSettlement.fromUser.avatar || undefined}
+                    sx={{ width: 52, height: 52, bgcolor: "error.main" }}
+                  >
+                    {selectedSettlement.fromUser.username[0]?.toUpperCase()}
+                  </Avatar>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }} noWrap>
+                    {selectedSettlement.fromUser.username}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">Paying</Typography>
+                </Box>
+
+                {/* Arrow + amount */}
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "success.main", whiteSpace: "nowrap" }}>
+                    {formatCurrency(selectedSettlement.amount, selectedSettlement.currency)}
+                  </Typography>
+                  <EastIcon sx={{ fontSize: 28, color: "success.main" }} />
+                </Box>
+
+                {/* To user */}
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.75, flex: 1 }}>
+                  <Avatar
+                    src={selectedSettlement.toUser.avatar || undefined}
+                    sx={{ width: 52, height: 52, bgcolor: "success.main" }}
+                  >
+                    {selectedSettlement.toUser.username[0]?.toUpperCase()}
+                  </Avatar>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }} noWrap>
+                    {selectedSettlement.toUser.username}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">Receiving</Typography>
+                </Box>
+              </Box>
+
+              <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>
+                Confirm that <strong>{selectedSettlement.fromUser.username}</strong> has paid <strong>{selectedSettlement.toUser.username}</strong>.
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3, pt: 2 }}>
+          <Button
+            fullWidth
+            variant="contained"
+            color="success"
+            startIcon={<CheckIcon />}
+            disabled={isSettlingDebt}
+            loading={isSettlingDebt}
+            onClick={async () => {
+              if (!selectedSettlement) return;
+              await new Promise<void>((resolve) => {
+                settleDebt(
+                  {
+                    from: selectedSettlement.from,
+                    to: selectedSettlement.to,
+                    amount: selectedSettlement.amount,
+                    currency: selectedSettlement.currency,
+                  },
+                  {
+                    onSuccess: () => {
+                      enqueueSnackbar("Settled!", { variant: "success" });
+                      setShowSettleModal(false);
+                      resolve();
+                    },
+                    onError: () => {
+                      enqueueSnackbar("Failed to settle", { variant: "error" });
+                      resolve();
+                    },
+                  }
+                );
+              });
+            }}
+          >
+            Confirm
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

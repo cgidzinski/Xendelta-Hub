@@ -30,7 +30,7 @@ interface ExpenseFormProps {
   onExactSplitsChange: (v: { [userId: string]: string }) => void;
   percentSplits: { [userId: string]: string };
   onPercentSplitsChange: (v: { [userId: string]: string }) => void;
-  members: Array<{ user_id: string; username: string; avatar?: string }>;
+  members: Array<{ user_id: string; username: string; avatar?: string | null }>;
   currencies: string[];
   onSubmit: () => void;
   submitDisabled?: boolean;

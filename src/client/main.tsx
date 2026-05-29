@@ -49,7 +49,6 @@ import XenLinkRedirect from "./routes/External/XenLinkRedirect/XenLinkRedirect";
 // Routes - Xensplit
 import XensplitGroupsList from "./routes/Internal/Xensplit/GroupsList";
 import XensplitGroupDetail from "./routes/Internal/Xensplit/GroupDetail";
-import XensplitSettleUp from "./routes/Internal/Xensplit/SettleUp";
 // Routes - Admin
 import Admin from "./routes/Admin/Admin";
 import Users from "./routes/Admin/Users";
@@ -157,7 +156,6 @@ const router = createBrowserRouter(
         <Route path="xensplit" index element={<Navigate to="groups" replace />} />
         <Route path="xensplit/groups" element={<XensplitGroupsList />} />
         <Route path="xensplit/groups/:groupId" element={<XensplitGroupDetail />} />
-        <Route path="xensplit/groups/:groupId/settle" element={<XensplitSettleUp />} />
         <Route path="apps" element={<Apps />} />
       </Route>
       {/* Admin routes - require admin role and use AdminNavBar */}
