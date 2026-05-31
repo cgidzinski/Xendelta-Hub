@@ -244,7 +244,7 @@ export const addXenSplitMembersSchema = z.object({
 
 export const createExpenseSchema = z.object({
   paid_by: objectIdSchema,
-  amount: z.number("Amount must be a number"),
+  amount: z.number("Amount must be a number").positive("Amount must be positive"),
   currency: z.string().default("USD"),
   title: z.string().min(1, "Title required").max(500),
   notes: z.string().max(1000).optional(),
@@ -255,7 +255,7 @@ export const createExpenseSchema = z.object({
 
 export const updateExpenseSchema = z.object({
   paid_by: objectIdSchema.optional(),
-  amount: z.number().optional(),
+  amount: z.number().positive("Amount must be positive").optional(),
   currency: z.string().optional(),
   title: z.string().min(1).max(500).optional(),
   notes: z.string().max(1000).optional(),
@@ -269,6 +269,9 @@ export const settleDebtSchema = z.object({
   to: objectIdSchema,
   amount: z.number().positive("Amount must be positive"),
   currency: z.string().default("USD"),
+}).refine((data) => data.from !== data.to, {
+  message: "Cannot settle with yourself",
+  path: ["to"],
 });
 
 export const xenSplitIdParamSchema = z.object({
@@ -289,5 +292,10 @@ export const xenSplitExpenseImageParamSchema = z.object({
   groupId: objectIdSchema,
   expenseId: objectIdSchema,
   imageId: objectIdSchema,
+});
+
+export const xenSplitSettlementParamSchema = z.object({
+  groupId: objectIdSchema,
+  settlementId: objectIdSchema,
 });
 

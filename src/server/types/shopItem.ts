@@ -1,4 +1,4 @@
-import { Item, ItemKey } from "./item";
+import { ItemKey } from "./item";
 
 export interface ShopItem {
   id: string;

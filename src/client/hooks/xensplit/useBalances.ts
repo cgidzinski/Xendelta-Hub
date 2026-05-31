@@ -27,6 +27,17 @@ export function useXenSplitBalances(groupId: string) {
     },
   });
 
+  const deleteSettlementMutation = useMutation({
+    mutationFn: async (settlementId: string) => {
+      const res = await apiClient.delete(`/api/xensplit/groups/${groupId}/settlements/${settlementId}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["xensplit", "balances", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
+    },
+  });
+
   return {
     balancesData: data,
     isLoading,
@@ -35,5 +46,7 @@ export function useXenSplitBalances(groupId: string) {
     settleDebt: settleDebtMutation.mutate,
     isSettlingDebt: settleDebtMutation.isPending,
     settleDebtError: settleDebtMutation.error,
+    deleteSettlement: deleteSettlementMutation.mutate,
+    isDeletingSettlement: deleteSettlementMutation.isPending,
   };
 }

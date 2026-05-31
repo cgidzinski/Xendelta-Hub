@@ -4,6 +4,8 @@ import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import { SnackbarProvider } from "notistack";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 
 // Components
 import ErrorPage from "./components/ErrorPage";
@@ -224,20 +226,22 @@ const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Failed to find the root element");
 
 ReactDOM.createRoot(rootElement).render(
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <AuthProvider>
-        <NavBarProvider>
-          <SnackbarProvider
-            maxSnack={10}
-            autoHideDuration={2500}
-            anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-          >
-            <RouterProvider router={router} />
-          </SnackbarProvider>
-        </NavBarProvider>
-      </AuthProvider>
-    </ThemeProvider>
-  </QueryClientProvider>,
+  <LocalizationProvider dateAdapter={AdapterDateFns}>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <AuthProvider>
+          <NavBarProvider>
+            <SnackbarProvider
+              maxSnack={10}
+              autoHideDuration={2500}
+              anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+            >
+              <RouterProvider router={router} />
+            </SnackbarProvider>
+          </NavBarProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  </LocalizationProvider>,
 );

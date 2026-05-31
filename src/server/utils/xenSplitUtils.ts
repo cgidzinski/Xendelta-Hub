@@ -25,7 +25,7 @@ interface Settlement {
 }
 
 interface XenSplitDocument {
-  members: { user_id: string }[];
+  members: string[];
   expenses: Expense[];
   settlements: Settlement[];
 }
@@ -52,9 +52,9 @@ export function calculateBalances(doc: XenSplitDocument): BalanceMap {
 
   // Initialize all members with zero balance entries for collected currencies
   for (const member of doc.members) {
-    balances[member.user_id] = {};
+    balances[member] = {};
     for (const c of currencies) {
-      balances[member.user_id][c] = 0;
+      balances[member][c] = 0;
     }
   }
 

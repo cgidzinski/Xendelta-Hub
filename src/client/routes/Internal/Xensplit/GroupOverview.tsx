@@ -1,10 +1,16 @@
+import { useState, useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
 import { useNavigate, useParams } from "react-router-dom";
-import { Box, Typography, Avatar, Button } from "@mui/material";
+import { Box, Typography, Avatar, Button, Collapse, IconButton, Chip } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import EastIcon from "@mui/icons-material/East";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { format, startOfMonth, subMonths } from "date-fns";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitExpense, XenSplitSettlement } from "../../../hooks/xensplit/types";
 import ExpenseListItem from "./components/ExpenseListItem";
+
+const CHART_COLORS = ["#6366f1", "#22d3ee", "#f59e0b", "#10b981", "#f43f5e", "#a78bfa", "#fb923c", "#34d399"];
 
 type ActivityItem =
     | { type: "expense"; date: string; expense: XenSplitExpense }
@@ -14,6 +20,7 @@ export default function GroupOverview() {
     const { group, balancesData, user, formatCurrency, onViewExpense } = useOutletContext<GroupDetailContext>();
     const navigate = useNavigate();
     const { groupId } = useParams<{ groupId: string }>();
+    const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
     // User balance per currency
     const userBalance = balancesData?.balances[user.id]?.balances ?? {};
@@ -43,6 +50,33 @@ export default function GroupOverview() {
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const getMember = (userId: string) => group.members.find((m) => m.user_id === userId);
+
+    // Spending analytics
+    const defaultCurrency = group.default_currency || "USD";
+
+    const memberSpendData = useMemo(() => {
+        const totals: { [userId: string]: number } = {};
+        group.expenses.filter(e => e.currency === defaultCurrency).forEach(e => {
+            totals[e.paid_by] = (totals[e.paid_by] ?? 0) + e.amount;
+        });
+        return Object.entries(totals).map(([userId, value]) => ({
+            name: group.members.find(m => m.user_id === userId)?.username ?? userId,
+            value,
+        })).filter(d => d.value > 0);
+    }, [group.expenses, group.members, defaultCurrency]);
+
+    const monthlySpendData = useMemo(() => {
+        const months: { [key: string]: number } = {};
+        for (let i = 11; i >= 0; i--) {
+            const d = startOfMonth(subMonths(new Date(), i));
+            months[format(d, "MMM yy")] = 0;
+        }
+        group.expenses.filter(e => e.currency === defaultCurrency).forEach(e => {
+            const key = format(startOfMonth(new Date(e.date)), "MMM yy");
+            if (key in months) months[key] = (months[key] ?? 0) + e.amount;
+        });
+        return Object.entries(months).map(([month, total]) => ({ month, total }));
+    }, [group.expenses, defaultCurrency]);
 
     return (
         <Box>
@@ -99,7 +133,7 @@ export default function GroupOverview() {
                                 variant="body1"
                                 sx={{
                                     fontWeight: 700,
-                                    color: (amount as number) >= 0 ? "success.main" : "error.main",
+                                    color: (amount as number) >= 0 ? "warning.main" : "error.main",
                                     lineHeight: 1.3,
                                 }}
                             >
@@ -120,6 +154,51 @@ export default function GroupOverview() {
                     </Box>
                 </Box>
             </Box>
+
+            {/* Analytics section */}
+            {group.expenses.length > 0 && (
+                <Box sx={{ mb: 3, bgcolor: "action.hover", borderRadius: 2, overflow: "hidden" }}>
+                    <Box
+                        sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 2, py: 1.5, cursor: "pointer" }}
+                        onClick={() => setAnalyticsOpen((o) => !o)}
+                    >
+                        <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                            Analytics ({defaultCurrency})
+                        </Typography>
+                        <IconButton size="small" sx={{ transform: analyticsOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>
+                            <ExpandMoreIcon fontSize="small" />
+                        </IconButton>
+                    </Box>
+                    <Collapse in={analyticsOpen}>
+                        <Box sx={{ px: 2, pb: 2 }}>
+                            {memberSpendData.length > 0 && (
+                                <>
+                                    <Typography variant="caption" color="text.disabled" sx={{ display: "block", mb: 1 }}>Who paid most</Typography>
+                                    <ResponsiveContainer width="100%" height={180}>
+                                        <PieChart>
+                                            <Pie data={memberSpendData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
+                                                {memberSpendData.map((_, i) => (
+                                                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip formatter={(v: number) => formatCurrency(v, defaultCurrency)} />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </>
+                            )}
+                            <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 2, mb: 1 }}>Monthly spend (last 12 months)</Typography>
+                            <ResponsiveContainer width="100%" height={160}>
+                                <BarChart data={monthlySpendData} margin={{ top: 0, right: 8, left: -16, bottom: 0 }}>
+                                    <XAxis dataKey="month" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+                                    <YAxis tick={{ fontSize: 10 }} />
+                                    <Tooltip formatter={(v: number) => formatCurrency(v, defaultCurrency)} />
+                                    <Bar dataKey="total" fill={CHART_COLORS[0]} radius={[3, 3, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </Box>
+                    </Collapse>
+                </Box>
+            )}
 
             {/* Activity feed */}
             {feed.length > 0 ? (
@@ -180,9 +259,14 @@ export default function GroupOverview() {
                                             </Avatar>
                                         </Box>
                                         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                                            <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
-                                                {s.from === user.id ? "You" : fromMember?.username} settled with {s.to === user.id ? "you" : toMember?.username}
-                                            </Typography>
+                                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
+                                                <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                                                    {s.from === user.id ? "You" : fromMember?.username} settled with {s.to === user.id ? "you" : toMember?.username}
+                                                </Typography>
+                                                {s.is_partial && (
+                                                    <Chip label="Partial" size="small" color="warning" variant="outlined" sx={{ fontSize: "0.6rem", height: 18, px: 0 }} />
+                                                )}
+                                            </Box>
                                             <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: 0.25, flexWrap: "nowrap", minWidth: 0 }}>
                                                 <Typography variant="caption" color="text.secondary" noWrap>
                                                     {new Date(s.settled_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}

@@ -63,16 +63,17 @@ export function GroupCard({ group, userId }: GroupCardProps) {
 
   const netBalances = getUserNetBalance(group, userId);
   const nonZeroEntries = Object.entries(netBalances).filter(([, v]) => v !== 0);
-  const firstEntry = nonZeroEntries[0];
   const isSettledUp = nonZeroEntries.length === 0;
 
-  const balanceDisplay = isSettledUp ? null : (() => {
-    const [currency, amount] = firstEntry;
+  const formatBalance = (currency: string, amount: number) => {
     const formatted = new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Math.abs(amount));
     return amount > 0
-      ? <Typography variant="caption" sx={{ fontWeight: 700, color: "success.main", whiteSpace: "nowrap" }}>Owed {formatted}</Typography>
-      : <Typography variant="caption" sx={{ fontWeight: 700, color: "error.main", whiteSpace: "nowrap" }}>You owe {formatted}</Typography>;
-  })();
+      ? <Typography key={currency} variant="caption" sx={{ fontWeight: 700, color: "success.main", whiteSpace: "nowrap" }}>Owed {formatted}</Typography>
+      : <Typography key={currency} variant="caption" sx={{ fontWeight: 700, color: "error.main", whiteSpace: "nowrap" }}>Owes {formatted}</Typography>;
+  };
+
+  const displayedEntries = nonZeroEntries.slice(0, 2);
+  const extraCount = nonZeroEntries.length - displayedEntries.length;
 
   return (
     <Card
@@ -153,7 +154,14 @@ export function GroupCard({ group, userId }: GroupCardProps) {
                   variant="outlined"
                   sx={{ fontSize: "0.65rem", height: 20 }}
                 />
-              ) : balanceDisplay}
+              ) : (
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.25 }}>
+                  {displayedEntries.map(([currency, amount]) => formatBalance(currency, amount))}
+                  {extraCount > 0 && (
+                    <Chip label={`+${extraCount} more`} size="small" sx={{ fontSize: "0.6rem", height: 18 }} />
+                  )}
+                </Box>
+              )}
               <ChevronRightIcon sx={{ color: "text.disabled", fontSize: 20 }} />
             </Box>
           </Box>

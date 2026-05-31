@@ -1,16 +1,26 @@
+import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Box, Typography, Button, Avatar, Chip, Divider } from "@mui/material";
+import { Box, Typography, Button, Avatar, Chip, Divider, Dialog, DialogTitle, DialogContent, DialogActions, ToggleButtonGroup, ToggleButton } from "@mui/material";
 import EastIcon from "@mui/icons-material/East";
 import CheckIcon from "@mui/icons-material/Check";
+import UndoIcon from "@mui/icons-material/Undo";
 import type { GroupDetailContext } from "./GroupDetail";
 
 export default function GroupSettlements() {
-    const { balancesData, group, user, formatCurrency, onSettle } = useOutletContext<GroupDetailContext>();
+    const { balancesData, group, user, formatCurrency, onSettle, deleteSettlement, isDeletingSettlement } = useOutletContext<GroupDetailContext>();
+    const [confirmUndoId, setConfirmUndoId] = useState<string | null>(null);
+    const [historyFilter, setHistoryFilter] = useState<"mine" | "all">("mine");
 
     const pendingSettlements = balancesData?.settlements ?? [];
+    const myPendingSettlements = pendingSettlements.filter(s => s.from === user.id || s.to === user.id);
+    const otherPendingSettlements = pendingSettlements.filter(s => s.from !== user.id && s.to !== user.id);
+
     const completedSettlements = [...(group.settlements ?? [])].sort(
         (a, b) => new Date(b.settled_at).getTime() - new Date(a.settled_at).getTime()
     );
+    const filteredHistory = historyFilter === "mine"
+        ? completedSettlements.filter(s => s.from === user.id || s.to === user.id)
+        : completedSettlements;
 
     const getMember = (userId: string) => group.members.find((m) => m.user_id === userId);
 
@@ -26,19 +36,19 @@ export default function GroupSettlements() {
 
     return (
         <Box>
-            <Box sx={{ mb: 2, minHeight: 48, display: "flex", alignItems: "center" }}>
+            <Box sx={{ mb: 2, minHeight: 48, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>
                     Settlements
                 </Typography>
             </Box>
 
-            {/* Pending */}
-            {pendingSettlements.length === 0 ? (
+            {/* Pending — mine */}
+            {myPendingSettlements.length === 0 ? (
                 <Box sx={{ textAlign: "center", py: 3, mb: completedSettlements.length > 0 ? 2 : 0 }}>
                     <Typography variant="body2" color="text.secondary">All settled up</Typography>
                 </Box>
             ) : (
-                pendingSettlements.map((settlement, idx) => (
+                myPendingSettlements.map((settlement, idx) => (
                     <Box
                         key={idx}
                         sx={{
@@ -104,23 +114,80 @@ export default function GroupSettlements() {
                 ))
             )}
 
+            {/* Others' pending settlements (view only) */}
+            {otherPendingSettlements.length > 0 && (
+                <>
+                    <Divider sx={{ my: 2 }} />
+                    <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1.5 }}>
+                        Others pending
+                    </Typography>
+                    {otherPendingSettlements.map((settlement, idx) => (
+                        <Box
+                            key={idx}
+                            sx={{
+                                display: "grid",
+                                gridTemplateColumns: "auto 1fr auto 1fr auto 1fr auto 1fr auto",
+                                gridTemplateRows: "auto",
+                                px: { xs: 2, sm: 3 },
+                                py: { xs: 1.5, sm: 2 },
+                                mb: 1.5,
+                                bgcolor: "action.hover",
+                                borderRadius: 2,
+                                alignItems: "center",
+                                opacity: 0.6,
+                            }}
+                        >
+                            <Box sx={{ gridColumn: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
+                                <Avatar src={settlement.fromUser.avatar || undefined} sx={{ width: { xs: 32, sm: 36 }, height: { xs: 32, sm: 36 } }}>
+                                    {settlement.fromUser.username[0]?.toUpperCase()}
+                                </Avatar>
+                                <Typography variant="caption" sx={{ fontSize: "0.65rem" }} noWrap>{settlement.fromUser.username}</Typography>
+                            </Box>
+                            <EastIcon sx={{ gridColumn: 3, fontSize: { xs: 14, sm: 16 }, color: "text.disabled", justifySelf: "center" }} />
+                            <Typography variant="body2" sx={{ gridColumn: 5, fontWeight: 700, justifySelf: "center", whiteSpace: "nowrap" }}>
+                                {formatCurrency(settlement.amount, settlement.currency)}
+                            </Typography>
+                            <EastIcon sx={{ gridColumn: 7, fontSize: { xs: 14, sm: 16 }, color: "text.disabled", justifySelf: "center" }} />
+                            <Box sx={{ gridColumn: 9, display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
+                                <Avatar src={settlement.toUser.avatar || undefined} sx={{ width: { xs: 32, sm: 36 }, height: { xs: 32, sm: 36 } }}>
+                                    {settlement.toUser.username[0]?.toUpperCase()}
+                                </Avatar>
+                                <Typography variant="caption" sx={{ fontSize: "0.65rem" }} noWrap>{settlement.toUser.username}</Typography>
+                            </Box>
+                        </Box>
+                    ))}
+                </>
+            )}
+
             {/* History */}
             {completedSettlements.length > 0 && (
                 <>
                     {pendingSettlements.length > 0 && <Divider sx={{ my: 2 }} />}
-                    <Typography
-                        variant="caption"
-                        color="text.disabled"
-                        sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1.5 }}
-                    >
-                        History
-                    </Typography>
-                    {completedSettlements.map((s, idx) => {
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
+                        <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                            History
+                        </Typography>
+                        <ToggleButtonGroup
+                            size="small"
+                            value={historyFilter}
+                            exclusive
+                            onChange={(_, v) => v && setHistoryFilter(v)}
+                            sx={{ height: 24 }}
+                        >
+                            <ToggleButton value="mine" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>Mine</ToggleButton>
+                            <ToggleButton value="all" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>All</ToggleButton>
+                        </ToggleButtonGroup>
+                    </Box>
+                    {filteredHistory.length === 0 ? (
+                        <Box sx={{ textAlign: "center", py: 3 }}>
+                            <Typography variant="body2" color="text.secondary">No settlements yet</Typography>
+                        </Box>
+                    ) : filteredHistory.map((s, idx) => {
                         const fromMember = getMember(s.from);
                         const toMember = getMember(s.to);
                         return (
                             <Box
-                                key={idx}
+                                key={s._id ?? idx}
                                 sx={{
                                     display: "grid",
                                     gridTemplateColumns: "auto 1fr auto 1fr auto 1fr auto 1fr auto",
@@ -145,17 +212,39 @@ export default function GroupSettlements() {
                                 </Box>
                                 <EastIcon sx={{ gridColumn: 3, gridRow: "1 / 3", alignSelf: "center", justifySelf: "center", fontSize: { xs: 14, sm: 18 }, color: "text.disabled" }} />
                                 <Box sx={{ gridColumn: 5, gridRow: "1 / 3", display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
+                                    {s._id && (s.from === user.id || s.to === user.id) && (
+                                        <Chip
+                                            icon={<UndoIcon sx={{ fontSize: "0.8rem !important" }} />}
+                                            label="Undo"
+                                            size="small"
+                                            color="error"
+                                            clickable
+                                            onClick={() => setConfirmUndoId(s._id)}
+                                            sx={{ fontSize: "0.7rem", height: 22, fontWeight: 600, cursor: "pointer" }}
+                                        />
+                                    )}
                                     <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>
                                         {formatCurrency(s.amount, s.currency)}
                                     </Typography>
-                                    <Chip
-                                        icon={<CheckIcon sx={{ fontSize: "0.75rem !important" }} />}
-                                        label={new Date(s.settled_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                                        size="small"
-                                        color="success"
-                                        variant="outlined"
-                                        sx={{ fontSize: "0.62rem", height: 20, px: 0.25 }}
-                                    />
+                                    <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", justifyContent: "center" }}>
+                                        <Chip
+                                            icon={<CheckIcon sx={{ fontSize: "0.75rem !important" }} />}
+                                            label={new Date(s.settled_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                                            size="small"
+                                            color="success"
+                                            variant="outlined"
+                                            sx={{ fontSize: "0.62rem", height: 20, px: 0.25 }}
+                                        />
+                                        {s.is_partial && (
+                                            <Chip
+                                                label="Partial"
+                                                size="small"
+                                                color="warning"
+                                                variant="outlined"
+                                                sx={{ fontSize: "0.62rem", height: 20, px: 0.25 }}
+                                            />
+                                        )}
+                                    </Box>
                                 </Box>
                                 <EastIcon sx={{ gridColumn: 7, gridRow: "1 / 3", alignSelf: "center", justifySelf: "center", fontSize: { xs: 14, sm: 18 }, color: "text.disabled" }} />
                                 <Box sx={{ gridColumn: 9, gridRow: "1 / 3", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: { xs: 0.5, sm: 0.75 } }}>
@@ -166,11 +255,34 @@ export default function GroupSettlements() {
                                         {toMember?.username ?? "?"}
                                     </Typography>
                                 </Box>
+
                             </Box>
                         );
                     })}
                 </>
             )}
+
+            <Dialog open={!!confirmUndoId} onClose={() => setConfirmUndoId(null)}>
+                <DialogTitle>Undo Settlement?</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2">This will remove the settlement record and restore the balance. Are you sure?</Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setConfirmUndoId(null)}>Cancel</Button>
+                    <Button
+                        color="error"
+                        disabled={isDeletingSettlement}
+                        onClick={() => {
+                            if (confirmUndoId) {
+                                deleteSettlement(confirmUndoId);
+                                setConfirmUndoId(null);
+                            }
+                        }}
+                    >
+                        Undo
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }

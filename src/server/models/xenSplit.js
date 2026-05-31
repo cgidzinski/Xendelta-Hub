@@ -1,13 +1,6 @@
 var mongoose = require("mongoose");
 var Schema = mongoose.Schema;
 
-var memberSchema = new Schema({
-  user_id: { type: String, required: true },
-  username: { type: String, required: true },
-  avatar: { type: String },
-  joined_at: { type: Date, default: Date.now },
-}, { _id: false });
-
 var splitSchema = new Schema({
   user_id: { type: String, required: true },
   amount_owed: { type: Number },
@@ -20,6 +13,7 @@ var expenseImageSchema = new Schema({
 
 var expenseSchema = new Schema({
   paid_by: { type: String, required: true },
+  created_by: { type: String },
   amount: { type: Number, required: true },
   currency: { type: String, default: "USD" },
   title: { type: String, required: true, maxlength: 500 },
@@ -41,14 +35,15 @@ var settlementSchema = new Schema({
   amount: { type: Number, required: true },
   currency: { type: String, default: "USD" },
   settled_at: { type: Date, default: Date.now },
-}, { _id: false });
+  is_partial: { type: Boolean, default: false },
+}, { _id: true });
 
 var xenSplitSchema = new Schema({
   name: { type: String, required: true, maxlength: 100 },
   default_currency: { type: String, default: "USD" },
   created_by: { type: String, required: true },
   created_at: { type: Date, default: Date.now },
-  members: [memberSchema],
+  members: [{ type: Schema.Types.ObjectId, ref: "User" }],
   expenses: [expenseSchema],
   settlements: [settlementSchema],
 });

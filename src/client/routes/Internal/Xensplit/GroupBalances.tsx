@@ -15,8 +15,8 @@ export default function GroupBalances() {
                 </Typography>
             </Box>
             {Object.entries(balancesData.balances).map(([userId, balance]) => {
-                const nonZeroBalances = Object.entries(balance.balances).filter(([_, amount]) => amount !== 0);
-                if (nonZeroBalances.length === 0) return null;
+                const nonZeroBalances = Object.entries(balance.balances).filter(([_, amount]) => Math.abs(amount as number) >= 0.01);
+                const isSettled = nonZeroBalances.length === 0;
                 return (
                     <Box
                         key={userId}
@@ -30,6 +30,7 @@ export default function GroupBalances() {
                             mb: 1,
                             minHeight: 64,
                             flexWrap: "wrap",
+                            opacity: isSettled ? 0.5 : 1,
                         }}
                     >
                         <Avatar src={balance.user.avatar || undefined} sx={{ bgcolor: "primary.main" }}>
@@ -38,19 +39,23 @@ export default function GroupBalances() {
                         <Box sx={{ flexGrow: 1 }}>
                             <Typography variant="subtitle2">{balance.user.username}</Typography>
                         </Box>
-                        {nonZeroBalances.map(([currency, amount]) => (
-                            <Typography
-                                key={currency}
-                                variant="subtitle2"
-                                sx={{
-                                    fontWeight: 700,
-                                    color: (amount as number) >= 0 ? "success.main" : "error.main",
-                                }}
-                            >
-                                {(amount as number) >= 0 ? "Owed " : "Owes "}
-                                {formatCurrency(Math.abs(amount as number), currency)}
-                            </Typography>
-                        ))}
+                        {isSettled ? (
+                            <Typography variant="subtitle2" color="text.secondary">Settled up</Typography>
+                        ) : (
+                            nonZeroBalances.map(([currency, amount]) => (
+                                <Typography
+                                    key={currency}
+                                    variant="subtitle2"
+                                    sx={{
+                                        fontWeight: 700,
+                                        color: (amount as number) >= 0 ? "success.main" : "error.main",
+                                    }}
+                                >
+                                    {(amount as number) >= 0 ? "Owed " : "Owes "}
+                                    {formatCurrency(Math.abs(amount as number), currency)}
+                                </Typography>
+                            ))
+                        )}
                     </Box>
                 );
             })}

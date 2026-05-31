@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSnackbar } from "notistack";
 import { useParams, useNavigate, useLocation, Outlet } from "react-router-dom";
 import {
@@ -24,6 +25,7 @@ import {
   MenuItem,
   Divider,
   CircularProgress,
+  TextField,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CheckIcon from "@mui/icons-material/Check";
@@ -49,6 +51,7 @@ import ErrorDisplay from "../../../components/ErrorDisplay";
 import UserSelect from "../../../components/UserSelect";
 import { SearchedUser } from "../../../hooks/useUserSearch";
 import ExpenseForm from "./components/ExpenseForm";
+import { apiClient } from "../../../config/api";
 import type { XenSplit, XenSplitBalancesData, XenSplitExpense, XenSplitSettlementTransfer } from "../../../hooks/xensplit/types";
 
 const ACCENT_COLORS = [
@@ -75,6 +78,8 @@ export interface GroupDetailContext {
   onMemberMenu: (memberId: string, anchor: HTMLElement) => void;
   updateGroup: (updates: { name?: string; default_currency?: string }, options?: { onSuccess?: () => void; onError?: () => void }) => void;
   isUpdating: boolean;
+  deleteSettlement: (settlementId: string) => void;
+  isDeletingSettlement: boolean;
 }
 
 export default function GroupDetail() {
@@ -82,10 +87,11 @@ export default function GroupDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
+  const queryClient = useQueryClient();
   const { group, isLoading, isError, error, addMembers, isAddingMembers, removeMember, isRemovingMember, updateGroup, isUpdating } = useXenSplit(groupId!);
   useTitle(group?.name ? `Xensplit - ${group.name}` : "Xensplit");
   const { deleteGroup } = useXenSplits();
-  const { balancesData, settleDebt, isSettlingDebt } = useXenSplitBalances(groupId!);
+  const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useXenSplitBalances(groupId!);
   const { updateExpense, updateExpenseAsync, isUpdatingExpense, addExpense, addExpenseAsync, isAddingExpense, deleteExpense, isDeletingExpense, uploadExpenseImages, isUploadingImages, deleteExpenseImage, isDeletingExpenseImage } = useXenSplitExpenses(groupId!);
   const location = useLocation();
   const activeTab = location.pathname.endsWith("/overview")
@@ -112,6 +118,7 @@ export default function GroupDetail() {
   const [addSelectedParticipants, setAddSelectedParticipants] = useState<SearchedUser[]>([]);
   const [addExactSplits, setAddExactSplits] = useState<{ [userId: string]: string }>({});
   const [addPercentSplits, setAddPercentSplits] = useState<{ [userId: string]: string }>({});
+  const [addDate, setAddDate] = useState<Date>(new Date());
   const [editTitle, setEditTitle] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editAmount, setEditAmount] = useState("");
@@ -122,8 +129,10 @@ export default function GroupDetail() {
   const [editSelectedParticipants, setEditSelectedParticipants] = useState<SearchedUser[]>([]);
   const [editExactSplits, setEditExactSplits] = useState<{ [userId: string]: string }>({});
   const [editPercentSplits, setEditPercentSplits] = useState<{ [userId: string]: string }>({});
+  const [editDate, setEditDate] = useState<Date>(new Date());
   const [showSettleModal, setShowSettleModal] = useState(false);
   const [selectedSettlement, setSelectedSettlement] = useState<XenSplitSettlementTransfer | null>(null);
+  const [settleAmount, setSettleAmount] = useState("");
   const [showViewExpenseModal, setShowViewExpenseModal] = useState(false);
   const [viewExpenseItem, setViewExpenseItem] = useState<XenSplitExpense | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -225,22 +234,45 @@ export default function GroupDetail() {
 
   const handleTransferOwnership = async () => {
     if (!menuMemberId) return;
-    await new Promise<void>((resolve) => {
-      fetch(`/api/xensplit/groups/${groupId}/transfer`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newOwnerId: menuMemberId }),
-      }).then((res) => {
-        if (res.ok) {
-          enqueueSnackbar("Ownership transferred", { variant: "success" });
-        } else {
-          enqueueSnackbar("Failed to transfer ownership", { variant: "error" });
-        }
-        setMenuAnchor(null);
-        setMenuMemberId(null);
-        resolve();
+    try {
+      await apiClient.post(`/api/xensplit/groups/${groupId}/transfer`, { newOwnerId: menuMemberId });
+      enqueueSnackbar("Ownership transferred", { variant: "success" });
+      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["xensplit", "groups"] });
+    } catch {
+      enqueueSnackbar("Failed to transfer ownership", { variant: "error" });
+    } finally {
+      setMenuAnchor(null);
+      setMenuMemberId(null);
+    }
+  };
+
+  const handleExportCSV = () => {
+    const memberName = (userId: string) => group.members.find((m) => m.user_id === userId)?.username ?? userId;
+    const rows: string[][] = [["Date", "Title", "Paid By", "Amount", "Currency", "Split Type", "Notes", ...group.members.map((m) => m.username)]];
+    for (const e of group.expenses) {
+      const memberAmounts = group.members.map((m) => {
+        const split = e.splits.find((s) => s.user_id === m.user_id);
+        if (!split) return "";
+        if (split.amount_owed !== undefined) return split.amount_owed.toFixed(2);
+        if (split.percentage !== undefined) return `${split.percentage}%`;
+        return (e.amount / e.splits.length).toFixed(2);
       });
-    });
+      rows.push([new Date(e.date).toISOString(), e.title, memberName(e.paid_by), e.amount.toFixed(2), e.currency, e.split_type, e.notes ?? "", ...memberAmounts]);
+    }
+    rows.push([]);
+    rows.push(["Date", "From", "To", "Amount", "Currency"]);
+    for (const s of group.settlements) {
+      rows.push([new Date(s.settled_at).toISOString(), memberName(s.from), memberName(s.to), s.amount.toFixed(2), s.currency]);
+    }
+    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${group.name.replace(/[^a-z0-9]/gi, "_")}_export.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleAddExpense = async () => {
@@ -273,6 +305,7 @@ export default function GroupDetail() {
           currency: addCurrency,
           title: addTitle,
           notes: addNotes.trim() || undefined,
+          date: addDate.toISOString(),
           split_type: addSplitType,
           splits,
         },
@@ -341,6 +374,7 @@ export default function GroupDetail() {
             currency: editCurrency,
             title: editTitle,
             notes: editNotes.trim() || undefined,
+            date: editDate.toISOString(),
             split_type: editSplitType,
             splits,
           }
@@ -405,6 +439,7 @@ export default function GroupDetail() {
       setEditExactSplits(exactMap);
       setEditPercentSplits(percentMap);
     }
+    setEditDate(expense.date ? new Date(expense.date) : new Date());
     setShowEditExpenseModal(true);
   };
 
@@ -418,6 +453,7 @@ export default function GroupDetail() {
       setAddPaidBy(user?.id || "");
       setAddPaidByUser(user ? { _id: user.id, username: user.username, avatar: user.avatar } : null);
       setAddCurrency(group.default_currency || "USD");
+      setAddDate(new Date());
       setShowAddExpenseModal(true);
     },
     onEditExpense: handleOpenEditExpense,
@@ -427,6 +463,7 @@ export default function GroupDetail() {
     },
     onSettle: (settlement) => {
       setSelectedSettlement(settlement);
+      setSettleAmount(settlement.amount.toString());
       setShowSettleModal(true);
     },
     onAddMembers: () => setShowAddMemberModal(true),
@@ -436,6 +473,8 @@ export default function GroupDetail() {
     },
     updateGroup,
     isUpdating,
+    deleteSettlement,
+    isDeletingSettlement,
   };
 
   return (
@@ -484,6 +523,14 @@ export default function GroupDetail() {
               </Box>
             </Box>
           </Box>
+          <IconButton
+            onClick={handleExportCSV}
+            size="small"
+            title="Export CSV"
+            sx={{ flexShrink: 0 }}
+          >
+            <FileDownloadIcon />
+          </IconButton>
           <IconButton
             onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settings`)}
             size="small"
@@ -653,6 +700,8 @@ export default function GroupDetail() {
             loading={isAddingExpense || isUploadingImages}
             images={addImages}
             onImagesChange={setAddImages}
+            date={addDate}
+            onDateChange={setAddDate}
           />
         </DialogContent>
       </Dialog>
@@ -733,6 +782,8 @@ export default function GroupDetail() {
             onDeleteExistingImage={(imageId) => deleteExpenseImage({ expenseId: selectedExpense!._id, imageId })}
             isDeletingImage={isDeletingExpenseImage}
             isEditing
+            date={editDate}
+            onDateChange={setEditDate}
           />
         </DialogContent>
       </Dialog>
@@ -932,6 +983,17 @@ export default function GroupDetail() {
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>
                 Confirm that <strong>{selectedSettlement.fromUser.username}</strong> has paid <strong>{selectedSettlement.toUser.username}</strong>.
               </Typography>
+
+              <TextField
+                label="Amount"
+                type="number"
+                fullWidth
+                size="small"
+                value={settleAmount}
+                onChange={(e) => setSettleAmount(e.target.value)}
+                inputProps={{ min: 0.01, step: 0.01 }}
+                InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5, color: "text.secondary" }}>{selectedSettlement.currency}</Typography> }}
+              />
             </Box>
           )}
         </DialogContent>
@@ -941,7 +1003,7 @@ export default function GroupDetail() {
             variant="contained"
             color="success"
             startIcon={<CheckIcon />}
-            disabled={isSettlingDebt}
+            disabled={isSettlingDebt || !settleAmount || parseFloat(settleAmount) <= 0}
             loading={isSettlingDebt}
             onClick={async () => {
               if (!selectedSettlement) return;
@@ -950,7 +1012,7 @@ export default function GroupDetail() {
                   {
                     from: selectedSettlement.from,
                     to: selectedSettlement.to,
-                    amount: selectedSettlement.amount,
+                    amount: parseFloat(settleAmount),
                     currency: selectedSettlement.currency,
                   },
                   {

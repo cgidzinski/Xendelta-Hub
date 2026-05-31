@@ -19,6 +19,7 @@ export interface XenSplitExpenseImage {
 export interface XenSplitExpense {
   _id: string;
   paid_by: string;
+  created_by?: string;
   amount: number;
   currency: string;
   title: string;
@@ -36,11 +37,13 @@ export interface XenSplitExpense {
 }
 
 export interface XenSplitSettlement {
+  _id: string;
   from: string;
   to: string;
   amount: number;
   currency: string;
   settled_at: string;
+  is_partial?: boolean;
 }
 
 export interface XenSplit {

@@ -16,6 +16,7 @@ import {
   IconButton,
   CircularProgress,
 } from "@mui/material";
+import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
@@ -67,6 +68,8 @@ interface ExpenseFormProps {
   onDeleteExistingImage?: (imageId: string) => void;
   isDeletingImage?: boolean;
   isEditing?: boolean;
+  date: Date;
+  onDateChange: (d: Date) => void;
 }
 
 export default function ExpenseForm({
@@ -103,6 +106,8 @@ export default function ExpenseForm({
   onDeleteExistingImage,
   isDeletingImage,
   isEditing = false,
+  date,
+  onDateChange,
 }: ExpenseFormProps) {
   const [step, setStep] = React.useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -237,6 +242,13 @@ export default function ExpenseForm({
               </Select>
             </FormControl>
           </Box>
+
+          <DateTimePicker
+            label="Date & Time"
+            value={date}
+            onChange={(d) => d && onDateChange(d)}
+            slotProps={{ textField: { fullWidth: true, size: "small" } }}
+          />
 
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
@@ -431,9 +443,11 @@ export default function ExpenseForm({
             fullWidth
             label="Notes"
             value={notes}
-            onChange={(e) => onNotesChange(e.target.value)}
+            onChange={(e) => onNotesChange(e.target.value.slice(0, 1000))}
             multiline
             rows={2}
+            inputProps={{ maxLength: 1000 }}
+            helperText={`${notes.length}/1000`}
           />
 
           <Box>
