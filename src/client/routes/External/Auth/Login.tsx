@@ -37,10 +37,10 @@ export default function Login() {
   const location = useLocation();
   const { login } = useAuth();
   const [formData, setFormData] = useState<LoginFormData>({
-    // username: "",
-    // password: "",
-    username: "testuser",
-    password: "Password123",
+    username: "",
+    password: "",
+    // username: "testuser",
+    // password: "Password123",
   });
   const [errors, setErrors] = useState<LoginErrors>({});
   const [isLoading, setIsLoading] = useState(false);
