@@ -22,7 +22,7 @@ import type { GroupDetailContext } from "./GroupDetail";
 const ALL_CURRENCIES = ["CAD", "USD", "JPY", "EUR", "GBP", "AUD", "CNY", "INR", "MXN", "BRL"];
 
 export default function GroupSettings() {
-    const { group, user, isCreator, onAddMembers, onMemberMenu, updateGroup, isUpdating } =
+    const { group, user, isCreator, onAddMembers, onMemberMenu, updateGroup, isUpdating, balancesData, formatCurrency } =
         useOutletContext<GroupDetailContext>();
     const { enqueueSnackbar } = useSnackbar();
     const [selectedCurrency, setSelectedCurrency] = useState(group.default_currency || "USD");
@@ -63,6 +63,31 @@ export default function GroupSettings() {
                             primary={member.username}
                             secondary={member.user_id === group.created_by ? "Creator" : ""}
                         />
+                        {/* Inline balance */}
+                        {balancesData && (() => {
+                            const memberBalances = balancesData.balances[member.user_id]?.balances ?? {};
+                            const nonZero = Object.entries(memberBalances).filter(([, v]) => v !== 0);
+                            if (nonZero.length === 0) {
+                                return (
+                                    <Typography variant="caption" sx={{ color: "success.main", fontWeight: 600, mr: 1, whiteSpace: "nowrap" }}>
+                                        Settled
+                                    </Typography>
+                                );
+                            }
+                            return (
+                                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", mr: 1 }}>
+                                    {nonZero.map(([currency, amount]) => (
+                                        <Typography
+                                            key={currency}
+                                            variant="caption"
+                                            sx={{ fontWeight: 700, whiteSpace: "nowrap", color: (amount as number) >= 0 ? "success.main" : "error.main" }}
+                                        >
+                                            {(amount as number) >= 0 ? "+" : ""}{formatCurrency(amount as number, currency)}
+                                        </Typography>
+                                    ))}
+                                </Box>
+                            );
+                        })()}
                         {(member.user_id === user.id ||
                             (isCreator && member.user_id !== group.created_by)) && (
                                 <IconButton onClick={(e) => onMemberMenu(member.user_id, e.currentTarget)}>

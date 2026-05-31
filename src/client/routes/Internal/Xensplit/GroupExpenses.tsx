@@ -7,6 +7,10 @@ import ExpenseListItem from "./components/ExpenseListItem";
 export default function GroupExpenses() {
     const { group, formatCurrency, onAddExpense, onViewExpense, user } = useOutletContext<GroupDetailContext>();
 
+    const sortedExpenses = [...group.expenses].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+
     return (
         <Box>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
@@ -17,7 +21,7 @@ export default function GroupExpenses() {
                     Add Expense
                 </Button>
             </Box>
-            {group.expenses.length === 0 ? (
+            {sortedExpenses.length === 0 ? (
                 <Box sx={{ textAlign: "center", py: 6 }}>
                     <Typography variant="body1" color="text.secondary">
                         No expenses yet
@@ -25,7 +29,7 @@ export default function GroupExpenses() {
                 </Box>
             ) : (
                 <List disablePadding>
-                    {group.expenses.map((expense) => (
+                    {sortedExpenses.map((expense) => (
                         <ExpenseListItem
                             key={expense._id}
                             expense={expense}

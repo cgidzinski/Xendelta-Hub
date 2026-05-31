@@ -46,19 +46,19 @@ export default function GroupOverview() {
 
     return (
         <Box>
-            {/* Pending settlements involving user */}
-            {userSettlements.length > 0 && (
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    color="warning"
-                    size="small"
-                    onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settlements`)}
-                    sx={{ mb: 2, borderRadius: 2, fontWeight: 600 }}
-                >
-                    {userSettlements.length} pending settlement{userSettlements.length !== 1 ? "s" : ""}
-                </Button>
-            )}
+            {/* Pending settlements — always visible */}
+            <Button
+                fullWidth
+                variant={userSettlements.length > 0 ? "outlined" : "text"}
+                color={userSettlements.length > 0 ? "warning" : "inherit"}
+                size="small"
+                onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settlements`)}
+                sx={{ mb: 2, borderRadius: 2, fontWeight: 600, opacity: userSettlements.length === 0 ? 0.5 : 1 }}
+            >
+                {userSettlements.length > 0
+                    ? `${userSettlements.length} pending settlement${userSettlements.length !== 1 ? "s" : ""}`
+                    : "No pending settlements"}
+            </Button>
 
             {/* Summary cards */}
             <Box sx={{ display: "flex", gap: 1.5, mb: 3 }}>

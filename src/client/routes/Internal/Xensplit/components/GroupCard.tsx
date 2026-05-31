@@ -25,13 +25,54 @@ function groupAccentColor(name: string): string {
   return ACCENT_COLORS[hash % ACCENT_COLORS.length];
 }
 
-interface GroupCardProps {
-  group: XenSplit;
+function getUserNetBalance(group: XenSplit, userId: string): { [currency: string]: number } {
+  const balances: { [currency: string]: number } = {};
+  for (const expense of group.expenses ?? []) {
+    const { paid_by, amount, currency, splits } = expense;
+    if (!balances[currency]) balances[currency] = 0;
+    if (paid_by === userId) balances[currency] += amount;
+    const mySplit = splits.find((s) => s.user_id === userId);
+    if (mySplit) {
+      let owed = 0;
+      if (mySplit.amount_owed !== undefined) {
+        owed = mySplit.amount_owed;
+      } else if (mySplit.percentage !== undefined) {
+        owed = (amount * mySplit.percentage) / 100;
+      } else {
+        owed = amount / splits.length;
+      }
+      balances[currency] -= owed;
+    }
+  }
+  for (const s of group.settlements ?? []) {
+    if (!balances[s.currency]) balances[s.currency] = 0;
+    if (s.from === userId) balances[s.currency] += s.amount;
+    if (s.to === userId) balances[s.currency] -= s.amount;
+  }
+  return balances;
 }
 
-export function GroupCard({ group }: GroupCardProps) {
+interface GroupCardProps {
+  group: XenSplit;
+  userId: string;
+}
+
+export function GroupCard({ group, userId }: GroupCardProps) {
   const navigate = useNavigate();
   const accentColor = groupAccentColor(group.name);
+
+  const netBalances = getUserNetBalance(group, userId);
+  const nonZeroEntries = Object.entries(netBalances).filter(([, v]) => v !== 0);
+  const firstEntry = nonZeroEntries[0];
+  const isSettledUp = nonZeroEntries.length === 0;
+
+  const balanceDisplay = isSettledUp ? null : (() => {
+    const [currency, amount] = firstEntry;
+    const formatted = new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Math.abs(amount));
+    return amount > 0
+      ? <Typography variant="caption" sx={{ fontWeight: 700, color: "success.main", whiteSpace: "nowrap" }}>Owed {formatted}</Typography>
+      : <Typography variant="caption" sx={{ fontWeight: 700, color: "error.main", whiteSpace: "nowrap" }}>You owe {formatted}</Typography>;
+  })();
 
   return (
     <Card
@@ -104,15 +145,15 @@ export function GroupCard({ group }: GroupCardProps) {
 
             {/* Right side */}
             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.5, flexShrink: 0 }}>
-              {group.settlements?.length > 0 && (
+              {isSettledUp && (group.expenses?.length ?? 0) > 0 ? (
                 <Chip
-                  label={`${group.settlements.length} settled`}
+                  label="Settled up"
                   size="small"
                   color="success"
                   variant="outlined"
                   sx={{ fontSize: "0.65rem", height: 20 }}
                 />
-              )}
+              ) : balanceDisplay}
               <ChevronRightIcon sx={{ color: "text.disabled", fontSize: 20 }} />
             </Box>
           </Box>

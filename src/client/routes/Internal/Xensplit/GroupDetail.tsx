@@ -82,7 +82,7 @@ export default function GroupDetail() {
   const { group, isLoading, isError, error, addMembers, isAddingMembers, removeMember, isRemovingMember, updateGroup, isUpdating } = useXenSplit(groupId!);
   const { deleteGroup } = useXenSplits();
   const { balancesData, settleDebt, isSettlingDebt } = useXenSplitBalances(groupId!);
-  const { updateExpense, isUpdatingExpense, addExpense, isAddingExpense } = useXenSplitExpenses(groupId!);
+  const { updateExpense, isUpdatingExpense, addExpense, isAddingExpense, deleteExpense, isDeletingExpense } = useXenSplitExpenses(groupId!);
   const location = useLocation();
   const activeTab = location.pathname.endsWith("/overview")
     ? 0
@@ -680,6 +680,27 @@ export default function GroupDetail() {
           return (
             <>
               <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
+                <IconButton
+                  onClick={() => {
+                    setConfirmDialogText("Delete this expense? This cannot be undone.");
+                    setConfirmAction(() => () => {
+                      deleteExpense(e._id, {
+                        onSuccess: () => {
+                          enqueueSnackbar("Expense deleted", { variant: "success" });
+                          setShowViewExpenseModal(false);
+                          setViewExpenseItem(null);
+                        },
+                        onError: () => enqueueSnackbar("Failed to delete expense", { variant: "error" }),
+                      });
+                    });
+                    setShowConfirmDialog(true);
+                  }}
+                  size="small"
+                  disabled={isDeletingExpense}
+                  sx={{ position: "absolute", top: 12, left: 12, color: "error.main" }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
                 <IconButton
                   onClick={() => setShowViewExpenseModal(false)}
                   size="small"

@@ -340,7 +340,10 @@ module.exports = function (app: any) {
       // Resolve splits
       let resolvedSplits = splits || [];
       if (split_type === "equal") {
-        const participants = group.members.map((m: any) => m.user_id);
+        // Use provided participant list if given, otherwise fall back to all members
+        const participants = (splits && splits.length > 0)
+          ? splits.map((s: any) => s.user_id)
+          : group.members.map((m: any) => m.user_id);
         const perPerson = amount / participants.length;
         resolvedSplits = participants.map((pid: string) => ({ user_id: pid, amount_owed: perPerson }));
       } else if (split_type === "percent") {
@@ -422,7 +425,10 @@ module.exports = function (app: any) {
         const split_type = expense.split_type;
 
         if (split_type === "equal") {
-          const participants = group.members.map((m: any) => m.user_id);
+          // Use existing split participants if present, otherwise fall back to all members
+          const participants = (expense.splits && expense.splits.length > 0)
+            ? expense.splits.map((s: any) => s.user_id)
+            : group.members.map((m: any) => m.user_id);
           const perPerson = amount / participants.length;
           expense.splits = participants.map((pid: string) => ({ user_id: pid, amount_owed: perPerson }));
         } else if (split_type === "percent" && expense.splits) {

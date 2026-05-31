@@ -23,9 +23,11 @@ import { useXenSplits } from "../../../hooks/xensplit/useGroups";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import GroupCard from "./components/GroupCard";
+import { useAuth } from "../../../contexts/AuthContext";
 
 export default function GroupsList() {
   const { groups, isLoading, isError, error, createGroup, isCreating } = useXenSplits();
+  const { user } = useAuth();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [primaryCurrency, setPrimaryCurrency] = useState("USD");
@@ -126,7 +128,7 @@ export default function GroupsList() {
           <Grid container spacing={1.5}>
             {groups.map((group) => (
               <Grid size={{ xs: 12, sm: 6 }} key={group._id}>
-                <GroupCard group={group} />
+                <GroupCard group={group} userId={user?.id ?? ""} />
               </Grid>
             ))}
           </Grid>
