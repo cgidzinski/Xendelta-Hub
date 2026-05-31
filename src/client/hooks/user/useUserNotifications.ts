@@ -14,6 +14,7 @@ export interface Notification {
   time: string;
   icon: string;
   unread: boolean;
+  link?: string;
 }
 
 interface UseUserNotificationsReturn {
@@ -27,6 +28,10 @@ interface UseUserNotificationsReturn {
   isMarkingAsRead: boolean;
   markNotificationAsRead: (notificationId: string) => void;
   isMarkingNotificationAsRead: boolean;
+  dismissNotification: (notificationId: string) => void;
+  isDismissing: boolean;
+  clearAllNotifications: () => void;
+  isClearing: boolean;
   fetchNotifications: () => void;
 }
 
@@ -50,6 +55,15 @@ const markAllNotificationsAsRead = async (): Promise<Notification[]> => {
 const markNotificationAsRead = async (notificationId: string): Promise<Notification> => {
   const response = await apiClient.put<ApiResponse<{ notification: Notification }>>(`/api/user/notifications/${notificationId}/mark-read`);
   return response.data.data!.notification;
+};
+
+const dismissUserNotification = async (notificationId: string): Promise<string> => {
+  await apiClient.delete(`/api/user/notifications/${notificationId}`);
+  return notificationId;
+};
+
+const clearUserNotifications = async (): Promise<void> => {
+  await apiClient.delete("/api/user/notifications");
 };
 
 // Hooks
@@ -123,7 +137,7 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
         // Single notification updated
         queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
           if (!oldData) return oldData;
-          return oldData.map(notif => 
+          return oldData.map(notif =>
             notif._id === data.notificationId ? { ...notif, ...data.update } : notif
           );
         });
@@ -132,7 +146,7 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
         queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
           if (!oldData) return oldData;
           const hasUnreadNotifications = oldData.some(notification => notification.unread);
-          
+
           queryClient.setQueryData(userProfileKeys.profile(), (oldProfileData: any) => {
             if (oldProfileData) {
               return {
@@ -142,7 +156,7 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
             }
             return oldProfileData;
           });
-          
+
           return oldData;
         });
       }
@@ -194,7 +208,7 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
       // Update the notifications cache with the updated notification
       queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
         if (!oldData) return oldData;
-        return oldData.map(notification => 
+        return oldData.map(notification =>
           notification._id === updatedNotification._id ? updatedNotification : notification
         );
       });
@@ -203,7 +217,7 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
       queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
         if (!oldData) return oldData;
         const hasUnreadNotifications = oldData.some(notification => notification.unread);
-        
+
         queryClient.setQueryData(userProfileKeys.profile(), (oldProfileData: any) => {
           if (oldProfileData) {
             return {
@@ -213,12 +227,41 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
           }
           return oldProfileData;
         });
-        
+
         return oldData;
       });
     },
     onError: () => {
       // Error handled by mutation error state
+    },
+  });
+
+  // Mutation for dismissing (deleting) a single notification
+  const { mutate: dismissSingleNotification, isPending: isDismissing } = useMutation({
+    mutationFn: dismissUserNotification,
+    onSuccess: (notificationId: string) => {
+      queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
+        if (!oldData) return oldData;
+        const remaining = oldData.filter((n) => n._id !== notificationId);
+        const hasUnread = remaining.some((n) => n.unread);
+        queryClient.setQueryData(userProfileKeys.profile(), (oldProfileData: any) => {
+          if (oldProfileData) return { ...oldProfileData, unread_notifications: hasUnread };
+          return oldProfileData;
+        });
+        return remaining;
+      });
+    },
+  });
+
+  // Mutation for clearing all notifications
+  const { mutate: clearAllNotifications, isPending: isClearing } = useMutation({
+    mutationFn: clearUserNotifications,
+    onSuccess: () => {
+      queryClient.setQueryData(userNotificationKeys.notifications(), []);
+      queryClient.setQueryData(userProfileKeys.profile(), (oldData: any) => {
+        if (oldData) return { ...oldData, unread_notifications: false };
+        return oldData;
+      });
     },
   });
 
@@ -233,6 +276,10 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
     isMarkingAsRead,
     markNotificationAsRead: markSingleNotificationAsRead,
     isMarkingNotificationAsRead,
+    dismissNotification: dismissSingleNotification,
+    isDismissing,
+    clearAllNotifications,
+    isClearing,
     fetchNotifications,
   };
 };

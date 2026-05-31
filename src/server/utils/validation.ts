@@ -106,12 +106,12 @@ export const validate = (schema: z.ZodSchema) => {
           })),
         });
       }
-      
+
       // Log unexpected errors for debugging
       console.error("Unexpected validation error:", error);
       console.error("Error type:", error?.constructor?.name);
       console.error("Request body:", JSON.stringify(req.body, null, 2));
-      
+
       return res.status(500).json({
         status: false,
         message: "Validation failed",
@@ -230,10 +230,12 @@ export const splitSchema = z.object({
 export const createXenSplitSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name too long"),
   memberIds: z.array(objectIdSchema).optional(),
+  default_currency: z.string().optional(),
 });
 
 export const updateXenSplitSchema = z.object({
   name: z.string().min(1).max(100).optional(),
+  default_currency: z.string().optional(),
 });
 
 export const addXenSplitMembersSchema = z.object({
@@ -244,7 +246,7 @@ export const createExpenseSchema = z.object({
   paid_by: objectIdSchema,
   amount: z.number("Amount must be a number"),
   currency: z.string().default("USD"),
-  description: z.string().min(1, "Description required").max(500),
+  title: z.string().min(1, "Title required").max(500),
   notes: z.string().max(1000).optional(),
   date: z.string().datetime().optional(),
   split_type: z.enum(["equal", "exact", "percent"]),
@@ -255,7 +257,7 @@ export const updateExpenseSchema = z.object({
   paid_by: objectIdSchema.optional(),
   amount: z.number().optional(),
   currency: z.string().optional(),
-  description: z.string().min(1).max(500).optional(),
+  title: z.string().min(1).max(500).optional(),
   notes: z.string().max(1000).optional(),
   date: z.string().datetime().optional(),
   split_type: z.enum(["equal", "exact", "percent"]).optional(),

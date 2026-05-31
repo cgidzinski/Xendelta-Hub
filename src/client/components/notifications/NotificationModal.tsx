@@ -13,6 +13,7 @@ import AnnouncementIcon from "@mui/icons-material/Announcement";
 import LockIcon from "@mui/icons-material/Lock";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import CloseIcon from "@mui/icons-material/Close";
+import { useNavigate } from "react-router-dom";
 import { formatDistance } from "date-fns";
 import { Notification } from "../../hooks/user/useUserNotifications";
 
@@ -38,6 +39,7 @@ const getNotificationIcon = (icon: string) => {
 };
 
 export default function NotificationModal({ notification, open, onClose }: NotificationModalProps) {
+  const navigate = useNavigate();
   if (!notification) return null;
 
   return (
@@ -107,7 +109,7 @@ export default function NotificationModal({ notification, open, onClose }: Notif
           <CloseIcon />
         </Button>
       </DialogTitle>
-      <DialogContent sx={{ m:3 }}>
+      <DialogContent sx={{ m: 3 }}>
         <Typography
           variant="body1"
           sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.7 }}
@@ -118,6 +120,14 @@ export default function NotificationModal({ notification, open, onClose }: Notif
           Received {formatDistance(new Date(notification.time), new Date(), { addSuffix: true })}
         </Typography>
       </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        {notification.link && (
+          <Button variant="contained" onClick={() => { navigate(notification.link!); onClose(); }}>
+            Go to
+          </Button>
+        )}
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
     </Dialog>
   );
 }

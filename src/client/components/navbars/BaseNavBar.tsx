@@ -149,9 +149,13 @@ export default function BaseNavBar({
       markedNotificationsRef.current.add(notification._id);
       markNotificationAsRead(notification._id);
     }
-    setSelectedNotification(notification);
-    setNotificationModalOpen(true);
     handleNotificationClose();
+    if (notification.link) {
+      navigate(notification.link);
+    } else {
+      setSelectedNotification(notification);
+      setNotificationModalOpen(true);
+    }
   };
 
   const handleCloseNotificationModal = () => {

@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
 const XenSplit = require("../models/xenSplit");
 const { User } = require("../models/user");
+const Notification = require("../models/notification");
 import { authenticateToken } from "../middleware/auth";
+import { SocketManager } from "../infrastructure/SocketManager";
 import {
   validate,
   validateParams,
@@ -16,6 +18,14 @@ import {
   xenSplitExpenseParamSchema,
 } from "../utils/validation";
 import { calculateBalances, calculateMinimumTransfers } from "../utils/xenSplitUtils";
+
+async function notify(userId: string, title: string, message: string, link?: string, icon = "announcement") {
+  try {
+    const n = new Notification({ userId, title, message, time: new Date().toISOString(), icon, unread: true, link });
+    await n.save();
+    SocketManager.getInstance().sendNotification(userId, n);
+  } catch (e) { console.error("Notification failed:", e); }
+}
 
 module.exports = function (app: any) {
   // Apply auth middleware to all xensplit routes
@@ -40,7 +50,7 @@ module.exports = function (app: any) {
   app.post("/api/xensplit/groups", validate(createXenSplitSchema), async (req: Request, res: Response) => {
     try {
       const userId = (req.user as any)._id.toString();
-      const { name, memberIds, currencies } = req.body;
+      const { name, memberIds, default_currency } = req.body;
 
       // Get creator's user data
       const creator = await User.findById(userId).select("username avatar").lean();
@@ -69,8 +79,8 @@ module.exports = function (app: any) {
 
       const group = new XenSplit({
         name,
+        default_currency: default_currency || "USD",
         created_by: userId,
-        currencies: currencies || ["USD"],
         members,
         expenses: [],
         settlements: [],
@@ -122,7 +132,7 @@ module.exports = function (app: any) {
     try {
       const userId = (req.user as any)._id.toString();
       const { groupId } = req.params;
-      const { name } = req.body;
+      const { name, default_currency } = req.body;
 
       const group = await XenSplit.findById(groupId);
       if (!group) {
@@ -134,6 +144,7 @@ module.exports = function (app: any) {
       }
 
       if (name) group.name = name;
+      if (default_currency) group.default_currency = default_currency;
       await group.save();
 
       res.json({ status: true, message: "Group updated", data: group });
@@ -192,6 +203,8 @@ module.exports = function (app: any) {
       group.created_by = newOwnerId;
       await group.save();
 
+      await notify(newOwnerId, "Group Ownership", `You are now the owner of ${group.name}`, `/internal/xensplit/groups/${groupId}/overview`, "person");
+
       res.json({ status: true, message: "Ownership transferred", data: group });
     } catch (error) {
       console.error("Error transferring ownership:", error);
@@ -218,6 +231,7 @@ module.exports = function (app: any) {
       const mongoose = require("mongoose");
       const objectIds = memberIds.map((id: string) => new mongoose.Types.ObjectId(id));
       const users = await User.find({ _id: { $in: objectIds } }).select("username avatar").lean();
+      const newMemberIds: string[] = [];
       for (const u of users) {
         if (!group.members.find((m: any) => m.user_id === u._id.toString())) {
           group.members.push({
@@ -226,10 +240,16 @@ module.exports = function (app: any) {
             avatar: u.avatar || null,
             joined_at: new Date(),
           });
+          newMemberIds.push(u._id.toString());
         }
       }
 
       await group.save();
+
+      for (const memberId of newMemberIds) {
+        await notify(memberId, "Added to Group", `You've been added to ${group.name}`, `/internal/xensplit/groups/${groupId}/overview`, "person");
+      }
+
       res.json({ status: true, message: "Members added", data: group });
     } catch (error) {
       console.error("Error adding members:", error);
@@ -278,6 +298,11 @@ module.exports = function (app: any) {
       group.members = group.members.filter((m: any) => m.user_id !== targetUserId);
       await group.save();
 
+      // Notify removed user if they were removed by someone else (not a voluntary leave)
+      if (targetUserId !== userId) {
+        await notify(targetUserId, "Removed from Group", `You've been removed from ${group.name}`, undefined, "person");
+      }
+
       // Delete group if no members left
       if (group.members.length === 0) {
         await XenSplit.findByIdAndDelete(groupId);
@@ -296,7 +321,7 @@ module.exports = function (app: any) {
     try {
       const userId = (req.user as any)._id.toString();
       const { groupId } = req.params;
-      const { paid_by, amount, currency, description, notes, date, split_type, splits } = req.body;
+      const { paid_by, amount, currency, title, notes, date, split_type, splits } = req.body;
 
       const group = await XenSplit.findById(groupId);
       if (!group) {
@@ -344,7 +369,7 @@ module.exports = function (app: any) {
         paid_by,
         amount,
         currency: currency || "USD",
-        description,
+        title,
         notes,
         date: date ? new Date(date) : new Date(),
         split_type,
@@ -354,6 +379,14 @@ module.exports = function (app: any) {
 
       group.expenses.push(expense as any);
       await group.save();
+
+      const actor = group.members.find((m: any) => m.user_id === userId);
+      const actorName = actor?.username || "Someone";
+      for (const member of group.members) {
+        if (member.user_id !== userId) {
+          await notify(member.user_id, "New Expense", `${actorName} added: ${title} (${amount} ${currency || "USD"})`, `/internal/xensplit/groups/${groupId}/expenses`);
+        }
+      }
 
       res.json({ status: true, message: "Expense added", data: group });
     } catch (error) {
@@ -415,6 +448,15 @@ module.exports = function (app: any) {
       }
 
       await group.save();
+
+      const actor = group.members.find((m: any) => m.user_id === userId);
+      const actorName = actor?.username || "Someone";
+      for (const member of group.members) {
+        if (member.user_id !== userId) {
+          await notify(member.user_id, "Expense Updated", `${actorName} updated: ${expense.title}`, `/internal/xensplit/groups/${groupId}/expenses`);
+        }
+      }
+
       res.json({ status: true, message: "Expense updated", data: group });
     } catch (error) {
       console.error("Error updating expense:", error);
@@ -535,6 +577,11 @@ module.exports = function (app: any) {
       });
 
       await group.save();
+
+      const fromMember = group.members.find((m: any) => m.user_id === from);
+      const fromName = fromMember?.username || "Someone";
+      await notify(to, "Settlement Received", `${fromName} paid you ${amount} ${currency} in ${group.name}`, `/internal/xensplit/groups/${groupId}/overview`);
+
       res.json({ status: true, message: "Debt settled", data: group });
     } catch (error) {
       console.error("Error settling debt:", error);

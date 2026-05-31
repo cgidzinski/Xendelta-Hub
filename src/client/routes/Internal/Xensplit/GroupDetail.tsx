@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSnackbar } from "notistack";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation, Outlet } from "react-router-dom";
 import {
   Box,
   Container,
@@ -22,6 +22,7 @@ import {
   DialogActions,
   Menu,
   MenuItem,
+  Divider,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CheckIcon from "@mui/icons-material/Check";
@@ -31,6 +32,10 @@ import EastIcon from "@mui/icons-material/East";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import DeleteIcon from "@mui/icons-material/Delete";
 import GroupRemoveIcon from "@mui/icons-material/GroupRemove";
+import SettingsIcon from "@mui/icons-material/Settings";
+import GridViewIcon from "@mui/icons-material/GridView";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import { useXenSplit } from "../../../hooks/xensplit/useGroup";
 import { useXenSplits } from "../../../hooks/xensplit/useGroups";
 import { useXenSplitBalances } from "../../../hooks/xensplit/useBalances";
@@ -41,18 +46,51 @@ import ErrorDisplay from "../../../components/ErrorDisplay";
 import UserSelect from "../../../components/UserSelect";
 import { SearchedUser } from "../../../hooks/useUserSearch";
 import ExpenseForm from "./components/ExpenseForm";
-import type { XenSplitExpense, XenSplitSettlementTransfer } from "../../../hooks/xensplit/types";
+import type { XenSplit, XenSplitBalancesData, XenSplitExpense, XenSplitSettlementTransfer } from "../../../hooks/xensplit/types";
+
+const ACCENT_COLORS = [
+  "#2196f3", "#9c27b0", "#e91e63", "#ff5722",
+  "#4caf50", "#ff9800", "#00bcd4", "#7c4dff",
+];
+function groupAccentColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0x7fffffff;
+  return ACCENT_COLORS[hash % ACCENT_COLORS.length];
+}
+
+export interface GroupDetailContext {
+  group: XenSplit;
+  balancesData: XenSplitBalancesData | undefined;
+  user: { id: string; username: string; email: string; avatar: string };
+  isCreator: boolean;
+  formatCurrency: (amount: number, currency: string) => string;
+  onAddExpense: () => void;
+  onEditExpense: (expense: XenSplitExpense) => void;
+  onViewExpense: (expense: XenSplitExpense) => void;
+  onSettle: (settlement: XenSplitSettlementTransfer) => void;
+  onAddMembers: () => void;
+  onMemberMenu: (memberId: string, anchor: HTMLElement) => void;
+  updateGroup: (updates: { name?: string; default_currency?: string }) => void;
+  isUpdating: boolean;
+}
 
 export default function GroupDetail() {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
-  const { group, isLoading, isError, error, addMembers, isAddingMembers, removeMember, isRemovingMember } = useXenSplit(groupId!);
+  const { group, isLoading, isError, error, addMembers, isAddingMembers, removeMember, isRemovingMember, updateGroup, isUpdating } = useXenSplit(groupId!);
   const { deleteGroup } = useXenSplits();
   const { balancesData, settleDebt, isSettlingDebt } = useXenSplitBalances(groupId!);
   const { updateExpense, isUpdatingExpense, addExpense, isAddingExpense } = useXenSplitExpenses(groupId!);
-  const [activeTab, setActiveTab] = useState(0);
+  const location = useLocation();
+  const activeTab = location.pathname.endsWith("/overview")
+    ? 0
+    : location.pathname.endsWith("/expenses")
+      ? 1
+      : location.pathname.endsWith("/balances")
+        ? 2
+        : false;
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<SearchedUser[]>([]);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
@@ -60,7 +98,7 @@ export default function GroupDetail() {
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
   const [showEditExpenseModal, setShowEditExpenseModal] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<XenSplitExpense | null>(null);
-  const [addDescription, setAddDescription] = useState("");
+  const [addTitle, setAddTitle] = useState("");
   const [addNotes, setAddNotes] = useState("");
   const [addAmount, setAddAmount] = useState("");
   const [addCurrency, setAddCurrency] = useState("USD");
@@ -70,7 +108,7 @@ export default function GroupDetail() {
   const [addSelectedParticipants, setAddSelectedParticipants] = useState<SearchedUser[]>([]);
   const [addExactSplits, setAddExactSplits] = useState<{ [userId: string]: string }>({});
   const [addPercentSplits, setAddPercentSplits] = useState<{ [userId: string]: string }>({});
-  const [editDescription, setEditDescription] = useState("");
+  const [editTitle, setEditTitle] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editAmount, setEditAmount] = useState("");
   const [editCurrency, setEditCurrency] = useState("USD");
@@ -82,9 +120,11 @@ export default function GroupDetail() {
   const [editPercentSplits, setEditPercentSplits] = useState<{ [userId: string]: string }>({});
   const [showSettleModal, setShowSettleModal] = useState(false);
   const [selectedSettlement, setSelectedSettlement] = useState<XenSplitSettlementTransfer | null>(null);
+  const [showViewExpenseModal, setShowViewExpenseModal] = useState(false);
+  const [viewExpenseItem, setViewExpenseItem] = useState<XenSplitExpense | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [confirmDialogText, setConfirmDialogText] = useState("");
-  const [confirmAction, setConfirmAction] = useState<() => void>(() => {});
+  const [confirmAction, setConfirmAction] = useState<() => void>(() => { });
 
   const handleConfirm = () => {
     confirmAction();
@@ -116,8 +156,13 @@ export default function GroupDetail() {
     await new Promise<void>((resolve) => {
       addMembers(selectedMembers.map((m) => m._id), {
         onSuccess: () => {
+          enqueueSnackbar("Members added", { variant: "success" });
           setShowAddMemberModal(false);
           setSelectedMembers([]);
+          resolve();
+        },
+        onError: () => {
+          enqueueSnackbar("Failed to add members", { variant: "error" });
           resolve();
         },
       });
@@ -181,7 +226,7 @@ export default function GroupDetail() {
   };
 
   const handleAddExpense = async () => {
-    if (!addDescription.trim() || !addAmount || !addPaidBy) return;
+    if (!addTitle.trim() || !addAmount || !addPaidBy) return;
 
     const numAmount = parseFloat(addAmount);
     let splits = undefined;
@@ -208,7 +253,7 @@ export default function GroupDetail() {
           paid_by: addPaidBy,
           amount: numAmount,
           currency: addCurrency,
-          description: addDescription,
+          title: addTitle,
           notes: addNotes.trim() || undefined,
           split_type: addSplitType,
           splits,
@@ -217,10 +262,10 @@ export default function GroupDetail() {
           onSuccess: () => {
             enqueueSnackbar("Expense added", { variant: "success" });
             setShowAddExpenseModal(false);
-            setAddDescription("");
+            setAddTitle("");
             setAddNotes("");
             setAddAmount("");
-            setAddCurrency("USD");
+            setAddCurrency(group.default_currency || "USD");
             setAddPaidBy("");
             setAddPaidByUser(null);
             setAddSplitType("equal");
@@ -229,13 +274,17 @@ export default function GroupDetail() {
             setAddPercentSplits({});
             resolve();
           },
+          onError: () => {
+            enqueueSnackbar("Failed to add expense", { variant: "error" });
+            resolve();
+          },
         }
       );
     });
   };
 
   const handleEditExpense = async () => {
-    if (!selectedExpense || !editDescription.trim() || !editAmount || !editPaidBy) return;
+    if (!selectedExpense || !editTitle.trim() || !editAmount || !editPaidBy) return;
 
     const numAmount = parseFloat(editAmount);
     let splits = undefined;
@@ -258,19 +307,25 @@ export default function GroupDetail() {
 
     await new Promise<void>((resolve) => {
       updateExpense(
-        { expenseId: selectedExpense._id, updates: {
-          paid_by: editPaidBy,
-          amount: numAmount,
-          currency: editCurrency,
-          description: editDescription,
-          notes: editNotes.trim() || undefined,
-          split_type: editSplitType,
-          splits,
-        } },
+        {
+          expenseId: selectedExpense._id, updates: {
+            paid_by: editPaidBy,
+            amount: numAmount,
+            currency: editCurrency,
+            title: editTitle,
+            notes: editNotes.trim() || undefined,
+            split_type: editSplitType,
+            splits,
+          }
+        },
         {
           onSuccess: () => {
             enqueueSnackbar("Expense updated", { variant: "success" });
             setShowEditExpenseModal(false);
+            resolve();
+          },
+          onError: () => {
+            enqueueSnackbar("Failed to update expense", { variant: "error" });
             resolve();
           },
         }
@@ -285,293 +340,140 @@ export default function GroupDetail() {
     }).format(amount);
   };
 
+  const handleOpenEditExpense = (expense: XenSplitExpense) => {
+    setSelectedExpense(expense);
+    setEditTitle(expense.title || "");
+    setEditNotes(expense.notes || "");
+    setEditAmount(expense.amount.toString());
+    setEditCurrency(expense.currency);
+    setEditPaidBy(expense.paid_by);
+    const payerMember = group.members.find((m) => m.user_id === expense.paid_by);
+    setEditPaidByUser(payerMember ? { _id: payerMember.user_id, username: payerMember.username, avatar: payerMember.avatar } : null);
+    setEditSplitType(expense.split_type as "equal" | "exact" | "percent");
+    if (expense.splits && expense.splits.length > 0) {
+      const participants = expense.splits
+        .map((s) => {
+          const member = group.members.find((m) => m.user_id === s.user_id);
+          return member ? { _id: member.user_id, username: member.username, avatar: member.avatar } : null;
+        })
+        .filter(Boolean) as SearchedUser[];
+      setEditSelectedParticipants(participants);
+      const exactMap: { [key: string]: string } = {};
+      const percentMap: { [key: string]: string } = {};
+      expense.splits.forEach((s) => {
+        if (expense.split_type === "exact" && s.amount_owed !== undefined) {
+          exactMap[s.user_id] = s.amount_owed.toString();
+        } else if (expense.split_type === "percent" && s.percentage !== undefined) {
+          percentMap[s.user_id] = s.percentage.toString();
+        }
+      });
+      setEditExactSplits(exactMap);
+      setEditPercentSplits(percentMap);
+    }
+    setShowEditExpenseModal(true);
+  };
+
+  const outletContext: GroupDetailContext = {
+    group,
+    balancesData,
+    user,
+    isCreator,
+    formatCurrency,
+    onAddExpense: () => {
+      setAddPaidBy(user?.id || "");
+      setAddPaidByUser(user ? { _id: user.id, username: user.username, avatar: user.avatar } : null);
+      setAddCurrency(group.default_currency || "USD");
+      setShowAddExpenseModal(true);
+    },
+    onEditExpense: handleOpenEditExpense,
+    onViewExpense: (expense) => {
+      setViewExpenseItem(expense);
+      setShowViewExpenseModal(true);
+    },
+    onSettle: (settlement) => {
+      setSelectedSettlement(settlement);
+      setShowSettleModal(true);
+    },
+    onAddMembers: () => setShowAddMemberModal(true),
+    onMemberMenu: (memberId, anchor) => {
+      setMenuAnchor(anchor);
+      setMenuMemberId(memberId);
+    },
+    updateGroup,
+    isUpdating,
+  };
+
   return (
     <Box>
-      <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-          <IconButton onClick={() => navigate("/internal/xensplit/groups")}>
+      <Container maxWidth="md" sx={{ mt: { xs: 1, sm: 4 }, mb: 4, px: { xs: 2, sm: 3 } }}>
+        {/* Header */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.5, sm: 1 }, mb: { xs: 2, sm: 3 } }}>
+          <IconButton
+            onClick={() => navigate(activeTab === false ? `/internal/xensplit/groups/${groupId}/overview` : "/internal/xensplit/groups")}
+            size="small"
+          >
             <ArrowBackIcon />
           </IconButton>
-          <Box sx={{ flexGrow: 1 }}>
-            <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
-              {group.name}
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.5 }}>
-              <AvatarGroup max={4} sx={{ "& .MuiAvatar-root": { width: 24, height: 24, fontSize: 11 } }}>
-                {group.members.map((m) => (
-                  <Avatar key={m.user_id} src={m.avatar || undefined} sx={{ bgcolor: "primary.main" }}>
-                    {m.username[0]?.toUpperCase()}
-                  </Avatar>
-                ))}
-              </AvatarGroup>
-              <Typography variant="caption" color="text.secondary">
-                {group.members.length} members
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexGrow: 1, minWidth: 0 }}>
+            <Box
+              sx={{
+                width: { xs: 36, sm: 44 },
+                height: { xs: 36, sm: 44 },
+                borderRadius: 1.5,
+                bgcolor: groupAccentColor(group.name),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Typography sx={{ color: "#fff", fontWeight: 800, fontSize: { xs: "0.9rem", sm: "1.1rem" }, lineHeight: 1 }}>
+                {group.name[0]?.toUpperCase()}
               </Typography>
             </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }} noWrap>
+                {group.name}
+              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", mt: 0.25 }}>
+                <AvatarGroup
+                  max={4}
+                  sx={{ "& .MuiAvatar-root": { width: 20, height: 20, fontSize: 9, border: "1.5px solid", borderColor: "background.paper" } }}
+                >
+                  {group.members.map((m) => (
+                    <Avatar key={m.user_id} src={m.avatar || undefined} sx={{ bgcolor: "primary.main" }}>
+                      {m.username[0]?.toUpperCase()}
+                    </Avatar>
+                  ))}
+                </AvatarGroup>
+              </Box>
+            </Box>
           </Box>
+          <IconButton
+            onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settings`)}
+            size="small"
+            sx={{ flexShrink: 0 }}
+          >
+            <SettingsIcon />
+          </IconButton>
         </Box>
 
-        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 3 }}>
-          <Tab label="Expenses" />
-          <Tab label="Balances" />
-          <Tab label="Settlements" />
-          <Tab label="Members" />
-        </Tabs>
-
-        {activeTab === 0 && (
-          <Box>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>
-                Expenses
-              </Typography>
-              <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setShowAddExpenseModal(true)}>
-                Add Expense
-              </Button>
-            </Box>
-            {group.expenses.length === 0 ? (
-              <Box sx={{ textAlign: "center", py: 6 }}>
-                <Typography variant="body1" color="text.secondary">
-                  No expenses yet
-                </Typography>
-              </Box>
-            ) : (
-              <List disablePadding>
-                {group.expenses.map((expense) => (
-                  <Box
-                    key={expense._id}
-                    onClick={() => {
-                      setSelectedExpense(expense);
-                      setEditDescription(expense.description);
-                      setEditNotes(expense.notes || "");
-                      setEditAmount(expense.amount.toString());
-                      setEditCurrency(expense.currency);
-                      setEditPaidBy(expense.paid_by);
-                      const payerMember = group.members.find((m) => m.user_id === expense.paid_by);
-                      setEditPaidByUser(payerMember ? { _id: payerMember.user_id, username: payerMember.username, avatar: payerMember.avatar } : null);
-                      setEditSplitType(expense.split_type as "equal" | "exact" | "percent");
-                      if (expense.splits && expense.splits.length > 0) {
-                        const participants = expense.splits.map((s) => {
-                          const member = group.members.find((m) => m.user_id === s.user_id);
-                          return member ? { _id: member.user_id, username: member.username, avatar: member.avatar } : null;
-                        }).filter(Boolean) as SearchedUser[];
-                        setEditSelectedParticipants(participants);
-                        const exactMap: { [key: string]: string } = {};
-                        const percentMap: { [key: string]: string } = {};
-                        expense.splits.forEach((s) => {
-                          if (expense.split_type === "exact" && s.amount_owed !== undefined) {
-                            exactMap[s.user_id] = s.amount_owed.toString();
-                          } else if (expense.split_type === "percent" && s.percentage !== undefined) {
-                            percentMap[s.user_id] = s.percentage.toString();
-                          }
-                        });
-                        setEditExactSplits(exactMap);
-                        setEditPercentSplits(percentMap);
-                      }
-                      setShowEditExpenseModal(true);
-                    }}
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 2,
-                      p: 2,
-                      bgcolor: "action.hover",
-                      borderRadius: 2,
-                      mb: 1,
-                      cursor: "pointer",
-                      height: 72,
-                      "&:hover": { bgcolor: "action.selected" },
-                    }}
-                  >
-                    <Avatar src={expense.payer?.avatar || undefined} sx={{ bgcolor: "primary.main", width: 40, height: 40, flexShrink: 0 }}>
-                      {expense.payer?.username?.[0]?.toUpperCase() || "?"}
-                    </Avatar>
-                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
-                        {expense.description}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" noWrap>
-                        Paid by {expense.payer?.username || "?"} · {new Date(expense.date).toLocaleString()}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ textAlign: "right", flexShrink: 0 }}>
-                      <Typography variant="subtitle2" color="success.main" sx={{ fontWeight: 700 }}>
-                        {formatCurrency(expense.amount, expense.currency)}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: "capitalize" }}>
-                        {expense.split_type}
-                      </Typography>
-                    </Box>
-                  </Box>
-                ))}
-              </List>
-            )}
+        {/* Tabs */}
+        {activeTab !== false && (
+          <Box sx={{ bgcolor: "action.hover", borderRadius: "8px 8px 0 0", mb: 3 }}>
+            <Tabs
+              value={activeTab}
+              onChange={(_, v) => navigate(`/internal/xensplit/groups/${groupId}/${["overview", "expenses", "balances"][v]}`)}
+              variant="fullWidth"
+            >
+              <Tab icon={<GridViewIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />} iconPosition="top" label="Overview" sx={{ minHeight: { xs: 56, sm: 64 }, fontSize: { xs: "0.65rem", sm: "0.875rem" }, py: { xs: 0.5, sm: 1 } }} />
+              <Tab icon={<ReceiptLongIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />} iconPosition="top" label="Expenses" sx={{ minHeight: { xs: 56, sm: 64 }, fontSize: { xs: "0.65rem", sm: "0.875rem" }, py: { xs: 0.5, sm: 1 } }} />
+              <Tab icon={<AccountBalanceWalletIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />} iconPosition="top" label="Balances" sx={{ minHeight: { xs: 56, sm: 64 }, fontSize: { xs: "0.65rem", sm: "0.875rem" }, py: { xs: 0.5, sm: 1 } }} />
+            </Tabs>
           </Box>
         )}
 
-        {activeTab === 1 && balancesData && (
-          <Box>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>
-                Balances
-              </Typography>
-            </Box>
-            {Object.entries(balancesData.balances).map(([userId, balance]) => {
-              const nonZeroBalances = Object.entries(balance.balances).filter(([_, amount]) => amount !== 0);
-              if (nonZeroBalances.length === 0) return null;
-              return (
-                <Box
-                  key={userId}
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 2,
-                    p: 2,
-                    bgcolor: "action.hover",
-                    borderRadius: 2,
-                    mb: 1,
-                    height: 72,
-                  }}
-                >
-                  <Avatar src={balance.user.avatar || undefined} sx={{ bgcolor: "primary.main" }}>
-                    {balance.user.username[0]?.toUpperCase()}
-                  </Avatar>
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Typography variant="subtitle2">{balance.user.username}</Typography>
-                  </Box>
-                  {nonZeroBalances.map(([currency, amount]) => (
-                    <Typography
-                      key={currency}
-                      variant="subtitle2"
-                      sx={{
-                        fontWeight: 700,
-                        color: (amount as number) >= 0 ? "success.main" : "error.main",
-                      }}
-                    >
-                      {(amount as number) >= 0 ? "Owed " : "Owes "}
-                      {formatCurrency(Math.abs(amount as number), currency)}
-                    </Typography>
-                  ))}
-                </Box>
-              );
-            })}
-            {Object.values(balancesData.balances).every((balance) =>
-              Object.values(balance.balances).every((amount) => amount === 0)
-            ) && (
-              <Box sx={{ textAlign: "center", py: 4 }}>
-                <Typography variant="body1" color="text.secondary">
-                  Nothing Yet
-                </Typography>
-              </Box>
-            )}
-          </Box>
-        )}
-
-        {activeTab === 2 && balancesData && balancesData.settlements.length > 0 && (
-          <Box>
-            <Box sx={{ mb: 2, minHeight: 48, display: "flex", alignItems: "center" }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>
-                Settlements
-              </Typography>
-            </Box>
-            {balancesData.settlements.map((settlement, idx) => (
-              <Box key={idx} sx={{ display: "flex", alignItems: "stretch", gap: 1, mb: 1 }}>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 2,
-                    flexGrow: 1,
-                    px: 2,
-                    bgcolor: "action.hover",
-                    borderRadius: 2,
-                    height: 72,
-                  }}
-                >
-                  <Avatar src={settlement.fromUser.avatar || undefined} sx={{ width: 40, height: 40, bgcolor: "primary.main" }}>
-                    {settlement.fromUser.username[0]?.toUpperCase()}
-                  </Avatar>
-                  <Typography variant="body2" sx={{ fontWeight: 500, flexShrink: 0 }}>
-                    {settlement.fromUser.username}
-                  </Typography>
-                  <EastIcon sx={{ fontSize: 16, color: "text.disabled", mx: 1, flexShrink: 0 }} />
-                  <Avatar src={settlement.toUser.avatar || undefined} sx={{ width: 40, height: 40, bgcolor: "success.main" }}>
-                    {settlement.toUser.username[0]?.toUpperCase()}
-                  </Avatar>
-                  <Typography variant="body2" sx={{ fontWeight: 500, flexShrink: 0 }}>
-                    {settlement.toUser.username}
-                  </Typography>
-                  <Typography
-                    variant="subtitle2"
-                    sx={{
-                      fontWeight: 700,
-                      ml: "auto",
-                      flexShrink: 0,
-                      color: settlement.from === user?.id
-                        ? "error.main"
-                        : settlement.to === user?.id
-                        ? "success.main"
-                        : "text.primary",
-                    }}
-                  >
-                    {formatCurrency(settlement.amount, settlement.currency)}
-                  </Typography>
-                </Box>
-                <Button
-                  variant="contained"
-                  color="success"
-                  sx={{ height: 72, borderRadius: 2, px: 3 }}
-                  onClick={() => {
-                    setSelectedSettlement(settlement);
-                    setShowSettleModal(true);
-                  }}
-                >
-                  Settle
-                </Button>
-              </Box>
-            ))}
-          </Box>
-        )}
-
-        {activeTab === 3 && (
-          <Box>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>
-                Members
-              </Typography>
-              <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setShowAddMemberModal(true)}>
-                Add Members
-              </Button>
-            </Box>
-            <List disablePadding>
-              {group.members.map((member) => (
-                <ListItem
-                  key={member.user_id}
-                  sx={{ bgcolor: "action.hover", borderRadius: 2, mb: 1, pr: 1, height: 72 }}
-                >
-                  <ListItemAvatar>
-                    <Avatar src={member.avatar || undefined} sx={{ bgcolor: "primary.main" }}>
-                      {member.username[0]?.toUpperCase()}
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={member.username}
-                    secondary={member.user_id === group.created_by ? "Creator" : ""}
-                  />
-                  {user && (member.user_id === user.id || (isCreator && member.user_id !== group.created_by)) && (
-                    <IconButton
-                      onClick={(e) => {
-                        setMenuAnchor(e.currentTarget);
-                        setMenuMemberId(member.user_id);
-                      }}
-                    >
-                      <MoreVertIcon />
-                    </IconButton>
-                  )}
-                </ListItem>
-              ))}
-            </List>
-          </Box>
-        )}
+        <Outlet context={outletContext} />
       </Container>
 
       <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
@@ -648,7 +550,7 @@ export default function GroupDetail() {
             disabled={selectedMembers.length === 0 || isAddingMembers}
             loading={isAddingMembers}
           >
-            Add Members
+            Add
           </Button>
         </DialogActions>
       </Dialog>
@@ -689,8 +591,8 @@ export default function GroupDetail() {
         </Box>
         <DialogContent sx={{ pt: 2 }}>
           <ExpenseForm
-            description={addDescription}
-            onDescriptionChange={setAddDescription}
+            title={addTitle}
+            onTitleChange={setAddTitle}
             notes={addNotes}
             onNotesChange={setAddNotes}
             amount={addAmount}
@@ -710,9 +612,9 @@ export default function GroupDetail() {
             percentSplits={addPercentSplits}
             onPercentSplitsChange={setAddPercentSplits}
             members={group.members}
-            currencies={group.currencies}
+            defaultCurrency={group.default_currency}
             onSubmit={handleAddExpense}
-            submitDisabled={!addDescription.trim() || !addAmount || !addPaidBy || !isExactValid || !isPercentValid}
+            submitDisabled={!addTitle.trim() || !addAmount || !addPaidBy || !isExactValid || !isPercentValid}
             loading={isAddingExpense}
           />
         </DialogContent>
@@ -733,8 +635,8 @@ export default function GroupDetail() {
         </Box>
         <DialogContent sx={{ pt: 2 }}>
           <ExpenseForm
-            description={editDescription}
-            onDescriptionChange={setEditDescription}
+            title={editTitle}
+            onTitleChange={setEditTitle}
             notes={editNotes}
             onNotesChange={setEditNotes}
             amount={editAmount}
@@ -754,13 +656,113 @@ export default function GroupDetail() {
             percentSplits={editPercentSplits}
             onPercentSplitsChange={setEditPercentSplits}
             members={group.members}
-            currencies={group.currencies}
+            defaultCurrency={group.default_currency}
             onSubmit={handleEditExpense}
-            submitDisabled={!editDescription.trim() || !editAmount || !editPaidBy || !isEditExactValid || !isEditPercentValid}
+            submitDisabled={!editTitle.trim() || !editAmount || !editPaidBy || !isEditExactValid || !isEditPercentValid}
             submitLabel="Save Changes"
             loading={isUpdatingExpense}
           />
         </DialogContent>
+      </Dialog>
+
+      {/* View Expense Modal (read-only) */}
+      <Dialog
+        fullWidth
+        maxWidth="xs"
+        open={showViewExpenseModal}
+        onClose={() => setShowViewExpenseModal(false)}
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        {viewExpenseItem && (() => {
+          const e = viewExpenseItem;
+          const payer = group.members.find((m) => m.user_id === e.paid_by);
+          const splitTypeLabel = e.split_type === "equal" ? "Equal split" : e.split_type === "exact" ? "Exact amounts" : "By percentage";
+          return (
+            <>
+              <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
+                <IconButton
+                  onClick={() => setShowViewExpenseModal(false)}
+                  size="small"
+                  sx={{ position: "absolute", top: 12, right: 12 }}
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+                <Typography variant="h4" sx={{ fontWeight: 800, color: "success.main", letterSpacing: "-0.02em" }}>
+                  {formatCurrency(e.amount, e.currency)}
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600, mt: 0.5 }}>
+                  {e.title}
+                </Typography>
+                <Chip label={splitTypeLabel} size="small" sx={{ mt: 1, fontWeight: 600, fontSize: "0.7rem" }} />
+              </Box>
+
+              <DialogContent sx={{ px: 3, pt: 1, pb: 2 }}>
+                {/* Paid by */}
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.25, mb: 1.5 }}>
+                  <Avatar src={payer?.avatar || undefined} sx={{ width: 32, height: 32, bgcolor: "primary.main" }}>
+                    {payer?.username?.[0]?.toUpperCase()}
+                  </Avatar>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.2 }}>Paid by</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{payer?.username ?? "Unknown"}</Typography>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
+                    {new Date(e.date).toLocaleString()}
+                  </Typography>
+                </Box>
+
+                {/* Notes */}
+                {e.notes && (
+                  <Box sx={{ bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.25, mb: 1.5 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.25 }}>Notes</Typography>
+                    <Typography variant="body2">{e.notes}</Typography>
+                  </Box>
+                )}
+
+                {/* Splits */}
+                {e.splits && e.splits.length > 0 && (
+                  <>
+                    <Divider sx={{ my: 1.5 }} />
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1 }}>
+                      Split
+                    </Typography>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
+                      {e.splits.map((split) => {
+                        const member = group.members.find((m) => m.user_id === split.user_id);
+                        return (
+                          <Box key={split.user_id} sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                            <Avatar src={member?.avatar || undefined} sx={{ width: 28, height: 28, fontSize: 11, bgcolor: "secondary.main" }}>
+                              {member?.username?.[0]?.toUpperCase()}
+                            </Avatar>
+                            <Typography variant="body2" sx={{ flexGrow: 1 }}>{member?.username ?? "?"}</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {e.split_type === "percent" && split.percentage != null
+                                ? `${split.percentage.toFixed(1)}% · ${formatCurrency(split.amount_owed ?? 0, e.currency)}`
+                                : formatCurrency(split.amount_owed ?? e.amount / e.splits.length, e.currency)}
+                            </Typography>
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  </>
+                )}
+              </DialogContent>
+
+              <DialogActions sx={{ px: 3, pb: 2.5 }}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  onClick={() => {
+                    setShowViewExpenseModal(false);
+                    handleOpenEditExpense(e);
+                  }}
+                >
+                  Edit Expense
+                </Button>
+              </DialogActions>
+            </>
+          );
+        })()}
       </Dialog>
 
       <Dialog

@@ -8,6 +8,7 @@ var notificationSchema = new mongoose.Schema({
   time: { type: String },
   icon: { type: String },
   unread: { type: Boolean, default: true },
+  link: { type: String },
 });
 
 notificationSchema.index({ userId: 1, time: -1 });

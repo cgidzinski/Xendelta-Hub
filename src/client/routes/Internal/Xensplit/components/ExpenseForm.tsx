@@ -1,19 +1,28 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import {
   Box,
   Typography,
   Button,
   TextField,
-  ToggleButton,
-  ToggleButtonGroup,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
   Avatar,
   InputAdornment,
 } from "@mui/material";
 import { SearchedUser } from "../../../../hooks/useUserSearch";
 
+const ALL_CURRENCIES = ["CAD", "USD", "JPY", "EUR", "GBP", "AUD", "CNY", "INR", "MXN", "BRL"];
+
+function getSortedCurrencies(defaultCurrency?: string) {
+  if (!defaultCurrency) return ALL_CURRENCIES;
+  return [defaultCurrency, ...ALL_CURRENCIES.filter((c) => c !== defaultCurrency)];
+}
+
 interface ExpenseFormProps {
-  description: string;
-  onDescriptionChange: (v: string) => void;
+  title: string;
+  onTitleChange: (v: string) => void;
   notes: string;
   onNotesChange: (v: string) => void;
   amount: string;
@@ -31,7 +40,7 @@ interface ExpenseFormProps {
   percentSplits: { [userId: string]: string };
   onPercentSplitsChange: (v: { [userId: string]: string }) => void;
   members: Array<{ user_id: string; username: string; avatar?: string | null }>;
-  currencies: string[];
+  defaultCurrency?: string;
   onSubmit: () => void;
   submitDisabled?: boolean;
   submitLabel?: string;
@@ -41,8 +50,8 @@ interface ExpenseFormProps {
 }
 
 export default function ExpenseForm({
-  description,
-  onDescriptionChange,
+  title,
+  onTitleChange,
   notes,
   onNotesChange,
   amount,
@@ -60,7 +69,7 @@ export default function ExpenseForm({
   percentSplits,
   onPercentSplitsChange,
   members,
-  currencies,
+  defaultCurrency,
   onSubmit,
   submitDisabled,
   submitLabel = "Add Expense",
@@ -106,21 +115,21 @@ export default function ExpenseForm({
       <TextField
         fullWidth
         margin="dense"
-        label="Description"
-        value={description}
-        onChange={(e) => onDescriptionChange(e.target.value)}
+        label="Title"
+        value={title}
+        onChange={(e) => onTitleChange(e.target.value)}
       />
 
       <TextField
         fullWidth
-        label="Notes (optional)"
+        label="Notes"
         value={notes}
         onChange={(e) => onNotesChange(e.target.value)}
         multiline
         rows={2}
       />
 
-      <Box sx={{ display: "flex", gap: 2 }}>
+      <Box sx={{ display: "flex", gap: 2, flexWrap: { xs: "wrap", sm: "nowrap" } }}>
         <TextField
           fullWidth
           label="Amount"
@@ -128,36 +137,32 @@ export default function ExpenseForm({
           value={amount}
           onChange={(e) => onAmountChange(e.target.value)}
         />
-        <TextField
-          select
-          value={currency}
-          onChange={(e) => onCurrencyChange(e.target.value)}
-          SelectProps={{ native: true }}
-          sx={{ width: 100 }}
-        >
-          {currencies.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </TextField>
+        <FormControl sx={{ width: { xs: "100%", sm: 110 } }}>
+          <InputLabel>Currency</InputLabel>
+          <Select
+            value={currency}
+            label="Currency"
+            onChange={(e) => onCurrencyChange(e.target.value)}
+          >
+            {getSortedCurrencies(defaultCurrency).map((c) => (
+              <MenuItem key={c} value={c}>{c}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
       </Box>
 
-      <Box>
-        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-          Split type
-        </Typography>
-        <ToggleButtonGroup
+      <FormControl fullWidth>
+        <InputLabel>Split type</InputLabel>
+        <Select
           value={splitType}
-          exclusive
-          onChange={(_, v) => v && onSplitTypeChange(v)}
-          fullWidth
+          label="Split type"
+          onChange={(e) => onSplitTypeChange(e.target.value as "equal" | "exact" | "percent")}
         >
-          <ToggleButton value="equal">Equal</ToggleButton>
-          <ToggleButton value="exact">Exact</ToggleButton>
-          <ToggleButton value="percent">Percent</ToggleButton>
-        </ToggleButtonGroup>
-      </Box>
+          <MenuItem value="equal">Equal</MenuItem>
+          <MenuItem value="exact">Exact amounts</MenuItem>
+          <MenuItem value="percent">By percentage</MenuItem>
+        </Select>
+      </FormControl>
 
       <Box>
         <Typography variant="subtitle2" sx={{ mb: 1 }}>
@@ -198,9 +203,20 @@ export default function ExpenseForm({
       </Box>
 
       <Box>
-        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-          Participants
-        </Typography>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+          <Typography variant="subtitle2">Participants</Typography>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() =>
+              selectedParticipants.length === members.length
+                ? onParticipantsChange([])
+                : onParticipantsChange(members.map((m) => ({ _id: m.user_id, username: m.username, avatar: m.avatar })))
+            }
+          >
+            {selectedParticipants.length === members.length ? "Clear" : "Everyone"}
+          </Button>
+        </Box>
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
           {members.map((member) => {
             const isSelected = selectedParticipants.some((p) => p._id === member.user_id);
@@ -243,26 +259,29 @@ export default function ExpenseForm({
 
       {selectedParticipants.length > 0 && (
         <Box>
-          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-            <Typography variant="subtitle2">
-              {splitType === "equal" ? "Equal split" : splitType === "exact" ? "Exact amounts" : "Percentages"}
-            </Typography>
-            {splitType === "equal" && (
+          {splitType === "equal" ? (
+            numAmount > 0 && (
               <Typography variant="caption" color="text.secondary">
-                {numAmount > 0 ? `${currency} ${(numAmount / selectedParticipants.length).toFixed(2)} each` : ""}
+                {new Intl.NumberFormat(undefined, { style: "currency", currency }).format(numAmount / selectedParticipants.length)} each
               </Typography>
-            )}
-            {splitType === "exact" && (
-              <Typography variant="caption" color={Math.abs(totalExact - numAmount) < 0.01 ? "success" : "error"}>
-                Total: {totalExact.toFixed(2)} / {numAmount.toFixed(2)}
+            )
+          ) : (
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
+              <Typography variant="subtitle2">
+                {splitType === "exact" ? "Exact amounts" : "Percentages"}
               </Typography>
-            )}
-            {splitType === "percent" && (
-              <Typography variant="caption" color={Math.abs(totalPercent - 100) < 0.01 ? "success" : "error"}>
-                Total: {totalPercent === 0 ? "0" : totalPercent.toFixed(1)}% / 100%
-              </Typography>
-            )}
-          </Box>
+              {splitType === "exact" && (
+                <Typography variant="caption" color={Math.abs(totalExact - numAmount) < 0.01 ? "success" : "error"}>
+                  Total: {totalExact.toFixed(2)} / {numAmount.toFixed(2)}
+                </Typography>
+              )}
+              {splitType === "percent" && (
+                <Typography variant="caption" color={Math.abs(totalPercent - 100) < 0.01 ? "success" : "error"}>
+                  Total: {totalPercent === 0 ? "0" : totalPercent.toFixed(1)}% / 100%
+                </Typography>
+              )}
+            </Box>
+          )}
           {splitType !== "equal" && selectedParticipants.map((p) => (
             <Box key={p._id} sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
               <Avatar src={p.avatar || undefined} sx={{ width: 28, height: 28 }}>

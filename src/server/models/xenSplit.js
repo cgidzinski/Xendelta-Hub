@@ -18,7 +18,7 @@ var expenseSchema = new Schema({
   paid_by: { type: String, required: true },
   amount: { type: Number, required: true },
   currency: { type: String, default: "USD" },
-  description: { type: String, required: true, maxlength: 500 },
+  title: { type: String, required: true, maxlength: 500 },
   notes: { type: String, maxlength: 1000 },
   date: { type: Date, default: Date.now },
   split_type: {
@@ -40,9 +40,9 @@ var settlementSchema = new Schema({
 
 var xenSplitSchema = new Schema({
   name: { type: String, required: true, maxlength: 100 },
+  default_currency: { type: String, default: "USD" },
   created_by: { type: String, required: true },
   created_at: { type: Date, default: Date.now },
-  currencies: { type: [String], default: ["USD"] },
   members: [memberSchema],
   expenses: [expenseSchema],
   settlements: [settlementSchema],

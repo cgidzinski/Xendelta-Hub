@@ -86,6 +86,52 @@ module.exports = function (app: express.Application) {
     }
   );
 
+  // Delete (dismiss) a single notification
+  app.delete(
+    "/api/user/notifications/:notificationId",
+    authenticateToken,
+    async function (req: express.Request, res: express.Response) {
+      const { notificationId } = req.params;
+      const userId = (req as AuthenticatedRequest).user!._id;
+
+      const notification = await Notification.findOneAndDelete({ _id: notificationId, userId });
+
+      if (notification) {
+        return res.json({
+          status: true,
+          message: "Notification dismissed",
+          data: { notificationId },
+        });
+      } else {
+        return res.status(404).json({
+          status: false,
+          message: "Notification not found",
+        });
+      }
+    }
+  );
+
+  // Delete (clear) all notifications for the current user
+  app.delete(
+    "/api/user/notifications",
+    authenticateToken,
+    async function (req: express.Request, res: express.Response) {
+      const userId = (req as AuthenticatedRequest).user!._id;
+
+      await Notification.deleteMany({ userId });
+
+      // Update user profile unread_notifications flag via socket
+      const socketManager = SocketManager.getInstance();
+      socketManager.notifyNotificationUpdate(userId.toString(), "all", { unread: false });
+
+      return res.json({
+        status: true,
+        message: "All notifications cleared",
+        data: {},
+      });
+    }
+  );
+
   // Admin: Send notification to all users
   app.post(
     "/api/admin/notifications/all",

@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import {
   Box,
   Container,
@@ -15,38 +15,33 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Autocomplete,
-  Checkbox,
-  ListItemText,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
+import GroupsIcon from "@mui/icons-material/Groups";
 import { useXenSplits } from "../../../hooks/xensplit/useGroups";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import GroupCard from "./components/GroupCard";
 
-const ALL_CURRENCIES = ["CAD", "USD", "JPY", "EUR", "GBP", "AUD", "CNY", "INR", "MXN", "BRL"];
-
 export default function GroupsList() {
   const { groups, isLoading, isError, error, createGroup, isCreating } = useXenSplits();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [groupName, setGroupName] = useState("");
-  const [primaryCurrency, setPrimaryCurrency] = useState("CAD");
-  const [secondaryCurrencies, setSecondaryCurrencies] = useState<string[]>([]);
+  const [primaryCurrency, setPrimaryCurrency] = useState("USD");
+
+  const ALL_CURRENCIES = ["CAD", "USD", "JPY", "EUR", "GBP", "AUD", "CNY", "INR", "MXN", "BRL"];
 
   const handleCreate = async () => {
     if (!groupName.trim()) return;
-    const currencies = [primaryCurrency, ...secondaryCurrencies.filter(c => c !== primaryCurrency)];
     await new Promise<void>((resolve) => {
       createGroup(
-        { name: groupName, currencies },
+        { name: groupName, default_currency: primaryCurrency },
         {
           onSuccess: () => {
             setShowCreateModal(false);
             setGroupName("");
-            setPrimaryCurrency("CAD");
-            setSecondaryCurrencies([]);
+            setPrimaryCurrency("USD");
             resolve();
           },
         }
@@ -59,38 +54,78 @@ export default function GroupsList() {
 
   return (
     <Box>
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 4 }}>
+      <Container maxWidth="lg" sx={{ mt: { xs: 2, sm: 4 }, mb: 4, px: { xs: 1.5, sm: 3 } }}>
+        {/* Header */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            mb: { xs: 2, sm: 3 },
+          }}
+        >
           <Box>
-            <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
+            <Typography
+              variant="h5"
+              component="h1"
+              sx={{ fontWeight: 700, letterSpacing: "-0.02em" }}
+            >
               Xensplit
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Split expenses with friends
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+              {groups.length > 0
+                ? `${groups.length} group${groups.length === 1 ? "" : "s"}`
+                : "Split expenses with friends"}
             </Typography>
           </Box>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => setShowCreateModal(true)}
+            size="medium"
           >
             New Group
           </Button>
         </Box>
 
+        {/* Group list */}
         {groups.length === 0 ? (
-          <Box sx={{ textAlign: "center", py: 8 }}>
-            <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
+          <Box
+            sx={{
+              textAlign: "center",
+              py: 10,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 1.5,
+            }}
+          >
+            <Box
+              sx={{
+                width: 64,
+                height: 64,
+                borderRadius: "50%",
+                bgcolor: "action.hover",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                mb: 0.5,
+              }}
+            >
+              <GroupsIcon sx={{ fontSize: 32, color: "text.disabled" }} />
+            </Box>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
               No groups yet
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Click "New Group" to create one
+              Create a group to start splitting expenses
             </Typography>
+
           </Box>
         ) : (
-          <Grid container spacing={3}>
+          <Grid container spacing={1.5}>
             {groups.map((group) => (
-              <Grid size={{ xs: 6 }} key={group._id}>
+              <Grid size={{ xs: 12, sm: 6 }} key={group._id}>
                 <GroupCard group={group} />
               </Grid>
             ))}
@@ -127,9 +162,9 @@ export default function GroupsList() {
             label="Group Name"
             value={groupName}
             onChange={(e) => setGroupName(e.target.value)}
-            sx={{ mt: 1, mb: 2 }}
+            sx={{ mt: 1 }}
           />
-          <FormControl fullWidth sx={{ mb: 2 }}>
+          <FormControl fullWidth sx={{ mt: 2 }}>
             <InputLabel>Primary Currency</InputLabel>
             <Select
               value={primaryCurrency}
@@ -141,22 +176,6 @@ export default function GroupsList() {
               ))}
             </Select>
           </FormControl>
-          <Autocomplete
-            multiple
-            options={ALL_CURRENCIES.filter(c => c !== primaryCurrency)}
-            disableCloseOnSelect
-            value={secondaryCurrencies}
-            onChange={(_, newValue) => setSecondaryCurrencies(newValue)}
-            renderOption={(props, option, { selected }) => (
-              <Box component="li" {...props} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <Checkbox checked={selected} size="small" />
-                <ListItemText primary={option} />
-              </Box>
-            )}
-            renderInput={(params) => (
-              <TextField {...params} label="Secondary Currencies" placeholder="Search currencies..." />
-            )}
-          />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Button fullWidth variant="outlined" onClick={() => setShowCreateModal(false)}>
@@ -169,7 +188,7 @@ export default function GroupsList() {
             disabled={!groupName.trim() || isCreating}
             loading={isCreating}
           >
-            Create Group
+            Create
           </Button>
         </DialogActions>
       </Dialog>

@@ -16,7 +16,7 @@ export interface XenSplitExpense {
   paid_by: string;
   amount: number;
   currency: string;
-  description: string;
+  title: string;
   notes?: string;
   date: string;
   split_type: "equal" | "exact" | "percent";
@@ -40,9 +40,9 @@ export interface XenSplitSettlement {
 export interface XenSplit {
   _id: string;
   name: string;
+  default_currency: string;
   created_by: string;
   created_at: string;
-  currencies: string[];
   members: XenSplitMember[];
   expenses: XenSplitExpense[];
   settlements: XenSplitSettlement[];
@@ -91,7 +91,7 @@ export interface CreateExpenseInput {
   paid_by: string;
   amount: number;
   currency: string;
-  description: string;
+  title: string;
   notes?: string;
   date?: string;
   split_type: "equal" | "exact" | "percent";
@@ -101,14 +101,14 @@ export interface CreateExpenseInput {
 export interface CreateXenSplitInput {
   name: string;
   memberIds?: string[];
-  currencies?: string[];
+  default_currency?: string;
 }
 
 export interface UpdateExpenseInput {
   paid_by?: string;
   amount?: number;
   currency?: string;
-  description?: string;
+  title?: string;
   notes?: string;
   date?: string;
   split_type?: "equal" | "exact" | "percent";

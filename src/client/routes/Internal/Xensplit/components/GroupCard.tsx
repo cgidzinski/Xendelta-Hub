@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+﻿import { useNavigate } from "react-router-dom";
 import {
   Card,
   CardActionArea,
@@ -9,7 +9,21 @@ import {
   AvatarGroup,
   Chip,
 } from "@mui/material";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import type { XenSplit } from "../../../hooks/xensplit/types";
+
+const ACCENT_COLORS = [
+  "#2196f3", "#9c27b0", "#e91e63", "#ff5722",
+  "#4caf50", "#ff9800", "#00bcd4", "#7c4dff",
+];
+
+function groupAccentColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) & 0x7fffffff;
+  }
+  return ACCENT_COLORS[hash % ACCENT_COLORS.length];
+}
 
 interface GroupCardProps {
   group: XenSplit;
@@ -17,59 +31,90 @@ interface GroupCardProps {
 
 export function GroupCard({ group }: GroupCardProps) {
   const navigate = useNavigate();
+  const accentColor = groupAccentColor(group.name);
 
   return (
     <Card
+      elevation={0}
       sx={{
-        height: "100%",
-        minHeight: 180,
-        minWidth: 0,
         width: "100%",
-        display: "flex",
-        flexDirection: "column",
-        transition: "transform 0.2s, box-shadow 0.2s",
+        border: 1,
+        borderColor: "divider",
+        transition: "border-color 0.15s, box-shadow 0.15s",
         "&:hover": {
-          transform: "translateY(-4px)",
-          boxShadow: 6,
+          borderColor: accentColor,
+          boxShadow: `0 0 0 1px ${accentColor}40`,
         },
       }}
     >
       <CardActionArea
         onClick={() => navigate(`/internal/xensplit/groups/${group._id}`)}
-        sx={{ flexGrow: 1, display: "flex", flexDirection: "column", alignItems: "flex-start" }}
       >
-        <CardContent sx={{ flexGrow: 1, width: "100%" }}>
-          <Typography gutterBottom variant="h6" component="h2" sx={{ fontWeight: 600 }}>
-            {group.name}
-          </Typography>
+        <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            {/* Colored group initial */}
+            <Box
+              sx={{
+                width: 48,
+                height: 48,
+                borderRadius: 2,
+                bgcolor: accentColor,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Typography sx={{ color: "#fff", fontWeight: 800, fontSize: "1.2rem", lineHeight: 1 }}>
+                {group.name[0]?.toUpperCase() ?? "?"}
+              </Typography>
+            </Box>
 
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-            <AvatarGroup max={4} sx={{ "& .MuiAvatar-root": { width: 28, height: 28, fontSize: 12 } }}>
-              {group.members.map((member) => (
-                <Avatar key={member.user_id} src={member.avatar || undefined} sx={{ bgcolor: "primary.main" }}>
-                  {member.username[0]?.toUpperCase()}
-                </Avatar>
-              ))}
-            </AvatarGroup>
-            <Typography variant="caption" color="text.secondary">
-              {group.members.length} {group.members.length === 1 ? "member" : "members"}
-            </Typography>
-          </Box>
+            {/* Name + members */}
+            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+              <Typography
+                variant="subtitle1"
+                sx={{ fontWeight: 700, lineHeight: 1.25, mb: 0.5 }}
+                noWrap
+              >
+                {group.name}
+              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                <Box sx={{ display: "flex", alignItems: "center" }}>
+                  <AvatarGroup
+                    max={4}
+                    sx={{ "& .MuiAvatar-root": { width: 24, height: 24, fontSize: 10, border: "1.5px solid", borderColor: "background.paper" } }}
+                  >
+                    {group.members.map((member) => (
+                      <Avatar
+                        key={member.user_id}
+                        src={member.avatar || undefined}
+                        sx={{ bgcolor: "primary.dark" }}
+                      >
+                        {member.username[0]?.toUpperCase()}
+                      </Avatar>
+                    ))}
+                  </AvatarGroup>
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1 }}>
+                  {group.expenses?.length || 0} expenses
+                </Typography>
+              </Box>
+            </Box>
 
-          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-            <Chip
-              label={`${group.expenses?.length || 0} expenses`}
-              size="small"
-              variant="outlined"
-            />
-            {group.settlements?.length > 0 && (
-              <Chip
-                label={`${group.settlements.length} settled`}
-                size="small"
-                color="success"
-                variant="outlined"
-              />
-            )}
+            {/* Right side */}
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.5, flexShrink: 0 }}>
+              {group.settlements?.length > 0 && (
+                <Chip
+                  label={`${group.settlements.length} settled`}
+                  size="small"
+                  color="success"
+                  variant="outlined"
+                  sx={{ fontSize: "0.65rem", height: 20 }}
+                />
+              )}
+              <ChevronRightIcon sx={{ color: "text.disabled", fontSize: 20 }} />
+            </Box>
           </Box>
         </CardContent>
       </CardActionArea>

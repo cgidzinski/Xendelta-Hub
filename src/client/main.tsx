@@ -49,6 +49,11 @@ import XenLinkRedirect from "./routes/External/XenLinkRedirect/XenLinkRedirect";
 // Routes - Xensplit
 import XensplitGroupsList from "./routes/Internal/Xensplit/GroupsList";
 import XensplitGroupDetail from "./routes/Internal/Xensplit/GroupDetail";
+import GroupOverview from "./routes/Internal/Xensplit/GroupOverview";
+import GroupExpenses from "./routes/Internal/Xensplit/GroupExpenses";
+import GroupBalances from "./routes/Internal/Xensplit/GroupBalances";
+import GroupSettlements from "./routes/Internal/Xensplit/GroupSettlements";
+import GroupSettings from "./routes/Internal/Xensplit/GroupSettings";
 // Routes - Admin
 import Admin from "./routes/Admin/Admin";
 import Users from "./routes/Admin/Users";
@@ -155,7 +160,14 @@ const router = createBrowserRouter(
         <Route path="inventory" element={<Inventory />} />
         <Route path="xensplit" index element={<Navigate to="groups" replace />} />
         <Route path="xensplit/groups" element={<XensplitGroupsList />} />
-        <Route path="xensplit/groups/:groupId" element={<XensplitGroupDetail />} />
+        <Route path="xensplit/groups/:groupId" element={<XensplitGroupDetail />}>
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route path="overview" element={<GroupOverview />} />
+          <Route path="expenses" element={<GroupExpenses />} />
+          <Route path="balances" element={<GroupBalances />} />
+          <Route path="settlements" element={<GroupSettlements />} />
+          <Route path="settings" element={<GroupSettings />} />
+        </Route>
         <Route path="apps" element={<Apps />} />
       </Route>
       {/* Admin routes - require admin role and use AdminNavBar */}

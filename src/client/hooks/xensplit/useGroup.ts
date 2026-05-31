@@ -17,8 +17,8 @@ export function useXenSplit(groupId: string) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ name }: { name: string }) => {
-      const res = await apiClient.put(`/api/xensplit/groups/${groupId}`, { name });
+    mutationFn: async ({ name, default_currency }: { name?: string; default_currency?: string }) => {
+      const res = await apiClient.put(`/api/xensplit/groups/${groupId}`, { name, default_currency });
       return res.data.data as XenSplit;
     },
     onSuccess: () => {

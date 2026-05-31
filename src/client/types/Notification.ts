@@ -8,5 +8,6 @@ export interface Notification {
   time: string;
   icon: string;
   unread: boolean;
+  link?: string;
 }
 

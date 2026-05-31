@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Container,
@@ -9,12 +10,17 @@ import {
   ListItemText,
   Divider,
   Paper,
+  Button,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
 import PersonIcon from "@mui/icons-material/Person";
 import SecurityIcon from "@mui/icons-material/Security";
 import AnnouncementIcon from "@mui/icons-material/Announcement";
 import LockIcon from "@mui/icons-material/Lock";
 import NotificationsIcon from "@mui/icons-material/Notifications";
+import CloseIcon from "@mui/icons-material/Close";
+import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import { formatDistance } from "date-fns";
 import { useTitle } from "../../../hooks/useTitle";
 import LoadingSpinner from "../../../components/LoadingSpinner";
@@ -38,18 +44,23 @@ const getNotificationIcon = (icon: string) => {
 
 export default function Notifications() {
   useTitle("Notifications");
-  const { notifications, isLoading, fetchNotifications, markNotificationAsRead } = useUserNotifications();
+  const { notifications, isLoading, fetchNotifications, markNotificationAsRead, dismissNotification, isDismissing, clearAllNotifications, isClearing } = useUserNotifications();
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
 
   useEffect(() => {
     fetchNotifications();
   }, []);
 
+  const navigate = useNavigate();
   const handleNotificationClick = (notification: Notification) => {
     if (notification.unread) {
       markNotificationAsRead(notification._id);
     }
-    setSelectedNotification(notification);
+    if (notification.link) {
+      navigate(notification.link);
+    } else {
+      setSelectedNotification(notification);
+    }
   };
 
   const handleCloseModal = () => {
@@ -59,13 +70,27 @@ export default function Notifications() {
   return (
     <Box>
       <Container maxWidth="md" sx={{ mt: 4 }}>
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h3" component="h1" gutterBottom>
-            Notifications
-          </Typography>
-          <Typography variant="h6" color="text.secondary">
-            View all your notifications
-          </Typography>
+        <Box sx={{ mb: 4, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+          <Box>
+            <Typography variant="h3" component="h1" gutterBottom>
+              Notifications
+            </Typography>
+            <Typography variant="h6" color="text.secondary">
+              View all your notifications
+            </Typography>
+          </Box>
+          {notifications && notifications.length > 0 && (
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<DeleteSweepIcon />}
+              onClick={() => clearAllNotifications()}
+              disabled={isClearing}
+              size="small"
+            >
+              Clear All
+            </Button>
+          )}
         </Box>
 
         <Paper sx={{ backgroundColor: "rgba(255, 255, 255, 0.05)" }}>
@@ -112,9 +137,22 @@ export default function Notifications() {
                         sx: { mt: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 400 },
                       }}
                     />
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
                       {formatDistance(new Date(notification.time), new Date(), { addSuffix: true })}
                     </Typography>
+                    <Tooltip title="Dismiss">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          dismissNotification(notification._id);
+                        }}
+                        disabled={isDismissing}
+                        sx={{ color: "text.secondary", "&:hover": { color: "error.main" } }}
+                      >
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                   </ListItem>
                   {index < notifications.length - 1 && <Divider />}
                 </Box>
