@@ -1,103 +1,47 @@
-import { Box, Container, Typography, Card, CardContent, Paper } from "@mui/material";
-import Grid from "@mui/material/Grid";
-import { Home as HomeIcon, Dashboard, Settings, People } from "@mui/icons-material";
+import { Box, Container, Typography } from "@mui/material";
 import { useTitle } from "../../../hooks/useTitle";
-import { useAuth } from "../../../contexts/AuthContext";
+import TopStatsCards from "./components/TopStatsCards";
+import PinnedAppsSection from "./components/PinnedAppsSection";
+import RecipaintCardBody from "./components/RecipaintCardBody";
+import XenBoxCardBody from "./components/XenBoxCardBody";
+import XenLinkCardBody from "./components/XenLinkCardBody";
+import XenSplitCardBody from "./components/XenSplitCardBody";
+import { useUserProfile } from "../../../hooks/user/useUserProfile";
+import { usePinnedApps } from "../../../hooks/user/usePinnedApps";
 
 export default function Home() {
-  const { user } = useAuth();
   useTitle("Home");
+  const { profile, isLoading, isError } = useUserProfile();
+  const { togglePinnedApp, isUpdating } = usePinnedApps();
+
+  if (isLoading) {
+    return <Typography sx={{ mt: 8, textAlign: "center" }}>Loading...</Typography>;
+  }
+  if (isError || !profile) {
+    return <Typography sx={{ mt: 8, textAlign: "center", color: "error.main" }}>Failed to load profile.</Typography>;
+  }
+
+  // App detail bodies for each pinned card
+  const appDetails: Record<string, React.ReactNode> = {
+    recipaint: <RecipaintCardBody />,
+    xenbox: <XenBoxCardBody />,
+    xenlink: <XenLinkCardBody />,
+    xensplit: <XenSplitCardBody />,
+  };
 
   return (
     <Box>
       <Container maxWidth="xl" sx={{ mt: 4 }}>
-        {/* Welcome Section */}
         <Box sx={{ mb: 4 }}>
           <Typography variant="h3" component="h1" gutterBottom>
-            Welcome back, {user?.username || "User"}!
-          </Typography>
-          <Typography variant="h6" color="text.secondary">
-            Here's what's happening in your Xendelta Hub
+            Welcome back, {profile.username}!
           </Typography>
         </Box>
-
-        {/* Quick Stats Cards */}
-        <Box sx={{ mb: 4 }}>
-          <Grid container spacing={3}>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card elevation={2}>
-                <CardContent sx={{ textAlign: "center", p: 3 }}>
-                  <HomeIcon sx={{ fontSize: 40, color: "primary.main", mb: 1 }} />
-                  <Typography variant="h4" component="div">
-                    3
-                  </Typography>
-                  <Typography color="text.secondary">Active Projects</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card elevation={2}>
-                <CardContent sx={{ textAlign: "center", p: 3 }}>
-                  <Dashboard sx={{ fontSize: 40, color: "secondary.main", mb: 1 }} />
-                  <Typography variant="h4" component="div">
-                    1
-                  </Typography>
-                  <Typography color="text.secondary">Completed Tasks</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card elevation={2}>
-                <CardContent sx={{ textAlign: "center", p: 3 }}>
-                  <People sx={{ fontSize: 40, color: "success.main", mb: 1 }} />
-                  <Typography variant="h4" component="div">
-                    3
-                  </Typography>
-                  <Typography color="text.secondary">Team Members</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card elevation={2}>
-                <CardContent sx={{ textAlign: "center", p: 3 }}>
-                  <Settings sx={{ fontSize: 40, color: "warning.main", mb: 1 }} />
-                  <Typography variant="h4" component="div">
-                    3
-                  </Typography>
-                  <Typography color="text.secondary">Pending Items</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </Box>
-
-        {/* Recent Activity */}
-        <Paper elevation={1} sx={{ p: 3 }}>
-          <Typography variant="h5" component="h2" gutterBottom>
-            Recent Activity
-          </Typography>
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
-              • Project "Recipaint" was added.
-            </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
-              • Project XenBox was added.
-            </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
-              • Project XenChat was added.
-            </Typography>
-          </Box>
-        </Paper>
-
-        {/* Quick Actions */}
-        <Box sx={{ mt: 4 }}>
-          <Typography variant="h5" component="h2" gutterBottom>
-            Quick Actions
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            This is a temporary home page. More features coming soon!
-          </Typography>
-        </Box>
+        <TopStatsCards />
+        <PinnedAppsSection
+          pinnedApps={profile.pinnedApps}
+          appDetails={appDetails}
+        />
       </Container>
     </Box>
   );

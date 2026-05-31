@@ -33,9 +33,29 @@ interface XenSplitDocument {
 export function calculateBalances(doc: XenSplitDocument): BalanceMap {
   const balances: BalanceMap = {};
 
-  // Initialize all members with zero balance per currency
+  // Collect currencies present in expenses and settlements so we can
+  // initialize a zero entry for each member for those currencies.
+  // This ensures settlements are applied even if no expense currently
+  // references that currency (fixes issue where deleting an expense
+  // removed the currency key and hid settlement effects).
+  const currencies = new Set<string>();
+  if (Array.isArray(doc.expenses)) {
+    for (const exp of doc.expenses) {
+      if (exp && exp.currency) currencies.add(exp.currency);
+    }
+  }
+  if (Array.isArray(doc.settlements)) {
+    for (const s of doc.settlements) {
+      if (s && s.currency) currencies.add(s.currency);
+    }
+  }
+
+  // Initialize all members with zero balance entries for collected currencies
   for (const member of doc.members) {
     balances[member.user_id] = {};
+    for (const c of currencies) {
+      balances[member.user_id][c] = 0;
+    }
   }
 
   // Process each expense
@@ -80,11 +100,20 @@ export function calculateBalances(doc: XenSplitDocument): BalanceMap {
   // Subtract settled amounts
   for (const settlement of doc.settlements) {
     const { from, to, amount, currency } = settlement;
-    if (balances[from] && balances[from][currency]) {
-      balances[from][currency] += amount;
+    // Use explicit undefined check; a zero balance is a valid starting point
+    if (balances[from]) {
+      if (balances[from][currency] !== undefined) {
+        balances[from][currency] += amount;
+      } else {
+        balances[from][currency] = amount;
+      }
     }
-    if (balances[to] && balances[to][currency]) {
-      balances[to][currency] -= amount;
+    if (balances[to]) {
+      if (balances[to][currency] !== undefined) {
+        balances[to][currency] -= amount;
+      } else {
+        balances[to][currency] = -amount;
+      }
     }
   }
 

@@ -20,12 +20,14 @@ import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import GroupsIcon from "@mui/icons-material/Groups";
 import { useXenSplits } from "../../../hooks/xensplit/useGroups";
+import { useTitle } from "../../../hooks/useTitle";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import GroupCard from "./components/GroupCard";
 import { useAuth } from "../../../contexts/AuthContext";
 
 export default function GroupsList() {
+  useTitle("Xensplit");
   const { groups, isLoading, isError, error, createGroup, isCreating } = useXenSplits();
   const { user } = useAuth();
   const [showCreateModal, setShowCreateModal] = useState(false);

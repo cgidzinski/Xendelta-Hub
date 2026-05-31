@@ -11,6 +11,11 @@ export interface XenSplitExpenseSplit {
   percentage?: number;
 }
 
+export interface XenSplitExpenseImage {
+  _id: string;
+  gcs_path: string;
+}
+
 export interface XenSplitExpense {
   _id: string;
   paid_by: string;
@@ -21,6 +26,7 @@ export interface XenSplitExpense {
   date: string;
   split_type: "equal" | "exact" | "percent";
   splits: XenSplitExpenseSplit[];
+  images?: XenSplitExpenseImage[];
   created_at: string;
   payer?: {
     user_id: string;

@@ -23,6 +23,7 @@ import {
   Menu,
   MenuItem,
   Divider,
+  CircularProgress,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CheckIcon from "@mui/icons-material/Check";
@@ -36,10 +37,12 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import GridViewIcon from "@mui/icons-material/GridView";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import { useTitle } from "../../../hooks/useTitle";
 import { useXenSplit } from "../../../hooks/xensplit/useGroup";
 import { useXenSplits } from "../../../hooks/xensplit/useGroups";
 import { useXenSplitBalances } from "../../../hooks/xensplit/useBalances";
-import { useXenSplitExpenses } from "../../../hooks/xensplit/useExpenses";
+import { useXenSplitExpenses, useExpenseImageUrls } from "../../../hooks/xensplit/useExpenses";
 import { useAuth } from "../../../contexts/AuthContext";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -70,7 +73,7 @@ export interface GroupDetailContext {
   onSettle: (settlement: XenSplitSettlementTransfer) => void;
   onAddMembers: () => void;
   onMemberMenu: (memberId: string, anchor: HTMLElement) => void;
-  updateGroup: (updates: { name?: string; default_currency?: string }) => void;
+  updateGroup: (updates: { name?: string; default_currency?: string }, options?: { onSuccess?: () => void; onError?: () => void }) => void;
   isUpdating: boolean;
 }
 
@@ -80,9 +83,10 @@ export default function GroupDetail() {
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const { group, isLoading, isError, error, addMembers, isAddingMembers, removeMember, isRemovingMember, updateGroup, isUpdating } = useXenSplit(groupId!);
+  useTitle(group?.name ? `Xensplit - ${group.name}` : "Xensplit");
   const { deleteGroup } = useXenSplits();
   const { balancesData, settleDebt, isSettlingDebt } = useXenSplitBalances(groupId!);
-  const { updateExpense, isUpdatingExpense, addExpense, isAddingExpense, deleteExpense, isDeletingExpense } = useXenSplitExpenses(groupId!);
+  const { updateExpense, updateExpenseAsync, isUpdatingExpense, addExpense, addExpenseAsync, isAddingExpense, deleteExpense, isDeletingExpense, uploadExpenseImages, isUploadingImages, deleteExpenseImage, isDeletingExpenseImage } = useXenSplitExpenses(groupId!);
   const location = useLocation();
   const activeTab = location.pathname.endsWith("/overview")
     ? 0
@@ -125,6 +129,20 @@ export default function GroupDetail() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [confirmDialogText, setConfirmDialogText] = useState("");
   const [confirmAction, setConfirmAction] = useState<() => void>(() => { });
+  const [addImages, setAddImages] = useState<File[]>([]);
+  const [editImages, setEditImages] = useState<File[]>([]);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  const { data: viewImageUrls = [] } = useExpenseImageUrls(
+    groupId ?? "",
+    viewExpenseItem?._id,
+    viewExpenseItem?.images?.length ?? 0
+  );
+  const { data: editImageUrls = [] } = useExpenseImageUrls(
+    groupId ?? "",
+    selectedExpense?._id,
+    selectedExpense?.images?.length ?? 0
+  );
 
   const handleConfirm = () => {
     confirmAction();
@@ -259,7 +277,15 @@ export default function GroupDetail() {
           splits,
         },
         {
-          onSuccess: () => {
+          onSuccess: async (result) => {
+            const newExpenseId = result?.data?.newExpenseId;
+            if (addImages.length > 0 && newExpenseId) {
+              try {
+                await uploadExpenseImages({ expenseId: newExpenseId, files: addImages });
+              } catch {
+                enqueueSnackbar("Expense added but some images failed to upload", { variant: "warning" });
+              }
+            }
             enqueueSnackbar("Expense added", { variant: "success" });
             setShowAddExpenseModal(false);
             setAddTitle("");
@@ -272,6 +298,7 @@ export default function GroupDetail() {
             setAddSelectedParticipants([]);
             setAddExactSplits({});
             setAddPercentSplits({});
+            setAddImages([]);
             resolve();
           },
           onError: () => {
@@ -319,9 +346,17 @@ export default function GroupDetail() {
           }
         },
         {
-          onSuccess: () => {
+          onSuccess: async () => {
+            if (editImages.length > 0) {
+              try {
+                await uploadExpenseImages({ expenseId: selectedExpense._id, files: editImages });
+              } catch {
+                enqueueSnackbar("Expense updated but some images failed to upload", { variant: "warning" });
+              }
+            }
             enqueueSnackbar("Expense updated", { variant: "success" });
             setShowEditExpenseModal(false);
+            setEditImages([]);
             resolve();
           },
           onError: () => {
@@ -580,7 +615,7 @@ export default function GroupDetail() {
         fullWidth
         maxWidth="sm"
         open={showAddExpenseModal}
-        onClose={() => setShowAddExpenseModal(false)}
+        onClose={() => { setShowAddExpenseModal(false); setAddImages([]); }}
         PaperProps={{ sx: { borderRadius: 2 } }}
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
@@ -615,7 +650,9 @@ export default function GroupDetail() {
             defaultCurrency={group.default_currency}
             onSubmit={handleAddExpense}
             submitDisabled={!addTitle.trim() || !addAmount || !addPaidBy || !isExactValid || !isPercentValid}
-            loading={isAddingExpense}
+            loading={isAddingExpense || isUploadingImages}
+            images={addImages}
+            onImagesChange={setAddImages}
           />
         </DialogContent>
       </Dialog>
@@ -624,11 +661,39 @@ export default function GroupDetail() {
         fullWidth
         maxWidth="sm"
         open={showEditExpenseModal}
-        onClose={() => setShowEditExpenseModal(false)}
+        onClose={() => { setShowEditExpenseModal(false); setEditImages([]); }}
         PaperProps={{ sx: { borderRadius: 2 } }}
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
-          <DialogTitle sx={{ fontWeight: 700, p: 0 }}>Edit Expense</DialogTitle>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <DialogTitle sx={{ fontWeight: 700, p: 0 }}>Edit Expense</DialogTitle>
+            <IconButton
+              aria-label="Delete expense"
+              color="error"
+              size="small"
+              onClick={async () => {
+                if (!selectedExpense) return;
+                if (window.confirm("Delete this expense? This cannot be undone.")) {
+                  await new Promise<void>((resolve) => {
+                    deleteExpense(selectedExpense._id, {
+                      onSuccess: () => {
+                        enqueueSnackbar("Expense deleted", { variant: "success" });
+                        setShowEditExpenseModal(false);
+                        setSelectedExpense(null);
+                        resolve();
+                      },
+                      onError: () => {
+                        enqueueSnackbar("Failed to delete expense", { variant: "error" });
+                        resolve();
+                      },
+                    });
+                  });
+                }
+              }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Box>
           <IconButton onClick={() => setShowEditExpenseModal(false)} size="small">
             <CloseIcon />
           </IconButton>
@@ -660,7 +725,14 @@ export default function GroupDetail() {
             onSubmit={handleEditExpense}
             submitDisabled={!editTitle.trim() || !editAmount || !editPaidBy || !isEditExactValid || !isEditPercentValid}
             submitLabel="Save Changes"
-            loading={isUpdatingExpense}
+            loading={isUpdatingExpense || isUploadingImages}
+            images={editImages}
+            onImagesChange={setEditImages}
+            existingImages={selectedExpense?.images}
+            existingImageUrls={editImageUrls}
+            onDeleteExistingImage={(imageId) => deleteExpenseImage({ expenseId: selectedExpense!._id, imageId })}
+            isDeletingImage={isDeletingExpenseImage}
+            isEditing
           />
         </DialogContent>
       </Dialog>
@@ -680,27 +752,6 @@ export default function GroupDetail() {
           return (
             <>
               <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
-                <IconButton
-                  onClick={() => {
-                    setConfirmDialogText("Delete this expense? This cannot be undone.");
-                    setConfirmAction(() => () => {
-                      deleteExpense(e._id, {
-                        onSuccess: () => {
-                          enqueueSnackbar("Expense deleted", { variant: "success" });
-                          setShowViewExpenseModal(false);
-                          setViewExpenseItem(null);
-                        },
-                        onError: () => enqueueSnackbar("Failed to delete expense", { variant: "error" }),
-                      });
-                    });
-                    setShowConfirmDialog(true);
-                  }}
-                  size="small"
-                  disabled={isDeletingExpense}
-                  sx={{ position: "absolute", top: 12, left: 12, color: "error.main" }}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
                 <IconButton
                   onClick={() => setShowViewExpenseModal(false)}
                   size="small"
@@ -761,6 +812,34 @@ export default function GroupDetail() {
                                 ? `${split.percentage.toFixed(1)}% · ${formatCurrency(split.amount_owed ?? 0, e.currency)}`
                                 : formatCurrency(split.amount_owed ?? e.amount / e.splits.length, e.currency)}
                             </Typography>
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  </>
+                )}
+
+                {/* Images */}
+                {e.images && e.images.length > 0 && (
+                  <>
+                    <Divider sx={{ my: 1.5 }} />
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1 }}>
+                      Photos
+                    </Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                      {e.images.map((img) => {
+                        const urlEntry = viewImageUrls.find((u) => u._id === img._id);
+                        return (
+                          <Box
+                            key={img._id}
+                            sx={{ width: 80, height: 80, flexShrink: 0, borderRadius: 1, overflow: "hidden", cursor: urlEntry ? "pointer" : "default", bgcolor: "action.hover", display: "flex", alignItems: "center", justifyContent: "center" }}
+                            onClick={() => urlEntry && setLightboxUrl(urlEntry.signedUrl)}
+                          >
+                            {urlEntry ? (
+                              <Box component="img" src={urlEntry.signedUrl} sx={{ width: 80, height: 80, objectFit: "cover", display: "block" }} />
+                            ) : (
+                              <CircularProgress size={20} />
+                            )}
                           </Box>
                         );
                       })}
@@ -892,6 +971,42 @@ export default function GroupDetail() {
             Confirm
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* Lightbox */}
+      <Dialog
+        open={!!lightboxUrl}
+        onClose={() => setLightboxUrl(null)}
+        fullScreen
+        PaperProps={{ sx: { bgcolor: "black", position: "relative" } }}
+      >
+        {lightboxUrl && (
+          <IconButton
+            component="a"
+            href={lightboxUrl}
+            download
+            target="_blank"
+            rel="noopener noreferrer"
+            size="small"
+            sx={{ position: "absolute", top: 8, right: 48, zIndex: 1, bgcolor: "rgba(255,255,255,0.15)", color: "white", "&:hover": { bgcolor: "rgba(255,255,255,0.3)" } }}
+          >
+            <FileDownloadIcon />
+          </IconButton>
+        )}
+        <IconButton
+          onClick={() => setLightboxUrl(null)}
+          size="small"
+          sx={{ position: "absolute", top: 8, right: 8, zIndex: 1, bgcolor: "rgba(255,255,255,0.15)", color: "white", "&:hover": { bgcolor: "rgba(255,255,255,0.3)" } }}
+        >
+          <CloseIcon />
+        </IconButton>
+        {lightboxUrl && (
+          <Box
+            component="img"
+            src={lightboxUrl}
+            sx={{ width: "100%", height: "100vh", objectFit: "contain", display: "block" }}
+          />
+        )}
       </Dialog>
     </Box>
   );

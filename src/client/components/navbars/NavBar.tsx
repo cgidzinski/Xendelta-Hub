@@ -3,24 +3,16 @@ import ArticleIcon from "@mui/icons-material/Article";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SecurityIcon from "@mui/icons-material/Security";
 import InventoryIcon from "@mui/icons-material/Inventory2";
-import BrushIcon from "@mui/icons-material/Brush";
-import FolderIcon from "@mui/icons-material/Folder";
-import LinkIcon from "@mui/icons-material/Link";
 import EditIcon from "@mui/icons-material/Edit";
-import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
-import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import { APPS_REGISTRY } from "../../constants/apps";
 import IconButton from "@mui/material/IconButton";
+import Typography from "@mui/material/Typography";
 import { Link } from "react-router-dom";
 import { useNavBar } from "../../contexts/NavBarContext";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
 import BaseNavBar, { NavItem } from "./BaseNavBar";
 
-const APPS_REGISTRY = {
-  recipaint: { label: "Recipaint", icon: <BrushIcon />, path: "/internal/recipaint" },
-  xenbox: { label: "XenBox", icon: <FolderIcon />, path: "/internal/xenbox" },
-  xenlink: { label: "XenLink", icon: <LinkIcon />, path: "/internal/xenlink" },
-  xensplit: { label: "Xensplit", icon: <ReceiptLongIcon />, path: "/internal/xensplit" },
-};
+// APPS_REGISTRY now imported from constants/apps.ts
 
 export default function Root() {
   const { isNavBarOpen, toggleNavBar, title } = useNavBar();
@@ -29,12 +21,12 @@ export default function Root() {
   const pinnedApps = profile?.pinnedApps || [];
 
   const appNavItems: NavItem[] = pinnedApps.map((appKey) => {
-    const app = APPS_REGISTRY[appKey as keyof typeof APPS_REGISTRY];
+    const app = APPS_REGISTRY.find((a) => a.key === appKey);
     if (!app) return null;
     return {
       key: `pinned-${appKey}`,
       label: app.label,
-      icon: app.icon,
+      icon: app.icon ? <app.icon sx={{ fontSize: 22 }} /> : undefined,
       path: app.path,
       isSelected: (pathname: string) => pathname.startsWith(app.path),
     };
@@ -71,10 +63,8 @@ export default function Root() {
       isSelected: () => false,
       type: "header" as const,
       headerAction: (
-        <Link to="/internal/apps" style={{ color: "inherit", display: "flex" }}>
-          <IconButton size="small" sx={{ color: "text.secondary" }}>
-            <EditIcon fontSize="small" />
-          </IconButton>
+        <Link to="/internal/apps" style={{ textDecoration: "none" }}>
+          <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 500, px: 1, py: 0.5, borderRadius: 1, display: "inline-block", "&:hover": { color: "text.primary", bgcolor: "action.hover" } }}>All</Typography>
         </Link>
       ),
     },

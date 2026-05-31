@@ -285,3 +285,9 @@ export const xenSplitExpenseParamSchema = z.object({
   expenseId: objectIdSchema,
 });
 
+export const xenSplitExpenseImageParamSchema = z.object({
+  groupId: objectIdSchema,
+  expenseId: objectIdSchema,
+  imageId: objectIdSchema,
+});
+

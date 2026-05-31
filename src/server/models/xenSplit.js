@@ -14,6 +14,10 @@ var splitSchema = new Schema({
   percentage: { type: Number },
 }, { _id: false });
 
+var expenseImageSchema = new Schema({
+  gcs_path: { type: String, required: true },
+}, { _id: true });
+
 var expenseSchema = new Schema({
   paid_by: { type: String, required: true },
   amount: { type: Number, required: true },
@@ -27,6 +31,7 @@ var expenseSchema = new Schema({
     required: true
   },
   splits: [splitSchema],
+  images: [expenseImageSchema],
   created_at: { type: Date, default: Date.now },
 }, { _id: true });
 

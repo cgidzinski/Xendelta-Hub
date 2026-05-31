@@ -25,7 +25,7 @@ export default function GroupSettings() {
     const { group, user, isCreator, onAddMembers, onMemberMenu, updateGroup, isUpdating, balancesData, formatCurrency } =
         useOutletContext<GroupDetailContext>();
     const { enqueueSnackbar } = useSnackbar();
-    const [selectedCurrency, setSelectedCurrency] = useState(group.default_currency || "USD");
+    const [selectedCurrency, setSelectedCurrency] = useState(group.default_currency || "CAD");
 
     const handleSaveCurrency = () => {
         updateGroup(
@@ -33,7 +33,7 @@ export default function GroupSettings() {
             {
                 onSuccess: () => enqueueSnackbar("Default currency updated", { variant: "success" }),
                 onError: () => enqueueSnackbar("Failed to update currency", { variant: "error" }),
-            } as any
+            }
         );
     };
 

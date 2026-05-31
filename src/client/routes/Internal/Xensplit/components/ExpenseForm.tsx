@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   Box,
   Typography,
@@ -10,15 +10,27 @@ import {
   MenuItem,
   Avatar,
   InputAdornment,
+  Stepper,
+  Step,
+  StepLabel,
+  IconButton,
+  CircularProgress,
 } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
+import DeleteIcon from "@mui/icons-material/Delete";
+import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import { SearchedUser } from "../../../../hooks/useUserSearch";
+import type { XenSplitExpenseImage } from "../../../../hooks/xensplit/types";
 
 const ALL_CURRENCIES = ["CAD", "USD", "JPY", "EUR", "GBP", "AUD", "CNY", "INR", "MXN", "BRL"];
+const MAX_IMAGES = 10;
 
 function getSortedCurrencies(defaultCurrency?: string) {
   if (!defaultCurrency) return ALL_CURRENCIES;
   return [defaultCurrency, ...ALL_CURRENCIES.filter((c) => c !== defaultCurrency)];
 }
+
+const STEPS = ["Details", "Split", "Photos"];
 
 interface ExpenseFormProps {
   title: string;
@@ -47,6 +59,14 @@ interface ExpenseFormProps {
   loading?: boolean;
   paidByUser?: SearchedUser | null;
   onPaidByUserChange?: (user: SearchedUser | null) => void;
+  // Image props
+  images: File[];
+  onImagesChange: (files: File[]) => void;
+  existingImages?: XenSplitExpenseImage[];
+  existingImageUrls?: { _id: string; signedUrl: string }[];
+  onDeleteExistingImage?: (imageId: string) => void;
+  isDeletingImage?: boolean;
+  isEditing?: boolean;
 }
 
 export default function ExpenseForm({
@@ -76,14 +96,32 @@ export default function ExpenseForm({
   loading,
   paidByUser,
   onPaidByUserChange,
+  images,
+  onImagesChange,
+  existingImages = [],
+  existingImageUrls = [],
+  onDeleteExistingImage,
+  isDeletingImage,
+  isEditing = false,
 }: ExpenseFormProps) {
+  const [step, setStep] = React.useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const objectUrlsRef = useRef<string[]>([]);
+
   const numAmount = parseFloat(amount) || 0;
+
+  // Revoke object URLs on unmount
+  useEffect(() => {
+    return () => {
+      objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
 
   // Auto-populate splits when participants or amount change
   const prevParticipantsRef = React.useRef<SearchedUser[]>([]);
   useEffect(() => {
-    // Only run if participants actually changed (not just re-render)
-    const participantsChanged = prevParticipantsRef.current.length !== selectedParticipants.length ||
+    const participantsChanged =
+      prevParticipantsRef.current.length !== selectedParticipants.length ||
       !prevParticipantsRef.current.every((p, i) => p._id === selectedParticipants[i]?._id);
 
     if (selectedParticipants.length === 0 || !participantsChanged) return;
@@ -110,221 +148,467 @@ export default function ExpenseForm({
   const totalExact = Object.values(exactSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
   const totalPercent = Object.values(percentSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
 
+  const totalImageCount = existingImages.length + images.length;
+  const canAddMoreImages = totalImageCount < MAX_IMAGES;
+
+  const step1NextDisabled = !title.trim() || !amount || !paidBy;
+  const step2NextDisabled = selectedParticipants.length === 0;
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const remaining = MAX_IMAGES - totalImageCount;
+    const toAdd = files.slice(0, remaining);
+    toAdd.forEach((f) => {
+      const url = URL.createObjectURL(f);
+      objectUrlsRef.current.push(url);
+    });
+    onImagesChange([...images, ...toAdd]);
+    // Reset input so same file can be re-added if removed
+    e.target.value = "";
+  }
+
+  function handleRemoveNewImage(index: number) {
+    const removed = images[index];
+    // Find and revoke the object URL for this file
+    const url = URL.createObjectURL(removed);
+    URL.revokeObjectURL(url);
+    onImagesChange(images.filter((_, i) => i !== index));
+  }
+
+  // Get preview URL for a new file (stable across renders via index-based cache)
+  const previewUrls = React.useMemo(() => {
+    return images.map((f) => URL.createObjectURL(f));
+  }, [images]);
+
+  // Revoke on images change
+  useEffect(() => {
+    return () => {
+      previewUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [previewUrls]);
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <TextField
-        fullWidth
-        margin="dense"
-        label="Title"
-        value={title}
-        onChange={(e) => onTitleChange(e.target.value)}
-      />
-
-      <TextField
-        fullWidth
-        label="Notes"
-        value={notes}
-        onChange={(e) => onNotesChange(e.target.value)}
-        multiline
-        rows={2}
-      />
-
-      <Box sx={{ display: "flex", gap: 2, flexWrap: { xs: "wrap", sm: "nowrap" } }}>
-        <TextField
-          fullWidth
-          label="Amount"
-          type="number"
-          value={amount}
-          onChange={(e) => onAmountChange(e.target.value)}
-        />
-        <FormControl sx={{ width: { xs: "100%", sm: 110 } }}>
-          <InputLabel>Currency</InputLabel>
-          <Select
-            value={currency}
-            label="Currency"
-            onChange={(e) => onCurrencyChange(e.target.value)}
-          >
-            {getSortedCurrencies(defaultCurrency).map((c) => (
-              <MenuItem key={c} value={c}>{c}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Box>
-
-      <FormControl fullWidth>
-        <InputLabel>Split type</InputLabel>
-        <Select
-          value={splitType}
-          label="Split type"
-          onChange={(e) => onSplitTypeChange(e.target.value as "equal" | "exact" | "percent")}
-        >
-          <MenuItem value="equal">Equal</MenuItem>
-          <MenuItem value="exact">Exact amounts</MenuItem>
-          <MenuItem value="percent">By percentage</MenuItem>
-        </Select>
-      </FormControl>
-
-      <Box>
-        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-          Paid by
-        </Typography>
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-          {members.map((member) => (
-            <Box
-              key={member.user_id}
-              onClick={() => {
-                onPaidByChange(paidBy === member.user_id ? "" : member.user_id);
-                onPaidByUserChange?.({ _id: member.user_id, username: member.username, avatar: member.avatar });
-              }}
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-                px: 2,
-                py: 1,
-                borderRadius: 2,
-                cursor: "pointer",
-                bgcolor: "action.hover",
-                color: "text.primary",
-                border: paidBy === member.user_id ? "2px solid" : "2px solid transparent",
-                borderColor: paidBy === member.user_id ? "primary.main" : "transparent",
-                transition: "all 0.2s",
-              }}
+      <Stepper activeStep={step} alternativeLabel sx={{ mb: 1 }}>
+        {STEPS.map((label, index) => (
+          <Step key={label}>
+            <StepLabel
+              onClick={isEditing ? () => setStep(index) : undefined}
+              sx={isEditing ? { cursor: "pointer" } : undefined}
             >
-              <Avatar src={member.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
-                {member.username[0]?.toUpperCase()}
-              </Avatar>
-              <Typography variant="caption">
-                {member.username}
-              </Typography>
-            </Box>
-          ))}
-        </Box>
-      </Box>
+              {label}
+            </StepLabel>
+          </Step>
+        ))}
+      </Stepper>
 
-      <Box>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-          <Typography variant="subtitle2">Participants</Typography>
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={() =>
-              selectedParticipants.length === members.length
-                ? onParticipantsChange([])
-                : onParticipantsChange(members.map((m) => ({ _id: m.user_id, username: m.username, avatar: m.avatar })))
-            }
-          >
-            {selectedParticipants.length === members.length ? "Clear" : "Everyone"}
-          </Button>
-        </Box>
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-          {members.map((member) => {
-            const isSelected = selectedParticipants.some((p) => p._id === member.user_id);
-            return (
-              <Box
-                key={member.user_id}
-                onClick={() => {
-                  if (isSelected) {
-                    onParticipantsChange(selectedParticipants.filter((p) => p._id !== member.user_id));
-                  } else {
-                    onParticipantsChange([...selectedParticipants, { _id: member.user_id, username: member.username, avatar: member.avatar }]);
-                  }
-                }}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                  px: 2,
-                  py: 1,
-                  borderRadius: 2,
-                  cursor: "pointer",
-                  bgcolor: "action.hover",
-                  color: "text.primary",
-                  border: isSelected ? "2px solid" : "2px solid transparent",
-                  borderColor: isSelected ? "primary.main" : "transparent",
-                  transition: "all 0.2s",
-                }}
+      {/* Step 1: Details */}
+      {step === 0 && (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, position: "relative" }}>
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <TextField
+              fullWidth
+              margin="dense"
+              label="Title"
+              value={title}
+              onChange={(e) => onTitleChange(e.target.value)}
+            />
+          </Box>
+
+          <Box sx={{ display: "flex", gap: 2, flexWrap: { xs: "wrap", sm: "nowrap" } }}>
+            <TextField
+              fullWidth
+              label="Amount"
+              type="number"
+              value={amount}
+              onChange={(e) => onAmountChange(e.target.value)}
+            />
+            <FormControl sx={{ width: { xs: "100%", sm: 110 } }}>
+              <InputLabel>Currency</InputLabel>
+              <Select
+                value={currency}
+                label="Currency"
+                onChange={(e) => onCurrencyChange(e.target.value)}
               >
-                <Avatar src={member.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
-                  {member.username[0]?.toUpperCase()}
-                </Avatar>
-                <Typography variant="caption">
-                  {member.username}
-                </Typography>
-              </Box>
-            );
-          })}
-        </Box>
-      </Box>
+                {getSortedCurrencies(defaultCurrency).map((c) => (
+                  <MenuItem key={c} value={c}>{c}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
 
-      {selectedParticipants.length > 0 && (
-        <Box>
-          {splitType === "equal" ? (
-            numAmount > 0 && (
-              <Typography variant="caption" color="text.secondary">
-                {new Intl.NumberFormat(undefined, { style: "currency", currency }).format(numAmount / selectedParticipants.length)} each
-              </Typography>
-            )
-          ) : (
-            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-              <Typography variant="subtitle2">
-                {splitType === "exact" ? "Exact amounts" : "Percentages"}
-              </Typography>
-              {splitType === "exact" && (
-                <Typography variant="caption" color={Math.abs(totalExact - numAmount) < 0.01 ? "success" : "error"}>
-                  Total: {totalExact.toFixed(2)} / {numAmount.toFixed(2)}
-                </Typography>
-              )}
-              {splitType === "percent" && (
-                <Typography variant="caption" color={Math.abs(totalPercent - 100) < 0.01 ? "success" : "error"}>
-                  Total: {totalPercent === 0 ? "0" : totalPercent.toFixed(1)}% / 100%
-                </Typography>
-              )}
-            </Box>
-          )}
-          {splitType !== "equal" && selectedParticipants.map((p) => (
-            <Box key={p._id} sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
-              <Avatar src={p.avatar || undefined} sx={{ width: 28, height: 28 }}>
-                {p.username[0]?.toUpperCase()}
-              </Avatar>
-              <Typography variant="body2" sx={{ width: 100 }}>
-                {p.username}
-              </Typography>
-              {splitType === "percent" ? (
-                <TextField
-                  size="small"
-                  type="number"
-                  value={percentSplits[p._id] || ""}
-                  onChange={(e) => onPercentSplitsChange({ ...percentSplits, [p._id]: e.target.value })}
-                  InputProps={{
-                    endAdornment: <InputAdornment position="end">%</InputAdornment>,
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Paid by
+            </Typography>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              {members.map((member) => (
+                <Box
+                  key={member.user_id}
+                  onClick={() => {
+                    onPaidByChange(paidBy === member.user_id ? "" : member.user_id);
+                    onPaidByUserChange?.({ _id: member.user_id, username: member.username, avatar: member.avatar ?? null });
                   }}
-                  sx={{ flexGrow: 1 }}
-                />
-              ) : (
-                <TextField
-                  size="small"
-                  type="number"
-                  value={exactSplits[p._id] || ""}
-                  onChange={(e) => onExactSplitsChange({ ...exactSplits, [p._id]: e.target.value })}
-                  sx={{ flexGrow: 1 }}
-                />
-              )}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    px: 2,
+                    py: 1,
+                    borderRadius: 2,
+                    cursor: "pointer",
+                    bgcolor: "action.hover",
+                    color: "text.primary",
+                    border: paidBy === member.user_id ? "2px solid" : "2px solid transparent",
+                    borderColor: paidBy === member.user_id ? "primary.main" : "transparent",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  <Avatar src={member.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
+                    {member.username[0]?.toUpperCase()}
+                  </Avatar>
+                  <Typography variant="caption">{member.username}</Typography>
+                </Box>
+              ))}
             </Box>
-          ))}
+          </Box>
         </Box>
       )}
 
-      <Button
-        fullWidth
-        variant="contained"
-        onClick={onSubmit}
-        disabled={submitDisabled || loading}
-        loading={loading}
-        sx={{ mt: 1 }}
-      >
-        {submitLabel}
-      </Button>
+      {/* Step 2: Split */}
+      {step === 1 && (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <FormControl fullWidth>
+            <InputLabel>Split type</InputLabel>
+            <Select
+              value={splitType}
+              label="Split type"
+              onChange={(e) => onSplitTypeChange(e.target.value as "equal" | "exact" | "percent")}
+            >
+              <MenuItem value="equal">Equal</MenuItem>
+              <MenuItem value="exact">Exact amounts</MenuItem>
+              <MenuItem value="percent">By percentage</MenuItem>
+            </Select>
+          </FormControl>
+
+          <Box>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+              <Typography variant="subtitle2">Participants</Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() =>
+                  selectedParticipants.length === members.length
+                    ? onParticipantsChange([])
+                    : onParticipantsChange(
+                      members.map((m) => ({ _id: m.user_id, username: m.username, avatar: m.avatar ?? null }))
+                    )
+                }
+              >
+                {selectedParticipants.length === members.length ? "Clear" : "Everyone"}
+              </Button>
+            </Box>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              {members.map((member) => {
+                const isSelected = selectedParticipants.some((p) => p._id === member.user_id);
+                return (
+                  <Box
+                    key={member.user_id}
+                    onClick={() => {
+                      if (isSelected) {
+                        onParticipantsChange(selectedParticipants.filter((p) => p._id !== member.user_id));
+                      } else {
+                        onParticipantsChange([
+                          ...selectedParticipants,
+                          { _id: member.user_id, username: member.username, avatar: member.avatar ?? null },
+                        ]);
+                      }
+                    }}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      px: 2,
+                      py: 1,
+                      borderRadius: 2,
+                      cursor: "pointer",
+                      bgcolor: "action.hover",
+                      color: "text.primary",
+                      border: isSelected ? "2px solid" : "2px solid transparent",
+                      borderColor: isSelected ? "primary.main" : "transparent",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    <Avatar src={member.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
+                      {member.username[0]?.toUpperCase()}
+                    </Avatar>
+                    <Typography variant="caption">{member.username}</Typography>
+                  </Box>
+                );
+              })}
+            </Box>
+          </Box>
+
+          {selectedParticipants.length > 0 && (
+            <Box>
+              {splitType === "equal" ? (
+                numAmount > 0 && (
+                  <Typography variant="caption" color="text.secondary">
+                    {new Intl.NumberFormat(undefined, { style: "currency", currency }).format(
+                      numAmount / selectedParticipants.length
+                    )}{" "}
+                    each
+                  </Typography>
+                )
+              ) : (
+                <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
+                  <Typography variant="subtitle2">
+                    {splitType === "exact" ? "Exact amounts" : "Percentages"}
+                  </Typography>
+                  {splitType === "exact" && (
+                    <Typography
+                      variant="caption"
+                      color={Math.abs(totalExact - numAmount) < 0.01 ? "success" : "error"}
+                    >
+                      Total: {totalExact.toFixed(2)} / {numAmount.toFixed(2)}
+                    </Typography>
+                  )}
+                  {splitType === "percent" && (
+                    <Typography
+                      variant="caption"
+                      color={Math.abs(totalPercent - 100) < 0.01 ? "success" : "error"}
+                    >
+                      Total: {totalPercent === 0 ? "0" : totalPercent.toFixed(1)}% / 100%
+                    </Typography>
+                  )}
+                </Box>
+              )}
+              {splitType !== "equal" &&
+                selectedParticipants.map((p) => (
+                  <Box key={p._id} sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <Avatar src={p.avatar || undefined} sx={{ width: 28, height: 28 }}>
+                      {p.username[0]?.toUpperCase()}
+                    </Avatar>
+                    <Typography variant="body2" sx={{ width: 100 }}>
+                      {p.username}
+                    </Typography>
+                    {splitType === "percent" ? (
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={percentSplits[p._id] || ""}
+                        onChange={(e) =>
+                          onPercentSplitsChange({ ...percentSplits, [p._id]: e.target.value })
+                        }
+                        InputProps={{
+                          endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                        }}
+                        sx={{ flexGrow: 1 }}
+                      />
+                    ) : (
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={exactSplits[p._id] || ""}
+                        onChange={(e) =>
+                          onExactSplitsChange({ ...exactSplits, [p._id]: e.target.value })
+                        }
+                        sx={{ flexGrow: 1 }}
+                      />
+                    )}
+                  </Box>
+                ))}
+            </Box>
+          )}
+        </Box>
+      )}
+
+      {/* Step 3: Photos */}
+      {step === 2 && (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <TextField
+            fullWidth
+            label="Notes"
+            value={notes}
+            onChange={(e) => onNotesChange(e.target.value)}
+            multiline
+            rows={2}
+          />
+
+          <Box>
+            <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+              <Typography variant="subtitle2">
+                Photos ({totalImageCount} / {MAX_IMAGES})
+              </Typography>
+              <Box sx={{ flex: 1 }} />
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+                10MB max
+              </Typography>
+            </Box>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: "none" }}
+              onChange={handleFileChange}
+            />
+
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              {/* Existing images (from DB) */}
+              {existingImages.map((img) => {
+                const urlEntry = existingImageUrls.find((u) => u._id === img._id);
+                return (
+                  <Box
+                    key={img._id}
+                    sx={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}
+                  >
+                    {urlEntry ? (
+                      <Box
+                        component="img"
+                        src={urlEntry.signedUrl}
+                        sx={{
+                          width: 80,
+                          height: 80,
+                          objectFit: "cover",
+                          borderRadius: 1,
+                          display: "block",
+                        }}
+                      />
+                    ) : (
+                      <Box
+                        sx={{
+                          width: 80,
+                          height: 80,
+                          bgcolor: "action.hover",
+                          borderRadius: 1,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <CircularProgress size={20} />
+                      </Box>
+                    )}
+                    <IconButton
+                      size="small"
+                      disabled={isDeletingImage}
+                      onClick={() => onDeleteExistingImage?.(img._id)}
+                      sx={{
+                        position: "absolute",
+                        top: 2,
+                        right: 2,
+                        bgcolor: "rgba(0,0,0,0.55)",
+                        color: "white",
+                        p: 0.25,
+                        "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
+                      }}
+                    >
+                      <CloseIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Box>
+                );
+              })}
+
+              {/* New images (pending upload) */}
+              {previewUrls.map((url, index) => (
+                <Box
+                  key={url}
+                  sx={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}
+                >
+                  <Box
+                    component="img"
+                    src={url}
+                    sx={{
+                      width: 80,
+                      height: 80,
+                      objectFit: "cover",
+                      borderRadius: 1,
+                      display: "block",
+                      opacity: 0.8,
+                    }}
+                  />
+                  <IconButton
+                    size="small"
+                    onClick={() => handleRemoveNewImage(index)}
+                    sx={{
+                      position: "absolute",
+                      top: 2,
+                      right: 2,
+                      bgcolor: "rgba(0,0,0,0.55)",
+                      color: "white",
+                      p: 0.25,
+                      "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
+                    }}
+                  >
+                    <CloseIcon sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Box>
+              ))}
+
+              {/* Add more tile */}
+              {canAddMoreImages && (
+                <Box
+                  onClick={() => fileInputRef.current?.click()}
+                  sx={{
+                    width: 80,
+                    height: 80,
+                    flexShrink: 0,
+                    border: "2px dashed",
+                    borderColor: "divider",
+                    borderRadius: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    color: "text.secondary",
+                    "&:hover": { borderColor: "primary.main", color: "primary.main" },
+                    transition: "all 0.2s",
+                  }}
+                >
+                  <AddPhotoAlternateIcon />
+                </Box>
+              )}
+            </Box>
+          </Box>
+        </Box>
+      )}
+
+      {/* Navigation */}
+      <Box sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>
+        <Button
+          variant="outlined"
+          disabled={step === 0}
+          onClick={() => setStep((s) => s - 1)}
+        >
+          Back
+        </Button>
+
+        {step < 2 ? (
+          <Button
+            variant="contained"
+            disabled={step === 0 ? step1NextDisabled : step2NextDisabled}
+            onClick={() => setStep((s) => s + 1)}
+          >
+            Next
+          </Button>
+        ) : (
+          <>
+            <Button
+              variant="contained"
+              onClick={onSubmit}
+              disabled={submitDisabled || loading}
+              loading={loading}
+            >
+              {submitLabel}
+            </Button>
+            {/* Delete Expense button removed; now only in dialog header */}
+          </>
+        )}
+      </Box>
     </Box>
   );
 }
+

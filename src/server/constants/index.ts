@@ -18,6 +18,8 @@ export {
 
 // File upload limits
 export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes (for avatars)
+export const MAX_XENSPLIT_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB per expense image
+export const MAX_XENSPLIT_IMAGES_PER_EXPENSE = 10;
 
 // Image processing constants
 export const AVATAR_WIDTH = 500;
@@ -26,7 +28,13 @@ export const AVATAR_QUALITY = 90;
 export const AVATAR_COMPRESSION_LEVEL = 9;
 
 // Allowed MIME types for images
-export const ALLOWED_IMAGE_MIMES = ["image/jpeg", "image/png", "image/gif"] as const;
+export const ALLOWED_IMAGE_MIMES = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/heic",
+  "image/heif"
+] as const;
 
 // Validation limits
 export const VALIDATION_LIMITS = {

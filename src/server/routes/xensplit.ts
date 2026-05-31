@@ -4,6 +4,10 @@ const { User } = require("../models/user");
 const Notification = require("../models/notification");
 import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
+import { uploadXenSplitImages } from "../config/multer";
+import { uploadToGCS, deleteFromGCS, generateSignedUrl } from "../utils/gcsUtils";
+import { generateUniqueFilename } from "../utils/mediaUtils";
+import { MAX_XENSPLIT_IMAGES_PER_EXPENSE } from "../constants";
 import {
   validate,
   validateParams,
@@ -16,6 +20,7 @@ import {
   xenSplitIdParamSchema,
   xenSplitMemberParamSchema,
   xenSplitExpenseParamSchema,
+  xenSplitExpenseImageParamSchema,
 } from "../utils/validation";
 import { calculateBalances, calculateMinimumTransfers } from "../utils/xenSplitUtils";
 
@@ -391,7 +396,8 @@ module.exports = function (app: any) {
         }
       }
 
-      res.json({ status: true, message: "Expense added", data: group });
+      const newExpense = group.expenses[group.expenses.length - 1];
+      res.json({ status: true, message: "Expense added", data: { group, newExpenseId: newExpense._id } });
     } catch (error) {
       console.error("Error adding expense:", error);
       res.status(500).json({ status: false, message: "Failed to add expense" });
@@ -401,6 +407,7 @@ module.exports = function (app: any) {
   // PUT /api/xensplit/groups/:groupId/expenses/:expenseId - Update expense
   app.put("/api/xensplit/groups/:groupId/expenses/:expenseId", validateParams(xenSplitExpenseParamSchema), validate(updateExpenseSchema), async (req: Request, res: Response) => {
     try {
+      const userId = (req.user as any)._id.toString();
       const { groupId, expenseId } = req.params;
 
       const group = await XenSplit.findById(groupId);
@@ -485,6 +492,16 @@ module.exports = function (app: any) {
         return res.status(404).json({ status: false, message: "Expense not found" });
       }
 
+      // Delete any GCS images associated with the expense
+      const expense = group.expenses[expenseIndex];
+      if (expense.images && expense.images.length > 0) {
+        await Promise.all(
+          expense.images.map((img: any) =>
+            deleteFromGCS(img.gcs_path, true).catch(() => { })
+          )
+        );
+      }
+
       // Allow any group member to delete expense
       group.expenses.splice(expenseIndex, 1);
       await group.save();
@@ -493,6 +510,129 @@ module.exports = function (app: any) {
     } catch (error) {
       console.error("Error deleting expense:", error);
       res.status(500).json({ status: false, message: "Failed to delete expense" });
+    }
+  });
+
+  // POST /api/xensplit/groups/:groupId/expenses/:expenseId/images - Upload expense images
+  app.post("/api/xensplit/groups/:groupId/expenses/:expenseId/images", validateParams(xenSplitExpenseParamSchema), uploadXenSplitImages.array("images", MAX_XENSPLIT_IMAGES_PER_EXPENSE), async (req: Request, res: Response) => {
+    try {
+      const userId = (req.user as any)._id.toString();
+      const { groupId, expenseId } = req.params;
+      const files = req.files as Express.Multer.File[] | undefined;
+
+      if (!files || files.length === 0) {
+        return res.status(400).json({ status: false, message: "No images provided" });
+      }
+
+      const group = await XenSplit.findById(groupId);
+      if (!group) {
+        return res.status(404).json({ status: false, message: "Group not found" });
+      }
+
+      if (!group.members.find((m: any) => m.user_id === userId)) {
+        return res.status(403).json({ status: false, message: "Not a member of this group" });
+      }
+
+      const expense = group.expenses.id(expenseId);
+      if (!expense) {
+        return res.status(404).json({ status: false, message: "Expense not found" });
+      }
+
+      if (!expense.images) {
+        expense.images = [];
+      }
+
+      if (expense.images.length + files.length > MAX_XENSPLIT_IMAGES_PER_EXPENSE) {
+        return res.status(400).json({ status: false, message: `Cannot exceed ${MAX_XENSPLIT_IMAGES_PER_EXPENSE} images per expense` });
+      }
+
+      for (const file of files) {
+        const filename = generateUniqueFilename(file.originalname);
+        const gcsPath = `xensplit-images/${groupId}/${expenseId}/${filename}`;
+        await uploadToGCS(file.buffer, gcsPath, file.mimetype, true);
+        expense.images.push({ gcs_path: gcsPath });
+      }
+
+      await group.save();
+      res.json({ status: true, message: "Images uploaded", data: group });
+    } catch (error) {
+      console.error("Error uploading expense images:", error);
+      res.status(500).json({ status: false, message: "Failed to upload images" });
+    }
+  });
+
+  // DELETE /api/xensplit/groups/:groupId/expenses/:expenseId/images/:imageId - Delete an expense image
+  app.delete("/api/xensplit/groups/:groupId/expenses/:expenseId/images/:imageId", validateParams(xenSplitExpenseImageParamSchema), async (req: Request, res: Response) => {
+    try {
+      const userId = (req.user as any)._id.toString();
+      const { groupId, expenseId, imageId } = req.params;
+
+      const group = await XenSplit.findById(groupId);
+      if (!group) {
+        return res.status(404).json({ status: false, message: "Group not found" });
+      }
+
+      if (!group.members.find((m: any) => m.user_id === userId)) {
+        return res.status(403).json({ status: false, message: "Not a member of this group" });
+      }
+
+      const expense = group.expenses.id(expenseId);
+      if (!expense) {
+        return res.status(404).json({ status: false, message: "Expense not found" });
+      }
+
+      const imageIndex = expense.images.findIndex((img: any) => img._id.toString() === imageId);
+      if (imageIndex === -1) {
+        return res.status(404).json({ status: false, message: "Image not found" });
+      }
+
+      const image = expense.images[imageIndex];
+      await deleteFromGCS(image.gcs_path, true).catch(() => { });
+      expense.images.splice(imageIndex, 1);
+      await group.save();
+
+      res.json({ status: true, message: "Image deleted", data: group });
+    } catch (error) {
+      console.error("Error deleting expense image:", error);
+      res.status(500).json({ status: false, message: "Failed to delete image" });
+    }
+  });
+
+  // GET /api/xensplit/groups/:groupId/expenses/:expenseId/image-urls - Get signed URLs for expense images
+  app.get("/api/xensplit/groups/:groupId/expenses/:expenseId/image-urls", validateParams(xenSplitExpenseParamSchema), async (req: Request, res: Response) => {
+    try {
+      const userId = (req.user as any)._id.toString();
+      const { groupId, expenseId } = req.params;
+
+      const group = await XenSplit.findById(groupId);
+      if (!group) {
+        return res.status(404).json({ status: false, message: "Group not found" });
+      }
+
+      if (!group.members.find((m: any) => m.user_id === userId)) {
+        return res.status(403).json({ status: false, message: "Not a member of this group" });
+      }
+
+      const expense = group.expenses.id(expenseId);
+      if (!expense) {
+        return res.status(404).json({ status: false, message: "Expense not found" });
+      }
+
+      if (!expense.images || expense.images.length === 0) {
+        return res.json({ status: true, data: [] });
+      }
+
+      const signedUrls = await Promise.all(
+        expense.images.map(async (img: any) => ({
+          _id: img._id.toString(),
+          signedUrl: await generateSignedUrl(img.gcs_path, 15),
+        }))
+      );
+
+      res.json({ status: true, data: signedUrls });
+    } catch (error) {
+      console.error("Error generating signed URLs:", error);
+      res.status(500).json({ status: false, message: "Failed to generate image URLs" });
     }
   });
 
