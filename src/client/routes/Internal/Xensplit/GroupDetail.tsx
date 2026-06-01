@@ -45,6 +45,7 @@ import { useXenSplit } from "../../../hooks/xensplit/useGroup";
 import { useXenSplits } from "../../../hooks/xensplit/useGroups";
 import { useXenSplitBalances } from "../../../hooks/xensplit/useBalances";
 import { useXenSplitExpenses, useExpenseImageUrls } from "../../../hooks/xensplit/useExpenses";
+import { useXenSplitSocket } from "../../../hooks/xensplit/useXenSplitSocket";
 import { useAuth } from "../../../contexts/AuthContext";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -93,6 +94,7 @@ export default function GroupDetail() {
   const { deleteGroup } = useXenSplits();
   const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useXenSplitBalances(groupId!);
   const { updateExpense, updateExpenseAsync, isUpdatingExpense, addExpense, addExpenseAsync, isAddingExpense, deleteExpense, isDeletingExpense, uploadExpenseImages, isUploadingImages, deleteExpenseImage, isDeletingExpenseImage } = useXenSplitExpenses(groupId!);
+  useXenSplitSocket(groupId!);
   const location = useLocation();
   const activeTab = location.pathname.endsWith("/overview")
     ? 0

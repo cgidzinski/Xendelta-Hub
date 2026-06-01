@@ -79,13 +79,13 @@ export default function Root() {
       path: "/internal/inventory",
       isSelected: (pathname) => pathname.startsWith("/internal/inventory"),
     },
-    {
-      key: "settings",
-      label: "Settings",
-      icon: <SettingsIcon />,
-      path: "/internal/settings",
-      isSelected: (pathname) => pathname.endsWith("/internal/settings"),
-    },
+    // {
+    //   key: "settings",
+    //   label: "Settings",
+    //   icon: <SettingsIcon />,
+    //   path: "/internal/settings",
+    //   isSelected: (pathname) => pathname.endsWith("/internal/settings"),
+    // },
   ];
 
   const isAdmin = profile?.roles?.some((role: string) => role.toLowerCase() === "admin");

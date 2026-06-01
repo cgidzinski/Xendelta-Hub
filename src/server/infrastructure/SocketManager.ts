@@ -220,4 +220,18 @@ export class SocketManager {
       update,
     });
   }
+
+  // Notify group members that a XenSplit group has been updated
+  notifyXenSplitGroupUpdate(groupId: string, memberIds: string[]) {
+    memberIds.forEach((userId) => {
+      this.io.to(`user:${userId}`).emit("xensplit:group_update", { groupId });
+    });
+  }
+
+  // Notify users that their groups list has changed (e.g. added to a new group)
+  notifyXenSplitGroupsUpdated(memberIds: string[]) {
+    memberIds.forEach((userId) => {
+      this.io.to(`user:${userId}`).emit("xensplit:groups_updated");
+    });
+  }
 }

@@ -36,9 +36,9 @@ export default function Profile() {
   const { uploadAvatar, isUploading: isUploadingAvatar } = useUserAvatar();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  
+
   useTitle("Profile");
-  
+
   useEffect(() => {
     // Update avatar URL from profile (ignore query params when comparing)
     if (profile?.avatar) {
@@ -82,10 +82,7 @@ export default function Profile() {
     setIsSavingUsername(true);
     try {
       await updateProfile({ username: trimmed });
-      queryClient.setQueryData(userProfileKeys.profile(), (old: UserProfile | undefined) => {
-        if (!old) return old;
-        return { ...old, username: trimmed };
-      });
+      refetch();
       enqueueSnackbar("Username updated successfully!", { variant: "success" });
     } catch (error: any) {
       const msg = error?.response?.data?.message || error?.message || "Failed to update username";
@@ -135,17 +132,17 @@ export default function Profile() {
         setIsUploading(false);
         return;
       }
-      
+
       const newAvatarUrl = data.avatar;
       enqueueSnackbar("Avatar uploaded successfully!", { variant: "success" });
       setSelectedFile(null);
       setFilePreviewUrl(null);
-      
+
       // Update avatar URL immediately with cache-busting timestamp
       const avatarUrlWithCache = `${newAvatarUrl}?t=${Date.now()}`;
       setMainAvatarUrl(avatarUrlWithCache);
       setAvatarKey((prev) => prev + 1);
-      
+
       // Update the query cache directly with the new avatar URL (with cache-busting)
       // This ensures the sidebar and other components using the profile see the new avatar immediately
       queryClient.setQueryData(userProfileKeys.profile(), (oldProfile: UserProfile | undefined) => {
@@ -155,7 +152,7 @@ export default function Profile() {
           avatar: avatarUrlWithCache,
         };
       });
-      
+
       // Refetch profile to get latest data from server (this will update the cache with server data)
       refetch();
       setIsUploading(false);

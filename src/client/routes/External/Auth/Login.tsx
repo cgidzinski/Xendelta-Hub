@@ -39,7 +39,7 @@ export default function Login() {
   const [formData, setFormData] = useState<LoginFormData>({
     username: "",
     password: "",
-    // username: "testuser",
+    // username: "evg31337",
     // password: "Password123",
   });
   const [errors, setErrors] = useState<LoginErrors>({});

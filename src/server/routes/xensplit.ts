@@ -96,6 +96,8 @@ module.exports = function (app: any) {
 
       await group.save();
       await group.populate("members", "username avatar");
+      const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupsUpdated(allMemberIds);
       res.json({ status: true, message: "Group created", data: transformMembers(group.toObject()) });
     } catch (error) {
       console.error("Error creating group:", error);
@@ -405,6 +407,9 @@ module.exports = function (app: any) {
         }
       }
 
+      const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
+
       const newExpense = group.expenses[group.expenses.length - 1];
       res.json({ status: true, message: "Expense added", data: { group: transformMembers(group.toObject()), newExpenseId: newExpense._id } });
     } catch (error) {
@@ -491,6 +496,9 @@ module.exports = function (app: any) {
         }
       }
 
+      const updatedMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, updatedMemberIds);
+
       res.json({ status: true, message: "Expense updated", data: transformMembers(group.toObject()) });
     } catch (error) {
       console.error("Error updating expense:", error);
@@ -532,6 +540,9 @@ module.exports = function (app: any) {
       group.expenses.splice(expenseIndex, 1);
       await group.save();
       await group.populate("members", "username avatar");
+
+      const deletedMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, deletedMemberIds);
 
       res.json({ status: true, message: "Expense deleted", data: transformMembers(group.toObject()) });
     } catch (error) {
