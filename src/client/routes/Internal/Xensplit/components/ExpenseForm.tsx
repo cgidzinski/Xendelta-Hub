@@ -124,7 +124,16 @@ export default function ExpenseForm({
 
   // Auto-populate splits when participants or amount change
   const prevParticipantsRef = React.useRef<SearchedUser[]>([]);
+  const isFirstRunRef = React.useRef(true);
   useEffect(() => {
+    // On initial mount when editing, skip auto-populate so existing split values are preserved
+    if (isEditing && isFirstRunRef.current) {
+      isFirstRunRef.current = false;
+      prevParticipantsRef.current = selectedParticipants;
+      return;
+    }
+    isFirstRunRef.current = false;
+
     const participantsChanged =
       prevParticipantsRef.current.length !== selectedParticipants.length ||
       !prevParticipantsRef.current.every((p, i) => p._id === selectedParticipants[i]?._id);
