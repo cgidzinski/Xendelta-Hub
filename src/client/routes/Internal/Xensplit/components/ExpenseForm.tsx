@@ -31,7 +31,7 @@ function getSortedCurrencies(defaultCurrency?: string) {
   return [defaultCurrency, ...ALL_CURRENCIES.filter((c) => c !== defaultCurrency)];
 }
 
-const STEPS = ["Details", "Split", "Photos"];
+const STEPS = ["Details", "Split", "Misc"];
 
 interface ExpenseFormProps {
   title: string;
@@ -379,20 +379,36 @@ export default function ExpenseForm({
                     {splitType === "exact" ? "Exact amounts" : "Percentages"}
                   </Typography>
                   {splitType === "exact" && (
-                    <Typography
-                      variant="caption"
-                      color={Math.abs(totalExact - numAmount) < 0.01 ? "success" : "error"}
-                    >
-                      Total: {totalExact.toFixed(2)} / {numAmount.toFixed(2)}
-                    </Typography>
+                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                      <Typography
+                        variant="caption"
+                        color={Math.abs(totalExact - numAmount) < 0.01 ? "success" : "error"}
+                      >
+                        Total: {totalExact.toFixed(2)} / {numAmount.toFixed(2)}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color={Math.abs(totalExact - numAmount) < 0.01 ? "success" : "text.secondary"}
+                      >
+                        Remainder: {(numAmount - totalExact).toFixed(2)}
+                      </Typography>
+                    </Box>
                   )}
                   {splitType === "percent" && (
-                    <Typography
-                      variant="caption"
-                      color={Math.abs(totalPercent - 100) < 0.01 ? "success" : "error"}
-                    >
-                      Total: {totalPercent === 0 ? "0" : totalPercent.toFixed(1)}% / 100%
-                    </Typography>
+                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                      <Typography
+                        variant="caption"
+                        color={Math.abs(totalPercent - 100) < 0.01 ? "success" : "error"}
+                      >
+                        Total: {totalPercent === 0 ? "0" : totalPercent.toFixed(1)}% / 100%
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color={Math.abs(totalPercent - 100) < 0.01 ? "success" : "text.secondary"}
+                      >
+                        Remainder: {(100 - totalPercent).toFixed(1)}%
+                      </Typography>
+                    </Box>
                   )}
                 </Box>
               )}

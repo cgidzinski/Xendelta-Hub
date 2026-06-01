@@ -7,8 +7,9 @@ import {
   Typography,
   Button,
   Grid,
+  TextField,
 } from "@mui/material";
-import { Security } from "@mui/icons-material";
+import { Security, Person } from "@mui/icons-material";
 import { useTitle } from "../../../hooks/useTitle";
 import { useUserProfile, userProfileKeys, UserProfile } from "../../../hooks/user/useUserProfile";
 import { OverlaySpinner } from "../../../components/LoadingSpinner";
@@ -26,8 +27,11 @@ export default function Profile() {
   const [mainAvatarUrl, setMainAvatarUrl] = useState<string | null>(null); // Main avatar from profile
   const [avatarKey, setAvatarKey] = useState(0); // Key to force Avatar re-render
   const [isUploading, setIsUploading] = useState(false);
+  const [editUsername, setEditUsername] = useState("");
+  const [usernameError, setUsernameError] = useState("");
+  const [isSavingUsername, setIsSavingUsername] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
-  const { profile, isLoading, refetch } = useUserProfile();
+  const { profile, isLoading, refetch, updateProfile } = useUserProfile();
   const { logout } = useAuth();
   const { uploadAvatar, isUploading: isUploadingAvatar } = useUserAvatar();
   const navigate = useNavigate();
@@ -49,6 +53,46 @@ export default function Profile() {
       setMainAvatarUrl(null);
     }
   }, [profile?.avatar]);
+
+  useEffect(() => {
+    if (profile?.username && !editUsername) {
+      setEditUsername(profile.username);
+    }
+  }, [profile?.username]);
+
+  const handleSaveUsername = async () => {
+    const trimmed = editUsername.trim();
+    if (!trimmed) {
+      setUsernameError("Username cannot be empty");
+      return;
+    }
+    if (trimmed.length < 3) {
+      setUsernameError("Username must be at least 3 characters");
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
+      setUsernameError("Username can only contain letters, numbers, and underscores");
+      return;
+    }
+    if (trimmed === profile?.username) {
+      setUsernameError("That's already your username");
+      return;
+    }
+    setUsernameError("");
+    setIsSavingUsername(true);
+    try {
+      await updateProfile({ username: trimmed });
+      queryClient.setQueryData(userProfileKeys.profile(), (old: UserProfile | undefined) => {
+        if (!old) return old;
+        return { ...old, username: trimmed };
+      });
+      enqueueSnackbar("Username updated successfully!", { variant: "success" });
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.message || "Failed to update username";
+      setUsernameError(msg);
+    }
+    setIsSavingUsername(false);
+  };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -153,6 +197,40 @@ export default function Profile() {
               onFileSelect={handleFileSelect}
               onUpload={handleUpdateAvatar}
             />
+          </Grid>
+
+          <Grid size={{ xs: 12 }}>
+            <Card elevation={2}>
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                  <Person color="primary" sx={{ mr: 1 }} />
+                  <Typography variant="h6">Account Settings</Typography>
+                </Box>
+                <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
+                  <TextField
+                    label="Username"
+                    value={editUsername}
+                    onChange={(e) => {
+                      setEditUsername(e.target.value);
+                      setUsernameError("");
+                    }}
+                    error={!!usernameError}
+                    helperText={usernameError || "Letters, numbers, and underscores only"}
+                    size="small"
+                    sx={{ flex: 1, maxWidth: 320 }}
+                    inputProps={{ maxLength: 50 }}
+                  />
+                  <Button
+                    variant="contained"
+                    onClick={handleSaveUsername}
+                    disabled={isSavingUsername}
+                    sx={{ mt: 0.5 }}
+                  >
+                    {isSavingUsername ? "Saving..." : "Save"}
+                  </Button>
+                </Box>
+              </CardContent>
+            </Card>
           </Grid>
 
           <Grid size={{ xs: 12 }}>

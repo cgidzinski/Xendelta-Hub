@@ -23,6 +23,7 @@ export interface UserProfile {
 
 export interface UpdateProfileData {
   avatar?: string;
+  username?: string;
 }
 
 interface UseUserProfileReturn {

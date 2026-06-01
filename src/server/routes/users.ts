@@ -61,7 +61,21 @@ module.exports = function (app: express.Application) {
     validate(updateProfileSchema),
     async function (req: express.Request, res: express.Response) {
       const userId = (req as AuthenticatedRequest).user!._id;
+      const { username } = req.body;
       const user = await User.findOne({ _id: userId }).exec();
+
+      if (username !== undefined) {
+        // Check uniqueness — reject if another user already has this username
+        const existing = await User.findOne({ username, _id: { $ne: userId } }).exec();
+        if (existing) {
+          return res.status(400).json({
+            status: false,
+            message: "Username is already taken",
+          });
+        }
+        user.username = username;
+        await user.save();
+      }
 
       const newNotification = new Notification({
         userId: userId,
