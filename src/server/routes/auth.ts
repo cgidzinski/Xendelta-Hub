@@ -62,9 +62,9 @@ module.exports = function (app: express.Application) {
   });
 
   app.post("/api/auth/login", validate(loginSchema), async function (req: express.Request, res: express.Response) {
-    const username = req.body.username;
+    const email = req.body.email.toLowerCase();
     const password = req.body.password;
-    const user = await User.findOne({ username: username }).exec();
+    const user = await User.findOne({ email: email }).exec();
 
     if (user && user.validPassword(password)) {
       const token = generateToken({
