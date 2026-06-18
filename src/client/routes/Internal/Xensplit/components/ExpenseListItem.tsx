@@ -1,15 +1,15 @@
 import { Box, Typography, Avatar } from "@mui/material";
 import type { XenSplitExpense } from "../../../../hooks/xensplit/types";
+import { formatCurrency } from "../../../../utils/currencyUtils";
 
 interface ExpenseListItemProps {
     expense: XenSplitExpense;
     onClick: () => void;
-    formatCurrency: (amount: number, currency: string) => string;
     userId?: string;
     mb?: number;
 }
 
-export default function ExpenseListItem({ expense, onClick, formatCurrency, userId, mb }: ExpenseListItemProps) {
+export default function ExpenseListItem({ expense, onClick, userId, mb }: ExpenseListItemProps) {
     const isInvolved = userId
         ? expense.paid_by === userId || expense.splits.some((sp) => sp.user_id === userId)
         : false;

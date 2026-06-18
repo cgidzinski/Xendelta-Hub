@@ -22,18 +22,9 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import { SearchedUser } from "../../../../hooks/useUserSearch";
 import type { XenSplitExpenseImage } from "../../../../hooks/xensplit/types";
+import { getSortedCurrencies, getCurrencySymbol } from "../../../../utils/currencyUtils";
 
-const ALL_CURRENCIES = ["CAD", "USD", "JPY", "EUR", "GBP", "AUD", "CNY", "INR", "MXN", "BRL"];
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  CAD: "$", USD: "$", JPY: "¥", EUR: "€", GBP: "£",
-  AUD: "$", CNY: "¥", INR: "₹", MXN: "$", BRL: "R$",
-};
 const MAX_IMAGES = 10;
-
-function getSortedCurrencies(defaultCurrency?: string) {
-  if (!defaultCurrency) return ALL_CURRENCIES;
-  return [defaultCurrency, ...ALL_CURRENCIES.filter((c) => c !== defaultCurrency)];
-}
 
 const STEPS = ["Details", "Split", "Misc"];
 
@@ -99,7 +90,7 @@ export default function ExpenseForm({
   defaultCurrency,
   onSubmit,
   submitDisabled,
-  submitLabel = "Add Expense",
+  submitLabel = "New Expense",
   loading,
   paidByUser,
   onPaidByUserChange,
@@ -243,7 +234,7 @@ export default function ExpenseForm({
                 onChange={(e) => onCurrencyChange(e.target.value)}
               >
                 {getSortedCurrencies(defaultCurrency).map((c) => (
-                  <MenuItem key={c} value={c}>{c} ({CURRENCY_SYMBOLS[c] ?? c})</MenuItem>
+                  <MenuItem key={c} value={c}>{c} ({getCurrencySymbol(c)})</MenuItem>
                 ))}
               </Select>
             </FormControl>
@@ -260,7 +251,7 @@ export default function ExpenseForm({
             label="Date & Time"
             value={date}
             onChange={(d) => d && onDateChange(d)}
-            slotProps={{ textField: { fullWidth: true, size: "small" } }}
+            slotProps={{ textField: { fullWidth: true } }}
           />
 
           <Box>
@@ -623,7 +614,7 @@ export default function ExpenseForm({
       <Box sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>
         <Button
           variant="outlined"
-          disabled={step === 0}
+          sx={{ visibility: step === 0 ? "hidden" : "visible" }}
           onClick={() => setStep((s) => s - 1)}
         >
           Back

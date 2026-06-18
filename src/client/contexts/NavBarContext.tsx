@@ -17,7 +17,10 @@ const NavBarContext = createContext<NavBarContextType>({
 });
 
 export const NavBarProvider = ({ children }: { children: React.ReactNode }) => {
-  const [isNavBarOpen, setIsNavBarOpen] = useState(localStorage.getItem("isNavBarOpen") == "true");
+  const [isNavBarOpen, setIsNavBarOpen] = useState(() => {
+    if (window.innerWidth <= 600) return false;
+    return localStorage.getItem("isNavBarOpen") == "true";
+  });
   const [title, setTitle] = useState(""); 
   const toggleNavBar = () => {
     setIsNavBarOpen((prevState) => {

@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
 import { useNavigate, useParams } from "react-router-dom";
-import { Box, Typography, Avatar, Button, Collapse, IconButton, Chip, Fab } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
+import { Box, Typography, Avatar, Button, Collapse, IconButton, Chip } from "@mui/material";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import EastIcon from "@mui/icons-material/East";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -10,6 +11,7 @@ import { format, startOfMonth, subMonths } from "date-fns";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitExpense, XenSplitSettlement } from "../../../hooks/xensplit/types";
 import ExpenseListItem from "./components/ExpenseListItem";
+import { formatCurrency } from "../../../utils/currencyUtils";
 
 const CHART_COLORS = ["#6366f1", "#22d3ee", "#f59e0b", "#10b981", "#f43f5e", "#a78bfa", "#fb923c", "#34d399"];
 
@@ -18,7 +20,7 @@ type ActivityItem =
     | { type: "settlement"; date: string; settlement: XenSplitSettlement };
 
 export default function GroupOverview() {
-    const { group, balancesData, user, formatCurrency, onViewExpense, onAddExpense } = useOutletContext<GroupDetailContext>();
+    const { group, balancesData, user, onViewExpense } = useOutletContext<GroupDetailContext>();
     const navigate = useNavigate();
     const { groupId } = useParams<{ groupId: string }>();
     const [analyticsOpen, setAnalyticsOpen] = useState(false);
@@ -55,40 +57,50 @@ export default function GroupOverview() {
     // Spending analytics
     const defaultCurrency = group.default_currency || "USD";
 
+    const analyticsAvailableCurrencies = useMemo(() => {
+        const seen = new Set<string>();
+        group.expenses.forEach(e => seen.add(e.currency));
+        return [...seen].sort((a, b) => a === defaultCurrency ? -1 : b === defaultCurrency ? 1 : a.localeCompare(b));
+    }, [group.expenses, defaultCurrency]);
+
+    const [analyticsSelectedCurrency, setAnalyticsSelectedCurrency] = useState(
+        () => analyticsAvailableCurrencies[0] ?? defaultCurrency
+    );
+
     const memberSpendData = useMemo(() => {
         const totals: { [userId: string]: number } = {};
-        group.expenses.filter(e => e.currency === defaultCurrency).forEach(e => {
+        group.expenses.filter(e => e.currency === analyticsSelectedCurrency).forEach((e) => {
             totals[e.paid_by] = (totals[e.paid_by] ?? 0) + e.amount;
         });
         return Object.entries(totals).map(([userId, value]) => ({
             name: group.members.find(m => m.user_id === userId)?.username ?? userId,
             value,
         })).filter(d => d.value > 0);
-    }, [group.expenses, group.members, defaultCurrency]);
+    }, [group.expenses, group.members, analyticsSelectedCurrency]);
 
     const monthlySpendData = useMemo(() => {
         const months: { [key: string]: number } = {};
-        for (let i = 11; i >= 0; i--) {
+        for (let i = 12; i >= 0; i--) {
             const d = startOfMonth(subMonths(new Date(), i));
             months[format(d, "MMM yy")] = 0;
         }
-        group.expenses.filter(e => e.currency === defaultCurrency).forEach(e => {
+        group.expenses.filter(e => e.currency === analyticsSelectedCurrency).forEach(e => {
             const key = format(startOfMonth(new Date(e.date)), "MMM yy");
             if (key in months) months[key] = (months[key] ?? 0) + e.amount;
         });
         return Object.entries(months).map(([month, total]) => ({ month, total }));
-    }, [group.expenses, defaultCurrency]);
+    }, [group.expenses, analyticsSelectedCurrency]);
 
     return (
         <Box>
             {/* Pending settlements — always visible */}
             <Button
                 fullWidth
-                variant={userSettlements.length > 0 ? "outlined" : "text"}
+                variant="outlined"
                 color={userSettlements.length > 0 ? "warning" : "inherit"}
                 size="small"
                 onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settlements`)}
-                sx={{ mb: 2, borderRadius: 2, fontWeight: 600, opacity: userSettlements.length === 0 ? 0.5 : 1 }}
+                sx={{ mb: 2, borderRadius: 2, fontWeight: 600, ...(userSettlements.length === 0 && { borderColor: "divider", color: "text.disabled" }) }}
             >
                 {userSettlements.length > 0
                     ? `${userSettlements.length} pending settlement${userSettlements.length !== 1 ? "s" : ""}`
@@ -163,39 +175,62 @@ export default function GroupOverview() {
                         sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 2, py: 1.5, cursor: "pointer" }}
                         onClick={() => setAnalyticsOpen((o) => !o)}
                     >
-                        <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                            Analytics ({defaultCurrency})
-                        </Typography>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                            <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                                Analytics
+                            </Typography>
+                            {analyticsAvailableCurrencies.length > 1 && (
+                                <Box sx={{ display: "flex", alignItems: "center" }} onClick={e => e.stopPropagation()}>
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => {
+                                            const idx = analyticsAvailableCurrencies.indexOf(analyticsSelectedCurrency);
+                                            setAnalyticsSelectedCurrency(analyticsAvailableCurrencies[(idx - 1 + analyticsAvailableCurrencies.length) % analyticsAvailableCurrencies.length]);
+                                        }}
+                                    >
+                                        <ChevronLeftIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                    <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, minWidth: 28, textAlign: "center" }}>
+                                        {analyticsSelectedCurrency}
+                                    </Typography>
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => {
+                                            const idx = analyticsAvailableCurrencies.indexOf(analyticsSelectedCurrency);
+                                            setAnalyticsSelectedCurrency(analyticsAvailableCurrencies[(idx + 1) % analyticsAvailableCurrencies.length]);
+                                        }}
+                                    >
+                                        <ChevronRightIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                </Box>
+                            )}
+                        </Box>
                         <IconButton size="small" sx={{ transform: analyticsOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>
                             <ExpandMoreIcon fontSize="small" />
                         </IconButton>
                     </Box>
                     <Collapse in={analyticsOpen}>
                         <Box sx={{ px: 2, pb: 2 }}>
-                            {memberSpendData.length > 0 && (
-                                <>
-                                    <Typography variant="caption" color="text.disabled" sx={{ display: "block", mb: 1 }}>Who paid most</Typography>
-                                    <ResponsiveContainer width="100%" height={180}>
-                                        <PieChart>
-                                            <Pie data={memberSpendData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
-                                                {memberSpendData.map((_, i) => (
-                                                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                                                ))}
-                                            </Pie>
-                                            <Tooltip formatter={(v: number) => formatCurrency(v, defaultCurrency)} />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                </>
-                            )}
-                            <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 2, mb: 1 }}>Monthly spend (last 12 months)</Typography>
-                            <ResponsiveContainer width="100%" height={160}>
-                                <BarChart data={monthlySpendData} margin={{ top: 0, right: 8, left: -16, bottom: 0 }}>
-                                    <XAxis dataKey="month" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                                    <YAxis tick={{ fontSize: 10 }} />
-                                    <Tooltip formatter={(v: number) => formatCurrency(v, defaultCurrency)} />
-                                    <Bar dataKey="total" fill={CHART_COLORS[0]} radius={[3, 3, 0, 0]} />
-                                </BarChart>
-                            </ResponsiveContainer>
+                            <Typography variant="caption" color="text.disabled" sx={{ display: "block", mb: 1 }}>Who paid most</Typography>
+                                <ResponsiveContainer width="100%" height={180}>
+                                    <PieChart>
+                                        <Pie data={memberSpendData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine={false}>
+                                            {memberSpendData.map((_, i) => (
+                                                <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip formatter={(v) => formatCurrency(Number(v), analyticsSelectedCurrency)} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                                <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 2, mb: 1 }}>Monthly spend (last 12 months)</Typography>
+                                <ResponsiveContainer width="100%" height={160}>
+                                    <BarChart data={monthlySpendData} margin={{ top: 0, right: 8, left: -16, bottom: 0 }}>
+                                        <XAxis dataKey="month" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+                                        <YAxis tick={{ fontSize: 10 }} />
+                                        <Tooltip formatter={(v) => formatCurrency(Number(v), analyticsSelectedCurrency)} />
+                                        <Bar dataKey="total" fill={CHART_COLORS[0]} radius={[3, 3, 0, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
                         </Box>
                     </Collapse>
                 </Box>
@@ -220,7 +255,6 @@ export default function GroupOverview() {
                                         key={`expense-${e._id}`}
                                         expense={e}
                                         onClick={() => onViewExpense(e)}
-                                        formatCurrency={formatCurrency}
                                         userId={user.id}
                                     />
                                 );
@@ -300,21 +334,6 @@ export default function GroupOverview() {
                 </Box>
             )}
 
-            <Fab
-                color="primary"
-                aria-label="Add expense"
-                onClick={onAddExpense}
-                sx={{
-                    position: "fixed",
-                    bottom: 24,
-                    right: {
-                        xs: 24,
-                        md: "calc((100vw - 900px) / 2 + 24px)",
-                    },
-                }}
-            >
-                <AddIcon />
-            </Fab>
         </Box>
     );
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatCurrency } from "../../../utils/currencyUtils";
 import { useQueryClient } from "@tanstack/react-query";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useSnackbar } from "notistack";
@@ -27,6 +28,7 @@ import {
   Divider,
   CircularProgress,
   TextField,
+  Fab,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CheckIcon from "@mui/icons-material/Check";
@@ -71,7 +73,6 @@ export interface GroupDetailContext {
   balancesData: XenSplitBalancesData | undefined;
   user: { id: string; username: string; email: string; avatar: string };
   isCreator: boolean;
-  formatCurrency: (amount: number, currency: string) => string;
   onAddExpense: () => void;
   onEditExpense: (expense: XenSplitExpense) => void;
   onViewExpense: (expense: XenSplitExpense) => void;
@@ -406,13 +407,6 @@ export default function GroupDetail() {
     });
   };
 
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-    }).format(amount);
-  };
-
   const handleOpenEditExpense = (expense: XenSplitExpense) => {
     setSelectedExpense(expense);
     setEditTitle(expense.title || "");
@@ -452,7 +446,6 @@ export default function GroupDetail() {
     balancesData,
     user,
     isCreator,
-    formatCurrency,
     onAddExpense: () => {
       setAddPaidBy(user?.id || "");
       setAddPaidByUser(user ? { _id: user.id, username: user.username, avatar: user.avatar } : null);
@@ -527,18 +520,25 @@ export default function GroupDetail() {
               </Box>
             </Box>
           </Box>
-          <IconButton
-            onClick={handleExportCSV}
+          <Button
+            variant="contained"
             size="small"
-            title="Export CSV"
-            sx={{ flexShrink: 0 }}
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setAddPaidBy(user?.id || "");
+              setAddPaidByUser(user ? { _id: user.id, username: user.username, avatar: user.avatar } : null);
+              setAddCurrency(group.default_currency || "USD");
+              setAddDate(new Date());
+              setShowAddExpenseModal(true);
+            }}
+            sx={{ display: activeTab === false ? "none" : { xs: "none", md: "inline-flex" }, flexShrink: 0 }}
           >
-            <FileDownloadIcon />
-          </IconButton>
+            New Expense
+          </Button>
           <IconButton
             onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settings`)}
             size="small"
-            sx={{ flexShrink: 0 }}
+            sx={{ flexShrink: 0, display: activeTab === false ? "none" : "inline-flex" }}
           >
             <SettingsIcon />
           </IconButton>
@@ -560,6 +560,20 @@ export default function GroupDetail() {
         )}
 
         <Outlet context={outletContext} />
+        <Fab
+          color="primary"
+          aria-label="Add expense"
+          onClick={() => {
+            setAddPaidBy(user?.id || "");
+            setAddPaidByUser(user ? { _id: user.id, username: user.username, avatar: user.avatar } : null);
+            setAddCurrency(group.default_currency || "USD");
+            setAddDate(new Date());
+            setShowAddExpenseModal(true);
+          }}
+          sx={{ display: { xs: "flex", md: "none" }, position: "fixed", bottom: 24, right: 24 }}
+        >
+          <AddIcon />
+        </Fab>
       </Container>
 
       <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
@@ -667,11 +681,11 @@ export default function GroupDetail() {
         maxWidth="sm"
         fullScreen={isMobile}
         open={showAddExpenseModal}
-        onClose={() => { setShowAddExpenseModal(false); setAddImages([]); }}
+        onClose={(_, reason) => { if (reason !== "backdropClick") { setShowAddExpenseModal(false); setAddImages([]); } }}
         PaperProps={{ sx: { borderRadius: isMobile ? 0 : 2 } }}
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
-          <DialogTitle sx={{ fontWeight: 700, p: 0 }}>Add Expense</DialogTitle>
+          <DialogTitle sx={{ fontWeight: 700, p: 0 }}>New Expense</DialogTitle>
           <IconButton onClick={() => setShowAddExpenseModal(false)} size="small">
             <CloseIcon />
           </IconButton>
