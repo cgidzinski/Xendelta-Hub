@@ -251,7 +251,7 @@ export default function ExpenseForm({
             label="Date & Time"
             value={date}
             onChange={(d) => d && onDateChange(d)}
-            slotProps={{ textField: { fullWidth: true, size: "small" } }}
+            slotProps={{ textField: { fullWidth: true } }}
           />
 
           <Box>

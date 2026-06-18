@@ -519,6 +519,21 @@ export default function GroupDetail() {
               </Box>
             </Box>
           </Box>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setAddPaidBy(user?.id || "");
+              setAddPaidByUser(user ? { _id: user.id, username: user.username, avatar: user.avatar } : null);
+              setAddCurrency(group.default_currency || "USD");
+              setAddDate(new Date());
+              setShowAddExpenseModal(true);
+            }}
+            sx={{ display: { xs: "none", md: "inline-flex" }, flexShrink: 0 }}
+          >
+            Add Expense
+          </Button>
           <IconButton
             onClick={handleExportCSV}
             size="small"
