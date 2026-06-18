@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import { useSnackbar } from "notistack";
 import { useParams, useNavigate, useLocation, Outlet } from "react-router-dom";
 import {
@@ -86,6 +87,7 @@ export interface GroupDetailContext {
 export default function GroupDetail() {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
+  const isMobile = useMediaQuery("(max-width:600px)");
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
@@ -663,9 +665,10 @@ export default function GroupDetail() {
       <Dialog
         fullWidth
         maxWidth="sm"
+        fullScreen={isMobile}
         open={showAddExpenseModal}
         onClose={() => { setShowAddExpenseModal(false); setAddImages([]); }}
-        PaperProps={{ sx: { borderRadius: 2 } }}
+        PaperProps={{ sx: { borderRadius: isMobile ? 0 : 2 } }}
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
           <DialogTitle sx={{ fontWeight: 700, p: 0 }}>Add Expense</DialogTitle>

@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
 import { useNavigate, useParams } from "react-router-dom";
-import { Box, Typography, Avatar, Button, Collapse, IconButton, Chip } from "@mui/material";
+import { Box, Typography, Avatar, Button, Collapse, IconButton, Chip, Fab } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import EastIcon from "@mui/icons-material/East";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -17,7 +18,7 @@ type ActivityItem =
     | { type: "settlement"; date: string; settlement: XenSplitSettlement };
 
 export default function GroupOverview() {
-    const { group, balancesData, user, formatCurrency, onViewExpense } = useOutletContext<GroupDetailContext>();
+    const { group, balancesData, user, formatCurrency, onViewExpense, onAddExpense } = useOutletContext<GroupDetailContext>();
     const navigate = useNavigate();
     const { groupId } = useParams<{ groupId: string }>();
     const [analyticsOpen, setAnalyticsOpen] = useState(false);
@@ -298,6 +299,15 @@ export default function GroupOverview() {
                     </Typography>
                 </Box>
             )}
+
+            <Fab
+                color="primary"
+                aria-label="Add expense"
+                onClick={onAddExpense}
+                sx={{ position: "fixed", bottom: 24, right: 24 }}
+            >
+                <AddIcon />
+            </Fab>
         </Box>
     );
 }

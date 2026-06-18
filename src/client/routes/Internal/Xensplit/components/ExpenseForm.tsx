@@ -24,6 +24,10 @@ import { SearchedUser } from "../../../../hooks/useUserSearch";
 import type { XenSplitExpenseImage } from "../../../../hooks/xensplit/types";
 
 const ALL_CURRENCIES = ["CAD", "USD", "JPY", "EUR", "GBP", "AUD", "CNY", "INR", "MXN", "BRL"];
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  CAD: "$", USD: "$", JPY: "¥", EUR: "€", GBP: "£",
+  AUD: "$", CNY: "¥", INR: "₹", MXN: "$", BRL: "R$",
+};
 const MAX_IMAGES = 10;
 
 function getSortedCurrencies(defaultCurrency?: string) {
@@ -230,15 +234,8 @@ export default function ExpenseForm({
             />
           </Box>
 
-          <Box sx={{ display: "flex", gap: 2, flexWrap: { xs: "wrap", sm: "nowrap" } }}>
-            <TextField
-              fullWidth
-              label="Amount"
-              type="number"
-              value={amount}
-              onChange={(e) => onAmountChange(e.target.value)}
-            />
-            <FormControl sx={{ width: { xs: "100%", sm: 110 } }}>
+          <Box sx={{ display: "flex", gap: 2 }}>
+            <FormControl sx={{ flex: 1 }}>
               <InputLabel>Currency</InputLabel>
               <Select
                 value={currency}
@@ -246,10 +243,17 @@ export default function ExpenseForm({
                 onChange={(e) => onCurrencyChange(e.target.value)}
               >
                 {getSortedCurrencies(defaultCurrency).map((c) => (
-                  <MenuItem key={c} value={c}>{c}</MenuItem>
+                  <MenuItem key={c} value={c}>{c} ({CURRENCY_SYMBOLS[c] ?? c})</MenuItem>
                 ))}
               </Select>
             </FormControl>
+            <TextField
+              label="Amount"
+              type="number"
+              value={amount}
+              onChange={(e) => onAmountChange(e.target.value)}
+              sx={{ flex: 2 }}
+            />
           </Box>
 
           <DateTimePicker
