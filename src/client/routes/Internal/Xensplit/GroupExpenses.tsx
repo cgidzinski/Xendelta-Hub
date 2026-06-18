@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Box, Typography, Button, List, TextField, InputAdornment, Chip, Stack } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
+import { Box, Typography, List, TextField, InputAdornment, Chip, Stack } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import { startOfMonth, startOfYear, subMonths } from "date-fns";
 import type { GroupDetailContext } from "./GroupDetail";
@@ -18,7 +17,7 @@ const DATE_FILTERS: { label: string; value: DateFilter }[] = [
 ];
 
 export default function GroupExpenses() {
-    const { group, onAddExpense, onViewExpense, user } = useOutletContext<GroupDetailContext>();
+    const { group, onViewExpense, user } = useOutletContext<GroupDetailContext>();
     const [search, setSearch] = useState("");
     const [dateFilter, setDateFilter] = useState<DateFilter>("all");
 
@@ -49,9 +48,6 @@ export default function GroupExpenses() {
                 <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>
                     Expenses ({sortedExpenses.length})
                 </Typography>
-                <Button variant="outlined" startIcon={<AddIcon />} onClick={onAddExpense}>
-                    Add Expense
-                </Button>
             </Box>
             <TextField
                 fullWidth

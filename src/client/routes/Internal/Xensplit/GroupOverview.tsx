@@ -1,8 +1,7 @@
 import { useState, useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
 import { useNavigate, useParams } from "react-router-dom";
-import { Box, Typography, Avatar, Button, Collapse, IconButton, Chip, Fab } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
+import { Box, Typography, Avatar, Button, Collapse, IconButton, Chip } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -21,7 +20,7 @@ type ActivityItem =
     | { type: "settlement"; date: string; settlement: XenSplitSettlement };
 
 export default function GroupOverview() {
-    const { group, balancesData, user, onViewExpense, onAddExpense } = useOutletContext<GroupDetailContext>();
+    const { group, balancesData, user, onViewExpense } = useOutletContext<GroupDetailContext>();
     const navigate = useNavigate();
     const { groupId } = useParams<{ groupId: string }>();
     const [analyticsOpen, setAnalyticsOpen] = useState(false);
@@ -97,11 +96,11 @@ export default function GroupOverview() {
             {/* Pending settlements — always visible */}
             <Button
                 fullWidth
-                variant={userSettlements.length > 0 ? "outlined" : "text"}
+                variant="outlined"
                 color={userSettlements.length > 0 ? "warning" : "inherit"}
                 size="small"
                 onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settlements`)}
-                sx={{ mb: 2, borderRadius: 2, fontWeight: 600, opacity: userSettlements.length === 0 ? 0.5 : 1 }}
+                sx={{ mb: 2, borderRadius: 2, fontWeight: 600, ...(userSettlements.length === 0 && { borderColor: "divider", color: "text.disabled" }) }}
             >
                 {userSettlements.length > 0
                     ? `${userSettlements.length} pending settlement${userSettlements.length !== 1 ? "s" : ""}`
@@ -335,19 +334,6 @@ export default function GroupOverview() {
                 </Box>
             )}
 
-            <Fab
-                color="primary"
-                aria-label="Add expense"
-                onClick={onAddExpense}
-                sx={{
-                    display: { xs: "flex", md: "none" },
-                    position: "fixed",
-                    bottom: 24,
-                    right: 24,
-                }}
-            >
-                <AddIcon />
-            </Fab>
         </Box>
     );
 }

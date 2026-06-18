@@ -15,6 +15,7 @@ import {
     MenuItem,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { useSnackbar } from "notistack";
 import type { GroupDetailContext } from "./GroupDetail";
@@ -25,6 +26,34 @@ export default function GroupSettings() {
         useOutletContext<GroupDetailContext>();
     const { enqueueSnackbar } = useSnackbar();
     const [selectedCurrency, setSelectedCurrency] = useState(group.default_currency || "CAD");
+
+    const handleExportCSV = () => {
+        const memberName = (userId: string) => group.members.find((m) => m.user_id === userId)?.username ?? userId;
+        const rows: string[][] = [["Date", "Title", "Paid By", "Amount", "Currency", "Split Type", "Notes", ...group.members.map((m) => m.username)]];
+        for (const e of group.expenses) {
+            const memberAmounts = group.members.map((m) => {
+                const split = e.splits.find((s) => s.user_id === m.user_id);
+                if (!split) return "";
+                if (split.amount_owed !== undefined) return split.amount_owed.toFixed(2);
+                if (split.percentage !== undefined) return `${split.percentage}%`;
+                return (e.amount / e.splits.length).toFixed(2);
+            });
+            rows.push([new Date(e.date).toISOString(), e.title, memberName(e.paid_by), e.amount.toFixed(2), e.currency, e.split_type, e.notes ?? "", ...memberAmounts]);
+        }
+        rows.push([]);
+        rows.push(["Date", "From", "To", "Amount", "Currency"]);
+        for (const s of group.settlements) {
+            rows.push([new Date(s.settled_at).toISOString(), memberName(s.from), memberName(s.to), s.amount.toFixed(2), s.currency]);
+        }
+        const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${group.name.replace(/[^a-z0-9]/gi, "_")}_export.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
 
     const handleSaveCurrency = () => {
         updateGroup(
@@ -127,6 +156,17 @@ export default function GroupSettings() {
                 ) : (
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>{group.default_currency}</Typography>
                 )}
+            </Box>
+
+            {/* Export */}
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 3, mb: 2, minHeight: 48 }}>
+                <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>Export</Typography>
+                    <Typography variant="caption" color="text.secondary">Download all expenses and settlements</Typography>
+                </Box>
+                <Button variant="outlined" size="small" startIcon={<FileDownloadIcon />} onClick={handleExportCSV}>
+                    Export CSV
+                </Button>
             </Box>
         </Box>
     );

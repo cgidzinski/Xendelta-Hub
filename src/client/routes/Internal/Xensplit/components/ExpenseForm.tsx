@@ -90,7 +90,7 @@ export default function ExpenseForm({
   defaultCurrency,
   onSubmit,
   submitDisabled,
-  submitLabel = "Add Expense",
+  submitLabel = "New Expense",
   loading,
   paidByUser,
   onPaidByUserChange,
@@ -614,7 +614,7 @@ export default function ExpenseForm({
       <Box sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>
         <Button
           variant="outlined"
-          disabled={step === 0}
+          sx={{ visibility: step === 0 ? "hidden" : "visible" }}
           onClick={() => setStep((s) => s - 1)}
         >
           Back
