@@ -304,7 +304,14 @@ export default function GroupOverview() {
                 color="primary"
                 aria-label="Add expense"
                 onClick={onAddExpense}
-                sx={{ position: "fixed", bottom: 24, right: 24 }}
+                sx={{
+                    position: "fixed",
+                    bottom: 24,
+                    right: {
+                        xs: 24,
+                        md: "calc((100vw - 900px) / 2 + 24px)",
+                    },
+                }}
             >
                 <AddIcon />
             </Fab>
