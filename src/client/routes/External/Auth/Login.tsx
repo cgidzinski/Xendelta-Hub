@@ -12,22 +12,22 @@ import {
   Divider,
   Grid,
 } from "@mui/material";
-import { Login as LoginIcon, Person } from "@mui/icons-material";
+import { Login as LoginIcon, Email } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../../contexts/AuthContext";
 import LandingHeader from "../../../components/LandingHeader";
 import PasswordField from "../../../components/PasswordField";
 import FormErrorAlert from "../../../components/forms/FormErrorAlert";
 import FormLoadingButton from "../../../components/forms/FormLoadingButton";
-import { validateUsername, validatePassword } from "../../../utils/formValidation";
+import { validateEmail, validatePassword } from "../../../utils/formValidation";
 
 interface LoginFormData {
-  username: string;
+  email: string;
   password: string;
 }
 
 interface LoginErrors {
-  username?: string;
+  email?: string;
   password?: string;
   general?: string;
 }
@@ -37,10 +37,8 @@ export default function Login() {
   const location = useLocation();
   const { login } = useAuth();
   const [formData, setFormData] = useState<LoginFormData>({
-    username: "",
+    email: "",
     password: "",
-    // username: "evg31337",
-    // password: "Password123",
   });
   const [errors, setErrors] = useState<LoginErrors>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -62,9 +60,9 @@ export default function Login() {
   const validateForm = (): boolean => {
     const newErrors: LoginErrors = {};
 
-    const usernameError = validateUsername(formData.username);
-    if (usernameError) {
-      newErrors.username = usernameError;
+    const emailError = validateEmail(formData.email);
+    if (emailError) {
+      newErrors.email = emailError;
     }
 
     const passwordError = validatePassword(formData.password, { minLength: 6 });
@@ -86,14 +84,14 @@ export default function Login() {
     setIsLoading(true);
     setErrors({});
 
-    const success = await login(formData.username, formData.password);
+    const success = await login(formData.email, formData.password);
 
     if (success) {
       // Redirect to the page they were trying to access, or internal by default
       const from = location.state?.from?.pathname;
       navigate(from || "/internal", { replace: true });
     } else {
-      setErrors({ general: "Invalid username or password" });
+      setErrors({ general: "Invalid email or password" });
     }
 
     setIsLoading(false);
@@ -258,18 +256,19 @@ export default function Login() {
                         margin="normal"
                         required
                         fullWidth
-                        id="username"
-                        label="Username"
-                        name="username"
+                        id="email"
+                        label="Email"
+                        name="email"
+                        type="email"
                         autoFocus
-                        value={formData.username}
-                        onChange={handleInputChange("username")}
-                        error={!!errors.username}
-                        helperText={errors.username}
+                        value={formData.email}
+                        onChange={handleInputChange("email")}
+                        error={!!errors.email}
+                        helperText={errors.email}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <Person color="action" />
+                              <Email color="action" />
                             </InputAdornment>
                           ),
                         }}
