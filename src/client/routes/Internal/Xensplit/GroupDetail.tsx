@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatCurrency } from "../../../utils/currencyUtils";
 import { useQueryClient } from "@tanstack/react-query";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useSnackbar } from "notistack";
@@ -71,7 +72,6 @@ export interface GroupDetailContext {
   balancesData: XenSplitBalancesData | undefined;
   user: { id: string; username: string; email: string; avatar: string };
   isCreator: boolean;
-  formatCurrency: (amount: number, currency: string) => string;
   onAddExpense: () => void;
   onEditExpense: (expense: XenSplitExpense) => void;
   onViewExpense: (expense: XenSplitExpense) => void;
@@ -406,13 +406,6 @@ export default function GroupDetail() {
     });
   };
 
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-    }).format(amount);
-  };
-
   const handleOpenEditExpense = (expense: XenSplitExpense) => {
     setSelectedExpense(expense);
     setEditTitle(expense.title || "");
@@ -452,7 +445,6 @@ export default function GroupDetail() {
     balancesData,
     user,
     isCreator,
-    formatCurrency,
     onAddExpense: () => {
       setAddPaidBy(user?.id || "");
       setAddPaidByUser(user ? { _id: user.id, username: user.username, avatar: user.avatar } : null);

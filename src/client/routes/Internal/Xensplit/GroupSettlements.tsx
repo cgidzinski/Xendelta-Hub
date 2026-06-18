@@ -5,9 +5,10 @@ import EastIcon from "@mui/icons-material/East";
 import CheckIcon from "@mui/icons-material/Check";
 import UndoIcon from "@mui/icons-material/Undo";
 import type { GroupDetailContext } from "./GroupDetail";
+import { formatCurrency } from "../../../utils/currencyUtils";
 
 export default function GroupSettlements() {
-    const { balancesData, group, user, formatCurrency, onSettle, deleteSettlement, isDeletingSettlement } = useOutletContext<GroupDetailContext>();
+    const { balancesData, group, user, onSettle, deleteSettlement, isDeletingSettlement } = useOutletContext<GroupDetailContext>();
     const [confirmUndoId, setConfirmUndoId] = useState<string | null>(null);
     const [historyFilter, setHistoryFilter] = useState<"mine" | "all">("mine");
 

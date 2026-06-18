@@ -18,11 +18,10 @@ import AddIcon from "@mui/icons-material/Add";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { useSnackbar } from "notistack";
 import type { GroupDetailContext } from "./GroupDetail";
-
-const ALL_CURRENCIES = ["CAD", "USD", "JPY", "EUR", "GBP", "AUD", "CNY", "INR", "MXN", "BRL"];
+import { ALL_CURRENCIES, formatCurrency } from "../../../utils/currencyUtils";
 
 export default function GroupSettings() {
-    const { group, user, isCreator, onAddMembers, onMemberMenu, updateGroup, isUpdating, balancesData, formatCurrency } =
+    const { group, user, isCreator, onAddMembers, onMemberMenu, updateGroup, isUpdating, balancesData } =
         useOutletContext<GroupDetailContext>();
     const { enqueueSnackbar } = useSnackbar();
     const [selectedCurrency, setSelectedCurrency] = useState(group.default_currency || "CAD");

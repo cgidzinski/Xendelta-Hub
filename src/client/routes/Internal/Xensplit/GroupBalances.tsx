@@ -1,9 +1,10 @@
 import { useOutletContext } from "react-router-dom";
 import { Box, Typography, Avatar } from "@mui/material";
 import type { GroupDetailContext } from "./GroupDetail";
+import { formatCurrency } from "../../../utils/currencyUtils";
 
 export default function GroupBalances() {
-    const { balancesData, formatCurrency } = useOutletContext<GroupDetailContext>();
+    const { balancesData } = useOutletContext<GroupDetailContext>();
 
     if (!balancesData) return null;
 
