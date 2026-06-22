@@ -44,7 +44,6 @@ import RecipeDetail from "./routes/Internal/Recipaint/RecipeDetail";
 import XenBox from "./routes/Internal/XenBox/XenBox";
 import FileDetail from "./routes/Internal/XenBox/FileDetail";
 import Shop from "./routes/Internal/Shop/Shop";
-import Apps from "./routes/Internal/Apps/Apps";
 import Inventory from "./routes/Internal/Inventory/Inventory";
 import XenLink from "./routes/Internal/XenLink/XenLink";
 import XenLinkRedirect from "./routes/External/XenLinkRedirect/XenLinkRedirect";
@@ -170,7 +169,6 @@ const router = createBrowserRouter(
           <Route path="settlements" element={<GroupSettlements />} />
           <Route path="settings" element={<GroupSettings />} />
         </Route>
-        <Route path="apps" element={<Apps />} />
       </Route>
       {/* Admin routes - require admin role and use AdminNavBar */}
       <Route

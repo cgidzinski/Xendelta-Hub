@@ -4,12 +4,15 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import SecurityIcon from "@mui/icons-material/Security";
 import InventoryIcon from "@mui/icons-material/Inventory2";
 import EditIcon from "@mui/icons-material/Edit";
-import { APPS_REGISTRY, AppRegistryItem } from "../../constants/apps";
+import PushPinIcon from "@mui/icons-material/PushPin";
+import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
+import { APPS_REGISTRY, AppRegistryItem, resolvePinnedApps } from "../../constants/apps";
 import IconButton from "@mui/material/IconButton";
-import Typography from "@mui/material/Typography";
+import Tooltip from "@mui/material/Tooltip";
 import { Link } from "react-router-dom";
 import { useNavBar } from "../../contexts/NavBarContext";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
+import { usePinnedApps } from "../../hooks/user/usePinnedApps";
 import BaseNavBar, { NavItem } from "./BaseNavBar";
 
 // APPS_REGISTRY now imported from constants/apps.ts
@@ -17,8 +20,9 @@ import BaseNavBar, { NavItem } from "./BaseNavBar";
 export default function Root() {
   const { isNavBarOpen, toggleNavBar, title } = useNavBar();
   const { profile } = useUserProfile();
+  const { togglePinnedApp, isUpdating } = usePinnedApps();
 
-  const pinnedApps = profile?.pinnedApps || [];
+  const pinnedApps = resolvePinnedApps(profile?.pinnedApps);
 
   const buildAppNavItem = (app: AppRegistryItem, keyPrefix: string): NavItem => ({
     key: `${keyPrefix}-${app.key}`,
@@ -35,7 +39,28 @@ export default function Root() {
     })
     .filter(Boolean) as NavItem[];
 
-  const allAppNavItems: NavItem[] = APPS_REGISTRY.map((app) => buildAppNavItem(app, "app"));
+  const allAppNavItems: NavItem[] = APPS_REGISTRY.map((app) => {
+    const isPinned = pinnedApps.includes(app.key);
+    return {
+      ...buildAppNavItem(app, "app"),
+      endAction: (
+        <Tooltip title={isPinned ? "Unpin" : "Pin"}>
+          <span>
+            <IconButton
+              edge="end"
+              size="small"
+              disabled={isUpdating}
+              onClick={() => togglePinnedApp(app.key, pinnedApps)}
+              aria-label={isPinned ? `Unpin ${app.label}` : `Pin ${app.label}`}
+              sx={{ color: isPinned ? "warning.main" : "action.active" }}
+            >
+              {isPinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
+            </IconButton>
+          </span>
+        </Tooltip>
+      ),
+    };
+  });
 
   const pinnedSection: NavItem[] = pinnedNavItems.length
     ? [
@@ -82,11 +107,6 @@ export default function Root() {
       path: "",
       isSelected: () => false,
       type: "header" as const,
-      headerAction: (
-        <Link to="/internal/apps" style={{ textDecoration: "none" }}>
-          <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 500, px: 1, py: 0.5, borderRadius: 1, display: "inline-block", "&:hover": { color: "text.primary", bgcolor: "action.hover" } }}>All</Typography>
-        </Link>
-      ),
     },
     ...allAppNavItems,
   ];

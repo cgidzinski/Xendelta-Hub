@@ -11,6 +11,11 @@ export interface AppRegistryItem {
     description: string;
 }
 
+// TEMP: default xensplit to pinned for existing users with no pins yet.
+// Remove this (and its call sites) once a proper default is in place.
+export const resolvePinnedApps = (pinnedApps: string[] | undefined): string[] =>
+    pinnedApps && pinnedApps.length > 0 ? pinnedApps : ["xensplit"];
+
 export const APPS_REGISTRY: AppRegistryItem[] = [
     {
         key: "recipaint",

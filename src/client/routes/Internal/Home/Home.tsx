@@ -8,6 +8,7 @@ import XenLinkCardBody from "./components/XenLinkCardBody";
 import XenSplitCardBody from "./components/XenSplitCardBody";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
 import { usePinnedApps } from "../../../hooks/user/usePinnedApps";
+import { resolvePinnedApps } from "../../../constants/apps";
 
 export default function Home() {
   useTitle("Home");
@@ -39,7 +40,7 @@ export default function Home() {
         </Box>
         <TopStatsCards />
         <PinnedAppsSection
-          pinnedApps={profile.pinnedApps}
+          pinnedApps={resolvePinnedApps(profile.pinnedApps)}
           appDetails={appDetails}
         />
       </Container>

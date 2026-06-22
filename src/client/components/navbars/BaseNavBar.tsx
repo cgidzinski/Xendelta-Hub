@@ -50,6 +50,7 @@ export interface NavItem {
   type?: "item" | "divider" | "header" | "nested";
   indent?: boolean;
   headerAction?: React.ReactNode;
+  endAction?: React.ReactNode;
 }
 
 interface BaseNavBarProps {
@@ -236,7 +237,11 @@ export default function BaseNavBar({
                 );
               }
               return (
-                <ListItem key={item.key} disablePadding>
+                <ListItem
+                  key={item.key}
+                  disablePadding
+                  secondaryAction={item.endAction}
+                >
                   <ListItemButton
                     onClick={() => handleNavItemClick(item.path)}
                     selected={item.isSelected(window.location.pathname)}
