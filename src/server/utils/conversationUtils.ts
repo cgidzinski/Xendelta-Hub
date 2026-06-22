@@ -6,6 +6,17 @@
 import { ConversationDocument, Message } from "../types";
 
 /**
+ * Normalize a date value to an ISO string. Dates are stored as Date in the
+ * schema, but legacy documents may still hold ISO strings, so handle both.
+ */
+function toISO(value: Date | string | undefined | null): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  return value instanceof Date ? value.toISOString() : String(value);
+}
+
+/**
  * Derive lastMessage and lastMessageTime from messages array
  */
 export function getLastMessageInfo(
@@ -15,12 +26,12 @@ export function getLastMessageInfo(
     const lastMsg = conversation.messages[conversation.messages.length - 1];
     return {
       lastMessage: lastMsg.message || "",
-      lastMessageTime: lastMsg.time || conversation.updatedAt?.toISOString() || new Date().toISOString(),
+      lastMessageTime: toISO(lastMsg.time) || toISO(conversation.updatedAt) || new Date().toISOString(),
     };
   }
   return {
     lastMessage: "",
-    lastMessageTime: conversation.updatedAt?.toISOString() || new Date().toISOString(),
+    lastMessageTime: toISO(conversation.updatedAt) || new Date().toISOString(),
   };
 }
 

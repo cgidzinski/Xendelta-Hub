@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "dev": "nodemon -w src/server -x tsx src/server/server.ts",
+    "dev": "cross-env NODE_ENV=development nodemon -w src/server -x tsx src/server/server.ts",
     "start": "cross-env NODE_ENV=production tsx src/server/server.ts",
     "build": "vite build",
     "type-check": "npm run type-check:server && npm run type-check:client",

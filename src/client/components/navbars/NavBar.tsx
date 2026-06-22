@@ -4,7 +4,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import SecurityIcon from "@mui/icons-material/Security";
 import InventoryIcon from "@mui/icons-material/Inventory2";
 import EditIcon from "@mui/icons-material/Edit";
-import { APPS_REGISTRY } from "../../constants/apps";
+import { APPS_REGISTRY, AppRegistryItem } from "../../constants/apps";
 import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import { Link } from "react-router-dom";
@@ -20,17 +20,36 @@ export default function Root() {
 
   const pinnedApps = profile?.pinnedApps || [];
 
-  const appNavItems: NavItem[] = pinnedApps.map((appKey) => {
-    const app = APPS_REGISTRY.find((a) => a.key === appKey);
-    if (!app) return null;
-    return {
-      key: `pinned-${appKey}`,
-      label: app.label,
-      icon: app.icon ? <app.icon sx={{ fontSize: 22 }} /> : undefined,
-      path: app.path,
-      isSelected: (pathname: string) => pathname.startsWith(app.path),
-    };
-  }).filter(Boolean) as NavItem[];
+  const buildAppNavItem = (app: AppRegistryItem, keyPrefix: string): NavItem => ({
+    key: `${keyPrefix}-${app.key}`,
+    label: app.label,
+    icon: app.icon ? <app.icon sx={{ fontSize: 22 }} /> : undefined,
+    path: app.path,
+    isSelected: (pathname: string) => pathname.startsWith(app.path),
+  });
+
+  const pinnedNavItems: NavItem[] = pinnedApps
+    .map((appKey) => {
+      const app = APPS_REGISTRY.find((a) => a.key === appKey);
+      return app ? buildAppNavItem(app, "pinned") : null;
+    })
+    .filter(Boolean) as NavItem[];
+
+  const allAppNavItems: NavItem[] = APPS_REGISTRY.map((app) => buildAppNavItem(app, "app"));
+
+  const pinnedSection: NavItem[] = pinnedNavItems.length
+    ? [
+        {
+          key: "pinned-apps-header",
+          label: "Pinned Apps",
+          icon: null,
+          path: "",
+          isSelected: () => false,
+          type: "header" as const,
+        },
+        ...pinnedNavItems,
+      ]
+    : [];
 
   const navItems: NavItem[] = [
     {
@@ -55,6 +74,7 @@ export default function Root() {
       isSelected: () => false,
       type: "divider" as const,
     },
+    ...pinnedSection,
     {
       key: "apps-header",
       label: "Apps",
@@ -68,7 +88,7 @@ export default function Root() {
         </Link>
       ),
     },
-    ...appNavItems,
+    ...allAppNavItems,
   ];
 
   const footerNavItems: NavItem[] = [

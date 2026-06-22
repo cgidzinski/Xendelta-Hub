@@ -5,7 +5,7 @@ export interface Message {
   _id: string;
   from: string;
   message: string;
-  time: string;
+  time: Date;
   parentMessageId?: string;
   toObject?: () => Message;
 }

@@ -24,7 +24,7 @@ interface ConversationSummary {
   lastMessage?: string;
   lastMessageTime?: string;
   unread?: boolean;
-  updatedAt?: string;
+  updatedAt?: Date;
 }
 
 interface Notification {

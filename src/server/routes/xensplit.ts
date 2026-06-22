@@ -87,7 +87,7 @@ module.exports = function (app: any) {
 
       const group = new XenSplit({
         name,
-        default_currency: default_currency || "USD",
+        default_currency: default_currency || "CAD",
         created_by: userId,
         members,
         expenses: [],
@@ -382,11 +382,12 @@ module.exports = function (app: any) {
         }
       }
 
+      const expenseCurrency = currency || group.default_currency || "CAD";
       const expense = {
         paid_by,
         created_by: userId,
         amount,
-        currency: currency || "USD",
+        currency: expenseCurrency,
         title,
         notes,
         date: date ? new Date(date) : new Date(),
@@ -403,7 +404,7 @@ module.exports = function (app: any) {
       const actorName = actor?.username || "Someone";
       for (const member of group.members as any[]) {
         if (member._id.toString() !== userId) {
-          await notify(member._id.toString(), "New Expense", `${actorName} added: ${title} (${amount} ${currency || "USD"})`, `/internal/xensplit/groups/${groupId}/expenses`);
+          await notify(member._id.toString(), "New Expense", `${actorName} added: ${title} (${amount} ${expenseCurrency})`, `/internal/xensplit/groups/${groupId}/expenses`);
         }
       }
 

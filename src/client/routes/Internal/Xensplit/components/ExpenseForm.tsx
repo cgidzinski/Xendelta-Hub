@@ -107,8 +107,42 @@ export default function ExpenseForm({
   const [step, setStep] = React.useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const objectUrlsRef = useRef<string[]>([]);
+  // Tracks split boxes the user has typed in, so untouched boxes can absorb the remainder
+  const editedSplitIdsRef = useRef<Set<string>>(new Set());
 
   const numAmount = parseFloat(amount) || 0;
+
+  // Accepts only digits and a single decimal separator (comma normalized to dot).
+  // Returns the sanitized string, or null if the keystroke should be rejected.
+  const sanitizeAmount = (raw: string): string | null => {
+    const normalized = raw.replace(/,/g, ".");
+    if (!/^\d*\.?\d*$/.test(normalized)) return null;
+    return normalized;
+  };
+
+  // Fills the untouched split boxes with an even share of the remainder when a box is edited.
+  const handleSplitChange = (id: string, raw: string, type: "exact" | "percent") => {
+    const v = sanitizeAmount(raw);
+    if (v === null) return;
+    editedSplitIdsRef.current.add(id);
+    const current = type === "exact" ? exactSplits : percentSplits;
+    const next = { ...current, [id]: v };
+    const total = type === "exact" ? numAmount : 100;
+    const edited = editedSplitIdsRef.current;
+    const editedSum = selectedParticipants.reduce(
+      (s, p) => (edited.has(p._id) ? s + (parseFloat(next[p._id]) || 0) : s),
+      0
+    );
+    const uneditedIds = selectedParticipants.filter((p) => !edited.has(p._id)).map((p) => p._id);
+    if (uneditedIds.length > 0) {
+      const per = Math.max(0, (total - editedSum) / uneditedIds.length);
+      uneditedIds.forEach((uid) => {
+        next[uid] = type === "exact" ? per.toFixed(2) : per.toFixed(1);
+      });
+    }
+    if (type === "exact") onExactSplitsChange(next);
+    else onPercentSplitsChange(next);
+  };
 
   // Revoke object URLs on unmount
   useEffect(() => {
@@ -135,6 +169,9 @@ export default function ExpenseForm({
 
     if (selectedParticipants.length === 0 || !participantsChanged) return;
 
+    // The baseline is about to be re-evened, so forget any manual edits
+    editedSplitIdsRef.current = new Set();
+
     const equalPercent = 100 / selectedParticipants.length;
 
     if (splitType === "exact" && numAmount > 0) {
@@ -153,6 +190,11 @@ export default function ExpenseForm({
 
     prevParticipantsRef.current = selectedParticipants;
   }, [selectedParticipants, splitType, numAmount]);
+
+  // Reset manual-edit tracking when the split type changes
+  useEffect(() => {
+    editedSplitIdsRef.current = new Set();
+  }, [splitType]);
 
   const totalExact = Object.values(exactSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
   const totalPercent = Object.values(percentSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
@@ -240,10 +282,13 @@ export default function ExpenseForm({
             </FormControl>
             <TextField
               label="Amount"
-              type="number"
               value={amount}
-              onChange={(e) => onAmountChange(e.target.value)}
-              sx={{ flex: 2 }}
+              onChange={(e) => {
+                const v = sanitizeAmount(e.target.value);
+                if (v !== null) onAmountChange(v);
+              }}
+              slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
+              sx={{ flex: 1 }}
             />
           </Box>
 
@@ -428,24 +473,20 @@ export default function ExpenseForm({
                     {splitType === "percent" ? (
                       <TextField
                         size="small"
-                        type="number"
                         value={percentSplits[p._id] || ""}
-                        onChange={(e) =>
-                          onPercentSplitsChange({ ...percentSplits, [p._id]: e.target.value })
-                        }
-                        InputProps={{
-                          endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                        onChange={(e) => handleSplitChange(p._id, e.target.value, "percent")}
+                        slotProps={{
+                          htmlInput: { inputMode: "decimal" },
+                          input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
                         }}
                         sx={{ flexGrow: 1 }}
                       />
                     ) : (
                       <TextField
                         size="small"
-                        type="number"
                         value={exactSplits[p._id] || ""}
-                        onChange={(e) =>
-                          onExactSplitsChange({ ...exactSplits, [p._id]: e.target.value })
-                        }
+                        onChange={(e) => handleSplitChange(p._id, e.target.value, "exact")}
+                        slotProps={{ htmlInput: { inputMode: "decimal" } }}
                         sx={{ flexGrow: 1 }}
                       />
                     )}

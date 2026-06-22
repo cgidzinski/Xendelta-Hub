@@ -26,6 +26,7 @@ import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import GroupCard from "./components/GroupCard";
 import { useAuth } from "../../../contexts/AuthContext";
+import { ALL_CURRENCIES } from "../../../utils/currencyUtils";
 
 export default function GroupsList() {
   useTitle("Xensplit");
@@ -34,9 +35,7 @@ export default function GroupsList() {
   const { user } = useAuth();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [groupName, setGroupName] = useState("");
-  const [primaryCurrency, setPrimaryCurrency] = useState("USD");
-
-  const ALL_CURRENCIES = ["CAD", "USD", "JPY", "EUR", "GBP", "AUD", "CNY", "INR", "MXN", "BRL"];
+  const [primaryCurrency, setPrimaryCurrency] = useState("CAD");
 
   const handleCreate = async () => {
     if (!groupName.trim()) return;
@@ -47,7 +46,7 @@ export default function GroupsList() {
           onSuccess: () => {
             setShowCreateModal(false);
             setGroupName("");
-            setPrimaryCurrency("USD");
+            setPrimaryCurrency("CAD");
             resolve();
           },
         }

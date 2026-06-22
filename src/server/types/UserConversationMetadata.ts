@@ -4,6 +4,6 @@
 export interface UserConversationMetadata {
   conversationId: string;
   unread: boolean;
-  lastReadTime?: Date;
+  lastReadAt?: Date;
 }
 
