@@ -190,11 +190,11 @@ module.exports = function (app: express.Application) {
       participants: allParticipants,
       name: defaultName, // Set default name from usernames
       createdBy: user._id.toString(), // Store creator ID
-      updatedAt: new Date().toISOString(),
+      updatedAt: new Date(),
       messages: message ? [{
         from: user._id.toString(),
         message: message,
-        time: new Date().toISOString(),
+        time: new Date(),
       }] : [],
     });
     await newConversation.save();
@@ -210,7 +210,7 @@ module.exports = function (app: express.Application) {
         participantUser.conversations.push({
           conversationId: newConversation._id,
           unread: participantId !== user._id.toString(), // Mark as unread for others
-          lastReadAt: participantId === user._id.toString() ? new Date().toISOString() : undefined,
+          lastReadAt: participantId === user._id.toString() ? new Date() : undefined,
         });
         await participantUser.save();
       }
@@ -286,7 +286,7 @@ module.exports = function (app: express.Application) {
     const newMessage = {
       from: user._id.toString(),
       message: message,
-      time: new Date().toISOString(),
+      time: new Date(),
       parentMessageId: parentMessageId || undefined,
     };
 
@@ -295,7 +295,7 @@ module.exports = function (app: express.Application) {
       conversation.messages = [];
     }
     conversation.messages.push(newMessage);
-    conversation.updatedAt = new Date().toISOString();
+    conversation.updatedAt = new Date();
     conversation.markModified('messages');
     await conversation.save();
 
@@ -381,7 +381,7 @@ module.exports = function (app: express.Application) {
     const replyMessage = {
       from: user._id.toString(),
       message: message,
-      time: new Date().toISOString(),
+      time: new Date(),
       parentMessageId: messageId,
     };
 
@@ -390,7 +390,7 @@ module.exports = function (app: express.Application) {
       conversation.messages = [];
     }
     conversation.messages.push(replyMessage);
-    conversation.updatedAt = new Date().toISOString();
+    conversation.updatedAt = new Date();
     conversation.markModified('messages');
     await conversation.save();
 
@@ -459,7 +459,7 @@ module.exports = function (app: express.Application) {
     const userConvMetadata = (user.conversations || []).find((uc: UserConversationMetadata) => uc.conversationId.toString() === conversationId);
     if (userConvMetadata) {
       userConvMetadata.unread = false;
-      userConvMetadata.lastReadAt = new Date().toISOString();
+      userConvMetadata.lastReadAt = new Date();
       user.markModified('conversations');
       await user.save();
     } else {
@@ -470,7 +470,7 @@ module.exports = function (app: express.Application) {
       user.conversations.push({
         conversationId: conversation._id,
         unread: false,
-        lastReadAt: new Date().toISOString(),
+        lastReadAt: new Date(),
       });
       user.markModified('conversations');
       await user.save();
@@ -532,7 +532,7 @@ module.exports = function (app: express.Application) {
 
     // Remove message from conversation
     conversation.messages.splice(messageIndex, 1);
-    conversation.updatedAt = new Date().toISOString();
+    conversation.updatedAt = new Date();
     conversation.markModified('messages');
     await conversation.save();
 
@@ -599,7 +599,7 @@ module.exports = function (app: express.Application) {
       });
     }
 
-    conversation.updatedAt = new Date().toISOString();
+    conversation.updatedAt = new Date();
     await conversation.save();
 
     // Add conversation metadata to new participants
@@ -675,7 +675,7 @@ module.exports = function (app: express.Application) {
 
     // Remove participant
     conversation.participants.splice(participantIndex, 1);
-    conversation.updatedAt = new Date().toISOString();
+    conversation.updatedAt = new Date();
     await conversation.save();
 
     // Remove conversation metadata from removed participant
@@ -731,7 +731,7 @@ module.exports = function (app: express.Application) {
 
     // Update name
     conversation.name = name || undefined;
-    conversation.updatedAt = new Date().toISOString();
+    conversation.updatedAt = new Date();
     await conversation.save();
 
     // Send socket notification about conversation update
@@ -810,7 +810,7 @@ module.exports = function (app: express.Application) {
       const userIndex = conversation.participants.indexOf(user._id.toString());
       if (userIndex !== -1) {
         conversation.participants.splice(userIndex, 1);
-        conversation.updatedAt = new Date().toISOString();
+        conversation.updatedAt = new Date();
         await conversation.save();
       }
 

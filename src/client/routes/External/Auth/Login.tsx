@@ -77,6 +77,8 @@ export default function Login() {
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
     if (!validateForm()) {
       return;
     }
@@ -249,7 +251,7 @@ export default function Login() {
                   }}
                 >
                   <CardContent sx={{ padding: 4 }}>
-                    <Box>
+                    <Box component="form" onSubmit={handleSubmit}>
                       {errors.general && <FormErrorAlert message={errors.general} sx={{ mb: 2 }} />}
 
                       <TextField
@@ -294,7 +296,6 @@ export default function Login() {
                         variant="contained"
                         loading={isLoading}
                         loadingText="Signing in..."
-                        onClick={handleSubmit}
                         sx={{
                           mt: 2,
                           mb: 2,

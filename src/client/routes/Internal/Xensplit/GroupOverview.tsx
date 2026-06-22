@@ -55,7 +55,7 @@ export default function GroupOverview() {
     const getMember = (userId: string) => group.members.find((m) => m.user_id === userId);
 
     // Spending analytics
-    const defaultCurrency = group.default_currency || "USD";
+    const defaultCurrency = group.default_currency || "CAD";
 
     const analyticsAvailableCurrencies = useMemo(() => {
         const seen = new Set<string>();

@@ -245,7 +245,7 @@ export const addXenSplitMembersSchema = z.object({
 export const createExpenseSchema = z.object({
   paid_by: objectIdSchema,
   amount: z.number("Amount must be a number").positive("Amount must be positive"),
-  currency: z.string().default("USD"),
+  currency: z.string().default("CAD"),
   title: z.string().min(1, "Title required").max(500),
   notes: z.string().max(1000).optional(),
   date: z.string().datetime().optional(),
@@ -268,7 +268,7 @@ export const settleDebtSchema = z.object({
   from: objectIdSchema,
   to: objectIdSchema,
   amount: z.number().positive("Amount must be positive"),
-  currency: z.string().default("USD"),
+  currency: z.string().default("CAD"),
 }).refine((data) => data.from !== data.to, {
   message: "Cannot settle with yourself",
   path: ["to"],

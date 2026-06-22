@@ -5,7 +5,7 @@ var Schema = mongoose.Schema;
 var messageSchema = new mongoose.Schema({
   from: { type: String }, // user ID
   message: { type: String },
-  time: { type: String },
+  time: { type: Date, default: () => new Date() },
   parentMessageId: { type: String }, // optional - for threaded replies
 });
 
@@ -14,7 +14,7 @@ var conversationSchema = new mongoose.Schema({
   participants: [{ type: String }], // array of user IDs
   name: { type: String }, // optional group name
   createdBy: { type: String }, // user ID of the conversation creator
-  updatedAt: { type: String, default: () => new Date().toISOString() },
+  updatedAt: { type: Date, default: () => new Date() },
   messages: [messageSchema], // array of messages in this conversation/group
 });
 

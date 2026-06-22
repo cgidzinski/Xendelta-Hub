@@ -15,7 +15,7 @@ export default function PinnedAppsSection({ pinnedApps, appDetails }: PinnedApps
                 Pinned Apps
             </Typography>
             {pinned.length === 0 ? (
-                <Typography color="text.secondary">No apps pinned. <a href="/internal/apps">Pin some apps</a> for quick access.</Typography>
+                <Typography color="text.secondary">No apps pinned. Use the pin icon next to an app in the sidebar for quick access.</Typography>
             ) : (
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
                     {pinned.map((app) => (

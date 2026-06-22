@@ -15,7 +15,7 @@ var expenseSchema = new Schema({
   paid_by: { type: String, required: true },
   created_by: { type: String },
   amount: { type: Number, required: true },
-  currency: { type: String, default: "USD" },
+  currency: { type: String, default: "CAD" },
   title: { type: String, required: true, maxlength: 500 },
   notes: { type: String, maxlength: 1000 },
   date: { type: Date, default: Date.now },
@@ -33,14 +33,14 @@ var settlementSchema = new Schema({
   from: { type: String, required: true },
   to: { type: String, required: true },
   amount: { type: Number, required: true },
-  currency: { type: String, default: "USD" },
+  currency: { type: String, default: "CAD" },
   settled_at: { type: Date, default: Date.now },
   is_partial: { type: Boolean, default: false },
 }, { _id: true });
 
 var xenSplitSchema = new Schema({
   name: { type: String, required: true, maxlength: 100 },
-  default_currency: { type: String, default: "USD" },
+  default_currency: { type: String, default: "CAD" },
   created_by: { type: String, required: true },
   created_at: { type: Date, default: Date.now },
   members: [{ type: Schema.Types.ObjectId, ref: "User" }],

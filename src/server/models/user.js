@@ -6,7 +6,7 @@ var Schema = mongoose.Schema;
 var userConversationMetadataSchema = new mongoose.Schema({
   conversationId: { type: Schema.Types.ObjectId, ref: "Conversation", required: true },
   unread: { type: Boolean, default: true }, // true if user has unread messages in this conversation
-  lastReadAt: { type: String }, // timestamp of last read
+  lastReadAt: { type: Date }, // timestamp of last read
 });
 
 // AUTHENTICATION PROVIDER SCHEMA

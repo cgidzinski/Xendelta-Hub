@@ -93,7 +93,7 @@ export default function GroupDetail() {
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
   const { group, isLoading, isError, error, addMembers, isAddingMembers, removeMember, isRemovingMember, updateGroup, isUpdating } = useXenSplit(groupId!);
-  useTitle(group?.name ? `Xensplit - ${group.name}` : "Xensplit");
+  useTitle("Xensplit");
   const { deleteGroup } = useXenSplits();
   const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useXenSplitBalances(groupId!);
   const { updateExpense, updateExpenseAsync, isUpdatingExpense, addExpense, addExpenseAsync, isAddingExpense, deleteExpense, isDeletingExpense, uploadExpenseImages, isUploadingImages, deleteExpenseImage, isDeletingExpenseImage } = useXenSplitExpenses(groupId!);
@@ -116,7 +116,7 @@ export default function GroupDetail() {
   const [addTitle, setAddTitle] = useState("");
   const [addNotes, setAddNotes] = useState("");
   const [addAmount, setAddAmount] = useState("");
-  const [addCurrency, setAddCurrency] = useState("USD");
+  const [addCurrency, setAddCurrency] = useState("CAD");
   const [addPaidBy, setAddPaidBy] = useState("");
   const [addPaidByUser, setAddPaidByUser] = useState<SearchedUser | null>(null);
   const [addSplitType, setAddSplitType] = useState<"equal" | "exact" | "percent">("equal");
@@ -127,7 +127,7 @@ export default function GroupDetail() {
   const [editTitle, setEditTitle] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editAmount, setEditAmount] = useState("");
-  const [editCurrency, setEditCurrency] = useState("USD");
+  const [editCurrency, setEditCurrency] = useState("CAD");
   const [editPaidBy, setEditPaidBy] = useState("");
   const [editPaidByUser, setEditPaidByUser] = useState<SearchedUser | null>(null);
   const [editSplitType, setEditSplitType] = useState<"equal" | "exact" | "percent">("equal");
@@ -329,7 +329,7 @@ export default function GroupDetail() {
             setAddTitle("");
             setAddNotes("");
             setAddAmount("");
-            setAddCurrency(group.default_currency || "USD");
+            setAddCurrency(group.default_currency || "CAD");
             setAddPaidBy("");
             setAddPaidByUser(null);
             setAddSplitType("equal");
@@ -441,18 +441,28 @@ export default function GroupDetail() {
     setShowEditExpenseModal(true);
   };
 
+  const openAddExpenseModal = () => {
+    setAddTitle("");
+    setAddNotes("");
+    setAddAmount("");
+    setAddCurrency(group.default_currency || "CAD");
+    setAddPaidBy(user?.id || "");
+    setAddPaidByUser(user ? { _id: user.id, username: user.username, avatar: user.avatar } : null);
+    setAddSplitType("equal");
+    setAddSelectedParticipants([]);
+    setAddExactSplits({});
+    setAddPercentSplits({});
+    setAddImages([]);
+    setAddDate(new Date());
+    setShowAddExpenseModal(true);
+  };
+
   const outletContext: GroupDetailContext = {
     group,
     balancesData,
     user,
     isCreator,
-    onAddExpense: () => {
-      setAddPaidBy(user?.id || "");
-      setAddPaidByUser(user ? { _id: user.id, username: user.username, avatar: user.avatar } : null);
-      setAddCurrency(group.default_currency || "USD");
-      setAddDate(new Date());
-      setShowAddExpenseModal(true);
-    },
+    onAddExpense: openAddExpenseModal,
     onEditExpense: handleOpenEditExpense,
     onViewExpense: (expense) => {
       setViewExpenseItem(expense);
@@ -524,13 +534,7 @@ export default function GroupDetail() {
             variant="contained"
             size="small"
             startIcon={<AddIcon />}
-            onClick={() => {
-              setAddPaidBy(user?.id || "");
-              setAddPaidByUser(user ? { _id: user.id, username: user.username, avatar: user.avatar } : null);
-              setAddCurrency(group.default_currency || "USD");
-              setAddDate(new Date());
-              setShowAddExpenseModal(true);
-            }}
+            onClick={openAddExpenseModal}
             sx={{ display: activeTab === false ? "none" : { xs: "none", md: "inline-flex" }, flexShrink: 0 }}
           >
             New Expense
@@ -563,13 +567,7 @@ export default function GroupDetail() {
         <Fab
           color="primary"
           aria-label="Add expense"
-          onClick={() => {
-            setAddPaidBy(user?.id || "");
-            setAddPaidByUser(user ? { _id: user.id, username: user.username, avatar: user.avatar } : null);
-            setAddCurrency(group.default_currency || "USD");
-            setAddDate(new Date());
-            setShowAddExpenseModal(true);
-          }}
+          onClick={openAddExpenseModal}
           sx={{ display: { xs: "flex", md: "none" }, position: "fixed", bottom: 24, right: 24 }}
         >
           <AddIcon />
