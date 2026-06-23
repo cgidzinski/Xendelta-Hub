@@ -844,10 +844,12 @@ export default function GroupDetail() {
                 <Typography variant="h6" sx={{ fontWeight: 600, mt: 0.5 }}>
                   {e.title}
                 </Typography>
-                <Chip label={splitTypeLabel} size="small" sx={{ mt: 1, fontWeight: 600, fontSize: "0.7rem" }} />
-                {e.category && (
-                  <Chip label={e.category} size="small" variant="outlined" sx={{ mt: 0.5, ml: 0.5, fontWeight: 500, fontSize: "0.7rem" }} />
-                )}
+                <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", flexWrap: "wrap", gap: 0.5, mt: 1 }}>
+                  <Chip label={splitTypeLabel} size="small" sx={{ fontWeight: 600, fontSize: "0.7rem" }} />
+                  {e.category && (
+                    <Chip label={e.category} size="small" variant="outlined" sx={{ fontWeight: 500, fontSize: "0.7rem" }} />
+                  )}
+                </Box>
               </Box>
 
               <DialogContent sx={{ px: 3, pt: 1, pb: 2 }}>
