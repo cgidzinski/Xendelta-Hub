@@ -28,6 +28,17 @@ const MAX_IMAGES = 10;
 
 const STEPS = ["Details", "Split", "Misc"];
 
+const EXPENSE_CATEGORIES = [
+  "Food & Drink",
+  "Transport",
+  "Utilities",
+  "Entertainment",
+  "Travel",
+  "Shopping",
+  "Healthcare",
+  "Other",
+] as const;
+
 interface ExpenseFormProps {
   title: string;
   onTitleChange: (v: string) => void;
@@ -65,6 +76,8 @@ interface ExpenseFormProps {
   isEditing?: boolean;
   date: Date;
   onDateChange: (d: Date) => void;
+  category: string;
+  onCategoryChange: (v: string) => void;
 }
 
 export default function ExpenseForm({
@@ -103,6 +116,8 @@ export default function ExpenseForm({
   isEditing = false,
   date,
   onDateChange,
+  category,
+  onCategoryChange,
 }: ExpenseFormProps) {
   const [step, setStep] = React.useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -497,9 +512,22 @@ export default function ExpenseForm({
         </Box>
       )}
 
-      {/* Step 3: Photos */}
+      {/* Step 3: Misc */}
       {step === 2 && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <FormControl fullWidth>
+            <InputLabel>Category (optional)</InputLabel>
+            <Select
+              value={category}
+              label="Category (optional)"
+              onChange={(e) => onCategoryChange(e.target.value)}
+            >
+              <MenuItem value=""><em>None</em></MenuItem>
+              {EXPENSE_CATEGORIES.map((c) => (
+                <MenuItem key={c} value={c}>{c}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <TextField
             fullWidth
             label="Notes"

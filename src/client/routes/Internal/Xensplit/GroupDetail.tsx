@@ -124,6 +124,7 @@ export default function GroupDetail() {
   const [addExactSplits, setAddExactSplits] = useState<{ [userId: string]: string }>({});
   const [addPercentSplits, setAddPercentSplits] = useState<{ [userId: string]: string }>({});
   const [addDate, setAddDate] = useState<Date>(new Date());
+  const [addCategory, setAddCategory] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editAmount, setEditAmount] = useState("");
@@ -135,6 +136,7 @@ export default function GroupDetail() {
   const [editExactSplits, setEditExactSplits] = useState<{ [userId: string]: string }>({});
   const [editPercentSplits, setEditPercentSplits] = useState<{ [userId: string]: string }>({});
   const [editDate, setEditDate] = useState<Date>(new Date());
+  const [editCategory, setEditCategory] = useState("");
   const [showSettleModal, setShowSettleModal] = useState(false);
   const [selectedSettlement, setSelectedSettlement] = useState<XenSplitSettlementTransfer | null>(null);
   const [settleAmount, setSettleAmount] = useState("");
@@ -310,6 +312,7 @@ export default function GroupDetail() {
           currency: addCurrency,
           title: addTitle,
           notes: addNotes.trim() || undefined,
+          category: addCategory || undefined,
           date: addDate.toISOString(),
           split_type: addSplitType,
           splits,
@@ -336,6 +339,7 @@ export default function GroupDetail() {
             setAddSelectedParticipants([]);
             setAddExactSplits({});
             setAddPercentSplits({});
+            setAddCategory("");
             setAddImages([]);
             resolve();
           },
@@ -379,6 +383,7 @@ export default function GroupDetail() {
             currency: editCurrency,
             title: editTitle,
             notes: editNotes.trim() || undefined,
+            category: editCategory || undefined,
             date: editDate.toISOString(),
             split_type: editSplitType,
             splits,
@@ -438,6 +443,7 @@ export default function GroupDetail() {
       setEditPercentSplits(percentMap);
     }
     setEditDate(expense.date ? new Date(expense.date) : new Date());
+    setEditCategory(expense.category || "");
     setShowEditExpenseModal(true);
   };
 
@@ -452,6 +458,7 @@ export default function GroupDetail() {
     setAddSelectedParticipants([]);
     setAddExactSplits({});
     setAddPercentSplits({});
+    setAddCategory("");
     setAddImages([]);
     setAddDate(new Date());
     setShowAddExpenseModal(true);
@@ -719,6 +726,8 @@ export default function GroupDetail() {
             onImagesChange={setAddImages}
             date={addDate}
             onDateChange={setAddDate}
+            category={addCategory}
+            onCategoryChange={setAddCategory}
           />
         </DialogContent>
       </Dialog>
@@ -801,6 +810,8 @@ export default function GroupDetail() {
             isEditing
             date={editDate}
             onDateChange={setEditDate}
+            category={editCategory}
+            onCategoryChange={setEditCategory}
           />
         </DialogContent>
       </Dialog>
@@ -834,6 +845,9 @@ export default function GroupDetail() {
                   {e.title}
                 </Typography>
                 <Chip label={splitTypeLabel} size="small" sx={{ mt: 1, fontWeight: 600, fontSize: "0.7rem" }} />
+                {e.category && (
+                  <Chip label={e.category} size="small" variant="outlined" sx={{ mt: 0.5, ml: 0.5, fontWeight: 500, fontSize: "0.7rem" }} />
+                )}
               </Box>
 
               <DialogContent sx={{ px: 3, pt: 1, pb: 2 }}>

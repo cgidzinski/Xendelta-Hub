@@ -335,7 +335,7 @@ module.exports = function (app: any) {
     try {
       const userId = (req.user as any)._id.toString();
       const { groupId } = req.params;
-      const { paid_by, amount, currency, title, notes, date, split_type, splits } = req.body;
+      const { paid_by, amount, currency, title, notes, category, date, split_type, splits } = req.body;
 
       const group = await XenSplit.findById(groupId);
       if (!group) {
@@ -390,6 +390,7 @@ module.exports = function (app: any) {
         currency: expenseCurrency,
         title,
         notes,
+        category: category || undefined,
         date: date ? new Date(date) : new Date(),
         split_type,
         splits: resolvedSplits,
@@ -448,6 +449,7 @@ module.exports = function (app: any) {
       if (updates.currency !== undefined) expense.currency = updates.currency;
       if (updates.title !== undefined) expense.title = updates.title;
       if (updates.notes !== undefined) expense.notes = updates.notes;
+      if (updates.category !== undefined) expense.category = updates.category || undefined;
       if (updates.date !== undefined) expense.date = new Date(updates.date);
       if (updates.split_type !== undefined) expense.split_type = updates.split_type;
       if (updates.splits !== undefined) expense.splits = updates.splits;

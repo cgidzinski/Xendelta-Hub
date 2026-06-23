@@ -24,6 +24,7 @@ export interface XenSplitExpense {
   currency: string;
   title: string;
   notes?: string;
+  category?: string;
   date: string;
   split_type: "equal" | "exact" | "percent";
   splits: XenSplitExpenseSplit[];
@@ -102,6 +103,7 @@ export interface CreateExpenseInput {
   currency: string;
   title: string;
   notes?: string;
+  category?: string;
   date?: string;
   split_type: "equal" | "exact" | "percent";
   splits?: XenSplitExpenseSplit[];
@@ -119,6 +121,7 @@ export interface UpdateExpenseInput {
   currency?: string;
   title?: string;
   notes?: string;
+  category?: string;
   date?: string;
   split_type?: "equal" | "exact" | "percent";
   splits?: XenSplitExpenseSplit[];
