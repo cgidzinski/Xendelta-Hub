@@ -138,7 +138,7 @@ export default function Root() {
       navItems={navItems}
       footerNavItems={footerNavItems}
       showNotifications={true}
-      showMessages={true}
+      showMessages={false}
       showPoints={true}
     >
       {isAdmin && (

@@ -169,7 +169,7 @@ export default function BaseNavBar({
       <CssBaseline />
       <Drawer
         sx={{
-          width: isNavBarOpen ? DRAWER_WIDTH : 0,
+          width: isNavBarOpen && !isMobile ? DRAWER_WIDTH : 0,
           flexShrink: 0,
           "& .MuiDrawer-paper": {
             width: DRAWER_WIDTH,
@@ -177,9 +177,10 @@ export default function BaseNavBar({
             top: 0,
           },
         }}
-        variant="persistent"
+        variant={isMobile ? "temporary" : "persistent"}
         anchor="left"
         open={isNavBarOpen}
+        onClose={onToggleNavBar}
       >
         <Box sx={{ overflow: "auto", display: "flex", flexDirection: "column", height: "100%" }}>
           <Box
@@ -298,8 +299,8 @@ export default function BaseNavBar({
         position="fixed"
         sx={{
           zIndex: (theme) => theme.zIndex.drawer + 1,
-          width: isNavBarOpen ? `calc(100% - ${DRAWER_WIDTH}px)` : "100%",
-          ml: isNavBarOpen ? `${DRAWER_WIDTH}px` : 0,
+          width: isNavBarOpen && !isMobile ? `calc(100% - ${DRAWER_WIDTH}px)` : "100%",
+          ml: isNavBarOpen && !isMobile ? `${DRAWER_WIDTH}px` : 0,
           transition: (theme) =>
             theme.transitions.create(["width", "margin-left"], {
               easing: theme.transitions.easing.sharp,

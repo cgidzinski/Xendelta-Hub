@@ -90,7 +90,7 @@ export default function ExpenseForm({
   defaultCurrency,
   onSubmit,
   submitDisabled,
-  submitLabel = "New Expense",
+  submitLabel = "Confirm",
   loading,
   paidByUser,
   onPaidByUserChange,
@@ -287,6 +287,10 @@ export default function ExpenseForm({
                 const v = sanitizeAmount(e.target.value);
                 if (v !== null) onAmountChange(v);
               }}
+              onBlur={() => {
+                const n = parseFloat(amount);
+                if (!isNaN(n)) onAmountChange(n.toFixed(2));
+              }}
               slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
               sx={{ flex: 1 }}
             />
@@ -475,6 +479,10 @@ export default function ExpenseForm({
                         size="small"
                         value={percentSplits[p._id] || ""}
                         onChange={(e) => handleSplitChange(p._id, e.target.value, "percent")}
+                        onBlur={() => {
+                          const n = parseFloat(percentSplits[p._id]);
+                          if (!isNaN(n)) onPercentSplitsChange({ ...percentSplits, [p._id]: n.toFixed(1) });
+                        }}
                         slotProps={{
                           htmlInput: { inputMode: "decimal" },
                           input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
@@ -486,6 +494,10 @@ export default function ExpenseForm({
                         size="small"
                         value={exactSplits[p._id] || ""}
                         onChange={(e) => handleSplitChange(p._id, e.target.value, "exact")}
+                        onBlur={() => {
+                          const n = parseFloat(exactSplits[p._id]);
+                          if (!isNaN(n)) onExactSplitsChange({ ...exactSplits, [p._id]: n.toFixed(2) });
+                        }}
                         slotProps={{ htmlInput: { inputMode: "decimal" } }}
                         sx={{ flexGrow: 1 }}
                       />

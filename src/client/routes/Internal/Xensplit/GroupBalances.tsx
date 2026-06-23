@@ -60,9 +60,7 @@ export default function GroupBalances() {
                     </Box>
                 );
             })}
-            {Object.values(balancesData.balances).every((balance) =>
-                Object.values(balance.balances).every((amount) => amount === 0)
-            ) && (
+            {Object.keys(balancesData.balances).length === 0 && (
                     <Box sx={{ textAlign: "center", py: 4 }}>
                         <Typography variant="body1" color="text.secondary">
                             Nothing Yet
