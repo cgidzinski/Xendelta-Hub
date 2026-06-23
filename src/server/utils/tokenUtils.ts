@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 
-export const TOKEN_EXPIRATION = "24hr";
+export const TOKEN_EXPIRATION = "30d";
 
 interface TokenData {
   _id: string;

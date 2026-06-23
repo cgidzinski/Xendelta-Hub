@@ -107,7 +107,7 @@ export default function Login() {
         <Container maxWidth="lg" sx={{ width: "100%" }}>
           <Grid container spacing={0} sx={{ minHeight: { md: "70vh" } }}>
             {/* Left Side - Welcome Section */}
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={{ xs: 12, md: 6 }} sx={{ display: { xs: "none", md: "flex" } }}>
               <Box
                 sx={{
                   height: "100%",

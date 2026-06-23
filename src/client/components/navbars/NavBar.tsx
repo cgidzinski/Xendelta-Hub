@@ -24,12 +24,30 @@ export default function Root() {
 
   const pinnedApps = resolvePinnedApps(profile?.pinnedApps);
 
+  const buildPinAction = (app: AppRegistryItem, isPinned: boolean): React.ReactNode => (
+    <Tooltip title={isPinned ? "Unpin" : "Pin"}>
+      <span>
+        <IconButton
+          edge="end"
+          size="small"
+          disabled={isUpdating}
+          onClick={() => togglePinnedApp(app.key, pinnedApps)}
+          aria-label={isPinned ? `Unpin ${app.label}` : `Pin ${app.label}`}
+          sx={{ color: isPinned ? "warning.main" : "action.active" }}
+        >
+          {isPinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
+        </IconButton>
+      </span>
+    </Tooltip>
+  );
+
   const buildAppNavItem = (app: AppRegistryItem, keyPrefix: string): NavItem => ({
     key: `${keyPrefix}-${app.key}`,
     label: app.label,
     icon: app.icon ? <app.icon sx={{ fontSize: 22 }} /> : undefined,
     path: app.path,
     isSelected: (pathname: string) => pathname.startsWith(app.path),
+    endAction: buildPinAction(app, pinnedApps.includes(app.key)),
   });
 
   const pinnedNavItems: NavItem[] = pinnedApps
@@ -39,28 +57,9 @@ export default function Root() {
     })
     .filter(Boolean) as NavItem[];
 
-  const allAppNavItems: NavItem[] = APPS_REGISTRY.map((app) => {
-    const isPinned = pinnedApps.includes(app.key);
-    return {
-      ...buildAppNavItem(app, "app"),
-      endAction: (
-        <Tooltip title={isPinned ? "Unpin" : "Pin"}>
-          <span>
-            <IconButton
-              edge="end"
-              size="small"
-              disabled={isUpdating}
-              onClick={() => togglePinnedApp(app.key, pinnedApps)}
-              aria-label={isPinned ? `Unpin ${app.label}` : `Pin ${app.label}`}
-              sx={{ color: isPinned ? "warning.main" : "action.active" }}
-            >
-              {isPinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
-            </IconButton>
-          </span>
-        </Tooltip>
-      ),
-    };
-  });
+  const allAppNavItems: NavItem[] = APPS_REGISTRY
+    .filter((app) => !pinnedApps.includes(app.key))
+    .map((app) => buildAppNavItem(app, "app"));
 
   const pinnedSection: NavItem[] = pinnedNavItems.length
     ? [
@@ -92,41 +91,40 @@ export default function Root() {
       isSelected: (pathname) => pathname.startsWith("/internal/blog"),
     },
     {
-      key: "apps-divider",
-      label: "",
-      icon: null,
-      path: "",
-      isSelected: () => false,
-      type: "divider" as const,
-    },
-    ...pinnedSection,
-    {
-      key: "apps-header",
-      label: "Apps",
-      icon: null,
-      path: "",
-      isSelected: () => false,
-      type: "header" as const,
-    },
-    ...allAppNavItems,
-  ];
-
-  const footerNavItems: NavItem[] = [
-    {
       key: "inventory",
       label: "Inventory",
       icon: <InventoryIcon />,
       path: "/internal/inventory",
       isSelected: (pathname) => pathname.startsWith("/internal/inventory"),
     },
-    // {
-    //   key: "settings",
-    //   label: "Settings",
-    //   icon: <SettingsIcon />,
-    //   path: "/internal/settings",
-    //   isSelected: (pathname) => pathname.endsWith("/internal/settings"),
-    // },
+    ...(pinnedNavItems.length > 0 || allAppNavItems.length > 0
+      ? [
+          {
+            key: "apps-divider",
+            label: "",
+            icon: null,
+            path: "",
+            isSelected: () => false,
+            type: "divider" as const,
+          },
+        ]
+      : []),
+    ...pinnedSection,
+    ...(allAppNavItems.length > 0
+      ? [
+          {
+            key: "apps-header",
+            label: "Apps",
+            icon: null,
+            path: "",
+            isSelected: () => false,
+            type: "header" as const,
+          },
+        ]
+      : []),
   ];
+
+  const footerNavItems: NavItem[] = [];
 
   const isAdmin = profile?.roles?.some((role: string) => role.toLowerCase() === "admin");
 
@@ -136,9 +134,10 @@ export default function Root() {
       isNavBarOpen={isNavBarOpen}
       onToggleNavBar={toggleNavBar}
       navItems={navItems}
+      scrollableNavItems={allAppNavItems}
       footerNavItems={footerNavItems}
       showNotifications={true}
-      showMessages={true}
+      showMessages={false}
       showPoints={true}
     >
       {isAdmin && (

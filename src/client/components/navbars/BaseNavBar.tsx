@@ -58,6 +58,7 @@ interface BaseNavBarProps {
   isNavBarOpen: boolean;
   onToggleNavBar: () => void;
   navItems: NavItem[];
+  scrollableNavItems?: NavItem[];
   footerNavItems?: NavItem[];
   showNotifications?: boolean;
   showMessages?: boolean;
@@ -90,6 +91,7 @@ export default function BaseNavBar({
   isNavBarOpen,
   onToggleNavBar,
   navItems,
+  scrollableNavItems = [],
   footerNavItems = [],
   showNotifications = false,
   showMessages = false,
@@ -120,6 +122,43 @@ export default function BaseNavBar({
       }
     },
   });
+
+  const renderNavItem = (item: NavItem) => {
+    if (item.type === "divider") {
+      return <Divider key={item.key} variant="middle" component="li" sx={{ my: 1 }} />;
+    }
+    if (item.type === "header") {
+      return (
+        <ListItem key={item.key} disablePadding>
+          <Box sx={{ px: 2, py: 1, width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              {item.icon}
+              <Typography variant="overline" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                {item.label}
+              </Typography>
+            </Box>
+            {item.headerAction}
+          </Box>
+        </ListItem>
+      );
+    }
+    return (
+      <ListItem
+        key={item.key}
+        disablePadding
+        secondaryAction={item.endAction}
+      >
+        <ListItemButton
+          onClick={() => handleNavItemClick(item.path)}
+          selected={item.isSelected(window.location.pathname)}
+          sx={item.indent ? { pl: 4 } : {}}
+        >
+          <ListItemIcon>{item.icon}</ListItemIcon>
+          <ListItemText primary={item.label} />
+        </ListItemButton>
+      </ListItem>
+    );
+  };
 
   const handleNavItemClick = (path: string) => {
     navigate(path);
@@ -169,7 +208,7 @@ export default function BaseNavBar({
       <CssBaseline />
       <Drawer
         sx={{
-          width: isNavBarOpen ? DRAWER_WIDTH : 0,
+          width: isNavBarOpen && !isMobile ? DRAWER_WIDTH : 0,
           flexShrink: 0,
           "& .MuiDrawer-paper": {
             width: DRAWER_WIDTH,
@@ -177,14 +216,16 @@ export default function BaseNavBar({
             top: 0,
           },
         }}
-        variant="persistent"
+        variant={isMobile ? "temporary" : "persistent"}
         anchor="left"
         open={isNavBarOpen}
+        onClose={onToggleNavBar}
       >
-        <Box sx={{ overflow: "auto", display: "flex", flexDirection: "column", height: "100%" }}>
+        <Box sx={{ overflow: "hidden", display: "flex", flexDirection: "column", height: "100%" }}>
           <Box
             sx={{
               height: 64,
+              flexShrink: 0,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -216,90 +257,76 @@ export default function BaseNavBar({
               {drawerHeaderText}
             </Typography>
           </Box>
-          <List>
-            {navItems.map((item) => {
-              if (item.type === "divider") {
-                return <Divider key={item.key} variant="middle" component="li" sx={{ my: 1 }} />;
-              }
-              if (item.type === "header") {
-                return (
-                  <ListItem key={item.key} disablePadding>
-                    <Box sx={{ px: 2, py: 1, width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        {item.icon}
-                        <Typography variant="overline" sx={{ fontWeight: 600, color: "text.secondary" }}>
-                          {item.label}
-                        </Typography>
-                      </Box>
-                      {item.headerAction}
-                    </Box>
-                  </ListItem>
-                );
-              }
-              return (
-                <ListItem
-                  key={item.key}
-                  disablePadding
-                  secondaryAction={item.endAction}
-                >
-                  <ListItemButton
-                    onClick={() => handleNavItemClick(item.path)}
-                    selected={item.isSelected(window.location.pathname)}
-                    sx={item.indent ? { pl: 4 } : {}}
-                  >
-                    <ListItemIcon>{item.icon}</ListItemIcon>
-                    <ListItemText primary={item.label} />
-                  </ListItemButton>
-                </ListItem>
-              );
-            })}
-          </List>
 
-          <Box sx={{ marginTop: "auto" }}>
+          {(showPoints || showProfile) && (
+            <Box sx={{ flexShrink: 0 }}>
+              <List sx={{ py: 0 }}>
+                {showProfile && (
+                  <ProfileListItem
+                    profile={profile}
+                    isSelected={location.pathname.endsWith("/internal/profile")}
+                    onNavigate={() => {
+                      if (isMobile && isNavBarOpen) {
+                        onToggleNavBar();
+                      }
+                      navigate("/internal/profile");
+                    }}
+                  />
+                )}
+                {showPoints && (
+                  <ShopListItem
+                    points={profile?.points}
+                    onNavigate={() => {
+                      if (isMobile && isNavBarOpen) {
+                        onToggleNavBar();
+                      }
+                      navigate("/internal/shop");
+                    }}
+                  />
+                )}
+              </List>
+              <Divider variant="middle" sx={{ my: 1 }} />
+            </Box>
+          )}
+
+          <Box sx={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
             <List>
-              {footerNavItems.map((item) => (
-                <ListItem key={item.key} disablePadding>
-                  <ListItemButton
-                    onClick={() => handleNavItemClick(item.path)}
-                    selected={item.isSelected(window.location.pathname)}
-                  >
-                    <ListItemIcon>{item.icon}</ListItemIcon>
-                    <ListItemText primary={item.label} />
-                  </ListItemButton>
-                </ListItem>
-              ))}
-              {footerNavItems.length > 0 && <Divider variant="middle" component="li" sx={{ my: 1 }} />}
-              {showProfile && (
-                <ProfileListItem profile={profile}
-                  isSelected={location.pathname.endsWith("/internal/profile")}
-                  onNavigate={() => {
-                    if (isMobile && isNavBarOpen) {
-                      onToggleNavBar();
-                    }
-                    navigate("/internal/profile");
-                  }} />
-              )}
-              {showProfile && <Divider variant="middle" component="li" sx={{ my: 1 }} />}
-              {showPoints && (
-                <ShopListItem
-                  points={profile?.points}
-                  onNavigate={() => {
-                    if (isMobile && isNavBarOpen) {
-                      onToggleNavBar();
-                    }
-                    navigate("/internal/shop");
-                  }} />
-              )}
+              {navItems.map(renderNavItem)}
             </List>
+
+            {scrollableNavItems.length > 0 && (
+              <List sx={{ py: 0 }}>
+                {scrollableNavItems.map(renderNavItem)}
+              </List>
+            )}
           </Box>
+
+          {footerNavItems.length > 0 && (
+            <Box sx={{ flexShrink: 0, marginTop: "auto" }}>
+              <Divider variant="middle" component="li" sx={{ my: 1 }} />
+              <List>
+                {footerNavItems.map((item) => (
+                  <ListItem key={item.key} disablePadding>
+                    <ListItemButton
+                      onClick={() => handleNavItemClick(item.path)}
+                      selected={item.isSelected(window.location.pathname)}
+                    >
+                      <ListItemIcon>{item.icon}</ListItemIcon>
+                      <ListItemText primary={item.label} />
+                    </ListItemButton>
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
         </Box>
       </Drawer>
       <AppBar
         position="fixed"
         sx={{
           zIndex: (theme) => theme.zIndex.drawer + 1,
-          width: isNavBarOpen ? `calc(100% - ${DRAWER_WIDTH}px)` : "100%",
-          ml: isNavBarOpen ? `${DRAWER_WIDTH}px` : 0,
+          width: isNavBarOpen && !isMobile ? `calc(100% - ${DRAWER_WIDTH}px)` : "100%",
+          ml: isNavBarOpen && !isMobile ? `${DRAWER_WIDTH}px` : 0,
           transition: (theme) =>
             theme.transitions.create(["width", "margin-left"], {
               easing: theme.transitions.easing.sharp,
