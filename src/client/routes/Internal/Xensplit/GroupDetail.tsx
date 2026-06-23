@@ -877,7 +877,7 @@ export default function GroupDetail() {
                             <Typography variant="body2" sx={{ flexGrow: 1 }}>{member?.username ?? "?"}</Typography>
                             <Typography variant="body2" sx={{ fontWeight: 600 }}>
                               {e.split_type === "percent" && split.percentage != null
-                                ? `${split.percentage.toFixed(1)}% · ${formatCurrency(split.amount_owed ?? 0, e.currency)}`
+                                ? `${split.percentage.toFixed(2)}% · ${formatCurrency(split.amount_owed ?? 0, e.currency)}`
                                 : formatCurrency(split.amount_owed ?? e.amount / e.splits.length, e.currency)}
                             </Typography>
                           </Box>

@@ -137,7 +137,7 @@ export default function ExpenseForm({
     if (uneditedIds.length > 0) {
       const per = Math.max(0, (total - editedSum) / uneditedIds.length);
       uneditedIds.forEach((uid) => {
-        next[uid] = type === "exact" ? per.toFixed(2) : per.toFixed(1);
+        next[uid] = per.toFixed(2);
       });
     }
     if (type === "exact") onExactSplitsChange(next);
@@ -183,7 +183,7 @@ export default function ExpenseForm({
     } else if (splitType === "percent") {
       const newPercentSplits: { [userId: string]: string } = {};
       selectedParticipants.forEach((p) => {
-        newPercentSplits[p._id] = equalPercent.toFixed(1);
+        newPercentSplits[p._id] = equalPercent.toFixed(2);
       });
       onPercentSplitsChange(newPercentSplits);
     }
@@ -453,13 +453,13 @@ export default function ExpenseForm({
                         variant="caption"
                         color={Math.abs(totalPercent - 100) < 0.01 ? "success" : "error"}
                       >
-                        Total: {totalPercent === 0 ? "0" : totalPercent.toFixed(1)}% / 100%
+                        Total: {totalPercent === 0 ? "0" : totalPercent.toFixed(2)}% / 100%
                       </Typography>
                       <Typography
                         variant="caption"
                         color={Math.abs(totalPercent - 100) < 0.01 ? "success" : "text.secondary"}
                       >
-                        Remainder: {(100 - totalPercent).toFixed(1)}%
+                        Remainder: {(100 - totalPercent).toFixed(2)}%
                       </Typography>
                     </Box>
                   )}
@@ -481,7 +481,7 @@ export default function ExpenseForm({
                         onChange={(e) => handleSplitChange(p._id, e.target.value, "percent")}
                         onBlur={() => {
                           const n = parseFloat(percentSplits[p._id]);
-                          if (!isNaN(n)) onPercentSplitsChange({ ...percentSplits, [p._id]: n.toFixed(1) });
+                          if (!isNaN(n)) onPercentSplitsChange({ ...percentSplits, [p._id]: n.toFixed(2) });
                         }}
                         slotProps={{
                           htmlInput: { inputMode: "decimal" },
