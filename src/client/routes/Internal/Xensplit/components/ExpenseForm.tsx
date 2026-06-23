@@ -23,21 +23,11 @@ import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import { SearchedUser } from "../../../../hooks/useUserSearch";
 import type { XenSplitExpenseImage } from "../../../../hooks/xensplit/types";
 import { getSortedCurrencies, getCurrencySymbol } from "../../../../utils/currencyUtils";
+import { EXPENSE_CATEGORIES } from "../../../../constants/xensplit";
 
 const MAX_IMAGES = 10;
 
 const STEPS = ["Details", "Split", "Misc"];
-
-const EXPENSE_CATEGORIES = [
-  "Food & Drink",
-  "Transport",
-  "Utilities",
-  "Entertainment",
-  "Travel",
-  "Shopping",
-  "Healthcare",
-  "Other",
-] as const;
 
 interface ExpenseFormProps {
   title: string;
