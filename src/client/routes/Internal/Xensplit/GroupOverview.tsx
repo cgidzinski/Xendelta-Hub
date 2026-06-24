@@ -38,10 +38,10 @@ export default function GroupOverview() {
     const userPaidCount = group.expenses.filter((e) => e.paid_by === user.id).length;
 
     // Pending settlements involving this user
-    const userSettlements = (balancesData?.settlements ?? []).filter(
+    const allPendingSettlements = balancesData?.settlements ?? [];
+    const userSettlements = allPendingSettlements.filter(
         (s) => s.from === user.id || s.to === user.id
     );
-    const iOweSettlements = userSettlements.filter((s) => s.from === user.id);
 
     // Activity feed
     const feed: ActivityItem[] = [
@@ -98,16 +98,16 @@ export default function GroupOverview() {
             <Button
                 fullWidth
                 variant="outlined"
-                color={iOweSettlements.length > 0 ? "primary" : userSettlements.length > 0 ? "warning" : "inherit"}
+                color={userSettlements.length > 0 ? "primary" : allPendingSettlements.length > 0 ? "warning" : "inherit"}
                 size="small"
                 onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settlements`)}
-                sx={{ mb: 2, borderRadius: 2, fontWeight: 600, ...(userSettlements.length === 0 && { borderColor: "divider", color: "text.disabled" }) }}
+                sx={{ mb: 2, borderRadius: 2, fontWeight: 600, ...(allPendingSettlements.length === 0 && { borderColor: "divider", color: "text.disabled" }) }}
             >
-                {iOweSettlements.length > 0
-                    ? "Settle Up"
-                    : userSettlements.length > 0
-                        ? `${userSettlements.length} pending settlement${userSettlements.length !== 1 ? "s" : ""}`
-                        : "No pending settlements"}
+                {userSettlements.length > 0
+                    ? `You have ${userSettlements.length} pending settlement${userSettlements.length !== 1 ? "s" : ""}`
+                    : allPendingSettlements.length > 0
+                        ? `${allPendingSettlements.length} Pending Settlement${allPendingSettlements.length !== 1 ? "s" : ""}`
+                        : "All settled up"}
             </Button>
 
             {/* Summary cards */}
