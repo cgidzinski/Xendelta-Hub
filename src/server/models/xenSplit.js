@@ -18,6 +18,7 @@ var expenseSchema = new Schema({
   currency: { type: String, default: "CAD" },
   title: { type: String, required: true, maxlength: 500 },
   notes: { type: String, maxlength: 1000 },
+  category: { type: String, maxlength: 50 },
   date: { type: Date, default: Date.now },
   split_type: {
     type: String,

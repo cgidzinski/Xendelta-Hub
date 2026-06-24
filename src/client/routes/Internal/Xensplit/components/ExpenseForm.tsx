@@ -23,6 +23,7 @@ import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import { SearchedUser } from "../../../../hooks/useUserSearch";
 import type { XenSplitExpenseImage } from "../../../../hooks/xensplit/types";
 import { getSortedCurrencies, getCurrencySymbol } from "../../../../utils/currencyUtils";
+import { EXPENSE_CATEGORIES } from "../../../../constants/xensplit";
 
 const MAX_IMAGES = 10;
 
@@ -65,6 +66,8 @@ interface ExpenseFormProps {
   isEditing?: boolean;
   date: Date;
   onDateChange: (d: Date) => void;
+  category: string;
+  onCategoryChange: (v: string) => void;
 }
 
 export default function ExpenseForm({
@@ -103,6 +106,8 @@ export default function ExpenseForm({
   isEditing = false,
   date,
   onDateChange,
+  category,
+  onCategoryChange,
 }: ExpenseFormProps) {
   const [step, setStep] = React.useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -137,7 +142,7 @@ export default function ExpenseForm({
     if (uneditedIds.length > 0) {
       const per = Math.max(0, (total - editedSum) / uneditedIds.length);
       uneditedIds.forEach((uid) => {
-        next[uid] = type === "exact" ? per.toFixed(2) : per.toFixed(1);
+        next[uid] = per.toFixed(2);
       });
     }
     if (type === "exact") onExactSplitsChange(next);
@@ -183,7 +188,7 @@ export default function ExpenseForm({
     } else if (splitType === "percent") {
       const newPercentSplits: { [userId: string]: string } = {};
       selectedParticipants.forEach((p) => {
-        newPercentSplits[p._id] = equalPercent.toFixed(1);
+        newPercentSplits[p._id] = equalPercent.toFixed(2);
       });
       onPercentSplitsChange(newPercentSplits);
     }
@@ -453,13 +458,13 @@ export default function ExpenseForm({
                         variant="caption"
                         color={Math.abs(totalPercent - 100) < 0.01 ? "success" : "error"}
                       >
-                        Total: {totalPercent === 0 ? "0" : totalPercent.toFixed(1)}% / 100%
+                        Total: {totalPercent === 0 ? "0" : totalPercent.toFixed(2)}% / 100%
                       </Typography>
                       <Typography
                         variant="caption"
                         color={Math.abs(totalPercent - 100) < 0.01 ? "success" : "text.secondary"}
                       >
-                        Remainder: {(100 - totalPercent).toFixed(1)}%
+                        Remainder: {(100 - totalPercent).toFixed(2)}%
                       </Typography>
                     </Box>
                   )}
@@ -481,7 +486,7 @@ export default function ExpenseForm({
                         onChange={(e) => handleSplitChange(p._id, e.target.value, "percent")}
                         onBlur={() => {
                           const n = parseFloat(percentSplits[p._id]);
-                          if (!isNaN(n)) onPercentSplitsChange({ ...percentSplits, [p._id]: n.toFixed(1) });
+                          if (!isNaN(n)) onPercentSplitsChange({ ...percentSplits, [p._id]: n.toFixed(2) });
                         }}
                         slotProps={{
                           htmlInput: { inputMode: "decimal" },
@@ -509,9 +514,22 @@ export default function ExpenseForm({
         </Box>
       )}
 
-      {/* Step 3: Photos */}
+      {/* Step 3: Misc */}
       {step === 2 && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <FormControl fullWidth>
+            <InputLabel>Category (optional)</InputLabel>
+            <Select
+              value={category}
+              label="Category (optional)"
+              onChange={(e) => onCategoryChange(e.target.value)}
+            >
+              <MenuItem value=""><em>None</em></MenuItem>
+              {EXPENSE_CATEGORIES.map((c) => (
+                <MenuItem key={c} value={c}>{c}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <TextField
             fullWidth
             label="Notes"

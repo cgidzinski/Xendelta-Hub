@@ -79,7 +79,7 @@ export interface GroupDetailContext {
   onSettle: (settlement: XenSplitSettlementTransfer) => void;
   onAddMembers: () => void;
   onMemberMenu: (memberId: string, anchor: HTMLElement) => void;
-  updateGroup: (updates: { name?: string; default_currency?: string }, options?: { onSuccess?: () => void; onError?: () => void }) => void;
+  updateGroup: (updates: { name?: string; default_currency?: string }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
   isUpdating: boolean;
   deleteSettlement: (settlementId: string) => void;
   isDeletingSettlement: boolean;
@@ -124,6 +124,7 @@ export default function GroupDetail() {
   const [addExactSplits, setAddExactSplits] = useState<{ [userId: string]: string }>({});
   const [addPercentSplits, setAddPercentSplits] = useState<{ [userId: string]: string }>({});
   const [addDate, setAddDate] = useState<Date>(new Date());
+  const [addCategory, setAddCategory] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editAmount, setEditAmount] = useState("");
@@ -135,6 +136,7 @@ export default function GroupDetail() {
   const [editExactSplits, setEditExactSplits] = useState<{ [userId: string]: string }>({});
   const [editPercentSplits, setEditPercentSplits] = useState<{ [userId: string]: string }>({});
   const [editDate, setEditDate] = useState<Date>(new Date());
+  const [editCategory, setEditCategory] = useState("");
   const [showSettleModal, setShowSettleModal] = useState(false);
   const [selectedSettlement, setSelectedSettlement] = useState<XenSplitSettlementTransfer | null>(null);
   const [settleAmount, setSettleAmount] = useState("");
@@ -193,8 +195,8 @@ export default function GroupDetail() {
           setSelectedMembers([]);
           resolve();
         },
-        onError: () => {
-          enqueueSnackbar("Failed to add members", { variant: "error" });
+        onError: (error: Error) => {
+          enqueueSnackbar(error?.message || "Failed to add members", { variant: "error" });
           resolve();
         },
       });
@@ -208,9 +210,8 @@ export default function GroupDetail() {
           enqueueSnackbar("Member removed", { variant: "success" });
           resolve();
         },
-        onError: (error: any) => {
-          const message = error?.response?.data?.message || "Failed to remove member";
-          enqueueSnackbar(message, { variant: "error" });
+        onError: (error: Error) => {
+          enqueueSnackbar(error?.message || "Failed to remove member", { variant: "error" });
           resolve();
         },
       });
@@ -226,8 +227,8 @@ export default function GroupDetail() {
           enqueueSnackbar("Group closed", { variant: "success" });
           resolve();
         },
-        onError: () => {
-          enqueueSnackbar("Failed to close group", { variant: "error" });
+        onError: (error: Error) => {
+          enqueueSnackbar(error?.message || "Failed to close group", { variant: "error" });
           resolve();
         },
       });
@@ -310,6 +311,7 @@ export default function GroupDetail() {
           currency: addCurrency,
           title: addTitle,
           notes: addNotes.trim() || undefined,
+          category: addCategory || undefined,
           date: addDate.toISOString(),
           split_type: addSplitType,
           splits,
@@ -336,11 +338,12 @@ export default function GroupDetail() {
             setAddSelectedParticipants([]);
             setAddExactSplits({});
             setAddPercentSplits({});
+            setAddCategory("");
             setAddImages([]);
             resolve();
           },
-          onError: () => {
-            enqueueSnackbar("Failed to add expense", { variant: "error" });
+          onError: (error: Error) => {
+            enqueueSnackbar(error?.message || "Failed to add expense", { variant: "error" });
             resolve();
           },
         }
@@ -379,6 +382,7 @@ export default function GroupDetail() {
             currency: editCurrency,
             title: editTitle,
             notes: editNotes.trim() || undefined,
+            category: editCategory || undefined,
             date: editDate.toISOString(),
             split_type: editSplitType,
             splits,
@@ -398,8 +402,8 @@ export default function GroupDetail() {
             setEditImages([]);
             resolve();
           },
-          onError: () => {
-            enqueueSnackbar("Failed to update expense", { variant: "error" });
+          onError: (error: Error) => {
+            enqueueSnackbar(error?.message || "Failed to update expense", { variant: "error" });
             resolve();
           },
         }
@@ -438,6 +442,7 @@ export default function GroupDetail() {
       setEditPercentSplits(percentMap);
     }
     setEditDate(expense.date ? new Date(expense.date) : new Date());
+    setEditCategory(expense.category || "");
     setShowEditExpenseModal(true);
   };
 
@@ -452,6 +457,7 @@ export default function GroupDetail() {
     setAddSelectedParticipants([]);
     setAddExactSplits({});
     setAddPercentSplits({});
+    setAddCategory("");
     setAddImages([]);
     setAddDate(new Date());
     setShowAddExpenseModal(true);
@@ -719,6 +725,8 @@ export default function GroupDetail() {
             onImagesChange={setAddImages}
             date={addDate}
             onDateChange={setAddDate}
+            category={addCategory}
+            onCategoryChange={setAddCategory}
           />
         </DialogContent>
       </Dialog>
@@ -748,8 +756,8 @@ export default function GroupDetail() {
                         setSelectedExpense(null);
                         resolve();
                       },
-                      onError: () => {
-                        enqueueSnackbar("Failed to delete expense", { variant: "error" });
+                      onError: (error: Error) => {
+                        enqueueSnackbar(error?.message || "Failed to delete expense", { variant: "error" });
                         resolve();
                       },
                     });
@@ -801,6 +809,8 @@ export default function GroupDetail() {
             isEditing
             date={editDate}
             onDateChange={setEditDate}
+            category={editCategory}
+            onCategoryChange={setEditCategory}
           />
         </DialogContent>
       </Dialog>
@@ -833,7 +843,12 @@ export default function GroupDetail() {
                 <Typography variant="h6" sx={{ fontWeight: 600, mt: 0.5 }}>
                   {e.title}
                 </Typography>
-                <Chip label={splitTypeLabel} size="small" sx={{ mt: 1, fontWeight: 600, fontSize: "0.7rem" }} />
+                <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", flexWrap: "wrap", gap: 0.5, mt: 1 }}>
+                  <Chip label={splitTypeLabel} size="small" sx={{ fontWeight: 600, fontSize: "0.7rem" }} />
+                  {e.category && (
+                    <Chip label={e.category} size="small" variant="outlined" sx={{ fontWeight: 500, fontSize: "0.7rem" }} />
+                  )}
+                </Box>
               </Box>
 
               <DialogContent sx={{ px: 3, pt: 1, pb: 2 }}>
@@ -877,7 +892,7 @@ export default function GroupDetail() {
                             <Typography variant="body2" sx={{ flexGrow: 1 }}>{member?.username ?? "?"}</Typography>
                             <Typography variant="body2" sx={{ fontWeight: 600 }}>
                               {e.split_type === "percent" && split.percentage != null
-                                ? `${split.percentage.toFixed(1)}% · ${formatCurrency(split.amount_owed ?? 0, e.currency)}`
+                                ? `${split.percentage.toFixed(2)}% · ${formatCurrency(split.amount_owed ?? 0, e.currency)}`
                                 : formatCurrency(split.amount_owed ?? e.amount / e.splits.length, e.currency)}
                             </Typography>
                           </Box>
@@ -1038,8 +1053,8 @@ export default function GroupDetail() {
                       setShowSettleModal(false);
                       resolve();
                     },
-                    onError: () => {
-                      enqueueSnackbar("Failed to settle", { variant: "error" });
+                    onError: (error: Error) => {
+                      enqueueSnackbar(error?.message || "Failed to settle", { variant: "error" });
                       resolve();
                     },
                   }
