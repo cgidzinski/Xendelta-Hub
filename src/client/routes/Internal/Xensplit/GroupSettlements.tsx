@@ -98,7 +98,7 @@ export default function GroupSettlements() {
                                     <Box sx={{ gridColumn: 1, gridRow: "1 / 3", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: { xs: 0.5, sm: 0.75 } }}>
                                         <Avatar
                                             src={settlement.fromUser.avatar || undefined}
-                                            sx={{ width: { xs: 36, sm: 44 }, height: { xs: 36, sm: 44 }, bgcolor: settlement.fromUser.avatar ? "transparent" : "error.main" }}
+                                            sx={{ width: { xs: 36, sm: 44 }, height: { xs: 36, sm: 44 } }}
                                         >
                                             {settlement.fromUser.username[0]?.toUpperCase()}
                                         </Avatar>
@@ -141,7 +141,7 @@ export default function GroupSettlements() {
                                     <Box sx={{ gridColumn: 9, gridRow: "1 / 3", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: { xs: 0.5, sm: 0.75 } }}>
                                         <Avatar
                                             src={settlement.toUser.avatar || undefined}
-                                            sx={{ width: { xs: 36, sm: 44 }, height: { xs: 36, sm: 44 }, bgcolor: settlement.toUser.avatar ? "transparent" : "success.main" }}
+                                            sx={{ width: { xs: 36, sm: 44 }, height: { xs: 36, sm: 44 } }}
                                         >
                                             {settlement.toUser.username[0]?.toUpperCase()}
                                         </Avatar>

@@ -34,7 +34,7 @@ export default function ExpenseListItem({ expense, onClick, userId, mb }: Expens
         >
             <Avatar
                 src={expense.payer?.avatar || undefined}
-                sx={{ bgcolor: "primary.main", width: { xs: 34, sm: 40 }, height: { xs: 34, sm: 40 }, flexShrink: 0 }}
+                sx={{ width: { xs: 34, sm: 40 }, height: { xs: 34, sm: 40 }, flexShrink: 0 }}
             >
                 {expense.payer?.username?.[0]?.toUpperCase() ?? "?"}
             </Avatar>

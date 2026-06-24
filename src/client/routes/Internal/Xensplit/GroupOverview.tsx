@@ -97,8 +97,8 @@ export default function GroupOverview() {
             {/* Pending settlements — always visible */}
             <Button
                 fullWidth
-                variant={iOweSettlements.length > 0 ? "contained" : "outlined"}
-                color={iOweSettlements.length > 0 ? "success" : userSettlements.length > 0 ? "warning" : "inherit"}
+                variant="outlined"
+                color={iOweSettlements.length > 0 ? "primary" : userSettlements.length > 0 ? "warning" : "inherit"}
                 size="small"
                 onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settlements`)}
                 sx={{ mb: 2, borderRadius: 2, fontWeight: 600, ...(userSettlements.length === 0 && { borderColor: "divider", color: "text.disabled" }) }}
@@ -284,14 +284,14 @@ export default function GroupOverview() {
                                         <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexShrink: 0 }}>
                                             <Avatar
                                                 src={fromMember?.avatar || undefined}
-                                                sx={{ bgcolor: fromMember?.avatar ? "transparent" : "error.dark", width: { xs: 32, sm: 36 }, height: { xs: 32, sm: 36 }, fontSize: { xs: 13, sm: 14 } }}
+                                                sx={{ width: { xs: 32, sm: 36 }, height: { xs: 32, sm: 36 }, fontSize: { xs: 13, sm: 14 } }}
                                             >
                                                 {fromMember?.username[0]?.toUpperCase()}
                                             </Avatar>
                                             <EastIcon sx={{ fontSize: { xs: 14, sm: 16 }, color: "text.disabled" }} />
                                             <Avatar
                                                 src={toMember?.avatar || undefined}
-                                                sx={{ bgcolor: toMember?.avatar ? "transparent" : "success.dark", width: { xs: 32, sm: 36 }, height: { xs: 32, sm: 36 }, fontSize: { xs: 13, sm: 14 } }}
+                                                sx={{ width: { xs: 32, sm: 36 }, height: { xs: 32, sm: 36 }, fontSize: { xs: 13, sm: 14 } }}
                                             >
                                                 {toMember?.username[0]?.toUpperCase()}
                                             </Avatar>

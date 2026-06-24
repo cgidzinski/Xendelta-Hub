@@ -34,7 +34,7 @@ export default function GroupBalances() {
                             opacity: isSettled ? 0.5 : 1,
                         }}
                     >
-                        <Avatar src={balance.user.avatar || undefined} sx={{ bgcolor: balance.user.avatar ? "transparent" : "primary.main" }}>
+                        <Avatar src={balance.user.avatar || undefined} sx={{}}>
                             {balance.user.username[0]?.toUpperCase()}
                         </Avatar>
                         <Box sx={{ flexGrow: 1 }}>
