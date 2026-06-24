@@ -19,6 +19,7 @@ import AdminNavBar from "./components/navbars/AdminNavBar";
 // Contexts
 import { NavBarProvider } from "./contexts/NavBarContext";
 import { AuthProvider } from "./contexts/AuthContext";
+import { SocketProvider } from "./contexts/SocketContext";
 
 // Routes - External
 import Landing from "./routes/External/Landing/Landing";
@@ -232,16 +233,18 @@ ReactDOM.createRoot(rootElement).render(
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <AuthProvider>
-          <NavBarProvider>
-            <SnackbarProvider
-              maxSnack={10}
-              autoHideDuration={2500}
-              anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-            >
-              <RouterProvider router={router} />
-              <PWA />
-            </SnackbarProvider>
-          </NavBarProvider>
+          <SocketProvider>
+            <NavBarProvider>
+              <SnackbarProvider
+                maxSnack={10}
+                autoHideDuration={2500}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+              >
+                <RouterProvider router={router} />
+                <PWA />
+              </SnackbarProvider>
+            </NavBarProvider>
+          </SocketProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
