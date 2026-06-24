@@ -131,7 +131,7 @@ export function GroupCard({ group, userId }: GroupCardProps) {
                       <Avatar
                         key={member.user_id}
                         src={member.avatar || undefined}
-                        sx={{ bgcolor: "primary.dark" }}
+                        sx={{}}
                       >
                         {member.username[0]?.toUpperCase()}
                       </Avatar>
