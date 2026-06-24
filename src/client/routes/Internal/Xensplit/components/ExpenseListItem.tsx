@@ -1,74 +1,72 @@
-import { Box, Typography, Avatar } from "@mui/material";
+import { Box, Typography } from "@mui/material";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import type { XenSplitExpense } from "../../../../hooks/xensplit/types";
 import { formatCurrency } from "../../../../utils/currencyUtils";
+import { xsCardSx, xsBadgeSx } from "./rowStyles";
 
 interface ExpenseListItemProps {
     expense: XenSplitExpense;
     onClick: () => void;
     userId?: string;
-    mb?: number;
+    /** Hide the inline date in the subtitle (e.g. when the feed is already grouped by date). */
+    hideDate?: boolean;
 }
 
-export default function ExpenseListItem({ expense, onClick, userId, mb }: ExpenseListItemProps) {
-    const isInvolved = userId
-        ? expense.paid_by === userId || expense.splits.some((sp) => sp.user_id === userId)
-        : false;
+export default function ExpenseListItem({ expense, onClick, userId, hideDate }: ExpenseListItemProps) {
+    const mySplit = userId ? expense.splits.find((sp) => sp.user_id === userId) : undefined;
+    const isInvolved = userId ? expense.paid_by === userId || expense.splits.some((sp) => sp.user_id === userId) : false;
+    const owe = mySplit && expense.paid_by !== userId
+        ? (mySplit.amount_owed ?? (expense.splits.length ? expense.amount / expense.splits.length : 0))
+        : 0;
+    const dateStr = new Date(expense.date).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
     return (
         <Box
             onClick={onClick}
             sx={{
+                ...xsCardSx,
+                position: "relative",
                 display: "grid",
-                gridTemplateColumns: { xs: "34px 1fr auto", sm: "40px 1fr auto" },
+                gridTemplateColumns: "40px 1fr auto",
                 alignItems: "center",
-                columnGap: 1.5,
-                px: 2,
-                py: 1.5,
-                bgcolor: "action.hover",
-                borderRadius: 2,
+                columnGap: 1.25,
                 cursor: "pointer",
-                borderLeft: "3px solid",
-                borderColor: isInvolved ? "primary.main" : "transparent",
-                mb: mb ?? 0,
-                "&:hover": { bgcolor: "action.selected" },
+                "&:hover": { bgcolor: "action.hover" },
+                ...(isInvolved && {
+                    "&::before": {
+                        content: '""',
+                        position: "absolute",
+                        left: -2,
+                        top: 8,
+                        bottom: 8,
+                        width: 4,
+                        borderRadius: 2,
+                        bgcolor: "primary.main",
+                    },
+                }),
             }}
         >
-            <Avatar
-                src={expense.payer?.avatar || undefined}
-                sx={{ width: { xs: 34, sm: 40 }, height: { xs: 34, sm: 40 } }}
-            >
-                {expense.payer?.username?.[0]?.toUpperCase() ?? "?"}
-            </Avatar>
-            <Box sx={{ minWidth: 0 }}>
-                <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
-                    {expense.title}
-                </Typography>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: 0.25, flexWrap: "nowrap", minWidth: 0 }}>
-                    <Typography variant="caption" color="text.secondary" noWrap>
-                        by{" "}
-                        <Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>
-                            {expense.payer?.username ?? "?"}
-                        </Box>
-                    </Typography>
-                    <Box sx={{ width: 3, height: 3, borderRadius: "50%", bgcolor: "text.disabled", flexShrink: 0 }} />
-                    <Typography variant="caption" color="text.secondary" noWrap>
-                        {new Date(expense.date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                    </Typography>
-                    <Box sx={{ display: { xs: "none", sm: "flex" }, alignItems: "center", gap: 0.75 }}>
-                        <Box sx={{ width: 3, height: 3, borderRadius: "50%", bgcolor: "text.disabled", flexShrink: 0 }} />
-                        <Typography variant="caption" color="text.secondary">
-                            {new Date(expense.date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
-                        </Typography>
-                    </Box>
-                </Box>
+            <Box sx={{ ...xsBadgeSx, bgcolor: "action.selected" }}>
+                <ReceiptLongIcon sx={{ fontSize: 20, color: "text.secondary" }} />
             </Box>
-            <Box sx={{ textAlign: "right" }}>
-                <Typography variant="subtitle2" color="success.main" sx={{ fontWeight: 700 }}>
+            <Box sx={{ minWidth: 0 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{expense.title}</Typography>
+                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                    <Box component="span" sx={{ textTransform: "capitalize" }}>{expense.payer?.username ?? "?"}</Box>
+                    {" paid · "}
+                    <Box component="span" sx={{ textTransform: "capitalize" }}>{expense.split_type}</Box>
+                    {!hideDate ? ` · ${dateStr}` : ""}
+                </Typography>
+            </Box>
+            <Box sx={{ textAlign: "right", flexShrink: 0 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", lineHeight: 1.3 }}>
                     {formatCurrency(expense.amount, expense.currency)}
                 </Typography>
-                <Typography variant="caption" sx={{ textTransform: "capitalize", bgcolor: "action.selected", borderRadius: 1, px: 0.75, py: 0.2, fontSize: "0.65rem", fontWeight: 600, color: "text.secondary", display: "inline-block" }}>
-                    {expense.split_type}
-                </Typography>
+                {owe > 0 && (
+                    <Typography variant="caption" sx={{ color: "error.main", fontWeight: 600, display: "block", lineHeight: 1.2 }}>
+                        {formatCurrency(owe, expense.currency)}
+                    </Typography>
+                )}
             </Box>
         </Box>
     );

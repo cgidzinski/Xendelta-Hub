@@ -1,19 +1,20 @@
 import { useState, useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Box, Typography, List, TextField, InputAdornment, Chip, Stack } from "@mui/material";
+import { Box, Typography, TextField, InputAdornment, ToggleButtonGroup, ToggleButton } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
-import { startOfMonth, startOfYear, subMonths } from "date-fns";
+import { startOfWeek, startOfMonth, startOfYear, subWeeks } from "date-fns";
 import type { GroupDetailContext } from "./GroupDetail";
 import ExpenseListItem from "./components/ExpenseListItem";
 import { formatCurrency } from "../../../utils/currencyUtils";
 
-type DateFilter = "all" | "thisMonth" | "lastMonth" | "thisYear";
+type DateFilter = "all" | "thisWeek" | "lastWeek" | "thisMonth" | "thisYear";
 
 const DATE_FILTERS: { label: string; value: DateFilter }[] = [
     { label: "All", value: "all" },
-    { label: "This month", value: "thisMonth" },
-    { label: "Last month", value: "lastMonth" },
-    { label: "This year", value: "thisYear" },
+    { label: "This Week", value: "thisWeek" },
+    { label: "Last Week", value: "lastWeek" },
+    { label: "This Month", value: "thisMonth" },
+    { label: "This Year", value: "thisYear" },
 ];
 
 export default function GroupExpenses() {
@@ -24,12 +25,13 @@ export default function GroupExpenses() {
     const sortedExpenses = useMemo(() => {
         const now = new Date();
         const dateStart: Date | null =
-            dateFilter === "thisMonth" ? startOfMonth(now) :
-                dateFilter === "lastMonth" ? startOfMonth(subMonths(now, 1)) :
-                    dateFilter === "thisYear" ? startOfYear(now) :
-                        null;
+            dateFilter === "thisWeek" ? startOfWeek(now) :
+                dateFilter === "lastWeek" ? startOfWeek(subWeeks(now, 1)) :
+                    dateFilter === "thisMonth" ? startOfMonth(now) :
+                        dateFilter === "thisYear" ? startOfYear(now) :
+                            null;
         const dateEnd: Date | null =
-            dateFilter === "lastMonth" ? startOfMonth(now) : null;
+            dateFilter === "lastWeek" ? startOfWeek(now) : null;
 
         return [...group.expenses]
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -58,19 +60,20 @@ export default function GroupExpenses() {
                 InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
                 sx={{ mb: 1.5 }}
             />
-            <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: "wrap", gap: 1 }}>
+            <ToggleButtonGroup
+                size="small"
+                value={dateFilter}
+                exclusive
+                onChange={(_, v) => v && setDateFilter(v)}
+                fullWidth
+                sx={{ mb: 2, height: 30 }}
+            >
                 {DATE_FILTERS.map((f) => (
-                    <Chip
-                        key={f.value}
-                        label={f.label}
-                        size="small"
-                        color={dateFilter === f.value ? "primary" : "default"}
-                        variant={dateFilter === f.value ? "filled" : "outlined"}
-                        onClick={() => setDateFilter(f.value)}
-                        clickable
-                    />
+                    <ToggleButton key={f.value} value={f.value} sx={{ px: 1, fontSize: "0.7rem", textTransform: "none", whiteSpace: "nowrap" }}>
+                        {f.label}
+                    </ToggleButton>
                 ))}
-            </Stack>
+            </ToggleButtonGroup>
             {sortedExpenses.length === 0 ? (
                 <Box sx={{ textAlign: "center", py: 6 }}>
                     <Typography variant="body1" color="text.secondary">
@@ -78,17 +81,16 @@ export default function GroupExpenses() {
                     </Typography>
                 </Box>
             ) : (
-                <List disablePadding>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                     {sortedExpenses.map((expense) => (
                         <ExpenseListItem
                             key={expense._id}
                             expense={expense}
                             onClick={() => onViewExpense(expense)}
                             userId={user.id}
-                            mb={1.5}
                         />
                     ))}
-                </List>
+                </Box>
             )}
         </Box>
     );

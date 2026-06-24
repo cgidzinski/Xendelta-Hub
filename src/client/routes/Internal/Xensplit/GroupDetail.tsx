@@ -107,6 +107,7 @@ export default function GroupDetail() {
       : location.pathname.endsWith("/balances")
         ? 2
         : false;
+  const hideAddExpense = location.pathname.endsWith("/analytics") || location.pathname.endsWith("/settings");
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<SearchedUser[]>([]);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
@@ -465,7 +466,7 @@ export default function GroupDetail() {
 
   return (
     <Box>
-      <Container maxWidth="md" sx={{ mt: { xs: 1, sm: 4 }, mb: 4, px: { xs: 2, sm: 3 } }}>
+      <Container maxWidth="md" sx={{ mt: { xs: 1, sm: 4 }, mb: 4, px: { xs: 2, sm: 3 }, pb: { xs: 12, md: 0 } }}>
         {/* Header */}
         <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.5, sm: 1 }, mb: { xs: 2, sm: 3 } }}>
           <IconButton
@@ -554,7 +555,7 @@ export default function GroupDetail() {
           color="primary"
           aria-label="Add expense"
           onClick={openAddExpenseModal}
-          sx={{ display: { xs: "flex", md: "none" }, position: "fixed", bottom: 24, right: 24 }}
+          sx={{ display: hideAddExpense ? "none" : { xs: "flex", md: "none" }, position: "fixed", bottom: 24, right: 24 }}
         >
           <AddIcon />
         </Fab>

@@ -5,10 +5,6 @@ import {
     Typography,
     Button,
     Avatar,
-    List,
-    ListItem,
-    ListItemAvatar,
-    ListItemText,
     IconButton,
     FormControl,
     Select,
@@ -18,6 +14,7 @@ import AddIcon from "@mui/icons-material/Add";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { useSnackbar } from "notistack";
 import type { GroupDetailContext } from "./GroupDetail";
+import { xsCardSx } from "./components/rowStyles";
 import { ALL_CURRENCIES, formatCurrency } from "../../../utils/currencyUtils";
 
 export default function GroupSettings() {
@@ -47,55 +44,63 @@ export default function GroupSettings() {
                     Add Members
                 </Button>
             </Box>
-            <List disablePadding sx={{ mb: 3 }}>
-                {group.members.map((member) => (
-                    <ListItem
-                        key={member.user_id}
-                        sx={{ bgcolor: "action.hover", borderRadius: 2, mb: 1, pr: 1, minHeight: 64 }}
-                    >
-                        <ListItemAvatar>
-                            <Avatar src={member.avatar || undefined}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 3 }}>
+                {group.members.map((member) => {
+                    const canMenu = member.user_id === user.id || (isCreator && member.user_id !== group.created_by);
+                    const memberBalances = balancesData?.balances[member.user_id]?.balances ?? {};
+                    const nonZero = Object.entries(memberBalances).filter(([, v]) => v !== 0);
+                    return (
+                        <Box
+                            key={member.user_id}
+                            sx={{
+                                ...xsCardSx,
+                                display: "grid",
+                                gridTemplateColumns: "40px 1fr auto 36px",
+                                alignItems: "center",
+                                columnGap: 1.5,
+                            }}
+                        >
+                            <Avatar src={member.avatar || undefined} sx={{ width: 40, height: 40 }}>
                                 {member.username[0]?.toUpperCase()}
                             </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                            primary={member.username}
-                            secondary={member.user_id === group.created_by ? "Creator" : ""}
-                        />
-                        {/* Inline balance */}
-                        {balancesData && (() => {
-                            const memberBalances = balancesData.balances[member.user_id]?.balances ?? {};
-                            const nonZero = Object.entries(memberBalances).filter(([, v]) => v !== 0);
-                            if (nonZero.length === 0) {
-                                return (
-                                    <Typography variant="caption" sx={{ color: "success.main", fontWeight: 600, mr: 1, whiteSpace: "nowrap" }}>
+                            <Box sx={{ minWidth: 0 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{member.username}</Typography>
+                                {member.user_id === group.created_by && (
+                                    <Typography variant="caption" color="text.secondary">Creator</Typography>
+                                )}
+                            </Box>
+                            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>
+                                {balancesData && (nonZero.length === 0 ? (
+                                    <Typography variant="caption" sx={{ color: "text.primary" }}>
                                         Settled
                                     </Typography>
-                                );
-                            }
-                            return (
-                                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", mr: 1 }}>
-                                    {nonZero.map(([currency, amount]) => (
-                                        <Typography
-                                            key={currency}
-                                            variant="caption"
-                                            sx={{ fontWeight: 700, whiteSpace: "nowrap", color: (amount as number) >= 0 ? "success.main" : "error.main" }}
-                                        >
-                                            {(amount as number) >= 0 ? "+" : ""}{formatCurrency(amount as number, currency)}
-                                        </Typography>
-                                    ))}
-                                </Box>
-                            );
-                        })()}
-                        {(member.user_id === user.id ||
-                            (isCreator && member.user_id !== group.created_by)) && (
-                                <IconButton onClick={(e) => onMemberMenu(member.user_id, e.currentTarget)}>
-                                    <MoreVertIcon />
+                                ) : (
+                                    nonZero.map(([currency, amount]) => {
+                                        const owed = (amount as number) >= 0;
+                                        return (
+                                            <Box key={currency} sx={{ textAlign: "right" }}>
+                                                <Typography variant="caption" sx={{ color: "text.primary", fontWeight: 600, display: "block", lineHeight: 1.1, textTransform: "uppercase", letterSpacing: 0.3 }}>
+                                                    {owed ? "Owed" : "Owes"}
+                                                </Typography>
+                                                <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700, color: owed ? "success.main" : "error.main", lineHeight: 1.2 }}>
+                                                    {formatCurrency(Math.abs(amount as number), currency)}
+                                                </Typography>
+                                            </Box>
+                                        );
+                                    })
+                                ))}
+                            </Box>
+                            {canMenu ? (
+                                <IconButton size="small" onClick={(e) => onMemberMenu(member.user_id, e.currentTarget)}>
+                                    <MoreVertIcon fontSize="small" />
                                 </IconButton>
+                            ) : (
+                                <Box />
                             )}
-                    </ListItem>
-                ))}
-            </List>
+                        </Box>
+                    );
+                })}
+            </Box>
 
             {/* Default Currency */}
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
