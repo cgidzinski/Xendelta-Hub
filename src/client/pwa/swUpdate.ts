@@ -10,6 +10,7 @@ import { registerSW } from "virtual:pwa-register";
 
 let needRefresh = false;
 let listener: (() => void) | null = null;
+let swRegistration: ServiceWorkerRegistration | null = null;
 
 const updateSW = registerSW({
   immediate: true,
@@ -19,6 +20,7 @@ const updateSW = registerSW({
   },
   onRegisteredSW(_swUrl, registration) {
     if (!registration) return;
+    swRegistration = registration;
     // Re-check for a new version whenever the app is opened or regains focus. In prompt
     // mode this surfaces the banner rather than reloading. Important for installed PWAs,
     // where reopening often resurfaces the existing page instead of triggering a fresh
@@ -28,6 +30,10 @@ const updateSW = registerSW({
     };
     document.addEventListener("visibilitychange", checkForUpdate);
     window.addEventListener("focus", checkForUpdate);
+    // iOS restores apps from bfcache on resume; pageshow fires where visibilitychange may not.
+    window.addEventListener("pageshow", (e) => {
+      if (e.persisted) registration.update();
+    });
   },
 });
 
@@ -43,6 +49,28 @@ export function getNeedRefresh() {
 }
 
 export function applyUpdate() {
-  // reloadPage = true: activate the waiting service worker and reload onto the new build.
-  return updateSW(true);
+  const waiting = swRegistration?.waiting;
+  if (!waiting) {
+    // No waiting SW tracked yet; fall back to vite-plugin-pwa's handler.
+    updateSW(true);
+    return;
+  }
+
+  // On iOS standalone, window.location.reload() can silently fail after skipWaiting because
+  // the SW statechange event that vite-plugin-pwa relies on doesn't always fire. Instead:
+  // - listen for controllerchange, which fires when the new SW calls clients.claim()
+  //   (enabled via clientsClaim: true in vite.config.ts workbox options)
+  // - use href assignment rather than reload() — more reliable in iOS standalone mode
+  // - fall back to a timeout in case controllerchange is delayed or missing
+  let reloaded = false;
+  const doReload = () => {
+    if (reloaded) return;
+    reloaded = true;
+    window.location.href = window.location.href;
+  };
+
+  navigator.serviceWorker.addEventListener("controllerchange", doReload, { once: true });
+  setTimeout(doReload, 3000);
+
+  waiting.postMessage({ type: "SKIP_WAITING" });
 }

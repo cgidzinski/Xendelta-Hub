@@ -29,6 +29,9 @@ export default defineConfig({
         // NavigationRoute that serves cached index.html for ALL navigations, hijacking
         // full-page navigations to /api/auth/* and breaking OAuth.
         navigateFallback: null,
+        // Immediately claim existing clients after skipWaiting so the controllerchange
+        // event fires on the open tab — required for the iOS-compatible reload in swUpdate.ts.
+        clientsClaim: true,
       },
       manifest: false,
     }),
