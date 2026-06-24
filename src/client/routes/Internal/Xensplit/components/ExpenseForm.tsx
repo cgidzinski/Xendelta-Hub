@@ -23,6 +23,7 @@ import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import { SearchedUser } from "../../../../hooks/useUserSearch";
 import type { XenSplitExpenseImage } from "../../../../hooks/xensplit/types";
 import { getSortedCurrencies, getCurrencySymbol } from "../../../../utils/currencyUtils";
+import { EXPENSE_CATEGORIES } from "../../../../constants/xensplit";
 
 const MAX_IMAGES = 10;
 
@@ -65,6 +66,8 @@ interface ExpenseFormProps {
   isEditing?: boolean;
   date: Date;
   onDateChange: (d: Date) => void;
+  category: string;
+  onCategoryChange: (v: string) => void;
 }
 
 export default function ExpenseForm({
@@ -103,6 +106,8 @@ export default function ExpenseForm({
   isEditing = false,
   date,
   onDateChange,
+  category,
+  onCategoryChange,
 }: ExpenseFormProps) {
   const [step, setStep] = React.useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -509,9 +514,22 @@ export default function ExpenseForm({
         </Box>
       )}
 
-      {/* Step 3: Photos */}
+      {/* Step 3: Misc */}
       {step === 2 && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <FormControl fullWidth>
+            <InputLabel>Category (optional)</InputLabel>
+            <Select
+              value={category}
+              label="Category (optional)"
+              onChange={(e) => onCategoryChange(e.target.value)}
+            >
+              <MenuItem value=""><em>None</em></MenuItem>
+              {EXPENSE_CATEGORIES.map((c) => (
+                <MenuItem key={c} value={c}>{c}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <TextField
             fullWidth
             label="Notes"

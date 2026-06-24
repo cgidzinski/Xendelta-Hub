@@ -60,7 +60,7 @@ export default function GroupSettings() {
             { default_currency: selectedCurrency },
             {
                 onSuccess: () => enqueueSnackbar("Default currency updated", { variant: "success" }),
-                onError: () => enqueueSnackbar("Failed to update currency", { variant: "error" }),
+                onError: (error: Error) => enqueueSnackbar(error?.message || "Failed to update currency", { variant: "error" }),
             }
         );
     };
