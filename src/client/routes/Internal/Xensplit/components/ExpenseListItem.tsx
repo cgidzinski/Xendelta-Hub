@@ -14,10 +14,12 @@ interface ExpenseListItemProps {
 
 export default function ExpenseListItem({ expense, onClick, userId, hideDate }: ExpenseListItemProps) {
     const mySplit = userId ? expense.splits.find((sp) => sp.user_id === userId) : undefined;
-    const isInvolved = userId ? expense.paid_by === userId || expense.splits.some((sp) => sp.user_id === userId) : false;
-    const owe = mySplit && expense.paid_by !== userId
+    const isPayer = userId ? expense.paid_by === userId : false;
+    const owe = mySplit && !isPayer
         ? (mySplit.amount_owed ?? (expense.splits.length ? expense.amount / expense.splits.length : 0))
         : 0;
+    // Accent bar: blue if you paid, green if you owe a share, grey otherwise.
+    const barColor = isPayer ? "primary.main" : owe > 0 ? "success.main" : "text.disabled";
     const dateStr = new Date(expense.date).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
     return (
@@ -32,7 +34,7 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
                 columnGap: 1.25,
                 cursor: "pointer",
                 "&:hover": { bgcolor: "action.hover" },
-                ...(isInvolved && {
+                ...(barColor && {
                     "&::before": {
                         content: '""',
                         position: "absolute",
@@ -41,7 +43,7 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
                         bottom: 8,
                         width: 4,
                         borderRadius: 2,
-                        bgcolor: "primary.main",
+                        bgcolor: barColor,
                     },
                 }),
             }}

@@ -34,9 +34,41 @@ export default function GroupSettings() {
     };
 
     return (
-        <Box>
-            {/* Members */}
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
+        <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            {/* Default Currency — fixed, on top */}
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48, flexShrink: 0 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    Default Currency
+                </Typography>
+                {isCreator && selectedCurrency !== group.default_currency && (
+                    <Button variant="contained" size="small" onClick={handleSaveCurrency} disabled={isUpdating}>
+                        Save
+                    </Button>
+                )}
+            </Box>
+            <Box sx={{ flexShrink: 0, mb: 3, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <Box>
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>Primary currency</Typography>
+                    <Typography variant="caption" color="text.secondary">Default when adding expenses</Typography>
+                </Box>
+                {isCreator ? (
+                    <FormControl size="small" sx={{ minWidth: 110 }}>
+                        <Select
+                            value={selectedCurrency}
+                            onChange={(e) => setSelectedCurrency(e.target.value)}
+                        >
+                            {ALL_CURRENCIES.map((c) => (
+                                <MenuItem key={c} value={c}>{c}</MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                ) : (
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{group.default_currency}</Typography>
+                )}
+            </Box>
+
+            {/* Members header — fixed */}
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48, flexShrink: 0 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
                     Members
                 </Typography>
@@ -44,7 +76,9 @@ export default function GroupSettings() {
                     Add Members
                 </Button>
             </Box>
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 3 }}>
+            {/* Scrollable: members list */}
+            <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pb: { xs: 11, md: 1 } }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 {group.members.map((member) => {
                     const canMenu = member.user_id === user.id || (isCreator && member.user_id !== group.created_by);
                     const memberBalances = balancesData?.balances[member.user_id]?.balances ?? {};
@@ -78,12 +112,12 @@ export default function GroupSettings() {
                                     nonZero.map(([currency, amount]) => {
                                         const owed = (amount as number) >= 0;
                                         return (
-                                            <Box key={currency} sx={{ textAlign: "right" }}>
-                                                <Typography variant="caption" sx={{ color: "text.primary", fontWeight: 600, display: "block", lineHeight: 1.1, textTransform: "uppercase", letterSpacing: 0.3 }}>
-                                                    {owed ? "Owed" : "Owes"}
-                                                </Typography>
+                                            <Box key={currency} sx={{ display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 0.5 }}>
                                                 <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700, color: owed ? "success.main" : "error.main", lineHeight: 1.2 }}>
                                                     {formatCurrency(Math.abs(amount as number), currency)}
+                                                </Typography>
+                                                <Typography variant="caption" sx={{ color: "text.primary", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3 }}>
+                                                    {owed ? "Owed" : "Owes"}
                                                 </Typography>
                                             </Box>
                                         );
@@ -101,37 +135,6 @@ export default function GroupSettings() {
                     );
                 })}
             </Box>
-
-            {/* Default Currency */}
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Default Currency
-                </Typography>
-                {isCreator && selectedCurrency !== group.default_currency && (
-                    <Button variant="contained" size="small" onClick={handleSaveCurrency} disabled={isUpdating}>
-                        Save
-                    </Button>
-                )}
-            </Box>
-            <Box sx={{ bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <Box>
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>Primary currency</Typography>
-                    <Typography variant="caption" color="text.secondary">Default when adding expenses</Typography>
-                </Box>
-                {isCreator ? (
-                    <FormControl size="small" sx={{ minWidth: 110 }}>
-                        <Select
-                            value={selectedCurrency}
-                            onChange={(e) => setSelectedCurrency(e.target.value)}
-                        >
-                            {ALL_CURRENCIES.map((c) => (
-                                <MenuItem key={c} value={c}>{c}</MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                ) : (
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{group.default_currency}</Typography>
-                )}
             </Box>
         </Box>
     );

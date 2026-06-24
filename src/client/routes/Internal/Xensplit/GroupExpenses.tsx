@@ -45,53 +45,52 @@ export default function GroupExpenses() {
     }, [group.expenses, search, dateFilter]);
 
     return (
-        <Box>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>
-                    Expenses ({sortedExpenses.length})
-                </Typography>
-            </Box>
-            <TextField
-                fullWidth
-                size="small"
-                placeholder="Search expenses…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
-                sx={{ mb: 1.5 }}
-            />
-            <ToggleButtonGroup
-                size="small"
-                value={dateFilter}
-                exclusive
-                onChange={(_, v) => v && setDateFilter(v)}
-                fullWidth
-                sx={{ mb: 2, height: 30 }}
-            >
-                {DATE_FILTERS.map((f) => (
-                    <ToggleButton key={f.value} value={f.value} sx={{ px: 1, fontSize: "0.7rem", textTransform: "none", whiteSpace: "nowrap" }}>
-                        {f.label}
-                    </ToggleButton>
-                ))}
-            </ToggleButtonGroup>
-            {sortedExpenses.length === 0 ? (
-                <Box sx={{ textAlign: "center", py: 6 }}>
-                    <Typography variant="body1" color="text.secondary">
-                        {search.trim() || dateFilter !== "all" ? "No expenses match your filters" : "No expenses yet"}
-                    </Typography>
-                </Box>
-            ) : (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                    {sortedExpenses.map((expense) => (
-                        <ExpenseListItem
-                            key={expense._id}
-                            expense={expense}
-                            onClick={() => onViewExpense(expense)}
-                            userId={user.id}
-                        />
+        <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <Box sx={{ flexShrink: 0 }}>
+                <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Search expenses…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
+                    sx={{ mb: 1.5 }}
+                />
+                <ToggleButtonGroup
+                    size="small"
+                    value={dateFilter}
+                    exclusive
+                    onChange={(_, v) => v && setDateFilter(v)}
+                    fullWidth
+                    sx={{ mb: 2, height: 30 }}
+                >
+                    {DATE_FILTERS.map((f) => (
+                        <ToggleButton key={f.value} value={f.value} sx={{ px: 1, fontSize: "0.7rem", textTransform: "none", whiteSpace: "nowrap" }}>
+                            {f.label}
+                        </ToggleButton>
                     ))}
-                </Box>
-            )}
+                </ToggleButtonGroup>
+            </Box>
+            <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pb: { xs: 11, md: 1 } }}>
+                {sortedExpenses.length === 0 ? (
+                    <Box sx={{ textAlign: "center", py: 6 }}>
+                        <Typography variant="body1" color="text.secondary">
+                            {search.trim() || dateFilter !== "all" ? "No expenses match your filters" : "No expenses yet"}
+                        </Typography>
+                    </Box>
+                ) : (
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        {sortedExpenses.map((expense) => (
+                            <ExpenseListItem
+                                key={expense._id}
+                                expense={expense}
+                                onClick={() => onViewExpense(expense)}
+                                userId={user.id}
+                            />
+                        ))}
+                    </Box>
+                )}
+            </Box>
         </Box>
     );
 }

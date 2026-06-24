@@ -101,15 +101,15 @@ export default function GroupOverview() {
     };
 
     return (
-        <Box>
-            {/* Pending settlements — always visible */}
+        <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            {/* Pending settlements — always visible (fixed header) */}
             <Button
                 fullWidth
                 variant="outlined"
                 color={userSettlements.length > 0 ? "warning" : allPendingSettlements.length > 0 ? "primary" : "inherit"}
                 size="small"
                 onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settlements`)}
-                sx={{ mb: 2, borderRadius: 2, fontWeight: 600, ...(allPendingSettlements.length === 0 && { borderColor: "divider", color: "text.disabled" }) }}
+                sx={{ mb: 2, flexShrink: 0, borderRadius: 2, fontWeight: 600, ...(allPendingSettlements.length === 0 && { borderColor: "divider", color: "text.disabled" }) }}
             >
                 {userSettlements.length > 0
                     ? `You have ${userSettlements.length} pending settlement${userSettlements.length !== 1 ? "s" : ""}`
@@ -118,10 +118,10 @@ export default function GroupOverview() {
                         : "All settled up"}
             </Button>
 
-            {/* Activity feed */}
-            {feed.length > 0 ? (
-                <>
-                    {groupedFeed.map((dateGroup) => (
+            {/* Activity feed (scrollable) */}
+            <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pb: { xs: 11, md: 1 } }}>
+                {feed.length > 0 ? (
+                    groupedFeed.map((dateGroup) => (
                         <Box key={dateGroup.key} sx={{ mb: 2.5 }}>
                             <Typography
                                 variant="caption"
@@ -134,16 +134,15 @@ export default function GroupOverview() {
                                 {dateGroup.items.map((item, idx) => renderItem(item, idx, dateGroup.key))}
                             </Box>
                         </Box>
-                    ))}
-                </>
-            ) : (
-                <Box sx={{ textAlign: "center", py: 6 }}>
-                    <Typography variant="body1" color="text.secondary">
-                        No activity yet
-                    </Typography>
-                </Box>
-            )}
-
+                    ))
+                ) : (
+                    <Box sx={{ textAlign: "center", py: 6 }}>
+                        <Typography variant="body1" color="text.secondary">
+                            No activity yet
+                        </Typography>
+                    </Box>
+                )}
+            </Box>
         </Box>
     );
 }

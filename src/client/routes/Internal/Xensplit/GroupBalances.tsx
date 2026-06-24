@@ -12,12 +12,7 @@ export default function GroupBalances() {
     const entries = Object.entries(balancesData.balances);
 
     return (
-        <Box>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>
-                    Balances
-                </Typography>
-            </Box>
+        <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
             {entries.length === 0 ? (
                 <Box sx={{ textAlign: "center", py: 6 }}>
                     <Typography variant="body1" color="text.secondary">
@@ -25,7 +20,7 @@ export default function GroupBalances() {
                     </Typography>
                 </Box>
             ) : (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 1, pb: { xs: 11, md: 1 } }}>
                     {entries.map(([userId, balance]) => {
                         const nonZeroBalances = Object.entries(balance.balances).filter(([, amount]) => Math.abs(amount as number) >= 0.01);
                         const isSettled = nonZeroBalances.length === 0;
@@ -51,12 +46,12 @@ export default function GroupBalances() {
                                         nonZeroBalances.map(([currency, amount]) => {
                                             const owed = (amount as number) >= 0;
                                             return (
-                                                <Box key={currency} sx={{ textAlign: "right" }}>
-                                                    <Typography variant="caption" sx={{ color: "text.primary", fontWeight: 600, display: "block", lineHeight: 1.1, textTransform: "uppercase", letterSpacing: 0.3 }}>
-                                                        {owed ? "Owed" : "Owes"}
-                                                    </Typography>
+                                                <Box key={currency} sx={{ display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 0.5 }}>
                                                     <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700, color: owed ? "success.main" : "error.main", lineHeight: 1.2 }}>
                                                         {formatCurrency(Math.abs(amount as number), currency)}
+                                                    </Typography>
+                                                    <Typography variant="caption" sx={{ color: "text.primary", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3 }}>
+                                                        {owed ? "Owed" : "Owes"}
                                                     </Typography>
                                                 </Box>
                                             );
