@@ -107,6 +107,9 @@ export default function GroupDetail() {
       : location.pathname.endsWith("/balances")
         ? 2
         : false;
+  const hideAddExpense = location.pathname.endsWith("/analytics") || location.pathname.endsWith("/settings");
+  // Routes whose page header stays fixed while only the list underneath scrolls.
+  const paneled = ["/overview", "/expenses", "/balances", "/settings"].some((p) => location.pathname.endsWith(p));
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<SearchedUser[]>([]);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
@@ -465,9 +468,23 @@ export default function GroupDetail() {
 
   return (
     <Box>
-      <Container maxWidth="md" sx={{ mt: { xs: 1, sm: 4 }, mb: 4, px: { xs: 2, sm: 3 } }}>
+      <Container
+        maxWidth="md"
+        sx={
+          paneled
+            ? {
+                px: { xs: 2, sm: 3 },
+                pt: { xs: 1, sm: 2 },
+                height: { xs: "calc(100dvh - 56px)", sm: "calc(100dvh - 64px)" },
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+              }
+            : { mt: { xs: 1, sm: 4 }, mb: 4, px: { xs: 2, sm: 3 }, pb: { xs: 12, md: 0 } }
+        }
+      >
         {/* Header */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.5, sm: 1 }, mb: { xs: 2, sm: 3 } }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.5, sm: 1 }, mb: { xs: 2, sm: 3 }, flexShrink: 0 }}>
           <IconButton
             onClick={() => navigate(activeTab === false ? `/internal/xensplit/groups/${groupId}/overview` : "/internal/xensplit/groups")}
             size="small"
@@ -536,7 +553,7 @@ export default function GroupDetail() {
 
         {/* Tabs */}
         {activeTab !== false && (
-          <Box sx={{ bgcolor: "action.hover", borderRadius: "8px 8px 0 0", mb: 3 }}>
+          <Box sx={{ bgcolor: "action.hover", borderRadius: "8px 8px 0 0", mb: 3, flexShrink: 0 }}>
             <Tabs
               value={activeTab}
               onChange={(_, v) => navigate(`/internal/xensplit/groups/${groupId}/${["overview", "expenses", "balances"][v]}`)}
@@ -554,7 +571,7 @@ export default function GroupDetail() {
           color="primary"
           aria-label="Add expense"
           onClick={openAddExpenseModal}
-          sx={{ display: { xs: "flex", md: "none" }, position: "fixed", bottom: 24, right: 24 }}
+          sx={{ display: hideAddExpense ? "none" : { xs: "flex", md: "none" }, position: "fixed", bottom: 24, right: 24 }}
         >
           <AddIcon />
         </Fab>

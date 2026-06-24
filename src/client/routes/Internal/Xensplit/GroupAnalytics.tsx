@@ -12,7 +12,7 @@ import { formatCurrency } from "../../../utils/currencyUtils";
 const CHART_COLORS = ["#6366f1", "#22d3ee", "#f59e0b", "#10b981", "#f43f5e", "#a78bfa", "#fb923c", "#34d399"];
 
 export default function GroupAnalytics() {
-    const { group } = useOutletContext<GroupDetailContext>();
+    const { group, user, balancesData } = useOutletContext<GroupDetailContext>();
 
     const defaultCurrency = group.default_currency || "CAD";
 
@@ -36,6 +36,12 @@ export default function GroupAnalytics() {
         const largest = currencyExpenses.reduce((max, e) => Math.max(max, e.amount), 0);
         return { total, count, average, largest };
     }, [currencyExpenses]);
+
+    const personalStats = useMemo(() => {
+        const paidByYou = currencyExpenses.filter((e) => e.paid_by === user.id).length;
+        const balance = balancesData?.balances[user.id]?.balances[selectedCurrency] ?? 0;
+        return { paidByYou, balance };
+    }, [currencyExpenses, user.id, balancesData, selectedCurrency]);
 
     const memberSpendData = useMemo(() => {
         const totals: { [userId: string]: number } = {};
@@ -150,8 +156,19 @@ export default function GroupAnalytics() {
             {/* Summary stat cards */}
             <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 1.5, mb: 3 }}>
                 {[
-                    { label: "Total spent", value: formatCurrency(stats.total, selectedCurrency) },
-                    { label: "Expenses", value: `${stats.count}` },
+                    {
+                        label: "Total spent",
+                        value: formatCurrency(stats.total, selectedCurrency),
+                        sub: personalStats.balance === 0
+                            ? "You're settled up"
+                            : `${personalStats.balance > 0 ? "You're owed" : "You owe"} ${formatCurrency(Math.abs(personalStats.balance), selectedCurrency)}`,
+                        subColor: personalStats.balance === 0 ? "text.disabled" : personalStats.balance > 0 ? "warning.main" : "error.main",
+                    },
+                    {
+                        label: "Expenses",
+                        value: `${stats.count}`,
+                        sub: `${personalStats.paidByYou} paid by you`,
+                    },
                     { label: "Average expense", value: formatCurrency(stats.average, selectedCurrency) },
                     { label: "Largest expense", value: formatCurrency(stats.largest, selectedCurrency) },
                 ].map((card) => (
@@ -166,6 +183,15 @@ export default function GroupAnalytics() {
                         <Typography variant="body1" sx={{ fontWeight: 700, lineHeight: 1.3 }} noWrap>
                             {card.value}
                         </Typography>
+                        {card.sub && (
+                            <Typography
+                                variant="caption"
+                                sx={{ display: "block", mt: 0.75, fontWeight: 600, color: card.subColor ?? "text.disabled" }}
+                                noWrap
+                            >
+                                {card.sub}
+                            </Typography>
+                        )}
                     </Box>
                 ))}
             </Box>
