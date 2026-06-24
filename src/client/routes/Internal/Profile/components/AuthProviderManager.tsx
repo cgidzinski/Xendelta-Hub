@@ -1,8 +1,6 @@
 import React, { useState } from "react";
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   Button,
   Alert,
@@ -22,6 +20,7 @@ import {
 import { Link as LinkIcon, LinkOff as UnlinkIcon } from "@mui/icons-material";
 import { useAuthProviders } from "../../../../hooks/auth/useAuthProviders";
 import AuthButton, { PROVIDER_CONFIG } from "./AuthButton";
+import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 
 export default function AuthProviderManager() {
   const { authProviders, loading, error, linkGoogleAccount, linkGitHubAccount, linkDiscordAccount, unlinkProvider, addPassword } =
@@ -110,13 +109,12 @@ export default function AuthProviderManager() {
 
   return (
     <Box sx={{}}>
-      <Card>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Linked Accounts
-          </Typography>
+      <Box>
+        <Typography variant="caption" sx={sectionLabelSx} gutterBottom>
+          Linked Accounts
+        </Typography>
 
-          <List>
+        <List>
             {providers.map((provider) => (
               <React.Fragment key={provider.provider}>
                 <ListItem>
@@ -151,11 +149,10 @@ export default function AuthProviderManager() {
               </React.Fragment>
             ))}
           </List>
-        </CardContent>
-      </Card>
+      </Box>
 
       <Box sx={{ mt: 3 }}>
-        <Typography variant="h6" gutterBottom>
+        <Typography variant="caption" sx={sectionLabelSx} gutterBottom>
           Add Authentication Method
         </Typography>
 

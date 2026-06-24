@@ -39,6 +39,18 @@ import AuthProviderManager from "./components/AuthProviderManager";
 import { useUserAvatar } from "../../../hooks/user/useUserAvatar";
 import ProfileHeader from "./components/ProfileHeader";
 import AvatarUploadSection from "./components/AvatarUploadSection";
+import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
+
+function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+      <Box sx={{ display: "flex", color: "text.disabled" }}>{icon}</Box>
+      <Typography variant="caption" sx={sectionLabelSx}>
+        {label}
+      </Typography>
+    </Box>
+  );
+}
 
 export default function Profile() {
   const [tab, setTab] = useState(0);
@@ -154,9 +166,19 @@ export default function Profile() {
 
   return (
     <Box sx={{ position: "relative" }}>
-      <Container maxWidth="md" sx={{ mt: 4 }}>
+      <Container maxWidth="md" sx={{ mt: { xs: 2, sm: 4 } }}>
+        {/* Page header */}
+        <Box sx={{ mb: { xs: 2, sm: 3 } }}>
+          <Typography variant="h5" component="h1" sx={{ fontWeight: 700, letterSpacing: "-0.02em" }}>
+            Profile
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+            Manage your account and preferences
+          </Typography>
+        </Box>
+
         {/* Header card always visible */}
-        <Card elevation={2} sx={{ mb: 3 }}>
+        <Card variant="outlined" sx={{ ...cardSx, mb: 3 }}>
           <CardContent sx={{ p: 4 }}>
             <ProfileHeader profile={profile} avatarUrl={mainAvatarUrl} avatarKey={avatarKey} />
           </CardContent>
@@ -181,12 +203,9 @@ export default function Profile() {
             </Grid>
 
             <Grid size={{ xs: 12 }}>
-              <Card elevation={2}>
+              <Card variant="outlined" sx={cardSx}>
                 <CardContent sx={{ p: 3 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                    <Person color="primary" sx={{ mr: 1 }} />
-                    <Typography variant="h6">Account Settings</Typography>
-                  </Box>
+                  <SectionHeader icon={<Person fontSize="small" />} label="Account Settings" />
                   <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
                     <TextField
                       label="Username"
@@ -207,19 +226,16 @@ export default function Profile() {
             </Grid>
 
             <Grid size={{ xs: 12 }}>
-              <Card elevation={2}>
+              <Card variant="outlined" sx={cardSx}>
                 <CardContent sx={{ p: 3 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                    <Security color="primary" sx={{ mr: 1 }} />
-                    <Typography variant="h6">Authentication Methods</Typography>
-                  </Box>
+                  <SectionHeader icon={<Security fontSize="small" />} label="Authentication Methods" />
                   <AuthProviderManager />
                 </CardContent>
               </Card>
             </Grid>
 
             <Grid size={{ xs: 12 }}>
-              <Card elevation={2}>
+              <Card variant="outlined" sx={cardSx}>
                 <CardContent sx={{ p: 3 }}>
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <Box>
@@ -239,12 +255,9 @@ export default function Profile() {
         {tab === 1 && (
           <Grid container spacing={3}>
             <Grid size={{ xs: 12, md: 6 }}>
-              <Card elevation={2}>
+              <Card variant="outlined" sx={cardSx}>
                 <CardContent sx={{ p: 3 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                    <Notifications color="primary" sx={{ mr: 1 }} />
-                    <Typography variant="h6">Notifications</Typography>
-                  </Box>
+                  <SectionHeader icon={<Notifications fontSize="small" />} label="Notifications" />
                   <FormControlLabel
                     control={<Switch checked={notifications} onChange={(e) => setNotifications(e.target.checked)} disabled />}
                     label="Enable notifications"
@@ -260,12 +273,9 @@ export default function Profile() {
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
-              <Card elevation={2}>
+              <Card variant="outlined" sx={cardSx}>
                 <CardContent sx={{ p: 3 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                    <Palette color="primary" sx={{ mr: 1 }} />
-                    <Typography variant="h6">Appearance</Typography>
-                  </Box>
+                  <SectionHeader icon={<Palette fontSize="small" />} label="Appearance" />
                   <FormControlLabel
                     control={<Switch checked={darkMode} onChange={(e) => setDarkMode(e.target.checked)} disabled />}
                     label="Dark mode"
@@ -281,12 +291,9 @@ export default function Profile() {
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
-              <Card elevation={2}>
+              <Card variant="outlined" sx={cardSx}>
                 <CardContent sx={{ p: 3 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                    <SettingsIcon color="primary" sx={{ mr: 1 }} />
-                    <Typography variant="h6">General</Typography>
-                  </Box>
+                  <SectionHeader icon={<SettingsIcon fontSize="small" />} label="General" />
                   <FormControlLabel
                     control={<Switch checked={autoSave} onChange={(e) => setAutoSave(e.target.checked)} disabled />}
                     label="Auto-save changes"
@@ -311,12 +318,9 @@ export default function Profile() {
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
-              <Card elevation={2}>
+              <Card variant="outlined" sx={cardSx}>
                 <CardContent sx={{ p: 3 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                    <VolumeUp color="primary" sx={{ mr: 1 }} />
-                    <Typography variant="h6">Audio</Typography>
-                  </Box>
+                  <SectionHeader icon={<VolumeUp fontSize="small" />} label="Audio" />
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                     Master Volume: {volume}%
                   </Typography>
@@ -338,12 +342,9 @@ export default function Profile() {
             </Grid>
 
             <Grid size={{ xs: 12 }}>
-              <Card elevation={2}>
+              <Card variant="outlined" sx={cardSx}>
                 <CardContent sx={{ p: 3 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                    <Security color="primary" sx={{ mr: 1 }} />
-                    <Typography variant="h6">Security</Typography>
-                  </Box>
+                  <SectionHeader icon={<Security fontSize="small" />} label="Security" />
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
                     <Box>
                       <Typography variant="body1">Two-Factor Authentication</Typography>

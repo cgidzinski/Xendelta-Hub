@@ -1,10 +1,10 @@
 // Shared row styling for Xensplit list items (activity feed, expenses, balances, members).
 // Keeps the bordered "badge row" look consistent across pages.
 
+import { cardSx } from "../../../../components/ui/surfaceStyles";
+
 export const xsCardSx = {
-    border: "1px solid",
-    borderColor: "divider",
-    borderRadius: 2,
+    ...cardSx,
     px: 1.25,
     py: 1,
 };
