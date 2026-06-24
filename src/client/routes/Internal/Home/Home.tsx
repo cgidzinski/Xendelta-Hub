@@ -1,6 +1,6 @@
 import { Box, Container, Typography } from "@mui/material";
 import { useTitle } from "../../../hooks/useTitle";
-import TopStatsCards from "./components/TopStatsCards";
+import CompactHomeHeader from "./components/CompactHomeHeader";
 import PinnedAppsSection from "./components/PinnedAppsSection";
 import RecipaintCardBody from "./components/RecipaintCardBody";
 import XenBoxCardBody from "./components/XenBoxCardBody";
@@ -13,7 +13,7 @@ import { resolvePinnedApps } from "../../../constants/apps";
 export default function Home() {
   useTitle("Home");
   const { profile, isLoading, isError } = useUserProfile();
-  const { togglePinnedApp, isUpdating } = usePinnedApps();
+  const { togglePinnedApp: _togglePinnedApp, isUpdating: _isUpdating } = usePinnedApps();
 
   if (isLoading) {
     return <Typography sx={{ mt: 8, textAlign: "center" }}>Loading...</Typography>;
@@ -22,7 +22,6 @@ export default function Home() {
     return <Typography sx={{ mt: 8, textAlign: "center", color: "error.main" }}>Failed to load profile.</Typography>;
   }
 
-  // App detail bodies for each pinned card
   const appDetails: Record<string, React.ReactNode> = {
     recipaint: <RecipaintCardBody />,
     xenbox: <XenBoxCardBody />,
@@ -32,13 +31,8 @@ export default function Home() {
 
   return (
     <Box>
-      <Container maxWidth="xl" sx={{ mt: 4 }}>
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h3" component="h1" gutterBottom>
-            Welcome back, {profile.username}!
-          </Typography>
-        </Box>
-        <TopStatsCards />
+      <Container maxWidth="xl" sx={{ mt: 3 }}>
+        <CompactHomeHeader />
         <PinnedAppsSection
           pinnedApps={resolvePinnedApps(profile.pinnedApps)}
           appDetails={appDetails}
