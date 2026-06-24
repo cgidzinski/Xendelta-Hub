@@ -1,7 +1,7 @@
-import { Box, Typography } from "@mui/material";
-import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import { Box, Typography, alpha } from "@mui/material";
 import type { XenSplitExpense } from "../../../../hooks/xensplit/types";
 import { formatCurrency } from "../../../../utils/currencyUtils";
+import { getCategoryIcon } from "../../../../constants/xensplitCategoryIcons";
 import { xsCardSx, xsBadgeSx } from "./rowStyles";
 
 interface ExpenseListItemProps {
@@ -18,38 +18,31 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
     const owe = mySplit && !isPayer
         ? (mySplit.amount_owed ?? (expense.splits.length ? expense.amount / expense.splits.length : 0))
         : 0;
-    // Accent bar: blue if you paid, green if you owe a share, grey otherwise.
-    const barColor = isPayer ? "primary.main" : owe > 0 ? "success.main" : "text.disabled";
+    // Avatar accent: blue if you paid, green if you owe a share, neutral otherwise.
+    const accent = isPayer ? "primary" : owe > 0 ? "success" : undefined;
     const dateStr = new Date(expense.date).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const CategoryIcon = getCategoryIcon(expense.category);
 
     return (
         <Box
             onClick={onClick}
             sx={{
                 ...xsCardSx,
-                position: "relative",
                 display: "grid",
                 gridTemplateColumns: "40px 1fr auto",
                 alignItems: "center",
                 columnGap: 1.25,
                 cursor: "pointer",
                 "&:hover": { bgcolor: "action.hover" },
-                ...(barColor && {
-                    "&::before": {
-                        content: '""',
-                        position: "absolute",
-                        left: -2,
-                        top: 8,
-                        bottom: 8,
-                        width: 4,
-                        borderRadius: 2,
-                        bgcolor: barColor,
-                    },
-                }),
             }}
         >
-            <Box sx={{ ...xsBadgeSx, bgcolor: "action.selected" }}>
-                <ReceiptLongIcon sx={{ fontSize: 20, color: "text.secondary" }} />
+            <Box
+                sx={{
+                    ...xsBadgeSx,
+                    bgcolor: (t) => (accent ? alpha(t.palette[accent].main, 0.16) : t.palette.action.selected),
+                }}
+            >
+                <CategoryIcon sx={{ fontSize: 20, color: accent ? `${accent}.main` : "text.secondary" }} />
             </Box>
             <Box sx={{ minWidth: 0 }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{expense.title}</Typography>
