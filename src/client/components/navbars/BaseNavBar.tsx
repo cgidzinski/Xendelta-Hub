@@ -17,6 +17,7 @@ import {
   ListItemIcon as MuiListItemIcon,
   useMediaQuery,
   useTheme,
+  Tooltip,
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import MailIcon from "@mui/icons-material/Mail";
@@ -25,6 +26,8 @@ import PersonIcon from "@mui/icons-material/Person";
 import AnnouncementIcon from "@mui/icons-material/Announcement";
 import SecurityIcon from "@mui/icons-material/Security";
 import LockIcon from "@mui/icons-material/Lock";
+import DoneAllIcon from "@mui/icons-material/DoneAll";
+import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import { formatDistance } from "date-fns";
 import CssBaseline from "@mui/material/CssBaseline";
 import { useNavigate } from "react-router-dom";
@@ -111,7 +114,16 @@ export default function BaseNavBar({
   const [notificationAnchorEl, setNotificationAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const [notificationModalOpen, setNotificationModalOpen] = useState(false);
-  const { notifications, markNotificationAsRead, fetchNotifications, isFetching } = useUserNotifications();
+  const {
+    notifications,
+    markNotificationAsRead,
+    markAllAsRead,
+    isMarkingAsRead,
+    clearAllNotifications,
+    isClearing,
+    fetchNotifications,
+    isFetching,
+  } = useUserNotifications();
   const markedNotificationsRef = useRef<Set<string>>(new Set());
 
   useNavBarSocket({
@@ -382,18 +394,44 @@ export default function BaseNavBar({
           }}
         >
           <Box sx={{ pt: 1 }}>
-            <Box sx={{ px: 2, pb: 1 }}>
-              <Typography variant="overline" sx={{ fontWeight: "bold" }}>Notifications</Typography>
+            <Box sx={{ px: 2, pb: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <Typography variant="overline" sx={{ fontWeight: "bold", lineHeight: 1 }}>Notifications</Typography>
+              <Box sx={{ display: "flex", gap: 0.5 }}>
+                {notifications?.some((n) => n.unread) && (
+                  <Tooltip title="Mark all as read">
+                    <span>
+                      <IconButton size="small" onClick={() => markAllAsRead()} disabled={isMarkingAsRead} aria-label="Mark all as read">
+                        <DoneAllIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}
+                {notifications && notifications.length > 0 && (
+                  <Tooltip title="Clear all">
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={() => clearAllNotifications()}
+                        disabled={isClearing}
+                        aria-label="Clear all notifications"
+                        sx={{ color: "text.secondary", "&:hover": { color: "error.main" } }}
+                      >
+                        <DeleteSweepIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}
+              </Box>
             </Box>
             <Divider />
 
-            {isFetching && notifications?.length === 0 && (
+            {isFetching && (!notifications || notifications.length === 0) && (
               <Box sx={{ py: 3, display: "flex", justifyContent: "center" }}>
                 <LoadingSpinner />
               </Box>
             )}
 
-            {!isFetching && notifications?.length === 0 && (
+            {!isFetching && (!notifications || notifications.length === 0) && (
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 3 }}>
                 No notifications
               </Typography>
@@ -419,6 +457,9 @@ export default function BaseNavBar({
                     <Typography variant="subtitle2" sx={{ fontWeight: notification.unread ? "bold" : "normal", flexGrow: 1 }}>
                       {notification.title}
                     </Typography>
+                    {notification.unread && (
+                      <Box sx={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "primary.main", flexShrink: 0, ml: 1 }} />
+                    )}
                   </Box>
                   <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mb: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 300 }}>
                     {notification.message}
@@ -431,21 +472,17 @@ export default function BaseNavBar({
               </Box>
             ))}
 
-            {notifications && notifications.length > 0 && (
-              <>
-                <Divider />
-                <Box sx={{ p: 1.5, textAlign: "center" }}>
-                  <Typography
-                    variant="body2"
-                    color="primary"
-                    sx={{ cursor: "pointer", "&:hover": { textDecoration: "underline" } }}
-                    onClick={() => { navigate("/internal/notifications"); handleNotificationClose(); }}
-                  >
-                    View all notifications
-                  </Typography>
-                </Box>
-              </>
-            )}
+            <Divider />
+            <Box sx={{ p: 1.5, textAlign: "center" }}>
+              <Typography
+                variant="body2"
+                color="primary"
+                sx={{ cursor: "pointer", "&:hover": { textDecoration: "underline" } }}
+                onClick={() => { navigate("/internal/notifications"); handleNotificationClose(); }}
+              >
+                View all notifications
+              </Typography>
+            </Box>
           </Box>
         </Menu>
       )}
