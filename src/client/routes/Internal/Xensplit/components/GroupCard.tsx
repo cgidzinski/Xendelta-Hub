@@ -93,7 +93,7 @@ export function GroupCard({ group, userId }: GroupCardProps) {
         onClick={() => navigate(`/internal/xensplit/groups/${group._id}`)}
       >
         <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "48px 1fr minmax(96px, auto)", alignItems: "center", columnGap: 2 }}>
             {/* Colored group initial */}
             <Box
               sx={{
@@ -113,7 +113,7 @@ export function GroupCard({ group, userId }: GroupCardProps) {
             </Box>
 
             {/* Name + members */}
-            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Box sx={{ minWidth: 0 }}>
               <Typography
                 variant="subtitle1"
                 sx={{ fontWeight: 700, lineHeight: 1.25, mb: 0.5 }}
@@ -145,7 +145,7 @@ export function GroupCard({ group, userId }: GroupCardProps) {
             </Box>
 
             {/* Right side */}
-            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.5, flexShrink: 0 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.5 }}>
               {isSettledUp && (group.expenses?.length ?? 0) > 0 ? (
                 <Chip
                   label="Settled up"
