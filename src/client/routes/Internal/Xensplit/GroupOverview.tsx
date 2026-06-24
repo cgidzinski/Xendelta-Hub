@@ -38,7 +38,8 @@ export default function GroupOverview() {
     const userPaidCount = group.expenses.filter((e) => e.paid_by === user.id).length;
 
     // Pending settlements involving this user
-    const userSettlements = (balancesData?.settlements ?? []).filter(
+    const allPendingSettlements = balancesData?.settlements ?? [];
+    const userSettlements = allPendingSettlements.filter(
         (s) => s.from === user.id || s.to === user.id
     );
 
@@ -97,14 +98,16 @@ export default function GroupOverview() {
             <Button
                 fullWidth
                 variant="outlined"
-                color={userSettlements.length > 0 ? "warning" : "inherit"}
+                color={userSettlements.length > 0 ? "warning" : allPendingSettlements.length > 0 ? "primary" : "inherit"}
                 size="small"
                 onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settlements`)}
-                sx={{ mb: 2, borderRadius: 2, fontWeight: 600, ...(userSettlements.length === 0 && { borderColor: "divider", color: "text.disabled" }) }}
+                sx={{ mb: 2, borderRadius: 2, fontWeight: 600, ...(allPendingSettlements.length === 0 && { borderColor: "divider", color: "text.disabled" }) }}
             >
                 {userSettlements.length > 0
-                    ? `${userSettlements.length} pending settlement${userSettlements.length !== 1 ? "s" : ""}`
-                    : "No pending settlements"}
+                    ? `You have ${userSettlements.length} pending settlement${userSettlements.length !== 1 ? "s" : ""}`
+                    : allPendingSettlements.length > 0
+                        ? `${allPendingSettlements.length} Pending Settlement${allPendingSettlements.length !== 1 ? "s" : ""}`
+                        : "All settled up"}
             </Button>
 
             {/* Summary cards */}
@@ -267,9 +270,10 @@ export default function GroupOverview() {
                                     <Box
                                         key={`settlement-${idx}`}
                                         sx={{
-                                            display: "flex",
+                                            display: "grid",
+                                            gridTemplateColumns: "auto 1fr auto",
                                             alignItems: "center",
-                                            gap: 1.5,
+                                            columnGap: 1.5,
                                             px: 2,
                                             py: 1.5,
                                             bgcolor: "action.hover",
@@ -278,31 +282,31 @@ export default function GroupOverview() {
                                             borderColor: isInvolved ? "primary.main" : "transparent",
                                         }}
                                     >
-                                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexShrink: 0 }}>
+                                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
                                             <Avatar
                                                 src={fromMember?.avatar || undefined}
-                                                sx={{ bgcolor: "error.dark", width: { xs: 32, sm: 36 }, height: { xs: 32, sm: 36 }, fontSize: { xs: 13, sm: 14 } }}
+                                                sx={{ width: { xs: 26, sm: 30 }, height: { xs: 26, sm: 30 }, fontSize: { xs: 11, sm: 12 } }}
                                             >
                                                 {fromMember?.username[0]?.toUpperCase()}
                                             </Avatar>
-                                            <EastIcon sx={{ fontSize: { xs: 14, sm: 16 }, color: "text.disabled" }} />
+                                            <EastIcon sx={{ fontSize: { xs: 12, sm: 14 }, color: "text.disabled" }} />
                                             <Avatar
                                                 src={toMember?.avatar || undefined}
-                                                sx={{ bgcolor: "success.dark", width: { xs: 32, sm: 36 }, height: { xs: 32, sm: 36 }, fontSize: { xs: 13, sm: 14 } }}
+                                                sx={{ width: { xs: 26, sm: 30 }, height: { xs: 26, sm: 30 }, fontSize: { xs: 11, sm: 12 } }}
                                             >
                                                 {toMember?.username[0]?.toUpperCase()}
                                             </Avatar>
                                         </Box>
-                                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
+                                        <Box sx={{ minWidth: 0 }}>
+                                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
                                                 <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
                                                     {s.from === user.id ? "You" : fromMember?.username} settled with {s.to === user.id ? "you" : toMember?.username}
                                                 </Typography>
                                                 {s.is_partial && (
-                                                    <Chip label="Partial" size="small" color="warning" variant="outlined" sx={{ fontSize: "0.6rem", height: 18, px: 0 }} />
+                                                    <Chip label="Partial" size="small" color="warning" variant="outlined" sx={{ fontSize: "0.6rem", height: 18, px: 0, flexShrink: 0 }} />
                                                 )}
                                             </Box>
-                                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: 0.25, flexWrap: "nowrap", minWidth: 0 }}>
+                                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: 0.25 }}>
                                                 <Typography variant="caption" color="text.secondary" noWrap>
                                                     {new Date(s.settled_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
                                                 </Typography>
@@ -316,7 +320,7 @@ export default function GroupOverview() {
                                         </Box>
                                         <Typography
                                             variant="subtitle2"
-                                            sx={{ fontWeight: 700, color: "success.main", flexShrink: 0 }}
+                                            sx={{ fontWeight: 700, color: "success.main", textAlign: "right" }}
                                         >
                                             {formatCurrency(s.amount, s.currency)}
                                         </Typography>

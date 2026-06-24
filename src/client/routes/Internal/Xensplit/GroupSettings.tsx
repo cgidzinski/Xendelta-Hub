@@ -83,7 +83,7 @@ export default function GroupSettings() {
                         sx={{ bgcolor: "action.hover", borderRadius: 2, mb: 1, pr: 1, minHeight: 64 }}
                     >
                         <ListItemAvatar>
-                            <Avatar src={member.avatar || undefined} sx={{ bgcolor: "primary.main" }}>
+                            <Avatar src={member.avatar || undefined}>
                                 {member.username[0]?.toUpperCase()}
                             </Avatar>
                         </ListItemAvatar>

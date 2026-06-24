@@ -528,7 +528,7 @@ export default function GroupDetail() {
                   sx={{ "& .MuiAvatar-root": { width: 20, height: 20, fontSize: 9, border: "1.5px solid", borderColor: "background.paper" } }}
                 >
                   {group.members.map((m) => (
-                    <Avatar key={m.user_id} src={m.avatar || undefined} sx={{ bgcolor: "primary.main" }}>
+                    <Avatar key={m.user_id} src={m.avatar || undefined}>
                       {m.username[0]?.toUpperCase()}
                     </Avatar>
                   ))}
@@ -854,7 +854,7 @@ export default function GroupDetail() {
               <DialogContent sx={{ px: 3, pt: 1, pb: 2 }}>
                 {/* Paid by */}
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.25, mb: 1.5 }}>
-                  <Avatar src={payer?.avatar || undefined} sx={{ width: 32, height: 32, bgcolor: "primary.main" }}>
+                  <Avatar src={payer?.avatar || undefined} sx={{ width: 32, height: 32 }}>
                     {payer?.username?.[0]?.toUpperCase()}
                   </Avatar>
                   <Box>
@@ -886,7 +886,7 @@ export default function GroupDetail() {
                         const member = group.members.find((m) => m.user_id === split.user_id);
                         return (
                           <Box key={split.user_id} sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                            <Avatar src={member?.avatar || undefined} sx={{ width: 28, height: 28, fontSize: 11, bgcolor: "secondary.main" }}>
+                            <Avatar src={member?.avatar || undefined} sx={{ width: 28, height: 28, fontSize: 11 }}>
                               {member?.username?.[0]?.toUpperCase()}
                             </Avatar>
                             <Typography variant="body2" sx={{ flexGrow: 1 }}>{member?.username ?? "?"}</Typography>
@@ -979,7 +979,7 @@ export default function GroupDetail() {
                 <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.75, flex: 1 }}>
                   <Avatar
                     src={selectedSettlement.fromUser.avatar || undefined}
-                    sx={{ width: 52, height: 52, bgcolor: "error.main" }}
+                    sx={{ width: 52, height: 52 }}
                   >
                     {selectedSettlement.fromUser.username[0]?.toUpperCase()}
                   </Avatar>
@@ -1001,7 +1001,7 @@ export default function GroupDetail() {
                 <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.75, flex: 1 }}>
                   <Avatar
                     src={selectedSettlement.toUser.avatar || undefined}
-                    sx={{ width: 52, height: 52, bgcolor: "success.main" }}
+                    sx={{ width: 52, height: 52 }}
                   >
                     {selectedSettlement.toUser.username[0]?.toUpperCase()}
                   </Avatar>

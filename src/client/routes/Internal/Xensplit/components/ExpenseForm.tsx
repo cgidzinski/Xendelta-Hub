@@ -472,11 +472,11 @@ export default function ExpenseForm({
               )}
               {splitType !== "equal" &&
                 selectedParticipants.map((p) => (
-                  <Box key={p._id} sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                  <Box key={p._id} sx={{ display: "grid", gridTemplateColumns: "28px auto 1fr", alignItems: "center", columnGap: 2, mb: 1 }}>
                     <Avatar src={p.avatar || undefined} sx={{ width: 28, height: 28 }}>
                       {p.username[0]?.toUpperCase()}
                     </Avatar>
-                    <Typography variant="body2" sx={{ width: 100 }}>
+                    <Typography variant="body2" noWrap>
                       {p.username}
                     </Typography>
                     {splitType === "percent" ? (
@@ -492,7 +492,7 @@ export default function ExpenseForm({
                           htmlInput: { inputMode: "decimal" },
                           input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
                         }}
-                        sx={{ flexGrow: 1 }}
+                        sx={{}}
                       />
                     ) : (
                       <TextField
@@ -504,7 +504,7 @@ export default function ExpenseForm({
                           if (!isNaN(n)) onExactSplitsChange({ ...exactSplits, [p._id]: n.toFixed(2) });
                         }}
                         slotProps={{ htmlInput: { inputMode: "decimal" } }}
-                        sx={{ flexGrow: 1 }}
+                        sx={{}}
                       />
                     )}
                   </Box>

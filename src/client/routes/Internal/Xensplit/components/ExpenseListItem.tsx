@@ -18,9 +18,10 @@ export default function ExpenseListItem({ expense, onClick, userId, mb }: Expens
         <Box
             onClick={onClick}
             sx={{
-                display: "flex",
+                display: "grid",
+                gridTemplateColumns: { xs: "34px 1fr auto", sm: "40px 1fr auto" },
                 alignItems: "center",
-                gap: 1.5,
+                columnGap: 1.5,
                 px: 2,
                 py: 1.5,
                 bgcolor: "action.hover",
@@ -34,11 +35,11 @@ export default function ExpenseListItem({ expense, onClick, userId, mb }: Expens
         >
             <Avatar
                 src={expense.payer?.avatar || undefined}
-                sx={{ bgcolor: "primary.main", width: { xs: 34, sm: 40 }, height: { xs: 34, sm: 40 }, flexShrink: 0 }}
+                sx={{ width: { xs: 34, sm: 40 }, height: { xs: 34, sm: 40 } }}
             >
                 {expense.payer?.username?.[0]?.toUpperCase() ?? "?"}
             </Avatar>
-            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Box sx={{ minWidth: 0 }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
                     {expense.title}
                 </Typography>
@@ -61,7 +62,7 @@ export default function ExpenseListItem({ expense, onClick, userId, mb }: Expens
                     </Box>
                 </Box>
             </Box>
-            <Box sx={{ textAlign: "right", flexShrink: 0 }}>
+            <Box sx={{ textAlign: "right" }}>
                 <Typography variant="subtitle2" color="success.main" sx={{ fontWeight: 700 }}>
                     {formatCurrency(expense.amount, expense.currency)}
                 </Typography>
