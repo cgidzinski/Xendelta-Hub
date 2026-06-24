@@ -37,7 +37,7 @@ const settlementBtnSx = {
 export default function GroupSettlements() {
     const { balancesData, group, user, onSettle, deleteSettlement, isDeletingSettlement } = useOutletContext<GroupDetailContext>();
     const [confirmUndoId, setConfirmUndoId] = useState<string | null>(null);
-    const [filter, setFilter] = useState<"mine" | "others">("mine");
+    const [filter, setFilter] = useState<"all" | "mine" | "others">("all");
     const [showHistory, setShowHistory] = useState(false);
 
     const pendingSettlements = balancesData?.settlements ?? [];
@@ -50,12 +50,14 @@ export default function GroupSettlements() {
         ...myPendingSettlements.filter(s => s.to === user.id),
     ];
     const sortedAllPending = [...sortedMyPending, ...otherPendingSettlements];
-    const displayedPending = filter === "mine" ? sortedMyPending : otherPendingSettlements;
+    const displayedPending = filter === "all" ? sortedAllPending : filter === "mine" ? sortedMyPending : otherPendingSettlements;
 
     const completedSettlements = [...(group.settlements ?? [])].sort(
         (a, b) => new Date(b.settled_at).getTime() - new Date(a.settled_at).getTime()
     );
-    const filteredHistory = filter === "mine"
+    const filteredHistory = filter === "all"
+        ? completedSettlements
+        : filter === "mine"
         ? completedSettlements.filter(s => s.from === user.id || s.to === user.id)
         : completedSettlements.filter(s => s.from !== user.id && s.to !== user.id);
 
@@ -84,6 +86,7 @@ export default function GroupSettlements() {
                     onChange={(_, v) => v && setFilter(v)}
                     sx={{ height: 24 }}
                 >
+                    <ToggleButton value="all" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>All</ToggleButton>
                     <ToggleButton value="mine" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>Mine</ToggleButton>
                     <ToggleButton value="others" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>Others</ToggleButton>
                 </ToggleButtonGroup>
