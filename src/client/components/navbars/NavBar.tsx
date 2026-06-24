@@ -63,16 +63,16 @@ export default function Root() {
 
   const pinnedSection: NavItem[] = pinnedNavItems.length
     ? [
-        {
-          key: "pinned-apps-header",
-          label: "Pinned Apps",
-          icon: null,
-          path: "",
-          isSelected: () => false,
-          type: "header" as const,
-        },
-        ...pinnedNavItems,
-      ]
+      {
+        key: "pinned-apps-header",
+        label: "Pinned Apps",
+        icon: null,
+        path: "",
+        isSelected: () => false,
+        type: "header" as const,
+      },
+      ...pinnedNavItems,
+    ]
     : [];
 
   const navItems: NavItem[] = [
@@ -83,44 +83,44 @@ export default function Root() {
       path: "/internal",
       isSelected: (pathname) => pathname === "/internal" || pathname === "/internal/",
     },
-    {
-      key: "blog",
-      label: "Blog",
-      icon: <ArticleIcon />,
-      path: "/internal/blog",
-      isSelected: (pathname) => pathname.startsWith("/internal/blog"),
-    },
-    {
-      key: "inventory",
-      label: "Inventory",
-      icon: <InventoryIcon />,
-      path: "/internal/inventory",
-      isSelected: (pathname) => pathname.startsWith("/internal/inventory"),
-    },
+    // {
+    //   key: "blog",
+    //   label: "Blog",
+    //   icon: <ArticleIcon />,
+    //   path: "/internal/blog",
+    //   isSelected: (pathname) => pathname.startsWith("/internal/blog"),
+    // },
+    // {
+    //   key: "inventory",
+    //   label: "Inventory",
+    //   icon: <InventoryIcon />,
+    //   path: "/internal/inventory",
+    //   isSelected: (pathname) => pathname.startsWith("/internal/inventory"),
+    // },
     ...(pinnedNavItems.length > 0 || allAppNavItems.length > 0
       ? [
-          {
-            key: "apps-divider",
-            label: "",
-            icon: null,
-            path: "",
-            isSelected: () => false,
-            type: "divider" as const,
-          },
-        ]
+        {
+          key: "apps-divider",
+          label: "",
+          icon: null,
+          path: "",
+          isSelected: () => false,
+          type: "divider" as const,
+        },
+      ]
       : []),
     ...pinnedSection,
     ...(allAppNavItems.length > 0
       ? [
-          {
-            key: "apps-header",
-            label: "Apps",
-            icon: null,
-            path: "",
-            isSelected: () => false,
-            type: "header" as const,
-          },
-        ]
+        {
+          key: "apps-header",
+          label: "Apps",
+          icon: null,
+          path: "",
+          isSelected: () => false,
+          type: "header" as const,
+        },
+      ]
       : []),
   ];
 
