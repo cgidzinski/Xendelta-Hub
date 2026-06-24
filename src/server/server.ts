@@ -31,7 +31,7 @@ const port = process.env.PORT || "3000";
 const server = ViteExpress.listen(app, Number(port), () => console.log(`>>> Server is listening on port ${port}...`));
 const io = new SocketIOServer(server, {
   cors: {
-    origin: `http://localhost:${process.env.PORT || "3000"}`,
+    origin: process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || "3000"}`,
     methods: ["GET", "POST"],
     credentials: true,
   },

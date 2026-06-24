@@ -166,7 +166,8 @@ module.exports = function (app: express.Application) {
       user.resetPassword.expires = resetTokenExpiry;
       await user.save();
 
-      const resetUrl = `http://localhost:${process.env.PORT || "3000"}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+      const baseUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || "3000"}`;
+      const resetUrl = `${baseUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
 
       const emailResult = await sendPasswordResetEmail({
         username: user.username,
