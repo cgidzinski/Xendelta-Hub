@@ -22,6 +22,7 @@ export default function GroupAvatar({ name, imageUrl, size = 48, borderRadius = 
 
   return (
     <Box
+      aria-label={name}
       sx={{
         width: size,
         height: size,
@@ -42,7 +43,7 @@ export default function GroupAvatar({ name, imageUrl, size = 48, borderRadius = 
         <Box
           component="img"
           src={imageUrl as string}
-          alt={name}
+          alt=""
           onError={() => setErrored(true)}
           sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
         />
