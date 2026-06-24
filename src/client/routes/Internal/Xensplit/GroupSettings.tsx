@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import { useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
     Box,
@@ -12,16 +12,28 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
+import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import { useSnackbar } from "notistack";
 import type { GroupDetailContext } from "./GroupDetail";
 import { xsCardSx } from "./components/rowStyles";
 import { ALL_CURRENCIES, formatCurrency } from "../../../utils/currencyUtils";
 
 export default function GroupSettings() {
-    const { group, user, isCreator, onAddMembers, onMemberMenu, updateGroup, isUpdating, balancesData } =
+    const { group, user, isCreator, onAddMembers, onMemberMenu, updateGroup, isUpdating, uploadGroupImage, isUploadingImage, balancesData } =
         useOutletContext<GroupDetailContext>();
     const { enqueueSnackbar } = useSnackbar();
     const [selectedCurrency, setSelectedCurrency] = useState(group.default_currency || "CAD");
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleImageSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = "";
+        if (!file) return;
+        uploadGroupImage(file, {
+            onSuccess: () => enqueueSnackbar("Group image updated", { variant: "success" }),
+            onError: (error: Error) => enqueueSnackbar(error?.message || "Failed to update group image", { variant: "error" }),
+        });
+    };
 
     const handleSaveCurrency = () => {
         updateGroup(
@@ -35,6 +47,60 @@ export default function GroupSettings() {
 
     return (
         <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            {/* Group Image — fixed, on top */}
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48, flexShrink: 0 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    Group Image
+                </Typography>
+            </Box>
+            <Box sx={{ flexShrink: 0, mb: 3, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5, display: "flex", alignItems: "center", gap: 2 }}>
+                <Box
+                    sx={{
+                        width: 64,
+                        height: 64,
+                        borderRadius: 2,
+                        overflow: "hidden",
+                        bgcolor: group.image_url ? "transparent" : "primary.main",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                    }}
+                >
+                    {group.image_url ? (
+                        <Box component="img" src={group.image_url} alt={group.name} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                        <Typography sx={{ color: "#fff", fontWeight: 800, fontSize: "1.6rem", lineHeight: 1 }}>
+                            {group.name[0]?.toUpperCase() ?? "?"}
+                        </Typography>
+                    )}
+                </Box>
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>Main image</Typography>
+                    <Typography variant="caption" color="text.secondary">Shown as the group thumbnail</Typography>
+                </Box>
+                {isCreator && (
+                    <>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png,image/gif"
+                            hidden
+                            onChange={handleImageSelected}
+                        />
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<PhotoCameraIcon />}
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isUploadingImage}
+                        >
+                            {isUploadingImage ? "Uploading…" : "Change"}
+                        </Button>
+                    </>
+                )}
+            </Box>
+
             {/* Default Currency — fixed, on top */}
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48, flexShrink: 0 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>

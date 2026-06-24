@@ -10,20 +10,7 @@ import {
   Chip,
 } from "@mui/material";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import type { XenSplit } from "../../../hooks/xensplit/types";
-
-const ACCENT_COLORS = [
-  "#2196f3", "#9c27b0", "#e91e63", "#ff5722",
-  "#4caf50", "#ff9800", "#00bcd4", "#7c4dff",
-];
-
-function groupAccentColor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = (hash * 31 + name.charCodeAt(i)) & 0x7fffffff;
-  }
-  return ACCENT_COLORS[hash % ACCENT_COLORS.length];
-}
+import type { XenSplit } from "../../../../hooks/xensplit/types";
 
 function getUserNetBalance(group: XenSplit, userId: string): { [currency: string]: number } {
   const balances: { [currency: string]: number } = {};
@@ -59,7 +46,6 @@ interface GroupCardProps {
 
 export function GroupCard({ group, userId }: GroupCardProps) {
   const navigate = useNavigate();
-  const accentColor = groupAccentColor(group.name);
 
   const netBalances = getUserNetBalance(group, userId);
   const nonZeroEntries = Object.entries(netBalances).filter(([, v]) => v !== 0);
@@ -84,8 +70,8 @@ export function GroupCard({ group, userId }: GroupCardProps) {
         borderColor: "divider",
         transition: "border-color 0.15s, box-shadow 0.15s",
         "&:hover": {
-          borderColor: accentColor,
-          boxShadow: `0 0 0 1px ${accentColor}40`,
+          borderColor: "primary.main",
+          boxShadow: (theme) => `0 0 0 1px ${theme.palette.primary.main}40`,
         },
       }}
     >
@@ -94,22 +80,27 @@ export function GroupCard({ group, userId }: GroupCardProps) {
       >
         <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
           <Box sx={{ display: "grid", gridTemplateColumns: "48px 1fr auto", alignItems: "center", columnGap: 2 }}>
-            {/* Colored group initial */}
+            {/* Group image, or colored group initial fallback */}
             <Box
               sx={{
                 width: 48,
                 height: 48,
                 borderRadius: 2,
-                bgcolor: accentColor,
+                overflow: "hidden",
+                bgcolor: group.image_url ? "transparent" : "primary.main",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
               }}
             >
-              <Typography sx={{ color: "#fff", fontWeight: 800, fontSize: "1.2rem", lineHeight: 1 }}>
-                {group.name[0]?.toUpperCase() ?? "?"}
-              </Typography>
+              {group.image_url ? (
+                <Box component="img" src={group.image_url} alt={group.name} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <Typography sx={{ color: "#fff", fontWeight: 800, fontSize: "1.2rem", lineHeight: 1 }}>
+                  {group.name[0]?.toUpperCase() ?? "?"}
+                </Typography>
+              )}
             </Box>
 
             {/* Name + members */}
