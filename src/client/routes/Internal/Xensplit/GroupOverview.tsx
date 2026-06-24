@@ -98,7 +98,7 @@ export default function GroupOverview() {
             <Button
                 fullWidth
                 variant="outlined"
-                color={userSettlements.length > 0 ? "primary" : allPendingSettlements.length > 0 ? "warning" : "inherit"}
+                color={userSettlements.length > 0 ? "warning" : allPendingSettlements.length > 0 ? "primary" : "inherit"}
                 size="small"
                 onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settlements`)}
                 sx={{ mb: 2, borderRadius: 2, fontWeight: 600, ...(allPendingSettlements.length === 0 && { borderColor: "divider", color: "text.disabled" }) }}
