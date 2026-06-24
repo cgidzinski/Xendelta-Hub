@@ -62,9 +62,12 @@ module.exports = function (app: express.Application) {
   });
 
   app.post("/api/auth/login", validate(loginSchema), async function (req: express.Request, res: express.Response) {
-    const username = req.body.username;
+    const identifier = req.body.username;
     const password = req.body.password;
-    const user = await User.findOne({ username: username }).exec();
+    const isEmail = identifier.includes("@");
+    const user = isEmail
+      ? await User.findOne({ email: identifier.toLowerCase() }).exec()
+      : await User.findOne({ username: identifier }).exec();
 
     if (user && user.validPassword(password)) {
       const token = generateToken({

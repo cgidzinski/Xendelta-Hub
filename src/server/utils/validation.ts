@@ -24,7 +24,7 @@ export const signupSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  username: z.string().min(1, "Username is required").max(50, "Username too long"),
+  username: z.string().min(1, "Username or email is required").max(254, "Input too long"),
   password: z.string().min(1, "Password is required"),
 });
 

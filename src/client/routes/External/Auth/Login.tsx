@@ -19,7 +19,7 @@ import LandingHeader from "../../../components/LandingHeader";
 import PasswordField from "../../../components/PasswordField";
 import FormErrorAlert from "../../../components/forms/FormErrorAlert";
 import FormLoadingButton from "../../../components/forms/FormLoadingButton";
-import { validateUsername, validatePassword } from "../../../utils/formValidation";
+import { validateUsernameOrEmail, validatePassword } from "../../../utils/formValidation";
 
 interface LoginFormData {
   username: string;
@@ -62,7 +62,7 @@ export default function Login() {
   const validateForm = (): boolean => {
     const newErrors: LoginErrors = {};
 
-    const usernameError = validateUsername(formData.username);
+    const usernameError = validateUsernameOrEmail(formData.username);
     if (usernameError) {
       newErrors.username = usernameError;
     }
@@ -93,7 +93,7 @@ export default function Login() {
       const from = location.state?.from?.pathname;
       navigate(from || "/internal", { replace: true });
     } else {
-      setErrors({ general: "Invalid username or password" });
+      setErrors({ general: "Invalid username, email, or password" });
     }
 
     setIsLoading(false);
@@ -259,7 +259,7 @@ export default function Login() {
                         required
                         fullWidth
                         id="username"
-                        label="Username"
+                        label="Username or Email"
                         name="username"
                         autoFocus
                         value={formData.username}

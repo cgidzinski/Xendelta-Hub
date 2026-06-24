@@ -71,6 +71,26 @@ export const validatePassword = (
   return undefined;
 };
 
+// Username or email validation (for login)
+export const validateUsernameOrEmail = (value: string): string | undefined => {
+  if (!value?.trim()) {
+    return "Username or email is required";
+  }
+  if (value.includes("@")) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      return "Please enter a valid email address";
+    }
+  } else {
+    if (value.length < 3) {
+      return "Username must be at least 3 characters";
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(value)) {
+      return "Username can only contain letters, numbers, and underscores";
+    }
+  }
+  return undefined;
+};
+
 // Password matching validation
 export const validatePasswordMatch = (
   password: string,
