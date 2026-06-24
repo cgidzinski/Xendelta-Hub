@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import CameraAltIcon from "@mui/icons-material/CameraAlt";
 import {
   Box,
   Typography,
@@ -111,6 +112,7 @@ export default function ExpenseForm({
 }: ExpenseFormProps) {
   const [step, setStep] = React.useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const objectUrlsRef = useRef<string[]>([]);
   // Tracks split boxes the user has typed in, so untouched boxes can absorb the remainder
   const editedSplitIdsRef = useRef<Set<string>>(new Set());
@@ -560,6 +562,14 @@ export default function ExpenseForm({
               style={{ display: "none" }}
               onChange={handleFileChange}
             />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              style={{ display: "none" }}
+              onChange={handleFileChange}
+            />
 
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
               {/* Existing images (from DB) */}
@@ -653,7 +663,31 @@ export default function ExpenseForm({
                 </Box>
               ))}
 
-              {/* Add more tile */}
+              {/* Camera tile */}
+              {canAddMoreImages && (
+                <Box
+                  onClick={() => cameraInputRef.current?.click()}
+                  sx={{
+                    width: 80,
+                    height: 80,
+                    flexShrink: 0,
+                    border: "2px dashed",
+                    borderColor: "divider",
+                    borderRadius: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    color: "text.secondary",
+                    "&:hover": { borderColor: "primary.main", color: "primary.main" },
+                    transition: "all 0.2s",
+                  }}
+                >
+                  <CameraAltIcon />
+                </Box>
+              )}
+
+              {/* Gallery tile */}
               {canAddMoreImages && (
                 <Box
                   onClick={() => fileInputRef.current?.click()}
