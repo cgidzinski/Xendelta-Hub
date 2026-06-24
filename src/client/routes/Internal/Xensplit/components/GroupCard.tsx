@@ -93,7 +93,7 @@ export function GroupCard({ group, userId }: GroupCardProps) {
         onClick={() => navigate(`/internal/xensplit/groups/${group._id}`)}
       >
         <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
-          <Box sx={{ display: "grid", gridTemplateColumns: "48px 1fr minmax(96px, auto)", alignItems: "center", columnGap: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "48px 1fr auto", alignItems: "center", columnGap: 2 }}>
             {/* Colored group initial */}
             <Box
               sx={{

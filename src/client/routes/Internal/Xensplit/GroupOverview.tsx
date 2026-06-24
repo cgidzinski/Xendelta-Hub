@@ -271,7 +271,7 @@ export default function GroupOverview() {
                                         key={`settlement-${idx}`}
                                         sx={{
                                             display: "grid",
-                                            gridTemplateColumns: { xs: "60px 1fr 80px", sm: "72px 1fr 96px" },
+                                            gridTemplateColumns: "auto 1fr auto",
                                             alignItems: "center",
                                             columnGap: 1.5,
                                             px: 2,
@@ -321,7 +321,6 @@ export default function GroupOverview() {
                                         <Typography
                                             variant="subtitle2"
                                             sx={{ fontWeight: 700, color: "success.main", textAlign: "right" }}
-                                            noWrap
                                         >
                                             {formatCurrency(s.amount, s.currency)}
                                         </Typography>

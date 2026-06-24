@@ -23,7 +23,7 @@ export default function GroupBalances() {
                         key={userId}
                         sx={{
                             display: "grid",
-                            gridTemplateColumns: "40px 1fr minmax(96px, auto)",
+                            gridTemplateColumns: "40px 1fr auto",
                             alignItems: "center",
                             columnGap: 2,
                             p: 2,
@@ -37,7 +37,7 @@ export default function GroupBalances() {
                         <Avatar src={balance.user.avatar || undefined}>
                             {balance.user.username[0]?.toUpperCase()}
                         </Avatar>
-                        <Typography variant="subtitle2" noWrap>{balance.user.username}</Typography>
+                        <Typography variant="subtitle2">{balance.user.username}</Typography>
                         <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.25 }}>
                             {isSettled ? (
                                 <Typography variant="subtitle2" color="text.secondary">Settled up</Typography>

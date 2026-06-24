@@ -472,7 +472,7 @@ export default function ExpenseForm({
               )}
               {splitType !== "equal" &&
                 selectedParticipants.map((p) => (
-                  <Box key={p._id} sx={{ display: "grid", gridTemplateColumns: "28px minmax(80px, 120px) 1fr", alignItems: "center", columnGap: 2, mb: 1 }}>
+                  <Box key={p._id} sx={{ display: "grid", gridTemplateColumns: "28px auto 1fr", alignItems: "center", columnGap: 2, mb: 1 }}>
                     <Avatar src={p.avatar || undefined} sx={{ width: 28, height: 28 }}>
                       {p.username[0]?.toUpperCase()}
                     </Avatar>

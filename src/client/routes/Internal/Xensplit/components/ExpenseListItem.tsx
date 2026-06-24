@@ -19,7 +19,7 @@ export default function ExpenseListItem({ expense, onClick, userId, mb }: Expens
             onClick={onClick}
             sx={{
                 display: "grid",
-                gridTemplateColumns: { xs: "34px 1fr 80px", sm: "40px 1fr 96px" },
+                gridTemplateColumns: { xs: "34px 1fr auto", sm: "40px 1fr auto" },
                 alignItems: "center",
                 columnGap: 1.5,
                 px: 2,
@@ -63,7 +63,7 @@ export default function ExpenseListItem({ expense, onClick, userId, mb }: Expens
                 </Box>
             </Box>
             <Box sx={{ textAlign: "right" }}>
-                <Typography variant="subtitle2" color="success.main" sx={{ fontWeight: 700 }} noWrap>
+                <Typography variant="subtitle2" color="success.main" sx={{ fontWeight: 700 }}>
                     {formatCurrency(expense.amount, expense.currency)}
                 </Typography>
                 <Typography variant="caption" sx={{ textTransform: "capitalize", bgcolor: "action.selected", borderRadius: 1, px: 0.75, py: 0.2, fontSize: "0.65rem", fontWeight: 600, color: "text.secondary", display: "inline-block" }}>
