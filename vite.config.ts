@@ -7,7 +7,14 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "autoUpdate",
+      // "prompt": a newly deployed service worker is detected but NOT activated
+      // automatically. We surface an update banner and only reload when the user
+      // clicks it (see src/client/pwa/swUpdate.ts), so we never reload out from under
+      // someone mid-action.
+      registerType: "prompt",
+      // We register the service worker manually in src/client/pwa/swUpdate.ts so we can
+      // wire up the update banner and re-check for updates on launch/focus.
+      injectRegister: false,
       workbox: {
         // Precache hashed static assets so repeat loads are fast and the app is installable.
         // This app requires a network connection to be useful, so there is intentionally no
