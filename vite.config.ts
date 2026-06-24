@@ -9,14 +9,15 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       workbox: {
+        // Precache hashed static assets so repeat loads are fast and the app is installable.
+        // This app requires a network connection to be useful, so there is intentionally no
+        // offline navigation fallback or runtime caching of API/data requests — navigations and
+        // /api/ calls always go straight to the server (also avoids the SW intercepting OAuth
+        // callback navigations under /api/auth/*).
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        navigateFallback: "/index.html",
-        runtimeCaching: [
-          {
-            urlPattern: /^\/api\//,
-            handler: "NetworkOnly",
-          },
-        ],
+        // Main bundle is ~2 MB, just over Workbox's 2 MiB default; raise the limit so it precaches.
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        cleanupOutdatedCaches: true,
       },
       manifest: false,
     }),
