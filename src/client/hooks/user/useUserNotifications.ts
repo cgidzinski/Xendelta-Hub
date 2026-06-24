@@ -1,11 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-
-declare global {
-  interface Navigator {
-    setAppBadge?(count?: number): Promise<void>;
-    clearAppBadge?(): Promise<void>;
-  }
-}
 import { useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiClient } from "../../config/api";
@@ -177,17 +170,6 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
       socket.off("notification:update", handleNotificationUpdate);
     };
   }, [socket, isAuthenticated, queryClient]);
-
-  // Update the app icon badge count when installed
-  useEffect(() => {
-    if (!("setAppBadge" in navigator)) return;
-    const unread = notifications?.filter((n) => n.unread).length ?? 0;
-    if (unread > 0) {
-      navigator.setAppBadge!(unread).catch(() => {});
-    } else {
-      navigator.clearAppBadge?.().catch(() => {});
-    }
-  }, [notifications]);
 
   // Function to manually trigger the notifications fetch
   const fetchNotifications = () => {
