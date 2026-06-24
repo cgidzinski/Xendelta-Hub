@@ -82,9 +82,9 @@ const checkAuthStatus = async (): Promise<AuthUser | null> => {
   }
 };
 
-const loginUser = async (username: string, password: string): Promise<LoginResponse> => {
+const loginUser = async (email: string, password: string): Promise<LoginResponse> => {
   const response = await apiClient.post<LoginResponse>("/api/auth/login", {
-    username,
+    email,
     password,
   });
 
@@ -153,8 +153,8 @@ export const useAuthHook = () => {
 
   // Mutation for login
   const { mutateAsync: loginMutation } = useMutation({
-    mutationFn: ({ username, password }: { username: string; password: string }) =>
-      loginUser(username, password),
+    mutationFn: ({ email, password }: { email: string; password: string }) =>
+      loginUser(email, password),
     onSuccess: (data) => {
       if (data.success && data.user) {
         // Clear all queries first to remove any previous user's data
@@ -242,8 +242,8 @@ export const useAuthHook = () => {
     queryClient.invalidateQueries({ queryKey: authKeys.status() });
   };
 
-  const login = async (username: string, password: string): Promise<boolean> => {
-    const result = await loginMutation({ username, password });
+  const login = async (email: string, password: string): Promise<boolean> => {
+    const result = await loginMutation({ email, password });
     return result.success || false;
   };
 
