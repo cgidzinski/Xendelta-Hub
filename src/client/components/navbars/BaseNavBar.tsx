@@ -335,10 +335,13 @@ export default function BaseNavBar({
       </Drawer>
       <AppBar
         position="fixed"
+        elevation={0}
         sx={{
           zIndex: (theme) => theme.zIndex.drawer + 1,
           width: isNavBarOpen && !isMobile ? `calc(100% - ${DRAWER_WIDTH}px)` : "100%",
           ml: isNavBarOpen && !isMobile ? `${DRAWER_WIDTH}px` : 0,
+          borderBottom: "1px solid",
+          borderColor: "divider",
           transition: (theme) =>
             theme.transitions.create(["width", "margin-left"], {
               easing: theme.transitions.easing.sharp,
@@ -448,8 +451,8 @@ export default function BaseNavBar({
                     py: 1.5,
                     px: 2,
                     cursor: "pointer",
-                    backgroundColor: notification.unread ? "rgba(255, 255, 255, 0.05)" : "background.default",
-                    "&:hover": { backgroundColor: "action.hover" },
+                    backgroundColor: notification.unread ? "action.hover" : "background.default",
+                    "&:hover": { backgroundColor: "action.selected" },
                   }}
                 >
                   <Box sx={{ display: "flex", alignItems: "center", width: "100%", mb: 0.5 }}>

@@ -26,6 +26,7 @@ import { useTitle } from "../../../hooks/useTitle";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import { useUserNotifications, Notification } from "../../../hooks/user/useUserNotifications";
 import NotificationModal from "../../../components/notifications/NotificationModal";
+import { cardSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
 
 const getNotificationIcon = (icon: string) => {
   switch (icon) {
@@ -69,13 +70,13 @@ export default function Notifications() {
 
   return (
     <Box>
-      <Container maxWidth="md" sx={{ mt: 4 }}>
-        <Box sx={{ mb: 4, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <Container maxWidth="md" sx={{ mt: { xs: 2, sm: 4 } }}>
+        <Box sx={{ mb: { xs: 2, sm: 3 }, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
           <Box>
-            <Typography variant="h3" component="h1" gutterBottom>
+            <Typography variant="h5" component="h1" sx={{ fontWeight: 700, letterSpacing: "-0.02em" }}>
               Notifications
             </Typography>
-            <Typography variant="h6" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
               View all your notifications
             </Typography>
           </Box>
@@ -93,22 +94,28 @@ export default function Notifications() {
           )}
         </Box>
 
-        <Paper sx={{ backgroundColor: "rgba(255, 255, 255, 0.05)" }}>
-          {isLoading && notifications?.length === 0 && (
-            <Box sx={{ py: 4, display: "flex", justifyContent: "center" }}>
-              <LoadingSpinner />
-            </Box>
-          )}
+        {isLoading && notifications?.length === 0 && (
+          <Box sx={{ py: 4, display: "flex", justifyContent: "center" }}>
+            <LoadingSpinner />
+          </Box>
+        )}
 
-          {!isLoading && notifications?.length === 0 && (
-            <Box sx={{ py: 4, textAlign: "center" }}>
-              <Typography variant="body1" color="text.secondary">
-                No notifications yet
-              </Typography>
+        {!isLoading && notifications?.length === 0 && (
+          <Box sx={emptyStateSx}>
+            <Box sx={emptyStateIconCircleSx}>
+              <NotificationsIcon sx={{ fontSize: 32, color: "text.disabled" }} />
             </Box>
-          )}
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              No notifications yet
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              You're all caught up
+            </Typography>
+          </Box>
+        )}
 
-          {notifications && notifications.length > 0 && (
+        {notifications && notifications.length > 0 && (
+          <Paper variant="outlined" sx={{ ...cardSx, overflow: "hidden" }}>
             <List sx={{ p: 0 }}>
               {notifications.map((notification, index) => (
                 <Box key={notification._id}>
@@ -117,9 +124,9 @@ export default function Notifications() {
                     sx={{
                       cursor: "pointer",
                       backgroundColor: notification.unread
-                        ? "rgba(255, 255, 255, 0.05)"
+                        ? "action.hover"
                         : "transparent",
-                      "&:hover": { backgroundColor: "action.hover" },
+                      "&:hover": { backgroundColor: "action.selected" },
                       py: 2,
                       px: 2,
                     }}
@@ -158,8 +165,8 @@ export default function Notifications() {
                 </Box>
               ))}
             </List>
-          )}
-        </Paper>
+          </Paper>
+        )}
 
         <NotificationModal
           notification={selectedNotification}

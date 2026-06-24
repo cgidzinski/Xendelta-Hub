@@ -12,7 +12,7 @@ export default function AppCard({ app, children, fullWidth }: AppCardProps) {
         <Card
             variant="outlined"
             sx={{
-                borderRadius: 3,
+                borderRadius: 2,
                 width: fullWidth ? "100%" : undefined,
                 display: "flex",
                 flexDirection: "column",

@@ -16,7 +16,7 @@ function formatBytes(bytes: number): string {
 
 const cardSx = {
     variant: "outlined" as const,
-    borderRadius: 3,
+    borderRadius: 2,
     flex: 1,
     minWidth: 0,
     width: { xs: "100%", sm: "auto" },

@@ -20,6 +20,7 @@ export default function PointsListItemSidebar({ points = 0, onNavigate }: Points
         px: 1.5,
         py: 0.5,
         mx: 1,
+        mt: 1,
         borderRadius: 2,
         border: 1,
         borderColor: "warning.main",

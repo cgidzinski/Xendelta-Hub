@@ -1,5 +1,6 @@
 import { Box, Card, CardContent, Typography, Button, Avatar } from "@mui/material";
-import { Notifications } from "@mui/icons-material";
+import { AccountCircle } from "@mui/icons-material";
+import { cardSx, sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 
 interface AvatarUploadSectionProps {
   selectedFile: File | null;
@@ -19,11 +20,15 @@ export default function AvatarUploadSection({
   onUpload,
 }: AvatarUploadSectionProps) {
   return (
-    <Card elevation={2}>
+    <Card variant="outlined" sx={cardSx}>
       <CardContent sx={{ p: 3 }}>
-        <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-          <Notifications color="primary" sx={{ mr: 1 }} />
-          <Typography variant="h6">Avatar</Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+          <Box sx={{ display: "flex", color: "text.disabled" }}>
+            <AccountCircle fontSize="small" />
+          </Box>
+          <Typography variant="caption" sx={sectionLabelSx}>
+            Avatar
+          </Typography>
         </Box>
 
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
