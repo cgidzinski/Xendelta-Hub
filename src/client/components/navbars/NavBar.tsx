@@ -1,6 +1,5 @@
 import HomeIcon from "@mui/icons-material/Home";
 import ArticleIcon from "@mui/icons-material/Article";
-import SettingsIcon from "@mui/icons-material/Settings";
 import SecurityIcon from "@mui/icons-material/Security";
 import InventoryIcon from "@mui/icons-material/Inventory2";
 import EditIcon from "@mui/icons-material/Edit";

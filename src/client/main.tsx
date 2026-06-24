@@ -35,7 +35,6 @@ import XenBoxDownload from "./routes/External/XenBoxDownload/XenBoxDownload";
 // Routes - Internal
 import Home from "./routes/Internal/Home/Home";
 import Profile from "./routes/Internal/Profile/Profile";
-import Settings from "./routes/Internal/Settings/Settings";
 import Messages from "./routes/Internal/Messages/Messages";
 import ConversationDetail from "./routes/Internal/Messages/ConversationDetail";
 import Notifications from "./routes/Internal/Notifications/Notifications";
@@ -149,7 +148,6 @@ const router = createBrowserRouter(
       >
         <Route index element={<Home />} />
         <Route path="profile" element={<Profile />} />
-        <Route path="settings" element={<Settings />} />
         <Route path="messages" element={<Messages />} />
         <Route path="messages/:conversationId" element={<ConversationDetail />} />
         <Route path="notifications" element={<Notifications />} />
