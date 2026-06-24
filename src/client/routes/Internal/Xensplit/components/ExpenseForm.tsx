@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import PWAImageCapture from "../../../../pwa/components/PWAImageCapture";
 import {
   Box,
   Typography,
@@ -19,7 +20,6 @@ import {
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
-import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import { SearchedUser } from "../../../../hooks/useUserSearch";
 import type { XenSplitExpenseImage } from "../../../../hooks/xensplit/types";
 import { getSortedCurrencies, getCurrencySymbol } from "../../../../utils/currencyUtils";
@@ -110,7 +110,6 @@ export default function ExpenseForm({
   onCategoryChange,
 }: ExpenseFormProps) {
   const [step, setStep] = React.useState(0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const objectUrlsRef = useRef<string[]>([]);
   // Tracks split boxes the user has typed in, so untouched boxes can absorb the remainder
   const editedSplitIdsRef = useRef<Set<string>>(new Set());
@@ -552,15 +551,6 @@ export default function ExpenseForm({
               </Typography>
             </Box>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              style={{ display: "none" }}
-              onChange={handleFileChange}
-            />
-
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
               {/* Existing images (from DB) */}
               {existingImages.map((img) => {
@@ -653,29 +643,7 @@ export default function ExpenseForm({
                 </Box>
               ))}
 
-              {/* Add more tile */}
-              {canAddMoreImages && (
-                <Box
-                  onClick={() => fileInputRef.current?.click()}
-                  sx={{
-                    width: 80,
-                    height: 80,
-                    flexShrink: 0,
-                    border: "2px dashed",
-                    borderColor: "divider",
-                    borderRadius: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer",
-                    color: "text.secondary",
-                    "&:hover": { borderColor: "primary.main", color: "primary.main" },
-                    transition: "all 0.2s",
-                  }}
-                >
-                  <AddPhotoAlternateIcon />
-                </Box>
-              )}
+              {canAddMoreImages && <PWAImageCapture onChange={handleFileChange} />}
             </Box>
           </Box>
         </Box>

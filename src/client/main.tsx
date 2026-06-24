@@ -10,6 +10,7 @@ import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 // Components
 import ErrorPage from "./components/ErrorPage";
 import NavBar from "./components/navbars/NavBar";
+import PWA from "./pwa/PWA";
 import ProtectedRoute from "./components/routeguards/ProtectedRoute";
 import UnprotectedRoute from "./components/routeguards/UnprotectedRoute";
 import AdminRoute from "./components/routeguards/AdminRoute";
@@ -238,6 +239,7 @@ ReactDOM.createRoot(rootElement).render(
               anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
             >
               <RouterProvider router={router} />
+              <PWA />
             </SnackbarProvider>
           </NavBarProvider>
         </AuthProvider>
