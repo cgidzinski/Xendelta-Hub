@@ -165,16 +165,13 @@ export default function GroupSettlements() {
             {completedSettlements.length > 0 && (
                 <>
                     <Divider sx={{ my: 2 }} />
-                    <Box
-                        sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: showHistory ? 1.5 : 0, cursor: "pointer" }}
-                        onClick={() => setShowHistory((v) => !v)}
-                    >
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: showHistory ? 1.5 : 0 }}>
                         <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
                             History
                         </Typography>
-                        <Typography variant="caption" color="text.disabled" sx={{ fontSize: "0.65rem" }}>
+                        <Button size="small" variant="outlined" onClick={() => setShowHistory((v) => !v)} sx={{ borderRadius: 2, fontWeight: 600, fontSize: "0.75rem", py: 0.25, px: 1.5 }}>
                             {showHistory ? "Hide" : "Show"}
-                        </Typography>
+                        </Button>
                     </Box>
 
                     {showHistory && (
