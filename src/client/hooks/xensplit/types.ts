@@ -51,6 +51,7 @@ export interface XenSplit {
   _id: string;
   name: string;
   default_currency: string;
+  image_url?: string;
   created_by: string;
   created_at: string;
   members: XenSplitMember[];

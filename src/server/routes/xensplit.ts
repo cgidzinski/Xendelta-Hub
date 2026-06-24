@@ -6,7 +6,7 @@ import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { uploadXenSplitImages } from "../config/multer";
 import { uploadToGCS, deleteFromGCS, generateSignedUrl } from "../utils/gcsUtils";
-import { generateUniqueFilename } from "../utils/mediaUtils";
+import { generateUniqueFilename, uploadXenSplitGroupImageFile } from "../utils/mediaUtils";
 import { MAX_XENSPLIT_IMAGES_PER_EXPENSE } from "../constants";
 import {
   validate,
@@ -166,6 +166,36 @@ module.exports = function (app: any) {
     } catch (error) {
       console.error("Error updating group:", error);
       res.status(500).json({ status: false, message: "Failed to update group" });
+    }
+  });
+
+  // POST /api/xensplit/groups/:groupId/image - Upload/replace the group image (creator only)
+  app.post("/api/xensplit/groups/:groupId/image", validateParams(xenSplitIdParamSchema), uploadXenSplitImages.single("image"), async (req: Request, res: Response) => {
+    try {
+      const userId = (req.user as any)._id.toString();
+      const { groupId } = req.params;
+
+      const group = await XenSplit.findById(groupId);
+      if (!group) {
+        return res.status(404).json({ status: false, message: "Group not found" });
+      }
+
+      if (group.created_by !== userId) {
+        return res.status(403).json({ status: false, message: "Only the creator can update the group image" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ status: false, message: "No image provided" });
+      }
+
+      const { url } = await uploadXenSplitGroupImageFile(req.file, groupId);
+      group.image_url = url;
+      await group.save();
+      await group.populate("members", "username avatar");
+      res.json({ status: true, message: "Group image updated", data: transformMembers(group.toObject()) });
+    } catch (error) {
+      console.error("Error uploading group image:", error);
+      res.status(500).json({ status: false, message: "Failed to upload group image" });
     }
   });
 

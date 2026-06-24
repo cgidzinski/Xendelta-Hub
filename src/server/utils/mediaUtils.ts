@@ -234,3 +234,37 @@ export async function uploadAvatarFile(
     size: finalSize,
   };
 }
+
+/**
+ * Upload a xensplit group image to the public GCS bucket.
+ * Processed to a square JPEG thumbnail so the GCS path/extension stays stable
+ * (re-uploads overwrite the same object) and is served from the public bucket.
+ * @param file - The uploaded file
+ * @param groupId - XenSplit group ID (used as filename)
+ * @returns Object with the public URL
+ */
+export async function uploadXenSplitGroupImageFile(
+  file: Express.Multer.File,
+  groupId: string
+): Promise<{ url: string }> {
+  if (!file.buffer) {
+    throw new Error("File buffer is missing");
+  }
+
+  // Validate that it's an allowed image type
+  const { contentType, ext } = detectFileType(file);
+  if (!ALLOWED_IMAGE_MIMES.includes(contentType as any)) {
+    throw new Error(`Group image must be an image. Detected type: ${contentType}, extension: ${ext}`);
+  }
+
+  // Always output a square JPEG (reads the first frame of GIFs) so the path/extension is stable
+  const processedBuffer = await sharp(file.buffer)
+    .resize(400, 400, { fit: "cover", position: "center" })
+    .jpeg({ quality: 90 })
+    .toBuffer();
+
+  const gcsPath = `xensplit-group-images/${groupId}.jpg`;
+  const publicUrl = await uploadToGCS(processedBuffer, gcsPath, "image/jpeg") as string;
+
+  return { url: publicUrl };
+}

@@ -59,16 +59,6 @@ import ExpenseForm from "./components/ExpenseForm";
 import { apiClient } from "../../../config/api";
 import type { XenSplit, XenSplitBalancesData, XenSplitExpense, XenSplitSettlementTransfer } from "../../../hooks/xensplit/types";
 
-const ACCENT_COLORS = [
-  "#2196f3", "#9c27b0", "#e91e63", "#ff5722",
-  "#4caf50", "#ff9800", "#00bcd4", "#7c4dff",
-];
-function groupAccentColor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0x7fffffff;
-  return ACCENT_COLORS[hash % ACCENT_COLORS.length];
-}
-
 export interface GroupDetailContext {
   group: XenSplit;
   balancesData: XenSplitBalancesData | undefined;
@@ -82,6 +72,8 @@ export interface GroupDetailContext {
   onMemberMenu: (memberId: string, anchor: HTMLElement) => void;
   updateGroup: (updates: { name?: string; default_currency?: string }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
   isUpdating: boolean;
+  uploadGroupImage: (file: File, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
+  isUploadingImage: boolean;
   deleteSettlement: (settlementId: string) => void;
   isDeletingSettlement: boolean;
 }
@@ -93,7 +85,7 @@ export default function GroupDetail() {
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
-  const { group, isLoading, isError, error, addMembers, isAddingMembers, removeMember, isRemovingMember, updateGroup, isUpdating } = useXenSplit(groupId!);
+  const { group, isLoading, isError, error, addMembers, isAddingMembers, removeMember, isRemovingMember, updateGroup, isUpdating, uploadGroupImage, isUploadingImage } = useXenSplit(groupId!);
   useTitle("Xensplit");
   const { deleteGroup } = useXenSplits();
   const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useXenSplitBalances(groupId!);
@@ -462,6 +454,8 @@ export default function GroupDetail() {
     },
     updateGroup,
     isUpdating,
+    uploadGroupImage,
+    isUploadingImage,
     deleteSettlement,
     isDeletingSettlement,
   };
@@ -497,16 +491,21 @@ export default function GroupDetail() {
                 width: { xs: 36, sm: 44 },
                 height: { xs: 36, sm: 44 },
                 borderRadius: 1.5,
-                bgcolor: groupAccentColor(group.name),
+                overflow: "hidden",
+                bgcolor: group.image_url ? "transparent" : "primary.main",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
               }}
             >
-              <Typography sx={{ color: "#fff", fontWeight: 800, fontSize: { xs: "0.9rem", sm: "1.1rem" }, lineHeight: 1 }}>
-                {group.name[0]?.toUpperCase()}
-              </Typography>
+              {group.image_url ? (
+                <Box component="img" src={group.image_url} alt={group.name} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <Typography sx={{ color: "#fff", fontWeight: 800, fontSize: { xs: "0.9rem", sm: "1.1rem" }, lineHeight: 1 }}>
+                  {group.name[0]?.toUpperCase()}
+                </Typography>
+              )}
             </Box>
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }} noWrap>

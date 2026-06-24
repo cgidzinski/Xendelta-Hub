@@ -27,6 +27,19 @@ export function useXenSplit(groupId: string) {
     },
   });
 
+  const uploadGroupImageMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("image", file);
+      const res = await apiClient.post(`/api/xensplit/groups/${groupId}/image`, formData);
+      return res.data.data as XenSplit;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["xensplit", "groups"] });
+    },
+  });
+
   const addMembersMutation = useMutation({
     mutationFn: async (memberIds: string[]) => {
       const res = await apiClient.post(`/api/xensplit/groups/${groupId}/members`, { memberIds });
@@ -54,6 +67,8 @@ export function useXenSplit(groupId: string) {
     error,
     updateGroup: updateMutation.mutate,
     isUpdating: updateMutation.isPending,
+    uploadGroupImage: uploadGroupImageMutation.mutate,
+    isUploadingImage: uploadGroupImageMutation.isPending,
     addMembers: addMembersMutation.mutate,
     isAddingMembers: addMembersMutation.isPending,
     removeMember: removeMemberMutation.mutate,
