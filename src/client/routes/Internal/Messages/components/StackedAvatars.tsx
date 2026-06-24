@@ -3,8 +3,11 @@ import { Box, Avatar } from "@mui/material";
 import { Conversation } from "../../../../types/Conversation";
 import { useUserProfile } from "../../../../hooks/user/useUserProfile";
 
+type ParticipantDisplay = { _id?: string; username: string; avatar?: string };
+
 interface StackedAvatarsProps {
-  conversation: Conversation;
+  conversation?: Conversation;
+  participants?: ParticipantDisplay[];
   currentUserId?: string;
   maxAvatars?: number;
   size?: number;
@@ -12,20 +15,23 @@ interface StackedAvatarsProps {
 
 export default function StackedAvatars({
   conversation,
+  participants: participantsProp,
   currentUserId,
   maxAvatars = 10,
   size = 48,
 }: StackedAvatarsProps) {
   const { profile } = useUserProfile();
-  
+
   // Get all participants excluding system, but including current user
-  let participants: Array<{ _id: string; username: string; avatar?: string }> = [];
-  
-  if (conversation.participantInfo) {
+  let participants: ParticipantDisplay[] = [];
+
+  if (participantsProp) {
+    participants = participantsProp;
+  } else if (conversation?.participantInfo) {
     participants = conversation.participantInfo.filter(
       (p) => p._id !== "system"
     );
-  } else {
+  } else if (conversation) {
     // If no participantInfo, construct from participants array
     // Include current user if we have their info
     participants = conversation.participants
@@ -44,7 +50,7 @@ export default function StackedAvatars({
 
   if (displayParticipants.length === 0) {
     // Fallback: show system or single avatar
-    const isSystem = conversation.participants.includes("system");
+    const isSystem = conversation?.participants.includes("system") ?? false;
     return (
       <Avatar 
         src={isSystem ? undefined : participants.find(p => p._id === currentUserId)?.avatar}
@@ -68,7 +74,7 @@ export default function StackedAvatars({
 
         return (
           <Avatar
-            key={participant._id}
+            key={participant._id ?? `participant-${index}`}
             src={avatarSrc}
             sx={{
               width: size,

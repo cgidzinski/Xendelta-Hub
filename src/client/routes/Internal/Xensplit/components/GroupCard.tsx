@@ -9,7 +9,7 @@ import {
   AvatarGroup,
   Chip,
 } from "@mui/material";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import GroupAvatar from "./GroupAvatar";
 import type { XenSplit } from "../../../../hooks/xensplit/types";
 
 function getUserNetBalance(group: XenSplit, userId: string): { [currency: string]: number } {
@@ -81,27 +81,7 @@ export function GroupCard({ group, userId }: GroupCardProps) {
         <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
           <Box sx={{ display: "grid", gridTemplateColumns: "48px 1fr auto", alignItems: "center", columnGap: 2 }}>
             {/* Group image, or colored group initial fallback */}
-            <Box
-              sx={{
-                width: 48,
-                height: 48,
-                borderRadius: 2,
-                overflow: "hidden",
-                bgcolor: group.image_url ? "transparent" : "primary.main",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              {group.image_url ? (
-                <Box component="img" src={group.image_url} alt={group.name} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              ) : (
-                <Typography sx={{ color: "#fff", fontWeight: 800, fontSize: "1.2rem", lineHeight: 1 }}>
-                  {group.name[0]?.toUpperCase() ?? "?"}
-                </Typography>
-              )}
-            </Box>
+            <GroupAvatar name={group.name} imageUrl={group.image_url} size={48} borderRadius={2} fontSize="1.2rem" />
 
             {/* Name + members */}
             <Box sx={{ minWidth: 0 }}>
@@ -112,48 +92,38 @@ export function GroupCard({ group, userId }: GroupCardProps) {
               >
                 {group.name}
               </Typography>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-                <Box sx={{ display: "flex", alignItems: "center" }}>
-                  <AvatarGroup
-                    max={4}
-                    sx={{ "& .MuiAvatar-root": { width: 24, height: 24, fontSize: 10, border: "1.5px solid", borderColor: "background.paper" } }}
-                  >
-                    {group.members.map((member) => (
-                      <Avatar
-                        key={member.user_id}
-                        src={member.avatar || undefined}
-                        sx={{}}
-                      >
-                        {member.username[0]?.toUpperCase()}
-                      </Avatar>
-                    ))}
-                  </AvatarGroup>
-                </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1 }}>
-                  {group.expenses?.length || 0} expenses
-                </Typography>
+              <Box sx={{ display: "flex", alignItems: "center" }}>
+                <AvatarGroup
+                  max={4}
+                  sx={{ "& .MuiAvatar-root": { width: 24, height: 24, fontSize: 10, border: "1.5px solid", borderColor: "background.paper" } }}
+                >
+                  {group.members.map((member) => (
+                    <Avatar
+                      key={member.user_id}
+                      src={member.avatar || undefined}
+                      sx={{}}
+                    >
+                      {member.username[0]?.toUpperCase()}
+                    </Avatar>
+                  ))}
+                </AvatarGroup>
               </Box>
             </Box>
 
             {/* Right side */}
-            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.5 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", alignSelf: "flex-start", gap: 0.25 }}>
               {isSettledUp && (group.expenses?.length ?? 0) > 0 ? (
-                <Chip
-                  label="Settled up"
-                  size="small"
-                  color="success"
-                  variant="outlined"
-                  sx={{ fontSize: "0.65rem", height: 20 }}
-                />
+                <Typography variant="caption" sx={{ fontWeight: 700, color: "text.primary", whiteSpace: "nowrap" }}>
+                  Settled up
+                </Typography>
               ) : (
-                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.25 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
                   {displayedEntries.map(([currency, amount]) => formatBalance(currency, amount))}
                   {extraCount > 0 && (
                     <Chip label={`+${extraCount} more`} size="small" sx={{ fontSize: "0.6rem", height: 18 }} />
                   )}
                 </Box>
               )}
-              <ChevronRightIcon sx={{ color: "text.disabled", fontSize: 20 }} />
             </Box>
           </Box>
         </CardContent>

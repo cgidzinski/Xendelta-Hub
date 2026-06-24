@@ -72,7 +72,7 @@ export default function Shop() {
                 {/* Shop Grid */}
                 <Grid container spacing={3}>
                     {(selectedCategory === "All" ? pointsShopItems : filteredItems).map((item) => (
-                        <Grid item xs={12} sm={6} md={4} key={item.id}>
+                        <Grid size={{ xs: 12, sm: 6, md: 4 }} key={item.id}>
                             <Card sx={{
                                 height: "100%",
                                 display: "flex",

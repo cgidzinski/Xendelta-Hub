@@ -1,5 +1,5 @@
 import { Card, CardContent, Typography, Box, Avatar } from "@mui/material";
-import { AppRegistryItem } from "../../../constants/apps";
+import { AppRegistryItem } from "../../../../constants/apps";
 
 interface AppCardProps {
     app: AppRegistryItem;

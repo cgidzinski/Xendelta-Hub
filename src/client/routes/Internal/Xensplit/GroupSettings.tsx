@@ -16,6 +16,7 @@ import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import { useSnackbar } from "notistack";
 import type { GroupDetailContext } from "./GroupDetail";
 import { xsCardSx } from "./components/rowStyles";
+import GroupAvatar from "./components/GroupAvatar";
 import { ALL_CURRENCIES, formatCurrency } from "../../../utils/currencyUtils";
 
 export default function GroupSettings() {
@@ -54,27 +55,7 @@ export default function GroupSettings() {
                 </Typography>
             </Box>
             <Box sx={{ flexShrink: 0, mb: 3, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5, display: "flex", alignItems: "center", gap: 2 }}>
-                <Box
-                    sx={{
-                        width: 64,
-                        height: 64,
-                        borderRadius: 2,
-                        overflow: "hidden",
-                        bgcolor: group.image_url ? "transparent" : "primary.main",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                    }}
-                >
-                    {group.image_url ? (
-                        <Box component="img" src={group.image_url} alt={group.name} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    ) : (
-                        <Typography sx={{ color: "#fff", fontWeight: 800, fontSize: "1.6rem", lineHeight: 1 }}>
-                            {group.name[0]?.toUpperCase() ?? "?"}
-                        </Typography>
-                    )}
-                </Box>
+                <GroupAvatar name={group.name} imageUrl={group.image_url} size={64} borderRadius={2} fontSize="1.6rem" />
                 <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Typography variant="body1" sx={{ fontWeight: 500 }}>Main image</Typography>
                     <Typography variant="caption" color="text.secondary">Shown as the group thumbnail</Typography>

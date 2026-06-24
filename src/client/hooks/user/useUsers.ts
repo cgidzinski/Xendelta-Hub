@@ -51,7 +51,7 @@ export const useUsers = () => {
   });
 
   // Filter out current user
-  const otherUsers = users?.filter((u) => u._id !== user?._id) || [];
+  const otherUsers = users?.filter((u) => u._id !== user?.id) || [];
 
   return { users: otherUsers, allUsers: users || [], isLoading, isError, error: error as Error | null, refetch };
 };

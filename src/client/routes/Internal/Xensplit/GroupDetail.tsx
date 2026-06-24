@@ -56,6 +56,7 @@ import ErrorDisplay from "../../../components/ErrorDisplay";
 import UserSelect from "../../../components/UserSelect";
 import { SearchedUser } from "../../../hooks/useUserSearch";
 import ExpenseForm from "./components/ExpenseForm";
+import GroupAvatar from "./components/GroupAvatar";
 import { apiClient } from "../../../config/api";
 import type { XenSplit, XenSplitBalancesData, XenSplitExpense, XenSplitSettlementTransfer } from "../../../hooks/xensplit/types";
 
@@ -486,27 +487,13 @@ export default function GroupDetail() {
             <ArrowBackIcon />
           </IconButton>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexGrow: 1, minWidth: 0 }}>
-            <Box
-              sx={{
-                width: { xs: 36, sm: 44 },
-                height: { xs: 36, sm: 44 },
-                borderRadius: 1.5,
-                overflow: "hidden",
-                bgcolor: group.image_url ? "transparent" : "primary.main",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              {group.image_url ? (
-                <Box component="img" src={group.image_url} alt={group.name} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              ) : (
-                <Typography sx={{ color: "#fff", fontWeight: 800, fontSize: { xs: "0.9rem", sm: "1.1rem" }, lineHeight: 1 }}>
-                  {group.name[0]?.toUpperCase()}
-                </Typography>
-              )}
-            </Box>
+            <GroupAvatar
+              name={group.name}
+              imageUrl={group.image_url}
+              size={{ xs: 36, sm: 44 }}
+              borderRadius={1.5}
+              fontSize={{ xs: "0.9rem", sm: "1.1rem" }}
+            />
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }} noWrap>
                 {group.name}
