@@ -79,7 +79,7 @@ export interface GroupDetailContext {
   onSettle: (settlement: XenSplitSettlementTransfer) => void;
   onAddMembers: () => void;
   onMemberMenu: (memberId: string, anchor: HTMLElement) => void;
-  updateGroup: (updates: { name?: string; default_currency?: string }, options?: { onSuccess?: () => void; onError?: () => void }) => void;
+  updateGroup: (updates: { name?: string; default_currency?: string }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
   isUpdating: boolean;
   deleteSettlement: (settlementId: string) => void;
   isDeletingSettlement: boolean;
@@ -195,8 +195,8 @@ export default function GroupDetail() {
           setSelectedMembers([]);
           resolve();
         },
-        onError: () => {
-          enqueueSnackbar("Failed to add members", { variant: "error" });
+        onError: (error: Error) => {
+          enqueueSnackbar(error?.message || "Failed to add members", { variant: "error" });
           resolve();
         },
       });
@@ -210,9 +210,8 @@ export default function GroupDetail() {
           enqueueSnackbar("Member removed", { variant: "success" });
           resolve();
         },
-        onError: (error: any) => {
-          const message = error?.response?.data?.message || "Failed to remove member";
-          enqueueSnackbar(message, { variant: "error" });
+        onError: (error: Error) => {
+          enqueueSnackbar(error?.message || "Failed to remove member", { variant: "error" });
           resolve();
         },
       });
@@ -228,8 +227,8 @@ export default function GroupDetail() {
           enqueueSnackbar("Group closed", { variant: "success" });
           resolve();
         },
-        onError: () => {
-          enqueueSnackbar("Failed to close group", { variant: "error" });
+        onError: (error: Error) => {
+          enqueueSnackbar(error?.message || "Failed to close group", { variant: "error" });
           resolve();
         },
       });
@@ -343,8 +342,8 @@ export default function GroupDetail() {
             setAddImages([]);
             resolve();
           },
-          onError: () => {
-            enqueueSnackbar("Failed to add expense", { variant: "error" });
+          onError: (error: Error) => {
+            enqueueSnackbar(error?.message || "Failed to add expense", { variant: "error" });
             resolve();
           },
         }
@@ -403,8 +402,8 @@ export default function GroupDetail() {
             setEditImages([]);
             resolve();
           },
-          onError: () => {
-            enqueueSnackbar("Failed to update expense", { variant: "error" });
+          onError: (error: Error) => {
+            enqueueSnackbar(error?.message || "Failed to update expense", { variant: "error" });
             resolve();
           },
         }
@@ -757,8 +756,8 @@ export default function GroupDetail() {
                         setSelectedExpense(null);
                         resolve();
                       },
-                      onError: () => {
-                        enqueueSnackbar("Failed to delete expense", { variant: "error" });
+                      onError: (error: Error) => {
+                        enqueueSnackbar(error?.message || "Failed to delete expense", { variant: "error" });
                         resolve();
                       },
                     });
@@ -1054,8 +1053,8 @@ export default function GroupDetail() {
                       setShowSettleModal(false);
                       resolve();
                     },
-                    onError: () => {
-                      enqueueSnackbar("Failed to settle", { variant: "error" });
+                    onError: (error: Error) => {
+                      enqueueSnackbar(error?.message || "Failed to settle", { variant: "error" });
                       resolve();
                     },
                   }
