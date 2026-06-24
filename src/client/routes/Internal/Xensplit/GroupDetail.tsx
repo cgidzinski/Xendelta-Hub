@@ -979,7 +979,7 @@ export default function GroupDetail() {
                 <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.75, flex: 1 }}>
                   <Avatar
                     src={selectedSettlement.fromUser.avatar || undefined}
-                    sx={{ width: 52, height: 52, bgcolor: "error.main" }}
+                    sx={{ width: 52, height: 52, bgcolor: selectedSettlement.fromUser.avatar ? "transparent" : "error.main" }}
                   >
                     {selectedSettlement.fromUser.username[0]?.toUpperCase()}
                   </Avatar>
@@ -1001,7 +1001,7 @@ export default function GroupDetail() {
                 <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.75, flex: 1 }}>
                   <Avatar
                     src={selectedSettlement.toUser.avatar || undefined}
-                    sx={{ width: 52, height: 52, bgcolor: "success.main" }}
+                    sx={{ width: 52, height: 52, bgcolor: selectedSettlement.toUser.avatar ? "transparent" : "success.main" }}
                   >
                     {selectedSettlement.toUser.username[0]?.toUpperCase()}
                   </Avatar>

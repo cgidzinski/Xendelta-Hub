@@ -11,10 +11,19 @@ export default function GroupSettlements() {
     const { balancesData, group, user, onSettle, deleteSettlement, isDeletingSettlement } = useOutletContext<GroupDetailContext>();
     const [confirmUndoId, setConfirmUndoId] = useState<string | null>(null);
     const [historyFilter, setHistoryFilter] = useState<"mine" | "all">("mine");
+    const [pendingFilter, setPendingFilter] = useState<"mine" | "all">("mine");
 
     const pendingSettlements = balancesData?.settlements ?? [];
     const myPendingSettlements = pendingSettlements.filter(s => s.from === user.id || s.to === user.id);
     const otherPendingSettlements = pendingSettlements.filter(s => s.from !== user.id && s.to !== user.id);
+
+    // Ordered: I owe first, then owed to me
+    const sortedMyPending = [
+        ...myPendingSettlements.filter(s => s.from === user.id),
+        ...myPendingSettlements.filter(s => s.to === user.id),
+    ];
+    const sortedAllPending = [...sortedMyPending, ...otherPendingSettlements];
+    const displayedPending = pendingFilter === "mine" ? sortedMyPending : sortedAllPending;
 
     const completedSettlements = [...(group.settlements ?? [])].sort(
         (a, b) => new Date(b.settled_at).getTime() - new Date(a.settled_at).getTime()
@@ -43,121 +52,115 @@ export default function GroupSettlements() {
                 </Typography>
             </Box>
 
-            {/* Pending — mine */}
-            {myPendingSettlements.length === 0 ? (
+            {/* Pending settlements with Mine/All toggle */}
+            {pendingSettlements.length > 0 && (
+                <>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
+                        <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                            Pending
+                        </Typography>
+                        <ToggleButtonGroup
+                            size="small"
+                            value={pendingFilter}
+                            exclusive
+                            onChange={(_, v) => v && setPendingFilter(v)}
+                            sx={{ height: 24 }}
+                        >
+                            <ToggleButton value="mine" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>Mine</ToggleButton>
+                            <ToggleButton value="all" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>All</ToggleButton>
+                        </ToggleButtonGroup>
+                    </Box>
+
+                    {displayedPending.length === 0 ? (
+                        <Box sx={{ textAlign: "center", py: 3, mb: completedSettlements.length > 0 ? 2 : 0 }}>
+                            <Typography variant="body2" color="text.secondary">All settled up</Typography>
+                        </Box>
+                    ) : (
+                        displayedPending.map((settlement, idx) => {
+                            const isInvolved = settlement.from === user.id || settlement.to === user.id;
+                            return (
+                                <Box
+                                    key={idx}
+                                    sx={{
+                                        display: "grid",
+                                        gridTemplateColumns: "auto 1fr auto 1fr auto 1fr auto 1fr auto",
+                                        gridTemplateRows: "auto auto",
+                                        rowGap: { xs: 0.75, sm: 1 },
+                                        px: { xs: 2, sm: 3 },
+                                        py: { xs: 1.5, sm: 2 },
+                                        mb: 1.5,
+                                        bgcolor: "action.hover",
+                                        borderRadius: 2,
+                                        alignItems: "center",
+                                        opacity: isInvolved ? 1 : 0.6,
+                                    }}
+                                >
+                                    <Box sx={{ gridColumn: 1, gridRow: "1 / 3", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: { xs: 0.5, sm: 0.75 } }}>
+                                        <Avatar
+                                            src={settlement.fromUser.avatar || undefined}
+                                            sx={{ width: { xs: 36, sm: 44 }, height: { xs: 36, sm: 44 }, bgcolor: settlement.fromUser.avatar ? "transparent" : "error.main" }}
+                                        >
+                                            {settlement.fromUser.username[0]?.toUpperCase()}
+                                        </Avatar>
+                                        <Typography variant="caption" sx={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "center", fontSize: { sm: "0.8rem" } }}>
+                                            {settlement.fromUser.username}
+                                        </Typography>
+                                    </Box>
+                                    <EastIcon sx={{ gridColumn: 3, gridRow: "1 / 3", alignSelf: "center", justifySelf: "center", fontSize: { xs: 14, sm: 18 }, color: "text.disabled" }} />
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            gridColumn: 5,
+                                            gridRow: 1,
+                                            alignSelf: "center",
+                                            justifySelf: "center",
+                                            fontWeight: 700,
+                                            fontSize: { sm: "1rem" },
+                                            whiteSpace: "nowrap",
+                                            color: settlement.from === user.id
+                                                ? "error.main"
+                                                : settlement.to === user.id
+                                                    ? "success.main"
+                                                    : "text.primary",
+                                        }}
+                                    >
+                                        {formatCurrency(settlement.amount, settlement.currency)}
+                                    </Typography>
+                                    {isInvolved && (
+                                        <Button
+                                            variant="outlined"
+                                            color="success"
+                                            size="small"
+                                            sx={{ gridColumn: 5, gridRow: 2, justifySelf: "center", alignSelf: "center", fontWeight: 600, borderRadius: 2, boxShadow: "none", px: { xs: 1, sm: 2 }, fontSize: { xs: "0.75rem", sm: "0.875rem" }, whiteSpace: "nowrap", "&:hover": { boxShadow: "none" } }}
+                                            onClick={() => onSettle(settlement)}
+                                        >
+                                            Settle
+                                        </Button>
+                                    )}
+                                    <EastIcon sx={{ gridColumn: 7, gridRow: "1 / 3", alignSelf: "center", justifySelf: "center", fontSize: { xs: 14, sm: 18 }, color: "text.disabled" }} />
+                                    <Box sx={{ gridColumn: 9, gridRow: "1 / 3", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: { xs: 0.5, sm: 0.75 } }}>
+                                        <Avatar
+                                            src={settlement.toUser.avatar || undefined}
+                                            sx={{ width: { xs: 36, sm: 44 }, height: { xs: 36, sm: 44 }, bgcolor: settlement.toUser.avatar ? "transparent" : "success.main" }}
+                                        >
+                                            {settlement.toUser.username[0]?.toUpperCase()}
+                                        </Avatar>
+                                        <Typography variant="caption" sx={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "center", fontSize: { sm: "0.8rem" } }}>
+                                            {settlement.toUser.username}
+                                        </Typography>
+                                    </Box>
+                                </Box>
+                            );
+                        })
+                    )}
+                </>
+            )}
+
+            {/* No pending but all settled */}
+            {pendingSettlements.length === 0 && (
                 <Box sx={{ textAlign: "center", py: 3, mb: completedSettlements.length > 0 ? 2 : 0 }}>
                     <Typography variant="body2" color="text.secondary">All settled up</Typography>
                 </Box>
-            ) : (
-                myPendingSettlements.map((settlement, idx) => (
-                    <Box
-                        key={idx}
-                        sx={{
-                            display: "grid",
-                            gridTemplateColumns: "auto 1fr auto 1fr auto 1fr auto 1fr auto",
-                            gridTemplateRows: "auto auto",
-                            rowGap: { xs: 0.75, sm: 1 },
-                            px: { xs: 2, sm: 3 },
-                            py: { xs: 1.5, sm: 2 },
-                            mb: 1.5,
-                            bgcolor: "action.hover",
-                            borderRadius: 2,
-                            alignItems: "center",
-                        }}
-                    >
-                        <Box sx={{ gridColumn: 1, gridRow: "1 / 3", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: { xs: 0.5, sm: 0.75 } }}>
-                            <Avatar src={settlement.fromUser.avatar || undefined} sx={{ width: { xs: 36, sm: 44 }, height: { xs: 36, sm: 44 }, bgcolor: "error.main" }}>
-                                {settlement.fromUser.username[0]?.toUpperCase()}
-                            </Avatar>
-                            <Typography variant="caption" sx={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "center", fontSize: { sm: "0.8rem" } }}>
-                                {settlement.fromUser.username}
-                            </Typography>
-                        </Box>
-                        <EastIcon sx={{ gridColumn: 3, gridRow: "1 / 3", alignSelf: "center", justifySelf: "center", fontSize: { xs: 14, sm: 18 }, color: "text.disabled" }} />
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                gridColumn: 5,
-                                gridRow: 1,
-                                alignSelf: "center",
-                                justifySelf: "center",
-                                fontWeight: 700,
-                                fontSize: { sm: "1rem" },
-                                whiteSpace: "nowrap",
-                                color: settlement.from === user.id
-                                    ? "error.main"
-                                    : settlement.to === user.id
-                                        ? "success.main"
-                                        : "text.primary",
-                            }}
-                        >
-                            {formatCurrency(settlement.amount, settlement.currency)}
-                        </Typography>
-                        <Button
-                            variant="outlined"
-                            color="success"
-                            size="small"
-                            sx={{ gridColumn: 5, gridRow: 2, justifySelf: "center", alignSelf: "center", fontWeight: 600, borderRadius: 2, boxShadow: "none", px: { xs: 1, sm: 2 }, fontSize: { xs: "0.75rem", sm: "0.875rem" }, whiteSpace: "nowrap", "&:hover": { boxShadow: "none" } }}
-                            onClick={() => onSettle(settlement)}
-                        >
-                            Settle
-                        </Button>
-                        <EastIcon sx={{ gridColumn: 7, gridRow: "1 / 3", alignSelf: "center", justifySelf: "center", fontSize: { xs: 14, sm: 18 }, color: "text.disabled" }} />
-                        <Box sx={{ gridColumn: 9, gridRow: "1 / 3", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: { xs: 0.5, sm: 0.75 } }}>
-                            <Avatar src={settlement.toUser.avatar || undefined} sx={{ width: { xs: 36, sm: 44 }, height: { xs: 36, sm: 44 }, bgcolor: "success.main" }}>
-                                {settlement.toUser.username[0]?.toUpperCase()}
-                            </Avatar>
-                            <Typography variant="caption" sx={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "center", fontSize: { sm: "0.8rem" } }}>
-                                {settlement.toUser.username}
-                            </Typography>
-                        </Box>
-                    </Box>
-                ))
-            )}
-
-            {/* Others' pending settlements (view only) */}
-            {otherPendingSettlements.length > 0 && (
-                <>
-                    <Divider sx={{ my: 2 }} />
-                    <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1.5 }}>
-                        Others pending
-                    </Typography>
-                    {otherPendingSettlements.map((settlement, idx) => (
-                        <Box
-                            key={idx}
-                            sx={{
-                                display: "grid",
-                                gridTemplateColumns: "auto 1fr auto 1fr auto 1fr auto 1fr auto",
-                                gridTemplateRows: "auto",
-                                px: { xs: 2, sm: 3 },
-                                py: { xs: 1.5, sm: 2 },
-                                mb: 1.5,
-                                bgcolor: "action.hover",
-                                borderRadius: 2,
-                                alignItems: "center",
-                                opacity: 0.6,
-                            }}
-                        >
-                            <Box sx={{ gridColumn: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
-                                <Avatar src={settlement.fromUser.avatar || undefined} sx={{ width: { xs: 32, sm: 36 }, height: { xs: 32, sm: 36 } }}>
-                                    {settlement.fromUser.username[0]?.toUpperCase()}
-                                </Avatar>
-                                <Typography variant="caption" sx={{ fontSize: "0.65rem" }} noWrap>{settlement.fromUser.username}</Typography>
-                            </Box>
-                            <EastIcon sx={{ gridColumn: 3, fontSize: { xs: 14, sm: 16 }, color: "text.disabled", justifySelf: "center" }} />
-                            <Typography variant="body2" sx={{ gridColumn: 5, fontWeight: 700, justifySelf: "center", whiteSpace: "nowrap" }}>
-                                {formatCurrency(settlement.amount, settlement.currency)}
-                            </Typography>
-                            <EastIcon sx={{ gridColumn: 7, fontSize: { xs: 14, sm: 16 }, color: "text.disabled", justifySelf: "center" }} />
-                            <Box sx={{ gridColumn: 9, display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
-                                <Avatar src={settlement.toUser.avatar || undefined} sx={{ width: { xs: 32, sm: 36 }, height: { xs: 32, sm: 36 } }}>
-                                    {settlement.toUser.username[0]?.toUpperCase()}
-                                </Avatar>
-                                <Typography variant="caption" sx={{ fontSize: "0.65rem" }} noWrap>{settlement.toUser.username}</Typography>
-                            </Box>
-                        </Box>
-                    ))}
-                </>
             )}
 
             {/* History */}
