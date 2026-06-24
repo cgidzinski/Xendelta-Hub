@@ -51,6 +51,7 @@ import XenLinkRedirect from "./routes/External/XenLinkRedirect/XenLinkRedirect";
 import XensplitGroupsList from "./routes/Internal/Xensplit/GroupsList";
 import XensplitGroupDetail from "./routes/Internal/Xensplit/GroupDetail";
 import GroupOverview from "./routes/Internal/Xensplit/GroupOverview";
+import GroupAnalytics from "./routes/Internal/Xensplit/GroupAnalytics";
 import GroupExpenses from "./routes/Internal/Xensplit/GroupExpenses";
 import GroupBalances from "./routes/Internal/Xensplit/GroupBalances";
 import GroupSettlements from "./routes/Internal/Xensplit/GroupSettlements";
@@ -167,6 +168,7 @@ const router = createBrowserRouter(
           <Route path="expenses" element={<GroupExpenses />} />
           <Route path="balances" element={<GroupBalances />} />
           <Route path="settlements" element={<GroupSettlements />} />
+          <Route path="analytics" element={<GroupAnalytics />} />
           <Route path="settings" element={<GroupSettings />} />
         </Route>
       </Route>

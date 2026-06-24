@@ -39,6 +39,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import DeleteIcon from "@mui/icons-material/Delete";
 import GroupRemoveIcon from "@mui/icons-material/GroupRemove";
 import SettingsIcon from "@mui/icons-material/Settings";
+import AnalyticsIcon from "@mui/icons-material/Analytics";
 import GridViewIcon from "@mui/icons-material/GridView";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
@@ -251,34 +252,6 @@ export default function GroupDetail() {
       setMenuAnchor(null);
       setMenuMemberId(null);
     }
-  };
-
-  const handleExportCSV = () => {
-    const memberName = (userId: string) => group.members.find((m) => m.user_id === userId)?.username ?? userId;
-    const rows: string[][] = [["Date", "Title", "Paid By", "Amount", "Currency", "Split Type", "Notes", ...group.members.map((m) => m.username)]];
-    for (const e of group.expenses) {
-      const memberAmounts = group.members.map((m) => {
-        const split = e.splits.find((s) => s.user_id === m.user_id);
-        if (!split) return "";
-        if (split.amount_owed !== undefined) return split.amount_owed.toFixed(2);
-        if (split.percentage !== undefined) return `${split.percentage}%`;
-        return (e.amount / e.splits.length).toFixed(2);
-      });
-      rows.push([new Date(e.date).toISOString(), e.title, memberName(e.paid_by), e.amount.toFixed(2), e.currency, e.split_type, e.notes ?? "", ...memberAmounts]);
-    }
-    rows.push([]);
-    rows.push(["Date", "From", "To", "Amount", "Currency"]);
-    for (const s of group.settlements) {
-      rows.push([new Date(s.settled_at).toISOString(), memberName(s.from), memberName(s.to), s.amount.toFixed(2), s.currency]);
-    }
-    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${group.name.replace(/[^a-z0-9]/gi, "_")}_export.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   const handleAddExpense = async () => {
@@ -545,6 +518,13 @@ export default function GroupDetail() {
           >
             New Expense
           </Button>
+          <IconButton
+            onClick={() => navigate(`/internal/xensplit/groups/${groupId}/analytics`)}
+            size="small"
+            sx={{ flexShrink: 0, display: activeTab === false ? "none" : "inline-flex" }}
+          >
+            <AnalyticsIcon />
+          </IconButton>
           <IconButton
             onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settings`)}
             size="small"
