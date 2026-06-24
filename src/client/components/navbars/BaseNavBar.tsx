@@ -397,30 +397,31 @@ export default function BaseNavBar({
             <Box sx={{ px: 2, pb: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <Typography variant="overline" sx={{ fontWeight: "bold", lineHeight: 1 }}>Notifications</Typography>
               <Box sx={{ display: "flex", gap: 0.5 }}>
-                {notifications?.some((n) => n.unread) && (
-                  <Tooltip title="Mark all as read">
-                    <span>
-                      <IconButton size="small" onClick={() => markAllAsRead()} disabled={isMarkingAsRead} aria-label="Mark all as read">
-                        <DoneAllIcon fontSize="small" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                )}
-                {notifications && notifications.length > 0 && (
-                  <Tooltip title="Clear all">
-                    <span>
-                      <IconButton
-                        size="small"
-                        onClick={() => clearAllNotifications()}
-                        disabled={isClearing}
-                        aria-label="Clear all notifications"
-                        sx={{ color: "text.secondary", "&:hover": { color: "error.main" } }}
-                      >
-                        <DeleteSweepIcon fontSize="small" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                )}
+                <Tooltip title="Mark all as read">
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={() => markAllAsRead()}
+                      disabled={isMarkingAsRead || !notifications?.some((n) => n.unread)}
+                      aria-label="Mark all as read"
+                    >
+                      <DoneAllIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title="Clear all">
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={() => clearAllNotifications()}
+                      disabled={isClearing || !notifications?.length}
+                      aria-label="Clear all notifications"
+                      sx={{ "&:not(:disabled):hover": { color: "error.main" } }}
+                    >
+                      <DeleteSweepIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
               </Box>
             </Box>
             <Divider />
