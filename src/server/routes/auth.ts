@@ -328,7 +328,7 @@ module.exports = function (app: express.Application) {
           email: existingUser.email,
         });
         
-        res.redirect(`http://localhost:${process.env.PORT || '3000'}/auth/callback?token=${token}&linked=true`);
+        res.redirect(`/auth/callback?token=${token}&linked=true`);
         return;
       }
     }
@@ -341,7 +341,7 @@ module.exports = function (app: express.Application) {
     });
 
     // Redirect to frontend with token
-    res.redirect(`http://localhost:${process.env.PORT || '3000'}/auth/callback?token=${token}`);
+    res.redirect(`/auth/callback?token=${token}`);
   };
 
   // Google OAuth Routes
@@ -356,7 +356,7 @@ module.exports = function (app: express.Application) {
         await handleOAuthCallback(req, res, 'google');
       } catch (error) {
         console.error("Google OAuth callback error:", error);
-        res.redirect(`http://localhost:${process.env.PORT || '3000'}/login?error=oauth_failed`);
+        res.redirect(`/login?error=oauth_failed`);
       }
     }
   );
@@ -373,7 +373,7 @@ module.exports = function (app: express.Application) {
         await handleOAuthCallback(req, res, 'github');
       } catch (error) {
         console.error("GitHub OAuth callback error:", error);
-        res.redirect(`http://localhost:${process.env.PORT || '3000'}/login?error=oauth_failed`);
+        res.redirect(`/login?error=oauth_failed`);
       }
     }
   );
@@ -390,7 +390,7 @@ module.exports = function (app: express.Application) {
         await handleOAuthCallback(req, res, 'discord');
       } catch (error) {
         console.error("Discord OAuth callback error:", error);
-        res.redirect(`http://localhost:${process.env.PORT || '3000'}/login?error=oauth_failed`);
+        res.redirect(`/login?error=oauth_failed`);
       }
     }
   );
