@@ -3,6 +3,7 @@ import { Strategy as JwtStrategy, ExtractJwt } from 'passport-jwt';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as GitHubStrategy } from 'passport-github2';
 import { Strategy as DiscordStrategy } from 'passport-discord';
+import { sendWelcomeMessage } from '../utils/welcomeUtils';
 const { User } = require('../models/user');
 
 // Check for required environment variables
@@ -79,9 +80,10 @@ passport.use(new GoogleStrategy(googleOptions, async (accessToken, refreshToken,
     
     // Add Google as auth provider
     await user.addAuthProvider('google', profile.id, profile.emails?.[0]?.value);
-    
+
     await user.save();
-    
+    await sendWelcomeMessage(user._id.toString());
+
     return done(null, user);
   } catch (error) {
     return done(error, false);
@@ -141,6 +143,7 @@ passport.use(new GitHubStrategy(githubOptions, async (accessToken: string, refre
     await user.addAuthProvider('github', profile.id, userEmail);
 
     await user.save();
+    await sendWelcomeMessage(user._id.toString());
 
     return done(null, user);
   } catch (error) {
@@ -199,6 +202,7 @@ passport.use(new DiscordStrategy(discordOptions, async (accessToken: string, ref
     await user.addAuthProvider('discord', profile.id, userEmail);
 
     await user.save();
+    await sendWelcomeMessage(user._id.toString());
 
     return done(null, user);
   } catch (error) {

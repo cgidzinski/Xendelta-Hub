@@ -5,6 +5,7 @@ const crypto = require("crypto");
 import { authenticateToken } from "../middleware/auth";
 import { generateToken } from "../utils/tokenUtils";
 import { sendPasswordResetEmail } from "../utils/emailUtils";
+import { sendWelcomeMessage } from "../utils/welcomeUtils";
 import passport from "../config/passport";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { validate, signupSchema, loginSchema } from "../utils/validation";
@@ -107,7 +108,9 @@ module.exports = function (app: express.Application) {
       
       // Add local authentication provider
       await newUser.addAuthProvider('local', null, email);
-      
+
+      await sendWelcomeMessage(newUser._id.toString());
+
       // Generate token for new user
       const token = generateToken({
         _id: newUser._id,
