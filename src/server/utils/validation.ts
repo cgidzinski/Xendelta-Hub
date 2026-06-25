@@ -271,6 +271,7 @@ export const settleDebtSchema = z.object({
   to: objectIdSchema,
   amount: z.number().positive("Amount must be positive"),
   currency: z.string().default("CAD"),
+  note: z.string().max(500).optional(),
 }).refine((data) => data.from !== data.to, {
   message: "Cannot settle with yourself",
   path: ["to"],

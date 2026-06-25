@@ -769,7 +769,7 @@ module.exports = function (app: any) {
     try {
       const userId = (req.user as any)._id.toString();
       const { groupId } = req.params;
-      const { from, to, amount, currency } = req.body;
+      const { from, to, amount, currency, note } = req.body;
 
       const group = await XenSplit.findById(groupId);
       if (!group) {
@@ -801,6 +801,7 @@ module.exports = function (app: any) {
         currency,
         settled_at: new Date(),
         is_partial,
+        ...(note ? { note } : {}),
       });
 
       await group.save();

@@ -137,6 +137,7 @@ export default function GroupDetail() {
   const [showSettleModal, setShowSettleModal] = useState(false);
   const [selectedSettlement, setSelectedSettlement] = useState<XenSplitSettlementTransfer | null>(null);
   const [settleAmount, setSettleAmount] = useState("");
+  const [settleNote, setSettleNote] = useState("");
   const [showViewExpenseModal, setShowViewExpenseModal] = useState(false);
   const [viewExpenseItem, setViewExpenseItem] = useState<XenSplitExpense | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -446,6 +447,7 @@ export default function GroupDetail() {
     onSettle: (settlement) => {
       setSelectedSettlement(settlement);
       setSettleAmount(settlement.amount.toString());
+      setSettleNote("");
       setShowSettleModal(true);
     },
     onAddMembers: () => setShowAddMemberModal(true),
@@ -935,7 +937,7 @@ export default function GroupDetail() {
         fullWidth
         maxWidth="xs"
         open={showSettleModal}
-        onClose={() => setShowSettleModal(false)}
+        onClose={() => { setShowSettleModal(false); setSettleNote(""); }}
         PaperProps={{ sx: { borderRadius: 3 } }}
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2.5 }}>
@@ -1009,6 +1011,17 @@ export default function GroupDetail() {
                 inputProps={{ min: 0.01, step: 0.01 }}
                 InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5, color: "text.secondary" }}>{selectedSettlement.currency}</Typography> }}
               />
+              <TextField
+                label="Note (optional)"
+                fullWidth
+                size="small"
+                multiline
+                rows={2}
+                value={settleNote}
+                onChange={(e) => setSettleNote(e.target.value)}
+                inputProps={{ maxLength: 500 }}
+                helperText="Only visible between you and the other party"
+              />
             </Box>
           )}
         </DialogContent>
@@ -1029,11 +1042,13 @@ export default function GroupDetail() {
                     to: selectedSettlement.to,
                     amount: parseFloat(settleAmount),
                     currency: selectedSettlement.currency,
+                    ...(settleNote.trim() ? { note: settleNote.trim() } : {}),
                   },
                   {
                     onSuccess: () => {
                       enqueueSnackbar("Settled!", { variant: "success" });
                       setShowSettleModal(false);
+                      setSettleNote("");
                       resolve();
                     },
                     onError: (error: Error) => {
