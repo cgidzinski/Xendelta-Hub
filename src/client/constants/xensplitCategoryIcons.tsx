@@ -8,6 +8,7 @@ import FlightIcon from "@mui/icons-material/Flight";
 import ShoppingBagIcon from "@mui/icons-material/ShoppingBag";
 import LocalHospitalIcon from "@mui/icons-material/LocalHospital";
 import CategoryIcon from "@mui/icons-material/Category";
+import HouseIcon from "@mui/icons-material/House";
 import type { ExpenseCategory } from "./xensplit";
 
 export const CATEGORY_ICONS: Record<ExpenseCategory, SvgIconComponent> = {
@@ -16,6 +17,7 @@ export const CATEGORY_ICONS: Record<ExpenseCategory, SvgIconComponent> = {
   Utilities: BoltIcon,
   Entertainment: MovieIcon,
   Travel: FlightIcon,
+  Lodging: HouseIcon,
   Shopping: ShoppingBagIcon,
   Healthcare: LocalHospitalIcon,
   Other: CategoryIcon,

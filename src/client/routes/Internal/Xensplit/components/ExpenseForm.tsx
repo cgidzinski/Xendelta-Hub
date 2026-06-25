@@ -16,6 +16,7 @@ import {
   StepLabel,
   IconButton,
   CircularProgress,
+  alpha,
 } from "@mui/material";
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import CloseIcon from "@mui/icons-material/Close";
@@ -24,6 +25,8 @@ import { SearchedUser } from "../../../../hooks/useUserSearch";
 import type { XenSplitExpenseImage } from "../../../../hooks/xensplit/types";
 import { getSortedCurrencies, getCurrencySymbol } from "../../../../utils/currencyUtils";
 import { EXPENSE_CATEGORIES } from "../../../../constants/xensplit";
+import { getCategoryIcon } from "../../../../constants/xensplitCategoryIcons";
+import { xsBadgeSx } from "./rowStyles";
 
 const MAX_IMAGES = 10;
 
@@ -115,6 +118,7 @@ export default function ExpenseForm({
   const editedSplitIdsRef = useRef<Set<string>>(new Set());
 
   const numAmount = parseFloat(amount) || 0;
+  const CategoryIconComponent = getCategoryIcon(category);
 
   // Accepts only digits and a single decimal separator (comma normalized to dot).
   // Returns the sanitized string, or null if the keystroke should be rejected.
@@ -516,19 +520,29 @@ export default function ExpenseForm({
       {/* Step 3: Misc */}
       {step === 2 && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <FormControl fullWidth>
-            <InputLabel>Category (optional)</InputLabel>
-            <Select
-              value={category}
-              label="Category (optional)"
-              onChange={(e) => onCategoryChange(e.target.value)}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Box
+              sx={{
+                ...xsBadgeSx,
+                bgcolor: (t) => alpha(t.palette.action.selected, 1),
+              }}
             >
-              <MenuItem value=""><em>None</em></MenuItem>
-              {EXPENSE_CATEGORIES.map((c) => (
-                <MenuItem key={c} value={c}>{c}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+              <CategoryIconComponent sx={{ fontSize: 20, color: "text.secondary" }} />
+            </Box>
+            <FormControl fullWidth>
+              <InputLabel>Category (optional)</InputLabel>
+              <Select
+                value={category}
+                label="Category (optional)"
+                onChange={(e) => onCategoryChange(e.target.value)}
+              >
+                <MenuItem value=""><em>None</em></MenuItem>
+                {EXPENSE_CATEGORIES.map((c) => (
+                  <MenuItem key={c} value={c}>{c}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
           <TextField
             fullWidth
             label="Notes"
