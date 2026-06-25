@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useOutletContext, useNavigate, useParams } from "react-router-dom";
-import { Box, Typography, Button } from "@mui/material";
+import { Box, Typography, Button, Switch } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import type { GroupDetailContext } from "./GroupDetail";
@@ -17,6 +17,7 @@ export default function GroupOverview() {
     const { group, balancesData, user, onViewExpense } = useOutletContext<GroupDetailContext>();
     const navigate = useNavigate();
     const { groupId } = useParams<{ groupId: string }>();
+    const [myActivityOnly, setMyActivityOnly] = useState(false);
 
     // Pending settlements involving this user
     const allPendingSettlements = balancesData?.settlements ?? [];
@@ -34,10 +35,20 @@ export default function GroupOverview() {
         })),
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+    const filteredFeed = myActivityOnly
+        ? feed.filter((item) => {
+              if (item.type === "expense") {
+                  const e = item.expense;
+                  return e.paid_by === user.id || e.splits.some((sp) => sp.user_id === user.id);
+              }
+              return item.settlement.from === user.id || item.settlement.to === user.id;
+          })
+        : feed;
+
     // Group the (already date-desc sorted) feed into ordered day-groups
     const groupedFeed = useMemo(() => {
         const groups: { key: string; label: string; items: ActivityItem[] }[] = [];
-        for (const item of feed) {
+        for (const item of filteredFeed) {
             const d = new Date(item.date);
             const key = d.toDateString();
             const label = d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
@@ -46,7 +57,7 @@ export default function GroupOverview() {
             else groups.push({ key, label, items: [item] });
         }
         return groups;
-    }, [feed]);
+    }, [filteredFeed]);
 
     const getMember = (userId: string) => group.members.find((m) => m.user_id === userId);
     const timeStr = (d: string) => new Date(d).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
@@ -118,9 +129,21 @@ export default function GroupOverview() {
                         : "All settled up"}
             </Button>
 
+            {/* Filter row */}
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", mb: 1, flexShrink: 0 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
+                    My activity only
+                </Typography>
+                <Switch
+                    size="small"
+                    checked={myActivityOnly}
+                    onChange={(e) => setMyActivityOnly(e.target.checked)}
+                />
+            </Box>
+
             {/* Activity feed (scrollable) */}
             <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pb: { xs: 11, md: 1 } }}>
-                {feed.length > 0 ? (
+                {filteredFeed.length > 0 ? (
                     groupedFeed.map((dateGroup) => (
                         <Box key={dateGroup.key} sx={{ mb: 2.5 }}>
                             <Typography
@@ -138,7 +161,7 @@ export default function GroupOverview() {
                 ) : (
                     <Box sx={{ textAlign: "center", py: 6 }}>
                         <Typography variant="body1" color="text.secondary">
-                            No activity yet
+                            {myActivityOnly ? "No activity involving you" : "No activity yet"}
                         </Typography>
                     </Box>
                 )}
