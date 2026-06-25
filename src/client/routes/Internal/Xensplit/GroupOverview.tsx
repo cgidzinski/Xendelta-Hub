@@ -114,7 +114,7 @@ export default function GroupOverview() {
                 {userSettlements.length > 0
                     ? `You have ${userSettlements.length} pending settlement${userSettlements.length !== 1 ? "s" : ""}`
                     : allPendingSettlements.length > 0
-                        ? `${allPendingSettlements.length} Pending Settlement${allPendingSettlements.length !== 1 ? "s" : ""}`
+                        ? `${allPendingSettlements.length} pending settlement${allPendingSettlements.length !== 1 ? "s" : ""} between others`
                         : "All settled up"}
             </Button>
 
