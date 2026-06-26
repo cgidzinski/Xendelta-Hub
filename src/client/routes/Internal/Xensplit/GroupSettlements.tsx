@@ -14,40 +14,17 @@ const listGridSx = {
     rowGap: 1,
 } as const;
 
+// 3-col subgrid, 2 rows: [avatar | amount | avatar] / [name | arrow | name]
 const cardSx = {
     ...xsCardSx,
     gridColumn: "1 / -1",
     display: "grid",
     gridTemplateColumns: "subgrid",
-    alignItems: "center",
+    gridTemplateRows: "auto auto",
     cursor: "pointer",
     textAlign: "center",
+    rowGap: 0.5,
 } as const;
-
-function PersonCol({ avatar, name }: { avatar?: string | null; name: string }) {
-    return (
-        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5, minWidth: 0 }}>
-            <Avatar src={avatar || undefined} sx={{ width: 38, height: 38 }}>
-                {name[0]?.toUpperCase() ?? "?"}
-            </Avatar>
-            <Typography variant="caption" noWrap sx={{ width: "100%", textAlign: "center", textTransform: "capitalize", lineHeight: 1.2, color: "text.secondary" }}>
-                {name}
-            </Typography>
-        </Box>
-    );
-}
-
-function MiddleCol({ amount, currency, arrowColor, sub }: { amount: number; currency: string; arrowColor?: string; sub?: React.ReactNode }) {
-    return (
-        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, px: 1 }}>
-            <EastIcon sx={{ fontSize: 16, color: arrowColor ?? "text.disabled" }} />
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, whiteSpace: "nowrap", lineHeight: 1.3 }}>
-                {formatCurrency(amount, currency)}
-            </Typography>
-            {sub}
-        </Box>
-    );
-}
 
 export default function GroupSettlements() {
     const { balancesData, group, user, onSettle, deleteSettlement, isDeletingSettlement } = useOutletContext<GroupDetailContext>();
@@ -113,13 +90,14 @@ export default function GroupSettlements() {
                                 const arrowColor = s.from === user.id ? "error.main" : s.to === user.id ? "success.main" : "text.disabled";
                                 return (
                                     <Box key={idx} onClick={() => setViewPending(s)} sx={cardSx}>
-                                        <PersonCol avatar={s.fromUser.avatar} name={s.fromUser.username} />
-                                        <MiddleCol
-                                            amount={s.amount}
-                                            currency={s.currency}
-                                            arrowColor={arrowColor}
-                                        />
-                                        <PersonCol avatar={s.toUser.avatar} name={s.toUser.username} />
+                                        {/* row 1: avatars + amount */}
+                                        <Avatar src={s.fromUser.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>{s.fromUser.username[0]?.toUpperCase()}</Avatar>
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 700, whiteSpace: "nowrap", alignSelf: "center" }}>{formatCurrency(s.amount, s.currency)}</Typography>
+                                        <Avatar src={s.toUser.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>{s.toUser.username[0]?.toUpperCase()}</Avatar>
+                                        {/* row 2: names + arrow */}
+                                        <Typography variant="caption" noWrap sx={{ textTransform: "capitalize", color: "text.secondary" }}>{s.fromUser.username}</Typography>
+                                        <EastIcon sx={{ fontSize: 16, color: arrowColor, justifySelf: "center", alignSelf: "center" }} />
+                                        <Typography variant="caption" noWrap sx={{ textTransform: "capitalize", color: "text.secondary" }}>{s.toUser.username}</Typography>
                                     </Box>
                                 );
                             })}
@@ -158,17 +136,17 @@ export default function GroupSettlements() {
                                 const toMember = getMember(s.to);
                                 return (
                                     <Box key={s._id ?? idx} onClick={() => setViewSettlement(s)} sx={cardSx}>
-                                        <PersonCol avatar={fromMember?.avatar} name={fromMember?.username ?? "?"} />
-                                        <MiddleCol
-                                            amount={s.amount}
-                                            currency={s.currency}
-                                            sub={
-                                                <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
-                                                    {s.is_partial ? "Partial" : "Full"}
-                                                </Typography>
-                                            }
-                                        />
-                                        <PersonCol avatar={toMember?.avatar} name={toMember?.username ?? "?"} />
+                                        {/* row 1: avatars + amount */}
+                                        <Avatar src={fromMember?.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>{fromMember?.username[0]?.toUpperCase()}</Avatar>
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 700, whiteSpace: "nowrap", alignSelf: "center" }}>{formatCurrency(s.amount, s.currency)}</Typography>
+                                        <Avatar src={toMember?.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>{toMember?.username[0]?.toUpperCase()}</Avatar>
+                                        {/* row 2: names + arrow + label */}
+                                        <Typography variant="caption" noWrap sx={{ textTransform: "capitalize", color: "text.secondary" }}>{fromMember?.username ?? "?"}</Typography>
+                                        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25 }}>
+                                            <EastIcon sx={{ fontSize: 16, color: "text.disabled" }} />
+                                            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap", fontSize: "0.6rem" }}>{s.is_partial ? "Partial" : "Full"}</Typography>
+                                        </Box>
+                                        <Typography variant="caption" noWrap sx={{ textTransform: "capitalize", color: "text.secondary" }}>{toMember?.username ?? "?"}</Typography>
                                     </Box>
                                 );
                             })}
