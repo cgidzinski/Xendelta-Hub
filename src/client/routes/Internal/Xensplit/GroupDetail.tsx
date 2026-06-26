@@ -29,7 +29,6 @@ import {
   CircularProgress,
   TextField,
   Fab,
-  Alert,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CheckIcon from "@mui/icons-material/Check";
@@ -182,14 +181,6 @@ export default function GroupDetail() {
   const isEditPercentValid = editSplitType !== "percent" || editSelectedParticipants.length === 0 ||
     Math.abs(Object.values(editPercentSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - 100) < 0.01;
 
-  const hasRelatedSettlements = useMemo(() => {
-    if (!group || !selectedExpense || selectedExpense.on_hold) return false;
-    return group.settlements.some((s) =>
-      s.from === selectedExpense.paid_by ||
-      s.to === selectedExpense.paid_by ||
-      selectedExpense.splits.some((sp) => sp.user_id === s.from || sp.user_id === s.to)
-    );
-  }, [selectedExpense, group?.settlements]);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorDisplay error={error} />;
@@ -792,11 +783,6 @@ export default function GroupDetail() {
           </IconButton>
         </Box>
         <DialogContent sx={{ pt: 2 }}>
-          {hasRelatedSettlements && (
-            <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
-              This group has existing settlements. Editing this expense will change who owes what.
-            </Alert>
-          )}
           <ExpenseForm
             title={editTitle}
             onTitleChange={setEditTitle}
