@@ -69,7 +69,6 @@ export default function GroupOverview() {
         return groups;
     }, [filteredFeed]);
 
-    const getMember = (userId: string) => group.members.find((m) => m.user_id === userId);
     const timeStr = (d: string) => new Date(d).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
     const settleNames = (s: XenSplitSettlement) => ({
         from: s.from === user.id ? "You" : getMember(s.from)?.username ?? "?",
