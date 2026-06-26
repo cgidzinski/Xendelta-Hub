@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { formatCurrency } from "../../../utils/currencyUtils";
 import { useQueryClient } from "@tanstack/react-query";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -146,7 +146,7 @@ export default function GroupDetail() {
   const [addImages, setAddImages] = useState<File[]>([]);
   const [editImages, setEditImages] = useState<File[]>([]);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-  const lightboxTouchStartY = React.useRef<number | null>(null);
+  const lightboxTouchStartY = useRef<number | null>(null);
 
   const { data: viewImageUrls = [] } = useExpenseImageUrls(
     groupId ?? "",
@@ -464,11 +464,11 @@ export default function GroupDetail() {
     isDeletingSettlement,
   };
 
-  const handleLightboxTouchStart = (e: React.TouchEvent) => {
+  const handleLightboxTouchStart = (e: TouchEvent) => {
     lightboxTouchStartY.current = e.touches[0].clientY;
   };
 
-  const handleLightboxTouchEnd = (e: React.TouchEvent) => {
+  const handleLightboxTouchEnd = (e: TouchEvent) => {
     if (lightboxTouchStartY.current !== null) {
       const delta = Math.abs(e.changedTouches[0].clientY - lightboxTouchStartY.current);
       if (delta > 80) setLightboxUrl(null);
