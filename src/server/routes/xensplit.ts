@@ -365,7 +365,7 @@ module.exports = function (app: any) {
     try {
       const userId = (req.user as any)._id.toString();
       const { groupId } = req.params;
-      const { paid_by, amount, currency, title, notes, category, date, split_type, splits } = req.body;
+      const { paid_by, amount, currency, title, notes, category, date, split_type, splits, on_hold } = req.body;
 
       const group = await XenSplit.findById(groupId);
       if (!group) {
@@ -424,6 +424,7 @@ module.exports = function (app: any) {
         date: date ? new Date(date) : new Date(),
         split_type,
         splits: resolvedSplits,
+        on_hold: on_hold === true,
         created_at: new Date(),
       };
 
@@ -483,6 +484,12 @@ module.exports = function (app: any) {
       if (updates.date !== undefined) expense.date = new Date(updates.date);
       if (updates.split_type !== undefined) expense.split_type = updates.split_type;
       if (updates.splits !== undefined) expense.splits = updates.splits;
+      if (updates.on_hold !== undefined) {
+        if (updates.on_hold === true && expense.on_hold !== true) {
+          return res.status(400).json({ status: false, message: "Cannot re-hold an expense that has already been active" });
+        }
+        expense.on_hold = updates.on_hold;
+      }
 
       // Recalculate splits if needed
       if (updates.split_type || updates.amount) {

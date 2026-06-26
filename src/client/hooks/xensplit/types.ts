@@ -29,6 +29,7 @@ export interface XenSplitExpense {
   split_type: "equal" | "exact" | "percent";
   splits: XenSplitExpenseSplit[];
   images?: XenSplitExpenseImage[];
+  on_hold?: boolean;
   created_at: string;
   payer?: {
     user_id: string;
@@ -109,6 +110,7 @@ export interface CreateExpenseInput {
   date?: string;
   split_type: "equal" | "exact" | "percent";
   splits?: XenSplitExpenseSplit[];
+  on_hold?: boolean;
 }
 
 export interface CreateXenSplitInput {
@@ -127,6 +129,7 @@ export interface UpdateExpenseInput {
   date?: string;
   split_type?: "equal" | "exact" | "percent";
   splits?: XenSplitExpenseSplit[];
+  on_hold?: boolean;
 }
 
 export interface SettleDebtInput {

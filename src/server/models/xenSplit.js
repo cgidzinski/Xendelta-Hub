@@ -27,6 +27,7 @@ var expenseSchema = new Schema({
   },
   splits: [splitSchema],
   images: [expenseImageSchema],
+  on_hold: { type: Boolean, default: false },
   created_at: { type: Date, default: Date.now },
 }, { _id: true });
 

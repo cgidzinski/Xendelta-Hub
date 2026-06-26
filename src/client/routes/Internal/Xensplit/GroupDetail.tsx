@@ -44,6 +44,7 @@ import GridViewIcon from "@mui/icons-material/GridView";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import { useTitle } from "../../../hooks/useTitle";
 import { useXenSplit } from "../../../hooks/xensplit/useGroup";
 import { useXenSplits } from "../../../hooks/xensplit/useGroups";
@@ -122,6 +123,7 @@ export default function GroupDetail() {
   const [addPercentSplits, setAddPercentSplits] = useState<{ [userId: string]: string }>({});
   const [addDate, setAddDate] = useState<Date>(new Date());
   const [addCategory, setAddCategory] = useState("");
+  const [addOnHold, setAddOnHold] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editAmount, setEditAmount] = useState("");
@@ -134,6 +136,8 @@ export default function GroupDetail() {
   const [editPercentSplits, setEditPercentSplits] = useState<{ [userId: string]: string }>({});
   const [editDate, setEditDate] = useState<Date>(new Date());
   const [editCategory, setEditCategory] = useState("");
+  const [editOnHold, setEditOnHold] = useState(false);
+  const [editWasOnHold, setEditWasOnHold] = useState(false);
   const [showSettleModal, setShowSettleModal] = useState(false);
   const [selectedSettlement, setSelectedSettlement] = useState<XenSplitSettlementTransfer | null>(null);
   const [settleAmount, setSettleAmount] = useState("");
@@ -286,6 +290,7 @@ export default function GroupDetail() {
           date: addDate.toISOString(),
           split_type: addSplitType,
           splits,
+          on_hold: addOnHold,
         },
         {
           onSuccess: async (result) => {
@@ -310,6 +315,7 @@ export default function GroupDetail() {
             setAddExactSplits({});
             setAddPercentSplits({});
             setAddCategory("");
+            setAddOnHold(false);
             setAddImages([]);
             resolve();
           },
@@ -357,6 +363,7 @@ export default function GroupDetail() {
             date: editDate.toISOString(),
             split_type: editSplitType,
             splits,
+            on_hold: editOnHold,
           }
         },
         {
@@ -414,6 +421,8 @@ export default function GroupDetail() {
     }
     setEditDate(expense.date ? new Date(expense.date) : new Date());
     setEditCategory(expense.category || "");
+    setEditOnHold(expense.on_hold ?? false);
+    setEditWasOnHold(expense.on_hold ?? false);
     setShowEditExpenseModal(true);
   };
 
@@ -429,6 +438,7 @@ export default function GroupDetail() {
     setAddExactSplits({});
     setAddPercentSplits({});
     setAddCategory("");
+    setAddOnHold(false);
     setAddImages([]);
     setAddDate(new Date());
     setShowAddExpenseModal(true);
@@ -725,6 +735,8 @@ export default function GroupDetail() {
             onDateChange={setAddDate}
             category={addCategory}
             onCategoryChange={setAddCategory}
+            onHold={addOnHold}
+            onOnHoldChange={setAddOnHold}
           />
         </DialogContent>
       </Dialog>
@@ -809,6 +821,9 @@ export default function GroupDetail() {
             onDateChange={setEditDate}
             category={editCategory}
             onCategoryChange={setEditCategory}
+            onHold={editOnHold}
+            onOnHoldChange={setEditOnHold}
+            wasOnHold={editWasOnHold}
           />
         </DialogContent>
       </Dialog>
@@ -845,6 +860,15 @@ export default function GroupDetail() {
                   <Chip label={splitTypeLabel} size="small" sx={{ fontWeight: 600, fontSize: "0.7rem" }} />
                   {e.category && (
                     <Chip label={e.category} size="small" variant="outlined" sx={{ fontWeight: 500, fontSize: "0.7rem" }} />
+                  )}
+                  {e.on_hold && (
+                    <Chip
+                      icon={<PauseCircleOutlineIcon sx={{ fontSize: "14px !important" }} />}
+                      label="On Hold"
+                      size="small"
+                      color="warning"
+                      sx={{ fontWeight: 600, fontSize: "0.7rem" }}
+                    />
                   )}
                 </Box>
               </Box>

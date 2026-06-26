@@ -13,6 +13,7 @@ interface Expense {
   paid_by: string;
   amount: number;
   currency: string;
+  on_hold?: boolean;
   splits: { user_id: string; amount_owed?: number; percentage?: number }[];
 }
 
@@ -41,7 +42,7 @@ export function calculateBalances(doc: XenSplitDocument): BalanceMap {
   const currencies = new Set<string>();
   if (Array.isArray(doc.expenses)) {
     for (const exp of doc.expenses) {
-      if (exp && exp.currency) currencies.add(exp.currency);
+      if (exp && exp.currency && !exp.on_hold) currencies.add(exp.currency);
     }
   }
   if (Array.isArray(doc.settlements)) {
@@ -60,6 +61,7 @@ export function calculateBalances(doc: XenSplitDocument): BalanceMap {
 
   // Process each expense
   for (const expense of doc.expenses) {
+    if (expense.on_hold) continue;
     const { paid_by, amount, currency, splits } = expense;
 
     // Initialize currency for payer if needed

@@ -1,4 +1,5 @@
-import { Box, Typography, Avatar, alpha } from "@mui/material";
+import { Box, Typography, Avatar, alpha, Chip } from "@mui/material";
+import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import type { XenSplitExpense } from "../../../../hooks/xensplit/types";
 import { formatCurrency } from "../../../../utils/currencyUtils";
 import { getCategoryIcon } from "../../../../constants/xensplitCategoryIcons";
@@ -53,6 +54,16 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
                     <Box component="span" sx={{ textTransform: "capitalize" }}>{expense.split_type}</Box>
                     {!hideDate ? ` · ${dateStr}` : ""}
                 </Typography>
+                {expense.on_hold && (
+                    <Chip
+                        icon={<PauseCircleOutlineIcon sx={{ fontSize: "14px !important" }} />}
+                        label="On Hold"
+                        size="small"
+                        color="warning"
+                        variant="outlined"
+                        sx={{ height: 18, fontSize: "0.6rem", mt: 0.25, "& .MuiChip-label": { px: 0.75 } }}
+                    />
+                )}
             </Box>
             <Box sx={{ textAlign: "right", flexShrink: 0 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", lineHeight: 1.3 }}>
