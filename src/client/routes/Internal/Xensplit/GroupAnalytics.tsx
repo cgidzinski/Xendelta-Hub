@@ -109,7 +109,7 @@ export default function GroupAnalytics() {
         URL.revokeObjectURL(url);
     };
 
-    if (group.expenses.length === 0) {
+    if (group.expenses.filter((e) => !e.on_hold).length === 0) {
         return (
             <Box sx={{ textAlign: "center", py: 6 }}>
                 <Typography variant="body1" color="text.secondary">
