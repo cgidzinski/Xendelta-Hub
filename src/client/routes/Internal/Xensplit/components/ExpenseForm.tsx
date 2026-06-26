@@ -17,7 +17,9 @@ import {
   IconButton,
   CircularProgress,
   alpha,
+  Switch,
 } from "@mui/material";
+import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -71,6 +73,10 @@ interface ExpenseFormProps {
   onDateChange: (d: Date) => void;
   category: string;
   onCategoryChange: (v: string) => void;
+  onHold: boolean;
+  onOnHoldChange: (v: boolean) => void;
+  /** "free" = group creator (bidirectional), "oneWay" = expense creator (hold→unhold only), "hidden" = no access */
+  holdMode?: "free" | "oneWay" | "hidden";
 }
 
 export default function ExpenseForm({
@@ -111,6 +117,9 @@ export default function ExpenseForm({
   onDateChange,
   category,
   onCategoryChange,
+  onHold,
+  onOnHoldChange,
+  holdMode = "hidden",
 }: ExpenseFormProps) {
   const [step, setStep] = React.useState(0);
   const objectUrlsRef = useRef<string[]>([]);
@@ -520,6 +529,45 @@ export default function ExpenseForm({
       {/* Step 3: Misc */}
       {step === 2 && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {holdMode !== "hidden" && (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                px: 2,
+                py: 1.25,
+                borderRadius: 2,
+                border: "1px solid",
+                borderColor: onHold ? "warning.main" : "divider",
+                bgcolor: (t) => onHold ? alpha(t.palette.warning.main, 0.08) : "transparent",
+                transition: "all 0.2s",
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                <PauseCircleOutlineIcon
+                  sx={{ fontSize: 22, color: onHold ? "warning.main" : "text.secondary" }}
+                />
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+                    On Hold
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3, display: "block" }}>
+                    {holdMode === "oneWay" && onHold
+                      ? "Removing hold is permanent — cannot be re-applied"
+                      : "Exclude from balance calculations"}
+                  </Typography>
+                </Box>
+              </Box>
+              <Switch
+                checked={onHold}
+                onChange={(e) => onOnHoldChange(e.target.checked)}
+                disabled={holdMode === "oneWay" && !onHold}
+                color="warning"
+                size="small"
+              />
+            </Box>
+          )}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
             <Avatar sx={{ bgcolor: "grey.800", width: 40, height: 40 }}>
               <CategoryIconComponent sx={{ fontSize: 20, color: "text.secondary" }} />

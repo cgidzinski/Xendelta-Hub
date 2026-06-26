@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { formatCurrency } from "../../../utils/currencyUtils";
 import { useQueryClient } from "@tanstack/react-query";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -29,6 +29,7 @@ import {
   CircularProgress,
   TextField,
   Fab,
+  Alert,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CheckIcon from "@mui/icons-material/Check";
@@ -44,6 +45,7 @@ import GridViewIcon from "@mui/icons-material/GridView";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import { useTitle } from "../../../hooks/useTitle";
 import { useXenSplit } from "../../../hooks/xensplit/useGroup";
 import { useXenSplits } from "../../../hooks/xensplit/useGroups";
@@ -122,6 +124,7 @@ export default function GroupDetail() {
   const [addPercentSplits, setAddPercentSplits] = useState<{ [userId: string]: string }>({});
   const [addDate, setAddDate] = useState<Date>(new Date());
   const [addCategory, setAddCategory] = useState("");
+  const [addOnHold, setAddOnHold] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editAmount, setEditAmount] = useState("");
@@ -134,6 +137,7 @@ export default function GroupDetail() {
   const [editPercentSplits, setEditPercentSplits] = useState<{ [userId: string]: string }>({});
   const [editDate, setEditDate] = useState<Date>(new Date());
   const [editCategory, setEditCategory] = useState("");
+  const [editOnHold, setEditOnHold] = useState(false);
   const [showSettleModal, setShowSettleModal] = useState(false);
   const [selectedSettlement, setSelectedSettlement] = useState<XenSplitSettlementTransfer | null>(null);
   const [settleAmount, setSettleAmount] = useState("");
@@ -177,6 +181,15 @@ export default function GroupDetail() {
     Math.abs(Object.values(editExactSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - (parseFloat(editAmount) || 0)) < 0.01;
   const isEditPercentValid = editSplitType !== "percent" || editSelectedParticipants.length === 0 ||
     Math.abs(Object.values(editPercentSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - 100) < 0.01;
+
+  const hasRelatedSettlements = useMemo(() => {
+    if (!selectedExpense || selectedExpense.on_hold) return false;
+    return group.settlements.some((s) =>
+      s.from === selectedExpense.paid_by ||
+      s.to === selectedExpense.paid_by ||
+      selectedExpense.splits.some((sp) => sp.user_id === s.from || sp.user_id === s.to)
+    );
+  }, [selectedExpense, group.settlements]);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorDisplay error={error} />;
@@ -286,6 +299,7 @@ export default function GroupDetail() {
           date: addDate.toISOString(),
           split_type: addSplitType,
           splits,
+          on_hold: addOnHold,
         },
         {
           onSuccess: async (result) => {
@@ -310,6 +324,7 @@ export default function GroupDetail() {
             setAddExactSplits({});
             setAddPercentSplits({});
             setAddCategory("");
+            setAddOnHold(false);
             setAddImages([]);
             resolve();
           },
@@ -357,6 +372,7 @@ export default function GroupDetail() {
             date: editDate.toISOString(),
             split_type: editSplitType,
             splits,
+            on_hold: editOnHold,
           }
         },
         {
@@ -414,6 +430,7 @@ export default function GroupDetail() {
     }
     setEditDate(expense.date ? new Date(expense.date) : new Date());
     setEditCategory(expense.category || "");
+    setEditOnHold(expense.on_hold ?? false);
     setShowEditExpenseModal(true);
   };
 
@@ -429,6 +446,7 @@ export default function GroupDetail() {
     setAddExactSplits({});
     setAddPercentSplits({});
     setAddCategory("");
+    setAddOnHold(false);
     setAddImages([]);
     setAddDate(new Date());
     setShowAddExpenseModal(true);
@@ -725,6 +743,9 @@ export default function GroupDetail() {
             onDateChange={setAddDate}
             category={addCategory}
             onCategoryChange={setAddCategory}
+            onHold={addOnHold}
+            onOnHoldChange={setAddOnHold}
+            holdMode="free"
           />
         </DialogContent>
       </Dialog>
@@ -771,6 +792,11 @@ export default function GroupDetail() {
           </IconButton>
         </Box>
         <DialogContent sx={{ pt: 2 }}>
+          {hasRelatedSettlements && (
+            <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
+              This group has existing settlements. Editing this expense will change who owes what.
+            </Alert>
+          )}
           <ExpenseForm
             title={editTitle}
             onTitleChange={setEditTitle}
@@ -809,6 +835,13 @@ export default function GroupDetail() {
             onDateChange={setEditDate}
             category={editCategory}
             onCategoryChange={setEditCategory}
+            onHold={editOnHold}
+            onOnHoldChange={setEditOnHold}
+            holdMode={
+              group.created_by === user.id ? "free" :
+              selectedExpense?.created_by === user.id ? "oneWay" :
+              "hidden"
+            }
           />
         </DialogContent>
       </Dialog>
@@ -845,6 +878,15 @@ export default function GroupDetail() {
                   <Chip label={splitTypeLabel} size="small" sx={{ fontWeight: 600, fontSize: "0.7rem" }} />
                   {e.category && (
                     <Chip label={e.category} size="small" variant="outlined" sx={{ fontWeight: 500, fontSize: "0.7rem" }} />
+                  )}
+                  {e.on_hold && (
+                    <Chip
+                      icon={<PauseCircleOutlineIcon sx={{ fontSize: "14px !important" }} />}
+                      label="On Hold"
+                      size="small"
+                      color="warning"
+                      sx={{ fontWeight: 600, fontSize: "0.7rem" }}
+                    />
                   )}
                 </Box>
               </Box>
