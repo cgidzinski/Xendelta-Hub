@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Box, Typography, Button, Avatar, Divider, ToggleButtonGroup, ToggleButton } from "@mui/material";
 import EastIcon from "@mui/icons-material/East";
-import CheckIcon from "@mui/icons-material/Check";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitSettlement, XenSplitSettlementTransfer } from "../../../hooks/xensplit/types";
 import { xsCardSx } from "./components/rowStyles";
@@ -111,19 +110,12 @@ export default function GroupSettlements() {
                     ) : (
                         <Box sx={listGridSx}>
                             {displayedPending.map((s, idx) => {
-                                const amountColor = s.from === user.id ? "error.main" : s.to === user.id ? "success.main" : "text.primary";
-                                const direction = s.from === user.id ? "You owe" : s.to === user.id ? "Owed to you" : null;
                                 return (
                                     <Box key={idx} onClick={() => setViewPending(s)} sx={cardSx}>
                                         <PersonCol avatar={s.fromUser.avatar} name={s.fromUser.username} />
                                         <MiddleCol
                                             amount={s.amount}
                                             currency={s.currency}
-                                            sub={direction && (
-                                                <Typography variant="caption" sx={{ color: amountColor, whiteSpace: "nowrap", fontWeight: 600 }}>
-                                                    {direction}
-                                                </Typography>
-                                            )}
                                         />
                                         <PersonCol avatar={s.toUser.avatar} name={s.toUser.username} />
                                     </Box>
@@ -169,10 +161,8 @@ export default function GroupSettlements() {
                                             amount={s.amount}
                                             currency={s.currency}
                                             sub={
-                                                <Typography variant="caption" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.25, whiteSpace: "nowrap" }}>
-                                                    <CheckIcon sx={{ fontSize: "0.8rem", color: "success.main" }} />
-                                                    {new Date(s.settled_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                                                    {s.is_partial ? " · P" : ""}
+                                                <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+                                                    {s.is_partial ? "Partial" : "Full"}
                                                 </Typography>
                                             }
                                         />
