@@ -18,14 +18,14 @@ export default function GroupAnalytics() {
 
     const availableCurrencies = useMemo(() => {
         const seen = new Set<string>();
-        group.expenses.forEach((e) => seen.add(e.currency));
+        group.expenses.filter((e) => !e.on_hold).forEach((e) => seen.add(e.currency));
         return [...seen].sort((a, b) => (a === defaultCurrency ? -1 : b === defaultCurrency ? 1 : a.localeCompare(b)));
     }, [group.expenses, defaultCurrency]);
 
     const [selectedCurrency, setSelectedCurrency] = useState(() => availableCurrencies[0] ?? defaultCurrency);
 
     const currencyExpenses = useMemo(
-        () => group.expenses.filter((e) => e.currency === selectedCurrency),
+        () => group.expenses.filter((e) => e.currency === selectedCurrency && !e.on_hold),
         [group.expenses, selectedCurrency]
     );
 
@@ -109,7 +109,7 @@ export default function GroupAnalytics() {
         URL.revokeObjectURL(url);
     };
 
-    if (group.expenses.length === 0) {
+    if (group.expenses.filter((e) => !e.on_hold).length === 0) {
         return (
             <Box sx={{ textAlign: "center", py: 6 }}>
                 <Typography variant="body1" color="text.secondary">
