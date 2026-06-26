@@ -9,17 +9,24 @@ import { xsCardSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
 import SettlementDetailDialog, { PendingSettlementDialog } from "./components/SettlementDetailDialog";
 
+// Subgrid card: spans all 4 parent columns so every card shares the same track widths.
+// The "auto" amount column is sized to the widest value across the whole list,
+// making both person columns equal 1fr and the arrow always at the same X.
 const cardSx = {
     ...xsCardSx,
-    mb: 1,
+    gridColumn: "1 / -1",
+    display: "grid",
+    gridTemplateColumns: "subgrid",
+    alignItems: "center",
     cursor: "pointer",
+    mb: 0,
 } as const;
 
-const personRowSx = {
+// Shared grid that drives column widths for all child cards.
+const listGridSx = {
     display: "grid",
-    gridTemplateColumns: "1fr 24px 1fr",
-    alignItems: "center",
-    mb: 0.5,
+    gridTemplateColumns: "1fr 24px 1fr auto",
+    rowGap: 1,
 } as const;
 
 function PersonStack({ avatar, name }: { avatar?: string | null; name: string }) {
@@ -93,26 +100,31 @@ export default function GroupSettlements() {
                         <Box sx={{ textAlign: "center", py: 3, mb: completedSettlements.length > 0 ? 2 : 0 }}>
                             <Typography variant="body2" color="text.secondary">All settled up</Typography>
                         </Box>
-                    ) : displayedPending.map((s, idx) => {
-                        const isInvolved = s.from === user.id || s.to === user.id;
-                        const amountColor = s.from === user.id ? "error.main" : s.to === user.id ? "success.main" : "text.primary";
-                        const direction = s.from === user.id ? "You owe" : s.to === user.id ? "Owed to you" : "Pending";
-                        return (
-                            <Box key={idx} onClick={() => setViewPending(s)} sx={cardSx}>
-                                <Box sx={personRowSx}>
-                                    <PersonStack avatar={s.fromUser.avatar} name={s.fromUser.username} />
-                                    <EastIcon sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center" }} />
-                                    <PersonStack avatar={s.toUser.avatar} name={s.toUser.username} />
-                                </Box>
-                                <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 1 }}>
-                                    <Typography variant="caption" color="text.secondary">{direction}</Typography>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: amountColor, whiteSpace: "nowrap" }}>
-                                        {formatCurrency(s.amount, s.currency)}
-                                    </Typography>
-                                </Box>
-                            </Box>
-                        );
-                    })}
+                    ) : (
+                        <Box sx={listGridSx}>
+                            {displayedPending.map((s, idx) => {
+                                const amountColor = s.from === user.id ? "error.main" : s.to === user.id ? "success.main" : "text.primary";
+                                const direction = s.from === user.id ? "You owe" : s.to === user.id ? "Owed to you" : null;
+                                return (
+                                    <Box key={idx} onClick={() => setViewPending(s)} sx={cardSx}>
+                                        <PersonStack avatar={s.fromUser.avatar} name={s.fromUser.username} />
+                                        <EastIcon sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center" }} />
+                                        <PersonStack avatar={s.toUser.avatar} name={s.toUser.username} />
+                                        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", pl: 1.5 }}>
+                                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: amountColor, whiteSpace: "nowrap" }}>
+                                                {formatCurrency(s.amount, s.currency)}
+                                            </Typography>
+                                            {direction && (
+                                                <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+                                                    {direction}
+                                                </Typography>
+                                            )}
+                                        </Box>
+                                    </Box>
+                                );
+                            })}
+                        </Box>
+                    )}
                 </>
             )}
 
@@ -139,29 +151,31 @@ export default function GroupSettlements() {
                         <Box sx={{ textAlign: "center", py: 3 }}>
                             <Typography variant="body2" color="text.secondary">No settlements yet</Typography>
                         </Box>
-                    ) : filteredHistory.map((s, idx) => {
-                        const fromMember = getMember(s.from);
-                        const toMember = getMember(s.to);
-                        return (
-                            <Box key={s._id ?? idx} onClick={() => setViewSettlement(s)} sx={cardSx}>
-                                <Box sx={personRowSx}>
-                                    <PersonStack avatar={fromMember?.avatar} name={fromMember?.username ?? "?"} />
-                                    <EastIcon sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center" }} />
-                                    <PersonStack avatar={toMember?.avatar} name={toMember?.username ?? "?"} />
-                                </Box>
-                                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", whiteSpace: "nowrap" }}>
-                                        {formatCurrency(s.amount, s.currency)}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.25, whiteSpace: "nowrap" }}>
-                                        <CheckIcon sx={{ fontSize: "0.85rem", color: "success.main" }} />
-                                        {new Date(s.settled_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                                        {s.is_partial ? " · Partial" : ""}
-                                    </Typography>
-                                </Box>
-                            </Box>
-                        );
-                    }))}
+                    ) : (
+                        <Box sx={listGridSx}>
+                            {filteredHistory.map((s, idx) => {
+                                const fromMember = getMember(s.from);
+                                const toMember = getMember(s.to);
+                                return (
+                                    <Box key={s._id ?? idx} onClick={() => setViewSettlement(s)} sx={cardSx}>
+                                        <PersonStack avatar={fromMember?.avatar} name={fromMember?.username ?? "?"} />
+                                        <EastIcon sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center" }} />
+                                        <PersonStack avatar={toMember?.avatar} name={toMember?.username ?? "?"} />
+                                        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", pl: 1.5 }}>
+                                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", whiteSpace: "nowrap" }}>
+                                                {formatCurrency(s.amount, s.currency)}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.25, whiteSpace: "nowrap" }}>
+                                                <CheckIcon sx={{ fontSize: "0.85rem", color: "success.main" }} />
+                                                {new Date(s.settled_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                                                {s.is_partial ? " · Partial" : ""}
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                );
+                            })}
+                        </Box>
+                    ))}
                 </>
             )}
 
