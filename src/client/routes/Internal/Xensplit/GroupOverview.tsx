@@ -17,7 +17,13 @@ export default function GroupOverview() {
     const { group, balancesData, user, onViewExpense } = useOutletContext<GroupDetailContext>();
     const navigate = useNavigate();
     const { groupId } = useParams<{ groupId: string }>();
-    const [myActivityOnly, setMyActivityOnly] = useState(false);
+    const lsKey = `xensplit_myActivityOnly_${groupId}`;
+    const [myActivityOnly, setMyActivityOnly] = useState(() => localStorage.getItem(lsKey) === "true");
+
+    const handleActivityToggle = (checked: boolean) => {
+        setMyActivityOnly(checked);
+        localStorage.setItem(lsKey, String(checked));
+    };
 
     // Pending settlements involving this user
     const allPendingSettlements = balancesData?.settlements ?? [];
@@ -137,7 +143,7 @@ export default function GroupOverview() {
                 <Switch
                     size="small"
                     checked={myActivityOnly}
-                    onChange={(e) => setMyActivityOnly(e.target.checked)}
+                    onChange={(e) => handleActivityToggle(e.target.checked)}
                 />
             </Box>
 
