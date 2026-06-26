@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Box, Typography, Button, Avatar, Dialog, DialogContent, DialogActions, Chip } from "@mui/material";
 import EastIcon from "@mui/icons-material/East";
 import UndoIcon from "@mui/icons-material/Undo";
+import CheckIcon from "@mui/icons-material/Check";
 import LockIcon from "@mui/icons-material/Lock";
-import type { XenSplitSettlement } from "../../../../hooks/xensplit/types";
+import type { XenSplitSettlement, XenSplitSettlementTransfer } from "../../../../hooks/xensplit/types";
 import { formatCurrency } from "../../../../utils/currencyUtils";
 
 function PersonStack({ avatar, name }: { avatar?: string | null; name: string }) {
@@ -19,7 +20,61 @@ function PersonStack({ avatar, name }: { avatar?: string | null; name: string })
     );
 }
 
-interface Props {
+// --- Pending settlement modal ---
+
+interface PendingProps {
+    settlement: XenSplitSettlementTransfer | null;
+    onClose: () => void;
+    userId: string;
+    onSettle: (s: XenSplitSettlementTransfer) => void;
+}
+
+export function PendingSettlementDialog({ settlement, onClose, userId, onSettle }: PendingProps) {
+    if (!settlement) return null;
+    const s = settlement;
+    const direction = s.from === userId ? "You owe" : s.to === userId ? "Owed to you" : "Pending";
+    const amountColor = s.from === userId ? "error.main" : s.to === userId ? "success.main" : "text.primary";
+    const isInvolved = s.from === userId || s.to === userId;
+
+    return (
+        <Dialog fullWidth maxWidth="xs" open={!!settlement} onClose={onClose} PaperProps={{ sx: { borderRadius: 3 } }}>
+            <Box sx={{ pt: 3, pb: 1, px: 3, textAlign: "center" }}>
+                <Typography variant="h4" sx={{ fontWeight: 800, color: amountColor, letterSpacing: "-0.02em" }}>
+                    {formatCurrency(s.amount, s.currency)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
+                    {direction}
+                </Typography>
+            </Box>
+
+            <DialogContent sx={{ px: 3, pt: 1.5, pb: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
+                    <PersonStack avatar={s.fromUser.avatar} name={s.fromUser.username} />
+                    <EastIcon sx={{ fontSize: 20, color: "text.disabled", flexShrink: 0 }} />
+                    <PersonStack avatar={s.toUser.avatar} name={s.toUser.username} />
+                </Box>
+            </DialogContent>
+
+            {isInvolved && (
+                <DialogActions sx={{ px: 3, pb: 2.5, pt: 0 }}>
+                    <Button
+                        fullWidth
+                        variant="contained"
+                        color="success"
+                        startIcon={<CheckIcon />}
+                        onClick={() => { onSettle(s); onClose(); }}
+                    >
+                        Mark as Settled
+                    </Button>
+                </DialogActions>
+            )}
+        </Dialog>
+    );
+}
+
+// --- Completed settlement modal ---
+
+interface CompletedProps {
     settlement: XenSplitSettlement | null;
     onClose: () => void;
     getMember: (userId: string) => { avatar?: string | null; username: string } | undefined;
@@ -28,7 +83,7 @@ interface Props {
     isDeletingSettlement: boolean;
 }
 
-export default function SettlementDetailDialog({ settlement, onClose, getMember, userId, deleteSettlement, isDeletingSettlement }: Props) {
+export default function SettlementDetailDialog({ settlement, onClose, getMember, userId, deleteSettlement, isDeletingSettlement }: CompletedProps) {
     const [confirmUndo, setConfirmUndo] = useState(false);
 
     if (!settlement) return null;
@@ -47,14 +102,8 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
 
     return (
         <>
-            <Dialog
-                fullWidth
-                maxWidth="xs"
-                open={!!settlement}
-                onClose={onClose}
-                PaperProps={{ sx: { borderRadius: 3 } }}
-            >
-                <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
+            <Dialog fullWidth maxWidth="xs" open={!!settlement} onClose={onClose} PaperProps={{ sx: { borderRadius: 3 } }}>
+                <Box sx={{ pt: 3, pb: 1, px: 3, textAlign: "center" }}>
                     <Typography variant="h4" sx={{ fontWeight: 800, color: "success.main", letterSpacing: "-0.02em" }}>
                         {formatCurrency(s.amount, s.currency)}
                     </Typography>
@@ -62,9 +111,7 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
                         <Typography variant="caption" color="text.secondary">
                             {new Date(s.settled_at).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric" })}
                         </Typography>
-                        {s.is_partial && (
-                            <Chip label="Partial" size="small" sx={{ fontSize: "0.65rem", height: 18 }} />
-                        )}
+                        {s.is_partial && <Chip label="Partial" size="small" sx={{ fontSize: "0.65rem", height: 18 }} />}
                     </Box>
                 </Box>
 
@@ -80,17 +127,13 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
                             Note
                         </Typography>
                         {isInvolved ? (
-                            s.note ? (
-                                <Typography variant="body2">{s.note}</Typography>
-                            ) : (
-                                <Typography variant="body2" color="text.disabled">No note added</Typography>
-                            )
+                            s.note
+                                ? <Typography variant="body2">{s.note}</Typography>
+                                : <Typography variant="body2" color="text.disabled">No note added</Typography>
                         ) : (
                             <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
                                 <LockIcon sx={{ fontSize: "0.9rem", color: "text.disabled" }} />
-                                <Typography variant="body2" color="text.disabled">
-                                    Only visible between the two parties
-                                </Typography>
+                                <Typography variant="body2" color="text.disabled">Only visible between the two parties</Typography>
                             </Box>
                         )}
                     </Box>
@@ -98,13 +141,7 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
 
                 {canUndo && (
                     <DialogActions sx={{ px: 3, pb: 2.5, pt: 0 }}>
-                        <Button
-                            fullWidth
-                            variant="outlined"
-                            color="error"
-                            startIcon={<UndoIcon />}
-                            onClick={() => { onClose(); setConfirmUndo(true); }}
-                        >
+                        <Button fullWidth variant="outlined" color="error" startIcon={<UndoIcon />} onClick={() => { onClose(); setConfirmUndo(true); }}>
                             Undo Settlement
                         </Button>
                     </DialogActions>

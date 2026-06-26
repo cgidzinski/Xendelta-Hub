@@ -4,48 +4,52 @@ import { Box, Typography, Button, Avatar, Divider, ToggleButtonGroup, ToggleButt
 import EastIcon from "@mui/icons-material/East";
 import CheckIcon from "@mui/icons-material/Check";
 import type { GroupDetailContext } from "./GroupDetail";
-import type { XenSplitSettlement } from "../../../hooks/xensplit/types";
+import type { XenSplitSettlement, XenSplitSettlementTransfer } from "../../../hooks/xensplit/types";
 import { xsCardSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
-import SettlementDetailDialog from "./components/SettlementDetailDialog";
+import SettlementDetailDialog, { PendingSettlementDialog } from "./components/SettlementDetailDialog";
 
-/** Compact avatar-over-name column used for each party in a settlement row. */
+const cardGridSx = {
+    ...xsCardSx,
+    display: "grid",
+    gridTemplateColumns: "1fr auto",
+    alignItems: "center",
+    columnGap: 1.5,
+    mb: 1,
+    cursor: "pointer",
+} as const;
+
+const personRowSx = {
+    display: "flex",
+    alignItems: "center",
+    gap: 0.75,
+    minWidth: 0,
+} as const;
+
 function PersonStack({ avatar, name }: { avatar?: string | null; name: string }) {
     return (
-        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, minWidth: 0, flex: 1 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, minWidth: 0 }}>
             <Avatar src={avatar || undefined} sx={{ width: 34, height: 34 }}>
                 {name[0]?.toUpperCase() ?? "?"}
             </Avatar>
-            <Typography variant="caption" noWrap sx={{ maxWidth: "100%", textTransform: "capitalize", lineHeight: 1.2, color: "text.secondary" }}>
+            <Typography variant="caption" noWrap sx={{ maxWidth: 64, textTransform: "capitalize", lineHeight: 1.2, color: "text.secondary" }}>
                 {name}
             </Typography>
         </Box>
     );
 }
 
-/** Shared style for the per-row action buttons (Settle / Undo). */
-const settlementBtnSx = {
-    fontWeight: 600,
-    borderRadius: 2,
-    boxShadow: "none",
-    py: 0.25,
-    px: 1.5,
-    fontSize: "0.75rem",
-    whiteSpace: "nowrap",
-    "&:hover": { boxShadow: "none" },
-} as const;
-
 export default function GroupSettlements() {
     const { balancesData, group, user, onSettle, deleteSettlement, isDeletingSettlement } = useOutletContext<GroupDetailContext>();
     const [filter, setFilter] = useState<"all" | "mine" | "others">("all");
     const [showHistory, setShowHistory] = useState(false);
+    const [viewPending, setViewPending] = useState<XenSplitSettlementTransfer | null>(null);
     const [viewSettlement, setViewSettlement] = useState<XenSplitSettlement | null>(null);
 
     const pendingSettlements = balancesData?.settlements ?? [];
     const myPendingSettlements = pendingSettlements.filter(s => s.from === user.id || s.to === user.id);
     const otherPendingSettlements = pendingSettlements.filter(s => s.from !== user.id && s.to !== user.id);
 
-    // Ordered: I owe first, then owed to me
     const sortedMyPending = [
         ...myPendingSettlements.filter(s => s.from === user.id),
         ...myPendingSettlements.filter(s => s.to === user.id),
@@ -67,9 +71,7 @@ export default function GroupSettlements() {
     if (pendingSettlements.length === 0 && completedSettlements.length === 0) {
         return (
             <Box sx={{ textAlign: "center", py: 4 }}>
-                <Typography variant="body1" color="text.secondary">
-                    No settlements yet
-                </Typography>
+                <Typography variant="body1" color="text.secondary">No settlements yet</Typography>
             </Box>
         );
     }
@@ -77,84 +79,53 @@ export default function GroupSettlements() {
     return (
         <Box>
             <Box sx={{ mb: 2, minHeight: 48, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>
-                    Settlements
-                </Typography>
-                <ToggleButtonGroup
-                    size="small"
-                    value={filter}
-                    exclusive
-                    onChange={(_, v) => v && setFilter(v)}
-                    sx={{ height: 24 }}
-                >
+                <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>Settlements</Typography>
+                <ToggleButtonGroup size="small" value={filter} exclusive onChange={(_, v) => v && setFilter(v)} sx={{ height: 24 }}>
                     <ToggleButton value="all" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>All</ToggleButton>
                     <ToggleButton value="mine" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>Mine</ToggleButton>
                     <ToggleButton value="others" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>Others</ToggleButton>
                 </ToggleButtonGroup>
             </Box>
 
-            {/* Pending settlements */}
+            {/* Pending */}
             {pendingSettlements.length > 0 && (
                 <>
                     <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1.5 }}>
                         Pending
                     </Typography>
-
                     {displayedPending.length === 0 ? (
                         <Box sx={{ textAlign: "center", py: 3, mb: completedSettlements.length > 0 ? 2 : 0 }}>
                             <Typography variant="body2" color="text.secondary">All settled up</Typography>
                         </Box>
-                    ) : (
-                        displayedPending.map((settlement, idx) => {
-                            const isInvolved = settlement.from === user.id || settlement.to === user.id;
-                            const direction = settlement.from === user.id ? "You owe" : settlement.to === user.id ? "Owed to you" : "Pending";
-                            const amountColor = settlement.from === user.id ? "error.main" : settlement.to === user.id ? "success.main" : "text.primary";
-                            return (
-                                <Box
-                                    key={idx}
-                                    onClick={() => isInvolved && onSettle(settlement)}
-                                    sx={{
-                                        ...xsCardSx,
-                                        display: "flex",
-                                        alignItems: "center",
-                                        columnGap: 1,
-                                        mb: 1,
-                                        opacity: isInvolved ? 1 : 0.55,
-                                        cursor: isInvolved ? "pointer" : "default",
-                                    }}
-                                >
-                                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0, flex: "1 1 66%" }}>
-                                        <PersonStack avatar={settlement.fromUser.avatar} name={settlement.fromUser.username} />
-                                        <EastIcon sx={{ fontSize: 16, color: "text.disabled", flexShrink: 0 }} />
-                                        <PersonStack avatar={settlement.toUser.avatar} name={settlement.toUser.username} />
-                                    </Box>
-                                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0, gap: 0.5 }}>
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: amountColor, lineHeight: 1.3, whiteSpace: "nowrap" }}>
-                                            {formatCurrency(settlement.amount, settlement.currency)}
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.1 }}>
-                                            {direction}
-                                        </Typography>
-                                        {isInvolved && (
-                                            <Button
-                                                variant="outlined"
-                                                color="success"
-                                                size="small"
-                                                sx={settlementBtnSx}
-                                                onClick={(e) => { e.stopPropagation(); onSettle(settlement); }}
-                                            >
-                                                Settle
-                                            </Button>
-                                        )}
-                                    </Box>
+                    ) : displayedPending.map((s, idx) => {
+                        const isInvolved = s.from === user.id || s.to === user.id;
+                        const amountColor = s.from === user.id ? "error.main" : s.to === user.id ? "success.main" : "text.primary";
+                        const direction = s.from === user.id ? "You owe" : s.to === user.id ? "Owed to you" : "Pending";
+                        return (
+                            <Box
+                                key={idx}
+                                onClick={() => setViewPending(s)}
+                                sx={{ ...cardGridSx, opacity: isInvolved ? 1 : 0.55 }}
+                            >
+                                <Box sx={personRowSx}>
+                                    <PersonStack avatar={s.fromUser.avatar} name={s.fromUser.username} />
+                                    <EastIcon sx={{ fontSize: 16, color: "text.disabled", flexShrink: 0 }} />
+                                    <PersonStack avatar={s.toUser.avatar} name={s.toUser.username} />
                                 </Box>
-                            );
-                        })
-                    )}
+                                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.25 }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: amountColor, lineHeight: 1.3, whiteSpace: "nowrap" }}>
+                                        {formatCurrency(s.amount, s.currency)}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.1 }}>
+                                        {direction}
+                                    </Typography>
+                                </Box>
+                            </Box>
+                        );
+                    })}
                 </>
             )}
 
-            {/* No pending */}
             {pendingSettlements.length === 0 && (
                 <Box sx={{ textAlign: "center", py: 3, mb: completedSettlements.length > 0 ? 2 : 0 }}>
                     <Typography variant="body2" color="text.secondary">All settled up</Typography>
@@ -169,54 +140,47 @@ export default function GroupSettlements() {
                         <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
                             History
                         </Typography>
-                        <Button size="small" variant="outlined" onClick={() => setShowHistory((v) => !v)} sx={{ borderRadius: 2, fontWeight: 600, fontSize: "0.75rem", py: 0.25, px: 1.5 }}>
+                        <Button size="small" variant="outlined" onClick={() => setShowHistory(v => !v)} sx={{ borderRadius: 2, fontWeight: 600, fontSize: "0.75rem", py: 0.25, px: 1.5 }}>
                             {showHistory ? "Hide" : "Show"}
                         </Button>
                     </Box>
 
-                    {showHistory && (
-                        filteredHistory.length === 0 ? (
-                            <Box sx={{ textAlign: "center", py: 3 }}>
-                                <Typography variant="body2" color="text.secondary">No settlements yet</Typography>
-                            </Box>
-                        ) : filteredHistory.map((s, idx) => {
-                            const fromMember = getMember(s.from);
-                            const toMember = getMember(s.to);
-                            return (
-                                <Box
-                                    key={s._id ?? idx}
-                                    onClick={() => setViewSettlement(s)}
-                                    sx={{
-                                        ...xsCardSx,
-                                        display: "flex",
-                                        alignItems: "center",
-                                        columnGap: 1,
-                                        mb: 1,
-                                        opacity: 0.6,
-                                        cursor: "pointer",
-                                    }}
-                                >
-                                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0, flex: "1 1 66%" }}>
-                                        <PersonStack avatar={fromMember?.avatar} name={fromMember?.username ?? "?"} />
-                                        <EastIcon sx={{ fontSize: 16, color: "text.disabled", flexShrink: 0 }} />
-                                        <PersonStack avatar={toMember?.avatar} name={toMember?.username ?? "?"} />
-                                    </Box>
-                                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0, gap: 0.5 }}>
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", lineHeight: 1.3, whiteSpace: "nowrap" }}>
-                                            {formatCurrency(s.amount, s.currency)}
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.25, lineHeight: 1.1 }}>
-                                            <CheckIcon sx={{ fontSize: "0.85rem", color: "success.main" }} />
-                                            {new Date(s.settled_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                                            {s.is_partial ? " · Partial" : ""}
-                                        </Typography>
-                                    </Box>
+                    {showHistory && (filteredHistory.length === 0 ? (
+                        <Box sx={{ textAlign: "center", py: 3 }}>
+                            <Typography variant="body2" color="text.secondary">No settlements yet</Typography>
+                        </Box>
+                    ) : filteredHistory.map((s, idx) => {
+                        const fromMember = getMember(s.from);
+                        const toMember = getMember(s.to);
+                        return (
+                            <Box key={s._id ?? idx} onClick={() => setViewSettlement(s)} sx={{ ...cardGridSx, opacity: 0.6 }}>
+                                <Box sx={personRowSx}>
+                                    <PersonStack avatar={fromMember?.avatar} name={fromMember?.username ?? "?"} />
+                                    <EastIcon sx={{ fontSize: 16, color: "text.disabled", flexShrink: 0 }} />
+                                    <PersonStack avatar={toMember?.avatar} name={toMember?.username ?? "?"} />
                                 </Box>
-                            );
-                        })
-                    )}
+                                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.25 }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", lineHeight: 1.3, whiteSpace: "nowrap" }}>
+                                        {formatCurrency(s.amount, s.currency)}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.25, lineHeight: 1.1 }}>
+                                        <CheckIcon sx={{ fontSize: "0.85rem", color: "success.main" }} />
+                                        {new Date(s.settled_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                                        {s.is_partial ? " · Partial" : ""}
+                                    </Typography>
+                                </Box>
+                            </Box>
+                        );
+                    }))}
                 </>
             )}
+
+            <PendingSettlementDialog
+                settlement={viewPending}
+                onClose={() => setViewPending(null)}
+                userId={user.id}
+                onSettle={onSettle}
+            />
 
             <SettlementDetailDialog
                 settlement={viewSettlement}
