@@ -37,10 +37,10 @@ function PersonCol({ avatar, name }: { avatar?: string | null; name: string }) {
     );
 }
 
-function MiddleCol({ amount, currency, sub }: { amount: number; currency: string; sub?: React.ReactNode }) {
+function MiddleCol({ amount, currency, arrowColor, sub }: { amount: number; currency: string; arrowColor?: string; sub?: React.ReactNode }) {
     return (
         <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, px: 1 }}>
-            <EastIcon sx={{ fontSize: 16, color: "text.disabled" }} />
+            <EastIcon sx={{ fontSize: 16, color: arrowColor ?? "text.disabled" }} />
             <Typography variant="subtitle2" sx={{ fontWeight: 700, whiteSpace: "nowrap", lineHeight: 1.3 }}>
                 {formatCurrency(amount, currency)}
             </Typography>
@@ -110,12 +110,14 @@ export default function GroupSettlements() {
                     ) : (
                         <Box sx={listGridSx}>
                             {displayedPending.map((s, idx) => {
+                                const arrowColor = s.from === user.id ? "error.main" : s.to === user.id ? "success.main" : "text.disabled";
                                 return (
                                     <Box key={idx} onClick={() => setViewPending(s)} sx={cardSx}>
                                         <PersonCol avatar={s.fromUser.avatar} name={s.fromUser.username} />
                                         <MiddleCol
                                             amount={s.amount}
                                             currency={s.currency}
+                                            arrowColor={arrowColor}
                                         />
                                         <PersonCol avatar={s.toUser.avatar} name={s.toUser.username} />
                                     </Box>
