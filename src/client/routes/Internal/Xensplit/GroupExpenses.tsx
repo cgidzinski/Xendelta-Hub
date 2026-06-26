@@ -22,6 +22,16 @@ export default function GroupExpenses() {
     const [search, setSearch] = useState("");
     const [dateFilter, setDateFilter] = useState<DateFilter>("all");
 
+    // Held expenses visible to this user (expense creator or group creator) — exempt from date filter
+    const heldVisible = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return [...group.expenses]
+            .filter((e) => e.on_hold && (e.created_by === user.id || group.created_by === user.id))
+            .filter((e) => !q || e.title.toLowerCase().includes(q))
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [group.expenses, search, user.id, group.created_by]);
+
+    // Active expenses only — subject to date + search filters
     const sortedExpenses = useMemo(() => {
         const now = new Date();
         const dateStart: Date | null =
@@ -34,6 +44,7 @@ export default function GroupExpenses() {
             dateFilter === "lastWeek" ? startOfWeek(now) : null;
 
         return [...group.expenses]
+            .filter((e) => !e.on_hold)
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
             .filter((e) => {
                 if (search.trim() && !e.title.toLowerCase().includes(search.toLowerCase())) return false;
@@ -72,8 +83,28 @@ export default function GroupExpenses() {
                 </ToggleButtonGroup>
             </Box>
             <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pb: { xs: 11, md: 1 } }}>
+                {heldVisible.length > 0 && (
+                    <Box sx={{ mb: 2 }}>
+                        <Typography
+                            variant="caption"
+                            sx={{ px: 0.5, mb: 0.75, display: "block", color: "warning.main", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", fontSize: "0.65rem" }}
+                        >
+                            Held Expenses
+                        </Typography>
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                            {heldVisible.map((expense) => (
+                                <ExpenseListItem
+                                    key={expense._id}
+                                    expense={expense}
+                                    onClick={() => onViewExpense(expense)}
+                                    userId={user.id}
+                                />
+                            ))}
+                        </Box>
+                    </Box>
+                )}
                 {sortedExpenses.length === 0 ? (
-                    <Box sx={{ textAlign: "center", py: 6 }}>
+                    <Box sx={{ textAlign: "center", py: heldVisible.length > 0 ? 3 : 6 }}>
                         <Typography variant="body1" color="text.secondary">
                             {search.trim() || dateFilter !== "all" ? "No expenses match your filters" : "No expenses yet"}
                         </Typography>
