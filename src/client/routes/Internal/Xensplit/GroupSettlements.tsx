@@ -98,7 +98,7 @@ export default function GroupSettlements() {
                         const amountColor = s.from === user.id ? "error.main" : s.to === user.id ? "success.main" : "text.primary";
                         const direction = s.from === user.id ? "You owe" : s.to === user.id ? "Owed to you" : "Pending";
                         return (
-                            <Box key={idx} onClick={() => setViewPending(s)} sx={{ ...cardSx, opacity: isInvolved ? 1 : 0.55 }}>
+                            <Box key={idx} onClick={() => setViewPending(s)} sx={cardSx}>
                                 <Box sx={personRowSx}>
                                     <PersonStack avatar={s.fromUser.avatar} name={s.fromUser.username} />
                                     <EastIcon sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center" }} />
@@ -143,7 +143,7 @@ export default function GroupSettlements() {
                         const fromMember = getMember(s.from);
                         const toMember = getMember(s.to);
                         return (
-                            <Box key={s._id ?? idx} onClick={() => setViewSettlement(s)} sx={{ ...cardSx, opacity: 0.6 }}>
+                            <Box key={s._id ?? idx} onClick={() => setViewSettlement(s)} sx={cardSx}>
                                 <Box sx={personRowSx}>
                                     <PersonStack avatar={fromMember?.avatar} name={fromMember?.username ?? "?"} />
                                     <EastIcon sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center" }} />
