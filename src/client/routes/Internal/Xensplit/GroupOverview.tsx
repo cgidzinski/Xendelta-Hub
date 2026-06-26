@@ -6,6 +6,7 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitExpense, XenSplitSettlement } from "../../../hooks/xensplit/types";
 import ExpenseListItem from "./components/ExpenseListItem";
+import SettlementDetailDialog from "./components/SettlementDetailDialog";
 import { xsCardSx, xsBadgeSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
 
@@ -14,11 +15,14 @@ type ActivityItem =
     | { type: "settlement"; date: string; settlement: XenSplitSettlement };
 
 export default function GroupOverview() {
-    const { group, balancesData, user, onViewExpense } = useOutletContext<GroupDetailContext>();
+    const { group, balancesData, user, onViewExpense, deleteSettlement, isDeletingSettlement } = useOutletContext<GroupDetailContext>();
     const navigate = useNavigate();
     const { groupId } = useParams<{ groupId: string }>();
     const lsKey = `xensplit_myActivityOnly_${groupId}`;
     const [myActivityOnly, setMyActivityOnly] = useState(() => localStorage.getItem(lsKey) === "true");
+    const [viewSettlement, setViewSettlement] = useState<XenSplitSettlement | null>(null);
+
+    const getMember = (userId: string) => group.members.find((m) => m.user_id === userId);
 
     const handleActivityToggle = (checked: boolean) => {
         setMyActivityOnly(checked);
@@ -90,6 +94,7 @@ export default function GroupOverview() {
         return (
             <Box
                 key={`s-${dateKey}-${idx}`}
+                onClick={() => setViewSettlement(s)}
                 sx={{
                     ...xsCardSx,
                     display: "grid",
@@ -98,6 +103,7 @@ export default function GroupOverview() {
                     columnGap: 1.25,
                     borderColor: (t) => alpha(t.palette.success.main, 0.4),
                     bgcolor: (t) => alpha(t.palette.success.main, 0.06),
+                    cursor: "pointer",
                 }}
             >
                 <Box sx={{ ...xsBadgeSx, bgcolor: (t) => alpha(t.palette.success.main, 0.16) }}>
@@ -172,6 +178,15 @@ export default function GroupOverview() {
                     </Box>
                 )}
             </Box>
+
+            <SettlementDetailDialog
+                settlement={viewSettlement}
+                onClose={() => setViewSettlement(null)}
+                getMember={getMember}
+                userId={user.id}
+                deleteSettlement={deleteSettlement}
+                isDeletingSettlement={isDeletingSettlement}
+            />
         </Box>
     );
 }
