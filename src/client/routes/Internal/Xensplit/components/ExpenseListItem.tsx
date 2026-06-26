@@ -1,4 +1,4 @@
-import { Box, Typography, alpha } from "@mui/material";
+import { Box, Typography, Avatar, alpha } from "@mui/material";
 import type { XenSplitExpense } from "../../../../hooks/xensplit/types";
 import { formatCurrency } from "../../../../utils/currencyUtils";
 import { getCategoryIcon } from "../../../../constants/xensplitCategoryIcons";
@@ -36,14 +36,15 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
                 "&:hover": { bgcolor: "action.hover" },
             }}
         >
-            <Box
+            <Avatar
                 sx={{
-                    ...xsBadgeSx,
-                    bgcolor: (t) => (accent ? alpha(t.palette[accent].main, 0.16) : t.palette.action.selected),
+                    width: 40,
+                    height: 40,
+                    bgcolor: (t) => (accent ? alpha(t.palette[accent].main, 0.16) : "grey.800"),
                 }}
             >
                 <CategoryIcon sx={{ fontSize: 20, color: accent ? `${accent}.main` : "text.secondary" }} />
-            </Box>
+            </Avatar>
             <Box sx={{ minWidth: 0 }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{expense.title}</Typography>
                 <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>

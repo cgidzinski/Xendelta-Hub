@@ -520,16 +520,10 @@ export default function ExpenseForm({
       {/* Step 3: Misc */}
       {step === 2 && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5 }}>
-            <Box
-              sx={{
-                ...xsBadgeSx,
-                bgcolor: "grey.800",
-                mt: "8px",
-              }}
-            >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Avatar sx={{ bgcolor: "grey.800", width: 40, height: 40 }}>
               <CategoryIconComponent sx={{ fontSize: 20, color: "text.secondary" }} />
-            </Box>
+            </Avatar>
             <FormControl fullWidth>
               <InputLabel>Category (optional)</InputLabel>
               <Select
