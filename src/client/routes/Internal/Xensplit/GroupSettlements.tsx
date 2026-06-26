@@ -9,9 +9,12 @@ import { xsCardSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
 import SettlementDetailDialog, { PendingSettlementDialog } from "./components/SettlementDetailDialog";
 
-// Subgrid card: spans all 4 parent columns so every card shares the same track widths.
-// The "auto" amount column is sized to the widest value across the whole list,
-// making both person columns equal 1fr and the arrow always at the same X.
+const listGridSx = {
+    display: "grid",
+    gridTemplateColumns: "1fr auto 1fr",
+    rowGap: 1,
+} as const;
+
 const cardSx = {
     ...xsCardSx,
     gridColumn: "1 / -1",
@@ -19,25 +22,30 @@ const cardSx = {
     gridTemplateColumns: "subgrid",
     alignItems: "center",
     cursor: "pointer",
-    mb: 0,
+    textAlign: "center",
 } as const;
 
-// Shared grid that drives column widths for all child cards.
-const listGridSx = {
-    display: "grid",
-    gridTemplateColumns: "1fr 24px 1fr auto",
-    rowGap: 1,
-} as const;
-
-function PersonStack({ avatar, name }: { avatar?: string | null; name: string }) {
+function PersonCol({ avatar, name }: { avatar?: string | null; name: string }) {
     return (
-        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, minWidth: 0, overflow: "hidden" }}>
-            <Avatar src={avatar || undefined} sx={{ width: 34, height: 34 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5, minWidth: 0 }}>
+            <Avatar src={avatar || undefined} sx={{ width: 38, height: 38 }}>
                 {name[0]?.toUpperCase() ?? "?"}
             </Avatar>
             <Typography variant="caption" noWrap sx={{ width: "100%", textAlign: "center", textTransform: "capitalize", lineHeight: 1.2, color: "text.secondary" }}>
                 {name}
             </Typography>
+        </Box>
+    );
+}
+
+function MiddleCol({ amount, currency, sub }: { amount: number; currency: string; sub?: React.ReactNode }) {
+    return (
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, px: 1 }}>
+            <EastIcon sx={{ fontSize: 16, color: "text.disabled" }} />
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, whiteSpace: "nowrap", lineHeight: 1.3 }}>
+                {formatCurrency(amount, currency)}
+            </Typography>
+            {sub}
         </Box>
     );
 }
@@ -107,19 +115,17 @@ export default function GroupSettlements() {
                                 const direction = s.from === user.id ? "You owe" : s.to === user.id ? "Owed to you" : null;
                                 return (
                                     <Box key={idx} onClick={() => setViewPending(s)} sx={cardSx}>
-                                        <PersonStack avatar={s.fromUser.avatar} name={s.fromUser.username} />
-                                        <EastIcon sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center" }} />
-                                        <PersonStack avatar={s.toUser.avatar} name={s.toUser.username} />
-                                        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", pl: 1.5 }}>
-                                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: amountColor, whiteSpace: "nowrap" }}>
-                                                {formatCurrency(s.amount, s.currency)}
-                                            </Typography>
-                                            {direction && (
-                                                <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+                                        <PersonCol avatar={s.fromUser.avatar} name={s.fromUser.username} />
+                                        <MiddleCol
+                                            amount={s.amount}
+                                            currency={s.currency}
+                                            sub={direction && (
+                                                <Typography variant="caption" sx={{ color: amountColor, whiteSpace: "nowrap", fontWeight: 600 }}>
                                                     {direction}
                                                 </Typography>
                                             )}
-                                        </Box>
+                                        />
+                                        <PersonCol avatar={s.toUser.avatar} name={s.toUser.username} />
                                     </Box>
                                 );
                             })}
@@ -158,19 +164,19 @@ export default function GroupSettlements() {
                                 const toMember = getMember(s.to);
                                 return (
                                     <Box key={s._id ?? idx} onClick={() => setViewSettlement(s)} sx={cardSx}>
-                                        <PersonStack avatar={fromMember?.avatar} name={fromMember?.username ?? "?"} />
-                                        <EastIcon sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center" }} />
-                                        <PersonStack avatar={toMember?.avatar} name={toMember?.username ?? "?"} />
-                                        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", pl: 1.5 }}>
-                                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", whiteSpace: "nowrap" }}>
-                                                {formatCurrency(s.amount, s.currency)}
-                                            </Typography>
-                                            <Typography variant="caption" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.25, whiteSpace: "nowrap" }}>
-                                                <CheckIcon sx={{ fontSize: "0.85rem", color: "success.main" }} />
-                                                {new Date(s.settled_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                                                {s.is_partial ? " · Partial" : ""}
-                                            </Typography>
-                                        </Box>
+                                        <PersonCol avatar={fromMember?.avatar} name={fromMember?.username ?? "?"} />
+                                        <MiddleCol
+                                            amount={s.amount}
+                                            currency={s.currency}
+                                            sub={
+                                                <Typography variant="caption" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.25, whiteSpace: "nowrap" }}>
+                                                    <CheckIcon sx={{ fontSize: "0.8rem", color: "success.main" }} />
+                                                    {new Date(s.settled_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                                                    {s.is_partial ? " · P" : ""}
+                                                </Typography>
+                                            }
+                                        />
+                                        <PersonCol avatar={toMember?.avatar} name={toMember?.username ?? "?"} />
                                     </Box>
                                 );
                             })}
