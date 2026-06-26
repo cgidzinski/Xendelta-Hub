@@ -12,7 +12,7 @@ import SettlementDetailDialog, { PendingSettlementDialog } from "./components/Se
 const cardGridSx = {
     ...xsCardSx,
     display: "grid",
-    gridTemplateColumns: "1fr 20px 1fr auto",
+    gridTemplateColumns: "1fr 20px 1fr 100px",
     alignItems: "center",
     columnGap: 1,
     mb: 1,
