@@ -12,14 +12,15 @@ const tileStyle = {
   height: 80,
   flexShrink: 0,
   border: "2px dashed",
-  borderColor: "divider",
+  borderColor: "action.disabled",
   borderRadius: 1,
+  bgcolor: "action.hover",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   cursor: "pointer",
   color: "text.secondary",
-  "&:hover": { borderColor: "primary.main", color: "primary.main" },
+  "&:hover": { borderColor: "primary.main", color: "primary.main", bgcolor: "action.selected" },
   transition: "all 0.2s",
 } as const;
 
