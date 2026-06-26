@@ -842,11 +842,16 @@ export default function GroupDetail() {
                   <Avatar src={payer?.avatar || undefined} sx={{ width: 32, height: 32, flexShrink: 0 }}>
                     {payer?.username?.[0]?.toUpperCase()}
                   </Avatar>
-                  <Box sx={{ minWidth: 0 }}>
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.2 }}>Paid by</Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>{payer?.username ?? "Unknown"}</Typography>
+                  </Box>
+                  <Box sx={{ textAlign: "right", flexShrink: 0 }}>
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.3 }}>
-                      {new Date(e.date).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      {new Date(e.date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.3 }}>
+                      {new Date(e.date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
                     </Typography>
                   </Box>
                 </Box>
