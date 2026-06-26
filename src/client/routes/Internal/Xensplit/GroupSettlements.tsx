@@ -20,19 +20,19 @@ const cardGridSx = {
 } as const;
 
 const personRowSx = {
-    display: "flex",
+    display: "grid",
+    gridTemplateColumns: "1fr 20px 1fr",
     alignItems: "center",
-    gap: 0.75,
     minWidth: 0,
 } as const;
 
 function PersonStack({ avatar, name }: { avatar?: string | null; name: string }) {
     return (
-        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, minWidth: 0 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, minWidth: 0, overflow: "hidden" }}>
             <Avatar src={avatar || undefined} sx={{ width: 34, height: 34 }}>
                 {name[0]?.toUpperCase() ?? "?"}
             </Avatar>
-            <Typography variant="caption" noWrap sx={{ maxWidth: 64, textTransform: "capitalize", lineHeight: 1.2, color: "text.secondary" }}>
+            <Typography variant="caption" noWrap sx={{ width: "100%", textAlign: "center", textTransform: "capitalize", lineHeight: 1.2, color: "text.secondary" }}>
                 {name}
             </Typography>
         </Box>

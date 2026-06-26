@@ -48,9 +48,9 @@ export function PendingSettlementDialog({ settlement, onClose, userId, onSettle 
             </Box>
 
             <DialogContent sx={{ px: 3, pt: 1.5, pb: 2 }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 24px 1fr", alignItems: "center", bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
                     <PersonStack avatar={s.fromUser.avatar} name={s.fromUser.username} />
-                    <EastIcon sx={{ fontSize: 20, color: "text.disabled", flexShrink: 0 }} />
+                    <EastIcon sx={{ fontSize: 20, color: "text.disabled" }} />
                     <PersonStack avatar={s.toUser.avatar} name={s.toUser.username} />
                 </Box>
             </DialogContent>
@@ -116,9 +116,9 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
                 </Box>
 
                 <DialogContent sx={{ px: 3, pt: 1.5, pb: 2 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5, mb: 2 }}>
+                    <Box sx={{ display: "grid", gridTemplateColumns: "1fr 24px 1fr", alignItems: "center", bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5, mb: 2 }}>
                         <PersonStack avatar={fromMember?.avatar} name={fromMember?.username ?? "?"} />
-                        <EastIcon sx={{ fontSize: 20, color: "text.disabled", flexShrink: 0 }} />
+                        <EastIcon sx={{ fontSize: 20, color: "text.disabled" }} />
                         <PersonStack avatar={toMember?.avatar} name={toMember?.username ?? "?"} />
                     </Box>
 
