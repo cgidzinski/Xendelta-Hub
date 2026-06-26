@@ -9,14 +9,17 @@ import { xsCardSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
 import SettlementDetailDialog, { PendingSettlementDialog } from "./components/SettlementDetailDialog";
 
-const cardGridSx = {
+const cardSx = {
     ...xsCardSx,
-    display: "grid",
-    gridTemplateColumns: "1fr 20px 1fr 100px",
-    alignItems: "center",
-    columnGap: 1,
     mb: 1,
     cursor: "pointer",
+} as const;
+
+const personRowSx = {
+    display: "grid",
+    gridTemplateColumns: "1fr 24px 1fr",
+    alignItems: "center",
+    mb: 0.5,
 } as const;
 
 function PersonStack({ avatar, name }: { avatar?: string | null; name: string }) {
@@ -95,16 +98,16 @@ export default function GroupSettlements() {
                         const amountColor = s.from === user.id ? "error.main" : s.to === user.id ? "success.main" : "text.primary";
                         const direction = s.from === user.id ? "You owe" : s.to === user.id ? "Owed to you" : "Pending";
                         return (
-                            <Box key={idx} onClick={() => setViewPending(s)} sx={{ ...cardGridSx, opacity: isInvolved ? 1 : 0.55 }}>
-                                <PersonStack avatar={s.fromUser.avatar} name={s.fromUser.username} />
-                                <EastIcon sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center" }} />
-                                <PersonStack avatar={s.toUser.avatar} name={s.toUser.username} />
-                                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.25, pl: 1 }}>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: amountColor, lineHeight: 1.3, whiteSpace: "nowrap" }}>
+                            <Box key={idx} onClick={() => setViewPending(s)} sx={{ ...cardSx, opacity: isInvolved ? 1 : 0.55 }}>
+                                <Box sx={personRowSx}>
+                                    <PersonStack avatar={s.fromUser.avatar} name={s.fromUser.username} />
+                                    <EastIcon sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center" }} />
+                                    <PersonStack avatar={s.toUser.avatar} name={s.toUser.username} />
+                                </Box>
+                                <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 1 }}>
+                                    <Typography variant="caption" color="text.secondary">{direction}</Typography>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: amountColor, whiteSpace: "nowrap" }}>
                                         {formatCurrency(s.amount, s.currency)}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.1 }}>
-                                        {direction}
                                     </Typography>
                                 </Box>
                             </Box>
@@ -140,18 +143,20 @@ export default function GroupSettlements() {
                         const fromMember = getMember(s.from);
                         const toMember = getMember(s.to);
                         return (
-                            <Box key={s._id ?? idx} onClick={() => setViewSettlement(s)} sx={{ ...cardGridSx, opacity: 0.6 }}>
-                                <PersonStack avatar={fromMember?.avatar} name={fromMember?.username ?? "?"} />
-                                <EastIcon sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center" }} />
-                                <PersonStack avatar={toMember?.avatar} name={toMember?.username ?? "?"} />
-                                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.25, pl: 1 }}>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", lineHeight: 1.3, whiteSpace: "nowrap" }}>
-                                        {formatCurrency(s.amount, s.currency)}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.25, lineHeight: 1.1 }}>
+                            <Box key={s._id ?? idx} onClick={() => setViewSettlement(s)} sx={{ ...cardSx, opacity: 0.6 }}>
+                                <Box sx={personRowSx}>
+                                    <PersonStack avatar={fromMember?.avatar} name={fromMember?.username ?? "?"} />
+                                    <EastIcon sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center" }} />
+                                    <PersonStack avatar={toMember?.avatar} name={toMember?.username ?? "?"} />
+                                </Box>
+                                <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 1 }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
                                         <CheckIcon sx={{ fontSize: "0.85rem", color: "success.main" }} />
                                         {new Date(s.settled_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                                         {s.is_partial ? " · Partial" : ""}
+                                    </Typography>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", whiteSpace: "nowrap" }}>
+                                        {formatCurrency(s.amount, s.currency)}
                                     </Typography>
                                 </Box>
                             </Box>
