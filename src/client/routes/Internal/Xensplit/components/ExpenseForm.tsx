@@ -75,7 +75,7 @@ interface ExpenseFormProps {
   onCategoryChange: (v: string) => void;
   onHold: boolean;
   onOnHoldChange: (v: boolean) => void;
-  wasOnHold?: boolean;
+  canToggleHold?: boolean;
 }
 
 export default function ExpenseForm({
@@ -118,7 +118,7 @@ export default function ExpenseForm({
   onCategoryChange,
   onHold,
   onOnHoldChange,
-  wasOnHold = false,
+  canToggleHold = false,
 }: ExpenseFormProps) {
   const [step, setStep] = React.useState(0);
   const objectUrlsRef = useRef<string[]>([]);
@@ -528,7 +528,7 @@ export default function ExpenseForm({
       {/* Step 3: Misc */}
       {step === 2 && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {(!isEditing || wasOnHold) && (
+          {(!isEditing || canToggleHold) && (
             <Box
               sx={{
                 display: "flex",
@@ -552,16 +552,13 @@ export default function ExpenseForm({
                     On Hold
                   </Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3, display: "block" }}>
-                    {isEditing && wasOnHold
-                      ? "Removing hold is permanent — cannot be re-applied"
-                      : "Exclude from balance calculations"}
+                    Exclude from balance calculations
                   </Typography>
                 </Box>
               </Box>
               <Switch
                 checked={onHold}
                 onChange={(e) => onOnHoldChange(e.target.checked)}
-                disabled={isEditing && wasOnHold && !onHold}
                 color="warning"
                 size="small"
               />

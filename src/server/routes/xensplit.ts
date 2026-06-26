@@ -484,12 +484,7 @@ module.exports = function (app: any) {
       if (updates.date !== undefined) expense.date = new Date(updates.date);
       if (updates.split_type !== undefined) expense.split_type = updates.split_type;
       if (updates.splits !== undefined) expense.splits = updates.splits;
-      if (updates.on_hold !== undefined) {
-        if (updates.on_hold === true && expense.on_hold !== true) {
-          return res.status(400).json({ status: false, message: "Cannot re-hold an expense that has already been active" });
-        }
-        expense.on_hold = updates.on_hold;
-      }
+      if (updates.on_hold !== undefined) expense.on_hold = updates.on_hold;
 
       // Recalculate splits if needed
       if (updates.split_type || updates.amount) {

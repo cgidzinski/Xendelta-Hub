@@ -138,7 +138,6 @@ export default function GroupDetail() {
   const [editDate, setEditDate] = useState<Date>(new Date());
   const [editCategory, setEditCategory] = useState("");
   const [editOnHold, setEditOnHold] = useState(false);
-  const [editWasOnHold, setEditWasOnHold] = useState(false);
   const [showSettleModal, setShowSettleModal] = useState(false);
   const [selectedSettlement, setSelectedSettlement] = useState<XenSplitSettlementTransfer | null>(null);
   const [settleAmount, setSettleAmount] = useState("");
@@ -432,7 +431,6 @@ export default function GroupDetail() {
     setEditDate(expense.date ? new Date(expense.date) : new Date());
     setEditCategory(expense.category || "");
     setEditOnHold(expense.on_hold ?? false);
-    setEditWasOnHold(expense.on_hold ?? false);
     setShowEditExpenseModal(true);
   };
 
@@ -838,7 +836,9 @@ export default function GroupDetail() {
             onCategoryChange={setEditCategory}
             onHold={editOnHold}
             onOnHoldChange={setEditOnHold}
-            wasOnHold={editWasOnHold}
+            canToggleHold={
+              selectedExpense?.created_by === user.id || group.created_by === user.id
+            }
           />
         </DialogContent>
       </Dialog>
