@@ -75,7 +75,8 @@ interface ExpenseFormProps {
   onCategoryChange: (v: string) => void;
   onHold: boolean;
   onOnHoldChange: (v: boolean) => void;
-  canToggleHold?: boolean;
+  /** "free" = group creator (bidirectional), "oneWay" = expense creator (hold→unhold only), "hidden" = no access */
+  holdMode?: "free" | "oneWay" | "hidden";
 }
 
 export default function ExpenseForm({
@@ -118,7 +119,7 @@ export default function ExpenseForm({
   onCategoryChange,
   onHold,
   onOnHoldChange,
-  canToggleHold = false,
+  holdMode = "hidden",
 }: ExpenseFormProps) {
   const [step, setStep] = React.useState(0);
   const objectUrlsRef = useRef<string[]>([]);
@@ -528,7 +529,7 @@ export default function ExpenseForm({
       {/* Step 3: Misc */}
       {step === 2 && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {(!isEditing || canToggleHold) && (
+          {holdMode !== "hidden" && (
             <Box
               sx={{
                 display: "flex",
@@ -552,13 +553,16 @@ export default function ExpenseForm({
                     On Hold
                   </Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3, display: "block" }}>
-                    Exclude from balance calculations
+                    {holdMode === "oneWay" && onHold
+                      ? "Removing hold is permanent — cannot be re-applied"
+                      : "Exclude from balance calculations"}
                   </Typography>
                 </Box>
               </Box>
               <Switch
                 checked={onHold}
                 onChange={(e) => onOnHoldChange(e.target.checked)}
+                disabled={holdMode === "oneWay" && !onHold}
                 color="warning"
                 size="small"
               />

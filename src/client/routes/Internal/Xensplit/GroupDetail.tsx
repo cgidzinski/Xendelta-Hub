@@ -745,6 +745,7 @@ export default function GroupDetail() {
             onCategoryChange={setAddCategory}
             onHold={addOnHold}
             onOnHoldChange={setAddOnHold}
+            holdMode="free"
           />
         </DialogContent>
       </Dialog>
@@ -836,8 +837,10 @@ export default function GroupDetail() {
             onCategoryChange={setEditCategory}
             onHold={editOnHold}
             onOnHoldChange={setEditOnHold}
-            canToggleHold={
-              selectedExpense?.created_by === user.id || group.created_by === user.id
+            holdMode={
+              group.created_by === user.id ? "free" :
+              selectedExpense?.created_by === user.id ? "oneWay" :
+              "hidden"
             }
           />
         </DialogContent>
