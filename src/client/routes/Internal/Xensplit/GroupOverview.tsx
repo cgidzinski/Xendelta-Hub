@@ -6,6 +6,7 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitExpense, XenSplitSettlement } from "../../../hooks/xensplit/types";
 import ExpenseListItem from "./components/ExpenseListItem";
+import SettlementDetailDialog from "./components/SettlementDetailDialog";
 import { xsCardSx, xsBadgeSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
 
@@ -14,10 +15,19 @@ type ActivityItem =
     | { type: "settlement"; date: string; settlement: XenSplitSettlement };
 
 export default function GroupOverview() {
-    const { group, balancesData, user, onViewExpense } = useOutletContext<GroupDetailContext>();
+    const { group, balancesData, user, onViewExpense, deleteSettlement, isDeletingSettlement } = useOutletContext<GroupDetailContext>();
     const navigate = useNavigate();
     const { groupId } = useParams<{ groupId: string }>();
-    const [myActivityOnly, setMyActivityOnly] = useState(false);
+    const lsKey = `xensplit_myActivityOnly_${groupId}`;
+    const [myActivityOnly, setMyActivityOnly] = useState(() => localStorage.getItem(lsKey) === "true");
+    const [viewSettlement, setViewSettlement] = useState<XenSplitSettlement | null>(null);
+
+    const getMember = (userId: string) => group.members.find((m) => m.user_id === userId);
+
+    const handleActivityToggle = (checked: boolean) => {
+        setMyActivityOnly(checked);
+        localStorage.setItem(lsKey, String(checked));
+    };
 
     // Pending settlements involving this user
     const allPendingSettlements = balancesData?.settlements ?? [];
@@ -37,12 +47,12 @@ export default function GroupOverview() {
 
     const filteredFeed = myActivityOnly
         ? feed.filter((item) => {
-              if (item.type === "expense") {
-                  const e = item.expense;
-                  return e.paid_by === user.id || e.splits.some((sp) => sp.user_id === user.id);
-              }
-              return item.settlement.from === user.id || item.settlement.to === user.id;
-          })
+            if (item.type === "expense") {
+                const e = item.expense;
+                return e.paid_by === user.id || e.splits.some((sp) => sp.user_id === user.id);
+            }
+            return item.settlement.from === user.id || item.settlement.to === user.id;
+        })
         : feed;
 
     // Group the (already date-desc sorted) feed into ordered day-groups
@@ -59,7 +69,6 @@ export default function GroupOverview() {
         return groups;
     }, [filteredFeed]);
 
-    const getMember = (userId: string) => group.members.find((m) => m.user_id === userId);
     const timeStr = (d: string) => new Date(d).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
     const settleNames = (s: XenSplitSettlement) => ({
         from: s.from === user.id ? "You" : getMember(s.from)?.username ?? "?",
@@ -84,6 +93,7 @@ export default function GroupOverview() {
         return (
             <Box
                 key={`s-${dateKey}-${idx}`}
+                onClick={() => setViewSettlement(s)}
                 sx={{
                     ...xsCardSx,
                     display: "grid",
@@ -92,6 +102,7 @@ export default function GroupOverview() {
                     columnGap: 1.25,
                     borderColor: (t) => alpha(t.palette.success.main, 0.4),
                     bgcolor: (t) => alpha(t.palette.success.main, 0.06),
+                    cursor: "pointer",
                 }}
             >
                 <Box sx={{ ...xsBadgeSx, bgcolor: (t) => alpha(t.palette.success.main, 0.16) }}>
@@ -125,7 +136,7 @@ export default function GroupOverview() {
                 {userSettlements.length > 0
                     ? `You have ${userSettlements.length} pending settlement${userSettlements.length !== 1 ? "s" : ""}`
                     : allPendingSettlements.length > 0
-                        ? `${allPendingSettlements.length} pending settlement${allPendingSettlements.length !== 1 ? "s" : ""} between others`
+                        ? `${allPendingSettlements.length} pending settlement${allPendingSettlements.length !== 1 ? "s" : ""}`
                         : "All settled up"}
             </Button>
 
@@ -137,7 +148,7 @@ export default function GroupOverview() {
                 <Switch
                     size="small"
                     checked={myActivityOnly}
-                    onChange={(e) => setMyActivityOnly(e.target.checked)}
+                    onChange={(e) => handleActivityToggle(e.target.checked)}
                 />
             </Box>
 
@@ -166,6 +177,15 @@ export default function GroupOverview() {
                     </Box>
                 )}
             </Box>
+
+            <SettlementDetailDialog
+                settlement={viewSettlement}
+                onClose={() => setViewSettlement(null)}
+                getMember={getMember}
+                userId={user.id}
+                deleteSettlement={deleteSettlement}
+                isDeletingSettlement={isDeletingSettlement}
+            />
         </Box>
     );
 }

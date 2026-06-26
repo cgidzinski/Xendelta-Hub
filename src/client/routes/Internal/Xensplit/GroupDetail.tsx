@@ -839,16 +839,21 @@ export default function GroupDetail() {
               <DialogContent sx={{ px: 3, pt: 1, pb: 2 }}>
                 {/* Paid by */}
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.25, mb: 1.5 }}>
-                  <Avatar src={payer?.avatar || undefined} sx={{ width: 32, height: 32 }}>
+                  <Avatar src={payer?.avatar || undefined} sx={{ width: 32, height: 32, flexShrink: 0 }}>
                     {payer?.username?.[0]?.toUpperCase()}
                   </Avatar>
-                  <Box>
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.2 }}>Paid by</Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>{payer?.username ?? "Unknown"}</Typography>
                   </Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
-                    {new Date(e.date).toLocaleString()}
-                  </Typography>
+                  <Box sx={{ textAlign: "right", flexShrink: 0 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.3 }}>
+                      {new Date(e.date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.3 }}>
+                      {new Date(e.date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                    </Typography>
+                  </Box>
                 </Box>
 
                 {/* Notes */}
