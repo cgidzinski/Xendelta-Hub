@@ -92,7 +92,7 @@ export default function GroupSettlements() {
                                     <Box key={idx} onClick={() => setViewPending(s)} sx={cardSx}>
                                         {/* row 1: avatars + amount */}
                                         <Avatar src={s.fromUser.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>{s.fromUser.username[0]?.toUpperCase()}</Avatar>
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 700, whiteSpace: "nowrap", alignSelf: "center" }}>{formatCurrency(s.amount, s.currency)}</Typography>
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 700, whiteSpace: "nowrap", alignSelf: "center", color: arrowColor }}>{formatCurrency(s.amount, s.currency)}</Typography>
                                         <Avatar src={s.toUser.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>{s.toUser.username[0]?.toUpperCase()}</Avatar>
                                         {/* row 2: names + arrow */}
                                         <Typography variant="caption" noWrap sx={{ textTransform: "capitalize", color: "text.secondary" }}>{s.fromUser.username}</Typography>
