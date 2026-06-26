@@ -16,7 +16,7 @@ interface ExpenseListItemProps {
 export default function ExpenseListItem({ expense, onClick, userId, hideDate }: ExpenseListItemProps) {
     const mySplit = userId ? expense.splits.find((sp) => sp.user_id === userId) : undefined;
     const isPayer = userId ? expense.paid_by === userId : false;
-    const owe = mySplit && !isPayer
+    const owe = mySplit && !isPayer && !expense.on_hold
         ? (mySplit.amount_owed ?? (expense.splits.length ? expense.amount / expense.splits.length : 0))
         : 0;
     // Avatar accent: blue if you paid, green if you owe a share, neutral otherwise.
