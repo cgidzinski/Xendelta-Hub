@@ -149,14 +149,14 @@ export default function GroupSettlements() {
                                     <EastIcon sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center" }} />
                                     <PersonStack avatar={toMember?.avatar} name={toMember?.username ?? "?"} />
                                 </Box>
-                                <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 1 }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
+                                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", whiteSpace: "nowrap" }}>
+                                        {formatCurrency(s.amount, s.currency)}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.25, whiteSpace: "nowrap" }}>
                                         <CheckIcon sx={{ fontSize: "0.85rem", color: "success.main" }} />
                                         {new Date(s.settled_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                                         {s.is_partial ? " · Partial" : ""}
-                                    </Typography>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", whiteSpace: "nowrap" }}>
-                                        {formatCurrency(s.amount, s.currency)}
                                     </Typography>
                                 </Box>
                             </Box>
