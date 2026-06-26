@@ -524,10 +524,10 @@ export default function ExpenseForm({
             <Box
               sx={{
                 ...xsBadgeSx,
-                bgcolor: (t) => alpha(t.palette.action.selected, 1),
+                bgcolor: "action.selected",
               }}
             >
-              <CategoryIconComponent sx={{ fontSize: 20, color: "text.secondary" }} />
+              <CategoryIconComponent sx={{ fontSize: 20, color: "primary.main" }} />
             </Box>
             <FormControl fullWidth>
               <InputLabel>Category (optional)</InputLabel>
