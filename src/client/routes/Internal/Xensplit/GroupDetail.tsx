@@ -146,6 +146,7 @@ export default function GroupDetail() {
   const [addImages, setAddImages] = useState<File[]>([]);
   const [editImages, setEditImages] = useState<File[]>([]);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const lightboxTouchStartY = React.useRef<number | null>(null);
 
   const { data: viewImageUrls = [] } = useExpenseImageUrls(
     groupId ?? "",
@@ -461,6 +462,18 @@ export default function GroupDetail() {
     isUploadingImage,
     deleteSettlement,
     isDeletingSettlement,
+  };
+
+  const handleLightboxTouchStart = (e: React.TouchEvent) => {
+    lightboxTouchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleLightboxTouchEnd = (e: React.TouchEvent) => {
+    if (lightboxTouchStartY.current !== null) {
+      const delta = Math.abs(e.changedTouches[0].clientY - lightboxTouchStartY.current);
+      if (delta > 80) setLightboxUrl(null);
+      lightboxTouchStartY.current = null;
+    }
   };
 
   return (
@@ -1077,33 +1090,39 @@ export default function GroupDetail() {
         fullScreen
         PaperProps={{ sx: { bgcolor: "black", position: "relative" } }}
       >
-        {lightboxUrl && (
-          <IconButton
-            component="a"
-            href={lightboxUrl}
-            download
-            target="_blank"
-            rel="noopener noreferrer"
-            size="small"
-            sx={{ position: "absolute", top: 8, right: 48, zIndex: 1, bgcolor: "rgba(255,255,255,0.15)", color: "white", "&:hover": { bgcolor: "rgba(255,255,255,0.3)" } }}
-          >
-            <FileDownloadIcon />
-          </IconButton>
-        )}
-        <IconButton
-          onClick={() => setLightboxUrl(null)}
-          size="small"
-          sx={{ position: "absolute", top: 8, right: 8, zIndex: 1, bgcolor: "rgba(255,255,255,0.15)", color: "white", "&:hover": { bgcolor: "rgba(255,255,255,0.3)" } }}
+        <Box
+          sx={{ width: "100%", height: "100vh", position: "relative" }}
+          onTouchStart={handleLightboxTouchStart}
+          onTouchEnd={handleLightboxTouchEnd}
         >
-          <CloseIcon />
-        </IconButton>
-        {lightboxUrl && (
-          <Box
-            component="img"
-            src={lightboxUrl}
-            sx={{ width: "100%", height: "100vh", objectFit: "contain", display: "block" }}
-          />
-        )}
+          {lightboxUrl && (
+            <IconButton
+              component="a"
+              href={lightboxUrl}
+              download
+              target="_blank"
+              rel="noopener noreferrer"
+              size="small"
+              sx={{ position: "absolute", top: 8, right: 48, zIndex: 1, bgcolor: "rgba(0,0,0,0.55)", color: "white", "&:hover": { bgcolor: "rgba(0,0,0,0.75)" } }}
+            >
+              <FileDownloadIcon />
+            </IconButton>
+          )}
+          <IconButton
+            onClick={() => setLightboxUrl(null)}
+            size="small"
+            sx={{ position: "absolute", top: 8, right: 8, zIndex: 1, bgcolor: "rgba(0,0,0,0.55)", color: "white", "&:hover": { bgcolor: "rgba(0,0,0,0.75)" } }}
+          >
+            <CloseIcon />
+          </IconButton>
+          {lightboxUrl && (
+            <Box
+              component="img"
+              src={lightboxUrl}
+              sx={{ width: "100%", height: "100vh", objectFit: "contain", display: "block" }}
+            />
+          )}
+        </Box>
       </Dialog>
     </Box>
   );
