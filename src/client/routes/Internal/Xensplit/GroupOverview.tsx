@@ -43,12 +43,12 @@ export default function GroupOverview() {
 
     const filteredFeed = myActivityOnly
         ? feed.filter((item) => {
-              if (item.type === "expense") {
-                  const e = item.expense;
-                  return e.paid_by === user.id || e.splits.some((sp) => sp.user_id === user.id);
-              }
-              return item.settlement.from === user.id || item.settlement.to === user.id;
-          })
+            if (item.type === "expense") {
+                const e = item.expense;
+                return e.paid_by === user.id || e.splits.some((sp) => sp.user_id === user.id);
+            }
+            return item.settlement.from === user.id || item.settlement.to === user.id;
+        })
         : feed;
 
     // Group the (already date-desc sorted) feed into ordered day-groups
@@ -131,7 +131,7 @@ export default function GroupOverview() {
                 {userSettlements.length > 0
                     ? `You have ${userSettlements.length} pending settlement${userSettlements.length !== 1 ? "s" : ""}`
                     : allPendingSettlements.length > 0
-                        ? `${allPendingSettlements.length} pending settlement${allPendingSettlements.length !== 1 ? "s" : ""} between others`
+                        ? `${allPendingSettlements.length} pending settlement${allPendingSettlements.length !== 1 ? "s" : ""}`
                         : "All settled up"}
             </Button>
 
