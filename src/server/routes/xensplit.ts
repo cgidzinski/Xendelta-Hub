@@ -434,9 +434,14 @@ module.exports = function (app: any) {
 
       const actor = (group.members as any[]).find((m: any) => m._id.toString() === userId);
       const actorName = actor?.username || "Someone";
+      const involvedIds = new Set<string>([
+        paid_by,
+        ...resolvedSplits.map((s: any) => s.user_id.toString()),
+      ]);
       for (const member of group.members as any[]) {
-        if (member._id.toString() !== userId) {
-          await notify(member._id.toString(), "New Expense", `${actorName} added: ${title} (${amount} ${expenseCurrency})`, `/internal/xensplit/groups/${groupId}/expenses`);
+        const mid = member._id.toString();
+        if (mid !== userId && involvedIds.has(mid)) {
+          await notify(mid, "New Expense", `${actorName} added: ${title} (${amount} ${expenseCurrency})`, `/internal/xensplit/groups/${groupId}/expenses`);
         }
       }
 
@@ -531,9 +536,14 @@ module.exports = function (app: any) {
 
       const actor = (group.members as any[]).find((m: any) => m._id.toString() === userId);
       const actorName = actor?.username || "Someone";
+      const involvedIds = new Set<string>([
+        expense.paid_by?.toString(),
+        ...(expense.splits || []).map((s: any) => s.user_id.toString()),
+      ]);
       for (const member of group.members as any[]) {
-        if (member._id.toString() !== userId) {
-          await notify(member._id.toString(), "Expense Updated", `${actorName} updated: ${expense.title}`, `/internal/xensplit/groups/${groupId}/expenses`);
+        const mid = member._id.toString();
+        if (mid !== userId && involvedIds.has(mid)) {
+          await notify(mid, "Expense Updated", `${actorName} updated: ${expense.title}`, `/internal/xensplit/groups/${groupId}/expenses`);
         }
       }
 

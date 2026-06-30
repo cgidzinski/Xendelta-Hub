@@ -101,9 +101,9 @@ export default function GroupDetail() {
       : location.pathname.endsWith("/balances")
         ? 2
         : false;
-  const hideAddExpense = location.pathname.endsWith("/analytics") || location.pathname.endsWith("/settings");
+  const hideAddExpense = location.pathname.endsWith("/analytics") || location.pathname.endsWith("/settings") || location.pathname.endsWith("/explain") || location.pathname.endsWith("/settlements");
   // Routes whose page header stays fixed while only the list underneath scrolls.
-  const paneled = ["/overview", "/expenses", "/balances", "/settings"].some((p) => location.pathname.endsWith(p));
+  const paneled = ["/overview", "/expenses", "/balances", "/settings", "/explain"].some((p) => location.pathname.endsWith(p));
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<SearchedUser[]>([]);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
@@ -473,11 +473,11 @@ export default function GroupDetail() {
     isDeletingSettlement,
   };
 
-  const handleLightboxTouchStart = (e: TouchEvent) => {
+  const handleLightboxTouchStart = (e: React.TouchEvent) => {
     lightboxTouchStartY.current = e.touches[0].clientY;
   };
 
-  const handleLightboxTouchEnd = (e: TouchEvent) => {
+  const handleLightboxTouchEnd = (e: React.TouchEvent) => {
     if (lightboxTouchStartY.current !== null) {
       const delta = Math.abs(e.changedTouches[0].clientY - lightboxTouchStartY.current);
       if (delta > 80) setLightboxUrl(null);
@@ -488,18 +488,18 @@ export default function GroupDetail() {
   return (
     <Box>
       <Container
-        maxWidth="md"
+        maxWidth="lg"
         sx={
           paneled
             ? {
-                px: { xs: 2, sm: 3 },
-                pt: { xs: 1, sm: 2 },
-                height: { xs: "calc(100dvh - 56px)", sm: "calc(100dvh - 64px)" },
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-              }
-            : { mt: { xs: 1, sm: 4 }, mb: 4, px: { xs: 2, sm: 3 }, pb: { xs: 12, md: 0 } }
+              px: { xs: 2, sm: 3 },
+              pt: { xs: 1, sm: 2 },
+              height: { xs: "calc(100dvh - 56px)", sm: "calc(100dvh - 64px)" },
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }
+            : { mt: { xs: 1, sm: 4 }, mb: 4, px: { xs: 2, sm: 3 }, pb: { xs: hideAddExpense ? 0 : 12, md: 0 } }
         }
       >
         {/* Header */}
@@ -825,8 +825,8 @@ export default function GroupDetail() {
             onOnHoldChange={setEditOnHold}
             holdMode={
               group.created_by === user.id ? "free" :
-              selectedExpense?.created_by === user.id ? "oneWay" :
-              "hidden"
+                selectedExpense?.created_by === user.id ? "oneWay" :
+                  "hidden"
             }
           />
         </DialogContent>
