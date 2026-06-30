@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useNavigate, useParams } from "react-router-dom";
 import { Box, Typography, Button, Avatar, Divider, ToggleButtonGroup, ToggleButton } from "@mui/material";
 import EastIcon from "@mui/icons-material/East";
+import HubIcon from "@mui/icons-material/Hub";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitSettlement, XenSplitSettlementTransfer } from "../../../hooks/xensplit/types";
 import { xsCardSx } from "./components/rowStyles";
@@ -28,7 +29,13 @@ const cardSx = {
 
 export default function GroupSettlements() {
     const { balancesData, group, user, onSettle, deleteSettlement, isDeletingSettlement } = useOutletContext<GroupDetailContext>();
-    const [filter, setFilter] = useState<"all" | "mine" | "others">("all");
+    const navigate = useNavigate();
+    const { groupId } = useParams<{ groupId: string }>();
+    const lsKey = `xensplit_settlementsFilter_${groupId}`;
+    const [filter, setFilter] = useState<"all" | "mine" | "others">(() => {
+        const saved = localStorage.getItem(lsKey);
+        return saved === "mine" || saved === "others" ? saved : "all";
+    });
     const [showHistory, setShowHistory] = useState(false);
     const [viewPending, setViewPending] = useState<XenSplitSettlementTransfer | null>(null);
     const [viewSettlement, setViewSettlement] = useState<XenSplitSettlement | null>(null);
@@ -50,8 +57,8 @@ export default function GroupSettlements() {
     const filteredHistory = filter === "all"
         ? completedSettlements
         : filter === "mine"
-        ? completedSettlements.filter(s => s.from === user.id || s.to === user.id)
-        : completedSettlements.filter(s => s.from !== user.id && s.to !== user.id);
+            ? completedSettlements.filter(s => s.from === user.id || s.to === user.id)
+            : completedSettlements.filter(s => s.from !== user.id && s.to !== user.id);
 
     const getMember = (userId: string) => group.members.find((m) => m.user_id === userId);
 
@@ -67,12 +74,22 @@ export default function GroupSettlements() {
         <Box>
             <Box sx={{ mb: 2, minHeight: 48, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>Settlements</Typography>
-                <ToggleButtonGroup size="small" value={filter} exclusive onChange={(_, v) => v && setFilter(v)} sx={{ height: 24 }}>
+                <ToggleButtonGroup size="small" value={filter} exclusive onChange={(_, v) => { if (v) { setFilter(v); localStorage.setItem(lsKey, v); } }} sx={{ height: 24 }}>
                     <ToggleButton value="all" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>All</ToggleButton>
                     <ToggleButton value="mine" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>Mine</ToggleButton>
                     <ToggleButton value="others" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>Others</ToggleButton>
                 </ToggleButtonGroup>
             </Box>
+
+            <Button
+                fullWidth
+                variant="outlined"
+                startIcon={<HubIcon sx={{ fontSize: 18 }} />}
+                onClick={() => navigate(`/internal/xensplit/groups/${groupId}/explain`)}
+                sx={{ borderRadius: 2, fontWeight: 600, textTransform: "none", mb: 2.5 }}
+            >
+                Explain these settlements
+            </Button>
 
             {/* Pending */}
             {pendingSettlements.length > 0 && (

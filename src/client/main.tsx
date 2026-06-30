@@ -56,6 +56,7 @@ import GroupAnalytics from "./routes/Internal/Xensplit/GroupAnalytics";
 import GroupExpenses from "./routes/Internal/Xensplit/GroupExpenses";
 import GroupBalances from "./routes/Internal/Xensplit/GroupBalances";
 import GroupSettlements from "./routes/Internal/Xensplit/GroupSettlements";
+import GroupExplain from "./routes/Internal/Xensplit/GroupExplain";
 import GroupSettings from "./routes/Internal/Xensplit/GroupSettings";
 // Routes - Admin
 import Admin from "./routes/Admin/Admin";
@@ -169,6 +170,7 @@ const router = createBrowserRouter(
           <Route path="balances" element={<GroupBalances />} />
           <Route path="settlements" element={<GroupSettlements />} />
           <Route path="analytics" element={<GroupAnalytics />} />
+          <Route path="explain" element={<GroupExplain />} />
           <Route path="settings" element={<GroupSettings />} />
         </Route>
       </Route>

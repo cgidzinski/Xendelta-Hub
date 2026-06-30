@@ -100,6 +100,25 @@ export interface XenSplitBalancesData {
   settlements: XenSplitSettlementTransfer[];
 }
 
+// A raw, un-simplified debt between two members for a single currency,
+// derived directly from shared expenses (before the greedy meshing).
+export interface DirectDebt {
+  from: string;
+  to: string;
+  amount: number;
+  currency: string;
+}
+
+// One signed line item explaining a member's net balance in a currency.
+// The sum of `amount` across all lines equals the member's net balance.
+export interface BreakdownLine {
+  kind: "paid" | "share" | "settlement";
+  label: string;
+  hint?: string; // short plain-language explanation of the line's direction
+  amount: number; // signed: positive increases balance (owed to them), negative decreases
+  date?: string;
+}
+
 export interface CreateExpenseInput {
   paid_by: string;
   amount: number;

@@ -124,7 +124,7 @@ export default function GroupSettings() {
                 </Button>
             </Box>
             {/* Scrollable: members list */}
-            <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pb: { xs: 11, md: 1 } }}>
+            <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pb: { xs: 1, md: 1 } }}>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 {group.members.map((member) => {
                     const canMenu = member.user_id === user.id || (isCreator && member.user_id !== group.created_by);
