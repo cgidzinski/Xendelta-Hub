@@ -79,7 +79,6 @@ export default function DebtWebChart({
     const linksRef = useRef<SimLink[]>([]);
     const simRef = useRef<Simulation<SimNode, SimLink> | null>(null);
     const positionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
-    const shouldFitRef = useRef(false);
     const [, setTick] = useState(0);
 
     // Pan / zoom. viewRef mirrors state so pointer handlers read fresh values.
@@ -163,7 +162,6 @@ export default function DebtWebChart({
 
         nodesRef.current = nodes;
         linksRef.current = links;
-        shouldFitRef.current = true;
 
         const sim = forceSimulation<SimNode, SimLink>(nodes)
             .force("charge", forceManyBody().strength(-650).distanceMax(420))
@@ -185,16 +183,21 @@ export default function DebtWebChart({
                     if (n.x != null && n.y != null) positionsRef.current.set(n.id, { x: n.x, y: n.y });
                 }
                 setTick((t) => t + 1);
-            })
-            // Frame the whole graph once it has settled, but not after a drag.
-            .on("end", () => {
-                if (shouldFitRef.current) {
-                    shouldFitRef.current = false;
-                    fitView();
-                }
             });
 
+        // Pre-settle the layout synchronously (no paint), then halt the auto-run
+        // timer. This avoids the fly-in animation and lets us frame the graph from
+        // its final positions immediately — a deterministic auto-fit with no timer.
+        // Dragging later calls alphaTarget().restart() to reheat for interaction.
+        sim.tick(300);
+        sim.stop();
+        for (const n of nodes) {
+            if (n.x != null && n.y != null) positionsRef.current.set(n.id, { x: n.x, y: n.y });
+        }
         simRef.current = sim;
+        setTick((t) => t + 1);
+        fitView();
+
         return () => {
             sim.stop();
         };
@@ -217,14 +220,47 @@ export default function DebtWebChart({
         return { x: (sx - v.x) / v.k, y: (sy - v.y) / v.k };
     }, []);
 
-    // Interaction state: dragging a node, or panning the background.
+    // Interaction state: dragging a node, panning, or pinch-zooming.
     const dragId = useRef<string | null>(null);
     const downClient = useRef<{ x: number; y: number } | null>(null);
     const moved = useRef(false);
     const panLast = useRef<{ x: number; y: number } | null>(null);
+    // All active pointers (by id) so we can detect a two-finger pinch.
+    const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+    const pinchDist = useRef<number | null>(null);
+
+    const twoPointers = () => {
+        const pts = [...pointers.current.values()];
+        return { a: pts[0], b: pts[1] };
+    };
+    const isPinching = () => pointers.current.size >= 2 && pinchDist.current != null;
+
+    // Capture-phase: records every pointer (even ones starting on a node/edge) so
+    // a pinch is detected wherever the two fingers land.
+    const onPointerDownCapture = (evt: React.PointerEvent) => {
+        pointers.current.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+        if (pointers.current.size >= 2) {
+            // Entering a pinch — cancel any in-progress node drag / pan and capture
+            // both pointers so we keep getting their moves.
+            if (dragId.current) {
+                const node = nodesRef.current.find((n) => n.id === dragId.current);
+                if (node) { node.fx = null; node.fy = null; }
+                simRef.current?.alphaTarget(0);
+                dragId.current = null;
+                moved.current = false;
+            }
+            panLast.current = null;
+            for (const pid of pointers.current.keys()) {
+                try { svgRef.current?.setPointerCapture(pid); } catch { /* ignore */ }
+            }
+            const { a, b } = twoPointers();
+            pinchDist.current = a && b ? Math.hypot(a.x - b.x, a.y - b.y) : null;
+        }
+    };
 
     const onNodePointerDown = (id: string) => (evt: React.PointerEvent) => {
         evt.stopPropagation();
+        if (pointers.current.size >= 2) return; // pinch in progress
         // Don't capture or start a drag yet — wait until the finger actually
         // moves. A press that never moves is treated as a tap (selection), which
         // is essential for touch where a tap always jitters a few pixels.
@@ -234,12 +270,36 @@ export default function DebtWebChart({
     };
 
     const onBackgroundPointerDown = (evt: React.PointerEvent) => {
+        if (pointers.current.size >= 2) return; // pinch in progress
         // No pointer capture here: capturing on the svg would steal the `click`
-        // event from edges. Node dragging captures separately in onNodePointerDown.
+        // event from edges. Node dragging captures separately once it moves.
         panLast.current = { x: evt.clientX, y: evt.clientY };
     };
 
     const onPointerMove = (evt: React.PointerEvent) => {
+        if (pointers.current.has(evt.pointerId)) {
+            pointers.current.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+        }
+
+        if (isPinching()) {
+            const { a, b } = twoPointers();
+            if (!a || !b || pinchDist.current == null) return;
+            const dist = Math.hypot(a.x - b.x, a.y - b.y);
+            if (dist <= 0) return;
+            const rect = svgRef.current?.getBoundingClientRect();
+            const mx = (a.x + b.x) / 2 - (rect?.left ?? 0);
+            const my = (a.y + b.y) / 2 - (rect?.top ?? 0);
+            const factor = dist / pinchDist.current;
+            pinchDist.current = dist;
+            setView((v) => {
+                const k = Math.min(3, Math.max(0.3, v.k * factor));
+                const gx = (mx - v.x) / v.k;
+                const gy = (my - v.y) / v.k;
+                return { k, x: mx - gx * k, y: my - gy * k };
+            });
+            return;
+        }
+
         if (dragId.current) {
             // Promote to an actual drag only once the finger crosses the threshold.
             if (!moved.current) {
@@ -264,7 +324,14 @@ export default function DebtWebChart({
         }
     };
 
-    const onPointerUp = () => {
+    const onPointerUp = (evt: React.PointerEvent) => {
+        pointers.current.delete(evt.pointerId);
+        if (pointers.current.size < 2) {
+            pinchDist.current = null;
+            // If one finger remains, continue panning from it without a jump.
+            const remaining = [...pointers.current.values()][0];
+            panLast.current = remaining ? { x: remaining.x, y: remaining.y } : null;
+        }
         if (dragId.current && moved.current) {
             // End of a drag: release the pinned node back to the simulation.
             const node = nodesRef.current.find((n) => n.id === dragId.current);
@@ -278,7 +345,6 @@ export default function DebtWebChart({
         // here — opening on pointerup lets the trailing compat-click hit the
         // drawer backdrop and immediately close it (flicker).
         dragId.current = null;
-        panLast.current = null;
         downClient.current = null;
     };
 
@@ -328,9 +394,11 @@ export default function DebtWebChart({
                     ref={svgRef}
                     width={size.w}
                     height={size.h}
+                    onPointerDownCapture={onPointerDownCapture}
                     onPointerDown={onBackgroundPointerDown}
                     onPointerMove={onPointerMove}
                     onPointerUp={onPointerUp}
+                    onPointerCancel={onPointerUp}
                     style={{ display: "block", touchAction: "none", cursor: "grab", userSelect: "none", WebkitUserSelect: "none" }}
                 >
                     <defs>
