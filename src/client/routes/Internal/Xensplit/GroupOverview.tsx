@@ -35,10 +35,9 @@ export default function GroupOverview() {
         (s) => s.from === user.id || s.to === user.id
     );
 
-    // Activity feed — exclude held expenses not visible to this user
+    // Activity feed — includes held expenses, visible to all group members
     const feed: ActivityItem[] = [
         ...group.expenses
-            .filter((e) => !e.on_hold || e.created_by === user.id || group.created_by === user.id)
             .map((e) => ({ type: "expense" as const, date: e.date, expense: e })),
         ...group.settlements.map((s) => ({
             type: "settlement" as const,
