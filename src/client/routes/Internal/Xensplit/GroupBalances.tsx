@@ -46,14 +46,9 @@ export default function GroupBalances() {
                                         nonZeroBalances.map(([currency, amount]) => {
                                             const owed = (amount as number) >= 0;
                                             return (
-                                                <Box key={currency} sx={{ display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 0.5 }}>
-                                                    <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700, color: owed ? "success.main" : "error.main", lineHeight: 1.2 }}>
-                                                        {formatCurrency(Math.abs(amount as number), currency)}
-                                                    </Typography>
-                                                    <Typography variant="caption" sx={{ color: "text.primary", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3 }}>
-                                                        {owed ? "Owed" : "Owes"}
-                                                    </Typography>
-                                                </Box>
+                                                <Typography key={currency} variant="subtitle2" noWrap sx={{ fontWeight: 700, color: owed ? "success.main" : "error.main", lineHeight: 1.2 }}>
+                                                    {formatCurrency(Math.abs(amount as number), currency)}
+                                                </Typography>
                                             );
                                         })
                                     )}
