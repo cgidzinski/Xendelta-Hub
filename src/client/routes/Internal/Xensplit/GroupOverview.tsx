@@ -92,6 +92,7 @@ export default function GroupOverview() {
         }
         const s = item.settlement;
         const { from, to } = settleNames(s);
+        const involvesMe = s.from === user.id || s.to === user.id;
         return (
             <Box
                 key={`s-${dateKey}-${idx}`}
@@ -102,13 +103,13 @@ export default function GroupOverview() {
                     gridTemplateColumns: "40px 1fr auto",
                     alignItems: "center",
                     columnGap: 1.25,
-                    borderColor: (t) => alpha(t.palette.success.main, 0.4),
-                    bgcolor: (t) => alpha(t.palette.success.main, 0.06),
+                    borderColor: (t) => alpha(t.palette.secondary.main, 0.4),
+                    bgcolor: (t) => alpha(t.palette.secondary.main, 0.06),
                     cursor: "pointer",
                 }}
             >
-                <Box sx={{ ...xsBadgeSx, bgcolor: (t) => alpha(t.palette.success.main, 0.16) }}>
-                    <SwapHorizIcon sx={{ fontSize: 22, color: "success.main" }} />
+                <Box sx={{ ...xsBadgeSx, bgcolor: (t) => (involvesMe ? alpha(t.palette.success.main, 0.16) : t.palette.grey[800]) }}>
+                    <SwapHorizIcon sx={{ fontSize: 22, color: "secondary.main" }} />
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{from} → {to}</Typography>
