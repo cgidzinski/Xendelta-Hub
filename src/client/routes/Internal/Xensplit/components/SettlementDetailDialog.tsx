@@ -1,10 +1,11 @@
-import { useState } from "react";
-import { Box, Typography, Button, Avatar, Dialog, DialogContent, DialogActions, Chip } from "@mui/material";
+import { useEffect, useState } from "react";
+import { useSnackbar } from "notistack";
+import { Box, Typography, Button, Avatar, Dialog, DialogContent, DialogActions, TextField, Chip } from "@mui/material";
 import EastIcon from "@mui/icons-material/East";
 import UndoIcon from "@mui/icons-material/Undo";
 import CheckIcon from "@mui/icons-material/Check";
 import LockIcon from "@mui/icons-material/Lock";
-import type { XenSplitSettlement, XenSplitSettlementTransfer } from "../../../../hooks/xensplit/types";
+import type { XenSplitSettlement, XenSplitSettlementTransfer, SettleDebtInput } from "../../../../hooks/xensplit/types";
 import { formatCurrency } from "../../../../utils/currencyUtils";
 
 function PersonStack({ avatar, name }: { avatar?: string | null; name: string }) {
@@ -26,15 +27,48 @@ interface PendingProps {
     settlement: XenSplitSettlementTransfer | null;
     onClose: () => void;
     userId: string;
-    onSettle: (s: XenSplitSettlementTransfer) => void;
+    settleDebt: (input: SettleDebtInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
+    isSettling: boolean;
 }
 
-export function PendingSettlementDialog({ settlement, onClose, userId, onSettle }: PendingProps) {
+export function PendingSettlementDialog({ settlement, onClose, userId, settleDebt, isSettling }: PendingProps) {
+    const { enqueueSnackbar } = useSnackbar();
+    const [amount, setAmount] = useState("");
+    const [note, setNote] = useState("");
+
+    useEffect(() => {
+        if (settlement) {
+            setAmount(settlement.amount.toString());
+            setNote("");
+        }
+    }, [settlement]);
+
     if (!settlement) return null;
     const s = settlement;
     const direction = s.from === userId ? "You owe" : s.to === userId ? "Owed to you" : "Pending";
     const amountColor = s.from === userId ? "error.main" : s.to === userId ? "success.main" : "text.primary";
     const isInvolved = s.from === userId || s.to === userId;
+
+    const handleConfirm = () => {
+        settleDebt(
+            {
+                from: s.from,
+                to: s.to,
+                amount: parseFloat(amount),
+                currency: s.currency,
+                ...(note.trim() ? { note: note.trim() } : {}),
+            },
+            {
+                onSuccess: () => {
+                    enqueueSnackbar("Settled!", { variant: "success" });
+                    onClose();
+                },
+                onError: (error: Error) => {
+                    enqueueSnackbar(error?.message || "Failed to settle", { variant: "error" });
+                },
+            }
+        );
+    };
 
     return (
         <Dialog fullWidth maxWidth="xs" open={!!settlement} onClose={onClose} PaperProps={{ sx: { borderRadius: 3 } }}>
@@ -47,12 +81,38 @@ export function PendingSettlementDialog({ settlement, onClose, userId, onSettle 
                 </Typography>
             </Box>
 
-            <DialogContent sx={{ px: 3, pt: 1.5, pb: 2 }}>
+            <DialogContent sx={{ px: 3, pt: 1.5, pb: 2, display: "flex", flexDirection: "column", gap: 2 }}>
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 24px 1fr", alignItems: "center", bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
                     <PersonStack avatar={s.fromUser.avatar} name={s.fromUser.username} />
                     <EastIcon sx={{ fontSize: 20, color: "text.disabled" }} />
                     <PersonStack avatar={s.toUser.avatar} name={s.toUser.username} />
                 </Box>
+
+                {isInvolved && (
+                    <>
+                        <TextField
+                            label="Amount"
+                            type="number"
+                            fullWidth
+                            size="small"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            inputProps={{ min: 0.01, step: 0.01 }}
+                            InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5, color: "text.secondary" }}>{s.currency}</Typography> }}
+                        />
+                        <TextField
+                            label="Note (optional)"
+                            fullWidth
+                            size="small"
+                            multiline
+                            rows={2}
+                            value={note}
+                            onChange={(e) => setNote(e.target.value)}
+                            inputProps={{ maxLength: 500 }}
+                            helperText="Only visible between you and the other party"
+                        />
+                    </>
+                )}
             </DialogContent>
 
             {isInvolved && (
@@ -62,9 +122,11 @@ export function PendingSettlementDialog({ settlement, onClose, userId, onSettle 
                         variant="contained"
                         color="success"
                         startIcon={<CheckIcon />}
-                        onClick={() => { onSettle(s); onClose(); }}
+                        disabled={isSettling || !amount || parseFloat(amount) <= 0}
+                        loading={isSettling}
+                        onClick={handleConfirm}
                     >
-                        Mark as Settled
+                        Confirm Settlement
                     </Button>
                 </DialogActions>
             )}

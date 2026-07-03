@@ -27,14 +27,11 @@ import {
   MenuItem,
   Divider,
   CircularProgress,
-  TextField,
   Fab,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import EastIcon from "@mui/icons-material/East";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import DeleteIcon from "@mui/icons-material/Delete";
 import GroupRemoveIcon from "@mui/icons-material/GroupRemove";
@@ -59,7 +56,7 @@ import { SearchedUser } from "../../../hooks/useUserSearch";
 import ExpenseForm from "./components/ExpenseForm";
 import GroupAvatar from "./components/GroupAvatar";
 import { apiClient } from "../../../config/api";
-import type { XenSplit, XenSplitBalancesData, XenSplitExpense, XenSplitSettlementTransfer } from "../../../hooks/xensplit/types";
+import type { XenSplit, XenSplitBalancesData, XenSplitExpense, SettleDebtInput } from "../../../hooks/xensplit/types";
 
 export interface GroupDetailContext {
   group: XenSplit;
@@ -69,7 +66,8 @@ export interface GroupDetailContext {
   onAddExpense: () => void;
   onEditExpense: (expense: XenSplitExpense) => void;
   onViewExpense: (expense: XenSplitExpense) => void;
-  onSettle: (settlement: XenSplitSettlementTransfer) => void;
+  settleDebt: (input: SettleDebtInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
+  isSettlingDebt: boolean;
   onAddMembers: () => void;
   onMemberMenu: (memberId: string, anchor: HTMLElement) => void;
   updateGroup: (updates: { name?: string; default_currency?: string }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
@@ -137,10 +135,6 @@ export default function GroupDetail() {
   const [editDate, setEditDate] = useState<Date>(new Date());
   const [editCategory, setEditCategory] = useState("");
   const [editOnHold, setEditOnHold] = useState(false);
-  const [showSettleModal, setShowSettleModal] = useState(false);
-  const [selectedSettlement, setSelectedSettlement] = useState<XenSplitSettlementTransfer | null>(null);
-  const [settleAmount, setSettleAmount] = useState("");
-  const [settleNote, setSettleNote] = useState("");
   const [showViewExpenseModal, setShowViewExpenseModal] = useState(false);
   const [viewExpenseItem, setViewExpenseItem] = useState<XenSplitExpense | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -454,12 +448,8 @@ export default function GroupDetail() {
       setViewExpenseItem(expense);
       setShowViewExpenseModal(true);
     },
-    onSettle: (settlement) => {
-      setSelectedSettlement(settlement);
-      setSettleAmount(settlement.amount.toString());
-      setSettleNote("");
-      setShowSettleModal(true);
-    },
+    settleDebt,
+    isSettlingDebt,
     onAddMembers: () => setShowAddMemberModal(true),
     onMemberMenu: (memberId, anchor) => {
       setMenuAnchor(anchor);
@@ -977,138 +967,6 @@ export default function GroupDetail() {
             </>
           );
         })()}
-      </Dialog>
-
-      <Dialog
-        fullWidth
-        maxWidth="xs"
-        open={showSettleModal}
-        onClose={() => { setShowSettleModal(false); setSettleNote(""); }}
-        PaperProps={{ sx: { borderRadius: 3 } }}
-      >
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2.5 }}>
-          <DialogTitle sx={{ fontWeight: 700, p: 0, fontSize: "1.15rem" }}>Confirm Settlement</DialogTitle>
-          <IconButton onClick={() => setShowSettleModal(false)} size="small">
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </Box>
-        <DialogContent sx={{ px: 3, pt: 2, pb: 1 }}>
-          {selectedSettlement && (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {/* Flow visualization */}
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1.5,
-                  p: 2.5,
-                  bgcolor: "action.hover",
-                  borderRadius: 3,
-                }}
-              >
-                {/* From user */}
-                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.75, flex: 1 }}>
-                  <Avatar
-                    src={selectedSettlement.fromUser.avatar || undefined}
-                    sx={{ width: 52, height: 52 }}
-                  >
-                    {selectedSettlement.fromUser.username[0]?.toUpperCase()}
-                  </Avatar>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }} noWrap>
-                    {selectedSettlement.fromUser.username}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">Paying</Typography>
-                </Box>
-
-                {/* Arrow + amount */}
-                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "success.main", whiteSpace: "nowrap" }}>
-                    {formatCurrency(selectedSettlement.amount, selectedSettlement.currency)}
-                  </Typography>
-                  <EastIcon sx={{ fontSize: 28, color: "success.main" }} />
-                </Box>
-
-                {/* To user */}
-                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.75, flex: 1 }}>
-                  <Avatar
-                    src={selectedSettlement.toUser.avatar || undefined}
-                    sx={{ width: 52, height: 52 }}
-                  >
-                    {selectedSettlement.toUser.username[0]?.toUpperCase()}
-                  </Avatar>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }} noWrap>
-                    {selectedSettlement.toUser.username}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">Receiving</Typography>
-                </Box>
-              </Box>
-
-              <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>
-                Confirm that <strong>{selectedSettlement.fromUser.username}</strong> has paid <strong>{selectedSettlement.toUser.username}</strong>.
-              </Typography>
-
-              <TextField
-                label="Amount"
-                type="number"
-                fullWidth
-                size="small"
-                value={settleAmount}
-                onChange={(e) => setSettleAmount(e.target.value)}
-                inputProps={{ min: 0.01, step: 0.01 }}
-                InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5, color: "text.secondary" }}>{selectedSettlement.currency}</Typography> }}
-              />
-              <TextField
-                label="Note (optional)"
-                fullWidth
-                size="small"
-                multiline
-                rows={2}
-                value={settleNote}
-                onChange={(e) => setSettleNote(e.target.value)}
-                inputProps={{ maxLength: 500 }}
-                helperText="Only visible between you and the other party"
-              />
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3, pt: 2 }}>
-          <Button
-            fullWidth
-            variant="contained"
-            color="success"
-            startIcon={<CheckIcon />}
-            disabled={isSettlingDebt || !settleAmount || parseFloat(settleAmount) <= 0}
-            loading={isSettlingDebt}
-            onClick={async () => {
-              if (!selectedSettlement) return;
-              await new Promise<void>((resolve) => {
-                settleDebt(
-                  {
-                    from: selectedSettlement.from,
-                    to: selectedSettlement.to,
-                    amount: parseFloat(settleAmount),
-                    currency: selectedSettlement.currency,
-                    ...(settleNote.trim() ? { note: settleNote.trim() } : {}),
-                  },
-                  {
-                    onSuccess: () => {
-                      enqueueSnackbar("Settled!", { variant: "success" });
-                      setShowSettleModal(false);
-                      setSettleNote("");
-                      resolve();
-                    },
-                    onError: (error: Error) => {
-                      enqueueSnackbar(error?.message || "Failed to settle", { variant: "error" });
-                      resolve();
-                    },
-                  }
-                );
-              });
-            }}
-          >
-            Confirm
-          </Button>
-        </DialogActions>
       </Dialog>
 
       {/* Lightbox */}

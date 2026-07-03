@@ -28,7 +28,7 @@ const cardSx = {
 } as const;
 
 export default function GroupSettlements() {
-    const { balancesData, group, user, onSettle, deleteSettlement, isDeletingSettlement } = useOutletContext<GroupDetailContext>();
+    const { balancesData, group, user, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useOutletContext<GroupDetailContext>();
     const navigate = useNavigate();
     const { groupId } = useParams<{ groupId: string }>();
     const lsKey = `xensplit_settlementsFilter_${groupId}`;
@@ -176,7 +176,8 @@ export default function GroupSettlements() {
                 settlement={viewPending}
                 onClose={() => setViewPending(null)}
                 userId={user.id}
-                onSettle={onSettle}
+                settleDebt={settleDebt}
+                isSettling={isSettlingDebt}
             />
 
             <SettlementDetailDialog
