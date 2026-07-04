@@ -34,7 +34,7 @@ var inventoryItemSchema = new mongoose.Schema({
 var userSchema = new mongoose.Schema({
   name: { type: String },
   username: { type: String },
-  email: { type: String },
+  email: { type: String, lowercase: true, trim: true, unique: true, sparse: true, index: true },
   avatar: { type: String, default: "/avatars/default-avatar.png" }, // Direct GCS public URL or local default
   roles: [{ type: String }],
   password: { type: String }, // For local authentication

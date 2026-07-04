@@ -61,24 +61,25 @@ passport.use(new GoogleStrategy(googleOptions, async (accessToken, refreshToken,
     }
     
     // Check if user exists with same email (for account linking)
-    user = await User.findOne({ email: profile.emails?.[0]?.value }).exec();
-    
+    const googleEmail = profile.emails?.[0]?.value?.toLowerCase();
+    user = await User.findOne({ email: googleEmail }).exec();
+
     if (user) {
       // Link Google account to existing user
-      await user.addAuthProvider('google', profile.id, profile.emails?.[0]?.value);
+      await user.addAuthProvider('google', profile.id, googleEmail);
       return done(null, user);
     }
-    
+
     // Create new user
     user = new User({
-      username: profile.displayName || profile.emails?.[0]?.value?.split('@')[0],
-      email: profile.emails?.[0]?.value,
+      username: profile.displayName || googleEmail?.split('@')[0],
+      email: googleEmail,
       avatar: profile.photos?.[0]?.value || '/avatars/default-avatar.png',
       notifications: []
     });
-    
+
     // Add Google as auth provider
-    await user.addAuthProvider('google', profile.id, profile.emails?.[0]?.value);
+    await user.addAuthProvider('google', profile.id, googleEmail);
     
     await user.save();
     
@@ -100,7 +101,7 @@ const githubOptions = {
 passport.use(new GitHubStrategy(githubOptions, async (accessToken: string, refreshToken: string, profile: any, done: (error: any, user?: any) => void) => {
   try {
     // Get email from profile (now available with user:email scope)
-    const userEmail = profile.emails?.[0]?.value;
+    const userEmail = profile.emails?.[0]?.value?.toLowerCase();
 
     if (!userEmail) {
       console.warn('No email found in GitHub profile despite user:email scope');
@@ -132,7 +133,7 @@ passport.use(new GitHubStrategy(githubOptions, async (accessToken: string, refre
     // Create new user
     user = new User({
       username: profile.username || profile.displayName || userEmail?.split('@')[0] || 'github-user',
-      email: userEmail || `${profile.username}@github.local`, // Fallback email if no email available
+      email: userEmail || `${profile.username}@github.local`.toLowerCase(), // Fallback email if no email available
       avatar: profile.photos?.[0]?.value || '/avatars/default-avatar.png',
       notifications: []
     });
@@ -160,7 +161,7 @@ const discordOptions = {
 // Discord OAuth Strategy
 passport.use(new DiscordStrategy(discordOptions, async (accessToken: string, refreshToken: string, profile: any, done: (error: any, user?: any) => void) => {
   try {
-    const userEmail = profile.email || profile.emails?.[0]?.value;
+    const userEmail = (profile.email || profile.emails?.[0]?.value)?.toLowerCase();
 
     if (!userEmail) {
       console.warn('No email found in Discord profile');
