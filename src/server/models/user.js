@@ -52,6 +52,7 @@ var userSchema = new mongoose.Schema({
   xenlink: [{ type: Schema.Types.ObjectId, ref: "XenLink" }],
   pinnedApps: [{ type: String }],
   inventory: [inventoryItemSchema],
+  notificationsLastCheckedAt: { type: Date },
 });
 userSchema.methods.generateHash = function (password) {
   return bcrypt.hashSync(password, bcrypt.genSaltSync(8), null);

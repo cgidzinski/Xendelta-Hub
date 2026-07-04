@@ -105,12 +105,13 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
         return [data.notification, ...oldData].slice(0, 10);
       });
 
-      // Update user profile to reflect unread notification
+      // Update user profile to reflect unread notification and new notification
       queryClient.setQueryData(userProfileKeys.profile(), (oldProfileData: any) => {
         if (oldProfileData) {
           return {
             ...oldProfileData,
             unread_notifications: true,
+            has_new_notifications: true,
           };
         }
         return oldProfileData;
@@ -174,7 +175,12 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
   // Function to manually trigger the notifications fetch
   const fetchNotifications = () => {
     if (isAuthenticated) {
-      refetch();
+      refetch().then(() => {
+        queryClient.setQueryData(userProfileKeys.profile(), (oldData: any) => {
+          if (oldData) return { ...oldData, has_new_notifications: false };
+          return oldData;
+        });
+      });
     }
   };
 

@@ -27,6 +27,10 @@ module.exports = function (app: express.Application) {
     const unreadNotificationsCount = await Notification.countDocuments({ userId, unread: true });
     const hasUnreadNotifications = unreadNotificationsCount > 0;
 
+    // Check for new notifications since last checked
+    const lastChecked = user.notificationsLastCheckedAt ? user.notificationsLastCheckedAt.toISOString() : new Date(0).toISOString();
+    const hasNewNotifications = await Notification.exists({ userId, time: { $gt: lastChecked } });
+
     // Calculate xenbox quota stats from populated files
     const xenboxFiles = user.xenbox?.files || [];
     const fileCount = xenboxFiles.length;
@@ -44,6 +48,7 @@ module.exports = function (app: express.Application) {
           points: user.points || 0,
           unread_messages: hasUnreadMessages,
           unread_notifications: hasUnreadNotifications,
+          has_new_notifications: !!hasNewNotifications,
           pinnedApps: user.pinnedApps || [],
           xenbox: {
             fileCount: fileCount,
@@ -101,6 +106,7 @@ module.exports = function (app: express.Application) {
             avatar: user.avatar || "/avatars/default-avatar.png",
             unread_messages: false,
             unread_notifications: true,
+            has_new_notifications: true,
           },
         },
       });
