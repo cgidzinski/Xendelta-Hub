@@ -27,7 +27,7 @@ import { SearchedUser } from "../../../../hooks/useUserSearch";
 import type { XenSplitExpenseImage } from "../../../../hooks/xensplit/types";
 import { getSortedCurrencies, getCurrencySymbol } from "../../../../utils/currencyUtils";
 import { EXPENSE_CATEGORIES } from "../../../../constants/xensplit";
-import { getCategoryIcon } from "../../../../constants/xensplitCategoryIcons";
+import { getCategoryIcon, getCategoryColor } from "../../../../constants/xensplitCategoryIcons";
 import { xsBadgeSx } from "./rowStyles";
 
 const MAX_IMAGES = 10;
@@ -569,8 +569,8 @@ export default function ExpenseForm({
             </Box>
           )}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <Avatar sx={{ bgcolor: "grey.800", width: 40, height: 40 }}>
-              <CategoryIconComponent sx={{ fontSize: 20, color: "text.secondary" }} />
+            <Avatar sx={{ bgcolor: getCategoryColor(category), width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+              <CategoryIconComponent sx={{ fontSize: 22, color: "grey.900" }} />
             </Avatar>
             <FormControl fullWidth>
               <InputLabel>Category (optional)</InputLabel>
