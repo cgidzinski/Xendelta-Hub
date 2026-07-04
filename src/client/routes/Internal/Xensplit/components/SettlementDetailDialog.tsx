@@ -1,11 +1,13 @@
-import { useState } from "react";
-import { Box, Typography, Button, Avatar, Dialog, DialogContent, DialogActions, Chip } from "@mui/material";
+import { useEffect, useState } from "react";
+import { useSnackbar } from "notistack";
+import { Box, Typography, Button, Avatar, Dialog, DialogContent, DialogActions, TextField, InputAdornment, Chip, IconButton } from "@mui/material";
 import EastIcon from "@mui/icons-material/East";
 import UndoIcon from "@mui/icons-material/Undo";
 import CheckIcon from "@mui/icons-material/Check";
+import CloseIcon from "@mui/icons-material/Close";
 import LockIcon from "@mui/icons-material/Lock";
-import type { XenSplitSettlement, XenSplitSettlementTransfer } from "../../../../hooks/xensplit/types";
-import { formatCurrency } from "../../../../utils/currencyUtils";
+import type { XenSplitSettlement, XenSplitSettlementTransfer, SettleDebtInput } from "../../../../hooks/xensplit/types";
+import { formatCurrency, sanitizeAmount } from "../../../../utils/currencyUtils";
 
 function PersonStack({ avatar, name }: { avatar?: string | null; name: string }) {
     return (
@@ -26,19 +28,55 @@ interface PendingProps {
     settlement: XenSplitSettlementTransfer | null;
     onClose: () => void;
     userId: string;
-    onSettle: (s: XenSplitSettlementTransfer) => void;
+    settleDebt: (input: SettleDebtInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
+    isSettling: boolean;
 }
 
-export function PendingSettlementDialog({ settlement, onClose, userId, onSettle }: PendingProps) {
+export function PendingSettlementDialog({ settlement, onClose, userId, settleDebt, isSettling }: PendingProps) {
+    const { enqueueSnackbar } = useSnackbar();
+    const [amount, setAmount] = useState("");
+    const [note, setNote] = useState("");
+
+    useEffect(() => {
+        if (settlement) {
+            setAmount(settlement.amount.toString());
+            setNote("");
+        }
+    }, [settlement]);
+
     if (!settlement) return null;
     const s = settlement;
     const direction = s.from === userId ? "You owe" : s.to === userId ? "Owed to you" : "Pending";
     const amountColor = s.from === userId ? "error.main" : s.to === userId ? "success.main" : "text.primary";
     const isInvolved = s.from === userId || s.to === userId;
 
+    const handleConfirm = () => {
+        settleDebt(
+            {
+                from: s.from,
+                to: s.to,
+                amount: parseFloat(amount),
+                currency: s.currency,
+                ...(note.trim() ? { note: note.trim() } : {}),
+            },
+            {
+                onSuccess: () => {
+                    enqueueSnackbar("Settled!", { variant: "success" });
+                    onClose();
+                },
+                onError: (error: Error) => {
+                    enqueueSnackbar(error?.message || "Failed to settle", { variant: "error" });
+                },
+            }
+        );
+    };
+
     return (
         <Dialog fullWidth maxWidth="xs" open={!!settlement} onClose={onClose} PaperProps={{ sx: { borderRadius: 3 } }}>
-            <Box sx={{ pt: 3, pb: 1, px: 3, textAlign: "center" }}>
+            <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
+                <IconButton onClick={onClose} size="small" sx={{ position: "absolute", top: 12, right: 12 }}>
+                    <CloseIcon fontSize="small" />
+                </IconButton>
                 <Typography variant="h4" sx={{ fontWeight: 800, color: amountColor, letterSpacing: "-0.02em" }}>
                     {formatCurrency(s.amount, s.currency)}
                 </Typography>
@@ -47,12 +85,46 @@ export function PendingSettlementDialog({ settlement, onClose, userId, onSettle 
                 </Typography>
             </Box>
 
-            <DialogContent sx={{ px: 3, pt: 1.5, pb: 2 }}>
+            <DialogContent sx={{ px: 3, pt: 1.5, pb: 2, display: "flex", flexDirection: "column", gap: 2 }}>
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 24px 1fr", alignItems: "center", bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
                     <PersonStack avatar={s.fromUser.avatar} name={s.fromUser.username} />
                     <EastIcon sx={{ fontSize: 20, color: "text.disabled" }} />
                     <PersonStack avatar={s.toUser.avatar} name={s.toUser.username} />
                 </Box>
+
+                {isInvolved && (
+                    <>
+                        <TextField
+                            label="Amount"
+                            fullWidth
+                            size="small"
+                            value={amount}
+                            onChange={(e) => {
+                                const v = sanitizeAmount(e.target.value);
+                                if (v !== null) setAmount(v);
+                            }}
+                            onBlur={() => {
+                                const n = parseFloat(amount);
+                                if (!isNaN(n)) setAmount(n.toFixed(2));
+                            }}
+                            slotProps={{
+                                htmlInput: { inputMode: "decimal" },
+                                input: { endAdornment: <InputAdornment position="end">{s.currency}</InputAdornment> },
+                            }}
+                        />
+                        <TextField
+                            label="Note (optional)"
+                            fullWidth
+                            size="small"
+                            multiline
+                            rows={2}
+                            value={note}
+                            onChange={(e) => setNote(e.target.value)}
+                            inputProps={{ maxLength: 500 }}
+                            helperText="Only visible between you and the other party"
+                        />
+                    </>
+                )}
             </DialogContent>
 
             {isInvolved && (
@@ -62,9 +134,11 @@ export function PendingSettlementDialog({ settlement, onClose, userId, onSettle 
                         variant="contained"
                         color="success"
                         startIcon={<CheckIcon />}
-                        onClick={() => { onSettle(s); onClose(); }}
+                        disabled={isSettling || !amount || parseFloat(amount) <= 0}
+                        loading={isSettling}
+                        onClick={handleConfirm}
                     >
-                        Mark as Settled
+                        Confirm Settlement
                     </Button>
                 </DialogActions>
             )}
@@ -103,7 +177,10 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
     return (
         <>
             <Dialog fullWidth maxWidth="xs" open={!!settlement} onClose={onClose} PaperProps={{ sx: { borderRadius: 3 } }}>
-                <Box sx={{ pt: 3, pb: 1, px: 3, textAlign: "center" }}>
+                <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
+                    <IconButton onClick={onClose} size="small" sx={{ position: "absolute", top: 12, right: 12 }}>
+                        <CloseIcon fontSize="small" />
+                    </IconButton>
                     <Typography variant="h4" sx={{ fontWeight: 800, color: "success.main", letterSpacing: "-0.02em" }}>
                         {formatCurrency(s.amount, s.currency)}
                     </Typography>

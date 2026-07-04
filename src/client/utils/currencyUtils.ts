@@ -16,3 +16,11 @@ export function getSortedCurrencies(defaultCurrency?: string): string[] {
   if (!defaultCurrency) return ALL_CURRENCIES;
   return [defaultCurrency, ...ALL_CURRENCIES.filter((c) => c !== defaultCurrency)];
 }
+
+// Accepts only digits and a single decimal separator (comma normalized to dot).
+// Returns the sanitized string, or null if the keystroke should be rejected.
+export function sanitizeAmount(raw: string): string | null {
+  const normalized = raw.replace(/,/g, ".");
+  if (!/^\d*\.?\d*$/.test(normalized)) return null;
+  return normalized;
+}

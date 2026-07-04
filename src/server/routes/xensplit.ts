@@ -803,14 +803,15 @@ module.exports = function (app: any) {
         return res.status(403).json({ status: false, message: "Can only settle your own debts" });
       }
 
-      // Determine if this is a partial settlement
+      // Determine if this is a partial settlement by comparing against each
+      // party's own net balance, not the greedy minimum-transfer suggestions
+      // (which can route a pair's debt through a third member and miss it).
       const groupObjForCalc = { ...group.toObject(), members: group.toObject().members.map((m: any) => m.toString()) };
       const currentBalances = calculateBalances(groupObjForCalc);
-      const suggestedTransfers = calculateMinimumTransfers(currentBalances);
-      const matchedTransfer = suggestedTransfers.find(
-        (t: any) => t.from === from && t.to === to && t.currency === currency
-      );
-      const is_partial = matchedTransfer ? amount < matchedTransfer.amount - 0.01 : false;
+      const fromBal = currentBalances[from]?.[currency] ?? 0;
+      const toBal = currentBalances[to]?.[currency] ?? 0;
+      const maxSensibleAmount = Math.min(Math.max(0, -fromBal), Math.max(0, toBal));
+      const is_partial = amount < maxSensibleAmount - 0.01;
 
       group.settlements.push({
         from,
