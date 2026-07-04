@@ -71,7 +71,6 @@ export default function GroupOverview() {
         return groups;
     }, [filteredFeed]);
 
-    const timeStr = (d: string) => new Date(d).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
     const settleNames = (s: XenSplitSettlement) => ({
         from: s.from === user.id ? "You" : getMember(s.from)?.username ?? "?",
         to: s.to === user.id ? "you" : getMember(s.to)?.username ?? "?",
@@ -113,13 +112,13 @@ export default function GroupOverview() {
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{from} → {to}</Typography>
-                    <Typography variant="caption" sx={{ color: "primary.main", fontWeight: 600, display: "block" }} noWrap>
+                    <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
                         Settlement{s.is_partial ? " · Partial" : ""}
                     </Typography>
                 </Box>
                 <Box sx={{ textAlign: "right", flexShrink: 0 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, color: s.from === user.id ? "error.main" : s.to === user.id ? "success.main" : "text.primary", lineHeight: 1.3 }}>{formatCurrency(s.amount, s.currency)}</Typography>
-                    <Typography variant="caption" color="text.disabled" sx={{ display: "block", lineHeight: 1.2 }}>{timeStr(s.settled_at)}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.2 }}>{s.is_partial ? "Partial" : "Full"}</Typography>
                 </Box>
             </Box>
         );

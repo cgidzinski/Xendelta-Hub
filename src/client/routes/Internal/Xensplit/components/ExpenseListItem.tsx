@@ -31,7 +31,7 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
                 ...xsCardSx,
                 display: "grid",
                 gridTemplateColumns: "40px 1fr auto",
-                alignItems: "center",
+                alignItems: "flex-start",
                 columnGap: 1.25,
                 cursor: "pointer",
                 "&:hover": { bgcolor: "action.hover" },
@@ -71,7 +71,7 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
                     />
                 )}
             </Box>
-            <Box sx={{ textAlign: "right", flexShrink: 0 }}>
+            <Box sx={{ textAlign: "right", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: isPayer ? "error.main" : "text.primary", lineHeight: 1.3 }}>
                     {formatCurrency(expense.amount, expense.currency)}
                 </Typography>
