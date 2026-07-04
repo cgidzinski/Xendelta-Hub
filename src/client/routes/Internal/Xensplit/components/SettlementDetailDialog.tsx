@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useSnackbar } from "notistack";
-import { Box, Typography, Button, Avatar, Dialog, DialogContent, DialogActions, TextField, Chip } from "@mui/material";
+import { Box, Typography, Button, Avatar, Dialog, DialogContent, DialogActions, TextField, InputAdornment, Chip, IconButton } from "@mui/material";
 import EastIcon from "@mui/icons-material/East";
 import UndoIcon from "@mui/icons-material/Undo";
 import CheckIcon from "@mui/icons-material/Check";
+import CloseIcon from "@mui/icons-material/Close";
 import LockIcon from "@mui/icons-material/Lock";
 import type { XenSplitSettlement, XenSplitSettlementTransfer, SettleDebtInput } from "../../../../hooks/xensplit/types";
-import { formatCurrency } from "../../../../utils/currencyUtils";
+import { formatCurrency, sanitizeAmount } from "../../../../utils/currencyUtils";
 
 function PersonStack({ avatar, name }: { avatar?: string | null; name: string }) {
     return (
@@ -72,7 +73,10 @@ export function PendingSettlementDialog({ settlement, onClose, userId, settleDeb
 
     return (
         <Dialog fullWidth maxWidth="xs" open={!!settlement} onClose={onClose} PaperProps={{ sx: { borderRadius: 3 } }}>
-            <Box sx={{ pt: 3, pb: 1, px: 3, textAlign: "center" }}>
+            <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
+                <IconButton onClick={onClose} size="small" sx={{ position: "absolute", top: 12, right: 12 }}>
+                    <CloseIcon fontSize="small" />
+                </IconButton>
                 <Typography variant="h4" sx={{ fontWeight: 800, color: amountColor, letterSpacing: "-0.02em" }}>
                     {formatCurrency(s.amount, s.currency)}
                 </Typography>
@@ -92,13 +96,21 @@ export function PendingSettlementDialog({ settlement, onClose, userId, settleDeb
                     <>
                         <TextField
                             label="Amount"
-                            type="number"
                             fullWidth
                             size="small"
                             value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            inputProps={{ min: 0.01, step: 0.01 }}
-                            InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5, color: "text.secondary" }}>{s.currency}</Typography> }}
+                            onChange={(e) => {
+                                const v = sanitizeAmount(e.target.value);
+                                if (v !== null) setAmount(v);
+                            }}
+                            onBlur={() => {
+                                const n = parseFloat(amount);
+                                if (!isNaN(n)) setAmount(n.toFixed(2));
+                            }}
+                            slotProps={{
+                                htmlInput: { inputMode: "decimal" },
+                                input: { endAdornment: <InputAdornment position="end">{s.currency}</InputAdornment> },
+                            }}
                         />
                         <TextField
                             label="Note (optional)"
@@ -165,7 +177,10 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
     return (
         <>
             <Dialog fullWidth maxWidth="xs" open={!!settlement} onClose={onClose} PaperProps={{ sx: { borderRadius: 3 } }}>
-                <Box sx={{ pt: 3, pb: 1, px: 3, textAlign: "center" }}>
+                <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
+                    <IconButton onClick={onClose} size="small" sx={{ position: "absolute", top: 12, right: 12 }}>
+                        <CloseIcon fontSize="small" />
+                    </IconButton>
                     <Typography variant="h4" sx={{ fontWeight: 800, color: "success.main", letterSpacing: "-0.02em" }}>
                         {formatCurrency(s.amount, s.currency)}
                     </Typography>

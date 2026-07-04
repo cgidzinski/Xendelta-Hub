@@ -25,7 +25,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { SearchedUser } from "../../../../hooks/useUserSearch";
 import type { XenSplitExpenseImage } from "../../../../hooks/xensplit/types";
-import { getSortedCurrencies, getCurrencySymbol } from "../../../../utils/currencyUtils";
+import { getSortedCurrencies, getCurrencySymbol, sanitizeAmount } from "../../../../utils/currencyUtils";
 import { EXPENSE_CATEGORIES } from "../../../../constants/xensplit";
 import { getCategoryIcon } from "../../../../constants/xensplitCategoryIcons";
 import { xsBadgeSx } from "./rowStyles";
@@ -128,14 +128,6 @@ export default function ExpenseForm({
 
   const numAmount = parseFloat(amount) || 0;
   const CategoryIconComponent = getCategoryIcon(category);
-
-  // Accepts only digits and a single decimal separator (comma normalized to dot).
-  // Returns the sanitized string, or null if the keystroke should be rejected.
-  const sanitizeAmount = (raw: string): string | null => {
-    const normalized = raw.replace(/,/g, ".");
-    if (!/^\d*\.?\d*$/.test(normalized)) return null;
-    return normalized;
-  };
 
   // Fills the untouched split boxes with an even share of the remainder when a box is edited.
   const handleSplitChange = (id: string, raw: string, type: "exact" | "percent") => {
