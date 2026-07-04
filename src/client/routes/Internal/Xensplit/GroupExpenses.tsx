@@ -22,14 +22,14 @@ export default function GroupExpenses() {
     const [search, setSearch] = useState("");
     const [dateFilter, setDateFilter] = useState<DateFilter>("all");
 
-    // Held expenses visible to this user (expense creator or group creator) — exempt from date filter
+    // Held expenses, visible to all group members — exempt from date filter
     const heldVisible = useMemo(() => {
         const q = search.trim().toLowerCase();
         return [...group.expenses]
-            .filter((e) => e.on_hold && (e.created_by === user.id || group.created_by === user.id))
+            .filter((e) => e.on_hold)
             .filter((e) => !q || e.title.toLowerCase().includes(q))
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [group.expenses, search, user.id, group.created_by]);
+    }, [group.expenses, search]);
 
     // Active expenses only — subject to date + search filters
     const sortedExpenses = useMemo(() => {
