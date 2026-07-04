@@ -20,8 +20,6 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
         ? (mySplit.amount_owed ?? (expense.splits.length ? expense.amount / expense.splits.length : 0))
         : 0;
     const involvesMe = userId ? (isPayer || expense.splits.some((sp) => sp.user_id === userId)) : false;
-    // Avatar background: red if you paid, blue if it involves you, neutral otherwise.
-    const badgeAccent = isPayer ? "error" : involvesMe ? "primary" : undefined;
     const dateStr = new Date(expense.date).toLocaleDateString(undefined, { month: "short", day: "numeric" });
     const CategoryIcon = getCategoryIcon(expense.category);
     const categoryColor = getCategoryColor(expense.category);
@@ -37,13 +35,15 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
                 columnGap: 1.25,
                 cursor: "pointer",
                 "&:hover": { bgcolor: "action.hover" },
+                borderColor: (t) => (involvesMe ? alpha(t.palette.secondary.main, 0.4) : "inherit"),
+                bgcolor: (t) => (involvesMe ? alpha(t.palette.secondary.main, 0.06) : "inherit"),
             }}
         >
             <Avatar
                 sx={{
                     width: 40,
                     height: 40,
-                    bgcolor: (t) => (badgeAccent ? alpha(t.palette[badgeAccent].main, 0.16) : "grey.800"),
+                    bgcolor: "grey.800",
                 }}
             >
                 <CategoryIcon sx={{ fontSize: 22, color: categoryColor }} />

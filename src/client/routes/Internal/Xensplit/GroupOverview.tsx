@@ -103,12 +103,12 @@ export default function GroupOverview() {
                     gridTemplateColumns: "40px 1fr auto",
                     alignItems: "center",
                     columnGap: 1.25,
-                    borderColor: (t) => alpha(t.palette.secondary.main, 0.4),
-                    bgcolor: (t) => alpha(t.palette.secondary.main, 0.06),
+                    borderColor: (t) => (involvesMe ? alpha(t.palette.secondary.main, 0.4) : "inherit"),
+                    bgcolor: (t) => (involvesMe ? alpha(t.palette.secondary.main, 0.06) : "inherit"),
                     cursor: "pointer",
                 }}
             >
-                <Box sx={{ ...xsBadgeSx, bgcolor: (t) => (involvesMe ? alpha(t.palette.primary.main, 0.16) : t.palette.grey[800]) }}>
+                <Box sx={{ ...xsBadgeSx, bgcolor: "grey.800" }}>
                     <SwapHorizIcon sx={{ fontSize: 22, color: "secondary.main" }} />
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
