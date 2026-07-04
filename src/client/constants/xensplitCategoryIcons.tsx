@@ -23,10 +23,30 @@ export const CATEGORY_ICONS: Record<ExpenseCategory, SvgIconComponent> = {
   Other: CategoryIcon,
 };
 
+export const CATEGORY_COLORS: Record<ExpenseCategory, string> = {
+  "Food & Drink": "#ff5722",
+  Transport: "#2196F3",
+  Utilities: "#FFEB3B",
+  Entertainment: "#9C27B0",
+  Travel: "#673AB7",
+  Lodging: "#00BCD4",
+  Shopping: "#E91E63",
+  Healthcare: "#F44336",
+  Other: "#757575",
+};
+
 /** Icon for an expense's category, falling back to the default receipt icon. */
 export function getCategoryIcon(category?: string): SvgIconComponent {
   if (category && category in CATEGORY_ICONS) {
     return CATEGORY_ICONS[category as ExpenseCategory];
   }
   return ReceiptLongIcon;
+}
+
+/** Color for an expense's category, falling back to the "Other" color. */
+export function getCategoryColor(category?: string): string {
+  if (category && category in CATEGORY_COLORS) {
+    return CATEGORY_COLORS[category as ExpenseCategory];
+  }
+  return CATEGORY_COLORS.Other;
 }

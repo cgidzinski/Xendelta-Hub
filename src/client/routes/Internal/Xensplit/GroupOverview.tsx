@@ -70,7 +70,6 @@ export default function GroupOverview() {
         return groups;
     }, [filteredFeed]);
 
-    const timeStr = (d: string) => new Date(d).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
     const settleNames = (s: XenSplitSettlement) => ({
         from: s.from === user.id ? "You" : getMember(s.from)?.username ?? "?",
         to: s.to === user.id ? "you" : getMember(s.to)?.username ?? "?",
@@ -91,6 +90,7 @@ export default function GroupOverview() {
         }
         const s = item.settlement;
         const { from, to } = settleNames(s);
+        const involvesMe = s.from === user.id || s.to === user.id;
         return (
             <Box
                 key={`s-${dateKey}-${idx}`}
@@ -101,23 +101,23 @@ export default function GroupOverview() {
                     gridTemplateColumns: "40px 1fr auto",
                     alignItems: "center",
                     columnGap: 1.25,
-                    borderColor: (t) => alpha(t.palette.success.main, 0.4),
-                    bgcolor: (t) => alpha(t.palette.success.main, 0.06),
+                    borderColor: (t) => (involvesMe ? alpha(t.palette.primary.main, 0.6) : t.palette.divider),
+                    bgcolor: (t) => (involvesMe ? alpha(t.palette.primary.main, 0.12) : "inherit"),
                     cursor: "pointer",
                 }}
             >
-                <Box sx={{ ...xsBadgeSx, bgcolor: (t) => alpha(t.palette.success.main, 0.16) }}>
-                    <SwapHorizIcon sx={{ fontSize: 22, color: "success.main" }} />
+                <Box sx={{ ...xsBadgeSx, borderRadius: 1, bgcolor: "primary.main", lineHeight: 1 }}>
+                    <SwapHorizIcon sx={{ fontSize: 22, color: "grey.900" }} />
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{from} → {to}</Typography>
-                    <Typography variant="caption" sx={{ color: "success.main", fontWeight: 600, display: "block" }} noWrap>
+                    <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
                         Settlement{s.is_partial ? " · Partial" : ""}
                     </Typography>
                 </Box>
                 <Box sx={{ textAlign: "right", flexShrink: 0 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "success.main", lineHeight: 1.3 }}>{formatCurrency(s.amount, s.currency)}</Typography>
-                    <Typography variant="caption" color="text.disabled" sx={{ display: "block", lineHeight: 1.2 }}>{timeStr(s.settled_at)}</Typography>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: s.from === user.id ? "error.main" : s.to === user.id ? "success.main" : "text.primary", lineHeight: 1.3 }}>{formatCurrency(s.amount, s.currency)}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.2 }}>{s.is_partial ? "Partial" : "Full"}</Typography>
                 </Box>
             </Box>
         );

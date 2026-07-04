@@ -2,7 +2,7 @@ import { Box, Typography, Avatar, alpha, Chip } from "@mui/material";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import type { XenSplitExpense } from "../../../../hooks/xensplit/types";
 import { formatCurrency } from "../../../../utils/currencyUtils";
-import { getCategoryIcon } from "../../../../constants/xensplitCategoryIcons";
+import { getCategoryIcon, getCategoryColor } from "../../../../constants/xensplitCategoryIcons";
 import { xsCardSx, xsBadgeSx } from "./rowStyles";
 
 interface ExpenseListItemProps {
@@ -19,10 +19,10 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
     const owe = mySplit && !isPayer && !expense.on_hold
         ? (mySplit.amount_owed ?? (expense.splits.length ? expense.amount / expense.splits.length : 0))
         : 0;
-    // Avatar accent: blue if you paid, green if you owe a share, neutral otherwise.
-    const accent = isPayer ? "primary" : owe > 0 ? "success" : undefined;
+    const involvesMe = userId ? (isPayer || expense.splits.some((sp) => sp.user_id === userId)) : false;
     const dateStr = new Date(expense.date).toLocaleDateString(undefined, { month: "short", day: "numeric" });
     const CategoryIcon = getCategoryIcon(expense.category);
+    const categoryColor = getCategoryColor(expense.category);
 
     return (
         <Box
@@ -31,20 +31,26 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
                 ...xsCardSx,
                 display: "grid",
                 gridTemplateColumns: "40px 1fr auto",
-                alignItems: "center",
+                alignItems: "flex-start",
                 columnGap: 1.25,
                 cursor: "pointer",
                 "&:hover": { bgcolor: "action.hover" },
+                borderColor: (t) => (involvesMe ? alpha(t.palette.primary.main, 0.6) : t.palette.divider),
+                bgcolor: (t) => (involvesMe ? alpha(t.palette.primary.main, 0.12) : "inherit"),
             }}
         >
             <Avatar
                 sx={{
                     width: 40,
                     height: 40,
-                    bgcolor: (t) => (accent ? alpha(t.palette[accent].main, 0.16) : "grey.800"),
+                    bgcolor: categoryColor,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    lineHeight: 1,
                 }}
             >
-                <CategoryIcon sx={{ fontSize: 20, color: accent ? `${accent}.main` : "text.secondary" }} />
+                <CategoryIcon sx={{ fontSize: 22, color: "grey.900" }} />
             </Avatar>
             <Box sx={{ minWidth: 0 }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{expense.title}</Typography>
@@ -65,8 +71,8 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
                     />
                 )}
             </Box>
-            <Box sx={{ textAlign: "right", flexShrink: 0 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", lineHeight: 1.3 }}>
+            <Box sx={{ textAlign: "right", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: isPayer ? "error.main" : "text.primary", lineHeight: 1.3 }}>
                     {formatCurrency(expense.amount, expense.currency)}
                 </Typography>
                 {owe > 0 && (
