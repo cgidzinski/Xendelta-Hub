@@ -373,7 +373,7 @@ export default function BaseNavBar({
               )}
               {showNotifications && (
                 <IconButton sx={{ width: 50, height: 50, p: 0 }} onClick={handleNotificationClick}>
-                  <Badge badgeContent={profile?.unread_notifications ? 1 : 0} color="error" variant="dot">
+                  <Badge badgeContent={profile?.has_new_notifications ? 1 : 0} color="error" variant="dot">
                     <NotificationsIcon />
                   </Badge>
                 </IconButton>

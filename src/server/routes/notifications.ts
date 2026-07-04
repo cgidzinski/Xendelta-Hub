@@ -13,6 +13,8 @@ module.exports = function (app: express.Application) {
     const userId = (req as AuthenticatedRequest).user!._id;
     await new Promise((resolve) => setTimeout(resolve, TIMEOUTS.NOTIFICATION_DELAY));
 
+    await User.findByIdAndUpdate(userId, { notificationsLastCheckedAt: new Date() });
+
     const notifications = await Notification.find({ userId })
       .sort({ time: -1 })
       .limit(10)

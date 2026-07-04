@@ -13,6 +13,7 @@ export interface UserProfile {
   points: number;
   unread_messages: boolean;
   unread_notifications: boolean;
+  has_new_notifications: boolean;
   pinnedApps: string[];
   xenbox: {
     fileCount: number;
