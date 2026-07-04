@@ -35,18 +35,22 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
                 columnGap: 1.25,
                 cursor: "pointer",
                 "&:hover": { bgcolor: "action.hover" },
-                borderColor: (t) => (involvesMe ? alpha(t.palette.secondary.main, 0.4) : "inherit"),
-                bgcolor: (t) => (involvesMe ? alpha(t.palette.secondary.main, 0.06) : "inherit"),
+                borderColor: (t) => (involvesMe ? alpha(t.palette.primary.main, 0.6) : t.palette.divider),
+                bgcolor: (t) => (involvesMe ? alpha(t.palette.primary.main, 0.12) : "inherit"),
             }}
         >
             <Avatar
                 sx={{
                     width: 40,
                     height: 40,
-                    bgcolor: "grey.800",
+                    bgcolor: categoryColor,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    lineHeight: 1,
                 }}
             >
-                <CategoryIcon sx={{ fontSize: 22, color: categoryColor }} />
+                <CategoryIcon sx={{ fontSize: 22, color: "grey.900" }} />
             </Avatar>
             <Box sx={{ minWidth: 0 }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{expense.title}</Typography>
@@ -68,7 +72,7 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
                 )}
             </Box>
             <Box sx={{ textAlign: "right", flexShrink: 0 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", lineHeight: 1.3 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: isPayer ? "error.main" : "text.primary", lineHeight: 1.3 }}>
                     {formatCurrency(expense.amount, expense.currency)}
                 </Typography>
                 {owe > 0 && (

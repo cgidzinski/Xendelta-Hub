@@ -24,15 +24,15 @@ export const CATEGORY_ICONS: Record<ExpenseCategory, SvgIconComponent> = {
 };
 
 export const CATEGORY_COLORS: Record<ExpenseCategory, string> = {
-  "Food & Drink": "#fb923c",
-  Transport: "#60a5fa",
-  Utilities: "#facc15",
-  Entertainment: "#c084fc",
-  Travel: "#818cf8",
-  Lodging: "#2dd4bf",
-  Shopping: "#f472b6",
-  Healthcare: "#f87171",
-  Other: "#94a3b8",
+  "Food & Drink": "#e8641e",
+  Transport: "#1f7eff",
+  Utilities: "#ffc000",
+  Entertainment: "#8b2ff0",
+  Travel: "#5b21b6",
+  Lodging: "#06b6d4",
+  Shopping: "#ec4899",
+  Healthcare: "#dc2626",
+  Other: "#4b5563",
 };
 
 /** Icon for an expense's category, falling back to the default receipt icon. */

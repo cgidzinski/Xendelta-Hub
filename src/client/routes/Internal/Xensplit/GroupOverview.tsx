@@ -103,22 +103,22 @@ export default function GroupOverview() {
                     gridTemplateColumns: "40px 1fr auto",
                     alignItems: "center",
                     columnGap: 1.25,
-                    borderColor: (t) => (involvesMe ? alpha(t.palette.secondary.main, 0.4) : "inherit"),
-                    bgcolor: (t) => (involvesMe ? alpha(t.palette.secondary.main, 0.06) : "inherit"),
+                    borderColor: (t) => (involvesMe ? alpha(t.palette.primary.main, 0.6) : t.palette.divider),
+                    bgcolor: (t) => (involvesMe ? alpha(t.palette.primary.main, 0.12) : "inherit"),
                     cursor: "pointer",
                 }}
             >
-                <Box sx={{ ...xsBadgeSx, bgcolor: "grey.800" }}>
-                    <SwapHorizIcon sx={{ fontSize: 22, color: "secondary.main" }} />
+                <Box sx={{ ...xsBadgeSx, borderRadius: 1, bgcolor: "primary.main", lineHeight: 1 }}>
+                    <SwapHorizIcon sx={{ fontSize: 22, color: "grey.900" }} />
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{from} → {to}</Typography>
-                    <Typography variant="caption" sx={{ color: "success.main", fontWeight: 600, display: "block" }} noWrap>
+                    <Typography variant="caption" sx={{ color: "primary.main", fontWeight: 600, display: "block" }} noWrap>
                         Settlement{s.is_partial ? " · Partial" : ""}
                     </Typography>
                 </Box>
                 <Box sx={{ textAlign: "right", flexShrink: 0 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "success.main", lineHeight: 1.3 }}>{formatCurrency(s.amount, s.currency)}</Typography>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: s.from === user.id ? "error.main" : s.to === user.id ? "success.main" : "text.primary", lineHeight: 1.3 }}>{formatCurrency(s.amount, s.currency)}</Typography>
                     <Typography variant="caption" color="text.disabled" sx={{ display: "block", lineHeight: 1.2 }}>{timeStr(s.settled_at)}</Typography>
                 </Box>
             </Box>
