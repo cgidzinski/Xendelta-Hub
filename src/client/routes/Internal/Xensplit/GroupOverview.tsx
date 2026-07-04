@@ -108,7 +108,7 @@ export default function GroupOverview() {
                     cursor: "pointer",
                 }}
             >
-                <Box sx={{ ...xsBadgeSx, bgcolor: (t) => (involvesMe ? alpha(t.palette.success.main, 0.16) : t.palette.grey[800]) }}>
+                <Box sx={{ ...xsBadgeSx, bgcolor: (t) => (involvesMe ? alpha(t.palette.primary.main, 0.16) : t.palette.grey[800]) }}>
                     <SwapHorizIcon sx={{ fontSize: 22, color: "secondary.main" }} />
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
