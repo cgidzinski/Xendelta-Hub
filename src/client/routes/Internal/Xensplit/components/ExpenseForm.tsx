@@ -561,8 +561,8 @@ export default function ExpenseForm({
             </Box>
           )}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <Avatar sx={{ bgcolor: getCategoryColor(category), width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
-              <CategoryIconComponent sx={{ fontSize: 22, color: "grey.900" }} />
+            <Avatar sx={{ ...xsBadgeSx, bgcolor: alpha(getCategoryColor(category), 0.15), lineHeight: 1 }}>
+              <CategoryIconComponent sx={{ fontSize: 22, color: getCategoryColor(category) }} />
             </Avatar>
             <FormControl fullWidth>
               <InputLabel>Category (optional)</InputLabel>

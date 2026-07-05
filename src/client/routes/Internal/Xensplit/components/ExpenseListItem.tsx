@@ -19,7 +19,6 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
     const owe = mySplit && !isPayer && !expense.on_hold
         ? (mySplit.amount_owed ?? (expense.splits.length ? expense.amount / expense.splits.length : 0))
         : 0;
-    const involvesMe = userId ? (isPayer || expense.splits.some((sp) => sp.user_id === userId)) : false;
     const dateStr = new Date(expense.date).toLocaleDateString(undefined, { month: "short", day: "numeric" });
     const CategoryIcon = getCategoryIcon(expense.category);
     const categoryColor = getCategoryColor(expense.category);
@@ -35,22 +34,16 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
                 columnGap: 1.25,
                 cursor: "pointer",
                 "&:hover": { bgcolor: "action.hover" },
-                borderColor: (t) => (involvesMe ? alpha(t.palette.primary.main, 0.6) : t.palette.divider),
-                bgcolor: (t) => (involvesMe ? alpha(t.palette.primary.main, 0.12) : "inherit"),
             }}
         >
             <Avatar
                 sx={{
-                    width: 40,
-                    height: 40,
-                    bgcolor: categoryColor,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    ...xsBadgeSx,
+                    bgcolor: alpha(categoryColor, 0.15),
                     lineHeight: 1,
                 }}
             >
-                <CategoryIcon sx={{ fontSize: 22, color: "grey.900" }} />
+                <CategoryIcon sx={{ fontSize: 22, color: categoryColor }} />
             </Avatar>
             <Box sx={{ minWidth: 0 }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{expense.title}</Typography>
