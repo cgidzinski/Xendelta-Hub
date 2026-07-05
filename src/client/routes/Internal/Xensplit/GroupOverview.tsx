@@ -1,13 +1,12 @@
 import { useMemo, useState } from "react";
 import { useOutletContext, useNavigate, useParams } from "react-router-dom";
-import { Box, Typography, Button, Switch } from "@mui/material";
-import { alpha } from "@mui/material/styles";
+import { Box, Typography, Button, Switch, Avatar } from "@mui/material";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitExpense, XenSplitSettlement } from "../../../hooks/xensplit/types";
 import ExpenseListItem from "./components/ExpenseListItem";
 import SettlementDetailDialog from "./components/SettlementDetailDialog";
-import { xsCardSx, xsBadgeSx } from "./components/rowStyles";
+import { xsCardSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
 
 type ActivityItem =
@@ -90,7 +89,12 @@ export default function GroupOverview() {
         }
         const s = item.settlement;
         const { from, to } = settleNames(s);
-        const involvesMe = s.from === user.id || s.to === user.id;
+        const fromMember = getMember(s.from);
+        const toMember = getMember(s.to);
+        const fromAvatar = s.from === user.id ? user.avatar : fromMember?.avatar;
+        const toAvatar = s.to === user.id ? user.avatar : toMember?.avatar;
+        const fromInitial = (s.from === user.id ? user.username : fromMember?.username ?? "?")[0]?.toUpperCase() ?? "?";
+        const toInitial = (s.to === user.id ? user.username : toMember?.username ?? "?")[0]?.toUpperCase() ?? "?";
         return (
             <Box
                 key={`s-${dateKey}-${idx}`}
@@ -99,25 +103,67 @@ export default function GroupOverview() {
                     ...xsCardSx,
                     display: "grid",
                     gridTemplateColumns: "40px 1fr auto",
-                    alignItems: "center",
+                    alignItems: "flex-start",
                     columnGap: 1.25,
-                    borderColor: (t) => (involvesMe ? alpha(t.palette.primary.main, 0.6) : t.palette.divider),
-                    bgcolor: (t) => (involvesMe ? alpha(t.palette.primary.main, 0.12) : "inherit"),
                     cursor: "pointer",
+                    "&:hover": { bgcolor: "action.hover" },
                 }}
             >
-                <Box sx={{ ...xsBadgeSx, borderRadius: 1, bgcolor: "primary.main", lineHeight: 1 }}>
-                    <SwapHorizIcon sx={{ fontSize: 22, color: "grey.900" }} />
+                <Box sx={{ position: "relative", width: 40, height: 40 }}>
+                    <Avatar
+                        src={fromAvatar || undefined}
+                        sx={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            width: 26,
+                            height: 26,
+                            fontSize: "0.6875rem",
+                            zIndex: 1,
+                        }}
+                    >
+                        {fromInitial}
+                    </Avatar>
+                    <Avatar
+                        src={toAvatar || undefined}
+                        sx={{
+                            position: "absolute",
+                            bottom: 0,
+                            right: 0,
+                            width: 26,
+                            height: 26,
+                            fontSize: "0.6875rem",
+                        }}
+                    >
+                        {toInitial}
+                    </Avatar>
+                    <Box
+                        sx={{
+                            position: "absolute",
+                            top: "50%",
+                            left: "50%",
+                            transform: "translate(-50%, -50%)",
+                            width: 14,
+                            height: 14,
+                            borderRadius: "50%",
+                            bgcolor: "background.paper",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "text.secondary",
+                        }}
+                    >
+                        <SwapHorizIcon sx={{ fontSize: 12 }} />
+                    </Box>
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{from} → {to}</Typography>
                     <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
-                        Settlement{s.is_partial ? " · Partial" : ""}
+                        Settled · {s.is_partial ? "Partial" : "Full"}
                     </Typography>
                 </Box>
                 <Box sx={{ textAlign: "right", flexShrink: 0 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, color: s.from === user.id ? "error.main" : s.to === user.id ? "success.main" : "text.primary", lineHeight: 1.3 }}>{formatCurrency(s.amount, s.currency)}</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.2 }}>{s.is_partial ? "Partial" : "Full"}</Typography>
                 </Box>
             </Box>
         );
