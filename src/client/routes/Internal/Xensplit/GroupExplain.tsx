@@ -287,8 +287,17 @@ function EdgeDetail({
             {mode === "simplified" ? (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                     <Typography variant="body2" color="text.secondary">
-                        This is a simplified payment. To keep settling-up simple, <strong style={{ textTransform: "capitalize" }}>{from?.username}</strong>'s
-                        debt is routed straight to <strong style={{ textTransform: "capitalize" }}>{to?.username}</strong> — even if they never shared an expense directly.
+                        {sharedExpenses.length === 0 ? (
+                            <>
+                                This is a simplified payment. To keep settling-up simple, <strong style={{ textTransform: "capitalize" }}>{from?.username}</strong>'s
+                                debt is routed straight to <strong style={{ textTransform: "capitalize" }}>{to?.username}</strong> — even if they never shared an expense directly.
+                            </>
+                        ) : (
+                            <>
+                                This payment is backed by an expense <strong style={{ textTransform: "capitalize" }}>{from?.username}</strong> and{" "}
+                                <strong style={{ textTransform: "capitalize" }}>{to?.username}</strong> shared directly.
+                            </>
+                        )}
                     </Typography>
                     <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                         <Typography variant="caption" color="text.secondary" sx={{ textTransform: "capitalize" }}>{from?.username} owes overall</Typography>

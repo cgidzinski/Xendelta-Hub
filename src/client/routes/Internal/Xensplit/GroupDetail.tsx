@@ -42,6 +42,7 @@ import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
+import LinkOffIcon from "@mui/icons-material/LinkOff";
 import { useTitle } from "../../../hooks/useTitle";
 import { useXenSplit } from "../../../hooks/xensplit/useGroup";
 import { useXenSplits } from "../../../hooks/xensplit/useGroups";
@@ -122,6 +123,7 @@ export default function GroupDetail() {
   const [addDate, setAddDate] = useState<Date>(new Date());
   const [addCategory, setAddCategory] = useState("");
   const [addOnHold, setAddOnHold] = useState(false);
+  const [addDoNotSimplify, setAddDoNotSimplify] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editAmount, setEditAmount] = useState("");
@@ -135,6 +137,7 @@ export default function GroupDetail() {
   const [editDate, setEditDate] = useState<Date>(new Date());
   const [editCategory, setEditCategory] = useState("");
   const [editOnHold, setEditOnHold] = useState(false);
+  const [editDoNotSimplify, setEditDoNotSimplify] = useState(false);
   const [showViewExpenseModal, setShowViewExpenseModal] = useState(false);
   const [viewExpenseItem, setViewExpenseItem] = useState<XenSplitExpense | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -285,6 +288,7 @@ export default function GroupDetail() {
           split_type: addSplitType,
           splits,
           on_hold: addOnHold,
+          do_not_simplify: addDoNotSimplify,
         },
         {
           onSuccess: async (result) => {
@@ -310,6 +314,7 @@ export default function GroupDetail() {
             setAddPercentSplits({});
             setAddCategory("");
             setAddOnHold(false);
+            setAddDoNotSimplify(false);
             setAddImages([]);
             resolve();
           },
@@ -358,6 +363,7 @@ export default function GroupDetail() {
             split_type: editSplitType,
             splits,
             on_hold: editOnHold,
+            do_not_simplify: editDoNotSimplify,
           }
         },
         {
@@ -416,6 +422,7 @@ export default function GroupDetail() {
     setEditDate(expense.date ? new Date(expense.date) : new Date());
     setEditCategory(expense.category || "");
     setEditOnHold(expense.on_hold ?? false);
+    setEditDoNotSimplify(expense.do_not_simplify ?? false);
     setShowEditExpenseModal(true);
   };
 
@@ -432,6 +439,7 @@ export default function GroupDetail() {
     setAddPercentSplits({});
     setAddCategory("");
     setAddOnHold(false);
+    setAddDoNotSimplify(false);
     setAddImages([]);
     setAddDate(new Date());
     setShowAddExpenseModal(true);
@@ -727,6 +735,8 @@ export default function GroupDetail() {
             onHold={addOnHold}
             onOnHoldChange={setAddOnHold}
             holdMode="free"
+            doNotSimplify={addDoNotSimplify}
+            onDoNotSimplifyChange={setAddDoNotSimplify}
           />
         </DialogContent>
       </Dialog>
@@ -818,6 +828,8 @@ export default function GroupDetail() {
                 selectedExpense?.created_by === user.id ? "oneWay" :
                   "hidden"
             }
+            doNotSimplify={editDoNotSimplify}
+            onDoNotSimplifyChange={setEditDoNotSimplify}
           />
         </DialogContent>
       </Dialog>
@@ -861,6 +873,15 @@ export default function GroupDetail() {
                       label="On Hold"
                       size="small"
                       color="warning"
+                      sx={{ fontWeight: 600, fontSize: "0.7rem" }}
+                    />
+                  )}
+                  {e.do_not_simplify && (
+                    <Chip
+                      icon={<LinkOffIcon sx={{ fontSize: "14px !important" }} />}
+                      label="Not Simplified"
+                      size="small"
+                      color="info"
                       sx={{ fontWeight: 600, fontSize: "0.7rem" }}
                     />
                   )}

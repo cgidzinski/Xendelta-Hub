@@ -14,6 +14,7 @@ interface Expense {
   amount: number;
   currency: string;
   on_hold?: boolean;
+  do_not_simplify?: boolean;
   splits: { user_id: string; amount_owed?: number; percentage?: number }[];
 }
 
@@ -29,6 +30,13 @@ interface XenSplitDocument {
   members: string[];
   expenses: Expense[];
   settlements: Settlement[];
+}
+
+function shareOwed(amount: number, splitCount: number, split: { amount_owed?: number; percentage?: number }): number {
+  if (split.amount_owed !== undefined) return split.amount_owed;
+  if (split.percentage !== undefined) return (amount * split.percentage) / 100;
+  if (splitCount > 0) return amount / splitCount;
+  return 0;
 }
 
 export function calculateBalances(doc: XenSplitDocument): BalanceMap {
@@ -169,4 +177,91 @@ export function calculateMinimumTransfers(balances: BalanceMap): Transfer[] {
   }
 
   return transfers;
+}
+
+// Suggested settlement transfers, honoring each expense's `do_not_simplify`
+// flag. Expenses not flagged are netted per-member (with settlements
+// applied) and rerouted via the greedy minimum-transfer algorithm, same as
+// today. Flagged expenses instead contribute a direct, unrouted pairwise
+// debt between their original payer and participants. The two sets are then
+// merged per (currency, pair), netting opposite directions together.
+//
+// When no expense is flagged this reduces to exactly
+// `calculateMinimumTransfers(calculateBalances(doc))` — today's behavior.
+export function calculateSimplifiedTransfers(doc: XenSplitDocument): Transfer[] {
+  const fullBalances = calculateBalances(doc);
+
+  // Net per-member contribution of flagged expenses only (no settlements).
+  const flaggedRaw: BalanceMap = {};
+  const addFlaggedRaw = (userId: string, currency: string, delta: number) => {
+    if (!flaggedRaw[userId]) flaggedRaw[userId] = {};
+    flaggedRaw[userId][currency] = (flaggedRaw[userId][currency] || 0) + delta;
+  };
+
+  // Direct, unrouted pairwise debts from flagged expenses: owe[a][b][currency].
+  const owe: { [a: string]: { [b: string]: { [currency: string]: number } } } = {};
+  const addOwe = (a: string, b: string, currency: string, amount: number) => {
+    if (a === b || amount === 0) return;
+    if (!owe[a]) owe[a] = {};
+    if (!owe[a][b]) owe[a][b] = {};
+    owe[a][b][currency] = (owe[a][b][currency] || 0) + amount;
+  };
+
+  for (const expense of doc.expenses) {
+    if (expense.on_hold || !expense.do_not_simplify) continue;
+    const { paid_by, amount, currency, splits } = expense;
+
+    addFlaggedRaw(paid_by, currency, amount);
+    for (const split of splits) {
+      const owed = shareOwed(amount, splits.length, split);
+      addFlaggedRaw(split.user_id, currency, -owed);
+      addOwe(split.user_id, paid_by, currency, owed);
+    }
+  }
+
+  // simplifiableNet = fullBalances - flaggedRaw (settlements remain embedded
+  // via fullBalances, since flaggedRaw never included them).
+  const simplifiableNet: BalanceMap = {};
+  for (const [userId, currencyBalances] of Object.entries(fullBalances)) {
+    simplifiableNet[userId] = {};
+    for (const [currency, balance] of Object.entries(currencyBalances)) {
+      simplifiableNet[userId][currency] = balance - (flaggedRaw[userId]?.[currency] || 0);
+    }
+  }
+
+  const simplifiedTransfers = calculateMinimumTransfers(simplifiableNet);
+
+  // Merge simplified transfers into the same pairwise map as the flagged
+  // direct debts, so opposite-direction amounts between a pair net out.
+  for (const t of simplifiedTransfers) {
+    addOwe(t.from, t.to, t.currency, t.amount);
+  }
+
+  // Net each unordered pair per currency into a single directed transfer.
+  const members = new Set<string>(doc.members);
+  for (const a of Object.keys(owe)) members.add(a);
+  for (const a of Object.keys(owe)) for (const b of Object.keys(owe[a])) members.add(b);
+  const memberIds = [...members];
+
+  const currencies = new Set<string>();
+  for (const a of Object.keys(owe)) {
+    for (const b of Object.keys(owe[a])) {
+      for (const c of Object.keys(owe[a][b])) currencies.add(c);
+    }
+  }
+
+  const result: Transfer[] = [];
+  for (const currency of currencies) {
+    for (let i = 0; i < memberIds.length; i++) {
+      for (let j = i + 1; j < memberIds.length; j++) {
+        const a = memberIds[i];
+        const b = memberIds[j];
+        const net = (owe[a]?.[b]?.[currency] || 0) - (owe[b]?.[a]?.[currency] || 0);
+        if (net > 0.01) result.push({ from: a, to: b, amount: Number(net.toFixed(2)), currency });
+        else if (net < -0.01) result.push({ from: b, to: a, amount: Number((-net).toFixed(2)), currency });
+      }
+    }
+  }
+
+  return result;
 }
