@@ -114,7 +114,7 @@ export default function GroupSettlements() {
                     onClick={() => setCreateOpen(true)}
                     sx={{ borderRadius: 2, fontWeight: 600, textTransform: "none" }}
                 >
-                    New Settlement
+                    New
                 </Button>
                 <Button
                     fullWidth
@@ -123,7 +123,7 @@ export default function GroupSettlements() {
                     onClick={() => navigate(`/internal/xensplit/groups/${groupId}/explain`)}
                     sx={{ borderRadius: 2, fontWeight: 600, textTransform: "none" }}
                 >
-                    Explain these settlements
+                    Explain
                 </Button>
             </Box>
 

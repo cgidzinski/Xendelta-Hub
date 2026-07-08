@@ -16,6 +16,7 @@ import {
     IconButton,
     Tooltip,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import EastIcon from "@mui/icons-material/East";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
@@ -95,27 +96,26 @@ export default function CreateSettlementDialog({ open, onClose, members, current
 
             <DialogContent sx={{ px: 3, pt: 1.5, pb: 2, display: "flex", flexDirection: "column", gap: 2 }}>
                 <Box>
-                    <Box sx={{ display: "grid", gridTemplateColumns: "1fr 40px 1fr", alignItems: "center", bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
+                    <Box sx={{ display: "grid", gridTemplateColumns: "1fr 56px 1fr", alignItems: "center", bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
                         <PersonStack avatar={currentUser.avatar} name={currentUser.username} />
                         <Tooltip title="Tap to flip who paid" placement="top">
                             <IconButton
                                 onClick={flipDirection}
-                                size="small"
                                 sx={{
                                     mx: "auto",
-                                    width: 32,
-                                    height: 32,
-                                    border: "2px solid",
-                                    borderColor: amountColor,
-                                    bgcolor: "background.paper",
-                                    boxShadow: 1,
-                                    transition: "transform 0.15s ease, box-shadow 0.15s ease",
-                                    "&:hover": { boxShadow: 3, transform: "scale(1.1)" },
+                                    width: 48,
+                                    height: 48,
+                                    bgcolor: (theme) => alpha(theme.palette[direction === "i_paid" ? "error" : "success"].main, 0.15),
+                                    transition: "transform 0.15s ease, background-color 0.2s ease",
+                                    "&:hover": {
+                                        bgcolor: (theme) => alpha(theme.palette[direction === "i_paid" ? "error" : "success"].main, 0.25),
+                                        transform: "scale(1.08)",
+                                    },
                                 }}
                             >
                                 <EastIcon
                                     sx={{
-                                        fontSize: 18,
+                                        fontSize: 30,
                                         color: amountColor,
                                         transform: direction === "they_paid" ? "rotate(180deg)" : "rotate(0deg)",
                                         transition: "transform 0.25s ease",
@@ -139,38 +139,37 @@ export default function CreateSettlementDialog({ open, onClose, members, current
                     </Typography>
                 </Box>
 
-                <Box>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                        With
-                    </Typography>
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                <FormControl fullWidth>
+                    <InputLabel>With</InputLabel>
+                    <Select
+                        value={counterpartyId}
+                        label="With"
+                        onChange={(e) => setCounterpartyId(e.target.value)}
+                        renderValue={(val) => {
+                            const m = otherMembers.find((mem) => mem.user_id === val);
+                            if (!m) return "";
+                            return (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                    <Avatar src={m.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
+                                        {m.username[0]?.toUpperCase()}
+                                    </Avatar>
+                                    <Typography variant="body2">{m.username}</Typography>
+                                </Box>
+                            );
+                        }}
+                    >
                         {otherMembers.map((member) => (
-                            <Box
-                                key={member.user_id}
-                                onClick={() => setCounterpartyId(member.user_id)}
-                                sx={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 1,
-                                    px: 2,
-                                    py: 1,
-                                    borderRadius: 2,
-                                    cursor: "pointer",
-                                    bgcolor: "action.hover",
-                                    color: "text.primary",
-                                    border: "2px solid",
-                                    borderColor: counterpartyId === member.user_id ? "primary.main" : "transparent",
-                                    transition: "all 0.2s",
-                                }}
-                            >
-                                <Avatar src={member.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
-                                    {member.username[0]?.toUpperCase()}
-                                </Avatar>
-                                <Typography variant="caption">{member.username}</Typography>
-                            </Box>
+                            <MenuItem key={member.user_id} value={member.user_id}>
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                    <Avatar src={member.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
+                                        {member.username[0]?.toUpperCase()}
+                                    </Avatar>
+                                    <Typography variant="body2">{member.username}</Typography>
+                                </Box>
+                            </MenuItem>
                         ))}
-                    </Box>
-                </Box>
+                    </Select>
+                </FormControl>
 
                 <Box sx={{ display: "flex", gap: 2 }}>
                     <FormControl sx={{ flex: 1 }}>
