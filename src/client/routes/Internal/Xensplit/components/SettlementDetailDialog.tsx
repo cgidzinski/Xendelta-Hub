@@ -9,7 +9,7 @@ import LockIcon from "@mui/icons-material/Lock";
 import type { XenSplitSettlement, XenSplitSettlementTransfer, SettleDebtInput } from "../../../../hooks/xensplit/types";
 import { formatCurrency, sanitizeAmount } from "../../../../utils/currencyUtils";
 
-function PersonStack({ avatar, name }: { avatar?: string | null; name: string }) {
+export function PersonStack({ avatar, name }: { avatar?: string | null; name: string }) {
     return (
         <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, minWidth: 0, flex: 1 }}>
             <Avatar src={avatar || undefined} sx={{ width: 34, height: 34 }}>

@@ -3,11 +3,13 @@ import { useOutletContext, useNavigate, useParams } from "react-router-dom";
 import { Box, Typography, Button, Avatar, Divider, ToggleButtonGroup, ToggleButton } from "@mui/material";
 import EastIcon from "@mui/icons-material/East";
 import HubIcon from "@mui/icons-material/Hub";
+import AddIcon from "@mui/icons-material/Add";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitSettlement, XenSplitSettlementTransfer } from "../../../hooks/xensplit/types";
 import { xsCardSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
 import SettlementDetailDialog, { PendingSettlementDialog } from "./components/SettlementDetailDialog";
+import CreateSettlementDialog from "./components/CreateSettlementDialog";
 
 const listGridSx = {
     display: "grid",
@@ -39,6 +41,7 @@ export default function GroupSettlements() {
     const [showHistory, setShowHistory] = useState(false);
     const [viewPending, setViewPending] = useState<XenSplitSettlementTransfer | null>(null);
     const [viewSettlement, setViewSettlement] = useState<XenSplitSettlement | null>(null);
+    const [createOpen, setCreateOpen] = useState(false);
 
     const pendingSettlements = balancesData?.settlements ?? [];
     const myPendingSettlements = pendingSettlements.filter(s => s.from === user.id || s.to === user.id);
@@ -64,8 +67,30 @@ export default function GroupSettlements() {
 
     if (pendingSettlements.length === 0 && completedSettlements.length === 0) {
         return (
-            <Box sx={{ textAlign: "center", py: 4 }}>
-                <Typography variant="body1" color="text.secondary">No settlements yet</Typography>
+            <Box>
+                <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<AddIcon sx={{ fontSize: 18 }} />}
+                    onClick={() => setCreateOpen(true)}
+                    sx={{ borderRadius: 2, fontWeight: 600, textTransform: "none", mb: 2.5 }}
+                >
+                    New Settlement
+                </Button>
+
+                <Box sx={{ textAlign: "center", py: 4 }}>
+                    <Typography variant="body1" color="text.secondary">No settlements yet</Typography>
+                </Box>
+
+                <CreateSettlementDialog
+                    open={createOpen}
+                    onClose={() => setCreateOpen(false)}
+                    members={group.members}
+                    currentUser={user}
+                    defaultCurrency={group.default_currency}
+                    settleDebt={settleDebt}
+                    isSettling={isSettlingDebt}
+                />
             </Box>
         );
     }
@@ -81,15 +106,26 @@ export default function GroupSettlements() {
                 </ToggleButtonGroup>
             </Box>
 
-            <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<HubIcon sx={{ fontSize: 18 }} />}
-                onClick={() => navigate(`/internal/xensplit/groups/${groupId}/explain`)}
-                sx={{ borderRadius: 2, fontWeight: 600, textTransform: "none", mb: 2.5 }}
-            >
-                Explain these settlements
-            </Button>
+            <Box sx={{ display: "flex", gap: 1.5, mb: 2.5 }}>
+                <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<AddIcon sx={{ fontSize: 18 }} />}
+                    onClick={() => setCreateOpen(true)}
+                    sx={{ borderRadius: 2, fontWeight: 600, textTransform: "none" }}
+                >
+                    New
+                </Button>
+                <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<HubIcon sx={{ fontSize: 18 }} />}
+                    onClick={() => navigate(`/internal/xensplit/groups/${groupId}/explain`)}
+                    sx={{ borderRadius: 2, fontWeight: 600, textTransform: "none" }}
+                >
+                    Explain
+                </Button>
+            </Box>
 
             {/* Pending */}
             {pendingSettlements.length > 0 && (
@@ -187,6 +223,16 @@ export default function GroupSettlements() {
                 userId={user.id}
                 deleteSettlement={deleteSettlement}
                 isDeletingSettlement={isDeletingSettlement}
+            />
+
+            <CreateSettlementDialog
+                open={createOpen}
+                onClose={() => setCreateOpen(false)}
+                members={group.members}
+                currentUser={user}
+                defaultCurrency={group.default_currency}
+                settleDebt={settleDebt}
+                isSettling={isSettlingDebt}
             />
         </Box>
     );
