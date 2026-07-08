@@ -13,9 +13,8 @@ import {
     InputLabel,
     Select,
     MenuItem,
-    ToggleButtonGroup,
-    ToggleButton,
     IconButton,
+    Tooltip,
 } from "@mui/material";
 import EastIcon from "@mui/icons-material/East";
 import CloseIcon from "@mui/icons-material/Close";
@@ -59,6 +58,8 @@ export default function CreateSettlementDialog({ open, onClose, members, current
     const amountColor = direction === "i_paid" ? "error.main" : "success.main";
     const isValid = !!counterpartyId && !!amount && parseFloat(amount) > 0 && !!currency;
 
+    const flipDirection = () => setDirection((d) => (d === "i_paid" ? "they_paid" : "i_paid"));
+
     const handleCreate = () => {
         const [from, to] = direction === "i_paid" ? [currentUser.id, counterpartyId] : [counterpartyId, currentUser.id];
         settleDebt(
@@ -93,25 +94,50 @@ export default function CreateSettlementDialog({ open, onClose, members, current
             </Box>
 
             <DialogContent sx={{ px: 3, pt: 1.5, pb: 2, display: "flex", flexDirection: "column", gap: 2 }}>
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 24px 1fr", alignItems: "center", bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
-                    <PersonStack avatar={currentUser.avatar} name={currentUser.username} />
-                    <EastIcon sx={{ fontSize: 20, color: amountColor }} />
-                    {counterparty ? (
-                        <PersonStack avatar={counterparty.avatar} name={counterparty.username} />
-                    ) : (
-                        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, minWidth: 0, flex: 1 }}>
-                            <Avatar sx={{ width: 34, height: 34, bgcolor: "action.disabledBackground" }}>?</Avatar>
-                            <Typography variant="caption" noWrap sx={{ maxWidth: "100%", color: "text.disabled" }}>
-                                Select member
-                            </Typography>
-                        </Box>
-                    )}
+                <Box>
+                    <Box sx={{ display: "grid", gridTemplateColumns: "1fr 40px 1fr", alignItems: "center", bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
+                        <PersonStack avatar={currentUser.avatar} name={currentUser.username} />
+                        <Tooltip title="Tap to flip who paid" placement="top">
+                            <IconButton
+                                onClick={flipDirection}
+                                size="small"
+                                sx={{
+                                    mx: "auto",
+                                    width: 32,
+                                    height: 32,
+                                    border: "2px solid",
+                                    borderColor: amountColor,
+                                    bgcolor: "background.paper",
+                                    boxShadow: 1,
+                                    transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                                    "&:hover": { boxShadow: 3, transform: "scale(1.1)" },
+                                }}
+                            >
+                                <EastIcon
+                                    sx={{
+                                        fontSize: 18,
+                                        color: amountColor,
+                                        transform: direction === "they_paid" ? "rotate(180deg)" : "rotate(0deg)",
+                                        transition: "transform 0.25s ease",
+                                    }}
+                                />
+                            </IconButton>
+                        </Tooltip>
+                        {counterparty ? (
+                            <PersonStack avatar={counterparty.avatar} name={counterparty.username} />
+                        ) : (
+                            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, minWidth: 0, flex: 1 }}>
+                                <Avatar sx={{ width: 34, height: 34, bgcolor: "action.disabledBackground" }}>?</Avatar>
+                                <Typography variant="caption" noWrap sx={{ maxWidth: "100%", color: "text.disabled" }}>
+                                    Select member
+                                </Typography>
+                            </Box>
+                        )}
+                    </Box>
+                    <Typography variant="caption" color="text.disabled" sx={{ display: "block", textAlign: "center", mt: 0.5 }}>
+                        {direction === "i_paid" ? "You paid them" : "They paid you"} — tap the arrow to flip
+                    </Typography>
                 </Box>
-
-                <ToggleButtonGroup size="small" fullWidth exclusive value={direction} onChange={(_, v) => { if (v) setDirection(v); }}>
-                    <ToggleButton value="i_paid" sx={{ textTransform: "none" }}>You paid them</ToggleButton>
-                    <ToggleButton value="they_paid" sx={{ textTransform: "none" }}>They paid you</ToggleButton>
-                </ToggleButtonGroup>
 
                 <Box>
                     <Typography variant="subtitle2" sx={{ mb: 1 }}>
