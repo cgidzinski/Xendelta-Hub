@@ -5,7 +5,6 @@ import SearchIcon from "@mui/icons-material/Search";
 import { startOfWeek, startOfMonth, startOfYear, subWeeks } from "date-fns";
 import type { GroupDetailContext } from "./GroupDetail";
 import ExpenseListItem from "./components/ExpenseListItem";
-import { formatCurrency } from "../../../utils/currencyUtils";
 
 type DateFilter = "all" | "thisWeek" | "lastWeek" | "thisMonth" | "thisYear";
 
@@ -31,8 +30,8 @@ export default function GroupExpenses() {
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [group.expenses, search]);
 
-    // Active expenses only — subject to date + search filters
-    const sortedExpenses = useMemo(() => {
+    // Active expenses + exchanges merged and date-filtered
+    const sortedItems = useMemo(() => {
         const now = new Date();
         const dateStart: Date | null =
             dateFilter === "thisWeek" ? startOfWeek(now) :
@@ -43,17 +42,19 @@ export default function GroupExpenses() {
         const dateEnd: Date | null =
             dateFilter === "lastWeek" ? startOfWeek(now) : null;
 
-        return [...group.expenses]
+        const expenses = group.expenses
             .filter((e) => !e.on_hold)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
             .filter((e) => {
                 if (search.trim() && !e.title.toLowerCase().includes(search.toLowerCase())) return false;
                 const d = new Date(e.date);
                 if (dateStart && d < dateStart) return false;
                 if (dateEnd && d >= dateEnd) return false;
                 return true;
-            });
-    }, [group.expenses, search, dateFilter]);
+            })
+            .map((e) => ({ type: "expense" as const, date: e.date, item: e }));
+
+        return expenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [group.expenses, group.exchanges, search, dateFilter]);
 
     return (
         <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
@@ -103,7 +104,7 @@ export default function GroupExpenses() {
                         </Box>
                     </Box>
                 )}
-                {sortedExpenses.length === 0 ? (
+                {sortedItems.length === 0 ? (
                     <Box sx={{ textAlign: "center", py: heldVisible.length > 0 ? 3 : 6 }}>
                         <Typography variant="body1" color="text.secondary">
                             {search.trim() || dateFilter !== "all" ? "No expenses match your filters" : "No expenses yet"}
@@ -111,11 +112,11 @@ export default function GroupExpenses() {
                     </Box>
                 ) : (
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                        {sortedExpenses.map((expense) => (
+                        {sortedItems.map((row) => (
                             <ExpenseListItem
-                                key={expense._id}
-                                expense={expense}
-                                onClick={() => onViewExpense(expense)}
+                                key={row.item._id}
+                                expense={row.item}
+                                onClick={() => onViewExpense(row.item)}
                                 userId={user.id}
                             />
                         ))}

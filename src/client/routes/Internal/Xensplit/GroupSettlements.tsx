@@ -4,6 +4,7 @@ import { Box, Typography, Button, Avatar, Divider, ToggleButtonGroup, ToggleButt
 import EastIcon from "@mui/icons-material/East";
 import HubIcon from "@mui/icons-material/Hub";
 import AddIcon from "@mui/icons-material/Add";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitSettlement, XenSplitSettlementTransfer } from "../../../hooks/xensplit/types";
 import { xsCardSx } from "./components/rowStyles";
@@ -30,7 +31,7 @@ const cardSx = {
 } as const;
 
 export default function GroupSettlements() {
-    const { balancesData, group, user, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useOutletContext<GroupDetailContext>();
+    const { balancesData, group, user, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement, onAddExchange } = useOutletContext<GroupDetailContext>();
     const navigate = useNavigate();
     const { groupId } = useParams<{ groupId: string }>();
     const lsKey = `xensplit_settlementsFilter_${groupId}`;
@@ -116,6 +117,15 @@ export default function GroupSettlements() {
                     sx={{ borderRadius: 2, fontWeight: 600, textTransform: "none" }}
                 >
                     New
+                </Button>
+                <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<SwapHorizIcon sx={{ fontSize: 18 }} />}
+                    onClick={onAddExchange}
+                    sx={{ borderRadius: 2, fontWeight: 600, textTransform: "none" }}
+                >
+                    Currency Exchange
                 </Button>
                 <Button
                     fullWidth

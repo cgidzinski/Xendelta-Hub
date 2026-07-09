@@ -3,18 +3,20 @@ import { useOutletContext, useNavigate, useParams } from "react-router-dom";
 import { Box, Typography, Button, Switch, Avatar } from "@mui/material";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import type { GroupDetailContext } from "./GroupDetail";
-import type { XenSplitExpense, XenSplitSettlement } from "../../../hooks/xensplit/types";
+import type { XenSplitExpense, XenSplitSettlement, XenSplitExchange } from "../../../hooks/xensplit/types";
 import ExpenseListItem from "./components/ExpenseListItem";
+import ExchangeListItem from "./components/ExchangeListItem";
 import SettlementDetailDialog from "./components/SettlementDetailDialog";
 import { xsCardSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
 
 type ActivityItem =
     | { type: "expense"; date: string; expense: XenSplitExpense }
-    | { type: "settlement"; date: string; settlement: XenSplitSettlement };
+    | { type: "settlement"; date: string; settlement: XenSplitSettlement }
+    | { type: "exchange"; date: string; exchange: XenSplitExchange };
 
 export default function GroupOverview() {
-    const { group, balancesData, user, onViewExpense, deleteSettlement, isDeletingSettlement } = useOutletContext<GroupDetailContext>();
+    const { group, balancesData, user, onViewExpense, deleteSettlement, isDeletingSettlement, deleteExchange, isDeletingExchange, isCreator } = useOutletContext<GroupDetailContext>();
     const navigate = useNavigate();
     const { groupId } = useParams<{ groupId: string }>();
     const lsKey = `xensplit_myActivityOnly_${groupId}`;
@@ -43,6 +45,11 @@ export default function GroupOverview() {
             date: s.settled_at,
             settlement: s,
         })),
+        ...(group.exchanges ?? []).map((ex) => ({
+            type: "exchange" as const,
+            date: ex.date,
+            exchange: ex,
+        })),
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const filteredFeed = myActivityOnly
@@ -50,6 +57,9 @@ export default function GroupOverview() {
             if (item.type === "expense") {
                 const e = item.expense;
                 return e.paid_by === user.id || e.splits.some((sp) => sp.user_id === user.id);
+            }
+            if (item.type === "exchange") {
+                return item.exchange.party_a === user.id || item.exchange.party_b === user.id;
             }
             return item.settlement.from === user.id || item.settlement.to === user.id;
         })
@@ -84,6 +94,20 @@ export default function GroupOverview() {
                     onClick={() => onViewExpense(e)}
                     userId={user.id}
                     hideDate
+                />
+            );
+        }
+        if (item.type === "exchange") {
+            const ex = item.exchange;
+            return (
+                <ExchangeListItem
+                    key={`ex-${ex._id}`}
+                    exchange={ex}
+                    members={group.members}
+                    currentUserId={user.id}
+                    canDelete={isCreator || ex.created_by === user.id || ex.party_a === user.id || ex.party_b === user.id}
+                    onDelete={deleteExchange}
+                    isDeletingExchange={isDeletingExchange}
                 />
             );
         }

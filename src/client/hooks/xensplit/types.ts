@@ -50,6 +50,22 @@ export interface XenSplitSettlement {
   note?: string;
 }
 
+export interface XenSplitExchange {
+  _id: string;
+  party_a: string;
+  currency_a: string;
+  amount_a: number;
+  party_b: string;
+  currency_b: string;
+  amount_b: number;
+  rate: number;
+  rate_from_currency?: string;
+  created_by?: string;
+  note?: string;
+  date: string;
+  created_at: string;
+}
+
 export interface XenSplit {
   _id: string;
   name: string;
@@ -61,6 +77,7 @@ export interface XenSplit {
   members: XenSplitMember[];
   expenses: XenSplitExpense[];
   settlements: XenSplitSettlement[];
+  exchanges: XenSplitExchange[];
 }
 
 export interface XenSplitBalance {
@@ -114,7 +131,7 @@ export interface DirectDebt {
 // One signed line item explaining a member's net balance in a currency.
 // The sum of `amount` across all lines equals the member's net balance.
 export interface BreakdownLine {
-  kind: "paid" | "share" | "settlement";
+  kind: "paid" | "share" | "settlement" | "exchange";
   label: string;
   hint?: string; // short plain-language explanation of the line's direction
   amount: number; // signed: positive increases balance (owed to them), negative decreases
@@ -162,4 +179,16 @@ export interface SettleDebtInput {
   amount: number;
   currency: string;
   note?: string;
+}
+
+export interface CreateExchangeInput {
+  party_a: string;
+  currency_a: string;
+  amount_a: number;
+  party_b: string;
+  currency_b: string;
+  rate: number;
+  rate_from_currency?: string;
+  note?: string;
+  date?: string;
 }
