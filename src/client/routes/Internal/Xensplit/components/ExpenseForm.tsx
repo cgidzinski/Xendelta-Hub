@@ -25,7 +25,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { SearchedUser } from "../../../../hooks/useUserSearch";
 import type { XenSplitExpenseImage } from "../../../../hooks/xensplit/types";
-import { getSortedCurrencies, getCurrencySymbol, sanitizeAmount } from "../../../../utils/currencyUtils";
+import { getCurrencySymbol, sanitizeAmount } from "../../../../utils/currencyUtils";
 import { EXPENSE_CATEGORIES } from "../../../../constants/xensplit";
 import { getCategoryIcon, getCategoryColor } from "../../../../constants/xensplitCategoryIcons";
 import { xsBadgeSx } from "./rowStyles";
@@ -54,7 +54,7 @@ interface ExpenseFormProps {
   percentSplits: { [userId: string]: string };
   onPercentSplitsChange: (v: { [userId: string]: string }) => void;
   members: Array<{ user_id: string; username: string; avatar?: string | null }>;
-  defaultCurrency?: string;
+  currencyOptions: string[];
   onSubmit: () => void;
   submitDisabled?: boolean;
   submitLabel?: string;
@@ -99,7 +99,7 @@ export default function ExpenseForm({
   percentSplits,
   onPercentSplitsChange,
   members,
-  defaultCurrency,
+  currencyOptions,
   onSubmit,
   submitDisabled,
   submitLabel = "Confirm",
@@ -284,7 +284,7 @@ export default function ExpenseForm({
                 label="Currency"
                 onChange={(e) => onCurrencyChange(e.target.value)}
               >
-                {getSortedCurrencies(defaultCurrency).map((c) => (
+                {currencyOptions.map((c) => (
                   <MenuItem key={c} value={c}>{c} ({getCurrencySymbol(c)})</MenuItem>
                 ))}
               </Select>

@@ -7,7 +7,7 @@ import AddIcon from "@mui/icons-material/Add";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitSettlement, XenSplitSettlementTransfer } from "../../../hooks/xensplit/types";
 import { xsCardSx } from "./components/rowStyles";
-import { formatCurrency } from "../../../utils/currencyUtils";
+import { formatCurrency, getGroupCurrencies } from "../../../utils/currencyUtils";
 import SettlementDetailDialog, { PendingSettlementDialog } from "./components/SettlementDetailDialog";
 import CreateSettlementDialog from "./components/CreateSettlementDialog";
 
@@ -88,6 +88,7 @@ export default function GroupSettlements() {
                     members={group.members}
                     currentUser={user}
                     defaultCurrency={group.default_currency}
+                    currencyOptions={getGroupCurrencies(group.default_currency, group.secondary_currencies)}
                     settleDebt={settleDebt}
                     isSettling={isSettlingDebt}
                 />
@@ -231,6 +232,7 @@ export default function GroupSettlements() {
                 members={group.members}
                 currentUser={user}
                 defaultCurrency={group.default_currency}
+                currencyOptions={getGroupCurrencies(group.default_currency, group.secondary_currencies)}
                 settleDebt={settleDebt}
                 isSettling={isSettlingDebt}
             />

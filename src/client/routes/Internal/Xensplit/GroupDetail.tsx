@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from "react";
-import { formatCurrency } from "../../../utils/currencyUtils";
+import { formatCurrency, getGroupCurrencies } from "../../../utils/currencyUtils";
 import { useQueryClient } from "@tanstack/react-query";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useSnackbar } from "notistack";
@@ -70,7 +70,7 @@ export interface GroupDetailContext {
   isSettlingDebt: boolean;
   onAddMembers: () => void;
   onMemberMenu: (memberId: string, anchor: HTMLElement) => void;
-  updateGroup: (updates: { name?: string; default_currency?: string }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
+  updateGroup: (updates: { name?: string; default_currency?: string; secondary_currencies?: string[] }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
   isUpdating: boolean;
   uploadGroupImage: (file: File, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
   isUploadingImage: boolean;
@@ -714,7 +714,7 @@ export default function GroupDetail() {
             percentSplits={addPercentSplits}
             onPercentSplitsChange={setAddPercentSplits}
             members={group.members}
-            defaultCurrency={group.default_currency}
+            currencyOptions={getGroupCurrencies(group.default_currency, group.secondary_currencies, addCurrency)}
             onSubmit={handleAddExpense}
             submitDisabled={!addTitle.trim() || !addAmount || !addPaidBy || !isExactValid || !isPercentValid}
             loading={isAddingExpense || isUploadingImages}
@@ -795,7 +795,7 @@ export default function GroupDetail() {
             percentSplits={editPercentSplits}
             onPercentSplitsChange={setEditPercentSplits}
             members={group.members}
-            defaultCurrency={group.default_currency}
+            currencyOptions={getGroupCurrencies(group.default_currency, group.secondary_currencies, editCurrency)}
             onSubmit={handleEditExpense}
             submitDisabled={!editTitle.trim() || !editAmount || !editPaidBy || !isEditExactValid || !isEditPercentValid}
             submitLabel="Save Changes"

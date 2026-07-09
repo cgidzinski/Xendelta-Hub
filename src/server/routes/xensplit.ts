@@ -33,6 +33,10 @@ async function notify(userId: string, title: string, message: string, link?: str
   } catch (e) { console.error("Notification failed:", e); }
 }
 
+function sanitizeSecondaryCurrencies(primary: string, secondaries: string[]): string[] {
+  return Array.from(new Set(secondaries.filter((c: string) => c !== primary)));
+}
+
 function transformMembers(obj: any): any {
   return {
     ...obj,
@@ -70,7 +74,7 @@ module.exports = function (app: any) {
   app.post("/api/xensplit/groups", validate(createXenSplitSchema), async (req: Request, res: Response) => {
     try {
       const userId = (req.user as any)._id.toString();
-      const { name, memberIds, default_currency } = req.body;
+      const { name, memberIds, default_currency, secondary_currencies } = req.body;
 
       const members: string[] = [userId];
       if (memberIds && memberIds.length > 0) {
@@ -85,9 +89,11 @@ module.exports = function (app: any) {
         }
       }
 
+      const primaryCurrency = default_currency || "CAD";
       const group = new XenSplit({
         name,
-        default_currency: default_currency || "CAD",
+        default_currency: primaryCurrency,
+        secondary_currencies: sanitizeSecondaryCurrencies(primaryCurrency, secondary_currencies || []),
         created_by: userId,
         members,
         expenses: [],
@@ -147,7 +153,7 @@ module.exports = function (app: any) {
     try {
       const userId = (req.user as any)._id.toString();
       const { groupId } = req.params;
-      const { name, default_currency } = req.body;
+      const { name, default_currency, secondary_currencies } = req.body;
 
       const group = await XenSplit.findById(groupId);
       if (!group) {
@@ -160,6 +166,9 @@ module.exports = function (app: any) {
 
       if (name) group.name = name;
       if (default_currency) group.default_currency = default_currency;
+      if (secondary_currencies !== undefined || default_currency) {
+        group.secondary_currencies = sanitizeSecondaryCurrencies(group.default_currency, secondary_currencies ?? group.secondary_currencies);
+      }
       await group.save();
       await group.populate("members", "username avatar");
       res.json({ status: true, message: "Group updated", data: transformMembers(group.toObject()) });

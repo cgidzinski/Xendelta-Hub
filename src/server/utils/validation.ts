@@ -227,15 +227,19 @@ export const splitSchema = z.object({
   percentage: z.number().min(0).max(100).optional(),
 });
 
+const secondaryCurrenciesSchema = z.array(z.string().min(1).max(10)).max(20).optional();
+
 export const createXenSplitSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name too long"),
   memberIds: z.array(objectIdSchema).optional(),
   default_currency: z.string().optional(),
+  secondary_currencies: secondaryCurrenciesSchema,
 });
 
 export const updateXenSplitSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   default_currency: z.string().optional(),
+  secondary_currencies: secondaryCurrenciesSchema,
 });
 
 export const addXenSplitMembersSchema = z.object({

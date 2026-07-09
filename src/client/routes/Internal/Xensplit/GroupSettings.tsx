@@ -17,14 +17,26 @@ import { useSnackbar } from "notistack";
 import type { GroupDetailContext } from "./GroupDetail";
 import { xsCardSx } from "./components/rowStyles";
 import GroupAvatar from "./components/GroupAvatar";
-import { ALL_CURRENCIES, formatCurrency } from "../../../utils/currencyUtils";
+import { ALL_CURRENCIES, formatCurrency, withoutCurrency } from "../../../utils/currencyUtils";
+import SecondaryCurrenciesSelect from "./components/SecondaryCurrenciesSelect";
 
 export default function GroupSettings() {
     const { group, user, isCreator, onAddMembers, onMemberMenu, updateGroup, isUpdating, uploadGroupImage, isUploadingImage, balancesData } =
         useOutletContext<GroupDetailContext>();
     const { enqueueSnackbar } = useSnackbar();
     const [selectedCurrency, setSelectedCurrency] = useState(group.default_currency || "CAD");
+    const [selectedSecondaries, setSelectedSecondaries] = useState<string[]>(group.secondary_currencies || []);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handlePrimaryCurrencyChange = (next: string) => {
+        setSelectedCurrency(next);
+        setSelectedSecondaries((prev) => withoutCurrency(prev, next));
+    };
+
+    const currenciesDirty =
+        selectedCurrency !== group.default_currency ||
+        selectedSecondaries.length !== (group.secondary_currencies || []).length ||
+        selectedSecondaries.some((c) => !(group.secondary_currencies || []).includes(c));
 
     const handleImageSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -36,12 +48,12 @@ export default function GroupSettings() {
         });
     };
 
-    const handleSaveCurrency = () => {
+    const handleSaveCurrencies = () => {
         updateGroup(
-            { default_currency: selectedCurrency },
+            { default_currency: selectedCurrency, secondary_currencies: selectedSecondaries },
             {
-                onSuccess: () => enqueueSnackbar("Default currency updated", { variant: "success" }),
-                onError: (error: Error) => enqueueSnackbar(error?.message || "Failed to update currency", { variant: "error" }),
+                onSuccess: () => enqueueSnackbar("Currencies updated", { variant: "success" }),
+                onError: (error: Error) => enqueueSnackbar(error?.message || "Failed to update currencies", { variant: "error" }),
             }
         );
     };
@@ -82,36 +94,58 @@ export default function GroupSettings() {
                 )}
             </Box>
 
-            {/* Default Currency — fixed, on top */}
+            {/* Currencies — fixed, on top */}
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48, flexShrink: 0 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Default Currency
+                    Currencies
                 </Typography>
-                {isCreator && selectedCurrency !== group.default_currency && (
-                    <Button variant="contained" size="small" onClick={handleSaveCurrency} disabled={isUpdating}>
+                {isCreator && currenciesDirty && (
+                    <Button variant="contained" size="small" onClick={handleSaveCurrencies} disabled={isUpdating}>
                         Save
                     </Button>
                 )}
             </Box>
-            <Box sx={{ flexShrink: 0, mb: 3, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <Box>
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>Primary currency</Typography>
-                    <Typography variant="caption" color="text.secondary">Default when adding expenses</Typography>
+            <Box sx={{ flexShrink: 0, mb: 3, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5, display: "flex", flexDirection: "column", gap: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <Box>
+                        <Typography variant="body1" sx={{ fontWeight: 500 }}>Primary currency</Typography>
+                        <Typography variant="caption" color="text.secondary">Default when adding expenses</Typography>
+                    </Box>
+                    {isCreator ? (
+                        <FormControl size="small" sx={{ minWidth: 110 }}>
+                            <Select
+                                value={selectedCurrency}
+                                onChange={(e) => handlePrimaryCurrencyChange(e.target.value)}
+                            >
+                                {ALL_CURRENCIES.map((c) => (
+                                    <MenuItem key={c} value={c}>{c}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                    ) : (
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{group.default_currency}</Typography>
+                    )}
                 </Box>
-                {isCreator ? (
-                    <FormControl size="small" sx={{ minWidth: 110 }}>
-                        <Select
-                            value={selectedCurrency}
-                            onChange={(e) => setSelectedCurrency(e.target.value)}
-                        >
-                            {ALL_CURRENCIES.map((c) => (
-                                <MenuItem key={c} value={c}>{c}</MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                ) : (
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{group.default_currency}</Typography>
-                )}
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <Box>
+                        <Typography variant="body1" sx={{ fontWeight: 500 }}>Secondary currencies</Typography>
+                        <Typography variant="caption" color="text.secondary">Also selectable when adding expenses</Typography>
+                    </Box>
+                    {isCreator ? (
+                        <Box sx={{ minWidth: 160 }}>
+                            <SecondaryCurrenciesSelect
+                                primaryCurrency={selectedCurrency}
+                                value={selectedSecondaries}
+                                onChange={setSelectedSecondaries}
+                                size="small"
+                            />
+                        </Box>
+                    ) : (
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {group.secondary_currencies?.length ? group.secondary_currencies.join(", ") : "None"}
+                        </Typography>
+                    )}
+                </Box>
             </Box>
 
             {/* Members header — fixed */}

@@ -21,7 +21,7 @@ import EastIcon from "@mui/icons-material/East";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
 import type { XenSplitMember, SettleDebtInput } from "../../../../hooks/xensplit/types";
-import { sanitizeAmount, getSortedCurrencies, getCurrencySymbol } from "../../../../utils/currencyUtils";
+import { sanitizeAmount, getCurrencySymbol } from "../../../../utils/currencyUtils";
 import { PersonStack } from "./SettlementDetailDialog";
 
 type Direction = "i_paid" | "they_paid";
@@ -32,11 +32,12 @@ interface CreateSettlementProps {
     members: XenSplitMember[];
     currentUser: { id: string; username: string; avatar?: string | null };
     defaultCurrency?: string;
+    currencyOptions: string[];
     settleDebt: (input: SettleDebtInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
     isSettling: boolean;
 }
 
-export default function CreateSettlementDialog({ open, onClose, members, currentUser, defaultCurrency, settleDebt, isSettling }: CreateSettlementProps) {
+export default function CreateSettlementDialog({ open, onClose, members, currentUser, defaultCurrency, currencyOptions, settleDebt, isSettling }: CreateSettlementProps) {
     const { enqueueSnackbar } = useSnackbar();
     const [counterpartyId, setCounterpartyId] = useState("");
     const [direction, setDirection] = useState<Direction>("i_paid");
@@ -175,7 +176,7 @@ export default function CreateSettlementDialog({ open, onClose, members, current
                     <FormControl sx={{ flex: 1 }}>
                         <InputLabel>Currency</InputLabel>
                         <Select value={currency} label="Currency" onChange={(e) => setCurrency(e.target.value)}>
-                            {getSortedCurrencies(defaultCurrency).map((c) => (
+                            {currencyOptions.map((c) => (
                                 <MenuItem key={c} value={c}>{c} ({getCurrencySymbol(c)})</MenuItem>
                             ))}
                         </Select>
