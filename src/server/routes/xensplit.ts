@@ -23,7 +23,7 @@ import {
   xenSplitExpenseImageParamSchema,
   xenSplitSettlementParamSchema,
 } from "../utils/validation";
-import { calculateBalances, calculateMinimumTransfers } from "../utils/xenSplitUtils";
+import { calculateBalances, calculateSimplifiedTransfers } from "../utils/xenSplitUtils";
 
 async function notify(userId: string, title: string, message: string, link?: string, icon = "announcement") {
   try {
@@ -374,7 +374,7 @@ module.exports = function (app: any) {
     try {
       const userId = (req.user as any)._id.toString();
       const { groupId } = req.params;
-      const { paid_by, amount, currency, title, notes, category, date, split_type, splits, on_hold } = req.body;
+      const { paid_by, amount, currency, title, notes, category, date, split_type, splits, on_hold, do_not_simplify } = req.body;
 
       const group = await XenSplit.findById(groupId);
       if (!group) {
@@ -434,6 +434,7 @@ module.exports = function (app: any) {
         split_type,
         splits: resolvedSplits,
         on_hold: on_hold === true,
+        do_not_simplify: do_not_simplify === true,
         created_at: new Date(),
       };
 
@@ -505,6 +506,7 @@ module.exports = function (app: any) {
         }
         expense.on_hold = updates.on_hold;
       }
+      if (updates.do_not_simplify !== undefined) expense.do_not_simplify = updates.do_not_simplify;
 
       // Recalculate splits if needed
       if (updates.split_type || updates.amount) {
@@ -759,7 +761,7 @@ module.exports = function (app: any) {
       const groupObj = group.toObject();
       const groupForCalc = { ...groupObj, members: populatedMembers.map((m: any) => m._id.toString()) };
       const balances = calculateBalances(groupForCalc);
-      const settlements = calculateMinimumTransfers(balances);
+      const settlements = calculateSimplifiedTransfers(groupForCalc);
 
       // Enrich with user details
       const enrichedBalances: any = {};

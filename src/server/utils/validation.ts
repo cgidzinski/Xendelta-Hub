@@ -257,6 +257,7 @@ export const createExpenseSchema = z.object({
   split_type: z.enum(["equal", "exact", "percent"]),
   splits: z.array(splitSchema).optional(),
   on_hold: z.boolean().optional(),
+  do_not_simplify: z.boolean().optional(),
 });
 
 export const updateExpenseSchema = z.object({
@@ -270,6 +271,7 @@ export const updateExpenseSchema = z.object({
   split_type: z.enum(["equal", "exact", "percent"]).optional(),
   splits: z.array(splitSchema).optional(),
   on_hold: z.boolean().optional(),
+  do_not_simplify: z.boolean().optional(),
 });
 
 export const settleDebtSchema = z.object({

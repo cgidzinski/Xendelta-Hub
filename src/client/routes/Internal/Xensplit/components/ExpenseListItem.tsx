@@ -1,5 +1,6 @@
 import { Box, Typography, Avatar, alpha, Chip } from "@mui/material";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
+import LinkOffIcon from "@mui/icons-material/LinkOff";
 import type { XenSplitExpense } from "../../../../hooks/xensplit/types";
 import { formatCurrency } from "../../../../utils/currencyUtils";
 import { getCategoryIcon, getCategoryColor } from "../../../../constants/xensplitCategoryIcons";
@@ -59,6 +60,16 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
                         label="On Hold"
                         size="small"
                         color="warning"
+                        variant="outlined"
+                        sx={{ height: 18, fontSize: "0.6rem", mt: 0.25, "& .MuiChip-label": { px: 0.75 } }}
+                    />
+                )}
+                {expense.do_not_simplify && (
+                    <Chip
+                        icon={<LinkOffIcon sx={{ fontSize: "14px !important" }} />}
+                        label="Not Simplified"
+                        size="small"
+                        color="info"
                         variant="outlined"
                         sx={{ height: 18, fontSize: "0.6rem", mt: 0.25, "& .MuiChip-label": { px: 0.75 } }}
                     />
