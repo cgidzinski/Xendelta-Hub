@@ -134,11 +134,12 @@ describe("calculateSimplifiedTransfers", () => {
     expect(calculateBalances(flaggedDoc)).toEqual(calculateBalances(unflaggedDoc));
   });
 
-  it("reroutes a 3-member unflagged group while leaving a flagged pair direct", () => {
-    // Unflagged: A pays 90 split 3 ways -> B owes A 30, C owes A 30.
-    //            B pays 30 split 3 ways among A/B/C -> A owes B 10, C owes B 10 (net contribution).
-    // Combined unflagged net: A +50, B -30+20=... computed via calculateMinimumTransfers directly below.
-    // Flagged: C pays Bob... reuse a direct A<->C flagged expense.
+  it("reroutes a 3-member unflagged pool separately from a flagged pair (never merges with 3+ aggregate holders)", () => {
+    // Unflagged: A pays 90 split 3 ways, B pays 30 split 3 ways -> aggregate net: A=50, B=-10, C=-40.
+    // Flagged: C pays 12 for A only -> protected: A owes C 12.
+    // Since the aggregate pool has 3 nonzero holders (A, B, C), the aggregate
+    // transfers must NOT be netted against the protected A<->C debt — doing so
+    // could let B's unrelated debt change what the flagged expense shows.
     const doc = makeDoc([
       { paid_by: "A", amount: 90, currency: "CAD", splits: equalSplit(90, ["A", "B", "C"]) },
       { paid_by: "B", amount: 30, currency: "CAD", splits: equalSplit(30, ["A", "B", "C"]) },
@@ -146,13 +147,34 @@ describe("calculateSimplifiedTransfers", () => {
     ]);
 
     const transfers = sortTransfers(calculateSimplifiedTransfers(doc));
-    // Unflagged-only balances: A = 90-30 -10 = 50; B = -30+30-10 = -10; C = -30-10 = -40.
-    // calculateMinimumTransfers -> C owes A 40, B owes A 10 (greedy largest-first).
-    // Flagged direct debt: A owes C 12.
-    // Merge A<->C: A owes C 12 vs C owes A 40 -> net C owes A 28.
     expect(transfers).toEqual([
+      { from: "A", to: "C", amount: 12, currency: "CAD" }, // protected: exactly the flagged expense, untouched
+      { from: "B", to: "A", amount: 10, currency: "CAD" }, // aggregate
+      { from: "C", to: "A", amount: 40, currency: "CAD" }, // aggregate
+    ]);
+  });
+
+  it("regression: an unrelated third party's debt must never flip or resize a flagged pair's debt", () => {
+    // Flagged: A pays $10 for B only -> Direct/protected fact: B owes A $10.
+    // Two unrelated unflagged expenses force the aggregate algorithm to route
+    // a $15 payment from A to B directly (A owes C 20, C owes B 15 in the
+    // aggregate pool -> with only A/B/C, A ends up paying B directly).
+    // A buggy implementation that merges the aggregate reroute into the
+    // protected pair would show "A owes B $5" here -- flipping the direction
+    // of a debt the user explicitly flagged to stay untouched.
+    const doc = makeDoc([
+      { paid_by: "A", amount: 10, currency: "CAD", do_not_simplify: true, splits: [{ user_id: "B", amount_owed: 10 }] },
+      { paid_by: "C", amount: 20, currency: "CAD", splits: [{ user_id: "A", amount_owed: 20 }] },
+      { paid_by: "B", amount: 15, currency: "CAD", splits: [{ user_id: "C", amount_owed: 15 }] },
+    ]);
+
+    const transfers = sortTransfers(calculateSimplifiedTransfers(doc));
+    // Protected: B owes A $10, untouched. Aggregate (A=-20,B=15,C=5,
+    // 3 nonzero holders so kept separate): A pays B $15, A pays C $5.
+    expect(transfers).toEqual([
+      { from: "A", to: "B", amount: 15, currency: "CAD" },
+      { from: "A", to: "C", amount: 5, currency: "CAD" },
       { from: "B", to: "A", amount: 10, currency: "CAD" },
-      { from: "C", to: "A", amount: 28, currency: "CAD" },
     ]);
   });
 });
