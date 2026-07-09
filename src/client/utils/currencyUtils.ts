@@ -12,9 +12,24 @@ export function getCurrencySymbol(currency: string): string {
   );
 }
 
-export function getSortedCurrencies(defaultCurrency?: string): string[] {
-  if (!defaultCurrency) return ALL_CURRENCIES;
-  return [defaultCurrency, ...ALL_CURRENCIES.filter((c) => c !== defaultCurrency)];
+export function withoutCurrency(currencies: string[], excluded: string): string[] {
+  return currencies.filter((c) => c !== excluded);
+}
+
+// Currency options for a group's transaction pickers: primary first, then secondaries.
+// If `include` isn't already in that set, it's appended so an existing value never
+// disappears from the dropdown (e.g. editing a record whose currency was later removed
+// from the group's secondaries).
+export function getGroupCurrencies(primary?: string, secondaries?: string[], include?: string): string[] {
+  const seen = new Set<string>();
+  const list: string[] = [];
+  [primary || "CAD", ...(secondaries || []), ...(include ? [include] : [])].forEach((c) => {
+    if (!seen.has(c)) {
+      seen.add(c);
+      list.push(c);
+    }
+  });
+  return list;
 }
 
 // Accepts only digits and a single decimal separator (comma normalized to dot).

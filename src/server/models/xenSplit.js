@@ -44,6 +44,7 @@ var settlementSchema = new Schema({
 var xenSplitSchema = new Schema({
   name: { type: String, required: true, maxlength: 100 },
   default_currency: { type: String, default: "CAD" },
+  secondary_currencies: { type: [String], default: [] },
   image_url: { type: String },
   created_by: { type: String, required: true },
   created_at: { type: Date, default: Date.now },

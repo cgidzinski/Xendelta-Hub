@@ -53,6 +53,7 @@ export interface XenSplit {
   _id: string;
   name: string;
   default_currency: string;
+  secondary_currencies: string[];
   image_url?: string;
   created_by: string;
   created_at: string;
@@ -136,6 +137,7 @@ export interface CreateXenSplitInput {
   name: string;
   memberIds?: string[];
   default_currency?: string;
+  secondary_currencies?: string[];
 }
 
 export interface UpdateExpenseInput {

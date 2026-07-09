@@ -13,12 +13,14 @@ export function useXenSplit(groupId: string) {
     },
     enabled: !!groupId,
     staleTime: 0, // Always refetch in background
-    placeholderData: (prev) => prev,
+    // Only reuse cached data as a placeholder for this same group — otherwise
+    // navigating from a different group briefly shows its stale currency/name/etc.
+    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === groupId ? prev : undefined),
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ name, default_currency }: { name?: string; default_currency?: string }) => {
-      const res = await apiClient.put(`/api/xensplit/groups/${groupId}`, { name, default_currency });
+    mutationFn: async ({ name, default_currency, secondary_currencies }: { name?: string; default_currency?: string; secondary_currencies?: string[] }) => {
+      const res = await apiClient.put(`/api/xensplit/groups/${groupId}`, { name, default_currency, secondary_currencies });
       return res.data.data as XenSplit;
     },
     onSuccess: () => {
