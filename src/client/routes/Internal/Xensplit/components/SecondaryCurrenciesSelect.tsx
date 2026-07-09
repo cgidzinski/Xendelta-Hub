@@ -6,7 +6,7 @@ import {
   Checkbox,
   ListItemText,
 } from "@mui/material";
-import { ALL_CURRENCIES, withoutCurrency } from "../../../../utils/currencyUtils";
+import { ALL_CURRENCIES, withoutCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 
 interface SecondaryCurrenciesSelectProps {
   primaryCurrency: string;
@@ -38,7 +38,7 @@ export default function SecondaryCurrenciesSelect({
         }}
         renderValue={(selected) => (selected.length > 0 ? selected.join(", ") : "None")}
         sx={{ "& .MuiSelect-select": { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }}
-        MenuProps={{ PaperProps: { sx: { maxHeight: 300 } } }}
+        MenuProps={{ ...STABLE_CURRENCY_MENU_PROPS, PaperProps: { sx: { maxHeight: 300 } } }}
       >
         {ALL_CURRENCIES.map((c) => {
           const isPrimary = c === primaryCurrency;

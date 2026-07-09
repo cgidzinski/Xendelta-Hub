@@ -21,7 +21,7 @@ import EastIcon from "@mui/icons-material/East";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
 import type { XenSplitMember, SettleDebtInput } from "../../../../hooks/xensplit/types";
-import { sanitizeAmount, getCurrencySymbol } from "../../../../utils/currencyUtils";
+import { sanitizeAmount, getCurrencySymbol, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 import { PersonStack } from "./SettlementDetailDialog";
 
 type Direction = "i_paid" | "they_paid";
@@ -175,7 +175,7 @@ export default function CreateSettlementDialog({ open, onClose, members, current
                 <Box sx={{ display: "flex", gap: 2 }}>
                     <FormControl sx={{ flex: 1 }}>
                         <InputLabel>Currency</InputLabel>
-                        <Select value={currency} label="Currency" onChange={(e) => setCurrency(e.target.value)}>
+                        <Select value={currency} label="Currency" onChange={(e) => setCurrency(e.target.value)} MenuProps={STABLE_CURRENCY_MENU_PROPS}>
                             {currencyOptions.map((c) => (
                                 <MenuItem key={c} value={c}>{c} ({getCurrencySymbol(c)})</MenuItem>
                             ))}

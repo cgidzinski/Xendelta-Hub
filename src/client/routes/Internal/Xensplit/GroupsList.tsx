@@ -26,7 +26,7 @@ import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import GroupCard from "./components/GroupCard";
 import { useAuth } from "../../../contexts/AuthContext";
-import { ALL_CURRENCIES, withoutCurrency } from "../../../utils/currencyUtils";
+import { ALL_CURRENCIES, withoutCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
 import SecondaryCurrenciesSelect from "./components/SecondaryCurrenciesSelect";
 
 export default function GroupsList() {
@@ -183,6 +183,7 @@ export default function GroupsList() {
               value={primaryCurrency}
               label="Primary Currency"
               onChange={(e) => handlePrimaryCurrencyChange(e.target.value)}
+              MenuProps={STABLE_CURRENCY_MENU_PROPS}
             >
               {ALL_CURRENCIES.map((c) => (
                 <MenuItem key={c} value={c}>{c}</MenuItem>

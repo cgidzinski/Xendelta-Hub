@@ -26,7 +26,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { SearchedUser } from "../../../../hooks/useUserSearch";
 import type { XenSplitExpenseImage } from "../../../../hooks/xensplit/types";
-import { getCurrencySymbol, sanitizeAmount } from "../../../../utils/currencyUtils";
+import { getCurrencySymbol, sanitizeAmount, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 import { EXPENSE_CATEGORIES } from "../../../../constants/xensplit";
 import { getCategoryIcon, getCategoryColor } from "../../../../constants/xensplitCategoryIcons";
 import { xsBadgeSx } from "./rowStyles";
@@ -288,6 +288,7 @@ export default function ExpenseForm({
                 value={currency}
                 label="Currency"
                 onChange={(e) => onCurrencyChange(e.target.value)}
+                MenuProps={STABLE_CURRENCY_MENU_PROPS}
               >
                 {currencyOptions.map((c) => (
                   <MenuItem key={c} value={c}>{c} ({getCurrencySymbol(c)})</MenuItem>

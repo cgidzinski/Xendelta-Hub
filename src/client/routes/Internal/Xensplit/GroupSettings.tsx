@@ -17,7 +17,7 @@ import { useSnackbar } from "notistack";
 import type { GroupDetailContext } from "./GroupDetail";
 import { xsCardSx } from "./components/rowStyles";
 import GroupAvatar from "./components/GroupAvatar";
-import { ALL_CURRENCIES, formatCurrency, withoutCurrency } from "../../../utils/currencyUtils";
+import { ALL_CURRENCIES, formatCurrency, withoutCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
 import SecondaryCurrenciesSelect from "./components/SecondaryCurrenciesSelect";
 
 export default function GroupSettings() {
@@ -121,6 +121,7 @@ export default function GroupSettings() {
                             <Select
                                 value={selectedCurrency}
                                 onChange={(e) => handlePrimaryCurrencyChange(e.target.value)}
+                                MenuProps={STABLE_CURRENCY_MENU_PROPS}
                             >
                                 {ALL_CURRENCIES.map((c) => (
                                     <MenuItem key={c} value={c}>{c}</MenuItem>

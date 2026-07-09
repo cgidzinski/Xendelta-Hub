@@ -1,5 +1,14 @@
 export const ALL_CURRENCIES = ["CAD", "USD", "JPY", "EUR", "GBP", "AUD", "CNY", "INR", "MXN", "BRL"];
 
+// MUI's default Select menu grows in with a Grow/scale transition anchored to the
+// center of the select — inside a Dialog this reads as the list "jumping" left/up
+// as it scales in. Left-anchor the menu and disable the transition to keep it stable.
+export const STABLE_CURRENCY_MENU_PROPS = {
+  anchorOrigin: { vertical: "bottom", horizontal: "left" },
+  transformOrigin: { vertical: "top", horizontal: "left" },
+  transitionDuration: 0,
+} as const;
+
 export function formatCurrency(amount: number, currency: string): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
 }
