@@ -43,10 +43,6 @@ import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import LinkOffIcon from "@mui/icons-material/LinkOff";
-import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
-import SpeedDial from "@mui/material/SpeedDial";
-import SpeedDialAction from "@mui/material/SpeedDialAction";
-import SpeedDialIcon from "@mui/material/SpeedDialIcon";
 import { useTitle } from "../../../hooks/useTitle";
 import { useXenSplit } from "../../../hooks/xensplit/useGroup";
 import { useXenSplits } from "../../../hooks/xensplit/useGroups";
@@ -593,18 +589,14 @@ export default function GroupDetail() {
         )}
 
         <Outlet context={outletContext} />
-        <SpeedDial
-          ariaLabel="Add actions"
-          icon={<SpeedDialIcon />}
+        <Fab
+          color="primary"
+          aria-label="Add expense"
+          onClick={openAddExpenseModal}
           sx={{ display: hideAddExpense ? "none" : { xs: "flex", md: "none" }, position: "fixed", bottom: 24, right: 24 }}
         >
-          <SpeedDialAction
-            icon={<AddIcon />}
-            tooltipTitle="New Expense"
-            tooltipOpen
-            onClick={openAddExpenseModal}
-          />
-        </SpeedDial>
+          <AddIcon />
+        </Fab>
       </Container>
 
       <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>

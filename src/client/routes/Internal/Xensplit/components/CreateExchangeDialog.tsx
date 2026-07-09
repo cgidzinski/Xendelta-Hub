@@ -10,6 +10,7 @@ import {
     DialogActions,
     TextField,
     FormControl,
+    InputLabel,
     Select,
     MenuItem,
     IconButton,
@@ -18,12 +19,12 @@ import {
     Step,
     StepLabel,
     Divider,
+    useMediaQuery,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import SwapVertIcon from "@mui/icons-material/SwapVert";
 import CheckIcon from "@mui/icons-material/Check";
-import InputAdornment from "@mui/material/InputAdornment";
 import type { XenSplitMember, CreateExchangeInput } from "../../../../hooks/xensplit/types";
 import { sanitizeAmount, getGroupCurrencies, getCurrencySymbol, formatCurrency, getPreferredRateCurrency, setPreferredRateCurrency, resolveRateBase, formatRate } from "../../../../utils/currencyUtils";
 
@@ -53,6 +54,7 @@ export default function CreateExchangeDialog({
     isAddingExchange,
 }: CreateExchangeDialogProps) {
     const { enqueueSnackbar } = useSnackbar();
+    const isMobile = useMediaQuery("(max-width:600px)");
 
     const [step, setStep] = useState(0);
     const [partyAId, setPartyAId] = useState(currentUser.id);
@@ -237,7 +239,7 @@ export default function CreateExchangeDialog({
     );
 
     return (
-        <Dialog fullWidth maxWidth="xs" open={open} onClose={onClose} PaperProps={{ sx: { borderRadius: 3 } }}>
+        <Dialog fullWidth maxWidth="xs" fullScreen={isMobile} open={open} onClose={onClose} PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3 } }}>
             <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
                 <IconButton onClick={onClose} size="small" sx={{ position: "absolute", top: 12, right: 12 }}>
                     <CloseIcon fontSize="small" />
@@ -266,7 +268,8 @@ export default function CreateExchangeDialog({
 
                         {/* Currency A */}
                         <FormControl fullWidth size="small">
-                            <Select value={currencyA} onChange={(e) => setCurrencyA(e.target.value)}>
+                            <InputLabel id="exchange-currency-a-label">Gives</InputLabel>
+                            <Select labelId="exchange-currency-a-label" label="Gives" value={currencyA} onChange={(e) => setCurrencyA(e.target.value)}>
                                 {getGroupCurrencies(defaultCurrency, secondaryCurrencies, currencyA).map((c) => (
                                     <MenuItem key={c} value={c}>
                                         {c} ({getCurrencySymbol(c)})
@@ -284,6 +287,12 @@ export default function CreateExchangeDialog({
                                     setCurrencyB(tmp);
                                 }}
                                 title="Swap currencies"
+                                sx={{
+                                    bgcolor: "action.selected",
+                                    border: "1px solid",
+                                    borderColor: "divider",
+                                    "&:hover": { bgcolor: "action.hover" },
+                                }}
                             >
                                 <SwapVertIcon fontSize="small" />
                             </IconButton>
@@ -296,7 +305,8 @@ export default function CreateExchangeDialog({
 
                         {/* Currency B */}
                         <FormControl fullWidth size="small">
-                            <Select value={currencyB} onChange={(e) => setCurrencyB(e.target.value)}>
+                            <InputLabel id="exchange-currency-b-label">Gives</InputLabel>
+                            <Select labelId="exchange-currency-b-label" label="Gives" value={currencyB} onChange={(e) => setCurrencyB(e.target.value)}>
                                 {getGroupCurrencies(defaultCurrency, secondaryCurrencies, currencyB).map((c) => (
                                     <MenuItem key={c} value={c}>
                                         {c} ({getCurrencySymbol(c)})
@@ -316,7 +326,7 @@ export default function CreateExchangeDialog({
 
                 {/* Step 2: Amounts */}
                 {step === 1 && (
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
                             <Avatar src={partyA?.avatar || undefined} sx={{ width: 32, height: 32 }}>
                                 {partyA?.username[0]?.toUpperCase()}
@@ -326,7 +336,7 @@ export default function CreateExchangeDialog({
                                     {partyA?.username}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                    {currencyA}
+                                    Gives {currencyA}
                                 </Typography>
                             </Box>
                             <IconButton
@@ -352,7 +362,14 @@ export default function CreateExchangeDialog({
                                     // Reset edit order so auto-compute doesn't clobber the freshly swapped values
                                     setEditOrder([]);
                                 }}
-                                sx={{ flexShrink: 0, color: "text.secondary" }}
+                                sx={{
+                                    flexShrink: 0,
+                                    color: "text.secondary",
+                                    bgcolor: "action.selected",
+                                    border: "1px solid",
+                                    borderColor: "divider",
+                                    "&:hover": { bgcolor: "action.hover" },
+                                }}
                                 title="Swap parties and currencies"
                             >
                                 <SwapHorizIcon sx={{ fontSize: 20 }} />
@@ -362,7 +379,7 @@ export default function CreateExchangeDialog({
                                     {partyB?.username}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                    {currencyB}
+                                    Gives {currencyB}
                                 </Typography>
                             </Box>
                             <Avatar src={partyB?.avatar || undefined} sx={{ width: 32, height: 32 }}>
@@ -373,7 +390,6 @@ export default function CreateExchangeDialog({
                         <TextField
                             label={`${partyA?.username ?? "Party A"}'s amount (${currencyA})`}
                             fullWidth
-                            size="small"
                             value={amountA}
                             onChange={(e) => {
                                 const v = sanitizeAmount(e.target.value);
@@ -388,50 +404,56 @@ export default function CreateExchangeDialog({
                             sx={undefined}
                         />
 
-                        <TextField
-                            label="Exchange Rate"
-                            fullWidth
-                            size="small"
-                            value={rateInput}
-                            onChange={(e) => {
-                                const v = sanitizeAmount(e.target.value);
-                                if (v === null) return;
-                                setRateInput(v);
-                                const parsed = parseFloat(v);
-                                if (!isNaN(parsed) && parsed > 0) {
-                                    const canonical = inverted
-                                        ? parseFloat((1 / parsed).toFixed(10)).toString()
-                                        : v;
-                                    handleFieldEdit("rate", canonical);
-                                } else {
-                                    handleFieldEdit("rate", v);
-                                }
-                            }}
-                            onBlur={() => {
-                                const n = parseFloat(rateInput);
-                                if (!isNaN(n)) setRateInput(parseFloat(n.toFixed(6)).toString());
-                            }}
-                            slotProps={{
-                                htmlInput: { inputMode: "decimal" },
-                                inputLabel: { shrink: true },
-                                input: {
-                                    endAdornment: (
-                                        <InputAdornment position="end">
-                                            <IconButton size="small" onClick={handleRateInvert} tabIndex={-1} title="Invert rate direction">
-                                                <SwapVertIcon fontSize="small" />
-                                            </IconButton>
-                                        </InputAdornment>
-                                    ),
-                                },
-                            }}
-                            helperText={inverted ? `1 ${currencyB} = ? ${currencyA}` : `1 ${currencyA} = ? ${currencyB}`}
-                            sx={undefined}
-                        />
+                        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                            <TextField
+                                label="Exchange Rate"
+                                fullWidth
+                                value={rateInput}
+                                onChange={(e) => {
+                                    const v = sanitizeAmount(e.target.value);
+                                    if (v === null) return;
+                                    setRateInput(v);
+                                    const parsed = parseFloat(v);
+                                    if (!isNaN(parsed) && parsed > 0) {
+                                        const canonical = inverted
+                                            ? parseFloat((1 / parsed).toFixed(10)).toString()
+                                            : v;
+                                        handleFieldEdit("rate", canonical);
+                                    } else {
+                                        handleFieldEdit("rate", v);
+                                    }
+                                }}
+                                onBlur={() => {
+                                    const n = parseFloat(rateInput);
+                                    if (!isNaN(n)) setRateInput(parseFloat(n.toFixed(6)).toString());
+                                }}
+                                slotProps={{
+                                    htmlInput: { inputMode: "decimal" },
+                                    inputLabel: { shrink: true },
+                                }}
+                                helperText={inverted ? `1 ${currencyB} = ? ${currencyA}` : `1 ${currencyA} = ? ${currencyB}`}
+                                sx={undefined}
+                            />
+                            <IconButton
+                                onClick={handleRateInvert}
+                                tabIndex={-1}
+                                title="Invert rate direction"
+                                sx={{
+                                    mt: 1,
+                                    flexShrink: 0,
+                                    bgcolor: "action.selected",
+                                    border: "1px solid",
+                                    borderColor: "divider",
+                                    "&:hover": { bgcolor: "action.hover" },
+                                }}
+                            >
+                                <SwapVertIcon fontSize="small" />
+                            </IconButton>
+                        </Box>
 
                         <TextField
                             label={`${partyB?.username ?? "Party B"}'s amount (${currencyB})`}
                             fullWidth
-                            size="small"
                             value={amountB}
                             onChange={(e) => {
                                 const v = sanitizeAmount(e.target.value);
