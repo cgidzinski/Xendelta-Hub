@@ -118,15 +118,17 @@ export default function GroupSettlements() {
                 >
                     New
                 </Button>
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    startIcon={<SwapHorizIcon sx={{ fontSize: 18 }} />}
-                    onClick={onAddExchange}
-                    sx={{ borderRadius: 2, fontWeight: 600, textTransform: "none" }}
-                >
-                    Currency Exchange
-                </Button>
+                {group.secondary_currencies?.length > 0 && (
+                    <Button
+                        fullWidth
+                        variant="outlined"
+                        startIcon={<SwapHorizIcon sx={{ fontSize: 18 }} />}
+                        onClick={onAddExchange}
+                        sx={{ borderRadius: 2, fontWeight: 600, textTransform: "none" }}
+                    >
+                        Currency Exchange
+                    </Button>
+                )}
                 <Button
                     fullWidth
                     variant="outlined"

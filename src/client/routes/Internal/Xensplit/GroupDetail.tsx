@@ -1019,6 +1019,7 @@ export default function GroupDetail() {
         members={group.members}
         currentUser={{ id: user.id, username: user.username, avatar: user.avatar }}
         defaultCurrency={group.default_currency}
+        secondaryCurrencies={group.secondary_currencies}
         groupId={groupId!}
         addExchange={addExchange}
         isAddingExchange={isAddingExchange}

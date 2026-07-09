@@ -25,7 +25,7 @@ import SwapVertIcon from "@mui/icons-material/SwapVert";
 import CheckIcon from "@mui/icons-material/Check";
 import InputAdornment from "@mui/material/InputAdornment";
 import type { XenSplitMember, CreateExchangeInput } from "../../../../hooks/xensplit/types";
-import { sanitizeAmount, getSortedCurrencies, getCurrencySymbol, formatCurrency, getPreferredRateCurrency, setPreferredRateCurrency, resolveRateBase, formatRate } from "../../../../utils/currencyUtils";
+import { sanitizeAmount, getGroupCurrencies, getCurrencySymbol, formatCurrency, getPreferredRateCurrency, setPreferredRateCurrency, resolveRateBase, formatRate } from "../../../../utils/currencyUtils";
 
 interface CreateExchangeDialogProps {
     open: boolean;
@@ -33,6 +33,7 @@ interface CreateExchangeDialogProps {
     members: XenSplitMember[];
     currentUser: { id: string; username: string; avatar?: string | null };
     defaultCurrency?: string;
+    secondaryCurrencies?: string[];
     groupId: string;
     addExchange: (input: CreateExchangeInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
     isAddingExchange: boolean;
@@ -46,6 +47,7 @@ export default function CreateExchangeDialog({
     members,
     currentUser,
     defaultCurrency,
+    secondaryCurrencies,
     groupId,
     addExchange,
     isAddingExchange,
@@ -58,7 +60,7 @@ export default function CreateExchangeDialog({
     const [amountA, setAmountA] = useState("");
     const [amountB, setAmountB] = useState("");
     const [partyBId, setPartyBId] = useState("");
-    const [currencyB, setCurrencyB] = useState((defaultCurrency ?? "CAD") === "CAD" ? "USD" : "CAD");
+    const [currencyB, setCurrencyB] = useState(secondaryCurrencies?.[0] ?? ((defaultCurrency ?? "CAD") === "CAD" ? "USD" : "CAD"));
     const [rate, setRate] = useState("");
     // rateInput is the string shown in the TextField; it may be in the inverted direction.
     // rate (canonical) is always 1 currencyA = rate currencyB.
@@ -81,7 +83,7 @@ export default function CreateExchangeDialog({
             setAmountA("");
             setAmountB("");
             setPartyBId("");
-            setCurrencyB((defaultCurrency ?? "CAD") === "CAD" ? "USD" : "CAD");
+            setCurrencyB(secondaryCurrencies?.[0] ?? ((defaultCurrency ?? "CAD") === "CAD" ? "USD" : "CAD"));
             setRate("");
             setRateInput("");
             setPreferred(getPreferredRateCurrency(groupId, defaultCurrency ?? "CAD"));
@@ -265,7 +267,7 @@ export default function CreateExchangeDialog({
                         {/* Currency A */}
                         <FormControl fullWidth size="small">
                             <Select value={currencyA} onChange={(e) => setCurrencyA(e.target.value)}>
-                                {getSortedCurrencies(defaultCurrency).map((c) => (
+                                {getGroupCurrencies(defaultCurrency, secondaryCurrencies, currencyA).map((c) => (
                                     <MenuItem key={c} value={c}>
                                         {c} ({getCurrencySymbol(c)})
                                     </MenuItem>
@@ -295,7 +297,7 @@ export default function CreateExchangeDialog({
                         {/* Currency B */}
                         <FormControl fullWidth size="small">
                             <Select value={currencyB} onChange={(e) => setCurrencyB(e.target.value)}>
-                                {getSortedCurrencies(defaultCurrency).map((c) => (
+                                {getGroupCurrencies(defaultCurrency, secondaryCurrencies, currencyB).map((c) => (
                                     <MenuItem key={c} value={c}>
                                         {c} ({getCurrencySymbol(c)})
                                     </MenuItem>
