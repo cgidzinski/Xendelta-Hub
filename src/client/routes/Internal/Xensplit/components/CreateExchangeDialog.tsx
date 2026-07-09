@@ -25,7 +25,7 @@ import SwapVertIcon from "@mui/icons-material/SwapVert";
 import CheckIcon from "@mui/icons-material/Check";
 import InputAdornment from "@mui/material/InputAdornment";
 import type { XenSplitMember, CreateExchangeInput } from "../../../../hooks/xensplit/types";
-import { sanitizeAmount, getSortedCurrencies, getCurrencySymbol, formatCurrency } from "../../../../utils/currencyUtils";
+import { sanitizeAmount, getSortedCurrencies, getCurrencySymbol, formatCurrency, getPreferredRateCurrency, setPreferredRateCurrency, resolveRateBase, formatRate } from "../../../../utils/currencyUtils";
 
 interface CreateExchangeDialogProps {
     open: boolean;
@@ -33,6 +33,7 @@ interface CreateExchangeDialogProps {
     members: XenSplitMember[];
     currentUser: { id: string; username: string; avatar?: string | null };
     defaultCurrency?: string;
+    groupId: string;
     addExchange: (input: CreateExchangeInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
     isAddingExchange: boolean;
 }
@@ -45,6 +46,7 @@ export default function CreateExchangeDialog({
     members,
     currentUser,
     defaultCurrency,
+    groupId,
     addExchange,
     isAddingExchange,
 }: CreateExchangeDialogProps) {
@@ -61,11 +63,15 @@ export default function CreateExchangeDialog({
     // rateInput is the string shown in the TextField; it may be in the inverted direction.
     // rate (canonical) is always 1 currencyA = rate currencyB.
     const [rateInput, setRateInput] = useState("");
-    const [rateInverted, setRateInverted] = useState(() => localStorage.getItem("xensplit_rateInverted") === "true");
+    // preferred is the user's chosen base currency for the rate display, stored per group.
+    const [preferred, setPreferred] = useState(() => getPreferredRateCurrency(groupId, defaultCurrency ?? "CAD"));
     const [note, setNote] = useState("");
     // Tracks the order in which the user manually edited the 3 amount fields.
     // The field NOT in the last 2 entries is always auto-computed from the other two.
     const [editOrder, setEditOrder] = useState<Array<"amountA" | "amountB" | "rate">>([]);
+
+    // Derived: whether the rate field is currently displayed as inverted (base = currencyB).
+    const inverted = resolveRateBase(currencyA, currencyB, preferred, defaultCurrency ?? "CAD") === "b";
 
     useEffect(() => {
         if (open) {
@@ -78,11 +84,23 @@ export default function CreateExchangeDialog({
             setCurrencyB((defaultCurrency ?? "CAD") === "CAD" ? "USD" : "CAD");
             setRate("");
             setRateInput("");
-            setRateInverted(localStorage.getItem("xensplit_rateInverted") === "true");
+            setPreferred(getPreferredRateCurrency(groupId, defaultCurrency ?? "CAD"));
             setNote("");
             setEditOrder([]);
         }
-    }, [open, defaultCurrency, currentUser.id]);
+    }, [open, defaultCurrency, currentUser.id, groupId]);
+
+    // Re-sync rateInput whenever the display direction changes (e.g. user swaps currencies in step 1).
+    useEffect(() => {
+        const n = parseFloat(rate);
+        if (!isNaN(n) && n > 0) {
+            const displayVal = inverted
+                ? parseFloat((1 / n).toFixed(6)).toString()
+                : parseFloat(n.toFixed(6)).toString();
+            setRateInput(displayVal);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [inverted]);
 
     const amountANum = parseFloat(amountA);
     const amountBNum = parseFloat(amountB);
@@ -121,7 +139,7 @@ export default function CreateExchangeDialog({
                 const canonicalRate = parseFloat((b / a).toFixed(6));
                 setRate(canonicalRate.toString());
                 // Sync the visible input to the current display direction
-                const displayRate = rateInverted
+                const displayRate = inverted
                     ? parseFloat((1 / canonicalRate).toFixed(6))
                     : canonicalRate;
                 setRateInput(displayRate.toString());
@@ -130,24 +148,22 @@ export default function CreateExchangeDialog({
     };
 
     const handleRateInvert = () => {
-        const newInverted = !rateInverted;
-        setRateInverted(newInverted);
-        localStorage.setItem("xensplit_rateInverted", String(newInverted));
-        // Recompute the visible input from the current canonical rate
-        const n = parseFloat(rate);
-        if (!isNaN(n) && n > 0) {
-            const displayVal = newInverted
-                ? parseFloat((1 / n).toFixed(6)).toString()
-                : parseFloat(n.toFixed(6)).toString();
-            setRateInput(displayVal);
-        }
+        // Flip the base to whichever currency is not currently the base.
+        const next = inverted ? currencyA : currencyB;
+        setPreferred(next);
+        setPreferredRateCurrency(groupId, next);
+        // rateInput will be re-synced by the inverted effect.
     };
 
     const partyA = members.find((m) => m.user_id === partyAId);
     const partyB = members.find((m) => m.user_id === partyBId);
 
     const step1Valid = !!partyAId && !!partyBId && partyAId !== partyBId && currencyA !== currencyB;
-    const step2Valid = amountANum > 0 && amountBNum > 0 && rateNum > 0;
+    const allAmountsProvided = amountANum > 0 && amountBNum > 0 && rateNum > 0;
+    const expectedAmountB = amountANum * rateNum;
+    const mathTolerance = Math.max(0.01, expectedAmountB * 0.01);
+    const mathValid = !allAmountsProvided || Math.abs(expectedAmountB - amountBNum) <= mathTolerance;
+    const step2Valid = allAmountsProvided && mathValid;
     const isValid = step1Valid && step2Valid;
 
     const handleCreate = () => {
@@ -160,7 +176,7 @@ export default function CreateExchangeDialog({
                 party_b: partyBId,
                 currency_b: currencyB,
                 rate: rateNum,
-                rate_from_currency: rateInverted ? currencyB : currencyA,
+                rate_from_currency: inverted ? currencyB : currencyA,
                 ...(note.trim() ? { note: note.trim() } : {}),
             },
             {
@@ -250,14 +266,26 @@ export default function CreateExchangeDialog({
                         <FormControl fullWidth size="small">
                             <Select value={currencyA} onChange={(e) => setCurrencyA(e.target.value)}>
                                 {getSortedCurrencies(defaultCurrency).map((c) => (
-                                    <MenuItem key={c} value={c} disabled={c === currencyB}>
+                                    <MenuItem key={c} value={c}>
                                         {c} ({getCurrencySymbol(c)})
                                     </MenuItem>
                                 ))}
                             </Select>
                         </FormControl>
 
-                        <Divider />
+                        <Divider>
+                            <IconButton
+                                size="small"
+                                onClick={() => {
+                                    const tmp = currencyA;
+                                    setCurrencyA(currencyB);
+                                    setCurrencyB(tmp);
+                                }}
+                                title="Swap currencies"
+                            >
+                                <SwapVertIcon fontSize="small" />
+                            </IconButton>
+                        </Divider>
 
                         {/* Party B */}
                         <Box>
@@ -268,7 +296,7 @@ export default function CreateExchangeDialog({
                         <FormControl fullWidth size="small">
                             <Select value={currencyB} onChange={(e) => setCurrencyB(e.target.value)}>
                                 {getSortedCurrencies(defaultCurrency).map((c) => (
-                                    <MenuItem key={c} value={c} disabled={c === currencyA}>
+                                    <MenuItem key={c} value={c}>
                                         {c} ({getCurrencySymbol(c)})
                                     </MenuItem>
                                 ))}
@@ -299,7 +327,34 @@ export default function CreateExchangeDialog({
                                     {currencyA}
                                 </Typography>
                             </Box>
-                            <SwapHorizIcon sx={{ color: "text.disabled", flexShrink: 0 }} />
+                            <IconButton
+                                size="small"
+                                onClick={() => {
+                                    // Swap currencies
+                                    setCurrencyA(currencyB);
+                                    setCurrencyB(currencyA);
+                                    // Swap amounts
+                                    setAmountA(amountB);
+                                    setAmountB(amountA);
+                                    // Invert the canonical rate (1 A = rate B becomes 1 B = rate A, i.e. 1 newA = 1/rate newB)
+                                    const newCanonical = rateNum > 0 ? 1 / rateNum : NaN;
+                                    if (!isNaN(newCanonical) && newCanonical > 0) {
+                                        setRate(newCanonical.toFixed(10));
+                                        // Re-sync rateInput using the new currencies + unchanged preferred
+                                        const newInverted = resolveRateBase(currencyB, currencyA, preferred, defaultCurrency ?? "CAD") === "b";
+                                        setRateInput(newInverted
+                                            ? parseFloat((1 / newCanonical).toFixed(6)).toString()
+                                            : parseFloat(newCanonical.toFixed(6)).toString()
+                                        );
+                                    }
+                                    // Reset edit order so auto-compute doesn't clobber the freshly swapped values
+                                    setEditOrder([]);
+                                }}
+                                sx={{ flexShrink: 0, color: "text.secondary" }}
+                                title="Swap parties and currencies"
+                            >
+                                <SwapHorizIcon sx={{ fontSize: 20 }} />
+                            </IconButton>
                             <Box sx={{ flex: 1, minWidth: 0, textAlign: "right" }}>
                                 <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
                                     {partyB?.username}
@@ -342,7 +397,7 @@ export default function CreateExchangeDialog({
                                 setRateInput(v);
                                 const parsed = parseFloat(v);
                                 if (!isNaN(parsed) && parsed > 0) {
-                                    const canonical = rateInverted
+                                    const canonical = inverted
                                         ? parseFloat((1 / parsed).toFixed(10)).toString()
                                         : v;
                                     handleFieldEdit("rate", canonical);
@@ -367,7 +422,7 @@ export default function CreateExchangeDialog({
                                     ),
                                 },
                             }}
-                            helperText={rateInverted ? `1 ${currencyB} = ? ${currencyA}` : `1 ${currencyA} = ? ${currencyB}`}
+                            helperText={inverted ? `1 ${currencyB} = ? ${currencyA}` : `1 ${currencyA} = ? ${currencyB}`}
                             sx={undefined}
                         />
 
@@ -388,6 +443,13 @@ export default function CreateExchangeDialog({
                             helperText={undefined}
                             sx={undefined}
                         />
+
+                        {allAmountsProvided && !mathValid && (
+                            <Typography variant="caption" color="error">
+                                The amounts don&apos;t match the exchange rate. Expected{" "}
+                                {formatCurrency(expectedAmountB, currencyB)} for {partyB?.username ?? "Party B"}.
+                            </Typography>
+                        )}
 
                     </Box>
                 )}
@@ -427,9 +489,7 @@ export default function CreateExchangeDialog({
                                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, px: 1 }}>
                                     <SwapHorizIcon sx={{ fontSize: 16, color: "text.disabled" }} />
                                     <Typography variant="caption" color="text.secondary">
-                                        {rateInverted
-                                            ? `1 ${currencyB} = ${parseFloat((1 / rateNum).toFixed(6))} ${currencyA}`
-                                            : `1 ${currencyA} = ${parseFloat(rateNum.toFixed(6))} ${currencyB}`}
+                                        {formatRate(currencyA, currencyB, rateNum, preferred, defaultCurrency ?? "CAD")}
                                     </Typography>
                                 </Box>
                             </Divider>

@@ -108,6 +108,8 @@ export default function GroupOverview() {
                     canDelete={isCreator || ex.created_by === user.id || ex.party_a === user.id || ex.party_b === user.id}
                     onDelete={deleteExchange}
                     isDeletingExchange={isDeletingExchange}
+                    groupId={groupId!}
+                    defaultCurrency={group.default_currency}
                 />
             );
         }

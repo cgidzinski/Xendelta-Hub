@@ -14,18 +14,9 @@ import SwapVertIcon from "@mui/icons-material/SwapVert";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { useState } from "react";
-import { formatCurrency } from "../../../../utils/currencyUtils";
+import { formatCurrency, formatRate, getPreferredRateCurrency, resolveRateBase, setPreferredRateCurrency } from "../../../../utils/currencyUtils";
 import type { XenSplitExchange, XenSplitMember } from "../../../../hooks/xensplit/types";
 import { xsCardSx } from "./rowStyles";
-
-/** Returns "1 X = N Y" respecting the user's global rate direction preference. */
-function formatRate(exchange: XenSplitExchange, inverted: boolean): string {
-    const { currency_a, currency_b, rate } = exchange;
-    if (inverted) {
-        return `1 ${currency_b} = ${parseFloat((1 / rate).toFixed(6))} ${currency_a}`;
-    }
-    return `1 ${currency_a} = ${parseFloat(rate.toFixed(6))} ${currency_b}`;
-}
 
 interface ExchangeListItemProps {
     exchange: XenSplitExchange;
@@ -34,6 +25,8 @@ interface ExchangeListItemProps {
     canDelete: boolean;
     onDelete: (exchangeId: string) => void;
     isDeletingExchange: boolean;
+    groupId: string;
+    defaultCurrency: string;
 }
 
 export default function ExchangeListItem({
@@ -43,6 +36,8 @@ export default function ExchangeListItem({
     canDelete,
     onDelete,
     isDeletingExchange,
+    groupId,
+    defaultCurrency,
 }: ExchangeListItemProps) {
     const [open, setOpen] = useState(false);
 
@@ -50,12 +45,13 @@ export default function ExchangeListItem({
     const partyB = members.find((m) => m.user_id === exchange.party_b);
 
     const isInvolved = exchange.party_a === currentUserId || exchange.party_b === currentUserId;
-    const [rateInverted, setRateInverted] = useState(() => localStorage.getItem("xensplit_rateInverted") === "true");
+    const [preferred, setPreferred] = useState(() => getPreferredRateCurrency(groupId, defaultCurrency));
 
     const handleRateInvert = () => {
-        const next = !rateInverted;
-        setRateInverted(next);
-        localStorage.setItem("xensplit_rateInverted", String(next));
+        const currentBase = resolveRateBase(exchange.currency_a, exchange.currency_b, preferred, defaultCurrency);
+        const next = currentBase === "a" ? exchange.currency_b : exchange.currency_a;
+        setPreferred(next);
+        setPreferredRateCurrency(groupId, next);
     };
 
     return (
@@ -126,7 +122,7 @@ export default function ExchangeListItem({
                         </Typography>
                     </Box>
                     <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
-                        {formatRate(exchange, rateInverted)}
+                        {formatRate(exchange.currency_a, exchange.currency_b, exchange.rate, preferred, defaultCurrency)}
                     </Typography>
                 </Box>
             </Box>
@@ -187,7 +183,7 @@ export default function ExchangeListItem({
                         <Typography variant="caption" color="text.secondary">Rate</Typography>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                             <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                                {formatRate(exchange, rateInverted)}
+                                {formatRate(exchange.currency_a, exchange.currency_b, exchange.rate, preferred, defaultCurrency)}
                             </Typography>
                             <IconButton size="small" onClick={handleRateInvert} title="Invert rate direction" sx={{ p: 0.25 }}>
                                 <SwapVertIcon sx={{ fontSize: 14, color: "text.secondary" }} />
