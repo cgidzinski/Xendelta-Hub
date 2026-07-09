@@ -25,27 +25,30 @@ export default function SecondaryCurrenciesSelect({
   label = "Secondary Currencies",
   size,
 }: SecondaryCurrenciesSelectProps) {
-  const options = withoutCurrency(ALL_CURRENCIES, primaryCurrency);
-
   return (
     <FormControl fullWidth disabled={disabled} size={size}>
-      <InputLabel>{label}</InputLabel>
+      {label && <InputLabel>{label}</InputLabel>}
       <Select
         multiple
         value={value}
-        label={label}
+        label={label || undefined}
         onChange={(e) => {
           const next = e.target.value;
-          onChange(typeof next === "string" ? next.split(",") : next);
+          onChange(withoutCurrency(typeof next === "string" ? next.split(",") : next, primaryCurrency));
         }}
         renderValue={(selected) => (selected.length > 0 ? selected.join(", ") : "None")}
+        sx={{ "& .MuiSelect-select": { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }}
+        MenuProps={{ PaperProps: { sx: { maxHeight: 300 } } }}
       >
-        {options.map((c) => (
-          <MenuItem key={c} value={c}>
-            <Checkbox checked={value.includes(c)} />
-            <ListItemText primary={c} />
-          </MenuItem>
-        ))}
+        {ALL_CURRENCIES.map((c) => {
+          const isPrimary = c === primaryCurrency;
+          return (
+            <MenuItem key={c} value={c} disabled={isPrimary}>
+              <Checkbox checked={!isPrimary && value.includes(c)} disabled={isPrimary} />
+              <ListItemText primary={c} secondary={isPrimary ? "Primary currency" : undefined} />
+            </MenuItem>
+          );
+        })}
       </Select>
     </FormControl>
   );

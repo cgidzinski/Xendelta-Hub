@@ -13,7 +13,9 @@ export function useXenSplit(groupId: string) {
     },
     enabled: !!groupId,
     staleTime: 0, // Always refetch in background
-    placeholderData: (prev) => prev,
+    // Only reuse cached data as a placeholder for this same group — otherwise
+    // navigating from a different group briefly shows its stale currency/name/etc.
+    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === groupId ? prev : undefined),
   });
 
   const updateMutation = useMutation({

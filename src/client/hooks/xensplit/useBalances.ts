@@ -13,7 +13,9 @@ export function useXenSplitBalances(groupId: string) {
     },
     enabled: !!groupId,
     staleTime: 0, // Always refetch in background
-    placeholderData: (prev) => prev,
+    // Only reuse cached data as a placeholder for this same group — otherwise
+    // navigating from a different group briefly shows its stale balances/currencies.
+    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === groupId ? prev : undefined),
   });
 
   const settleDebtMutation = useMutation({
