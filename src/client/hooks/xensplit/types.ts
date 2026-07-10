@@ -46,7 +46,6 @@ export interface XenSplitSettlement {
   amount: number;
   currency: string;
   settled_at: string;
-  is_partial?: boolean;
   note?: string;
 }
 

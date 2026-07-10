@@ -38,7 +38,6 @@ var settlementSchema = new Schema({
   amount: { type: Number, required: true },
   currency: { type: String, default: "CAD" },
   settled_at: { type: Date, default: Date.now },
-  is_partial: { type: Boolean, default: false },
   note: { type: String, maxlength: 500 },
 }, { _id: true });
 

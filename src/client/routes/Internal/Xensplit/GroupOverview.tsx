@@ -159,7 +159,7 @@ export default function GroupOverview() {
                 <Box sx={{ minWidth: 0 }}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{from} → {to}</Typography>
                     <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
-                        Settled · {s.is_partial ? "Partial" : "Full"}
+                        Settled
                     </Typography>
                 </Box>
                 <Box sx={{ textAlign: "right", flexShrink: 0 }}>
