@@ -357,7 +357,7 @@ export default function CreateExchangeDialog({
                                     {isFetchingLiveRate ? "Fetching…" : "Live Rate"}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
-                                    Ideal rate
+                                    Online rate
                                 </Typography>
                             </ToggleButton>
                             <ToggleButton value="cash" sx={{ px: 2, py: 0.75, flexDirection: "column", gap: 0.25, textTransform: "none" }}>
