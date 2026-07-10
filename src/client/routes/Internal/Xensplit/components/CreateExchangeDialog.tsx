@@ -352,17 +352,23 @@ export default function CreateExchangeDialog({
                             }}
                             sx={{ alignSelf: "center" }}
                         >
-                            <ToggleButton value="live" disabled={isFetchingLiveRate} sx={{ px: 2, fontSize: "0.75rem", textTransform: "none" }}>
-                                {isFetchingLiveRate ? "Fetching…" : "Live Rate"}
+                            <ToggleButton value="live" disabled={isFetchingLiveRate} sx={{ px: 2, py: 0.75, flexDirection: "column", gap: 0.25, textTransform: "none" }}>
+                                <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+                                    {isFetchingLiveRate ? "Fetching…" : "Live Rate"}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
+                                    Ideal rate
+                                </Typography>
                             </ToggleButton>
-                            <ToggleButton value="cash" sx={{ px: 2, fontSize: "0.75rem", textTransform: "none" }}>
-                                Cash Rate
+                            <ToggleButton value="cash" sx={{ px: 2, py: 0.75, flexDirection: "column", gap: 0.25, textTransform: "none" }}>
+                                <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+                                    Cash Rate
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
+                                    Real rate
+                                </Typography>
                             </ToggleButton>
                         </ToggleButtonGroup>
-
-                        <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
-                            Live rate is the ideal exchange rate — cash rate is the more realistic rate you'll get exchanging in person.
-                        </Typography>
 
                         {!isNaN(rateNum) && rateNum > 0 ? (
                             <Typography variant="subtitle1" sx={{ textAlign: "center", fontWeight: 700 }}>
