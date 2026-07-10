@@ -15,6 +15,7 @@ import {
     MenuItem,
     IconButton,
     Tooltip,
+    useMediaQuery,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import EastIcon from "@mui/icons-material/East";
@@ -39,6 +40,7 @@ interface CreateSettlementProps {
 
 export default function CreateSettlementDialog({ open, onClose, members, currentUser, defaultCurrency, currencyOptions, settleDebt, isSettling }: CreateSettlementProps) {
     const { enqueueSnackbar } = useSnackbar();
+    const isMobile = useMediaQuery("(max-width:600px)");
     const [counterpartyId, setCounterpartyId] = useState("");
     const [direction, setDirection] = useState<Direction>("i_paid");
     const [amount, setAmount] = useState("");
@@ -85,7 +87,7 @@ export default function CreateSettlementDialog({ open, onClose, members, current
     };
 
     return (
-        <Dialog fullWidth maxWidth="xs" open={open} onClose={onClose} PaperProps={{ sx: { borderRadius: 3 } }}>
+        <Dialog fullWidth maxWidth="xs" fullScreen={isMobile} open={open} onClose={onClose} PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3 } }}>
             <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
                 <IconButton onClick={onClose} size="small" sx={{ position: "absolute", top: 12, right: 12 }}>
                     <CloseIcon fontSize="small" />
