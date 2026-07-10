@@ -310,3 +310,29 @@ export const xenSplitSettlementParamSchema = z.object({
   settlementId: objectIdSchema,
 });
 
+export const createExchangeSchema = z.object({
+  party_a: objectIdSchema,
+  currency_a: z.string().min(1, "Currency A is required"),
+  amount_a: z.number().positive("Amount must be positive"),
+  party_b: objectIdSchema,
+  currency_b: z.string().min(1, "Currency B is required"),
+  rate: z.number().positive("Rate must be positive"),
+  rate_from_currency: z.string().optional(),
+  note: z.string().max(500).optional(),
+  date: z.string().datetime().optional(),
+}).refine((data) => data.party_a !== data.party_b, {
+  message: "Party A and Party B must be different members",
+  path: ["party_b"],
+}).refine((data) => data.currency_a !== data.currency_b, {
+  message: "Currency A and Currency B must be different",
+  path: ["currency_b"],
+}).refine((data) => !data.rate_from_currency || data.rate_from_currency === data.currency_a || data.rate_from_currency === data.currency_b, {
+  message: "rate_from_currency must be currency_a or currency_b",
+  path: ["rate_from_currency"],
+});
+
+export const xenSplitExchangeParamSchema = z.object({
+  groupId: objectIdSchema,
+  exchangeId: objectIdSchema,
+});
+

@@ -26,10 +26,21 @@ interface Settlement {
   settled_at?: Date;
 }
 
+interface Exchange {
+  party_a: string;
+  currency_a: string;
+  amount_a: number;
+  party_b: string;
+  currency_b: string;
+  amount_b: number;
+  rate: number;
+}
+
 interface XenSplitDocument {
   members: string[];
   expenses: Expense[];
   settlements: Settlement[];
+  exchanges?: Exchange[];
 }
 
 function shareOwed(amount: number, splitCount: number, split: { amount_owed?: number; percentage?: number }): number {
@@ -56,6 +67,12 @@ export function calculateBalances(doc: XenSplitDocument): BalanceMap {
   if (Array.isArray(doc.settlements)) {
     for (const s of doc.settlements) {
       if (s && s.currency) currencies.add(s.currency);
+    }
+  }
+  if (Array.isArray(doc.exchanges)) {
+    for (const ex of doc.exchanges) {
+      if (ex && ex.currency_a) currencies.add(ex.currency_a);
+      if (ex && ex.currency_b) currencies.add(ex.currency_b);
     }
   }
 
@@ -124,6 +141,18 @@ export function calculateBalances(doc: XenSplitDocument): BalanceMap {
       } else {
         balances[to][currency] = -amount;
       }
+    }
+  }
+
+  // Apply exchange legs: party_a owes party_b in currency_a, party_b owes party_a in currency_b
+  for (const ex of doc.exchanges ?? []) {
+    if (balances[ex.party_a]) {
+      balances[ex.party_a][ex.currency_a] = (balances[ex.party_a][ex.currency_a] ?? 0) - ex.amount_a;
+      balances[ex.party_a][ex.currency_b] = (balances[ex.party_a][ex.currency_b] ?? 0) + ex.amount_b;
+    }
+    if (balances[ex.party_b]) {
+      balances[ex.party_b][ex.currency_a] = (balances[ex.party_b][ex.currency_a] ?? 0) + ex.amount_a;
+      balances[ex.party_b][ex.currency_b] = (balances[ex.party_b][ex.currency_b] ?? 0) - ex.amount_b;
     }
   }
 

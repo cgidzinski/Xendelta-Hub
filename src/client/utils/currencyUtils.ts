@@ -8,6 +8,55 @@ export const STABLE_CURRENCY_MENU_PROPS = {
   transformOrigin: { vertical: "top", horizontal: "left" },
   transitionDuration: 0,
 } as const;
+// --- Per-group rate base currency preference ---
+
+export function rateBaseStorageKey(groupId: string): string {
+  return `xensplit_rateBase_${groupId}`;
+}
+
+export function getPreferredRateCurrency(groupId: string, defaultCurrency: string): string {
+  return localStorage.getItem(rateBaseStorageKey(groupId)) ?? defaultCurrency;
+}
+
+export function setPreferredRateCurrency(groupId: string, currency: string): void {
+  localStorage.setItem(rateBaseStorageKey(groupId), currency);
+}
+
+/**
+ * Resolves which currency should be the "1" base when displaying a rate.
+ * Priority: preferred base (if in the pair) > group default_currency (if in the pair) > canonical (currency_a).
+ * Returns "a" if currency_a is the base, "b" if currency_b is the base.
+ */
+export function resolveRateBase(
+  currencyA: string,
+  currencyB: string,
+  preferred: string,
+  defaultCurrency: string,
+): "a" | "b" {
+  if (preferred === currencyA) return "a";
+  if (preferred === currencyB) return "b";
+  if (defaultCurrency === currencyA) return "a";
+  if (defaultCurrency === currencyB) return "b";
+  return "a";
+}
+
+/**
+ * Formats a canonical rate (1 A = rate B) into a human-readable string,
+ * respecting the per-group preferred base currency.
+ */
+export function formatRate(
+  currencyA: string,
+  currencyB: string,
+  rate: number,
+  preferred: string,
+  defaultCurrency: string,
+): string {
+  const base = resolveRateBase(currencyA, currencyB, preferred, defaultCurrency);
+  if (base === "b") {
+    return `1 ${currencyB} = ${parseFloat((1 / rate).toFixed(6))} ${currencyA}`;
+  }
+  return `1 ${currencyA} = ${parseFloat(rate.toFixed(6))} ${currencyB}`;
+}
 
 export function formatCurrency(amount: number, currency: string): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);

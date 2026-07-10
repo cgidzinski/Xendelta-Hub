@@ -22,6 +22,8 @@ import {
   xenSplitExpenseParamSchema,
   xenSplitExpenseImageParamSchema,
   xenSplitSettlementParamSchema,
+  createExchangeSchema,
+  xenSplitExchangeParamSchema,
 } from "../utils/validation";
 import { calculateBalances, calculateSimplifiedTransfers } from "../utils/xenSplitUtils";
 
@@ -738,6 +740,27 @@ module.exports = function (app: any) {
     }
   });
 
+  // GET /api/xensplit/exchange-rate - Live exchange rate proxy (exchangerate-api.com)
+  app.get("/api/xensplit/exchange-rate", async (req: Request, res: Response) => {
+    try {
+      const from = ((req.query.from as string) || "").toUpperCase();
+      const to = ((req.query.to as string) || "").toUpperCase();
+      if (!from || !to) return res.status(400).json({ status: false, message: "from and to are required" });
+
+      const apiKey = process.env.EXCHANGERATE_API_KEY;
+      if (!apiKey) return res.status(500).json({ status: false, message: "Exchange rate service not configured" });
+
+      const response = await fetch(`https://v6.exchangerate-api.com/v6/${apiKey}/pair/${from}/${to}`);
+      const data: any = await response.json();
+      if (data.result !== "success") {
+        return res.status(502).json({ status: false, message: data["error-type"] || "Failed to fetch exchange rate" });
+      }
+      res.json({ status: true, data: { rate: data.conversion_rate } });
+    } catch (e) {
+      res.status(500).json({ status: false, message: "Failed to fetch exchange rate" });
+    }
+  });
+
   // GET /api/xensplit/groups/:groupId/balances - Get balances
   app.get("/api/xensplit/groups/:groupId/balances", validateParams(xenSplitIdParamSchema), async (req: Request, res: Response) => {
     try {
@@ -882,6 +905,108 @@ module.exports = function (app: any) {
     } catch (error) {
       console.error("Error undoing settlement:", error);
       res.status(500).json({ status: false, message: "Failed to undo settlement" });
+    }
+  });
+
+  // POST /api/xensplit/groups/:groupId/exchanges - Record a currency exchange
+  app.post("/api/xensplit/groups/:groupId/exchanges", validateParams(xenSplitIdParamSchema), validate(createExchangeSchema), async (req: Request, res: Response) => {
+    try {
+      const userId = (req.user as any)._id.toString();
+      const { groupId } = req.params;
+      const { party_a, currency_a, amount_a, party_b, currency_b, rate, rate_from_currency, note, date } = req.body;
+
+      const group = await XenSplit.findById(groupId);
+      if (!group) {
+        return res.status(404).json({ status: false, message: "Group not found" });
+      }
+
+      if (!group.members.some((m: any) => m.toString() === userId)) {
+        return res.status(403).json({ status: false, message: "Not a member of this group" });
+      }
+
+      if (!group.members.some((m: any) => m.toString() === party_a)) {
+        return res.status(400).json({ status: false, message: "Party A must be a group member" });
+      }
+
+      if (!group.members.some((m: any) => m.toString() === party_b)) {
+        return res.status(400).json({ status: false, message: "Party B must be a group member" });
+      }
+
+      const amount_b = Number((amount_a * rate).toFixed(2));
+
+      group.exchanges = group.exchanges || [];
+      group.exchanges.push({
+        party_a,
+        currency_a,
+        amount_a,
+        party_b,
+        currency_b,
+        amount_b,
+        rate,
+        rate_from_currency: rate_from_currency ?? currency_a,
+        created_by: userId,
+        date: date ? new Date(date) : new Date(),
+        created_at: new Date(),
+        ...(note ? { note } : {}),
+      } as any);
+
+      await group.save();
+      await group.populate("members", "username avatar");
+
+      const actor = (group.members as any[]).find((m: any) => m._id.toString() === userId);
+      const actorName = actor?.username || "Someone";
+      const notifyIds = new Set([party_a, party_b].filter((id) => id !== userId));
+      for (const mid of notifyIds) {
+        await notify(mid, "New Exchange", `${actorName} recorded a currency exchange in ${group.name}`, `/internal/xensplit/groups/${groupId}/expenses`, "swap_horiz");
+      }
+
+      const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
+
+      res.json({ status: true, message: "Exchange recorded", data: transformMembers(group.toObject()) });
+    } catch (error) {
+      console.error("Error recording exchange:", error);
+      res.status(500).json({ status: false, message: "Failed to record exchange" });
+    }
+  });
+
+  // DELETE /api/xensplit/groups/:groupId/exchanges/:exchangeId - Delete an exchange
+  app.delete("/api/xensplit/groups/:groupId/exchanges/:exchangeId", validateParams(xenSplitExchangeParamSchema), async (req: Request, res: Response) => {
+    try {
+      const userId = (req.user as any)._id.toString();
+      const { groupId, exchangeId } = req.params;
+
+      const group = await XenSplit.findById(groupId);
+      if (!group) {
+        return res.status(404).json({ status: false, message: "Group not found" });
+      }
+
+      if (!group.members.some((m: any) => m.toString() === userId)) {
+        return res.status(403).json({ status: false, message: "Not a member of this group" });
+      }
+
+      const exchangeIndex = (group.exchanges || []).findIndex((ex: any) => ex._id.toString() === exchangeId);
+      if (exchangeIndex === -1) {
+        return res.status(404).json({ status: false, message: "Exchange not found" });
+      }
+
+      const exchange = group.exchanges[exchangeIndex];
+      // Only the creator, either party, or group owner may delete
+      if (exchange.created_by !== userId && exchange.party_a !== userId && exchange.party_b !== userId && group.created_by !== userId) {
+        return res.status(403).json({ status: false, message: "Not authorised to delete this exchange" });
+      }
+
+      group.exchanges.splice(exchangeIndex, 1);
+      await group.save();
+      await group.populate("members", "username avatar");
+
+      const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
+
+      res.json({ status: true, message: "Exchange deleted", data: transformMembers(group.toObject()) });
+    } catch (error) {
+      console.error("Error deleting exchange:", error);
+      res.status(500).json({ status: false, message: "Failed to delete exchange" });
     }
   });
 };

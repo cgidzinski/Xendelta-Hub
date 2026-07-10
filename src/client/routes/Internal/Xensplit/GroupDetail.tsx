@@ -48,6 +48,7 @@ import { useXenSplit } from "../../../hooks/xensplit/useGroup";
 import { useXenSplits } from "../../../hooks/xensplit/useGroups";
 import { useXenSplitBalances } from "../../../hooks/xensplit/useBalances";
 import { useXenSplitExpenses, useExpenseImageUrls } from "../../../hooks/xensplit/useExpenses";
+import { useXenSplitExchanges } from "../../../hooks/xensplit/useExchanges";
 import { useXenSplitSocket } from "../../../hooks/xensplit/useXenSplitSocket";
 import { useAuth } from "../../../contexts/AuthContext";
 import LoadingSpinner from "../../../components/LoadingSpinner";
@@ -56,8 +57,9 @@ import UserSelect from "../../../components/UserSelect";
 import { SearchedUser } from "../../../hooks/useUserSearch";
 import ExpenseForm from "./components/ExpenseForm";
 import GroupAvatar from "./components/GroupAvatar";
+import CreateExchangeDialog from "./components/CreateExchangeDialog";
 import { apiClient } from "../../../config/api";
-import type { XenSplit, XenSplitBalancesData, XenSplitExpense, SettleDebtInput } from "../../../hooks/xensplit/types";
+import type { XenSplit, XenSplitBalancesData, XenSplitExpense, SettleDebtInput, CreateExchangeInput } from "../../../hooks/xensplit/types";
 
 export interface GroupDetailContext {
   group: XenSplit;
@@ -69,6 +71,11 @@ export interface GroupDetailContext {
   onViewExpense: (expense: XenSplitExpense) => void;
   settleDebt: (input: SettleDebtInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
   isSettlingDebt: boolean;
+  onAddExchange: () => void;
+  addExchange: (input: CreateExchangeInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
+  isAddingExchange: boolean;
+  deleteExchange: (exchangeId: string) => void;
+  isDeletingExchange: boolean;
   onAddMembers: () => void;
   onMemberMenu: (memberId: string, anchor: HTMLElement) => void;
   updateGroup: (updates: { name?: string; default_currency?: string; secondary_currencies?: string[] }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
@@ -91,6 +98,7 @@ export default function GroupDetail() {
   const { deleteGroup } = useXenSplits();
   const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useXenSplitBalances(groupId!);
   const { updateExpense, updateExpenseAsync, isUpdatingExpense, addExpense, addExpenseAsync, isAddingExpense, deleteExpense, isDeletingExpense, uploadExpenseImages, isUploadingImages, deleteExpenseImage, isDeletingExpenseImage } = useXenSplitExpenses(groupId!);
+  const { addExchange, isAddingExchange, deleteExchange, isDeletingExchange, fetchLiveRate, isFetchingLiveRate } = useXenSplitExchanges(groupId!);
   useXenSplitSocket(groupId!);
   const location = useLocation();
   const activeTab = location.pathname.endsWith("/overview")
@@ -140,6 +148,7 @@ export default function GroupDetail() {
   const [editDoNotSimplify, setEditDoNotSimplify] = useState(false);
   const [showViewExpenseModal, setShowViewExpenseModal] = useState(false);
   const [viewExpenseItem, setViewExpenseItem] = useState<XenSplitExpense | null>(null);
+  const [showAddExchangeModal, setShowAddExchangeModal] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [confirmDialogText, setConfirmDialogText] = useState("");
   const [confirmAction, setConfirmAction] = useState<() => void>(() => { });
@@ -458,6 +467,11 @@ export default function GroupDetail() {
     },
     settleDebt,
     isSettlingDebt,
+    onAddExchange: () => setShowAddExchangeModal(true),
+    addExchange,
+    isAddingExchange,
+    deleteExchange,
+    isDeletingExchange,
     onAddMembers: () => setShowAddMemberModal(true),
     onMemberMenu: (memberId, anchor) => {
       setMenuAnchor(anchor);
@@ -990,6 +1004,20 @@ export default function GroupDetail() {
           );
         })()}
       </Dialog>
+
+      <CreateExchangeDialog
+        open={showAddExchangeModal}
+        onClose={() => setShowAddExchangeModal(false)}
+        members={group.members}
+        currentUser={{ id: user.id, username: user.username, avatar: user.avatar }}
+        defaultCurrency={group.default_currency}
+        secondaryCurrencies={group.secondary_currencies}
+        groupId={groupId!}
+        addExchange={addExchange}
+        isAddingExchange={isAddingExchange}
+        fetchLiveRate={fetchLiveRate}
+        isFetchingLiveRate={isFetchingLiveRate}
+      />
 
       {/* Lightbox */}
       <Dialog

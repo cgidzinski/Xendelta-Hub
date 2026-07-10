@@ -42,6 +42,21 @@ var settlementSchema = new Schema({
   note: { type: String, maxlength: 500 },
 }, { _id: true });
 
+var exchangeSchema = new Schema({
+  party_a: { type: String, required: true },
+  currency_a: { type: String, required: true },
+  amount_a: { type: Number, required: true },
+  party_b: { type: String, required: true },
+  currency_b: { type: String, required: true },
+  amount_b: { type: Number, required: true },
+  rate: { type: Number, required: true },
+  rate_from_currency: { type: String },
+  created_by: { type: String },
+  note: { type: String, maxlength: 500 },
+  date: { type: Date, default: Date.now },
+  created_at: { type: Date, default: Date.now },
+}, { _id: true });
+
 var xenSplitSchema = new Schema({
   name: { type: String, required: true, maxlength: 100 },
   default_currency: { type: String, default: "CAD" },
@@ -52,6 +67,7 @@ var xenSplitSchema = new Schema({
   members: [{ type: Schema.Types.ObjectId, ref: "User" }],
   expenses: [expenseSchema],
   settlements: [settlementSchema],
+  exchanges: [exchangeSchema],
 });
 
 module.exports = mongoose.model("XenSplit", xenSplitSchema);
