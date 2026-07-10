@@ -744,9 +744,10 @@ export default function GroupDetail() {
       <Dialog
         fullWidth
         maxWidth="sm"
+        fullScreen={isMobile}
         open={showEditExpenseModal}
         onClose={() => { setShowEditExpenseModal(false); setEditImages([]); }}
-        PaperProps={{ sx: { borderRadius: 2 } }}
+        PaperProps={{ sx: { borderRadius: isMobile ? 0 : 2 } }}
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
