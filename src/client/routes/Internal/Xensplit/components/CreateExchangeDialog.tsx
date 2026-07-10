@@ -17,7 +17,7 @@ import {
     Paper,
     Stepper,
     Step,
-    StepLabel,
+    StepButton,
     Divider,
     useMediaQuery,
 } from "@mui/material";
@@ -39,9 +39,11 @@ interface CreateExchangeDialogProps {
     groupId: string;
     addExchange: (input: CreateExchangeInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
     isAddingExchange: boolean;
+    fetchLiveRate: (input: { from: string; to: string }) => Promise<{ rate: number }>;
+    isFetchingLiveRate: boolean;
 }
 
-const STEPS = ["Parties", "Amounts", "Summary"];
+const STEPS = ["Parties", "Rate", "Amounts", "Summary"];
 
 export default function CreateExchangeDialog({
     open,
@@ -53,27 +55,30 @@ export default function CreateExchangeDialog({
     groupId,
     addExchange,
     isAddingExchange,
+    fetchLiveRate,
+    isFetchingLiveRate,
 }: CreateExchangeDialogProps) {
     const { enqueueSnackbar } = useSnackbar();
     const isMobile = useMediaQuery("(max-width:600px)");
 
     const [step, setStep] = useState(0);
+    // The furthest step reached this session — lets the stepper allow navigating back to any
+    // previously visited step even after moving on, without allowing skipping ahead to unvisited ones.
+    const [maxStepReached, setMaxStepReached] = useState(0);
     const [partyAId, setPartyAId] = useState(currentUser.id);
     const [currencyA, setCurrencyA] = useState(defaultCurrency ?? "CAD");
     const [amountA, setAmountA] = useState("");
     const [amountB, setAmountB] = useState("");
     const [partyBId, setPartyBId] = useState("");
     const [currencyB, setCurrencyB] = useState(secondaryCurrencies?.[0] ?? ((defaultCurrency ?? "CAD") === "CAD" ? "USD" : "CAD"));
-    const [rate, setRate] = useState("");
-    // rateInput is the string shown in the TextField; it may be in the inverted direction.
-    // rate (canonical) is always 1 currencyA = rate currencyB.
-    const [rateInput, setRateInput] = useState("");
+    // The exchange rate, established on the Rate step — canonical 1 currencyA = rateNum currencyB.
+    const [rateNum, setRateNum] = useState(NaN);
+    // The two Rate-step boxes; their currencies flip with `inverted`.
+    const [previewLeft, setPreviewLeft] = useState("1");
+    const [previewRight, setPreviewRight] = useState("");
     // preferred is the user's chosen base currency for the rate display, stored per group.
     const [preferred, setPreferred] = useState(() => getPreferredRateCurrency(groupId, defaultCurrency ?? "CAD"));
     const [note, setNote] = useState("");
-    // Tracks the order in which the user manually edited the 3 amount fields.
-    // The field NOT in the last 2 entries is always auto-computed from the other two.
-    const [editOrder, setEditOrder] = useState<Array<"amountA" | "amountB" | "rate">>([]);
 
     // Derived: whether the rate field is currently displayed as inverted (base = currencyB).
     const inverted = resolveRateBase(currencyA, currencyB, preferred, defaultCurrency ?? "CAD") === "b";
@@ -81,75 +86,63 @@ export default function CreateExchangeDialog({
     useEffect(() => {
         if (open) {
             setStep(0);
+            setMaxStepReached(0);
             setPartyAId(currentUser.id);
             setCurrencyA(defaultCurrency ?? "CAD");
             setAmountA("");
             setAmountB("");
             setPartyBId("");
             setCurrencyB(secondaryCurrencies?.[0] ?? ((defaultCurrency ?? "CAD") === "CAD" ? "USD" : "CAD"));
-            setRate("");
-            setRateInput("");
+            setRateNum(NaN);
+            setPreviewLeft("1");
+            setPreviewRight("");
             setPreferred(getPreferredRateCurrency(groupId, defaultCurrency ?? "CAD"));
             setNote("");
-            setEditOrder([]);
         }
     }, [open, defaultCurrency, currentUser.id, groupId]);
 
-    // Re-sync rateInput whenever the display direction changes (e.g. user swaps currencies in step 1).
     useEffect(() => {
-        const n = parseFloat(rate);
-        if (!isNaN(n) && n > 0) {
-            const displayVal = inverted
-                ? parseFloat((1 / n).toFixed(6)).toString()
-                : parseFloat(n.toFixed(6)).toString();
-            setRateInput(displayVal);
+        setMaxStepReached((m) => Math.max(m, step));
+    }, [step]);
+
+    // Whenever the Rate step becomes active, refresh its two boxes from the canonical rate —
+    // catches cases where the rate changed elsewhere (e.g. the currency swap on the Amounts step)
+    // without fighting the user's live typing while they're actually on this step. If no rate has
+    // been established yet, auto-fetch the live rate to prefill it.
+    useEffect(() => {
+        if (step !== 1) return;
+        if (!isNaN(rateNum) && rateNum > 0) {
+            setPreviewLeft("1");
+            setPreviewRight(parseFloat((inverted ? 1 / rateNum : rateNum).toFixed(6)).toString());
+            return;
         }
+        setPreviewLeft("1");
+        setPreviewRight("");
+        (async () => {
+            try {
+                const { rate } = await fetchLiveRate({ from: currencyA, to: currencyB });
+                setRateNum(rate);
+                setPreviewLeft("1");
+                setPreviewRight(parseFloat((inverted ? 1 / rate : rate).toFixed(6)).toString());
+            } catch {
+                // Live rate unavailable — leave the boxes blank for manual entry.
+            }
+        })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [inverted]);
+    }, [step]);
 
     const amountANum = parseFloat(amountA);
     const amountBNum = parseFloat(amountB);
-    const rateNum = parseFloat(rate);
 
-    const allAmountFields = ["amountA", "amountB", "rate"] as const;
-
-    const handleFieldEdit = (field: "amountA" | "amountB" | "rate", rawValue: string) => {
-        const newOrder = [...editOrder.filter((f) => f !== field), field];
-        setEditOrder(newOrder);
-
-        // Build the new values map with the just-typed value applied
-        const vals = {
-            amountA: field === "amountA" ? rawValue : amountA,
-            amountB: field === "amountB" ? rawValue : amountB,
-            // rawValue for rate is always canonical (1 A = rate B)
-            rate: field === "rate" ? rawValue : rate,
-        };
-
-        if (field === "amountA") setAmountA(rawValue);
-        else if (field === "amountB") setAmountB(rawValue);
-        else setRate(rawValue);
-
-        // Determine which field to auto-compute
-        if (newOrder.length >= 2) {
-            const computed = allAmountFields.find((f) => !newOrder.slice(-2).includes(f));
-            const a = parseFloat(vals.amountA);
-            const b = parseFloat(vals.amountB);
-            const r = parseFloat(vals.rate);
-
-            if (computed === "amountB" && !isNaN(a) && !isNaN(r) && a > 0 && r > 0) {
-                setAmountB((a * r).toFixed(2));
-            } else if (computed === "amountA" && !isNaN(b) && !isNaN(r) && b > 0 && r > 0) {
-                setAmountA((b / r).toFixed(2));
-            } else if (computed === "rate" && !isNaN(a) && !isNaN(b) && a > 0 && b > 0) {
-                const canonicalRate = parseFloat((b / a).toFixed(6));
-                setRate(canonicalRate.toString());
-                // Sync the visible input to the current display direction
-                const displayRate = inverted
-                    ? parseFloat((1 / canonicalRate).toFixed(6))
-                    : canonicalRate;
-                setRateInput(displayRate.toString());
-            }
+    // Recomputes rateNum from the Rate step's two boxes — called on blur.
+    const commitRate = (left: string, right: string) => {
+        const l = parseFloat(left);
+        const r = parseFloat(right);
+        if (isNaN(l) || isNaN(r) || l <= 0 || r <= 0) {
+            setRateNum(NaN);
+            return;
         }
+        setRateNum(inverted ? l / r : r / l);
     };
 
     const handleRateInvert = () => {
@@ -157,19 +150,26 @@ export default function CreateExchangeDialog({
         const next = inverted ? currencyA : currencyB;
         setPreferred(next);
         setPreferredRateCurrency(groupId, next);
-        // rateInput will be re-synced by the inverted effect.
+        // Resync the boxes to the new direction immediately, without waiting for a re-render.
+        const newInverted = resolveRateBase(currencyA, currencyB, next, defaultCurrency ?? "CAD") === "b";
+        if (!isNaN(rateNum) && rateNum > 0) {
+            setPreviewLeft("1");
+            setPreviewRight(parseFloat((newInverted ? 1 / rateNum : rateNum).toFixed(6)).toString());
+        }
     };
 
     const partyA = members.find((m) => m.user_id === partyAId);
     const partyB = members.find((m) => m.user_id === partyBId);
 
     const step1Valid = !!partyAId && !!partyBId && partyAId !== partyBId && currencyA !== currencyB;
-    const allAmountsProvided = amountANum > 0 && amountBNum > 0 && rateNum > 0;
-    const expectedAmountB = amountANum * rateNum;
-    const mathTolerance = Math.max(0.01, expectedAmountB * 0.01);
-    const mathValid = !allAmountsProvided || Math.abs(expectedAmountB - amountBNum) <= mathTolerance;
-    const step2Valid = allAmountsProvided && mathValid;
-    const isValid = step1Valid && step2Valid;
+    const stepRateValid = !isNaN(rateNum) && rateNum > 0;
+    const stepAmountsValid = amountANum > 0 && amountBNum > 0;
+    const isValid = step1Valid && stepRateValid && stepAmountsValid;
+
+    const stepsValid = [step1Valid, stepRateValid, stepAmountsValid, true];
+    const stepValid = stepsValid[step];
+    // Can only jump to a step via the stepper if it's already been visited.
+    const canGoToStep = (index: number) => index <= maxStepReached;
 
     const handleCreate = () => {
         if (!isValid) return;
@@ -209,9 +209,11 @@ export default function CreateExchangeDialog({
 
             <DialogContent sx={{ px: 3, pt: 1.5, pb: 2, display: "flex", flexDirection: "column", gap: 2 }}>
                 <Stepper activeStep={step} alternativeLabel sx={{ mb: 0.5 }}>
-                    {STEPS.map((label) => (
-                        <Step key={label}>
-                            <StepLabel>{label}</StepLabel>
+                    {STEPS.map((label, index) => (
+                        <Step key={label} completed={index < STEPS.length - 1 && stepsValid[index] && index !== step}>
+                            <StepButton disabled={!canGoToStep(index)} onClick={() => setStep(index)}>
+                                {label}
+                            </StepButton>
                         </Step>
                     ))}
                 </Stepper>
@@ -278,115 +280,29 @@ export default function CreateExchangeDialog({
                     </Box>
                 )}
 
-                {/* Step 2: Amounts */}
+                {/* Step 2: Rate */}
                 {step === 1 && (
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
-                            <Avatar src={partyA?.avatar || undefined} sx={{ width: 32, height: 32 }}>
-                                {partyA?.username[0]?.toUpperCase()}
-                            </Avatar>
-                            <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
-                                    {partyA?.username}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    Gives {currencyA}
-                                </Typography>
-                            </Box>
-                            <IconButton
-                                size="small"
-                                onClick={() => {
-                                    // Swap currencies
-                                    setCurrencyA(currencyB);
-                                    setCurrencyB(currencyA);
-                                    // Swap amounts
-                                    setAmountA(amountB);
-                                    setAmountB(amountA);
-                                    // Invert the canonical rate (1 A = rate B becomes 1 B = rate A, i.e. 1 newA = 1/rate newB)
-                                    const newCanonical = rateNum > 0 ? 1 / rateNum : NaN;
-                                    if (!isNaN(newCanonical) && newCanonical > 0) {
-                                        setRate(newCanonical.toFixed(10));
-                                        // Re-sync rateInput using the new currencies + unchanged preferred
-                                        const newInverted = resolveRateBase(currencyB, currencyA, preferred, defaultCurrency ?? "CAD") === "b";
-                                        setRateInput(newInverted
-                                            ? parseFloat((1 / newCanonical).toFixed(6)).toString()
-                                            : parseFloat(newCanonical.toFixed(6)).toString()
-                                        );
-                                    }
-                                    // Reset edit order so auto-compute doesn't clobber the freshly swapped values
-                                    setEditOrder([]);
-                                }}
-                                sx={{
-                                    flexShrink: 0,
-                                    color: "text.secondary",
-                                    bgcolor: "action.selected",
-                                    border: "1px solid",
-                                    borderColor: "divider",
-                                    "&:hover": { bgcolor: "action.hover" },
-                                }}
-                                title="Swap parties and currencies"
-                            >
-                                <SwapHorizIcon sx={{ fontSize: 20 }} />
-                            </IconButton>
-                            <Box sx={{ flex: 1, minWidth: 0, textAlign: "right" }}>
-                                <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
-                                    {partyB?.username}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    Gives {currencyB}
-                                </Typography>
-                            </Box>
-                            <Avatar src={partyB?.avatar || undefined} sx={{ width: 32, height: 32 }}>
-                                {partyB?.username[0]?.toUpperCase()}
-                            </Avatar>
-                        </Box>
-
-                        <TextField
-                            label={`${partyA?.username ?? "Party A"}'s amount (${currencyA})`}
-                            fullWidth
-                            value={amountA}
-                            onChange={(e) => {
-                                const v = sanitizeAmount(e.target.value);
-                                if (v !== null) handleFieldEdit("amountA", v);
-                            }}
-                            onBlur={() => {
-                                const n = parseFloat(amountA);
-                                if (!isNaN(n)) setAmountA(n.toFixed(2));
-                            }}
-                            slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
-                            helperText={undefined}
-                            sx={undefined}
-                        />
+                        <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>
+                            Set the exchange rate between {currencyA} and {currencyB}.
+                        </Typography>
 
                         <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
                             <TextField
-                                label="Exchange Rate"
+                                label={inverted ? currencyB : currencyA}
                                 fullWidth
-                                value={rateInput}
+                                value={previewLeft}
                                 onChange={(e) => {
                                     const v = sanitizeAmount(e.target.value);
                                     if (v === null) return;
-                                    setRateInput(v);
-                                    const parsed = parseFloat(v);
-                                    if (!isNaN(parsed) && parsed > 0) {
-                                        const canonical = inverted
-                                            ? parseFloat((1 / parsed).toFixed(10)).toString()
-                                            : v;
-                                        handleFieldEdit("rate", canonical);
-                                    } else {
-                                        handleFieldEdit("rate", v);
-                                    }
+                                    setPreviewLeft(v);
+                                    commitRate(v, previewRight);
                                 }}
                                 onBlur={() => {
-                                    const n = parseFloat(rateInput);
-                                    if (!isNaN(n)) setRateInput(parseFloat(n.toFixed(6)).toString());
+                                    const n = parseFloat(previewLeft);
+                                    if (!isNaN(n)) setPreviewLeft(parseFloat(n.toFixed(6)).toString());
                                 }}
-                                slotProps={{
-                                    htmlInput: { inputMode: "decimal" },
-                                    inputLabel: { shrink: true },
-                                }}
-                                helperText={inverted ? `1 ${currencyB} = ? ${currencyA}` : `1 ${currencyA} = ? ${currencyB}`}
-                                sx={undefined}
+                                slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
                             />
                             <IconButton
                                 onClick={handleRateInvert}
@@ -401,39 +317,142 @@ export default function CreateExchangeDialog({
                                     "&:hover": { bgcolor: "action.hover" },
                                 }}
                             >
-                                <SwapVertIcon fontSize="small" />
+                                <SwapHorizIcon fontSize="small" />
                             </IconButton>
+                            <TextField
+                                label={inverted ? currencyA : currencyB}
+                                fullWidth
+                                value={previewRight}
+                                onChange={(e) => {
+                                    const v = sanitizeAmount(e.target.value);
+                                    if (v === null) return;
+                                    setPreviewRight(v);
+                                    commitRate(previewLeft, v);
+                                }}
+                                onBlur={() => {
+                                    const n = parseFloat(previewRight);
+                                    if (!isNaN(n)) setPreviewRight(parseFloat(n.toFixed(6)).toString());
+                                }}
+                                slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
+                            />
                         </Box>
 
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            disabled={isFetchingLiveRate}
+                            onClick={async () => {
+                                try {
+                                    const { rate } = await fetchLiveRate({ from: currencyA, to: currencyB });
+                                    setRateNum(rate);
+                                    setPreviewLeft("1");
+                                    setPreviewRight(parseFloat((inverted ? 1 / rate : rate).toFixed(6)).toString());
+                                } catch (e) {
+                                    enqueueSnackbar(e instanceof Error ? e.message : "Failed to fetch live rate", { variant: "error" });
+                                }
+                            }}
+                            sx={{ alignSelf: "center" }}
+                        >
+                            {isFetchingLiveRate ? "Fetching…" : "Use Live Rate"}
+                        </Button>
+
+                        {!isNaN(rateNum) && rateNum > 0 ? (
+                            <Typography variant="subtitle1" sx={{ textAlign: "center", fontWeight: 700 }}>
+                                {formatRate(currencyA, currencyB, rateNum, preferred, defaultCurrency ?? "CAD")}
+                            </Typography>
+                        ) : (
+                            <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>
+                                Enter the rate above to continue
+                            </Typography>
+                        )}
+                    </Box>
+                )}
+
+                {/* Step 3: Amounts */}
+                {step === 2 && (
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        {!isNaN(rateNum) && rateNum > 0 && (
+                            <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+                                {formatRate(currencyA, currencyB, rateNum, preferred, defaultCurrency ?? "CAD")}
+                            </Typography>
+                        )}
+
+                        {/* Party A: name box, amount field directly underneath */}
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
+                            <Avatar src={partyA?.avatar || undefined} sx={{ width: 32, height: 32 }}>
+                                {partyA?.username[0]?.toUpperCase()}
+                            </Avatar>
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                                    {partyA?.username}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    Gives {currencyA}
+                                </Typography>
+                            </Box>
+                        </Box>
                         <TextField
-                            label={`${partyB?.username ?? "Party B"}'s amount (${currencyB})`}
+                            label={`Amount (${currencyA})`}
+                            fullWidth
+                            value={amountA}
+                            onChange={(e) => {
+                                const v = sanitizeAmount(e.target.value);
+                                if (v === null) return;
+                                setAmountA(v);
+                                const n = parseFloat(v);
+                                if (!isNaN(n) && !isNaN(rateNum) && rateNum > 0) {
+                                    setAmountB((n * rateNum).toFixed(2));
+                                }
+                            }}
+                            onBlur={() => {
+                                const n = parseFloat(amountA);
+                                if (!isNaN(n)) setAmountA(n.toFixed(2));
+                            }}
+                            slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
+                        />
+
+                        <Divider>
+                            <SwapVertIcon fontSize="small" sx={{ color: "text.disabled" }} />
+                        </Divider>
+
+                        {/* Party B: name box, amount field directly underneath */}
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
+                            <Avatar src={partyB?.avatar || undefined} sx={{ width: 32, height: 32 }}>
+                                {partyB?.username[0]?.toUpperCase()}
+                            </Avatar>
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                                    {partyB?.username}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    Gives {currencyB}
+                                </Typography>
+                            </Box>
+                        </Box>
+                        <TextField
+                            label={`Amount (${currencyB})`}
                             fullWidth
                             value={amountB}
                             onChange={(e) => {
                                 const v = sanitizeAmount(e.target.value);
-                                if (v !== null) handleFieldEdit("amountB", v);
+                                if (v === null) return;
+                                setAmountB(v);
+                                const n = parseFloat(v);
+                                if (!isNaN(n) && !isNaN(rateNum) && rateNum > 0) {
+                                    setAmountA((n / rateNum).toFixed(2));
+                                }
                             }}
                             onBlur={() => {
                                 const n = parseFloat(amountB);
                                 if (!isNaN(n)) setAmountB(n.toFixed(2));
                             }}
                             slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
-                            helperText={undefined}
-                            sx={undefined}
                         />
-
-                        {allAmountsProvided && !mathValid && (
-                            <Typography variant="caption" color="error">
-                                The amounts don&apos;t match the exchange rate. Expected{" "}
-                                {formatCurrency(expectedAmountB, currencyB)} for {partyB?.username ?? "Party B"}.
-                            </Typography>
-                        )}
-
                     </Box>
                 )}
 
-                {/* Step 3: Summary */}
-                {step === 2 && (
+                {/* Step 4: Summary */}
+                {step === 3 && (
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                         <Typography variant="subtitle2" color="text.secondary" sx={{ textAlign: "center" }}>
                             Review the exchange before confirming
@@ -497,19 +516,23 @@ export default function CreateExchangeDialog({
                         </Paper>
 
                         {/* What each party owes */}
-                        <Paper variant="outlined" sx={{ px: 2, py: 1.5, borderRadius: 2 }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                        <Paper variant="outlined" sx={{ px: 2, py: 1, borderRadius: 2 }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
                                 Settlement
                             </Typography>
-                            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-                                <Typography variant="body2">
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
+                                <Typography variant="caption" color="text.secondary">
                                     <strong>{partyA?.username}</strong> owes <strong>{partyB?.username}</strong>{" "}
-                                    <strong>{formatCurrency(amountANum, currencyA)}</strong>
+                                    <Box component="span" sx={{ color: "common.white", fontWeight: 700 }}>
+                                        {formatCurrency(amountANum, currencyA)}
+                                    </Box>
                                 </Typography>
                                 {amountBNum > 0 && (
-                                    <Typography variant="body2">
+                                    <Typography variant="caption" color="text.secondary">
                                         <strong>{partyB?.username}</strong> owes <strong>{partyA?.username}</strong>{" "}
-                                        <strong>{formatCurrency(amountBNum, currencyB)}</strong>
+                                        <Box component="span" sx={{ color: "common.white", fontWeight: 700 }}>
+                                            {formatCurrency(amountBNum, currencyB)}
+                                        </Box>
                                     </Typography>
                                 )}
                             </Box>
@@ -538,10 +561,10 @@ export default function CreateExchangeDialog({
                     Back
                 </Button>
 
-                {step < 2 ? (
+                {step < 3 ? (
                     <Button
                         variant="contained"
-                        disabled={step === 0 ? !step1Valid : !step2Valid}
+                        disabled={!stepValid}
                         onClick={() => setStep((s) => s + 1)}
                     >
                         Next

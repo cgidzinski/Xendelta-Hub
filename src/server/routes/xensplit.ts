@@ -740,6 +740,27 @@ module.exports = function (app: any) {
     }
   });
 
+  // GET /api/xensplit/exchange-rate - Live exchange rate proxy (exchangerate-api.com)
+  app.get("/api/xensplit/exchange-rate", async (req: Request, res: Response) => {
+    try {
+      const from = ((req.query.from as string) || "").toUpperCase();
+      const to = ((req.query.to as string) || "").toUpperCase();
+      if (!from || !to) return res.status(400).json({ status: false, message: "from and to are required" });
+
+      const apiKey = process.env.EXCHANGERATE_API_KEY;
+      if (!apiKey) return res.status(500).json({ status: false, message: "Exchange rate service not configured" });
+
+      const response = await fetch(`https://v6.exchangerate-api.com/v6/${apiKey}/pair/${from}/${to}`);
+      const data: any = await response.json();
+      if (data.result !== "success") {
+        return res.status(502).json({ status: false, message: data["error-type"] || "Failed to fetch exchange rate" });
+      }
+      res.json({ status: true, data: { rate: data.conversion_rate } });
+    } catch (e) {
+      res.status(500).json({ status: false, message: "Failed to fetch exchange rate" });
+    }
+  });
+
   // GET /api/xensplit/groups/:groupId/balances - Get balances
   app.get("/api/xensplit/groups/:groupId/balances", validateParams(xenSplitIdParamSchema), async (req: Request, res: Response) => {
     try {

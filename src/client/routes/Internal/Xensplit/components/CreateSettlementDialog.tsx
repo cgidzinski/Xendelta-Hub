@@ -162,35 +162,33 @@ export default function CreateSettlementDialog({ open, onClose, members, current
                     </Typography>
                 </Box>
 
-                <Box sx={{ display: "flex", gap: 2 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <MemberSelect members={members} label="Party A" value={partyAId} excludeId={partyBId} onChange={setPartyAId} />
                     <MemberSelect members={members} label="Party B" value={partyBId} excludeId={partyAId} onChange={setPartyBId} />
                 </Box>
 
-                <Box sx={{ display: "flex", gap: 2 }}>
-                    <FormControl sx={{ flex: 1 }}>
-                        <InputLabel>Currency</InputLabel>
-                        <Select value={currency} label="Currency" onChange={(e) => setCurrency(e.target.value)} MenuProps={STABLE_CURRENCY_MENU_PROPS}>
-                            {currencyOptions.map((c) => (
-                                <MenuItem key={c} value={c}>{c} ({getCurrencySymbol(c)})</MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                    <TextField
-                        label="Amount"
-                        value={amount}
-                        onChange={(e) => {
-                            const v = sanitizeAmount(e.target.value);
-                            if (v !== null) setAmount(v);
-                        }}
-                        onBlur={() => {
-                            const n = parseFloat(amount);
-                            if (!isNaN(n)) setAmount(n.toFixed(2));
-                        }}
-                        slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
-                        sx={{ flex: 1 }}
-                    />
-                </Box>
+                <FormControl fullWidth>
+                    <InputLabel>Currency</InputLabel>
+                    <Select value={currency} label="Currency" onChange={(e) => setCurrency(e.target.value)} MenuProps={STABLE_CURRENCY_MENU_PROPS}>
+                        {currencyOptions.map((c) => (
+                            <MenuItem key={c} value={c}>{c} ({getCurrencySymbol(c)})</MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+                <TextField
+                    label="Amount"
+                    fullWidth
+                    value={amount}
+                    onChange={(e) => {
+                        const v = sanitizeAmount(e.target.value);
+                        if (v !== null) setAmount(v);
+                    }}
+                    onBlur={() => {
+                        const n = parseFloat(amount);
+                        if (!isNaN(n)) setAmount(n.toFixed(2));
+                    }}
+                    slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
+                />
 
                 <TextField
                     label="Note (optional)"

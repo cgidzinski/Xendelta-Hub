@@ -98,7 +98,7 @@ export default function GroupDetail() {
   const { deleteGroup } = useXenSplits();
   const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useXenSplitBalances(groupId!);
   const { updateExpense, updateExpenseAsync, isUpdatingExpense, addExpense, addExpenseAsync, isAddingExpense, deleteExpense, isDeletingExpense, uploadExpenseImages, isUploadingImages, deleteExpenseImage, isDeletingExpenseImage } = useXenSplitExpenses(groupId!);
-  const { addExchange, isAddingExchange, deleteExchange, isDeletingExchange } = useXenSplitExchanges(groupId!);
+  const { addExchange, isAddingExchange, deleteExchange, isDeletingExchange, fetchLiveRate, isFetchingLiveRate } = useXenSplitExchanges(groupId!);
   useXenSplitSocket(groupId!);
   const location = useLocation();
   const activeTab = location.pathname.endsWith("/overview")
@@ -1015,6 +1015,8 @@ export default function GroupDetail() {
         groupId={groupId!}
         addExchange={addExchange}
         isAddingExchange={isAddingExchange}
+        fetchLiveRate={fetchLiveRate}
+        isFetchingLiveRate={isFetchingLiveRate}
       />
 
       {/* Lightbox */}

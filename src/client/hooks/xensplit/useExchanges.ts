@@ -27,10 +27,19 @@ export function useXenSplitExchanges(groupId: string) {
     },
   });
 
+  const liveRateMutation = useMutation({
+    mutationFn: async ({ from, to }: { from: string; to: string }) => {
+      const res = await apiClient.get(`/api/xensplit/exchange-rate`, { params: { from, to } });
+      return res.data.data as { rate: number };
+    },
+  });
+
   return {
     addExchange: addExchangeMutation.mutate,
     isAddingExchange: addExchangeMutation.isPending,
     deleteExchange: deleteExchangeMutation.mutate,
     isDeletingExchange: deleteExchangeMutation.isPending,
+    fetchLiveRate: liveRateMutation.mutateAsync,
+    isFetchingLiveRate: liveRateMutation.isPending,
   };
 }
