@@ -52,6 +52,9 @@ function transformMembers(obj: any): any {
   };
 }
 
+const RATE_CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+const rateCache = new Map<string, { rate: number; fetchedAt: number }>();
+
 module.exports = function (app: any) {
   // Apply auth middleware to all xensplit routes
   app.use("/api/xensplit", authenticateToken);
@@ -740,12 +743,20 @@ module.exports = function (app: any) {
     }
   });
 
-  // GET /api/xensplit/exchange-rate - Live exchange rate proxy (exchangerate-api.com)
+  // GET /api/xensplit/exchange-rate - Live exchange rate proxy (exchangerate-api.com), cached for a
+  // few hours since rates barely move within a day and the upstream API has usage limits.
   app.get("/api/xensplit/exchange-rate", async (req: Request, res: Response) => {
     try {
       const from = ((req.query.from as string) || "").toUpperCase();
       const to = ((req.query.to as string) || "").toUpperCase();
       if (!from || !to) return res.status(400).json({ status: false, message: "from and to are required" });
+
+      const key = `${from}_${to}`;
+      const cached = rateCache.get(key);
+      const now = Date.now();
+      if (cached && now - cached.fetchedAt < RATE_CACHE_TTL_MS) {
+        return res.json({ status: true, data: { rate: cached.rate, fetchedAt: cached.fetchedAt } });
+      }
 
       const apiKey = process.env.EXCHANGERATE_API_KEY;
       if (!apiKey) return res.status(500).json({ status: false, message: "Exchange rate service not configured" });
@@ -755,7 +766,9 @@ module.exports = function (app: any) {
       if (data.result !== "success") {
         return res.status(502).json({ status: false, message: data["error-type"] || "Failed to fetch exchange rate" });
       }
-      res.json({ status: true, data: { rate: data.conversion_rate } });
+      const fetchedAt = now;
+      rateCache.set(key, { rate: data.conversion_rate, fetchedAt });
+      res.json({ status: true, data: { rate: data.conversion_rate, fetchedAt } });
     } catch (e) {
       res.status(500).json({ status: false, message: "Failed to fetch exchange rate" });
     }
