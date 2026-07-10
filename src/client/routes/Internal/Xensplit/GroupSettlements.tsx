@@ -202,11 +202,10 @@ export default function GroupSettlements() {
                                 const toMember = getMember(s.to);
                                 return (
                                     <Box key={s._id ?? idx} onClick={() => setViewSettlement(s)} sx={cardSx}>
-                                        {/* row 1: avatars + amount + label */}
+                                        {/* row 1: avatars + amount */}
                                         <Avatar src={fromMember?.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>{fromMember?.username[0]?.toUpperCase()}</Avatar>
                                         <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, alignSelf: "center" }}>
                                             <Typography variant="subtitle2" sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>{formatCurrency(s.amount, s.currency)}</Typography>
-                                            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap", fontSize: "0.6rem" }}>{s.is_partial ? "Partial" : "Full"}</Typography>
                                         </Box>
                                         <Avatar src={toMember?.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>{toMember?.username[0]?.toUpperCase()}</Avatar>
                                         {/* row 2: names + arrow */}

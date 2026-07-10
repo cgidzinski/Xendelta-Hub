@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSnackbar } from "notistack";
-import { Box, Typography, Button, Avatar, Dialog, DialogContent, DialogActions, TextField, InputAdornment, Chip, IconButton } from "@mui/material";
+import { Box, Typography, Button, Avatar, Dialog, DialogContent, DialogActions, TextField, InputAdornment, IconButton } from "@mui/material";
 import EastIcon from "@mui/icons-material/East";
 import UndoIcon from "@mui/icons-material/Undo";
 import CheckIcon from "@mui/icons-material/Check";
@@ -188,7 +188,6 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
                         <Typography variant="caption" color="text.secondary">
                             {new Date(s.settled_at).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric" })}
                         </Typography>
-                        {s.is_partial && <Chip label="Partial" size="small" sx={{ fontSize: "0.65rem", height: 18 }} />}
                     </Box>
                 </Box>
 
