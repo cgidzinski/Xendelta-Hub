@@ -26,7 +26,8 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import SwapVertIcon from "@mui/icons-material/SwapVert";
 import CheckIcon from "@mui/icons-material/Check";
 import type { XenSplitMember, CreateExchangeInput } from "../../../../hooks/xensplit/types";
-import { sanitizeAmount, getGroupCurrencies, getCurrencySymbol, formatCurrency, getPreferredRateCurrency, setPreferredRateCurrency, resolveRateBase, formatRate } from "../../../../utils/currencyUtils";
+import { sanitizeAmount, getGroupCurrencies, getCurrencySymbol, formatCurrency, getPreferredRateCurrency, setPreferredRateCurrency, resolveRateBase, formatRate, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
+import { MemberSelect } from "./MemberSelect";
 
 interface CreateExchangeDialogProps {
     open: boolean;
@@ -195,49 +196,6 @@ export default function CreateExchangeDialog({
         );
     };
 
-    const MemberChips = ({
-        selectedId,
-        disabledId,
-        onSelect,
-    }: {
-        selectedId: string;
-        disabledId: string;
-        onSelect: (id: string) => void;
-    }) => (
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {members.map((m) => {
-                const isSelected = m.user_id === selectedId;
-                const isDisabled = m.user_id === disabledId;
-                return (
-                    <Box
-                        key={m.user_id}
-                        onClick={() => !isDisabled && onSelect(isSelected ? "" : m.user_id)}
-                        sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 1,
-                            px: 2,
-                            py: 1,
-                            borderRadius: 2,
-                            cursor: isDisabled ? "not-allowed" : "pointer",
-                            bgcolor: "action.hover",
-                            color: isDisabled ? "text.disabled" : "text.primary",
-                            border: isSelected ? "2px solid" : "2px solid transparent",
-                            borderColor: isSelected ? "primary.main" : "transparent",
-                            opacity: isDisabled ? 0.4 : 1,
-                            transition: "all 0.2s",
-                        }}
-                    >
-                        <Avatar src={m.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
-                            {m.username[0]?.toUpperCase()}
-                        </Avatar>
-                        <Typography variant="caption">{m.username}</Typography>
-                    </Box>
-                );
-            })}
-        </Box>
-    );
-
     return (
         <Dialog fullWidth maxWidth="xs" fullScreen={isMobile} open={open} onClose={onClose} PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3 } }}>
             <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
@@ -260,16 +218,14 @@ export default function CreateExchangeDialog({
 
                 {/* Step 1: Parties */}
                 {step === 0 && (
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                         {/* Party A */}
-                        <Box>
-                            <MemberChips selectedId={partyAId} disabledId={partyBId} onSelect={setPartyAId} />
-                        </Box>
+                        <MemberSelect members={members} label="Party A" value={partyAId} excludeId={partyBId} onChange={setPartyAId} />
 
                         {/* Currency A */}
-                        <FormControl fullWidth size="small">
+                        <FormControl fullWidth>
                             <InputLabel id="exchange-currency-a-label">Gives</InputLabel>
-                            <Select labelId="exchange-currency-a-label" label="Gives" value={currencyA} onChange={(e) => setCurrencyA(e.target.value)}>
+                            <Select labelId="exchange-currency-a-label" label="Gives" value={currencyA} onChange={(e) => setCurrencyA(e.target.value)} MenuProps={STABLE_CURRENCY_MENU_PROPS}>
                                 {getGroupCurrencies(defaultCurrency, secondaryCurrencies, currencyA).map((c) => (
                                     <MenuItem key={c} value={c}>
                                         {c} ({getCurrencySymbol(c)})
@@ -299,14 +255,12 @@ export default function CreateExchangeDialog({
                         </Divider>
 
                         {/* Party B */}
-                        <Box>
-                            <MemberChips selectedId={partyBId} disabledId={partyAId} onSelect={setPartyBId} />
-                        </Box>
+                        <MemberSelect members={members} label="Party B" value={partyBId} excludeId={partyAId} onChange={setPartyBId} />
 
                         {/* Currency B */}
-                        <FormControl fullWidth size="small">
+                        <FormControl fullWidth>
                             <InputLabel id="exchange-currency-b-label">Gives</InputLabel>
-                            <Select labelId="exchange-currency-b-label" label="Gives" value={currencyB} onChange={(e) => setCurrencyB(e.target.value)}>
+                            <Select labelId="exchange-currency-b-label" label="Gives" value={currencyB} onChange={(e) => setCurrencyB(e.target.value)} MenuProps={STABLE_CURRENCY_MENU_PROPS}>
                                 {getGroupCurrencies(defaultCurrency, secondaryCurrencies, currencyB).map((c) => (
                                     <MenuItem key={c} value={c}>
                                         {c} ({getCurrencySymbol(c)})
@@ -326,7 +280,7 @@ export default function CreateExchangeDialog({
 
                 {/* Step 2: Amounts */}
                 {step === 1 && (
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
                             <Avatar src={partyA?.avatar || undefined} sx={{ width: 32, height: 32 }}>
                                 {partyA?.username[0]?.toUpperCase()}

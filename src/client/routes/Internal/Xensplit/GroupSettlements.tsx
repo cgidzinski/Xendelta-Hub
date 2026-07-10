@@ -126,7 +126,7 @@ export default function GroupSettlements() {
                         onClick={onAddExchange}
                         sx={{ borderRadius: 2, fontWeight: 600, textTransform: "none" }}
                     >
-                        Exchange
+                        Swap
                     </Button>
                 )}
                 <Button
