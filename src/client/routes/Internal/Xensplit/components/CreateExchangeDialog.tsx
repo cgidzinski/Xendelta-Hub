@@ -20,6 +20,8 @@ import {
     StepButton,
     Divider,
     useMediaQuery,
+    ToggleButtonGroup,
+    ToggleButton,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
@@ -79,6 +81,8 @@ export default function CreateExchangeDialog({
     // preferred is the user's chosen base currency for the rate display, stored per group.
     const [preferred, setPreferred] = useState(() => getPreferredRateCurrency(groupId, defaultCurrency ?? "CAD"));
     const [note, setNote] = useState("");
+    // Which rate source the user has selected on the Rate step — null until they pick one, so nothing autofills.
+    const [rateMode, setRateMode] = useState<"live" | "cash" | null>(null);
 
     // Derived: whether the rate field is currently displayed as inverted (base = currencyB).
     const inverted = resolveRateBase(currencyA, currencyB, preferred, defaultCurrency ?? "CAD") === "b";
@@ -98,6 +102,7 @@ export default function CreateExchangeDialog({
             setPreviewRight("");
             setPreferred(getPreferredRateCurrency(groupId, defaultCurrency ?? "CAD"));
             setNote("");
+            setRateMode(null);
         }
     }, [open, defaultCurrency, currentUser.id, groupId]);
 
@@ -107,27 +112,13 @@ export default function CreateExchangeDialog({
 
     // Whenever the Rate step becomes active, refresh its two boxes from the canonical rate —
     // catches cases where the rate changed elsewhere (e.g. the currency swap on the Amounts step)
-    // without fighting the user's live typing while they're actually on this step. If no rate has
-    // been established yet, auto-fetch the live rate to prefill it.
+    // without fighting the user's live typing while they're actually on this step.
     useEffect(() => {
         if (step !== 1) return;
         if (!isNaN(rateNum) && rateNum > 0) {
             setPreviewLeft("1");
             setPreviewRight(parseFloat((inverted ? 1 / rateNum : rateNum).toFixed(6)).toString());
-            return;
         }
-        setPreviewLeft("1");
-        setPreviewRight("");
-        (async () => {
-            try {
-                const { rate } = await fetchLiveRate({ from: currencyA, to: currencyB });
-                setRateNum(rate);
-                setPreviewLeft("1");
-                setPreviewRight(parseFloat((inverted ? 1 / rate : rate).toFixed(6)).toString());
-            } catch {
-                // Live rate unavailable — leave the boxes blank for manual entry.
-            }
-        })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [step]);
 
@@ -337,24 +328,41 @@ export default function CreateExchangeDialog({
                             />
                         </Box>
 
-                        <Button
-                            variant="outlined"
-                            size="small"
-                            disabled={isFetchingLiveRate}
-                            onClick={async () => {
-                                try {
-                                    const { rate } = await fetchLiveRate({ from: currencyA, to: currencyB });
-                                    setRateNum(rate);
+                        <ToggleButtonGroup
+                            exclusive
+                            value={rateMode}
+                            onChange={async (_, v) => {
+                                if (!v) return;
+                                setRateMode(v);
+                                if (v === "live") {
+                                    try {
+                                        const { rate } = await fetchLiveRate({ from: currencyA, to: currencyB });
+                                        setRateNum(rate);
+                                        setPreviewLeft("1");
+                                        setPreviewRight(parseFloat((inverted ? 1 / rate : rate).toFixed(6)).toString());
+                                    } catch (e) {
+                                        enqueueSnackbar(e instanceof Error ? e.message : "Failed to fetch live rate", { variant: "error" });
+                                    }
+                                } else {
+                                    // No live source for cash rate — clear the boxes for manual entry.
+                                    setRateNum(NaN);
                                     setPreviewLeft("1");
-                                    setPreviewRight(parseFloat((inverted ? 1 / rate : rate).toFixed(6)).toString());
-                                } catch (e) {
-                                    enqueueSnackbar(e instanceof Error ? e.message : "Failed to fetch live rate", { variant: "error" });
+                                    setPreviewRight("");
                                 }
                             }}
                             sx={{ alignSelf: "center" }}
                         >
-                            {isFetchingLiveRate ? "Fetching…" : "Use Live Rate"}
-                        </Button>
+                            <ToggleButton value="live" disabled={isFetchingLiveRate} sx={{ px: 2, fontSize: "0.75rem", textTransform: "none" }}>
+                                {isFetchingLiveRate ? "Fetching…" : "Live Rate"}
+                            </ToggleButton>
+                            <ToggleButton value="cash" sx={{ px: 2, fontSize: "0.75rem", textTransform: "none" }}>
+                                Cash Rate
+                            </ToggleButton>
+                        </ToggleButtonGroup>
+
+                        <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+                            Live rate is the ideal exchange rate — cash rate is the more realistic rate you'll get exchanging in person.
+                        </Typography>
 
                         {!isNaN(rateNum) && rateNum > 0 ? (
                             <Typography variant="subtitle1" sx={{ textAlign: "center", fontWeight: 700 }}>
