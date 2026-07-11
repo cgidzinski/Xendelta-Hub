@@ -63,6 +63,7 @@ import Admin from "./routes/Admin/Admin";
 import Users from "./routes/Admin/Users";
 import AdminBlog from "./routes/Admin/Blog";
 import BlogPostForm from "./routes/Admin/BlogPostForm";
+import Database from "./routes/Admin/Database";
 import RecipaintPublic from "./routes/External/RecipaintPublic/RecipaintPublic";
 
 const router = createBrowserRouter(
@@ -189,6 +190,7 @@ const router = createBrowserRouter(
         <Route path="blog" element={<AdminBlog />} />
         <Route path="blog/new" element={<BlogPostForm />} />
         <Route path="blog/:id/edit" element={<BlogPostForm />} />
+        <Route path="database" element={<Database />} />
       </Route>
     </>,
   ),

@@ -60,6 +60,7 @@ require("./routes/blog.ts")(app);
 require("./routes/admin/blog.ts")(app);
 require("./routes/admin/users.ts")(app);
 require("./routes/admin/messages.ts")(app);
+require("./routes/admin/database.ts")(app);
 require("./routes/recipaint.ts")(app);
 require("./routes/xenbox.ts")(app);
 require("./routes/xenlink.ts")(app);
