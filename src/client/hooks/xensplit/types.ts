@@ -31,12 +31,32 @@ export interface XenSplitExpense {
   images?: XenSplitExpenseImage[];
   on_hold?: boolean;
   do_not_simplify?: boolean;
+  recurring_id?: string;
   created_at: string;
   payer?: {
     user_id: string;
     username: string;
     avatar: string | null;
   } | null;
+}
+
+// "30s" exists for testing the scheduler; real schedules are daily or longer
+export type RecurringFrequency = "30s" | "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+
+export interface XenSplitRecurringSeries {
+  _id: string;
+  genesis_expense_id?: string;
+  pending_expense?: Partial<XenSplitExpense>;
+  frequency: RecurringFrequency;
+  start_date: string;
+  end_date?: string;
+  max_occurrences?: number;
+  active: boolean;
+  occurrence_count: number;
+  next_run_at: string;
+  last_generated_at?: string;
+  created_by?: string;
+  created_at: string;
 }
 
 export interface XenSplitSettlement {
@@ -77,6 +97,7 @@ export interface XenSplit {
   expenses: XenSplitExpense[];
   settlements: XenSplitSettlement[];
   exchanges: XenSplitExchange[];
+  recurring_expenses?: XenSplitRecurringSeries[];
 }
 
 export interface XenSplitBalance {
@@ -149,6 +170,11 @@ export interface CreateExpenseInput {
   splits?: XenSplitExpenseSplit[];
   on_hold?: boolean;
   do_not_simplify?: boolean;
+  recurring?: {
+    frequency: RecurringFrequency;
+    end_date?: string;
+    max_occurrences?: number;
+  };
 }
 
 export interface CreateXenSplitInput {
@@ -170,6 +196,12 @@ export interface UpdateExpenseInput {
   splits?: XenSplitExpenseSplit[];
   on_hold?: boolean;
   do_not_simplify?: boolean;
+  recurring?: {
+    end_date?: string | null;
+    max_occurrences?: number | null;
+    active?: boolean;
+    cancel?: true;
+  };
 }
 
 export interface SettleDebtInput {

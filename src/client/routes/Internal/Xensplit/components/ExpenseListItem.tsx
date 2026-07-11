@@ -1,10 +1,33 @@
 import { Box, Typography, Avatar, alpha, Chip } from "@mui/material";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import LinkOffIcon from "@mui/icons-material/LinkOff";
-import type { XenSplitExpense } from "../../../../hooks/xensplit/types";
+import RepeatIcon from "@mui/icons-material/Repeat";
+import type { XenSplitExpense, XenSplitRecurringSeries } from "../../../../hooks/xensplit/types";
 import { formatCurrency } from "../../../../utils/currencyUtils";
 import { getCategoryIcon, getCategoryColor } from "../../../../constants/xensplitCategoryIcons";
 import { xsCardSx, xsBadgeSx } from "./rowStyles";
+
+export const FREQUENCY_LABELS: Record<XenSplitRecurringSeries["frequency"], string> = {
+    "30s": "Every 30s",
+    daily: "Daily",
+    weekly: "Weekly",
+    biweekly: "Biweekly",
+    monthly: "Monthly",
+    quarterly: "Quarterly",
+    yearly: "Yearly",
+};
+
+export function recurringSeriesCaption(series: XenSplitRecurringSeries): string {
+    const freq = FREQUENCY_LABELS[series.frequency];
+    if (!series.active) {
+        const ended =
+            (series.end_date && new Date(series.next_run_at) > new Date(series.end_date)) ||
+            (series.max_occurrences && series.occurrence_count >= series.max_occurrences);
+        return `${freq} · ${ended ? "Ended" : "Paused"}`;
+    }
+    const next = new Date(series.next_run_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return `${freq} · next ${next}`;
+}
 
 interface ExpenseListItemProps {
     expense: XenSplitExpense;
@@ -12,9 +35,11 @@ interface ExpenseListItemProps {
     userId?: string;
     /** Hide the inline date in the subtitle (e.g. when the feed is already grouped by date). */
     hideDate?: boolean;
+    /** The recurring series this expense is the genesis of, if any. */
+    recurringSeries?: XenSplitRecurringSeries;
 }
 
-export default function ExpenseListItem({ expense, onClick, userId, hideDate }: ExpenseListItemProps) {
+export default function ExpenseListItem({ expense, onClick, userId, hideDate, recurringSeries }: ExpenseListItemProps) {
     const mySplit = userId ? expense.splits.find((sp) => sp.user_id === userId) : undefined;
     const isPayer = userId ? expense.paid_by === userId : false;
     const owe = mySplit && !isPayer && !expense.on_hold
@@ -70,6 +95,26 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate }: 
                         label="Not Simplified"
                         size="small"
                         color="info"
+                        variant="outlined"
+                        sx={{ height: 18, fontSize: "0.6rem", mt: 0.25, "& .MuiChip-label": { px: 0.75 } }}
+                    />
+                )}
+                {recurringSeries && (
+                    <Chip
+                        icon={<RepeatIcon sx={{ fontSize: "14px !important" }} />}
+                        label={recurringSeriesCaption(recurringSeries)}
+                        size="small"
+                        color="secondary"
+                        variant="outlined"
+                        sx={{ height: 18, fontSize: "0.6rem", mt: 0.25, "& .MuiChip-label": { px: 0.75 } }}
+                    />
+                )}
+                {!recurringSeries && expense.recurring_id && (
+                    <Chip
+                        icon={<RepeatIcon sx={{ fontSize: "14px !important" }} />}
+                        label="Recurring"
+                        size="small"
+                        color="secondary"
                         variant="outlined"
                         sx={{ height: 18, fontSize: "0.6rem", mt: 0.25, "& .MuiChip-label": { px: 0.75 } }}
                     />

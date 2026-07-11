@@ -29,6 +29,31 @@ var expenseSchema = new Schema({
   images: [expenseImageSchema],
   on_hold: { type: Boolean, default: false },
   do_not_simplify: { type: Boolean, default: false },
+  // Set on generated occurrences; points at the genesis expense _id of the series
+  recurring_id: { type: Schema.Types.ObjectId },
+  created_at: { type: Date, default: Date.now },
+}, { _id: true });
+
+var recurringExpenseSchema = new Schema({
+  // Genesis expense this series clones from; null until a future-start series births it
+  genesis_expense_id: { type: Schema.Types.ObjectId },
+  // Snapshot of the expense body for future-start series, cleared once the genesis is born
+  pending_expense: { type: Object },
+  frequency: {
+    type: String,
+    // "30s" exists for testing the scheduler; real schedules are daily or longer
+    enum: ["30s", "daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"],
+    required: true
+  },
+  start_date: { type: Date, required: true },
+  end_date: { type: Date },
+  max_occurrences: { type: Number },
+  active: { type: Boolean, default: true },
+  occurrence_count: { type: Number, default: 0 },
+  // Invariant: next_run_at === advanceDate(start_date, frequency, occurrence_count)
+  next_run_at: { type: Date, required: true },
+  last_generated_at: { type: Date },
+  created_by: { type: String },
   created_at: { type: Date, default: Date.now },
 }, { _id: true });
 
@@ -67,6 +92,9 @@ var xenSplitSchema = new Schema({
   expenses: [expenseSchema],
   settlements: [settlementSchema],
   exchanges: [exchangeSchema],
+  recurring_expenses: [recurringExpenseSchema],
 });
+
+xenSplitSchema.index({ "recurring_expenses.next_run_at": 1 });
 
 module.exports = mongoose.model("XenSplit", xenSplitSchema);

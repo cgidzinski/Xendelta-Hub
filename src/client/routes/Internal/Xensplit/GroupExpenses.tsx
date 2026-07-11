@@ -1,10 +1,14 @@
 import { useState, useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Box, Typography, TextField, InputAdornment, ToggleButtonGroup, ToggleButton } from "@mui/material";
+import { Box, Typography, TextField, InputAdornment, ToggleButtonGroup, ToggleButton, Avatar, IconButton, alpha } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
+import RepeatIcon from "@mui/icons-material/Repeat";
+import CloseIcon from "@mui/icons-material/Close";
 import { startOfWeek, startOfMonth, startOfYear, subWeeks } from "date-fns";
 import type { GroupDetailContext } from "./GroupDetail";
-import ExpenseListItem from "./components/ExpenseListItem";
+import ExpenseListItem, { FREQUENCY_LABELS } from "./components/ExpenseListItem";
+import { formatCurrency } from "../../../utils/currencyUtils";
+import { xsCardSx, xsBadgeSx } from "./components/rowStyles";
 
 type DateFilter = "all" | "thisWeek" | "lastWeek" | "thisMonth" | "thisYear";
 
@@ -17,9 +21,27 @@ const DATE_FILTERS: { label: string; value: DateFilter }[] = [
 ];
 
 export default function GroupExpenses() {
-    const { group, onViewExpense, user } = useOutletContext<GroupDetailContext>();
+    const { group, onViewExpense, user, cancelRecurring, isCancellingRecurring } = useOutletContext<GroupDetailContext>();
     const [search, setSearch] = useState("");
     const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+
+    // Genesis expense id -> its recurring series, for chips on genesis rows
+    const seriesByGenesisId = useMemo(() => {
+        const map = new Map<string, NonNullable<typeof group.recurring_expenses>[number]>();
+        for (const r of group.recurring_expenses ?? []) {
+            if (r.genesis_expense_id) map.set(r.genesis_expense_id, r);
+        }
+        return map;
+    }, [group.recurring_expenses]);
+
+    // Future-start series that haven't created their first expense yet — exempt from date filter
+    const pendingSeries = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return (group.recurring_expenses ?? [])
+            .filter((r) => !r.genesis_expense_id && r.active)
+            .filter((r) => !q || (r.pending_expense?.title ?? "").toLowerCase().includes(q))
+            .sort((a, b) => new Date(a.next_run_at).getTime() - new Date(b.next_run_at).getTime());
+    }, [group.recurring_expenses, search]);
 
     // Held expenses, visible to all group members — exempt from date filter
     const heldVisible = useMemo(() => {
@@ -84,6 +106,65 @@ export default function GroupExpenses() {
                 </ToggleButtonGroup>
             </Box>
             <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pb: { xs: 11, md: 1 } }}>
+                {pendingSeries.length > 0 && (
+                    <Box sx={{ mb: 2 }}>
+                        <Typography
+                            variant="caption"
+                            sx={{ px: 0.5, mb: 0.75, display: "block", color: "secondary.main", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", fontSize: "0.65rem" }}
+                        >
+                            Upcoming Recurring
+                        </Typography>
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                            {pendingSeries.map((series) => (
+                                <Box
+                                    key={series._id}
+                                    sx={{
+                                        ...xsCardSx,
+                                        display: "grid",
+                                        gridTemplateColumns: "40px 1fr auto",
+                                        alignItems: "center",
+                                        columnGap: 1.25,
+                                        opacity: 0.75,
+                                        borderStyle: "dashed",
+                                    }}
+                                >
+                                    <Avatar sx={{ ...xsBadgeSx, bgcolor: (t) => alpha(t.palette.secondary.main, 0.15) }}>
+                                        <RepeatIcon sx={{ fontSize: 22, color: "secondary.main" }} />
+                                    </Avatar>
+                                    <Box sx={{ minWidth: 0 }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                                            {series.pending_expense?.title ?? "Recurring expense"}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                                            Starts {new Date(series.next_run_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                                            {" · "}{FREQUENCY_LABELS[series.frequency]}
+                                        </Typography>
+                                    </Box>
+                                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                                        {series.pending_expense?.amount != null && (
+                                            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                                                {formatCurrency(series.pending_expense.amount, series.pending_expense.currency ?? group.default_currency)}
+                                            </Typography>
+                                        )}
+                                        {(series.created_by === user.id || group.created_by === user.id) && (
+                                            <IconButton
+                                                size="small"
+                                                disabled={isCancellingRecurring}
+                                                onClick={() => {
+                                                    if (window.confirm("Cancel this upcoming recurring expense? No expenses have been created yet.")) {
+                                                        cancelRecurring(series._id);
+                                                    }
+                                                }}
+                                            >
+                                                <CloseIcon sx={{ fontSize: 16 }} />
+                                            </IconButton>
+                                        )}
+                                    </Box>
+                                </Box>
+                            ))}
+                        </Box>
+                    </Box>
+                )}
                 {heldVisible.length > 0 && (
                     <Box sx={{ mb: 2 }}>
                         <Typography
@@ -99,6 +180,7 @@ export default function GroupExpenses() {
                                     expense={expense}
                                     onClick={() => onViewExpense(expense)}
                                     userId={user.id}
+                                    recurringSeries={seriesByGenesisId.get(expense._id)}
                                 />
                             ))}
                         </Box>
@@ -118,6 +200,7 @@ export default function GroupExpenses() {
                                 expense={row.item}
                                 onClick={() => onViewExpense(row.item)}
                                 userId={user.id}
+                                recurringSeries={seriesByGenesisId.get(row.item._id)}
                             />
                         ))}
                     </Box>

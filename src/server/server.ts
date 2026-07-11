@@ -45,6 +45,8 @@ const mongoConnection = Mongo.getConnection();
 mongoConnection.on("connected", async () => {
   console.log(">>> MongoDB connected");
   // await initializeDefaultUsers();
+  const { startRecurringExpenseScheduler } = require("./utils/recurringExpenseUtils");
+  startRecurringExpenseScheduler();
 });
 
 console.log(">>> Initializing Socket...");
