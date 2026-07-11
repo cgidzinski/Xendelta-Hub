@@ -1078,20 +1078,50 @@ export default function GroupDetail() {
                 {e.recurring_id ? (
                   (() => {
                     const genesisExpense = group.expenses.find((x) => x._id === e.recurring_id);
-                    return genesisExpense ? (
-                      <Button
-                        fullWidth
-                        variant="outlined"
-                        color="secondary"
-                        startIcon={<RepeatIcon />}
-                        onClick={() => setViewExpenseItem(genesisExpense)}
-                      >
-                        View Original Expense
-                      </Button>
-                    ) : (
-                      <Typography variant="caption" color="text.secondary" sx={{ width: "100%", textAlign: "center" }}>
-                        Created by a recurring expense that no longer exists
-                      </Typography>
+                    const canDelete = isCreator || !e.created_by || e.created_by === user.id;
+                    return (
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%" }}>
+                        {genesisExpense ? (
+                          <Button
+                            fullWidth
+                            variant="outlined"
+                            color="secondary"
+                            startIcon={<RepeatIcon />}
+                            onClick={() => setViewExpenseItem(genesisExpense)}
+                          >
+                            View Original Expense
+                          </Button>
+                        ) : (
+                          <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+                            Created by a recurring expense that no longer exists
+                          </Typography>
+                        )}
+                        {canDelete && (
+                          <Button
+                            fullWidth
+                            variant="outlined"
+                            color="error"
+                            startIcon={<DeleteIcon />}
+                            disabled={isDeletingExpense}
+                            onClick={() => {
+                              if (window.confirm("Delete this occurrence? The recurring schedule is unaffected — future occurrences will still be created.")) {
+                                deleteExpense(e._id, {
+                                  onSuccess: () => {
+                                    enqueueSnackbar("Expense deleted", { variant: "success" });
+                                    setShowViewExpenseModal(false);
+                                    setViewExpenseItem(null);
+                                  },
+                                  onError: (error: Error) => {
+                                    enqueueSnackbar(error?.message || "Failed to delete expense", { variant: "error" });
+                                  },
+                                });
+                              }
+                            }}
+                          >
+                            Delete This Occurrence
+                          </Button>
+                        )}
+                      </Box>
                     );
                   })()
                 ) : (
