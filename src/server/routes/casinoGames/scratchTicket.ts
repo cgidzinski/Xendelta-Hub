@@ -1,13 +1,19 @@
 /**
- * Scratch Ticket — a single weighted draw from a prize-tier table. The "3 symbols" reveal
- * is purely display flavor on top of a pre-determined tier (the same way real scratch-off
- * lotteries work: the prize tier is fixed before the ticket is printed, and the scratched
- * symbols just have to be consistent with it) — that keeps the math a plain categorical
- * distribution instead of independent-cell matching, so it's exactly, trivially verifiable.
+ * Scratch Ticket — a real scratch-off layout: 10 lines, each with 3 hidden symbols and a
+ * fixed, visible prize. A line wins if its 3 symbols all match (any symbol). Every line
+ * shares the same match mechanic/probability; only the printed prize differs per line
+ * (exactly like a real ticket - the prize is known upfront, only whether you matched it
+ * is hidden), and the 10 prize values are shuffled into random line positions per ticket.
  *
- * Solved for a 90% RTP (10% house edge, same target as Slots):
- *   0.7136 * 0 + 0.22 * 2 + 0.06 * 5 + 0.006 * 20 + 0.0004 * 100 = 0.90
- * Probabilities sum to exactly 1 - verified, not eyeballed (see commit history).
+ * This whole config block (LINE_COUNT / SYMBOL_POOL / LINE_PRIZE_MULTIPLIERS) is meant to
+ * be copied and re-tuned for future scratch variants with different odds - it's kept as
+ * one small, self-contained object rather than spread across the file on purpose.
+ *
+ * Math (verified, not eyeballed - see commit history for the derivation):
+ *   5 equally-weighted symbols -> match probability per line = 5 * (1/5)^3 = 1/25 = 4%
+ *   Prize multipliers [0.5, 0.5, 1, 1, 1, 2, 2, 3, 5, 6.5] sum to 22.5
+ *   RTP = matchProbability * sum(prizes) = 0.04 * 22.5 = 0.90 (90%, matching Slots)
+ *   P(at least one winning line per ticket) = 1 - (1 - 0.04)^10 ≈ 33.5%
  */
 import express = require("express");
 import { authenticateToken } from "../../middleware/auth";
@@ -16,55 +22,41 @@ const { User } = require("../../models/user");
 const crypto = require("crypto");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 
-interface PrizeTier {
-    label: string;
-    multiplier: number;
-    probability: number;
-    symbol: string | null; // null for the loss tier
+const LINE_COUNT = 10;
+const SYMBOLS_PER_LINE = 3;
+const SYMBOL_POOL = ["🍀", "💰", "💵", "👑", "⭐"];
+const LINE_PRIZE_MULTIPLIERS = [0.5, 0.5, 1, 1, 1, 2, 2, 3, 5, 6.5];
+
+const MATCH_PROBABILITY = 1 / (SYMBOL_POOL.length * SYMBOL_POOL.length);
+const PRIZE_POOL_SUM = LINE_PRIZE_MULTIPLIERS.reduce((sum, m) => sum + m, 0);
+const RTP = MATCH_PROBABILITY * PRIZE_POOL_SUM;
+
+interface TicketLine {
+    symbols: string[];
+    prizeMultiplier: number;
+    won: boolean;
 }
 
-// Ordered highest to lowest, "loss" last on purpose: if float rounding ever let the
-// cumulative-probability walk in drawTier() fall through without matching, it falls back
-// to the last tier - loss - the safe direction, never an accidental win.
-const PRIZE_TIERS: PrizeTier[] = [
-    { label: "100x", multiplier: 100, probability: 0.0004, symbol: "👑" },
-    { label: "20x", multiplier: 20, probability: 0.006, symbol: "💵" },
-    { label: "5x", multiplier: 5, probability: 0.06, symbol: "💰" },
-    { label: "2x", multiplier: 2, probability: 0.22, symbol: "🍀" },
-    { label: "loss", multiplier: 0, probability: 0.7136, symbol: null },
-];
-const RTP = PRIZE_TIERS.reduce((sum, t) => sum + t.probability * t.multiplier, 0);
-
-const ALL_SYMBOLS = ["👑", "💵", "💰", "🍀", "⭐"];
-const PROBABILITY_SCALE = 1_000_000;
-
-function drawTier(): PrizeTier {
-    const roll = crypto.randomInt(0, PROBABILITY_SCALE);
-    let cumulative = 0;
-    for (const tier of PRIZE_TIERS) {
-        cumulative += tier.probability * PROBABILITY_SCALE;
-        if (roll < cumulative) {
-            return tier;
-        }
-    }
-    return PRIZE_TIERS[PRIZE_TIERS.length - 1];
-}
-
-function shuffledSymbols(): string[] {
-    const symbols = [...ALL_SYMBOLS];
-    for (let i = symbols.length - 1; i > 0; i--) {
+function shuffled<T>(items: T[]): T[] {
+    const arr = [...items];
+    for (let i = arr.length - 1; i > 0; i--) {
         const j = crypto.randomInt(0, i + 1);
-        [symbols[i], symbols[j]] = [symbols[j], symbols[i]];
+        [arr[i], arr[j]] = [arr[j], arr[i]];
     }
-    return symbols;
+    return arr;
 }
 
-function revealFor(tier: PrizeTier): [string, string, string] {
-    if (tier.symbol) {
-        return [tier.symbol, tier.symbol, tier.symbol];
-    }
-    const [a, b, c] = shuffledSymbols();
-    return [a, b, c];
+function drawLineSymbols(): string[] {
+    return Array.from({ length: SYMBOLS_PER_LINE }, () => SYMBOL_POOL[crypto.randomInt(0, SYMBOL_POOL.length)]);
+}
+
+function generateTicket(): TicketLine[] {
+    const prizes = shuffled(LINE_PRIZE_MULTIPLIERS);
+    return prizes.map((prizeMultiplier) => {
+        const symbols = drawLineSymbols();
+        const won = symbols.every((s) => s === symbols[0]);
+        return { symbols, prizeMultiplier, won };
+    });
 }
 
 module.exports = function (app: express.Application) {
@@ -73,11 +65,10 @@ module.exports = function (app: express.Application) {
         return res.json({
             status: true,
             data: {
-                paytable: PRIZE_TIERS.filter((t) => t.label !== "loss").map((t) => ({
-                    label: t.label,
-                    probability: t.probability,
-                    multiplier: t.multiplier,
-                })),
+                lineCount: LINE_COUNT,
+                matchProbability: MATCH_PROBABILITY,
+                linePrizeMultipliers: [...LINE_PRIZE_MULTIPLIERS].sort((a, b) => a - b),
+                probabilityAtLeastOneWin: 1 - Math.pow(1 - MATCH_PROBABILITY, LINE_COUNT),
                 rtp: RTP,
             },
         });
@@ -104,30 +95,29 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "Insufficient balance" });
             }
 
-            const tier = drawTier();
-            const reveal = revealFor(tier);
+            const lines = generateTicket();
+            const totalMultiplier = lines.reduce((sum, line) => sum + (line.won ? line.prizeMultiplier : 0), 0);
+            const totalPayout = wager * totalMultiplier;
+            const net = totalPayout - wager;
+
             const xenCasinoAccountId = await getXenCasinoAccountId();
             const key = `xendelta-scratch-${userId}-${crypto.randomUUID()}`;
 
-            const netWin = wager * (tier.multiplier - 1);
             let balance: string;
-            let payout = 0;
-
-            if (netWin > 0) {
-                payout = netWin;
+            if (net > 0) {
                 const result = await transfer({
                     fromAccountId: xenCasinoAccountId,
                     toAccountId: resolved.account.accountId,
-                    amount: netWin.toFixed(10),
+                    amount: net.toFixed(10),
                     key,
-                    note: `scratch_${tier.label}`,
+                    note: "scratch_win",
                 });
                 balance = result.toNewBalance;
-            } else if (netWin < 0) {
+            } else if (net < 0) {
                 const result = await transfer({
                     fromAccountId: resolved.account.accountId,
                     toAccountId: xenCasinoAccountId,
-                    amount: Math.abs(netWin).toFixed(10),
+                    amount: Math.abs(net).toFixed(10),
                     key,
                     note: "scratch_loss",
                 });
@@ -136,10 +126,7 @@ module.exports = function (app: express.Application) {
                 balance = resolved.account.balance;
             }
 
-            return res.json({
-                status: true,
-                data: { reveal, tier: tier.label, multiplier: tier.multiplier, payout, balance },
-            });
+            return res.json({ status: true, data: { lines, totalPayout, balance } });
         } catch (err) {
             if (err instanceof WeeabetsTransferError && err.status === 400) {
                 return res.status(400).json({ status: false, message: "Insufficient balance to settle" });

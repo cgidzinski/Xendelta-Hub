@@ -5,22 +5,23 @@ import { ApiResponse } from "../../../../../types/api";
 import { casinoBalanceKeys } from "../../../../../hooks/casino/useCasinoBalance";
 import { casinoLedgerKeys } from "../../../../../hooks/casino/useCasinoLedger";
 
-export interface ScratchPaytableRow {
-  label: string;
-  probability: number;
-  multiplier: number;
+export interface TicketLine {
+  symbols: string[];
+  prizeMultiplier: number;
+  won: boolean;
 }
 
 export interface ScratchOdds {
-  paytable: ScratchPaytableRow[];
+  lineCount: number;
+  matchProbability: number;
+  linePrizeMultipliers: number[];
+  probabilityAtLeastOneWin: number;
   rtp: number;
 }
 
 export interface ScratchResult {
-  reveal: [string, string, string];
-  tier: string;
-  multiplier: number;
-  payout: number;
+  lines: TicketLine[];
+  totalPayout: number;
   balance: string;
 }
 
@@ -48,10 +49,10 @@ export const useScratchTicket = () => {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: casinoBalanceKeys.all });
       queryClient.invalidateQueries({ queryKey: casinoLedgerKeys.all });
-      if (result.payout > 0) {
-        enqueueSnackbar(`You won ${result.payout.toFixed(2)} cheddar!`, { variant: "success" });
+      if (result.totalPayout > 0) {
+        enqueueSnackbar(`Ticket bought — up to ${result.totalPayout.toFixed(2)} cheddar waiting to be revealed!`, { variant: "success" });
       } else {
-        enqueueSnackbar("No prize this time.", { variant: "info" });
+        enqueueSnackbar("Ticket bought — scratch to see your luck.", { variant: "info" });
       }
     },
     onError: (error: Error) => enqueueSnackbar(error.message || "Failed to buy ticket", { variant: "error" }),
