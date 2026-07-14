@@ -643,7 +643,7 @@ export default function ExpenseForm({
               />
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
-                  Do Not Simplify
+                  Direct
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3, display: "block" }}>
                   Always show as a direct debt, not routed through others

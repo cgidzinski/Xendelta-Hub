@@ -121,7 +121,7 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate, re
                 {expense.do_not_simplify && (
                     <Chip
                         icon={<LinkOffIcon sx={{ fontSize: "14px !important" }} />}
-                        label="Not Simplified"
+                        label="Direct"
                         size="small"
                         color="info"
                         variant="outlined"

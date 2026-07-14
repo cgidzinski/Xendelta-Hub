@@ -980,7 +980,7 @@ export default function GroupDetail() {
                   {e.do_not_simplify && (
                     <Chip
                       icon={<LinkOffIcon sx={{ fontSize: "14px !important" }} />}
-                      label="Not Simplified"
+                      label="Direct"
                       size="small"
                       color="info"
                       sx={{ fontWeight: 600, fontSize: "0.7rem" }}

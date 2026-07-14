@@ -21,10 +21,19 @@ const DATE_FILTERS: { label: string; value: DateFilter }[] = [
     { label: "This Year", value: "thisYear" },
 ];
 
+type FilterKey = "recurring" | "held" | "notSimplified";
+
+const PROPERTY_FILTERS: { label: string; value: FilterKey }[] = [
+    { label: "Recurring", value: "recurring" },
+    { label: "Held", value: "held" },
+    { label: "Direct", value: "notSimplified" },
+];
+
 export default function GroupExpenses() {
     const { group, onViewExpense, user, cancelRecurring, isCancellingRecurring } = useOutletContext<GroupDetailContext>();
     const [search, setSearch] = useState("");
     const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+    const [activeFilters, setActiveFilters] = useState<FilterKey[]>([]);
 
     // Genesis expense id -> its recurring series, for chips on genesis rows
     const seriesByGenesisId = useMemo(() => {
@@ -35,28 +44,47 @@ export default function GroupExpenses() {
         return map;
     }, [group.recurring_expenses]);
 
+    const isRecurringExpense = (e: { _id: string; recurring_id?: string }) =>
+        !!e.recurring_id || seriesByGenesisId.has(e._id);
+
+    const matchesActiveFilters = (e: { _id: string; recurring_id?: string; on_hold?: boolean; do_not_simplify?: boolean }) =>
+        activeFilters.every((f) =>
+            f === "recurring" ? isRecurringExpense(e) :
+                f === "held" ? !!e.on_hold :
+                    !!e.do_not_simplify
+        );
+
     const finalExpenseIds = useMemo(
         () => computeFinalExpenseIds(group.expenses, group.recurring_expenses),
         [group.expenses, group.recurring_expenses]
     );
 
-    // Future-start series that haven't created their first expense yet — exempt from date filter
+    const hasActiveFilters = activeFilters.length > 0;
+    // A pending (not-yet-started) series has no expense yet, so it can't match "held" or "direct"
+    const pendingSeriesEligible = activeFilters.every((f) => f === "recurring");
+
+    // Future-start series that haven't created their first expense yet — exempt from date filter.
+    // Folded away once a filter that a pending series can never match is active.
     const pendingSeries = useMemo(() => {
+        if (!pendingSeriesEligible) return [];
         const q = search.trim().toLowerCase();
         return (group.recurring_expenses ?? [])
             .filter((r) => !r.genesis_expense_id && r.active)
             .filter((r) => !q || (r.pending_expense?.title ?? "").toLowerCase().includes(q))
             .sort((a, b) => new Date(a.next_run_at).getTime() - new Date(b.next_run_at).getTime());
-    }, [group.recurring_expenses, search]);
+    }, [group.recurring_expenses, search, pendingSeriesEligible]);
 
-    // Held expenses, visible to all group members — exempt from date filter
+    // Held expenses, visible to all group members — pinned + exempt from date filter by
+    // default. Once any filter chip is active, held items move into the normal filtered
+    // list instead (so "held" becomes a real filter, not a permanent pin).
     const heldVisible = useMemo(() => {
+        if (hasActiveFilters) return [];
         const q = search.trim().toLowerCase();
         return [...group.expenses]
             .filter((e) => e.on_hold)
             .filter((e) => !q || e.title.toLowerCase().includes(q))
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [group.expenses, search]);
+    }, [group.expenses, search, hasActiveFilters]);
 
     // Active expenses + exchanges merged and date-filtered
     const sortedItems = useMemo(() => {
@@ -71,7 +99,7 @@ export default function GroupExpenses() {
             dateFilter === "lastWeek" ? startOfWeek(now) : null;
 
         const expenses = group.expenses
-            .filter((e) => !e.on_hold)
+            .filter((e) => hasActiveFilters ? matchesActiveFilters(e) : !e.on_hold)
             .filter((e) => {
                 if (search.trim() && !e.title.toLowerCase().includes(search.toLowerCase())) return false;
                 const d = new Date(e.date);
@@ -82,7 +110,7 @@ export default function GroupExpenses() {
             .map((e) => ({ type: "expense" as const, date: e.date, item: e }));
 
         return expenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [group.expenses, group.exchanges, search, dateFilter]);
+    }, [group.expenses, group.exchanges, search, dateFilter, activeFilters]);
 
     // Group the (already date-desc sorted) list into ordered day-groups, like the Overview feed
     const groupedItems = useMemo(() => groupByDay(sortedItems, (row) => row.date), [sortedItems]);
@@ -105,9 +133,22 @@ export default function GroupExpenses() {
                     exclusive
                     onChange={(_, v) => v && setDateFilter(v)}
                     fullWidth
-                    sx={{ mb: 2, height: 30 }}
+                    sx={{ mb: 1.5, height: 30 }}
                 >
                     {DATE_FILTERS.map((f) => (
+                        <ToggleButton key={f.value} value={f.value} sx={{ px: 1, fontSize: "0.7rem", textTransform: "none", whiteSpace: "nowrap" }}>
+                            {f.label}
+                        </ToggleButton>
+                    ))}
+                </ToggleButtonGroup>
+                <ToggleButtonGroup
+                    size="small"
+                    value={activeFilters}
+                    onChange={(_, v: FilterKey[]) => setActiveFilters(v)}
+                    fullWidth
+                    sx={{ mb: 2, height: 30 }}
+                >
+                    {PROPERTY_FILTERS.map((f) => (
                         <ToggleButton key={f.value} value={f.value} sx={{ px: 1, fontSize: "0.7rem", textTransform: "none", whiteSpace: "nowrap" }}>
                             {f.label}
                         </ToggleButton>
@@ -199,7 +240,7 @@ export default function GroupExpenses() {
                 {sortedItems.length === 0 ? (
                     <Box sx={{ textAlign: "center", py: heldVisible.length > 0 ? 3 : 6 }}>
                         <Typography variant="body1" color="text.secondary">
-                            {search.trim() || dateFilter !== "all" ? "No expenses match your filters" : "No expenses yet"}
+                            {search.trim() || dateFilter !== "all" || hasActiveFilters ? "No expenses match your filters" : "No expenses yet"}
                         </Typography>
                     </Box>
                 ) : (
