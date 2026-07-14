@@ -26,4 +26,10 @@ export const CASINO_GAMES_REGISTRY: CasinoGameRegistryItem[] = [
     path: "/internal/xencasino/games/slots",
     description: "Spin the reels for a shot at the growing jackpot.",
   },
+  {
+    key: "scratch",
+    label: "Scratch Ticket",
+    path: "/internal/xencasino/games/scratch",
+    description: "Buy a ticket, match three symbols to win up to 100x.",
+  },
 ];
