@@ -78,6 +78,20 @@ export default function GroupExpenses() {
         return expenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [group.expenses, group.exchanges, search, dateFilter]);
 
+    // Group the (already date-desc sorted) list into ordered day-groups, like the Overview feed
+    const groupedItems = useMemo(() => {
+        const groups: { key: string; label: string; items: typeof sortedItems }[] = [];
+        for (const row of sortedItems) {
+            const d = new Date(row.date);
+            const key = d.toDateString();
+            const label = d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+            const last = groups[groups.length - 1];
+            if (last && last.key === key) last.items.push(row);
+            else groups.push({ key, label, items: [row] });
+        }
+        return groups;
+    }, [sortedItems]);
+
     return (
         <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
             <Box sx={{ flexShrink: 0 }}>
@@ -193,17 +207,29 @@ export default function GroupExpenses() {
                         </Typography>
                     </Box>
                 ) : (
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                        {sortedItems.map((row) => (
-                            <ExpenseListItem
-                                key={row.item._id}
-                                expense={row.item}
-                                onClick={() => onViewExpense(row.item)}
-                                userId={user.id}
-                                recurringSeries={seriesByGenesisId.get(row.item._id)}
-                            />
-                        ))}
-                    </Box>
+                    groupedItems.map((dateGroup) => (
+                        <Box key={dateGroup.key} sx={{ mb: 2.5 }}>
+                            <Typography
+                                variant="caption"
+                                color="text.disabled"
+                                sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1, ml: 0.25 }}
+                            >
+                                {dateGroup.label}
+                            </Typography>
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                                {dateGroup.items.map((row) => (
+                                    <ExpenseListItem
+                                        key={row.item._id}
+                                        expense={row.item}
+                                        onClick={() => onViewExpense(row.item)}
+                                        userId={user.id}
+                                        hideDate
+                                        recurringSeries={seriesByGenesisId.get(row.item._id)}
+                                    />
+                                ))}
+                            </Box>
+                        </Box>
+                    ))
                 )}
             </Box>
         </Box>
