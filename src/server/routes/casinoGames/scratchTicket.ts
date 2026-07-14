@@ -19,11 +19,20 @@
  *   authentically worse than Crash/Slots (90%), consistent with real retail scratch
  *   tickets. P(at least one winning line of 10, any kind) ≈33.7% (~1-in-3, matching OLG's
  *   real "1-in-3 to 1-in-5" range).
+ *
+ * Same debit-at-start pattern as Crash/Slots: the whole ticket (every line's symbols and
+ * prize) is drawn and the total payout is fully decided *before* any money moves, then
+ * persisted into a XenCasinoRound alongside the wager debit's idempotency key. The wager
+ * is debited first; only then is the (already decided) payout transferred. If the process
+ * dies between those two transfers, the round survives in the database and a periodic
+ * sweep replays both idempotent transfers to finish the job - a ticket's outcome is never
+ * re-drawn, only ever completed.
  */
 import express = require("express");
 import { authenticateToken } from "../../middleware/auth";
 import { AuthenticatedRequest } from "../../types/AuthenticatedRequest";
 const { User } = require("../../models/user");
+const { XenCasinoRound } = require("../../models/xenCasino");
 const crypto = require("crypto");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 
@@ -31,6 +40,18 @@ interface PoolEntry {
     symbol: string;
     weight: number;
     bonusMultiple?: number; // present only for instant-multiplier symbols
+}
+
+interface TicketLine {
+    symbols: string[];
+    prizeMultiplier: number; // the line's own prize, times any bonus multiple hit
+    bonusMultiple: number | null;
+    won: boolean;
+}
+
+interface TicketConditions {
+    lines: TicketLine[];
+    totalPayout: number;
 }
 
 // Integer weights over a large total for fine-grained precision with crypto.randomInt.
@@ -52,13 +73,16 @@ const SYMBOL_POOL: PoolEntry[] = [
 
 const LINE_PRIZES = [0.5, 0.5, 1, 1, 1, 1.5, 2, 3, 4, 5]; // sums to 19.5
 const LINE_COUNT = LINE_PRIZES.length;
+const GAME_KEY = "scratch_ticket";
 
-interface TicketLine {
-    symbols: string[];
-    prizeMultiplier: number; // the line's own prize, times any bonus multiple hit
-    bonusMultiple: number | null;
-    won: boolean;
-}
+// A round's outcome (and thus its payout) is fully decided before it's even persisted, so
+// "stale" only ever means "the process died mid-settlement" - the sweep below finishes it.
+const ROUND_TTL_MS = 30 * 1000;
+setInterval(() => {
+    recoverStaleRounds().catch((err: Error) => {
+        console.error("scratch: stale round recovery failed", err);
+    });
+}, 60 * 1000).unref();
 
 function shuffled<T>(items: T[]): T[] {
     const arr = [...items];
@@ -131,6 +155,46 @@ function computeExactOdds() {
 
 const ODDS = computeExactOdds();
 
+// Pays out the ticket's already-decided total (if any). Shared by the live play handler
+// and the recovery sweep so both settle a round exactly the same way.
+async function settleRound(round: { _id: string; playerAccountId: number; conditions: TicketConditions }): Promise<{ balance?: string }> {
+    const { totalPayout } = round.conditions;
+    if (totalPayout <= 0) {
+        return {};
+    }
+    const xenCasinoAccountId = await getXenCasinoAccountId();
+    const result = await transfer({
+        fromAccountId: xenCasinoAccountId,
+        toAccountId: round.playerAccountId,
+        amount: totalPayout.toFixed(10),
+        key: `xendelta-scratch-payout-${round._id}`,
+        note: "scratch_win",
+    });
+    return { balance: result.toNewBalance };
+}
+
+async function recoverStaleRounds(): Promise<void> {
+    const stale = await XenCasinoRound.sweepStale(GAME_KEY, ROUND_TTL_MS);
+    for (const round of stale) {
+        try {
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+            // Replaying the debit is safe even if it already went through - the key makes
+            // it a no-op on the ledger, not a double charge.
+            await transfer({
+                fromAccountId: round.playerAccountId,
+                toAccountId: xenCasinoAccountId,
+                amount: round.wager.toFixed(10),
+                key: round.debitKey,
+                note: "scratch_wager",
+            });
+            await settleRound(round);
+            await XenCasinoRound.resolve(round._id);
+        } catch (err) {
+            console.error(`scratch: failed to recover stale round ${round._id}`, err);
+        }
+    }
+}
+
 module.exports = function (app: express.Application) {
 
     app.get("/api/casino/games/scratch/odds", authenticateToken, function (_req: express.Request, res: express.Response) {
@@ -158,7 +222,7 @@ module.exports = function (app: express.Application) {
             return res.status(400).json({ status: false, message: "wager must be a positive number" });
         }
 
-        const userId = (req as AuthenticatedRequest).user!._id;
+        const userId = String((req as AuthenticatedRequest).user!._id);
         const user = await User.findById(userId).exec();
         if (!user) {
             return res.status(404).json({ status: false, message: "User not found" });
@@ -176,39 +240,51 @@ module.exports = function (app: express.Application) {
             const lines = generateTicket();
             const totalMultiplier = lines.reduce((sum, line) => sum + (line.won ? line.prizeMultiplier : 0), 0);
             const totalPayout = wager * totalMultiplier;
-            const net = totalPayout - wager;
+
+            const debitKey = `xendelta-scratch-start-${userId}-${crypto.randomUUID()}`;
+            let round;
+            try {
+                round = await XenCasinoRound.startRound({
+                    game: GAME_KEY,
+                    userId,
+                    wager,
+                    debitKey,
+                    playerAccountId: resolved.account.accountId,
+                    conditions: { lines, totalPayout } as TicketConditions,
+                });
+            } catch (err) {
+                if ((err as { code?: number }).code === 11000) {
+                    return res.status(400).json({ status: false, message: "You already have an active Scratch Ticket round" });
+                }
+                throw err;
+            }
 
             const xenCasinoAccountId = await getXenCasinoAccountId();
-            const key = `xendelta-scratch-${userId}-${crypto.randomUUID()}`;
-
-            let balance: string;
-            if (net > 0) {
-                const result = await transfer({
-                    fromAccountId: xenCasinoAccountId,
-                    toAccountId: resolved.account.accountId,
-                    amount: net.toFixed(10),
-                    key,
-                    note: "scratch_win",
-                });
-                balance = result.toNewBalance;
-            } else if (net < 0) {
+            let debitBalance: string;
+            try {
                 const result = await transfer({
                     fromAccountId: resolved.account.accountId,
                     toAccountId: xenCasinoAccountId,
-                    amount: Math.abs(net).toFixed(10),
-                    key,
-                    note: "scratch_loss",
+                    amount: wager.toFixed(10),
+                    key: debitKey,
+                    note: "scratch_wager",
                 });
-                balance = result.fromNewBalance;
-            } else {
-                balance = resolved.account.balance;
+                debitBalance = result.fromNewBalance;
+            } catch (err) {
+                if (err instanceof WeeabetsTransferError && err.status === 400) {
+                    await XenCasinoRound.resolve(round._id);
+                    return res.status(400).json({ status: false, message: "Insufficient balance" });
+                }
+                throw err; // ambiguous - leave round in place, the recovery sweep will retry
             }
 
-            return res.json({ status: true, data: { lines, totalPayout, balance } });
+            // Debit succeeded - the payout (if any) is what's left; an ambiguous failure
+            // here also leaves the round in place rather than answering with a guess.
+            const settled = await settleRound(round);
+            await XenCasinoRound.resolve(round._id);
+
+            return res.json({ status: true, data: { lines, totalPayout, balance: settled.balance ?? debitBalance } });
         } catch (err) {
-            if (err instanceof WeeabetsTransferError && err.status === 400) {
-                return res.status(400).json({ status: false, message: "Insufficient balance to settle" });
-            }
             const status = err instanceof WeeabetsUnavailable ? 503 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });
         }

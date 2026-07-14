@@ -13,9 +13,9 @@ export interface CrashOdds {
 }
 
 interface StartRoundResult {
-  roundId: string;
   startedAt: number;
   growthPerSecond: number;
+  balance: string;
 }
 
 export interface CashoutResult {
@@ -37,8 +37,11 @@ const startRound = async (wager: number): Promise<StartRoundResult> => {
   return response.data.data!;
 };
 
-const cashoutRound = async (roundId: string): Promise<CashoutResult> => {
-  const response = await apiClient.post<ApiResponse<CashoutResult>>("/api/casino/games/crash/cashout", { roundId });
+// The wager is already taken by the time /start responds, so the server tracks the
+// active round by (game, userId) itself - there's nothing left for the client to hand
+// back here.
+const cashoutRound = async (): Promise<CashoutResult> => {
+  const response = await apiClient.post<ApiResponse<CashoutResult>>("/api/casino/games/crash/cashout");
   return response.data.data!;
 };
 
@@ -51,7 +54,6 @@ export const useCrash = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  const [roundId, setRoundId] = useState<string | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [liveMultiplier, setLiveMultiplier] = useState(1);
   const [lastResult, setLastResult] = useState<CashoutResult | null>(null);
@@ -77,10 +79,13 @@ export const useCrash = () => {
   const { mutate: start, isPending: isStarting } = useMutation({
     mutationFn: startRound,
     onSuccess: (result) => {
-      setRoundId(result.roundId);
       setStartedAt(result.startedAt);
       setLiveMultiplier(1);
       setLastResult(null);
+      // The wager is debited the moment the round starts, not at cashout - refresh the
+      // balance/ledger here too, not just after cashout.
+      queryClient.invalidateQueries({ queryKey: casinoBalanceKeys.all });
+      queryClient.invalidateQueries({ queryKey: casinoLedgerKeys.all });
     },
     onError: (error: Error) => enqueueSnackbar(error.message || "Failed to start round", { variant: "error" }),
   });
@@ -88,7 +93,6 @@ export const useCrash = () => {
   const { mutate: cashOutMutation, isPending: isCashingOut } = useMutation({
     mutationFn: cashoutRound,
     onSuccess: (result) => {
-      setRoundId(null);
       setStartedAt(null);
       setLastResult(result);
       queryClient.invalidateQueries({ queryKey: casinoBalanceKeys.all });
@@ -105,16 +109,12 @@ export const useCrash = () => {
 
   return {
     odds,
-    isPlaying: roundId !== null,
+    isPlaying: startedAt !== null,
     liveMultiplier,
     lastResult,
     isStarting,
     isCashingOut,
     start: (wager: number) => start(wager),
-    cashOut: () => {
-      if (roundId) {
-        cashOutMutation(roundId);
-      }
-    },
+    cashOut: () => cashOutMutation(),
   };
 };

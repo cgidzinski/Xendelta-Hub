@@ -9,16 +9,30 @@
  * The jackpot pool itself is local bookkeeping (an XenCasino.slotsJackpotPool counter) -
  * that wager money already sits in XenCasino's real Weeabets balance the moment it's
  * lost; only the jackpot *payout* triggers an actual transfer.
+ *
+ * Same debit-at-start pattern as Crash: the reels are drawn and the payout is fully
+ * decided *before* any money moves, then persisted into a XenCasinoRound alongside the
+ * wager debit's idempotency key. The wager is debited first; only then is the (already
+ * decided) payout transferred. If the process dies between those two transfers, the round
+ * survives in the database and a periodic sweep replays both idempotent transfers to
+ * finish the job - a spin's outcome is never re-drawn, only ever completed.
  */
 import express = require("express");
 import { authenticateToken } from "../../middleware/auth";
 import { AuthenticatedRequest } from "../../types/AuthenticatedRequest";
 const { User } = require("../../models/user");
-const { XenCasino } = require("../../models/xenCasino");
+const { XenCasino, XenCasinoRound } = require("../../models/xenCasino");
 const crypto = require("crypto");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 
 type Symbol = "cherry" | "lemon" | "bell" | "diamond" | "seven";
+
+interface SpinConditions {
+    reels: [Symbol, Symbol, Symbol];
+    multiplier: number;
+    jackpot: boolean;
+    payout: number;
+}
 
 const SYMBOL_WEIGHTS: { symbol: Symbol; weight: number }[] = [
     { symbol: "cherry", weight: 40 },
@@ -38,6 +52,16 @@ const TRIPLE_MULTIPLIERS: Partial<Record<Symbol, number>> = {
 const TWO_CHERRY_MULTIPLIER = 1.4;
 const JACKPOT_CONTRIBUTION_RATE = 0.035; // 3.5% of every non-jackpot wager
 const BLENDED_RTP = 0.9001;
+const GAME_KEY = "slots";
+
+// A round's outcome (and thus its payout) is fully decided before it's even persisted, so
+// "stale" only ever means "the process died mid-settlement" - the sweep below finishes it.
+const ROUND_TTL_MS = 30 * 1000;
+setInterval(() => {
+    recoverStaleRounds().catch((err: Error) => {
+        console.error("slots: stale round recovery failed", err);
+    });
+}, 60 * 1000).unref();
 
 function weightOf(symbol: Symbol): number {
     return SYMBOL_WEIGHTS.find((s) => s.symbol === symbol)!.weight;
@@ -74,6 +98,56 @@ function resultFor(reels: [Symbol, Symbol, Symbol]): { multiplier: number; jackp
     return { multiplier: 0, jackpot: false };
 }
 
+// Pays out the round's already-decided payout (if any) and updates the jackpot pool.
+// Shared by the live spin handler and the recovery sweep so both settle a round exactly
+// the same way.
+async function settleRound(round: { _id: string; wager: number; playerAccountId: number; conditions: SpinConditions }): Promise<{ balance?: string }> {
+    const { jackpot, payout } = round.conditions;
+
+    let balance: string | undefined;
+    if (payout > 0) {
+        const xenCasinoAccountId = await getXenCasinoAccountId();
+        const result = await transfer({
+            fromAccountId: xenCasinoAccountId,
+            toAccountId: round.playerAccountId,
+            amount: payout.toFixed(10),
+            key: `xendelta-slots-payout-${round._id}`,
+            note: jackpot ? "slots_jackpot" : "slots_win",
+        });
+        balance = result.toNewBalance;
+    }
+
+    if (jackpot) {
+        await XenCasino.resetJackpotPool();
+    } else {
+        await XenCasino.incrementJackpotPool(round.wager * JACKPOT_CONTRIBUTION_RATE);
+    }
+
+    return { balance };
+}
+
+async function recoverStaleRounds(): Promise<void> {
+    const stale = await XenCasinoRound.sweepStale(GAME_KEY, ROUND_TTL_MS);
+    for (const round of stale) {
+        try {
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+            // Replaying the debit is safe even if it already went through - the key makes
+            // it a no-op on the ledger, not a double charge.
+            await transfer({
+                fromAccountId: round.playerAccountId,
+                toAccountId: xenCasinoAccountId,
+                amount: round.wager.toFixed(10),
+                key: round.debitKey,
+                note: "slots_wager",
+            });
+            await settleRound(round);
+            await XenCasinoRound.resolve(round._id);
+        } catch (err) {
+            console.error(`slots: failed to recover stale round ${round._id}`, err);
+        }
+    }
+}
+
 module.exports = function (app: express.Application) {
 
     app.get("/api/casino/games/slots/odds", authenticateToken, async function (_req: express.Request, res: express.Response) {
@@ -105,7 +179,7 @@ module.exports = function (app: express.Application) {
             return res.status(400).json({ status: false, message: "wager must be a positive number" });
         }
 
-        const userId = (req as AuthenticatedRequest).user!._id;
+        const userId = String((req as AuthenticatedRequest).user!._id);
         const user = await User.findById(userId).exec();
         if (!user) {
             return res.status(404).json({ status: false, message: "User not found" });
@@ -122,56 +196,52 @@ module.exports = function (app: express.Application) {
 
             const reels = spinReels();
             const { multiplier, jackpot } = resultFor(reels);
-            const xenCasinoAccountId = await getXenCasinoAccountId();
-            const key = `xendelta-slots-${userId}-${crypto.randomUUID()}`;
+            const payout = jackpot ? (await XenCasino.getSingleton()).slotsJackpotPool : wager * multiplier;
 
-            let balance: string;
-            let payout = 0;
-
-            if (jackpot) {
-                const state = await XenCasino.getSingleton();
-                payout = state.slotsJackpotPool;
-                const result = await transfer({
-                    fromAccountId: xenCasinoAccountId,
-                    toAccountId: resolved.account.accountId,
-                    amount: payout.toFixed(10),
-                    key,
-                    note: "slots_jackpot",
+            const debitKey = `xendelta-slots-start-${userId}-${crypto.randomUUID()}`;
+            let round;
+            try {
+                round = await XenCasinoRound.startRound({
+                    game: GAME_KEY,
+                    userId,
+                    wager,
+                    debitKey,
+                    playerAccountId: resolved.account.accountId,
+                    conditions: { reels, multiplier, jackpot, payout } as SpinConditions,
                 });
-                balance = result.toNewBalance;
-                await XenCasino.resetJackpotPool();
-            } else {
-                const netWin = wager * (multiplier - 1);
-                if (netWin > 0) {
-                    payout = netWin;
-                    const result = await transfer({
-                        fromAccountId: xenCasinoAccountId,
-                        toAccountId: resolved.account.accountId,
-                        amount: netWin.toFixed(10),
-                        key,
-                        note: "slots_win",
-                    });
-                    balance = result.toNewBalance;
-                } else if (netWin < 0) {
-                    const result = await transfer({
-                        fromAccountId: resolved.account.accountId,
-                        toAccountId: xenCasinoAccountId,
-                        amount: Math.abs(netWin).toFixed(10),
-                        key,
-                        note: "slots_loss",
-                    });
-                    balance = result.fromNewBalance;
-                } else {
-                    balance = resolved.account.balance;
+            } catch (err) {
+                if ((err as { code?: number }).code === 11000) {
+                    return res.status(400).json({ status: false, message: "You already have an active Slots round" });
                 }
-                await XenCasino.incrementJackpotPool(wager * JACKPOT_CONTRIBUTION_RATE);
+                throw err;
             }
 
-            return res.json({ status: true, data: { reels, multiplier, jackpot, payout, balance } });
-        } catch (err) {
-            if (err instanceof WeeabetsTransferError && err.status === 400) {
-                return res.status(400).json({ status: false, message: "Insufficient balance to settle" });
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+            let debitBalance: string;
+            try {
+                const result = await transfer({
+                    fromAccountId: resolved.account.accountId,
+                    toAccountId: xenCasinoAccountId,
+                    amount: wager.toFixed(10),
+                    key: debitKey,
+                    note: "slots_wager",
+                });
+                debitBalance = result.fromNewBalance;
+            } catch (err) {
+                if (err instanceof WeeabetsTransferError && err.status === 400) {
+                    await XenCasinoRound.resolve(round._id);
+                    return res.status(400).json({ status: false, message: "Insufficient balance" });
+                }
+                throw err; // ambiguous - leave round in place, the recovery sweep will retry
             }
+
+            // Debit succeeded - the payout (if any) is what's left; an ambiguous failure
+            // here also leaves the round in place rather than answering with a guess.
+            const settled = await settleRound(round);
+            await XenCasinoRound.resolve(round._id);
+
+            return res.json({ status: true, data: { reels, multiplier, jackpot, payout, balance: settled.balance ?? debitBalance } });
+        } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });
         }
