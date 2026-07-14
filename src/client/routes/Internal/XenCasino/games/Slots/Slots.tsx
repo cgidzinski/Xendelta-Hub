@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { Box, Button, Card, CardContent, Typography, TextField, Stack } from "@mui/material";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { useNavigate } from "react-router-dom";
 import { useSlots } from "./useSlots";
-import OddsDisplay from "../../components/OddsDisplay";
+import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 
 const SYMBOL_EMOJI: Record<string, string> = {
     cherry: "🍒",
@@ -16,23 +14,30 @@ const SYMBOL_EMOJI: Record<string, string> = {
 const DEFAULT_REELS = ["cherry", "cherry", "cherry"];
 
 export default function Slots() {
-    const navigate = useNavigate();
     const [wagerInput, setWagerInput] = useState("5");
     const { odds, isPending, lastResult, spin } = useSlots();
 
     const wager = Number(wagerInput);
     const canSpin = !isPending && Number.isFinite(wager) && wager > 0;
 
+    const oddsSections: OddsSection[] = odds
+        ? [
+              {
+                  title: "Paytable",
+                  rows: odds.paytable.map((row) => ({
+                      label: row.combo,
+                      probability: row.probability,
+                      payout: row.multiplier ? `${row.multiplier}x` : "Jackpot pool",
+                  })),
+                  footnote: `Blended RTP: ${(odds.rtp * 100).toFixed(1)}% · ${(odds.jackpotContributionRate * 100).toFixed(1)}% of every wager feeds the jackpot.`,
+              },
+          ]
+        : [];
+
     return (
-        <Box>
-            <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/internal/xencasino")} sx={{ mb: 2 }}>
-                Back to Games
-            </Button>
+        <GameWrapper title="Slots" howToPlay="Spin the reels for a shot at the growing jackpot. Match 3 symbols to win." oddsSections={oddsSections}>
             <Card variant="outlined">
                 <CardContent sx={{ textAlign: "center", py: 6 }}>
-                    <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
-                        Slots
-                    </Typography>
                     {odds && (
                         <Typography variant="body2" color="warning.main" sx={{ fontWeight: 700, mb: 3 }}>
                             Jackpot: {odds.jackpotPool.toFixed(2)} cheddar
@@ -84,18 +89,6 @@ export default function Slots() {
                     )}
                 </CardContent>
             </Card>
-
-            {odds && (
-                <OddsDisplay
-                    title="Paytable"
-                    rows={odds.paytable.map((row) => ({
-                        label: row.combo,
-                        probability: row.probability,
-                        payout: row.multiplier ? `${row.multiplier}x` : "Jackpot pool",
-                    }))}
-                    footnote={`Blended RTP: ${(odds.rtp * 100).toFixed(1)}% · ${(odds.jackpotContributionRate * 100).toFixed(1)}% of every wager feeds the jackpot.`}
-                />
-            )}
-        </Box>
+        </GameWrapper>
     );
 }

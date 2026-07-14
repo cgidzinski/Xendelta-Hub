@@ -1,15 +1,12 @@
 import { useState, useEffect } from "react";
 import { Box, Button, Card, CardContent, Typography, TextField, Stack, Divider } from "@mui/material";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { useNavigate } from "react-router-dom";
 import { useScratchTicket } from "./useScratchTicket";
-import OddsDisplay from "../../components/OddsDisplay";
+import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 
 // Cosmetic only - actual win/payout logic is entirely server-determined.
 const BONUS_SYMBOLS = new Set(["2x", "5x", "10x", "20x"]);
 
 export default function ScratchTicket() {
-    const navigate = useNavigate();
     const [wagerInput, setWagerInput] = useState("5");
     // Two independent reveal zones per line: the 3 symbol boxes (do they match?) and the
     // separate prize box (what's it worth?) - scratching one says nothing about the other.
@@ -48,23 +45,37 @@ export default function ScratchTicket() {
         0
     );
 
+    const oddsSections: OddsSection[] = odds
+        ? [
+              {
+                  title: "Prizes",
+                  rows: odds.linePrizes.map((prize, i) => ({
+                      label: `Line ${i + 1}`,
+                      probability: odds.matchProbability,
+                      payout: `${prize}x`,
+                  })),
+                  footnote: `P(at least one winning line): ${(odds.probabilityAtLeastOneWin * 100).toFixed(1)}% · RTP: ${(odds.rtp * 100).toFixed(1)}% (lower than Crash/Slots — that's authentic to real scratch tickets). The symbol you match doesn't change the prize — only whether you win it.`,
+              },
+              {
+                  title: "Bonus Symbols",
+                  rows: odds.bonusSymbols.map((b) => ({
+                      label: `Reveal ${b.symbol} (any box)`,
+                      probability: b.probability,
+                      payout: `${b.multiple}x that line's prize`,
+                  })),
+                  footnote: `Reveal any one of these in any box and that line auto-wins, no match needed. P(at least one bonus on a ticket): ${(odds.probabilityAtLeastOneBonus * 100).toFixed(2)}%.`,
+              },
+          ]
+        : [];
+
     return (
-        <Box>
-            <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/internal/xencasino")} sx={{ mb: 2 }}>
-                Back to Games
-            </Button>
+        <GameWrapper
+            title="Scratch Ticket"
+            howToPlay="10 lines. Match all 3 symbols to win — then scratch the prize box to see how much. Reveal a rare 2x/5x/10x/20x bonus symbol and that line auto-wins at that multiple."
+            oddsSections={oddsSections}
+        >
             <Card variant="outlined">
                 <CardContent sx={{ py: 4 }}>
-                    <Box sx={{ textAlign: "center", mb: 3 }}>
-                        <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
-                            Scratch Ticket
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            10 lines. Match all 3 symbols to win — then scratch the prize box to see how much.
-                            Reveal a rare 2x/5x/10x/20x bonus symbol and that line auto-wins at that multiple.
-                        </Typography>
-                    </Box>
-
                     {lines.length === 0 ? (
                         <Stack direction="row" spacing={2} justifyContent="center" alignItems="center" sx={{ py: 4 }}>
                             <TextField
@@ -172,29 +183,6 @@ export default function ScratchTicket() {
                     )}
                 </CardContent>
             </Card>
-
-            {odds && (
-                <>
-                    <OddsDisplay
-                        title="Prizes"
-                        rows={odds.linePrizes.map((prize, i) => ({
-                            label: `Line ${i + 1}`,
-                            probability: odds.matchProbability,
-                            payout: `${prize}x`,
-                        }))}
-                        footnote={`P(at least one winning line): ${(odds.probabilityAtLeastOneWin * 100).toFixed(1)}% · RTP: ${(odds.rtp * 100).toFixed(1)}% (lower than Crash/Slots — that's authentic to real scratch tickets). The symbol you match doesn't change the prize — only whether you win it.`}
-                    />
-                    <OddsDisplay
-                        title="Bonus Symbols"
-                        rows={odds.bonusSymbols.map((b) => ({
-                            label: `Reveal ${b.symbol} (any box)`,
-                            probability: b.probability,
-                            payout: `${b.multiple}x that line's prize`,
-                        }))}
-                        footnote={`Reveal any one of these in any box and that line auto-wins, no match needed. P(at least one bonus on a ticket): ${(odds.probabilityAtLeastOneBonus * 100).toFixed(2)}%.`}
-                    />
-                </>
-            )}
-        </Box>
+        </GameWrapper>
     );
 }

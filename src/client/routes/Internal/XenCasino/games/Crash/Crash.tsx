@@ -1,32 +1,36 @@
 import { useState } from "react";
-import { Box, Button, Card, CardContent, Typography, TextField, Stack } from "@mui/material";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { useNavigate } from "react-router-dom";
+import { Button, Card, CardContent, Typography, TextField, Stack } from "@mui/material";
 import { useCrash } from "./useCrash";
-import OddsDisplay from "../../components/OddsDisplay";
+import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 
 export default function Crash() {
-    const navigate = useNavigate();
     const [wagerInput, setWagerInput] = useState("5");
     const { odds, isPlaying, liveMultiplier, lastResult, isStarting, isCashingOut, start, cashOut } = useCrash();
 
     const wager = Number(wagerInput);
     const canStart = !isPlaying && !isStarting && Number.isFinite(wager) && wager > 0;
 
+    const oddsSections: OddsSection[] = odds
+        ? [
+              {
+                  title: "Odds",
+                  rows: odds.referenceOdds.map((o) => ({
+                      label: `Reach ${o.multiplier}x`,
+                      probability: o.probability,
+                  })),
+                  footnote: `House edge: ${(odds.houseEdge * 100).toFixed(1)}% — your expected return is the same no matter when you cash out.`,
+              },
+          ]
+        : [];
+
     return (
-        <Box>
-            <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/internal/xencasino")} sx={{ mb: 2 }}>
-                Back to Games
-            </Button>
+        <GameWrapper
+            title="Crash"
+            howToPlay="Cash out before it crashes. The longer you wait, the higher the multiplier — and the risk."
+            oddsSections={oddsSections}
+        >
             <Card variant="outlined">
                 <CardContent sx={{ textAlign: "center", py: 6 }}>
-                    <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
-                        Crash
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                        Cash out before it crashes. The longer you wait, the higher the multiplier — and the risk.
-                    </Typography>
-
                     <Typography
                         variant="h2"
                         sx={{ fontWeight: 700, color: isPlaying ? "warning.main" : "text.primary", mb: 3 }}
@@ -63,17 +67,6 @@ export default function Crash() {
                     )}
                 </CardContent>
             </Card>
-
-            {odds && (
-                <OddsDisplay
-                    title="Odds"
-                    rows={odds.referenceOdds.map((o) => ({
-                        label: `Reach ${o.multiplier}x`,
-                        probability: o.probability,
-                    }))}
-                    footnote={`House edge: ${(odds.houseEdge * 100).toFixed(1)}% — your expected return is the same no matter when you cash out.`}
-                />
-            )}
-        </Box>
+        </GameWrapper>
     );
 }
