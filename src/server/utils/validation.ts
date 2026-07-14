@@ -246,6 +246,8 @@ export const addXenSplitMembersSchema = z.object({
   memberIds: z.array(objectIdSchema).min(1, "At least one member required"),
 });
 
+const recurringFrequencySchema = z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]);
+
 export const createExpenseSchema = z.object({
   paid_by: objectIdSchema,
   amount: z.number("Amount must be a number").positive("Amount must be positive"),
@@ -258,6 +260,14 @@ export const createExpenseSchema = z.object({
   splits: z.array(splitSchema).optional(),
   on_hold: z.boolean().optional(),
   do_not_simplify: z.boolean().optional(),
+  recurring: z.object({
+    frequency: recurringFrequencySchema,
+    end_date: z.string().datetime().optional(),
+    max_occurrences: z.number().int().min(2).optional(),
+  }).optional(),
+}).refine((d) => !d.recurring?.end_date || !d.date || new Date(d.recurring.end_date) > new Date(d.date), {
+  message: "End date must be after the start date",
+  path: ["recurring", "end_date"],
 });
 
 export const updateExpenseSchema = z.object({
@@ -272,6 +282,12 @@ export const updateExpenseSchema = z.object({
   splits: z.array(splitSchema).optional(),
   on_hold: z.boolean().optional(),
   do_not_simplify: z.boolean().optional(),
+  recurring: z.object({
+    end_date: z.string().datetime().nullable().optional(),
+    max_occurrences: z.number().int().min(2).nullable().optional(),
+    active: z.boolean().optional(),
+    cancel: z.literal(true).optional(),
+  }).optional(),
 });
 
 export const settleDebtSchema = z.object({
@@ -292,6 +308,11 @@ export const xenSplitIdParamSchema = z.object({
 export const xenSplitMemberParamSchema = z.object({
   groupId: objectIdSchema,
   userId: objectIdSchema,
+});
+
+export const xenSplitRecurringParamSchema = z.object({
+  groupId: objectIdSchema,
+  recurringId: objectIdSchema,
 });
 
 export const xenSplitExpenseParamSchema = z.object({

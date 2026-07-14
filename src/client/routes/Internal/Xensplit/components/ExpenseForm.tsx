@@ -18,14 +18,16 @@ import {
   CircularProgress,
   alpha,
   Switch,
+  Collapse,
 } from "@mui/material";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import LinkOffIcon from "@mui/icons-material/LinkOff";
+import RepeatIcon from "@mui/icons-material/Repeat";
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { SearchedUser } from "../../../../hooks/useUserSearch";
-import type { XenSplitExpenseImage } from "../../../../hooks/xensplit/types";
+import type { XenSplitExpenseImage, RecurringFrequency } from "../../../../hooks/xensplit/types";
 import { getCurrencySymbol, sanitizeAmount, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 import { EXPENSE_CATEGORIES } from "../../../../constants/xensplit";
 import { getCategoryIcon, getCategoryColor } from "../../../../constants/xensplitCategoryIcons";
@@ -80,7 +82,32 @@ interface ExpenseFormProps {
   holdMode?: "free" | "oneWay" | "hidden";
   doNotSimplify: boolean;
   onDoNotSimplifyChange: (v: boolean) => void;
+  /** "off" hides recurrence entirely; "create" offers the toggle; "editSeries" edits a genesis expense's schedule */
+  recurringMode?: "off" | "create" | "editSeries";
+  isRecurring?: boolean;
+  onIsRecurringChange?: (v: boolean) => void;
+  frequency?: RecurringFrequency;
+  onFrequencyChange?: (v: RecurringFrequency) => void;
+  recurringEndDate?: Date | null;
+  onRecurringEndDateChange?: (d: Date | null) => void;
+  maxOccurrences?: string;
+  onMaxOccurrencesChange?: (v: string) => void;
+  seriesActive?: boolean;
+  onSeriesActiveChange?: (v: boolean) => void;
+  /** The series was retired by its own end date / max count (editSeries mode). */
+  seriesEnded?: boolean;
+  /** The series was not running when the dialog opened (paused or ended). */
+  seriesWasInactive?: boolean;
 }
+
+const FREQUENCY_OPTIONS: { value: RecurringFrequency; label: string }[] = [
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "biweekly", label: "Biweekly" },
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+  { value: "yearly", label: "Yearly" },
+];
 
 export default function ExpenseForm({
   title,
@@ -125,8 +152,29 @@ export default function ExpenseForm({
   holdMode = "hidden",
   doNotSimplify,
   onDoNotSimplifyChange,
+  recurringMode = "off",
+  isRecurring = false,
+  onIsRecurringChange,
+  frequency = "monthly",
+  onFrequencyChange,
+  recurringEndDate = null,
+  onRecurringEndDateChange,
+  maxOccurrences = "",
+  onMaxOccurrencesChange,
+  seriesActive = true,
+  onSeriesActiveChange,
+  seriesEnded = false,
+  seriesWasInactive = false,
 }: ExpenseFormProps) {
   const [step, setStep] = React.useState(0);
+  const recurringOn = recurringMode !== "off" && isRecurring;
+  // Editing the bounds of an ended series restarts it — the warning below the
+  // Active switch tells the user what that means
+  const autoResumeOnBoundsEdit = () => {
+    if (recurringMode === "editSeries" && seriesEnded && !seriesActive) onSeriesActiveChange?.(true);
+  };
+  // A future-start recurring series has no expense yet, so there's nothing to attach photos to
+  const hidePhotos = recurringMode === "create" && recurringOn && date.getTime() > Date.now();
   const objectUrlsRef = useRef<string[]>([]);
   // Tracks split boxes the user has typed in, so untouched boxes can absorb the remainder
   const editedSplitIdsRef = useRef<Set<string>>(new Set());
@@ -312,10 +360,16 @@ export default function ExpenseForm({
           </Box>
 
           <DateTimePicker
-            label="Date & Time"
+            label={recurringOn ? "Starts" : "Date & Time"}
             value={date}
             onChange={(d) => d && onDateChange(d)}
-            slotProps={{ textField: { fullWidth: true } }}
+            disabled={recurringMode === "editSeries"}
+            slotProps={{
+              textField: {
+                fullWidth: true,
+                helperText: recurringMode === "editSeries" ? "Locked while recurring — cancel recurrence to change it" : undefined,
+              },
+            }}
           />
 
           <Box>
@@ -539,6 +593,7 @@ export default function ExpenseForm({
                 border: "1px solid",
                 borderColor: onHold ? "warning.main" : "divider",
                 bgcolor: (t) => onHold ? alpha(t.palette.warning.main, 0.08) : "transparent",
+                opacity: recurringOn ? 0.5 : 1,
                 transition: "all 0.2s",
               }}
             >
@@ -551,16 +606,18 @@ export default function ExpenseForm({
                     On Hold
                   </Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3, display: "block" }}>
-                    {holdMode === "oneWay" && onHold
-                      ? "Removing hold is permanent — cannot be re-applied"
-                      : "Exclude from balance calculations"}
+                    {recurringOn
+                      ? "Not available for recurring expenses — pause the schedule instead"
+                      : holdMode === "oneWay" && onHold
+                        ? "Removing hold is permanent — cannot be re-applied"
+                        : "Exclude from balance calculations"}
                   </Typography>
                 </Box>
               </Box>
               <Switch
                 checked={onHold}
                 onChange={(e) => onOnHoldChange(e.target.checked)}
-                disabled={holdMode === "oneWay" && !onHold}
+                disabled={recurringOn || (holdMode === "oneWay" && !onHold)}
                 color="warning"
                 size="small"
               />
@@ -586,7 +643,7 @@ export default function ExpenseForm({
               />
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
-                  Do Not Simplify
+                  Direct
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3, display: "block" }}>
                   Always show as a direct debt, not routed through others
@@ -600,6 +657,113 @@ export default function ExpenseForm({
               size="small"
             />
           </Box>
+          {recurringMode !== "off" && (
+            <Box
+              sx={{
+                px: 2,
+                py: 1.25,
+                borderRadius: 2,
+                border: "1px solid",
+                borderColor: recurringOn ? "secondary.main" : "divider",
+                bgcolor: (t) => recurringOn ? alpha(t.palette.secondary.main, 0.08) : "transparent",
+                transition: "all 0.2s",
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                  <RepeatIcon
+                    sx={{ fontSize: 22, color: recurringOn ? "secondary.main" : "text.secondary" }}
+                  />
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+                      Recurring
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3, display: "block" }}>
+                      {recurringMode === "editSeries" && !isRecurring
+                        ? "Will stop recurring when saved — existing expenses are kept"
+                        : "Automatically re-add this expense on a schedule"}
+                    </Typography>
+                  </Box>
+                </Box>
+                <Switch
+                  checked={isRecurring}
+                  onChange={(e) => {
+                    onIsRecurringChange?.(e.target.checked);
+                    if (e.target.checked) onOnHoldChange(false); // hold is per-expense; recurring series use Pause
+                  }}
+                  color="secondary"
+                  size="small"
+                />
+              </Box>
+              <Collapse in={recurringOn}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 2 }}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Repeats</InputLabel>
+                    <Select
+                      value={frequency}
+                      label="Repeats"
+                      onChange={(e) => onFrequencyChange?.(e.target.value as RecurringFrequency)}
+                      disabled={recurringMode === "editSeries"}
+                    >
+                      {FREQUENCY_OPTIONS.map((f) => (
+                        <MenuItem key={f.value} value={f.value}>{f.label}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <DateTimePicker
+                    label="Ends (optional)"
+                    value={recurringEndDate}
+                    onChange={(d) => {
+                      onRecurringEndDateChange?.(d);
+                      autoResumeOnBoundsEdit();
+                    }}
+                    slotProps={{ textField: { fullWidth: true, size: "small" }, field: { clearable: true } }}
+                  />
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Max occurrences (optional)"
+                    value={maxOccurrences}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^0-9]/g, "");
+                      onMaxOccurrencesChange?.(v);
+                      autoResumeOnBoundsEdit();
+                    }}
+                    slotProps={{ htmlInput: { inputMode: "numeric" } }}
+                    helperText="Total number of expenses, including the first"
+                  />
+                  {recurringMode === "editSeries" && (
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+                          {seriesActive ? "Active" : seriesEnded ? "Ended" : "Paused"}
+                        </Typography>
+                        {seriesActive && seriesWasInactive ? (
+                          <Typography variant="caption" sx={{ lineHeight: 1.3, display: "block", color: "warning.main" }}>
+                            Saving restarts the schedule — occurrences missed since it stopped will be added
+                          </Typography>
+                        ) : (
+                          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3, display: "block" }}>
+                            {seriesActive
+                              ? "Occurrences are being created on schedule"
+                              : seriesEnded
+                                ? "Extend the end date or count to restart"
+                                : "Resuming will backfill any missed occurrences"}
+                          </Typography>
+                        )}
+                      </Box>
+                      <Switch
+                        checked={seriesActive}
+                        onChange={(e) => onSeriesActiveChange?.(e.target.checked)}
+                        color="secondary"
+                        size="small"
+                      />
+                    </Box>
+                  )}
+                </Box>
+              </Collapse>
+            </Box>
+          )}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
             <Avatar sx={{ ...xsBadgeSx, bgcolor: alpha(getCategoryColor(category), 0.15), lineHeight: 1 }}>
               <CategoryIconComponent sx={{ fontSize: 22, color: getCategoryColor(category) }} />
@@ -629,6 +793,11 @@ export default function ExpenseForm({
             helperText={`${notes.length}/1000`}
           />
 
+          {hidePhotos ? (
+            <Typography variant="caption" color="text.secondary">
+              Photos can be added once the first expense is created on the start date.
+            </Typography>
+          ) : (
           <Box>
             <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
               <Typography variant="subtitle2">
@@ -735,6 +904,7 @@ export default function ExpenseForm({
               {canAddMoreImages && <PWAImageCapture onChange={handleFileChange} />}
             </Box>
           </Box>
+          )}
         </Box>
       )}
 
