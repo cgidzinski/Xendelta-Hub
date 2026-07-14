@@ -14,4 +14,16 @@ export const CASINO_GAMES_REGISTRY: CasinoGameRegistryItem[] = [
     path: "/internal/xencasino/games/demo",
     description: "A placeholder game to try winning and losing cheddar.",
   },
+  {
+    key: "crash",
+    label: "Crash",
+    path: "/internal/xencasino/games/crash",
+    description: "Cash out before it crashes. 1% house edge, no matter when you cash out.",
+  },
+  {
+    key: "slots",
+    label: "Slots",
+    path: "/internal/xencasino/games/slots",
+    description: "Spin the reels for a shot at the growing jackpot.",
+  },
 ];
