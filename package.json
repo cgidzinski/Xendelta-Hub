@@ -9,7 +9,9 @@
     "type-check": "npm run type-check:server && npm run type-check:client",
     "type-check:server": "tsc --noEmit --project src/server/tsconfig.json",
     "type-check:client": "tsc --noEmit --project src/client/tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:export": "tsx scripts/db-backup.ts export",
+    "db:import": "tsx scripts/db-backup.ts import"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

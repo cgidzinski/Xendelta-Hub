@@ -28,6 +28,5 @@ src/server/public/avatars/**
 !src/server/public/avatars/default-avatar.png
 gcs-service-account.json
 
-# Local pre-import database safety snapshots - never commit, contains raw data dumps
-src/server/data/backups/*
-!src/server/data/backups/.gitkeep
+# Database backups produced by scripts/db-backup.ts - never commit, contains raw data dumps
+/backups/

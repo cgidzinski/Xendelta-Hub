@@ -6,6 +6,6 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext"
   },
-  "include": ["src/server"],
+  "include": ["src/server", "scripts"],
   "exclude": ["src/client", "node_modules"]
 }

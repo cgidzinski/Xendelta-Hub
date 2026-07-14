@@ -49,8 +49,3 @@ export const VALIDATION_LIMITS = {
 export const TIMEOUTS = {
   NOTIFICATION_DELAY: 300,
 } as const;
-
-// Database export/import (admin)
-export const MAX_DATABASE_IMPORT_SIZE = 500 * 1024 * 1024; // 500MB in bytes (gzip-compressed dump)
-export const DATABASE_IMPORT_CONFIRMATION_PHRASE = "RESTORE DATABASE";
-export const DATABASE_BACKUP_DIR = "src/server/data/backups";

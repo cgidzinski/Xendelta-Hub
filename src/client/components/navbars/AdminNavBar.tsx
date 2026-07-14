@@ -2,7 +2,6 @@ import SecurityIcon from "@mui/icons-material/Security";
 import PeopleIcon from "@mui/icons-material/People";
 import ArticleIcon from "@mui/icons-material/Article";
 import HomeIcon from "@mui/icons-material/Home";
-import StorageIcon from "@mui/icons-material/Storage";
 import IconButton from "@mui/material/IconButton";
 import { Link } from "react-router-dom";
 import { useNavBar } from "../../contexts/NavBarContext";
@@ -32,13 +31,6 @@ export default function AdminNavBar() {
       icon: <ArticleIcon />,
       path: "/admin/blog",
       isSelected: (pathname) => pathname.startsWith("/admin/blog"),
-    },
-    {
-      key: "database",
-      label: "Database",
-      icon: <StorageIcon />,
-      path: "/admin/database",
-      isSelected: (pathname) => pathname === "/admin/database",
     },
   ];
 
