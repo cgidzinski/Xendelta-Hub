@@ -45,8 +45,19 @@ const mongoConnection = Mongo.getConnection();
 mongoConnection.on("connected", async () => {
   console.log(">>> MongoDB connected");
   // await initializeDefaultUsers();
-  const { startRecurringExpenseScheduler } = require("./utils/recurringExpenseUtils");
-  startRecurringExpenseScheduler();
+  const { Scheduler } = require("./infrastructure/Scheduler");
+  const { runDueTasks, TICK_INTERVAL_MS } = require("./infrastructure/TaskDispatcher");
+  const { registerXenSplitRecurringHandler, migrateEmbeddedRecurringSeries } = require("./utils/xensplitRecurringHandler");
+  const { cleanupOldSessions } = require("./utils/xenboxUtils");
+
+  registerXenSplitRecurringHandler();
+  // Must finish before the dispatcher's first tick so migrated tasks aren't missed
+  await migrateEmbeddedRecurringSeries();
+
+  const scheduler = Scheduler.getInstance();
+  scheduler.register({ name: "scheduled-task-dispatcher", everyMs: TICK_INTERVAL_MS, runOnStart: true, handler: runDueTasks });
+  scheduler.register({ name: "xenbox-session-cleanup", everyMs: 30 * 60 * 1000, handler: cleanupOldSessions });
+  scheduler.start();
 });
 
 console.log(">>> Initializing Socket...");

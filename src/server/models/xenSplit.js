@@ -34,6 +34,11 @@ var expenseSchema = new Schema({
   created_at: { type: Date, default: Date.now },
 }, { _id: true });
 
+// DEPRECATED — recurring series migrated to the ScheduledTask collection
+// (see utils/xensplitRecurringHandler.ts). Kept so the one-time startup
+// migration can read old embedded data; remove once all environments have
+// booted past the migration. The old recurring_expenses.next_run_at Mongo
+// index can be dropped manually.
 var recurringExpenseSchema = new Schema({
   // Genesis expense this series clones from; null until a future-start series births it
   genesis_expense_id: { type: Schema.Types.ObjectId },
@@ -92,9 +97,7 @@ var xenSplitSchema = new Schema({
   expenses: [expenseSchema],
   settlements: [settlementSchema],
   exchanges: [exchangeSchema],
-  recurring_expenses: [recurringExpenseSchema],
+  recurring_expenses: [recurringExpenseSchema], // DEPRECATED — see note above
 });
-
-xenSplitSchema.index({ "recurring_expenses.next_run_at": 1 });
 
 module.exports = mongoose.model("XenSplit", xenSplitSchema);
