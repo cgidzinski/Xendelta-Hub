@@ -473,9 +473,10 @@ export default function GroupDetail() {
     }
     setEditDate(expense.date ? new Date(expense.date) : new Date());
     setEditCategory(expense.category || "");
-    setEditOnHold(expense.on_hold ?? false);
-    setEditDoNotSimplify(expense.do_not_simplify ?? false);
     const series = findSeriesForGenesis(expense._id);
+    // Hold isn't available while recurring — saving a genesis clears any stale hold
+    setEditOnHold(series ? false : (expense.on_hold ?? false));
+    setEditDoNotSimplify(expense.do_not_simplify ?? false);
     setEditIsRecurring(!!series);
     setEditFrequency(series?.frequency ?? "monthly");
     setEditRecurringEndDate(series?.end_date ? new Date(series.end_date) : null);

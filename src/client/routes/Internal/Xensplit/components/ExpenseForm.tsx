@@ -583,6 +583,7 @@ export default function ExpenseForm({
                 border: "1px solid",
                 borderColor: onHold ? "warning.main" : "divider",
                 bgcolor: (t) => onHold ? alpha(t.palette.warning.main, 0.08) : "transparent",
+                opacity: recurringOn ? 0.5 : 1,
                 transition: "all 0.2s",
               }}
             >
@@ -595,16 +596,18 @@ export default function ExpenseForm({
                     On Hold
                   </Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3, display: "block" }}>
-                    {holdMode === "oneWay" && onHold
-                      ? "Removing hold is permanent — cannot be re-applied"
-                      : "Exclude from balance calculations"}
+                    {recurringOn
+                      ? "Not available for recurring expenses — pause the schedule instead"
+                      : holdMode === "oneWay" && onHold
+                        ? "Removing hold is permanent — cannot be re-applied"
+                        : "Exclude from balance calculations"}
                   </Typography>
                 </Box>
               </Box>
               <Switch
                 checked={onHold}
                 onChange={(e) => onOnHoldChange(e.target.checked)}
-                disabled={holdMode === "oneWay" && !onHold}
+                disabled={recurringOn || (holdMode === "oneWay" && !onHold)}
                 color="warning"
                 size="small"
               />
@@ -674,7 +677,10 @@ export default function ExpenseForm({
                 </Box>
                 <Switch
                   checked={isRecurring}
-                  onChange={(e) => onIsRecurringChange?.(e.target.checked)}
+                  onChange={(e) => {
+                    onIsRecurringChange?.(e.target.checked);
+                    if (e.target.checked) onOnHoldChange(false); // hold is per-expense; recurring series use Pause
+                  }}
                   color="secondary"
                   size="small"
                 />
