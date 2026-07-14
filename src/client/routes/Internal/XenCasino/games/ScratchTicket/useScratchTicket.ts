@@ -11,15 +11,10 @@ export interface TicketLine {
   won: boolean;
 }
 
-export interface ScratchSymbol {
-  symbol: string;
-  prizeMultiplier: number;
-  probability: number;
-}
-
 export interface ScratchOdds {
   lineCount: number;
-  symbols: ScratchSymbol[];
+  matchProbability: number;
+  linePrizes: number[];
   probabilityAtLeastOneWin: number;
   rtp: number;
 }

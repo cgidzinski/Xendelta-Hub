@@ -8,28 +8,40 @@ import OddsDisplay from "../../components/OddsDisplay";
 export default function ScratchTicket() {
     const navigate = useNavigate();
     const [wagerInput, setWagerInput] = useState("5");
-    const [scratchedLines, setScratchedLines] = useState<Set<number>>(new Set());
+    // Two independent reveal zones per line: the 3 symbol boxes (do they match?) and the
+    // separate prize box (what's it worth?) - scratching one says nothing about the other.
+    const [scratchedSymbols, setScratchedSymbols] = useState<Set<number>>(new Set());
+    const [scratchedPrizes, setScratchedPrizes] = useState<Set<number>>(new Set());
     const { odds, isPending, lastResult, buyTicket } = useScratchTicket();
 
     // A fresh ticket starts fully unscratched.
     useEffect(() => {
-        setScratchedLines(new Set());
+        setScratchedSymbols(new Set());
+        setScratchedPrizes(new Set());
     }, [lastResult]);
 
     const wager = Number(wagerInput);
     const canPlay = !isPending && Number.isFinite(wager) && wager > 0;
     const lines = lastResult?.lines ?? [];
-    const allScratched = lines.length > 0 && scratchedLines.size === lines.length;
+    const allScratched =
+        lines.length > 0 && scratchedSymbols.size === lines.length && scratchedPrizes.size === lines.length;
 
-    const scratchLine = (index: number) => {
-        setScratchedLines((prev) => new Set(prev).add(index));
+    const scratchSymbols = (index: number) => {
+        setScratchedSymbols((prev) => new Set(prev).add(index));
+    };
+    const scratchPrize = (index: number) => {
+        setScratchedPrizes((prev) => new Set(prev).add(index));
     };
     const scratchAll = () => {
-        setScratchedLines(new Set(lines.map((_, i) => i)));
+        setScratchedSymbols(new Set(lines.map((_, i) => i)));
+        setScratchedPrizes(new Set(lines.map((_, i) => i)));
     };
 
+    // Only counts once BOTH zones on a winning line are revealed - you need to scratch
+    // the symbols (to know you won) and the prize box (to know how much) separately.
     const revealedTotal = lines.reduce(
-        (sum, line, i) => sum + (scratchedLines.has(i) && line.won ? line.prizeMultiplier * wager : 0),
+        (sum, line, i) =>
+            sum + (scratchedSymbols.has(i) && scratchedPrizes.has(i) && line.won ? line.prizeMultiplier * wager : 0),
         0
     );
 
@@ -45,7 +57,7 @@ export default function ScratchTicket() {
                             Scratch Ticket
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                            10 lines, 3 hidden symbols each. Match all 3 to win — the symbol you match is the prize.
+                            10 lines. Match all 3 symbols to win — then scratch the prize box to see how much.
                         </Typography>
                     </Box>
 
@@ -65,43 +77,51 @@ export default function ScratchTicket() {
                         </Stack>
                     ) : (
                         <>
-                            <Stack spacing={1} sx={{ maxWidth: 420, mx: "auto" }}>
+                            <Stack spacing={1} sx={{ maxWidth: 460, mx: "auto" }}>
                                 {lines.map((line, i) => {
-                                    const revealed = scratchedLines.has(i);
+                                    const symbolsRevealed = scratchedSymbols.has(i);
+                                    const prizeRevealed = scratchedPrizes.has(i);
+                                    const won = symbolsRevealed && line.won;
                                     return (
-                                        <Stack
-                                            key={i}
-                                            direction="row"
-                                            spacing={1}
-                                            alignItems="center"
-                                            sx={{ py: 0.5 }}
-                                        >
-                                            <Box sx={{ width: 56 }}>
-                                                <Typography sx={{ fontWeight: 600, lineHeight: 1.1 }} color={revealed && line.won ? "success.main" : "text.secondary"}>
-                                                    {revealed ? (line.won ? `${line.prizeMultiplier}x` : "—") : "?"}
-                                                </Typography>
-                                            </Box>
+                                        <Stack key={i} direction="row" spacing={1} alignItems="center" sx={{ py: 0.5 }}>
                                             {line.symbols.map((symbol, j) => (
                                                 <Box
                                                     key={j}
-                                                    onClick={() => !revealed && scratchLine(i)}
+                                                    onClick={() => !symbolsRevealed && scratchSymbols(i)}
                                                     sx={{
-                                                        width: 44,
-                                                        height: 44,
+                                                        width: 40,
+                                                        height: 40,
                                                         display: "flex",
                                                         alignItems: "center",
                                                         justifyContent: "center",
-                                                        fontSize: 24,
-                                                        bgcolor: revealed ? "action.hover" : "action.selected",
+                                                        fontSize: 22,
+                                                        bgcolor: symbolsRevealed ? "action.hover" : "action.selected",
                                                         borderRadius: 1,
-                                                        cursor: revealed ? "default" : "pointer",
+                                                        cursor: symbolsRevealed ? "default" : "pointer",
                                                     }}
                                                 >
-                                                    {revealed ? symbol : "❔"}
+                                                    {symbolsRevealed ? symbol : "❔"}
                                                 </Box>
                                             ))}
+                                            <Box
+                                                onClick={() => !prizeRevealed && scratchPrize(i)}
+                                                sx={{
+                                                    width: 64,
+                                                    height: 40,
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    fontSize: 16,
+                                                    fontWeight: 700,
+                                                    bgcolor: prizeRevealed ? "action.hover" : "warning.light",
+                                                    borderRadius: 1,
+                                                    cursor: prizeRevealed ? "default" : "pointer",
+                                                }}
+                                            >
+                                                {prizeRevealed ? `${line.prizeMultiplier}x` : "🎁"}
+                                            </Box>
                                             <Typography sx={{ width: 48, fontWeight: 700 }} color="success.main">
-                                                {revealed && line.won ? "WIN" : ""}
+                                                {symbolsRevealed && prizeRevealed && won ? "WIN" : ""}
                                             </Typography>
                                         </Stack>
                                     );
@@ -115,7 +135,8 @@ export default function ScratchTicket() {
                                 <Button
                                     variant="contained"
                                     onClick={() => {
-                                        setScratchedLines(new Set());
+                                        setScratchedSymbols(new Set());
+                                        setScratchedPrizes(new Set());
                                         buyTicket(wager);
                                     }}
                                     disabled={isPending}
@@ -137,13 +158,13 @@ export default function ScratchTicket() {
 
             {odds && (
                 <OddsDisplay
-                    title="Symbol Prizes"
-                    rows={odds.symbols.map((s) => ({
-                        label: `Match 3 ${s.symbol}`,
-                        probability: s.probability,
-                        payout: `${s.prizeMultiplier}x`,
+                    title="Prizes"
+                    rows={odds.linePrizes.map((prize, i) => ({
+                        label: `Line ${i + 1}`,
+                        probability: odds.matchProbability,
+                        payout: `${prize}x`,
                     }))}
-                    footnote={`P(at least one winning line): ${(odds.probabilityAtLeastOneWin * 100).toFixed(1)}% · RTP: ${(odds.rtp * 100).toFixed(1)}% (lower than Crash/Slots — that's authentic to real scratch tickets).`}
+                    footnote={`P(at least one winning line): ${(odds.probabilityAtLeastOneWin * 100).toFixed(1)}% · RTP: ${(odds.rtp * 100).toFixed(1)}% (lower than Crash/Slots — that's authentic to real scratch tickets). The symbol you match doesn't change the prize — only whether you win it.`}
                 />
             )}
         </Box>
