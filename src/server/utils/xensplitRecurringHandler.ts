@@ -57,14 +57,15 @@ async function generate(task: any, dueDates: Date[]): Promise<TaskRunResult> {
   let remaining = dueDates;
 
   if (!source && task.payload.pending_expense) {
-    // Birth the genesis from the creation-time snapshot, reusing the pre-allocated id
+    // Birth the genesis from the creation-time snapshot, reusing the pre-allocated id.
+    // The snapshot is cleared only AFTER the group save succeeds — a VersionError
+    // retry re-enters generate() and still needs it to birth the genesis.
     group.expenses.push({
       ...buildOccurrence(task.payload.pending_expense, dueDates[0], undefined),
       _id: genesisId,
       recurring_id: undefined,
     });
     source = group.expenses.id(genesisId);
-    task.payload = { ...task.payload, pending_expense: undefined }; // persisted by the dispatcher's advance
     processed++;
     pushedCount++;
     remaining = dueDates.slice(1);
@@ -95,6 +96,11 @@ async function generate(task: any, dueDates: Date[]): Promise<TaskRunResult> {
 
   if (pushedCount > 0) {
     await group.save();
+
+    if (task.payload.pending_expense) {
+      // The genesis is persisted — safe to drop the snapshot (dispatcher persists payload)
+      task.payload = { ...task.payload, pending_expense: undefined };
+    }
 
     const groupId = group._id.toString();
     const memberIds = (group.members as any[]).map((m: any) => m.toString());
@@ -127,7 +133,9 @@ export function registerXenSplitRecurringHandler(): void {
 export async function migrateEmbeddedRecurringSeries(): Promise<void> {
   const groups = await XenSplit.find({ "recurring_expenses.0": { $exists: true } });
   let migrated = 0;
+  let skipped = 0;
   for (const group of groups) {
+    let groupFullyMigrated = true;
     for (const series of group.recurring_expenses) {
       try {
         await ScheduledTask.create({
@@ -153,12 +161,19 @@ export async function migrateEmbeddedRecurringSeries(): Promise<void> {
         migrated++;
       } catch (e: any) {
         if (e?.code === 11000) continue; // already migrated on a previous boot
-        throw e;
+        // A bad series (e.g. a frequency the new schema no longer accepts) must not
+        // block the rest of the migration or the scheduler bootstrap. Its embedded
+        // copy is kept for manual repair.
+        skipped++;
+        groupFullyMigrated = false;
+        console.error(`>>> Skipped migrating recurring series ${series._id} in group ${group._id}:`, e?.message ?? e);
       }
     }
-    await XenSplit.updateOne({ _id: group._id }, { $set: { recurring_expenses: [] } });
+    if (groupFullyMigrated) {
+      await XenSplit.updateOne({ _id: group._id }, { $set: { recurring_expenses: [] } });
+    }
   }
   if (groups.length > 0) {
-    console.log(`>>> Migrated ${migrated} recurring series from ${groups.length} group(s) to ScheduledTask`);
+    console.log(`>>> Migrated ${migrated} recurring series from ${groups.length} group(s) to ScheduledTask${skipped ? ` (${skipped} skipped — see errors above)` : ""}`);
   }
 }

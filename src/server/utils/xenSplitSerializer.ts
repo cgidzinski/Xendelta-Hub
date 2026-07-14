@@ -41,12 +41,7 @@ export function taskToRecurringSeries(task: any): any {
  * The group must already be populate("members", "username avatar")-ed.
  */
 export async function serializeXenSplitGroup(group: any): Promise<any> {
-  const obj = transformMembers(group.toObject());
-  const tasks = await ScheduledTask.find({
-    task_type: XENSPLIT_RECURRING_TASK_TYPE,
-    "payload.group_id": group._id.toString(),
-  }).lean();
-  obj.recurring_expenses = tasks.map(taskToRecurringSeries);
+  const [obj] = await serializeXenSplitGroups([group]);
   return obj;
 }
 

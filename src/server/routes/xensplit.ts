@@ -27,7 +27,7 @@ import {
 } from "../utils/validation";
 import { calculateBalances, calculateSimplifiedTransfers } from "../utils/xenSplitUtils";
 import { notify } from "../utils/notificationUtils";
-import { advanceDate } from "../utils/scheduleUtils";
+import { advanceDate, applyAdvance } from "../utils/scheduleUtils";
 import { dispatchTask } from "../infrastructure/TaskDispatcher";
 import { XENSPLIT_RECURRING_TASK_TYPE } from "../utils/xensplitRecurringHandler";
 import { serializeXenSplitGroup, serializeXenSplitGroups } from "../utils/xenSplitSerializer";
@@ -421,7 +421,8 @@ module.exports = function (app: any) {
         date: date ? new Date(date) : new Date(),
         split_type,
         splits: resolvedSplits,
-        on_hold: on_hold === true,
+        // Hold is per-expense state; a recurring series is stopped by pausing it
+        on_hold: recurring ? false : on_hold === true,
         do_not_simplify: do_not_simplify === true,
         created_at: new Date(),
       };
@@ -541,6 +542,9 @@ module.exports = function (app: any) {
       if (series && updates.date !== undefined && new Date(updates.date).getTime() !== new Date(expense.date).getTime()) {
         return res.status(400).json({ status: false, message: "Date is locked while recurring — cancel recurrence to change it" });
       }
+      if (series && updates.on_hold === true) {
+        return res.status(400).json({ status: false, message: "Hold isn't available for recurring expenses — pause the schedule instead" });
+      }
 
       if (updates.paid_by !== undefined) expense.paid_by = updates.paid_by;
       if (updates.amount !== undefined) expense.amount = updates.amount;
@@ -607,9 +611,9 @@ module.exports = function (app: any) {
             resumed = r.active === true && series.enabled !== true;
             series.enabled = r.active;
           }
-          // A tightened end date or count can retire the series outright
-          if ((series.end_date && series.run_at > series.end_date) ||
-            (series.max_runs && series.run_count >= series.max_runs)) {
+          // A tightened end date or count can retire the series outright —
+          // applyAdvance(_, 0) is the dispatcher's own retirement predicate
+          if (!applyAdvance(series, 0).enabled) {
             series.enabled = false;
             resumed = false;
           }
@@ -713,13 +717,18 @@ module.exports = function (app: any) {
         return res.status(404).json({ status: false, message: "Group not found" });
       }
 
+      if (!group.members.some((m: any) => m.toString() === userId)) {
+        return res.status(403).json({ status: false, message: "Not a member of this group" });
+      }
+
       const series = await ScheduledTask.findById(recurringId);
       if (!series || series.task_type !== XENSPLIT_RECURRING_TASK_TYPE || series.payload?.group_id !== groupId) {
         return res.status(404).json({ status: false, message: "Recurring series not found" });
       }
 
-      // Only the series creator or group owner may cancel
-      if (series.created_by && series.created_by !== userId && group.created_by !== userId) {
+      // Only the series creator or group owner may cancel (a missing created_by
+      // does not bypass the check — the group owner still can)
+      if (series.created_by !== userId && group.created_by !== userId) {
         return res.status(403).json({ status: false, message: "Not authorised to cancel this recurring expense" });
       }
 

@@ -57,8 +57,14 @@ mongoConnection.on("connected", async () => {
     const { cleanupOldSessions } = require("./utils/xenboxUtils");
 
     registerXenSplitRecurringHandler();
-    // Must finish before the dispatcher's first tick so migrated tasks aren't missed
-    await migrateEmbeddedRecurringSeries();
+    // Must finish before the dispatcher's first tick so migrated tasks aren't missed.
+    // A migration failure must not stop the scheduler (or the unrelated xenbox job)
+    // from starting — unmigrated series simply don't generate until repaired.
+    try {
+      await migrateEmbeddedRecurringSeries();
+    } catch (e) {
+      console.error(">>> Recurring series migration failed (scheduler will still start):", e);
+    }
 
     const scheduler = Scheduler.getInstance();
     scheduler.register({ name: "scheduled-task-dispatcher", everyMs: TICK_INTERVAL_MS, runOnStart: true, handler: runDueTasks });

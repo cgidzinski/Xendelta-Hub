@@ -8,6 +8,7 @@ import { startOfWeek, startOfMonth, startOfYear, subWeeks } from "date-fns";
 import type { GroupDetailContext } from "./GroupDetail";
 import ExpenseListItem, { FREQUENCY_LABELS, computeFinalExpenseIds } from "./components/ExpenseListItem";
 import { formatCurrency } from "../../../utils/currencyUtils";
+import { groupByDay } from "../../../utils/dateGrouping";
 import { xsCardSx, xsBadgeSx } from "./components/rowStyles";
 
 type DateFilter = "all" | "thisWeek" | "lastWeek" | "thisMonth" | "thisYear";
@@ -84,18 +85,7 @@ export default function GroupExpenses() {
     }, [group.expenses, group.exchanges, search, dateFilter]);
 
     // Group the (already date-desc sorted) list into ordered day-groups, like the Overview feed
-    const groupedItems = useMemo(() => {
-        const groups: { key: string; label: string; items: typeof sortedItems }[] = [];
-        for (const row of sortedItems) {
-            const d = new Date(row.date);
-            const key = d.toDateString();
-            const label = d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-            const last = groups[groups.length - 1];
-            if (last && last.key === key) last.items.push(row);
-            else groups.push({ key, label, items: [row] });
-        }
-        return groups;
-    }, [sortedItems]);
+    const groupedItems = useMemo(() => groupByDay(sortedItems, (row) => row.date), [sortedItems]);
 
     return (
         <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>

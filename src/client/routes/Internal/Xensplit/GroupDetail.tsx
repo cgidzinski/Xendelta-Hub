@@ -181,6 +181,11 @@ export default function GroupDetail() {
     selectedExpense?.images?.length ?? 0
   );
 
+  const finalExpenseIds = useMemo(
+    () => computeFinalExpenseIds(group?.expenses ?? [], group?.recurring_expenses),
+    [group?.expenses, group?.recurring_expenses]
+  );
+
   const handleConfirm = () => {
     confirmAction();
     setShowConfirmDialog(false);
@@ -984,7 +989,7 @@ export default function GroupDetail() {
                   {(() => {
                     const series = findSeriesForGenesis(e._id);
                     if (!series && !e.recurring_id) return null;
-                    const isFinal = computeFinalExpenseIds(group.expenses, group.recurring_expenses).has(e._id);
+                    const isFinal = finalExpenseIds.has(e._id);
                     const label = series
                       ? `Recurring · ${recurringSeriesCaption(series)}`
                       : "Recurring";

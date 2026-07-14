@@ -9,6 +9,7 @@ import ExchangeListItem from "./components/ExchangeListItem";
 import SettlementDetailDialog from "./components/SettlementDetailDialog";
 import { xsCardSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
+import { groupByDay } from "../../../utils/dateGrouping";
 
 type ActivityItem =
     | { type: "expense"; date: string; expense: XenSplitExpense }
@@ -80,18 +81,7 @@ export default function GroupOverview() {
         : feed;
 
     // Group the (already date-desc sorted) feed into ordered day-groups
-    const groupedFeed = useMemo(() => {
-        const groups: { key: string; label: string; items: ActivityItem[] }[] = [];
-        for (const item of filteredFeed) {
-            const d = new Date(item.date);
-            const key = d.toDateString();
-            const label = d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-            const last = groups[groups.length - 1];
-            if (last && last.key === key) last.items.push(item);
-            else groups.push({ key, label, items: [item] });
-        }
-        return groups;
-    }, [filteredFeed]);
+    const groupedFeed = useMemo(() => groupByDay(filteredFeed, (item) => item.date), [filteredFeed]);
 
     const settleNames = (s: XenSplitSettlement) => ({
         from: s.from === user.id ? "You" : getMember(s.from)?.username ?? "?",

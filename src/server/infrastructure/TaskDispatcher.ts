@@ -46,7 +46,16 @@ export async function dispatchTask(task: any): Promise<number> {
     }
 
     const now = new Date();
-    const dueDates = computeDueDates(task, now);
+    let dueDates: Date[];
+    try {
+      dueDates = computeDueDates(task, now);
+    } catch (e: any) {
+      // e.g. a corrupt/unknown frequency — record it on the document so a wedged
+      // task is diagnosable without trawling process logs
+      console.error(`Failed to compute due dates for task ${taskId}:`, e);
+      await ScheduledTask.updateOne({ _id: task._id }, { $set: { last_error: String(e?.message ?? e) } });
+      return 0;
+    }
     const originalRunCount = task.run_count;
 
     let result: TaskRunResult = { processed: 0 };
@@ -70,8 +79,10 @@ export async function dispatchTask(task: any): Promise<number> {
     if (result.disable) next.enabled = false;
     if (advanceBy === 0 && next.enabled === task.enabled && dueDates.length === 0) return 0; // nothing to persist
 
+    // enabled: true in the filter keeps a concurrent user pause/retire from being
+    // overwritten by this advance (the pause wins; dedup reconciles on resume)
     const update = await ScheduledTask.updateOne(
-      { _id: task._id, run_count: originalRunCount },
+      { _id: task._id, run_count: originalRunCount, enabled: true },
       {
         $set: {
           run_count: next.run_count,
