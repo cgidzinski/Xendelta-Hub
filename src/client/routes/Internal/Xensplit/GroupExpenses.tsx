@@ -33,7 +33,7 @@ export default function GroupExpenses() {
     const { group, onViewExpense, user, cancelRecurring, isCancellingRecurring } = useOutletContext<GroupDetailContext>();
     const [search, setSearch] = useState("");
     const [dateFilter, setDateFilter] = useState<DateFilter>("all");
-    const [activeFilters, setActiveFilters] = useState<FilterKey[]>([]);
+    const [activeFilter, setActiveFilter] = useState<FilterKey | null>(null);
 
     // Genesis expense id -> its recurring series, for chips on genesis rows
     const seriesByGenesisId = useMemo(() => {
@@ -48,20 +48,19 @@ export default function GroupExpenses() {
         !!e.recurring_id || seriesByGenesisId.has(e._id);
 
     const matchesActiveFilters = (e: { _id: string; recurring_id?: string; on_hold?: boolean; do_not_simplify?: boolean }) =>
-        activeFilters.every((f) =>
-            f === "recurring" ? isRecurringExpense(e) :
-                f === "held" ? !!e.on_hold :
-                    !!e.do_not_simplify
-        );
+        activeFilter === "recurring" ? isRecurringExpense(e) :
+            activeFilter === "held" ? !!e.on_hold :
+                activeFilter === "notSimplified" ? !!e.do_not_simplify :
+                    true;
 
     const finalExpenseIds = useMemo(
         () => computeFinalExpenseIds(group.expenses, group.recurring_expenses),
         [group.expenses, group.recurring_expenses]
     );
 
-    const hasActiveFilters = activeFilters.length > 0;
+    const hasActiveFilters = activeFilter !== null;
     // A pending (not-yet-started) series has no expense yet, so it can't match "held" or "direct"
-    const pendingSeriesEligible = activeFilters.every((f) => f === "recurring");
+    const pendingSeriesEligible = activeFilter === null || activeFilter === "recurring";
 
     // Future-start series that haven't created their first expense yet — exempt from date filter.
     // Folded away once a filter that a pending series can never match is active.
@@ -110,7 +109,7 @@ export default function GroupExpenses() {
             .map((e) => ({ type: "expense" as const, date: e.date, item: e }));
 
         return expenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [group.expenses, group.exchanges, search, dateFilter, activeFilters]);
+    }, [group.expenses, group.exchanges, search, dateFilter, activeFilter]);
 
     // Group the (already date-desc sorted) list into ordered day-groups, like the Overview feed
     const groupedItems = useMemo(() => groupByDay(sortedItems, (row) => row.date), [sortedItems]);
@@ -143,8 +142,9 @@ export default function GroupExpenses() {
                 </ToggleButtonGroup>
                 <ToggleButtonGroup
                     size="small"
-                    value={activeFilters}
-                    onChange={(_, v: FilterKey[]) => setActiveFilters(v)}
+                    value={activeFilter}
+                    exclusive
+                    onChange={(_, v: FilterKey | null) => setActiveFilter(v)}
                     fullWidth
                     sx={{ mb: 2, height: 30 }}
                 >
