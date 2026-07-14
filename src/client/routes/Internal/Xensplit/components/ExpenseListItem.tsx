@@ -8,7 +8,6 @@ import { getCategoryIcon, getCategoryColor } from "../../../../constants/xenspli
 import { xsCardSx, xsBadgeSx } from "./rowStyles";
 
 export const FREQUENCY_LABELS: Record<XenSplitRecurringSeries["frequency"], string> = {
-    "30s": "Every 30s",
     daily: "Daily",
     weekly: "Weekly",
     biweekly: "Biweekly",

@@ -10,8 +10,8 @@ export interface TaskRunResult {
 
 export type TaskHandler = (task: any, dueDates: Date[]) => Promise<TaskRunResult>;
 
-/** Short tick so the "30s" test frequency is observable; the due-task query is indexed and cheap. */
-export const TICK_INTERVAL_MS = 30 * 1000;
+/** Minimum schedule granularity is daily, so a 5-minute poll is plenty responsive. */
+export const TICK_INTERVAL_MS = 5 * 60 * 1000;
 
 const handlers = new Map<string, TaskHandler>();
 const dispatching = new Set<string>();

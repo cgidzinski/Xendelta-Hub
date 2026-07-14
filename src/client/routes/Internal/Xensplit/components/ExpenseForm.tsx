@@ -101,7 +101,6 @@ interface ExpenseFormProps {
 }
 
 const FREQUENCY_OPTIONS: { value: RecurringFrequency; label: string }[] = [
-  { value: "30s", label: "Every 30 seconds (testing)" },
   { value: "daily", label: "Daily" },
   { value: "weekly", label: "Weekly" },
   { value: "biweekly", label: "Biweekly" },

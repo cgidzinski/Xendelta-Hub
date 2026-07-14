@@ -10,8 +10,7 @@ var scheduledTaskSchema = new Schema({
   anchor_date: { type: Date, required: true },
   frequency: {
     type: String,
-    // "30s" exists for testing the scheduler; real schedules are daily or longer
-    enum: ["30s", "daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"],
+    enum: ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"],
     default: null, // null => one-shot
   },
   end_date: { type: Date }, // inclusive

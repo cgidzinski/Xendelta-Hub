@@ -6,15 +6,14 @@ const utc = (iso: string) => new Date(iso);
 describe("advanceDate", () => {
   it("returns the anchor itself for occurrence 0", () => {
     const anchor = utc("2026-07-11T14:30:00.000Z");
-    for (const f of ["30s", "daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"] as const) {
+    for (const f of ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"] as const) {
       expect(advanceDate(anchor, f, 0).toISOString()).toBe(anchor.toISOString());
     }
   });
 
-  it("advances the 30s test frequency by exact 30-second periods", () => {
+  it("throws on an unknown frequency instead of computing garbage dates", () => {
     const anchor = utc("2026-01-01T09:00:00.000Z");
-    expect(advanceDate(anchor, "30s", 1).toISOString()).toBe("2026-01-01T09:00:30.000Z");
-    expect(advanceDate(anchor, "30s", 120).toISOString()).toBe("2026-01-01T10:00:00.000Z");
+    expect(() => advanceDate(anchor, "30s" as never, 1)).toThrow(/Unknown schedule frequency/);
   });
 
   it("advances daily by exact 24h periods", () => {

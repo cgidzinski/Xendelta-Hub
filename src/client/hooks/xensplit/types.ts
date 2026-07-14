@@ -40,8 +40,7 @@ export interface XenSplitExpense {
   } | null;
 }
 
-// "30s" exists for testing the scheduler; real schedules are daily or longer
-export type RecurringFrequency = "30s" | "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+export type RecurringFrequency = "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
 
 export interface XenSplitRecurringSeries {
   _id: string;

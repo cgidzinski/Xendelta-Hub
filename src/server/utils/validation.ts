@@ -246,8 +246,7 @@ export const addXenSplitMembersSchema = z.object({
   memberIds: z.array(objectIdSchema).min(1, "At least one member required"),
 });
 
-// "30s" exists for testing the scheduler; real schedules are daily or longer
-const recurringFrequencySchema = z.enum(["30s", "daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]);
+const recurringFrequencySchema = z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]);
 
 export const createExpenseSchema = z.object({
   paid_by: objectIdSchema,

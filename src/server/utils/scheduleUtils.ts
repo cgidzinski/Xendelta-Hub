@@ -1,10 +1,9 @@
 // Pure schedule date math shared by the task dispatcher and domain code.
 // Must stay free of model/socket imports so infrastructure can import it without cycles.
 
-// "30s" exists for testing the scheduler; real schedules are daily or longer
-export type ScheduleFrequency = "30s" | "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+export type ScheduleFrequency = "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
 
-export const SCHEDULE_FREQUENCIES: ScheduleFrequency[] = ["30s", "daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"];
+export const SCHEDULE_FREQUENCIES: ScheduleFrequency[] = ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"];
 
 const DAY_MS = 86_400_000;
 const MONTHS_PER_PERIOD: Partial<Record<ScheduleFrequency, number>> = {
@@ -23,10 +22,13 @@ function daysInUTCMonth(year: number, month: number): number {
  * day-of-month per-occurrence (never cumulatively): Jan 31 -> Feb 28 -> Mar 31.
  */
 export function advanceDate(anchor: Date, frequency: ScheduleFrequency, n: number): Date {
-  if (frequency === "30s") return new Date(anchor.getTime() + n * 30_000);
   if (frequency === "daily") return new Date(anchor.getTime() + n * DAY_MS);
   if (frequency === "weekly") return new Date(anchor.getTime() + n * 7 * DAY_MS);
   if (frequency === "biweekly") return new Date(anchor.getTime() + n * 14 * DAY_MS);
+  if (!MONTHS_PER_PERIOD[frequency]) {
+    // e.g. a task left over from a removed frequency — fail loudly rather than compute garbage dates
+    throw new Error(`Unknown schedule frequency "${frequency}"`);
+  }
 
   const months = anchor.getUTCMonth() + n * (MONTHS_PER_PERIOD[frequency] as number);
   const targetYear = anchor.getUTCFullYear() + Math.floor(months / 12);
