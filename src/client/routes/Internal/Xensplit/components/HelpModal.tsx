@@ -68,7 +68,25 @@ const TABS: { label: string; sections: HelpSection[] }[] = [
                 heading: "Extra options",
                 items: [
                     "Put an expense \"on hold\" to record it without having it count toward balances yet.",
-                    "Mark an expense \"do not simplify\" to keep it out of debt simplification when settling up.",
+                    "Mark an expense \"Direct\" to keep it out of debt simplification when settling up.",
+                ],
+            },
+            {
+                heading: "Recurring expenses",
+                items: [
+                    "Toggle \"Recurring\" on the Add Expense form to turn it into the first occurrence of a series — pick a frequency (daily, weekly, biweekly, monthly, quarterly, or yearly) and optionally an end date and/or max number of occurrences.",
+                    "A series that starts in the future shows as a dashed \"Upcoming Recurring\" row until its first occurrence fires, and can be cancelled from there before it starts.",
+                    "Only the first expense in the series (the genesis) can be edited — its date and frequency lock once recurring is on, and later occurrences are read-only clones that link back to it. Occurrences can still be deleted individually.",
+                    "Pause or resume the whole series from the genesis expense; resuming backfills any occurrences missed while paused. On Hold isn't available while an expense is recurring — pause the schedule instead.",
+                    "Deleting the genesis stops the series but keeps any expenses it already created.",
+                    "Recurring expenses show a chip with their frequency and next run date (or \"Final\" once the series has ended).",
+                ],
+            },
+            {
+                heading: "Filtering and browsing",
+                items: [
+                    "Use the second filter row (Recurring / Held / Direct) to isolate expenses with one of those properties.",
+                    "The list is grouped by day, similar to the Overview feed.",
                 ],
             },
         ],
