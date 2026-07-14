@@ -5,8 +5,9 @@
  * genuinely rarer, not just differently labeled, mirroring how real scratch-off tickets
  * work (per OLG/Wizard-of-Odds research: overall odds of winning ANY prize sit around
  * 1-in-3 to 1-in-5, heavily dominated by small prizes, with progressively rarer big tiers).
- * Symbols are plain numbers ("1".."poolSize") rather than curated emoji so arbitrary pool
- * sizes are trivial to generate.
+ * Pool sizes are capped at 16 so a small, fixed set of emoji covers every tier - smaller
+ * (easier) pools only draw from the common fruit symbols; only the rarer, bigger-pool
+ * tiers reach into the special ones at the end of MASTER_SYMBOLS.
  *
  * Also unlike Crash/Slots (90% RTP): real retail scratch tickets run notably worse than
  * casino games (commonly ~50-65%), so this one is authentically a worse-value game rather
@@ -23,21 +24,21 @@ import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailabl
 
 interface LineTier {
     prizeMultiplier: number;
-    poolSize: number; // this line's 3 symbols are drawn uniformly from "1".."poolSize"
+    poolSize: number; // this line's 3 symbols are drawn uniformly from MASTER_SYMBOLS[0..poolSize)
 }
 
-// RTP ≈ 72.6%, P(at least one winning line) ≈ 32% (~1 in 3.1), top prize 1-in-2025.
+// RTP ≈ 75.9%, P(at least one winning line) ≈ 34.3% (~1 in 2.9), top prize 1-in-256.
 const LINE_TIERS: LineTier[] = [
-    { prizeMultiplier: 1, poolSize: 3 },
-    { prizeMultiplier: 1, poolSize: 3 },
-    { prizeMultiplier: 1.5, poolSize: 4 },
-    { prizeMultiplier: 2, poolSize: 5 },
+    { prizeMultiplier: 0.3, poolSize: 3 },
+    { prizeMultiplier: 0.3, poolSize: 3 },
+    { prizeMultiplier: 0.5, poolSize: 4 },
+    { prizeMultiplier: 1, poolSize: 5 },
+    { prizeMultiplier: 1.5, poolSize: 6 },
     { prizeMultiplier: 3, poolSize: 7 },
-    { prizeMultiplier: 5, poolSize: 9 },
-    { prizeMultiplier: 8, poolSize: 12 },
-    { prizeMultiplier: 15, poolSize: 17 },
-    { prizeMultiplier: 40, poolSize: 27 },
-    { prizeMultiplier: 90, poolSize: 45 },
+    { prizeMultiplier: 6, poolSize: 9 },
+    { prizeMultiplier: 12, poolSize: 11 },
+    { prizeMultiplier: 24, poolSize: 13 },
+    { prizeMultiplier: 52, poolSize: 16 },
 ];
 
 function matchProbability(tier: LineTier): number {
@@ -63,8 +64,16 @@ function shuffled<T>(items: T[]): T[] {
     return arr;
 }
 
+// Ordered common -> special so smaller (easier) pools only draw from the plain fruit
+// symbols, and only the rarer, bigger-pool tiers reach the bell/diamond/star/crown at the
+// end - exactly 16 entries, covering the largest LINE_TIERS pool size with none to spare.
+const MASTER_SYMBOLS = [
+    "🍒", "🍋", "🍇", "🍉", "🍓", "🍑", "🍍", "🥝",
+    "🍌", "🥥", "🍏", "🍊", "🔔", "💎", "⭐", "👑",
+];
+
 function drawLineSymbols(poolSize: number): string[] {
-    return Array.from({ length: 3 }, () => String(crypto.randomInt(1, poolSize + 1)));
+    return Array.from({ length: 3 }, () => MASTER_SYMBOLS[crypto.randomInt(0, poolSize)]);
 }
 
 function generateTicket(): TicketLine[] {

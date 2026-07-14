@@ -79,7 +79,7 @@ export default function ScratchTicket() {
                                             <Box sx={{ width: 56 }}>
                                                 <Typography sx={{ fontWeight: 600, lineHeight: 1.1 }}>{line.prizeMultiplier}x</Typography>
                                                 <Typography variant="caption" color="text.secondary">
-                                                    1-{line.poolSize}
+                                                    of {line.poolSize}
                                                 </Typography>
                                             </Box>
                                             {line.symbols.map((symbol, j) => (
@@ -92,8 +92,7 @@ export default function ScratchTicket() {
                                                         display: "flex",
                                                         alignItems: "center",
                                                         justifyContent: "center",
-                                                        fontSize: 18,
-                                                        fontWeight: 700,
+                                                        fontSize: 24,
                                                         bgcolor: revealed ? "action.hover" : "action.selected",
                                                         borderRadius: 1,
                                                         cursor: revealed ? "default" : "pointer",
