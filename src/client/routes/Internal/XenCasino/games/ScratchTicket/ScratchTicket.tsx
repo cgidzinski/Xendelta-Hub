@@ -76,7 +76,12 @@ export default function ScratchTicket() {
                                             alignItems="center"
                                             sx={{ py: 0.5 }}
                                         >
-                                            <Typography sx={{ width: 48, fontWeight: 600 }}>{line.prizeMultiplier}x</Typography>
+                                            <Box sx={{ width: 56 }}>
+                                                <Typography sx={{ fontWeight: 600, lineHeight: 1.1 }}>{line.prizeMultiplier}x</Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                    1-{line.poolSize}
+                                                </Typography>
+                                            </Box>
                                             {line.symbols.map((symbol, j) => (
                                                 <Box
                                                     key={j}
@@ -87,7 +92,8 @@ export default function ScratchTicket() {
                                                         display: "flex",
                                                         alignItems: "center",
                                                         justifyContent: "center",
-                                                        fontSize: 22,
+                                                        fontSize: 18,
+                                                        fontWeight: 700,
                                                         bgcolor: revealed ? "action.hover" : "action.selected",
                                                         borderRadius: 1,
                                                         cursor: revealed ? "default" : "pointer",
@@ -133,13 +139,13 @@ export default function ScratchTicket() {
 
             {odds && (
                 <OddsDisplay
-                    title="Prize Lines"
-                    rows={odds.linePrizeMultipliers.map((m, i) => ({
-                        label: `Line ${i + 1}`,
-                        probability: odds.matchProbability,
-                        payout: `${m}x`,
+                    title="Prize Tiers"
+                    rows={odds.tiers.map((t) => ({
+                        label: `Match 3 of ${t.poolSize}`,
+                        probability: t.probability,
+                        payout: `${t.prizeMultiplier}x`,
                     }))}
-                    footnote={`P(at least one winning line): ${(odds.probabilityAtLeastOneWin * 100).toFixed(1)}% · RTP: ${(odds.rtp * 100).toFixed(1)}%`}
+                    footnote={`P(at least one winning line): ${(odds.probabilityAtLeastOneWin * 100).toFixed(1)}% · RTP: ${(odds.rtp * 100).toFixed(1)}% (lower than Crash/Slots — that's authentic to real scratch tickets).`}
                 />
             )}
         </Box>

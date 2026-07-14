@@ -1,19 +1,18 @@
 /**
- * Scratch Ticket — a real scratch-off layout: 10 lines, each with 3 hidden symbols and a
- * fixed, visible prize. A line wins if its 3 symbols all match (any symbol). Every line
- * shares the same match mechanic/probability; only the printed prize differs per line
- * (exactly like a real ticket - the prize is known upfront, only whether you matched it
- * is hidden), and the 10 prize values are shuffled into random line positions per ticket.
+ * Scratch Ticket — 10 lines, each with 3 hidden symbols and a fixed, visible prize. A line
+ * wins if its 3 symbols all match. Unlike a flat "same odds, different label" ticket, each
+ * line draws from its own symbol pool size — a bigger pool means matching 3-of-a-kind is
+ * genuinely rarer, not just differently labeled, mirroring how real scratch-off tickets
+ * work (per OLG/Wizard-of-Odds research: overall odds of winning ANY prize sit around
+ * 1-in-3 to 1-in-5, heavily dominated by small prizes, with progressively rarer big tiers).
+ * Symbols are plain numbers ("1".."poolSize") rather than curated emoji so arbitrary pool
+ * sizes are trivial to generate.
  *
- * This whole config block (LINE_COUNT / SYMBOL_POOL / LINE_PRIZE_MULTIPLIERS) is meant to
- * be copied and re-tuned for future scratch variants with different odds - it's kept as
- * one small, self-contained object rather than spread across the file on purpose.
- *
- * Math (verified, not eyeballed - see commit history for the derivation):
- *   5 equally-weighted symbols -> match probability per line = 5 * (1/5)^3 = 1/25 = 4%
- *   Prize multipliers [0.5, 0.5, 1, 1, 1, 2, 2, 3, 5, 6.5] sum to 22.5
- *   RTP = matchProbability * sum(prizes) = 0.04 * 22.5 = 0.90 (90%, matching Slots)
- *   P(at least one winning line per ticket) = 1 - (1 - 0.04)^10 ≈ 33.5%
+ * Also unlike Crash/Slots (90% RTP): real retail scratch tickets run notably worse than
+ * casino games (commonly ~50-65%), so this one is authentically a worse-value game rather
+ * than force-fit to match the others - see the LINE_TIERS table below for the exact,
+ * computed (not eyeballed) math. This config block is the template for future scratch
+ * variants with different odds.
  */
 import express = require("express");
 import { authenticateToken } from "../../middleware/auth";
@@ -22,18 +21,36 @@ const { User } = require("../../models/user");
 const crypto = require("crypto");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 
-const LINE_COUNT = 10;
-const SYMBOLS_PER_LINE = 3;
-const SYMBOL_POOL = ["🍀", "💰", "💵", "👑", "⭐"];
-const LINE_PRIZE_MULTIPLIERS = [0.5, 0.5, 1, 1, 1, 2, 2, 3, 5, 6.5];
+interface LineTier {
+    prizeMultiplier: number;
+    poolSize: number; // this line's 3 symbols are drawn uniformly from "1".."poolSize"
+}
 
-const MATCH_PROBABILITY = 1 / (SYMBOL_POOL.length * SYMBOL_POOL.length);
-const PRIZE_POOL_SUM = LINE_PRIZE_MULTIPLIERS.reduce((sum, m) => sum + m, 0);
-const RTP = MATCH_PROBABILITY * PRIZE_POOL_SUM;
+// RTP ≈ 72.6%, P(at least one winning line) ≈ 32% (~1 in 3.1), top prize 1-in-2025.
+const LINE_TIERS: LineTier[] = [
+    { prizeMultiplier: 1, poolSize: 3 },
+    { prizeMultiplier: 1, poolSize: 3 },
+    { prizeMultiplier: 1.5, poolSize: 4 },
+    { prizeMultiplier: 2, poolSize: 5 },
+    { prizeMultiplier: 3, poolSize: 7 },
+    { prizeMultiplier: 5, poolSize: 9 },
+    { prizeMultiplier: 8, poolSize: 12 },
+    { prizeMultiplier: 15, poolSize: 17 },
+    { prizeMultiplier: 40, poolSize: 27 },
+    { prizeMultiplier: 90, poolSize: 45 },
+];
+
+function matchProbability(tier: LineTier): number {
+    return 1 / (tier.poolSize * tier.poolSize);
+}
+
+const RTP = LINE_TIERS.reduce((sum, t) => sum + matchProbability(t) * t.prizeMultiplier, 0);
+const PROBABILITY_AT_LEAST_ONE_WIN = 1 - LINE_TIERS.reduce((product, t) => product * (1 - matchProbability(t)), 1);
 
 interface TicketLine {
     symbols: string[];
     prizeMultiplier: number;
+    poolSize: number;
     won: boolean;
 }
 
@@ -46,16 +63,15 @@ function shuffled<T>(items: T[]): T[] {
     return arr;
 }
 
-function drawLineSymbols(): string[] {
-    return Array.from({ length: SYMBOLS_PER_LINE }, () => SYMBOL_POOL[crypto.randomInt(0, SYMBOL_POOL.length)]);
+function drawLineSymbols(poolSize: number): string[] {
+    return Array.from({ length: 3 }, () => String(crypto.randomInt(1, poolSize + 1)));
 }
 
 function generateTicket(): TicketLine[] {
-    const prizes = shuffled(LINE_PRIZE_MULTIPLIERS);
-    return prizes.map((prizeMultiplier) => {
-        const symbols = drawLineSymbols();
+    return shuffled(LINE_TIERS).map((tier) => {
+        const symbols = drawLineSymbols(tier.poolSize);
         const won = symbols.every((s) => s === symbols[0]);
-        return { symbols, prizeMultiplier, won };
+        return { symbols, prizeMultiplier: tier.prizeMultiplier, poolSize: tier.poolSize, won };
     });
 }
 
@@ -65,10 +81,15 @@ module.exports = function (app: express.Application) {
         return res.json({
             status: true,
             data: {
-                lineCount: LINE_COUNT,
-                matchProbability: MATCH_PROBABILITY,
-                linePrizeMultipliers: [...LINE_PRIZE_MULTIPLIERS].sort((a, b) => a - b),
-                probabilityAtLeastOneWin: 1 - Math.pow(1 - MATCH_PROBABILITY, LINE_COUNT),
+                lineCount: LINE_TIERS.length,
+                tiers: [...LINE_TIERS]
+                    .sort((a, b) => a.prizeMultiplier - b.prizeMultiplier)
+                    .map((t) => ({
+                        prizeMultiplier: t.prizeMultiplier,
+                        poolSize: t.poolSize,
+                        probability: matchProbability(t),
+                    })),
+                probabilityAtLeastOneWin: PROBABILITY_AT_LEAST_ONE_WIN,
                 rtp: RTP,
             },
         });

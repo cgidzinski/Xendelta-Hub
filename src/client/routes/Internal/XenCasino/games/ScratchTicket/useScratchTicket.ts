@@ -8,13 +8,19 @@ import { casinoLedgerKeys } from "../../../../../hooks/casino/useCasinoLedger";
 export interface TicketLine {
   symbols: string[];
   prizeMultiplier: number;
+  poolSize: number;
   won: boolean;
+}
+
+export interface ScratchTier {
+  prizeMultiplier: number;
+  poolSize: number;
+  probability: number;
 }
 
 export interface ScratchOdds {
   lineCount: number;
-  matchProbability: number;
-  linePrizeMultipliers: number[];
+  tiers: ScratchTier[];
   probabilityAtLeastOneWin: number;
   rtp: number;
 }
