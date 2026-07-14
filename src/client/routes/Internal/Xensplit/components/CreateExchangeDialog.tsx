@@ -334,35 +334,30 @@ export default function CreateExchangeDialog({
                             onChange={async (_, v) => {
                                 if (!v) return;
                                 setRateMode(v);
-                                if (v === "live") {
-                                    try {
-                                        const { rate } = await fetchLiveRate({ from: currencyA, to: currencyB });
-                                        setRateNum(rate);
-                                        setPreviewLeft("1");
-                                        setPreviewRight(parseFloat((inverted ? 1 / rate : rate).toFixed(6)).toString());
-                                    } catch (e) {
-                                        enqueueSnackbar(e instanceof Error ? e.message : "Failed to fetch live rate", { variant: "error" });
-                                    }
-                                } else {
-                                    // No live source for cash rate — clear the boxes for manual entry.
-                                    setRateNum(NaN);
+                                try {
+                                    const { rate } = await fetchLiveRate({ from: currencyA, to: currencyB });
+                                    // Cash/Real Rate is the live rate marked down 4% — a typical cash-exchange spread.
+                                    const resolved = v === "live" ? rate : rate * 0.96;
+                                    setRateNum(resolved);
                                     setPreviewLeft("1");
-                                    setPreviewRight("");
+                                    setPreviewRight(parseFloat((inverted ? 1 / resolved : resolved).toFixed(6)).toString());
+                                } catch (e) {
+                                    enqueueSnackbar(e instanceof Error ? e.message : "Failed to fetch live rate", { variant: "error" });
                                 }
                             }}
                             sx={{ alignSelf: "center" }}
                         >
                             <ToggleButton value="live" disabled={isFetchingLiveRate} sx={{ px: 2, py: 0.75, flexDirection: "column", gap: 0.25, textTransform: "none" }}>
                                 <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                                    {isFetchingLiveRate ? "Fetching…" : "Live Rate"}
+                                    {isFetchingLiveRate && rateMode === "live" ? "Fetching…" : "Live Rate"}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
                                     Online rate
                                 </Typography>
                             </ToggleButton>
-                            <ToggleButton value="cash" sx={{ px: 2, py: 0.75, flexDirection: "column", gap: 0.25, textTransform: "none" }}>
+                            <ToggleButton value="cash" disabled={isFetchingLiveRate} sx={{ px: 2, py: 0.75, flexDirection: "column", gap: 0.25, textTransform: "none" }}>
                                 <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                                    Cash Rate
+                                    {isFetchingLiveRate && rateMode === "cash" ? "Fetching…" : "Cash Rate"}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
                                     Real rate
@@ -370,15 +365,16 @@ export default function CreateExchangeDialog({
                             </ToggleButton>
                         </ToggleButtonGroup>
 
-                        {!isNaN(rateNum) && rateNum > 0 ? (
-                            <Typography variant="subtitle1" sx={{ textAlign: "center", fontWeight: 700 }}>
-                                {formatRate(currencyA, currencyB, rateNum, preferred, defaultCurrency ?? "CAD")}
-                            </Typography>
-                        ) : (
-                            <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>
-                                Enter the rate above to continue
-                            </Typography>
-                        )}
+                        {(() => {
+                            const base = resolveRateBase(currencyA, currencyB, preferred, defaultCurrency ?? "CAD") === "b" ? currencyB : currencyA;
+                            const other = base === currencyA ? currencyB : currencyA;
+                            const hasRate = !isNaN(rateNum) && rateNum > 0;
+                            return (
+                                <Typography variant="subtitle1" sx={{ textAlign: "center", fontWeight: 700 }}>
+                                    1 {base} = {hasRate ? formatRate(currencyA, currencyB, rateNum, preferred, defaultCurrency ?? "CAD").split("= ")[1] : `? ${other}`}
+                                </Typography>
+                            );
+                        })()}
                     </Box>
                 )}
 
