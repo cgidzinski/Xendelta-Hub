@@ -45,7 +45,7 @@ export default function ScratchTicket() {
                             Scratch Ticket
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                            10 lines, 3 hidden symbols each. Match all 3 on a line to win its prize.
+                            10 lines, 3 hidden symbols each. Match all 3 to win — the symbol you match is the prize.
                         </Typography>
                     </Box>
 
@@ -77,9 +77,8 @@ export default function ScratchTicket() {
                                             sx={{ py: 0.5 }}
                                         >
                                             <Box sx={{ width: 56 }}>
-                                                <Typography sx={{ fontWeight: 600, lineHeight: 1.1 }}>{line.prizeMultiplier}x</Typography>
-                                                <Typography variant="caption" color="text.secondary">
-                                                    of {line.poolSize}
+                                                <Typography sx={{ fontWeight: 600, lineHeight: 1.1 }} color={revealed && line.won ? "success.main" : "text.secondary"}>
+                                                    {revealed ? (line.won ? `${line.prizeMultiplier}x` : "—") : "?"}
                                                 </Typography>
                                             </Box>
                                             {line.symbols.map((symbol, j) => (
@@ -138,11 +137,11 @@ export default function ScratchTicket() {
 
             {odds && (
                 <OddsDisplay
-                    title="Prize Tiers"
-                    rows={odds.tiers.map((t) => ({
-                        label: `Match 3 of ${t.poolSize}`,
-                        probability: t.probability,
-                        payout: `${t.prizeMultiplier}x`,
+                    title="Symbol Prizes"
+                    rows={odds.symbols.map((s) => ({
+                        label: `Match 3 ${s.symbol}`,
+                        probability: s.probability,
+                        payout: `${s.prizeMultiplier}x`,
                     }))}
                     footnote={`P(at least one winning line): ${(odds.probabilityAtLeastOneWin * 100).toFixed(1)}% · RTP: ${(odds.rtp * 100).toFixed(1)}% (lower than Crash/Slots — that's authentic to real scratch tickets).`}
                 />
