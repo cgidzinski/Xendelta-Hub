@@ -5,6 +5,9 @@ import { useNavigate } from "react-router-dom";
 import { useScratchTicket } from "./useScratchTicket";
 import OddsDisplay from "../../components/OddsDisplay";
 
+// Cosmetic only - actual win/payout logic is entirely server-determined.
+const BONUS_SYMBOLS = new Set(["2x", "5x", "10x", "20x"]);
+
 export default function ScratchTicket() {
     const navigate = useNavigate();
     const [wagerInput, setWagerInput] = useState("5");
@@ -58,6 +61,7 @@ export default function ScratchTicket() {
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                             10 lines. Match all 3 symbols to win — then scratch the prize box to see how much.
+                            Reveal a rare 2x/5x/10x/20x bonus symbol and that line auto-wins at that multiple.
                         </Typography>
                     </Box>
 
@@ -84,25 +88,34 @@ export default function ScratchTicket() {
                                     const won = symbolsRevealed && line.won;
                                     return (
                                         <Stack key={i} direction="row" spacing={1} alignItems="center" sx={{ py: 0.5 }}>
-                                            {line.symbols.map((symbol, j) => (
-                                                <Box
-                                                    key={j}
-                                                    onClick={() => !symbolsRevealed && scratchSymbols(i)}
-                                                    sx={{
-                                                        width: 40,
-                                                        height: 40,
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        justifyContent: "center",
-                                                        fontSize: 22,
-                                                        bgcolor: symbolsRevealed ? "action.hover" : "action.selected",
-                                                        borderRadius: 1,
-                                                        cursor: symbolsRevealed ? "default" : "pointer",
-                                                    }}
-                                                >
-                                                    {symbolsRevealed ? symbol : "❔"}
-                                                </Box>
-                                            ))}
+                                            {line.symbols.map((symbol, j) => {
+                                                const isBonus = symbolsRevealed && BONUS_SYMBOLS.has(symbol);
+                                                return (
+                                                    <Box
+                                                        key={j}
+                                                        onClick={() => !symbolsRevealed && scratchSymbols(i)}
+                                                        sx={{
+                                                            width: 40,
+                                                            height: 40,
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "center",
+                                                            fontSize: isBonus ? 14 : 22,
+                                                            fontWeight: isBonus ? 800 : 400,
+                                                            color: isBonus ? "warning.contrastText" : "inherit",
+                                                            bgcolor: isBonus
+                                                                ? "warning.main"
+                                                                : symbolsRevealed
+                                                                ? "action.hover"
+                                                                : "action.selected",
+                                                            borderRadius: 1,
+                                                            cursor: symbolsRevealed ? "default" : "pointer",
+                                                        }}
+                                                    >
+                                                        {symbolsRevealed ? symbol : "❔"}
+                                                    </Box>
+                                                );
+                                            })}
                                             <Box
                                                 onClick={() => !prizeRevealed && scratchPrize(i)}
                                                 sx={{
@@ -120,8 +133,12 @@ export default function ScratchTicket() {
                                             >
                                                 {prizeRevealed ? `${line.prizeMultiplier}x` : "🎁"}
                                             </Box>
-                                            <Typography sx={{ width: 48, fontWeight: 700 }} color="success.main">
-                                                {symbolsRevealed && prizeRevealed && won ? "WIN" : ""}
+                                            <Typography sx={{ width: 64, fontWeight: 700 }} color={line.bonusMultiple ? "warning.main" : "success.main"}>
+                                                {symbolsRevealed && prizeRevealed && won
+                                                    ? line.bonusMultiple
+                                                        ? `BONUS ${line.bonusMultiple}x`
+                                                        : "WIN"
+                                                    : ""}
                                             </Typography>
                                         </Stack>
                                     );
@@ -157,15 +174,26 @@ export default function ScratchTicket() {
             </Card>
 
             {odds && (
-                <OddsDisplay
-                    title="Prizes"
-                    rows={odds.linePrizes.map((prize, i) => ({
-                        label: `Line ${i + 1}`,
-                        probability: odds.matchProbability,
-                        payout: `${prize}x`,
-                    }))}
-                    footnote={`P(at least one winning line): ${(odds.probabilityAtLeastOneWin * 100).toFixed(1)}% · RTP: ${(odds.rtp * 100).toFixed(1)}% (lower than Crash/Slots — that's authentic to real scratch tickets). The symbol you match doesn't change the prize — only whether you win it.`}
-                />
+                <>
+                    <OddsDisplay
+                        title="Prizes"
+                        rows={odds.linePrizes.map((prize, i) => ({
+                            label: `Line ${i + 1}`,
+                            probability: odds.matchProbability,
+                            payout: `${prize}x`,
+                        }))}
+                        footnote={`P(at least one winning line): ${(odds.probabilityAtLeastOneWin * 100).toFixed(1)}% · RTP: ${(odds.rtp * 100).toFixed(1)}% (lower than Crash/Slots — that's authentic to real scratch tickets). The symbol you match doesn't change the prize — only whether you win it.`}
+                    />
+                    <OddsDisplay
+                        title="Bonus Symbols"
+                        rows={odds.bonusSymbols.map((b) => ({
+                            label: `Reveal ${b.symbol} (any box)`,
+                            probability: b.probability,
+                            payout: `${b.multiple}x that line's prize`,
+                        }))}
+                        footnote={`Reveal any one of these in any box and that line auto-wins, no match needed. P(at least one bonus on a ticket): ${(odds.probabilityAtLeastOneBonus * 100).toFixed(2)}%.`}
+                    />
+                </>
             )}
         </Box>
     );

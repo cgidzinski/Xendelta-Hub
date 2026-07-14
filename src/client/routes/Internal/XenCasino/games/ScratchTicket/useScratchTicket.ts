@@ -8,13 +8,22 @@ import { casinoLedgerKeys } from "../../../../../hooks/casino/useCasinoLedger";
 export interface TicketLine {
   symbols: string[];
   prizeMultiplier: number;
+  bonusMultiple: number | null;
   won: boolean;
+}
+
+export interface ScratchBonusSymbol {
+  symbol: string;
+  multiple: number;
+  probability: number;
 }
 
 export interface ScratchOdds {
   lineCount: number;
   matchProbability: number;
   linePrizes: number[];
+  bonusSymbols: ScratchBonusSymbol[];
+  probabilityAtLeastOneBonus: number;
   probabilityAtLeastOneWin: number;
   rtp: number;
 }
@@ -49,7 +58,10 @@ export const useScratchTicket = () => {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: casinoBalanceKeys.all });
       queryClient.invalidateQueries({ queryKey: casinoLedgerKeys.all });
-      if (result.totalPayout > 0) {
+      const hitBonus = result.lines.some((line) => line.bonusMultiple);
+      if (hitBonus) {
+        enqueueSnackbar("Ticket bought — you hit a bonus multiplier symbol somewhere in there!", { variant: "success" });
+      } else if (result.totalPayout > 0) {
         enqueueSnackbar(`Ticket bought — up to ${result.totalPayout.toFixed(2)} cheddar waiting to be revealed!`, { variant: "success" });
       } else {
         enqueueSnackbar("Ticket bought — scratch to see your luck.", { variant: "info" });
