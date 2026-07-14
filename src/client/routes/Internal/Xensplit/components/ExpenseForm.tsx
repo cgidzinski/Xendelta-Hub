@@ -94,6 +94,10 @@ interface ExpenseFormProps {
   onMaxOccurrencesChange?: (v: string) => void;
   seriesActive?: boolean;
   onSeriesActiveChange?: (v: boolean) => void;
+  /** The series was retired by its own end date / max count (editSeries mode). */
+  seriesEnded?: boolean;
+  /** The series was not running when the dialog opened (paused or ended). */
+  seriesWasInactive?: boolean;
 }
 
 const FREQUENCY_OPTIONS: { value: RecurringFrequency; label: string }[] = [
@@ -160,9 +164,16 @@ export default function ExpenseForm({
   onMaxOccurrencesChange,
   seriesActive = true,
   onSeriesActiveChange,
+  seriesEnded = false,
+  seriesWasInactive = false,
 }: ExpenseFormProps) {
   const [step, setStep] = React.useState(0);
   const recurringOn = recurringMode !== "off" && isRecurring;
+  // Editing the bounds of an ended series restarts it — the warning below the
+  // Active switch tells the user what that means
+  const autoResumeOnBoundsEdit = () => {
+    if (recurringMode === "editSeries" && seriesEnded && !seriesActive) onSeriesActiveChange?.(true);
+  };
   // A future-start recurring series has no expense yet, so there's nothing to attach photos to
   const hidePhotos = recurringMode === "create" && recurringOn && date.getTime() > Date.now();
   const objectUrlsRef = useRef<string[]>([]);
@@ -703,7 +714,10 @@ export default function ExpenseForm({
                   <DateTimePicker
                     label="Ends (optional)"
                     value={recurringEndDate}
-                    onChange={(d) => onRecurringEndDateChange?.(d)}
+                    onChange={(d) => {
+                      onRecurringEndDateChange?.(d);
+                      autoResumeOnBoundsEdit();
+                    }}
                     slotProps={{ textField: { fullWidth: true, size: "small" }, field: { clearable: true } }}
                   />
                   <TextField
@@ -714,6 +728,7 @@ export default function ExpenseForm({
                     onChange={(e) => {
                       const v = e.target.value.replace(/[^0-9]/g, "");
                       onMaxOccurrencesChange?.(v);
+                      autoResumeOnBoundsEdit();
                     }}
                     slotProps={{ htmlInput: { inputMode: "numeric" } }}
                     helperText="Total number of expenses, including the first"
@@ -722,13 +737,21 @@ export default function ExpenseForm({
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <Box>
                         <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
-                          {seriesActive ? "Active" : "Paused"}
+                          {seriesActive ? "Active" : seriesEnded ? "Ended" : "Paused"}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3, display: "block" }}>
-                          {seriesActive
-                            ? "Occurrences are being created on schedule"
-                            : "Resuming will backfill any missed occurrences"}
-                        </Typography>
+                        {seriesActive && seriesWasInactive ? (
+                          <Typography variant="caption" sx={{ lineHeight: 1.3, display: "block", color: "warning.main" }}>
+                            Saving restarts the schedule — occurrences missed since it stopped will be added
+                          </Typography>
+                        ) : (
+                          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3, display: "block" }}>
+                            {seriesActive
+                              ? "Occurrences are being created on schedule"
+                              : seriesEnded
+                                ? "Extend the end date or count to restart"
+                                : "Resuming will backfill any missed occurrences"}
+                          </Typography>
+                        )}
                       </Box>
                       <Switch
                         checked={seriesActive}

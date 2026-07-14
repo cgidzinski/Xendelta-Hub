@@ -57,7 +57,7 @@ import ErrorDisplay from "../../../components/ErrorDisplay";
 import UserSelect from "../../../components/UserSelect";
 import { SearchedUser } from "../../../hooks/useUserSearch";
 import ExpenseForm from "./components/ExpenseForm";
-import { recurringSeriesCaption } from "./components/ExpenseListItem";
+import { recurringSeriesCaption, computeFinalExpenseIds, isSeriesEnded } from "./components/ExpenseListItem";
 import GroupAvatar from "./components/GroupAvatar";
 import CreateExchangeDialog from "./components/CreateExchangeDialog";
 import { apiClient } from "../../../config/api";
@@ -924,6 +924,8 @@ export default function GroupDetail() {
             onMaxOccurrencesChange={setEditMaxOccurrences}
             seriesActive={editSeriesActive}
             onSeriesActiveChange={setEditSeriesActive}
+            seriesEnded={selectedExpenseSeries ? isSeriesEnded(selectedExpenseSeries) : false}
+            seriesWasInactive={selectedExpenseSeries ? !selectedExpenseSeries.active : false}
           />
         </DialogContent>
       </Dialog>
@@ -981,29 +983,20 @@ export default function GroupDetail() {
                   )}
                   {(() => {
                     const series = findSeriesForGenesis(e._id);
-                    if (series) {
-                      return (
-                        <Chip
-                          icon={<RepeatIcon sx={{ fontSize: "14px !important" }} />}
-                          label={`Recurring · ${recurringSeriesCaption(series)}`}
-                          size="small"
-                          color="secondary"
-                          sx={{ fontWeight: 600, fontSize: "0.7rem" }}
-                        />
-                      );
-                    }
-                    if (e.recurring_id) {
-                      return (
-                        <Chip
-                          icon={<RepeatIcon sx={{ fontSize: "14px !important" }} />}
-                          label="Recurring"
-                          size="small"
-                          color="secondary"
-                          sx={{ fontWeight: 600, fontSize: "0.7rem" }}
-                        />
-                      );
-                    }
-                    return null;
+                    if (!series && !e.recurring_id) return null;
+                    const isFinal = computeFinalExpenseIds(group.expenses, group.recurring_expenses).has(e._id);
+                    const label = series
+                      ? `Recurring · ${recurringSeriesCaption(series)}`
+                      : "Recurring";
+                    return (
+                      <Chip
+                        icon={<RepeatIcon sx={{ fontSize: "14px !important" }} />}
+                        label={isFinal ? `${label} · Final` : label}
+                        size="small"
+                        color="secondary"
+                        sx={{ fontWeight: 600, fontSize: "0.7rem" }}
+                      />
+                    );
                   })()}
                 </Box>
               </Box>

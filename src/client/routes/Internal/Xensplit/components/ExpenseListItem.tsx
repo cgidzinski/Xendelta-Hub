@@ -17,16 +17,44 @@ export const FREQUENCY_LABELS: Record<XenSplitRecurringSeries["frequency"], stri
     yearly: "Yearly",
 };
 
+/** Retired by its own bounds (end date / max occurrences), as opposed to manually paused. */
+export function isSeriesEnded(series: XenSplitRecurringSeries): boolean {
+    return !series.active && (
+        (!!series.end_date && new Date(series.next_run_at) > new Date(series.end_date)) ||
+        (!!series.max_occurrences && series.occurrence_count >= series.max_occurrences)
+    );
+}
+
 export function recurringSeriesCaption(series: XenSplitRecurringSeries): string {
     const freq = FREQUENCY_LABELS[series.frequency];
     if (!series.active) {
-        const ended =
-            (series.end_date && new Date(series.next_run_at) > new Date(series.end_date)) ||
-            (series.max_occurrences && series.occurrence_count >= series.max_occurrences);
-        return `${freq} · ${ended ? "Ended" : "Paused"}`;
+        return `${freq} · ${isSeriesEnded(series) ? "Ended" : "Paused"}`;
     }
     const next = new Date(series.next_run_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
     return `${freq} · next ${next}`;
+}
+
+/**
+ * Ids of each ended series' last expense (genesis or occurrence). Derived, not
+ * stored — extending an ended series makes it active again and the marker
+ * disappears on its own.
+ */
+export function computeFinalExpenseIds(
+    expenses: XenSplitExpense[],
+    seriesList: XenSplitRecurringSeries[] | undefined
+): Set<string> {
+    const ids = new Set<string>();
+    for (const s of seriesList ?? []) {
+        if (!s.genesis_expense_id || !isSeriesEnded(s)) continue;
+        let latest: XenSplitExpense | undefined;
+        for (const e of expenses) {
+            if (e._id === s.genesis_expense_id || e.recurring_id === s.genesis_expense_id) {
+                if (!latest || new Date(e.date) > new Date(latest.date)) latest = e;
+            }
+        }
+        if (latest) ids.add(latest._id);
+    }
+    return ids;
 }
 
 interface ExpenseListItemProps {
@@ -37,9 +65,11 @@ interface ExpenseListItemProps {
     hideDate?: boolean;
     /** The recurring series this expense is the genesis of, if any. */
     recurringSeries?: XenSplitRecurringSeries;
+    /** Last expense of an ended series (see computeFinalExpenseIds). */
+    isFinal?: boolean;
 }
 
-export default function ExpenseListItem({ expense, onClick, userId, hideDate, recurringSeries }: ExpenseListItemProps) {
+export default function ExpenseListItem({ expense, onClick, userId, hideDate, recurringSeries, isFinal }: ExpenseListItemProps) {
     const mySplit = userId ? expense.splits.find((sp) => sp.user_id === userId) : undefined;
     const isPayer = userId ? expense.paid_by === userId : false;
     const owe = mySplit && !isPayer && !expense.on_hold
@@ -102,7 +132,7 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate, re
                 {recurringSeries && (
                     <Chip
                         icon={<RepeatIcon sx={{ fontSize: "14px !important" }} />}
-                        label={recurringSeriesCaption(recurringSeries)}
+                        label={isFinal ? `${recurringSeriesCaption(recurringSeries)} · Final` : recurringSeriesCaption(recurringSeries)}
                         size="small"
                         color="secondary"
                         variant="outlined"
@@ -112,7 +142,7 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate, re
                 {!recurringSeries && expense.recurring_id && (
                     <Chip
                         icon={<RepeatIcon sx={{ fontSize: "14px !important" }} />}
-                        label="Recurring"
+                        label={isFinal ? "Recurring · Final" : "Recurring"}
                         size="small"
                         color="secondary"
                         variant="outlined"

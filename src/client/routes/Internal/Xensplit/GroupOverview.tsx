@@ -4,7 +4,7 @@ import { Box, Typography, Button, Switch, Avatar } from "@mui/material";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitExpense, XenSplitSettlement, XenSplitExchange } from "../../../hooks/xensplit/types";
-import ExpenseListItem from "./components/ExpenseListItem";
+import ExpenseListItem, { computeFinalExpenseIds } from "./components/ExpenseListItem";
 import ExchangeListItem from "./components/ExchangeListItem";
 import SettlementDetailDialog from "./components/SettlementDetailDialog";
 import { xsCardSx } from "./components/rowStyles";
@@ -33,6 +33,11 @@ export default function GroupOverview() {
         }
         return map;
     }, [group.recurring_expenses]);
+
+    const finalExpenseIds = useMemo(
+        () => computeFinalExpenseIds(group.expenses, group.recurring_expenses),
+        [group.expenses, group.recurring_expenses]
+    );
 
     const handleActivityToggle = (checked: boolean) => {
         setMyActivityOnly(checked);
@@ -104,6 +109,7 @@ export default function GroupOverview() {
                     userId={user.id}
                     hideDate
                     recurringSeries={seriesByGenesisId.get(e._id)}
+                    isFinal={finalExpenseIds.has(e._id)}
                 />
             );
         }

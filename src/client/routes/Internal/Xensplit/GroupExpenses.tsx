@@ -6,7 +6,7 @@ import RepeatIcon from "@mui/icons-material/Repeat";
 import CloseIcon from "@mui/icons-material/Close";
 import { startOfWeek, startOfMonth, startOfYear, subWeeks } from "date-fns";
 import type { GroupDetailContext } from "./GroupDetail";
-import ExpenseListItem, { FREQUENCY_LABELS } from "./components/ExpenseListItem";
+import ExpenseListItem, { FREQUENCY_LABELS, computeFinalExpenseIds } from "./components/ExpenseListItem";
 import { formatCurrency } from "../../../utils/currencyUtils";
 import { xsCardSx, xsBadgeSx } from "./components/rowStyles";
 
@@ -33,6 +33,11 @@ export default function GroupExpenses() {
         }
         return map;
     }, [group.recurring_expenses]);
+
+    const finalExpenseIds = useMemo(
+        () => computeFinalExpenseIds(group.expenses, group.recurring_expenses),
+        [group.expenses, group.recurring_expenses]
+    );
 
     // Future-start series that haven't created their first expense yet — exempt from date filter
     const pendingSeries = useMemo(() => {
@@ -195,6 +200,7 @@ export default function GroupExpenses() {
                                     onClick={() => onViewExpense(expense)}
                                     userId={user.id}
                                     recurringSeries={seriesByGenesisId.get(expense._id)}
+                                    isFinal={finalExpenseIds.has(expense._id)}
                                 />
                             ))}
                         </Box>
@@ -225,6 +231,7 @@ export default function GroupExpenses() {
                                         userId={user.id}
                                         hideDate
                                         recurringSeries={seriesByGenesisId.get(row.item._id)}
+                                        isFinal={finalExpenseIds.has(row.item._id)}
                                     />
                                 ))}
                             </Box>
