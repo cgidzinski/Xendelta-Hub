@@ -25,6 +25,15 @@ export default function GroupOverview() {
 
     const getMember = (userId: string) => group.members.find((m) => m.user_id === userId);
 
+    // Genesis expense id -> its recurring series, for chips on genesis rows
+    const seriesByGenesisId = useMemo(() => {
+        const map = new Map<string, NonNullable<typeof group.recurring_expenses>[number]>();
+        for (const r of group.recurring_expenses ?? []) {
+            if (r.genesis_expense_id) map.set(r.genesis_expense_id, r);
+        }
+        return map;
+    }, [group.recurring_expenses]);
+
     const handleActivityToggle = (checked: boolean) => {
         setMyActivityOnly(checked);
         localStorage.setItem(lsKey, String(checked));
@@ -94,6 +103,7 @@ export default function GroupOverview() {
                     onClick={() => onViewExpense(e)}
                     userId={user.id}
                     hideDate
+                    recurringSeries={seriesByGenesisId.get(e._id)}
                 />
             );
         }

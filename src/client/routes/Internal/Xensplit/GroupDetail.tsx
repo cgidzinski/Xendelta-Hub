@@ -57,6 +57,7 @@ import ErrorDisplay from "../../../components/ErrorDisplay";
 import UserSelect from "../../../components/UserSelect";
 import { SearchedUser } from "../../../hooks/useUserSearch";
 import ExpenseForm from "./components/ExpenseForm";
+import { recurringSeriesCaption } from "./components/ExpenseListItem";
 import GroupAvatar from "./components/GroupAvatar";
 import CreateExchangeDialog from "./components/CreateExchangeDialog";
 import { apiClient } from "../../../config/api";
@@ -977,15 +978,32 @@ export default function GroupDetail() {
                       sx={{ fontWeight: 600, fontSize: "0.7rem" }}
                     />
                   )}
-                  {(e.recurring_id || findSeriesForGenesis(e._id)) && (
-                    <Chip
-                      icon={<RepeatIcon sx={{ fontSize: "14px !important" }} />}
-                      label="Recurring"
-                      size="small"
-                      color="secondary"
-                      sx={{ fontWeight: 600, fontSize: "0.7rem" }}
-                    />
-                  )}
+                  {(() => {
+                    const series = findSeriesForGenesis(e._id);
+                    if (series) {
+                      return (
+                        <Chip
+                          icon={<RepeatIcon sx={{ fontSize: "14px !important" }} />}
+                          label={`Recurring · ${recurringSeriesCaption(series)}`}
+                          size="small"
+                          color="secondary"
+                          sx={{ fontWeight: 600, fontSize: "0.7rem" }}
+                        />
+                      );
+                    }
+                    if (e.recurring_id) {
+                      return (
+                        <Chip
+                          icon={<RepeatIcon sx={{ fontSize: "14px !important" }} />}
+                          label="Recurring"
+                          size="small"
+                          color="secondary"
+                          sx={{ fontWeight: 600, fontSize: "0.7rem" }}
+                        />
+                      );
+                    }
+                    return null;
+                  })()}
                 </Box>
               </Box>
 
