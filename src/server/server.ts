@@ -64,3 +64,5 @@ require("./routes/recipaint.ts")(app);
 require("./routes/xenbox.ts")(app);
 require("./routes/xenlink.ts")(app);
 require("./routes/xensplit")(app);
+require("./routes/casino.ts")(app);
+require("./routes/casinoGames/demoGame.ts")(app);

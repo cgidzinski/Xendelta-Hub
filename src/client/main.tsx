@@ -48,6 +48,11 @@ import Shop from "./routes/Internal/Shop/Shop";
 import Inventory from "./routes/Internal/Inventory/Inventory";
 import XenLink from "./routes/Internal/XenLink/XenLink";
 import XenLinkRedirect from "./routes/External/XenLinkRedirect/XenLinkRedirect";
+// Routes - XenCasino
+import XenCasinoLayout from "./routes/Internal/XenCasino/XenCasinoLayout";
+import GamesIndex from "./routes/Internal/XenCasino/GamesIndex";
+import Ledger from "./routes/Internal/XenCasino/Ledger";
+import DemoGame from "./routes/Internal/XenCasino/games/DemoGame/DemoGame";
 // Routes - Xensplit
 import XensplitGroupsList from "./routes/Internal/Xensplit/GroupsList";
 import XensplitGroupDetail from "./routes/Internal/Xensplit/GroupDetail";
@@ -161,6 +166,11 @@ const router = createBrowserRouter(
         <Route path="xenlink" element={<XenLink />} />
         <Route path="shop" element={<Shop />} />
         <Route path="inventory" element={<Inventory />} />
+        <Route path="xencasino" element={<XenCasinoLayout />}>
+          <Route index element={<GamesIndex />} />
+          <Route path="ledger" element={<Ledger />} />
+          <Route path="games/demo" element={<DemoGame />} />
+        </Route>
         <Route path="xensplit" index element={<Navigate to="groups" replace />} />
         <Route path="xensplit/groups" element={<XensplitGroupsList />} />
         <Route path="xensplit/groups/:groupId" element={<XensplitGroupDetail />}>
