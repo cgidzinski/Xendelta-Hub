@@ -42,22 +42,33 @@ console.log(">>> ------------------");
 console.log(">>> Initializing Mongo...");
 const mongoConnection = Mongo.getConnection();
 
+// The "connected" event fires on every reconnect (Atlas idle drops, sleep, network
+// blips), so the scheduling bootstrap must run exactly once per process.
+let schedulingInitialized = false;
 mongoConnection.on("connected", async () => {
   console.log(">>> MongoDB connected");
   // await initializeDefaultUsers();
-  const { Scheduler } = require("./infrastructure/Scheduler");
-  const { runDueTasks, TICK_INTERVAL_MS } = require("./infrastructure/TaskDispatcher");
-  const { registerXenSplitRecurringHandler, migrateEmbeddedRecurringSeries } = require("./utils/xensplitRecurringHandler");
-  const { cleanupOldSessions } = require("./utils/xenboxUtils");
+  if (schedulingInitialized) return;
+  schedulingInitialized = true;
+  try {
+    const { Scheduler } = require("./infrastructure/Scheduler");
+    const { runDueTasks, TICK_INTERVAL_MS } = require("./infrastructure/TaskDispatcher");
+    const { registerXenSplitRecurringHandler, migrateEmbeddedRecurringSeries } = require("./utils/xensplitRecurringHandler");
+    const { cleanupOldSessions } = require("./utils/xenboxUtils");
 
-  registerXenSplitRecurringHandler();
-  // Must finish before the dispatcher's first tick so migrated tasks aren't missed
-  await migrateEmbeddedRecurringSeries();
+    registerXenSplitRecurringHandler();
+    // Must finish before the dispatcher's first tick so migrated tasks aren't missed
+    await migrateEmbeddedRecurringSeries();
 
-  const scheduler = Scheduler.getInstance();
-  scheduler.register({ name: "scheduled-task-dispatcher", everyMs: TICK_INTERVAL_MS, runOnStart: true, handler: runDueTasks });
-  scheduler.register({ name: "xenbox-session-cleanup", everyMs: 30 * 60 * 1000, handler: cleanupOldSessions });
-  scheduler.start();
+    const scheduler = Scheduler.getInstance();
+    scheduler.register({ name: "scheduled-task-dispatcher", everyMs: TICK_INTERVAL_MS, runOnStart: true, handler: runDueTasks });
+    scheduler.register({ name: "xenbox-session-cleanup", everyMs: 30 * 60 * 1000, handler: cleanupOldSessions });
+    scheduler.start();
+  } catch (e) {
+    // An error thrown from an event handler would crash the process as an
+    // unhandled rejection — log loudly instead
+    console.error(">>> Failed to initialize scheduling:", e);
+  }
 });
 
 console.log(">>> Initializing Socket...");

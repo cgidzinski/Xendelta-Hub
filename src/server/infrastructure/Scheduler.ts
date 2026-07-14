@@ -27,7 +27,12 @@ export class Scheduler {
   }
 
   register(job: SchedulerJob): void {
-    if (this.jobs.has(job.name)) throw new Error(`Scheduler job "${job.name}" is already registered`);
+    if (this.jobs.has(job.name)) {
+      // Always a wiring mistake, but on a long-running server keeping the first
+      // registration is strictly safer than dying at runtime
+      console.warn(`Scheduler job "${job.name}" is already registered — keeping the first registration`);
+      return;
+    }
     this.jobs.set(job.name, { ...job, running: false });
     if (this.started) this.arm(this.jobs.get(job.name)!);
   }

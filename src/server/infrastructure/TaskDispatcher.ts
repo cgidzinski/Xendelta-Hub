@@ -17,7 +17,12 @@ const handlers = new Map<string, TaskHandler>();
 const dispatching = new Set<string>();
 
 export function registerTaskHandler(taskType: string, handler: TaskHandler): void {
-  if (handlers.has(taskType)) throw new Error(`Task handler for "${taskType}" is already registered`);
+  if (handlers.has(taskType)) {
+    // Always a wiring mistake, but on a long-running server keeping the first
+    // registration is strictly safer than dying at runtime
+    console.warn(`Task handler for "${taskType}" is already registered — keeping the first registration`);
+    return;
+  }
   handlers.set(taskType, handler);
 }
 
