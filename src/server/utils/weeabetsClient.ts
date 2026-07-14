@@ -41,25 +41,56 @@ function assertServiceConfigured(): void {
 }
 
 // ===== TEMPORARY MOCK - real Weeabets isn't reachable here, remove before merging =====
-// Fakes account lookup + transfer with an in-memory balance per discord id so game flows
-// can be exercised end to end without a live Weeabets backend. Numbers are made up but
-// move consistently (wager debited, payout credited) so UI behavior is representative.
+// Fakes account lookup + transfer + ledger with in-memory state per discord id so game
+// flows (and the Ledger tab) can be exercised end to end without a live Weeabets backend.
+// Numbers are made up but move/accumulate consistently (wager debited, payout credited,
+// each transfer logged) so UI behavior is representative.
+const MOCK_XENCASINO_ACCOUNT_ID = 999_999;
 const MOCK_STARTING_BALANCE = 1000;
 const MOCK_XENCASINO_BALANCE = 1_000_000;
 const mockAccountIdByDiscordId = new Map<string, number>();
 const mockDiscordIdByAccountId = new Map<number, string>();
 const mockBalances = new Map<number, number>();
+const mockLedgerEntries: LedgerEntry[] = []; // most-recent first
 let mockNextAccountId = 1;
+let mockNextLedgerId = 1;
 
 function mockResolveAccountId(discordId: string): number {
   let accountId = mockAccountIdByDiscordId.get(discordId);
   if (accountId === undefined) {
-    accountId = discordId === XENCASINO_DISCORD_ID ? 999_999 : mockNextAccountId++;
+    accountId = discordId === XENCASINO_DISCORD_ID ? MOCK_XENCASINO_ACCOUNT_ID : mockNextAccountId++;
     mockAccountIdByDiscordId.set(discordId, accountId);
     mockDiscordIdByAccountId.set(accountId, discordId);
     mockBalances.set(accountId, discordId === XENCASINO_DISCORD_ID ? MOCK_XENCASINO_BALANCE : MOCK_STARTING_BALANCE);
   }
   return accountId;
+}
+
+// Ledger is from XenCasino's own perspective, same as the real endpoint: "credit" = money
+// came in (counterparty paid XenCasino), "debit" = money went out (XenCasino paid
+// counterparty). Only logs transfers that actually touch the XenCasino account, mirroring
+// what the real ledger would contain.
+function mockRecordLedgerEntry(params: { fromAccountId: number; toAccountId: number; amount: string; key: string; note: string }): void {
+  let entryType: "credit" | "debit";
+  let counterpartyId: number;
+  if (params.toAccountId === MOCK_XENCASINO_ACCOUNT_ID) {
+    entryType = "credit";
+    counterpartyId = params.fromAccountId;
+  } else if (params.fromAccountId === MOCK_XENCASINO_ACCOUNT_ID) {
+    entryType = "debit";
+    counterpartyId = params.toAccountId;
+  } else {
+    return; // neither side is XenCasino - shouldn't happen given the guarded-transfer rule
+  }
+  mockLedgerEntries.unshift({
+    id: mockNextLedgerId++,
+    entryType,
+    amount: params.amount,
+    counterpartyId,
+    key: params.key,
+    note: params.note,
+    createdAt: new Date().toISOString(),
+  });
 }
 // ===== END TEMPORARY MOCK =====
 
@@ -110,6 +141,7 @@ export async function transfer(params: {
   const toNewBalance = toBalance + amount;
   mockBalances.set(params.fromAccountId, fromNewBalance);
   mockBalances.set(params.toAccountId, toNewBalance);
+  mockRecordLedgerEntry(params);
   console.log(
     `[MOCK weeabetsClient]   ${params.fromAccountId}: ${fromBalance.toFixed(2)} -> ${fromNewBalance.toFixed(2)} | ` +
       `${params.toAccountId}: ${toBalance.toFixed(2)} -> ${toNewBalance.toFixed(2)}`
@@ -141,6 +173,16 @@ export async function transfer(params: {
 }
 
 export async function getLedger(params: { limit?: number; beforeId?: number } = {}): Promise<LedgerEntry[]> {
+  // TEMPORARY MOCK - see the block above; real call kept commented out below.
+  let entries = mockLedgerEntries;
+  if (params.beforeId !== undefined) {
+    entries = entries.filter((e) => e.id < params.beforeId!);
+  }
+  const limited = entries.slice(0, params.limit ?? entries.length);
+  console.log(`[MOCK weeabetsClient] getLedger(${JSON.stringify(params)}) -> ${limited.length} entries`);
+  return limited;
+
+  /*
   if (!WEEABETS_API_URL) {
     throw new WeeabetsUnavailable("Weeabets XenCasino integration is not configured");
   }
@@ -172,6 +214,7 @@ export async function getLedger(params: { limit?: number; beforeId?: number } = 
     note: e.note,
     createdAt: e.created_at,
   }));
+  */
 }
 
 let xenCasinoAccountIdCache: number | null = null;
