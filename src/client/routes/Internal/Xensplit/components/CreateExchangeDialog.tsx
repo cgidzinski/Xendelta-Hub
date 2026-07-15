@@ -336,8 +336,8 @@ export default function CreateExchangeDialog({
                                 setRateMode(v);
                                 try {
                                     const { rate } = await fetchLiveRate({ from: currencyA, to: currencyB });
-                                    // Cash/Real Rate is the live rate marked down 4% — a typical cash-exchange spread.
-                                    const resolved = v === "live" ? rate : rate * 0.96;
+                                    // Cash/Real Rate is 4% worse than the live rate — a typical cash-exchange spread.
+                                    const resolved = v === "live" ? rate : rate * 1.04;
                                     setRateNum(resolved);
                                     setPreviewLeft("1");
                                     setPreviewRight(parseFloat((inverted ? 1 / resolved : resolved).toFixed(6)).toString());
