@@ -1,4 +1,9 @@
 require("dotenv").config({ quiet: true });
+
+if (process.env.MOCK_WEEABETS === "true" && process.env.NODE_ENV !== "production") {
+  require("./mocks/node").startWeeabetsMock();
+}
+
 const express = require("express");
 const passport = require("passport");
 const cors = require("cors");
