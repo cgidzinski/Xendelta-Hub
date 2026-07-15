@@ -9,6 +9,7 @@ import ShoppingBagIcon from "@mui/icons-material/ShoppingBag";
 import LocalHospitalIcon from "@mui/icons-material/LocalHospital";
 import CategoryIcon from "@mui/icons-material/Category";
 import HouseIcon from "@mui/icons-material/House";
+import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
 import type { ExpenseCategory } from "./xensplit";
 
 export const CATEGORY_ICONS: Record<ExpenseCategory, SvgIconComponent> = {
@@ -20,6 +21,7 @@ export const CATEGORY_ICONS: Record<ExpenseCategory, SvgIconComponent> = {
   Lodging: HouseIcon,
   Shopping: ShoppingBagIcon,
   Healthcare: LocalHospitalIcon,
+  Currency: CurrencyExchangeIcon,
   Other: CategoryIcon,
 };
 
@@ -32,6 +34,7 @@ export const CATEGORY_COLORS: Record<ExpenseCategory, string> = {
   Lodging: "#00BCD4",
   Shopping: "#E91E63",
   Healthcare: "#F44336",
+  Currency: "#4CAF50",
   Other: "#757575",
 };
 

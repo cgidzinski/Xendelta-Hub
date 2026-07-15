@@ -7,6 +7,7 @@ export const EXPENSE_CATEGORIES = [
   "Lodging",
   "Shopping",
   "Healthcare",
+  "Currency",
   "Other",
 ] as const;
 
