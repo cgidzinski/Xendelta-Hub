@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import type { CreateExchangeInput } from "./types";
 
@@ -42,4 +42,19 @@ export function useXenSplitExchanges(groupId: string) {
     fetchLiveRate: liveRateMutation.mutateAsync,
     isFetchingLiveRate: liveRateMutation.isPending,
   };
+}
+
+// Passive, cacheable read of the live rate for a currency pair — backed by the server's own
+// few-hours cache, so this just avoids redundant client-side refetches on every remount.
+export function useLiveRateQuery(from: string, to: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["xensplit", "rate", from, to],
+    queryFn: async () => {
+      const res = await apiClient.get(`/api/xensplit/exchange-rate`, { params: { from, to } });
+      return res.data.data as { rate: number; fetchedAt: number };
+    },
+    enabled,
+    staleTime: 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
 }
