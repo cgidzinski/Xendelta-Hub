@@ -1,10 +1,8 @@
 import { ComponentType } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Box, Card, CardActionArea, CardContent, Typography, Chip, Avatar, SvgIconProps } from "@mui/material";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import CasinoIcon from "@mui/icons-material/Casino";
 import ConfirmationNumberIcon from "@mui/icons-material/ConfirmationNumber";
-import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import AddIcon from "@mui/icons-material/Add";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../../config/api";
@@ -12,9 +10,6 @@ import { ApiResponse } from "../../../types/api";
 import { CASINO_GAMES_REGISTRY, CASINO_GAME_TYPE_LABELS, CasinoGameType } from "./gamesRegistry";
 import { formatOddsRatio } from "./utils/odds";
 
-interface CrashOddsSummary {
-    referenceOdds: { multiplier: number; probability: number }[];
-}
 interface SlotsOddsSummary {
     paytable: { probability: number }[];
 }
@@ -25,25 +20,19 @@ interface ScratchOddsSummary {
 // Same GET requests (and query keys) each game's own page uses to fetch its odds, so the
 // cache is shared and warm either way - just enough of the response shape to compute one
 // headline ratio per card.
-const fetchCrashOdds = async (): Promise<CrashOddsSummary> =>
-    (await apiClient.get<ApiResponse<CrashOddsSummary>>("/api/casino/games/crash/odds")).data.data!;
 const fetchSlotsOdds = async (): Promise<SlotsOddsSummary> =>
     (await apiClient.get<ApiResponse<SlotsOddsSummary>>("/api/casino/games/slots/odds")).data.data!;
 const fetchScratchOdds = async (): Promise<ScratchOddsSummary> =>
     (await apiClient.get<ApiResponse<ScratchOddsSummary>>("/api/casino/games/scratch/odds")).data.data!;
 
 const TYPE_ICON: Record<CasinoGameType, ComponentType<SvgIconProps>> = {
-    crash: TrendingUpIcon,
     slots: CasinoIcon,
     scratch: ConfirmationNumberIcon,
-    practice: SportsEsportsIcon,
 };
 
-const TYPE_ORDER: CasinoGameType[] = ["crash", "slots", "scratch", "practice"];
+const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch"];
 
-// Only the real game types get a "more coming" placeholder - Practice isn't meant to grow.
 const GHOST_COPY: Partial<Record<CasinoGameType, string>> = {
-    crash: "Faster/slower variants land here as they ship.",
     slots: "New reel sets and jackpots land here as they ship.",
     scratch: "New ticket variants land here as they ship.",
 };
@@ -59,17 +48,12 @@ const ODDS_CHIP_SX = {
 export default function GamesIndex() {
     const navigate = useNavigate();
 
-    const { data: crashOdds } = useQuery({ queryKey: ["crashOdds"], queryFn: fetchCrashOdds, staleTime: 5 * 60 * 1000 });
     const { data: slotsOdds } = useQuery({ queryKey: ["slotsOdds"], queryFn: fetchSlotsOdds, staleTime: 15 * 1000 });
     const { data: scratchOdds } = useQuery({ queryKey: ["scratchOdds"], queryFn: fetchScratchOdds, staleTime: 5 * 60 * 1000 });
 
     const oddsLabelByKey: Record<string, string | undefined> = {
-        crash: formatOddsRatio(
-            crashOdds?.referenceOdds.find((o) => o.multiplier === 2)?.probability ?? crashOdds?.referenceOdds[0]?.probability
-        ),
         slots: formatOddsRatio(slotsOdds?.paytable.reduce((sum, row) => sum + row.probability, 0)),
         scratch: formatOddsRatio(scratchOdds?.probabilityAtLeastOneWin),
-        demo: "Practice",
     };
 
     const groups = TYPE_ORDER.map((type) => ({

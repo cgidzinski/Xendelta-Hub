@@ -52,8 +52,6 @@ import XenLinkRedirect from "./routes/External/XenLinkRedirect/XenLinkRedirect";
 import XenCasinoLayout from "./routes/Internal/XenCasino/XenCasinoLayout";
 import GamesIndex from "./routes/Internal/XenCasino/GamesIndex";
 import Ledger from "./routes/Internal/XenCasino/Ledger";
-import DemoGame from "./routes/Internal/XenCasino/games/DemoGame/DemoGame";
-import Crash from "./routes/Internal/XenCasino/games/Crash/Crash";
 import Slots from "./routes/Internal/XenCasino/games/Slots/Slots";
 import ScratchTicket from "./routes/Internal/XenCasino/games/ScratchTicket/ScratchTicket";
 // Routes - Xensplit
@@ -172,8 +170,6 @@ const router = createBrowserRouter(
         <Route path="xencasino" element={<XenCasinoLayout />}>
           <Route index element={<GamesIndex />} />
           <Route path="ledger" element={<Ledger />} />
-          <Route path="games/demo" element={<DemoGame />} />
-          <Route path="games/crash" element={<Crash />} />
           <Route path="games/slots" element={<Slots />} />
           <Route path="games/scratch" element={<ScratchTicket />} />
         </Route>

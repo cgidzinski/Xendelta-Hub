@@ -57,7 +57,7 @@ export default function ScratchTicket() {
                       probability: odds.matchProbability,
                       payout: `${prize}x`,
                   })),
-                  footnote: `P(at least one winning line): ${(odds.probabilityAtLeastOneWin * 100).toFixed(1)}% · RTP: ${(odds.rtp * 100).toFixed(1)}% (lower than Crash/Slots — that's authentic to real scratch tickets). The symbol you match doesn't change the prize — only whether you win it.`,
+                  footnote: `P(at least one winning line): ${(odds.probabilityAtLeastOneWin * 100).toFixed(1)}% · RTP: ${(odds.rtp * 100).toFixed(1)}% (lower than Slots — that's authentic to real scratch tickets). The symbol you match doesn't change the prize — only whether you win it.`,
               },
               {
                   title: "Bonus Symbols",

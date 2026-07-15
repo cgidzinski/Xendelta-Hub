@@ -12,7 +12,7 @@
  *   - transfer() is idempotent by `key`: replaying the same key returns the cached prior
  *     result instead of re-applying the balance delta, matching the real backend's
  *     documented idempotency contract and actually validating the debit-at-start
- *     round-recovery logic Crash/Slots/Scratch Ticket rely on.
+ *     round-recovery logic Slots/Scratch Ticket rely on.
  */
 import { http, HttpResponse } from "msw";
 import { MOCK_WEEABETS_BASE_URL, XENCASINO_DISCORD_ID } from "../config/weeabets";

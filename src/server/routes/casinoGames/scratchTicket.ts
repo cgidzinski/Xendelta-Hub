@@ -16,11 +16,11 @@
  *   per ticket
  *   Expected payout factor per line (per 1 unit of that line's prize) = 0.04097
  *   Prize amounts [0.5, 0.5, 1, 1, 1, 1.5, 2, 3, 4, 5] sum to 19.5, so RTP ≈ 79.9% - still
- *   authentically worse than Crash/Slots (90%), consistent with real retail scratch
- *   tickets. P(at least one winning line of 10, any kind) ≈33.7% (~1-in-3, matching OLG's
- *   real "1-in-3 to 1-in-5" range).
+ *   authentically worse than Slots (90%), consistent with real retail scratch tickets.
+ *   P(at least one winning line of 10, any kind) ≈33.7% (~1-in-3, matching OLG's real
+ *   "1-in-3 to 1-in-5" range).
  *
- * Same debit-at-start pattern as Crash/Slots: the whole ticket (every line's symbols and
+ * Same debit-at-start pattern as Slots: the whole ticket (every line's symbols and
  * prize) is drawn and the total payout is fully decided *before* any money moves, then
  * persisted into a XenCasinoRound alongside the wager debit's idempotency key. The wager
  * is debited first; only then is the (already decided) payout transferred. If the process

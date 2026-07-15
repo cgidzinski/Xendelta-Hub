@@ -10,12 +10,13 @@
  * that wager money already sits in XenCasino's real Weeabets balance the moment it's
  * lost; only the jackpot *payout* triggers an actual transfer.
  *
- * Same debit-at-start pattern as Crash: the reels are drawn and the payout is fully
- * decided *before* any money moves, then persisted into a XenCasinoRound alongside the
- * wager debit's idempotency key. The wager is debited first; only then is the (already
- * decided) payout transferred. If the process dies between those two transfers, the round
- * survives in the database and a periodic sweep replays both idempotent transfers to
- * finish the job - a spin's outcome is never re-drawn, only ever completed.
+ * Same debit-at-start pattern used across every game: the reels are drawn and the payout
+ * is fully decided *before* any money moves, then persisted into a XenCasinoRound
+ * alongside the wager debit's idempotency key. The wager is debited first; only then is
+ * the (already decided) payout transferred. If the process dies between those two
+ * transfers, the round survives in the database and a periodic sweep replays both
+ * idempotent transfers to finish the job - a spin's outcome is never re-drawn, only ever
+ * completed.
  */
 import express = require("express");
 import { authenticateToken } from "../../middleware/auth";
