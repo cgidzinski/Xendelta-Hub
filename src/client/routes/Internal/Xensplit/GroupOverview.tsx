@@ -4,12 +4,13 @@ import { Box, Typography, Button, Switch, Avatar } from "@mui/material";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitExpense, XenSplitSettlement, XenSplitExchange } from "../../../hooks/xensplit/types";
-import ExpenseListItem from "./components/ExpenseListItem";
+import ExpenseListItem, { computeFinalExpenseIds } from "./components/ExpenseListItem";
 import ExchangeListItem from "./components/ExchangeListItem";
 import SettlementDetailDialog from "./components/SettlementDetailDialog";
 import { xsCardSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
 import { useLiveRateQuery } from "../../../hooks/xensplit/useExchanges";
+import { groupByDay } from "../../../utils/dateGrouping";
 
 type ActivityItem =
     | { type: "expense"; date: string; expense: XenSplitExpense }
@@ -53,6 +54,20 @@ export default function GroupOverview() {
 
     const rateQuery = useLiveRateQuery(tickerPair?.from ?? "", tickerPair?.to ?? "", !!tickerPair);
 
+    // Genesis expense id -> its recurring series, for chips on genesis rows
+    const seriesByGenesisId = useMemo(() => {
+        const map = new Map<string, NonNullable<typeof group.recurring_expenses>[number]>();
+        for (const r of group.recurring_expenses ?? []) {
+            if (r.genesis_expense_id) map.set(r.genesis_expense_id, r);
+        }
+        return map;
+    }, [group.recurring_expenses]);
+
+    const finalExpenseIds = useMemo(
+        () => computeFinalExpenseIds(group.expenses, group.recurring_expenses),
+        [group.expenses, group.recurring_expenses]
+    );
+
     const handleActivityToggle = (checked: boolean) => {
         setMyActivityOnly(checked);
         localStorage.setItem(lsKey, String(checked));
@@ -94,18 +109,7 @@ export default function GroupOverview() {
         : feed;
 
     // Group the (already date-desc sorted) feed into ordered day-groups
-    const groupedFeed = useMemo(() => {
-        const groups: { key: string; label: string; items: ActivityItem[] }[] = [];
-        for (const item of filteredFeed) {
-            const d = new Date(item.date);
-            const key = d.toDateString();
-            const label = d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-            const last = groups[groups.length - 1];
-            if (last && last.key === key) last.items.push(item);
-            else groups.push({ key, label, items: [item] });
-        }
-        return groups;
-    }, [filteredFeed]);
+    const groupedFeed = useMemo(() => groupByDay(filteredFeed, (item) => item.date), [filteredFeed]);
 
     const settleNames = (s: XenSplitSettlement) => ({
         from: s.from === user.id ? "You" : getMember(s.from)?.username ?? "?",
@@ -122,6 +126,8 @@ export default function GroupOverview() {
                     onClick={() => onViewExpense(e)}
                     userId={user.id}
                     hideDate
+                    recurringSeries={seriesByGenesisId.get(e._id)}
+                    isFinal={finalExpenseIds.has(e._id)}
                 />
             );
         }
