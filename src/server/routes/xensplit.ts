@@ -25,7 +25,7 @@ import {
   createExchangeSchema,
   xenSplitExchangeParamSchema,
 } from "../utils/validation";
-import { calculateBalances, calculateSimplifiedTransfers } from "../utils/xenSplitUtils";
+import { calculateBalances, calculateSimplifiedTransfers, resolveSplits } from "../utils/xenSplitUtils";
 import { notify } from "../utils/notificationUtils";
 import { advanceDate, applyAdvance } from "../utils/scheduleUtils";
 import { dispatchTask } from "../infrastructure/TaskDispatcher";
@@ -382,35 +382,12 @@ module.exports = function (app: any) {
       }
 
       // Resolve splits
-      let resolvedSplits = splits || [];
-      if (split_type === "equal") {
-        // Use provided participant list if given, otherwise fall back to all members
-        const participants = (splits && splits.length > 0)
-          ? splits.map((s: any) => s.user_id)
-          : group.members.map((m: any) => m.toString());
-        const perPerson = amount / participants.length;
-        resolvedSplits = participants.map((pid: string) => ({ user_id: pid, amount_owed: perPerson }));
-      } else if (split_type === "percent") {
-        resolvedSplits = splits.map((s: any) => ({
-          user_id: s.user_id,
-          amount_owed: (amount * s.percentage) / 100,
-          percentage: s.percentage,
-        }));
-        // Auto-adjust: ensure percentages sum to 100
-        const percentSum = resolvedSplits.reduce((acc: number, s: any) => acc + (s.percentage || 0), 0);
-        const percentDiff = 100 - percentSum;
-        if (Math.abs(percentDiff) > 0.001 && resolvedSplits.length > 0) {
-          resolvedSplits[resolvedSplits.length - 1].percentage += percentDiff;
-          resolvedSplits[resolvedSplits.length - 1].amount_owed = (amount * resolvedSplits[resolvedSplits.length - 1].percentage) / 100;
-        }
-      } else if (split_type === "exact") {
-        // Auto-adjust: ensure exact amounts sum to total
-        const exactSum = resolvedSplits.reduce((acc: number, s: any) => acc + (s.amount_owed || 0), 0);
-        const exactDiff = amount - exactSum;
-        if (Math.abs(exactDiff) > 0.001 && resolvedSplits.length > 0) {
-          resolvedSplits[resolvedSplits.length - 1].amount_owed += exactDiff;
-        }
-      }
+      const resolvedSplits = resolveSplits(
+        split_type,
+        amount,
+        splits || [],
+        group.members.map((m: any) => m.toString()),
+      );
 
       const expenseCurrency = currency || group.default_currency || "CAD";
       const expense = {
@@ -572,33 +549,12 @@ module.exports = function (app: any) {
         const amount = expense.amount;
         const split_type = expense.split_type;
 
-        if (split_type === "equal") {
-          // Use existing split participants if present, otherwise fall back to all members
-          const participants = (expense.splits && expense.splits.length > 0)
-            ? expense.splits.map((s: any) => s.user_id)
-            : group.members.map((m: any) => m.toString());
-          const perPerson = amount / participants.length;
-          expense.splits = participants.map((pid: string) => ({ user_id: pid, amount_owed: perPerson }));
-        } else if (split_type === "percent" && expense.splits) {
-          expense.splits = expense.splits.map((s: any) => ({
-            ...s,
-            amount_owed: (amount * s.percentage) / 100,
-          }));
-          // Auto-adjust percentages to sum to 100
-          const percentSum = expense.splits.reduce((acc: number, s: any) => acc + (s.percentage || 0), 0);
-          const percentDiff = 100 - percentSum;
-          if (Math.abs(percentDiff) > 0.001 && expense.splits.length > 0) {
-            expense.splits[expense.splits.length - 1].percentage += percentDiff;
-            expense.splits[expense.splits.length - 1].amount_owed = (amount * expense.splits[expense.splits.length - 1].percentage) / 100;
-          }
-        } else if (split_type === "exact" && expense.splits) {
-          // Auto-adjust exact amounts to sum to total
-          const exactSum = expense.splits.reduce((acc: number, s: any) => acc + (s.amount_owed || 0), 0);
-          const exactDiff = amount - exactSum;
-          if (Math.abs(exactDiff) > 0.001 && expense.splits.length > 0) {
-            expense.splits[expense.splits.length - 1].amount_owed += exactDiff;
-          }
-        }
+        expense.splits = resolveSplits(
+          split_type,
+          amount,
+          expense.splits || [],
+          group.members.map((m: any) => m.toString()),
+        );
       }
 
       // Recurring schedule updates (only meaningful on a genesis expense)
