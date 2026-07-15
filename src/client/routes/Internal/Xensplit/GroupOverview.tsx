@@ -9,7 +9,6 @@ import ExchangeListItem from "./components/ExchangeListItem";
 import SettlementDetailDialog from "./components/SettlementDetailDialog";
 import { xsCardSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
-import { useLiveRateQuery } from "../../../hooks/xensplit/useExchanges";
 import { groupByDay } from "../../../utils/dateGrouping";
 
 type ActivityItem =
@@ -26,33 +25,6 @@ export default function GroupOverview() {
     const [viewSettlement, setViewSettlement] = useState<XenSplitSettlement | null>(null);
 
     const getMember = (userId: string) => group.members.find((m) => m.user_id === userId);
-
-    // The group's most-used currency pair, for the rate ticker — falls back to the group's two
-    // configured currencies if there's no exchange history yet.
-    const tickerPair = useMemo(() => {
-        const counts = new Map<string, number>();
-        for (const ex of group.exchanges ?? []) {
-            const key = `${ex.currency_a}_${ex.currency_b}`;
-            counts.set(key, (counts.get(key) ?? 0) + 1);
-        }
-        let best: string | null = null;
-        let bestCount = 0;
-        for (const [key, count] of counts) {
-            if (count > bestCount) {
-                best = key;
-                bestCount = count;
-            }
-        }
-        if (best) {
-            const [from, to] = best.split("_");
-            return { from, to };
-        }
-        const from = group.default_currency;
-        const to = group.secondary_currencies?.[0];
-        return from && to && from !== to ? { from, to } : null;
-    }, [group.exchanges, group.default_currency, group.secondary_currencies]);
-
-    const rateQuery = useLiveRateQuery(tickerPair?.from ?? "", tickerPair?.to ?? "", !!tickerPair);
 
     // Genesis expense id -> its recurring series, for chips on genesis rows
     const seriesByGenesisId = useMemo(() => {
@@ -246,22 +218,6 @@ export default function GroupOverview() {
                         ? `${allPendingSettlements.length} pending settlement${allPendingSettlements.length !== 1 ? "s" : ""}`
                         : "All settled up"}
             </Button>
-
-            {/* Rate ticker — the group's most-used currency pair */}
-            {tickerPair && (
-                <Box sx={{ ...xsCardSx, display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5, flexShrink: 0 }}>
-                    <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, letterSpacing: 0.5, textTransform: "uppercase" }}>
-                        {tickerPair.from}/{tickerPair.to}
-                    </Typography>
-                    {rateQuery.data ? (
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                            1 {tickerPair.from} = {rateQuery.data.rate.toFixed(4)} {tickerPair.to}
-                        </Typography>
-                    ) : (
-                        <Typography variant="caption" color="text.disabled">—</Typography>
-                    )}
-                </Box>
-            )}
 
             {/* Filter row */}
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", mb: 1, flexShrink: 0 }}>

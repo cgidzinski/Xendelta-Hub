@@ -8,6 +8,8 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import { format, startOfMonth, subMonths } from "date-fns";
 import type { GroupDetailContext } from "./GroupDetail";
 import { formatCurrency } from "../../../utils/currencyUtils";
+import { useLiveRateQuery } from "../../../hooks/xensplit/useExchanges";
+import { xsCardSx } from "./components/rowStyles";
 
 const CHART_COLORS = ["#6366f1", "#22d3ee", "#f59e0b", "#10b981", "#f43f5e", "#a78bfa", "#fb923c", "#34d399"];
 
@@ -23,6 +25,33 @@ export default function GroupAnalytics() {
     }, [group.expenses, defaultCurrency]);
 
     const [selectedCurrency, setSelectedCurrency] = useState(() => availableCurrencies[0] ?? defaultCurrency);
+
+    // The group's most-used currency pair, for the rate ticker — falls back to the group's two
+    // configured currencies if there's no exchange history yet.
+    const tickerPair = useMemo(() => {
+        const counts = new Map<string, number>();
+        for (const ex of group.exchanges ?? []) {
+            const key = `${ex.currency_a}_${ex.currency_b}`;
+            counts.set(key, (counts.get(key) ?? 0) + 1);
+        }
+        let best: string | null = null;
+        let bestCount = 0;
+        for (const [key, count] of counts) {
+            if (count > bestCount) {
+                best = key;
+                bestCount = count;
+            }
+        }
+        if (best) {
+            const [from, to] = best.split("_");
+            return { from, to };
+        }
+        const from = group.default_currency;
+        const to = group.secondary_currencies?.[0];
+        return from && to && from !== to ? { from, to } : null;
+    }, [group.exchanges, group.default_currency, group.secondary_currencies]);
+
+    const rateQuery = useLiveRateQuery(tickerPair?.from ?? "", tickerPair?.to ?? "", !!tickerPair);
 
     const currencyExpenses = useMemo(
         () => group.expenses.filter((e) => e.currency === selectedCurrency && !e.on_hold),
@@ -152,6 +181,27 @@ export default function GroupAnalytics() {
                     </Box>
                 )}
             </Box>
+
+            {/* Rate ticker — the group's most-used currency pair, shown both directions */}
+            {tickerPair && (
+                <Box sx={{ ...xsCardSx, display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2, flexShrink: 0 }}>
+                    <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, letterSpacing: 0.5, textTransform: "uppercase" }}>
+                        {tickerPair.from}/{tickerPair.to}
+                    </Typography>
+                    {rateQuery.data ? (
+                        <Box sx={{ textAlign: "right" }}>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                1 {tickerPair.from} = {rateQuery.data.rate.toFixed(4)} {tickerPair.to}
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                1 {tickerPair.to} = {(1 / rateQuery.data.rate).toFixed(4)} {tickerPair.from}
+                            </Typography>
+                        </Box>
+                    ) : (
+                        <Typography variant="caption" color="text.disabled">—</Typography>
+                    )}
+                </Box>
+            )}
 
             {/* Summary stat cards */}
             <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 1.5, mb: 3 }}>
