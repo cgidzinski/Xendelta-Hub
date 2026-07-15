@@ -992,6 +992,9 @@ module.exports = function (app: any) {
       await group.save();
       await group.populate("members", "username avatar");
 
+      const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
+
       const fromMember = (group.members as any[]).find((m: any) => m._id.toString() === from);
       const fromName = fromMember?.username || "Someone";
       await notify(to, "Settlement Received", `${fromName} paid you ${amount} ${currency} in ${group.name}`, `/internal/xensplit/groups/${groupId}/overview`);
@@ -1032,6 +1035,9 @@ module.exports = function (app: any) {
       group.settlements.splice(settlementIndex, 1);
       await group.save();
       await group.populate("members", "username avatar");
+
+      const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
 
       res.json({ status: true, message: "Settlement undone", data: await serializeXenSplitGroup(group) });
     } catch (error) {
