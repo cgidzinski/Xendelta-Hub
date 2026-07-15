@@ -347,20 +347,20 @@ export default function CreateExchangeDialog({
                             }}
                             sx={{ alignSelf: "center" }}
                         >
-                            <ToggleButton value="live" disabled={isFetchingLiveRate} sx={{ px: 2, py: 0.75, flexDirection: "column", gap: 0.25, textTransform: "none" }}>
+                            <ToggleButton value="live" sx={{ px: 2, py: 0.75, flexDirection: "column", gap: 0.25, textTransform: "none" }}>
                                 <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                                    {isFetchingLiveRate && rateMode === "live" ? "Fetching…" : "Live Rate"}
+                                    Live Rate
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
                                     Online rate
                                 </Typography>
                             </ToggleButton>
-                            <ToggleButton value="cash" disabled={isFetchingLiveRate} sx={{ px: 2, py: 0.75, flexDirection: "column", gap: 0.25, textTransform: "none" }}>
+                            <ToggleButton value="cash" sx={{ px: 2, py: 0.75, flexDirection: "column", gap: 0.25, textTransform: "none" }}>
                                 <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                                    {isFetchingLiveRate && rateMode === "cash" ? "Fetching…" : "Cash Rate"}
+                                    Cash Rate
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
-                                    Real rate
+                                    -4%
                                 </Typography>
                             </ToggleButton>
                         </ToggleButtonGroup>
