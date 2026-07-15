@@ -12,13 +12,22 @@ const ODDS_CHIP_SX = {
     fontWeight: 700,
 } as const;
 
+// Balances come back as a Numeric(28, 10) string (e.g. "950.0000000000") - cheddar is
+// shown as a whole number, no decimals.
+function formatCheddar(balance: string | null): string {
+    if (balance === null) {
+        return "—";
+    }
+    const amount = Number(balance);
+    return Number.isFinite(amount) ? amount.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—";
+}
+
 /**
  * The one navbar shared between the games list, the ledger, and every game page. Full
  * width, slim, sticky just below the app's own AppBar. On the games list / ledger it shows
  * the Games/Ledger tabs; on a game page (registered via XenCasinoTitlebarContext) those
- * tabs are replaced by the game's name, its odds, and the help button, centered on the bar
- * itself rather than just the leftover space. The cheddar balance stays on the right in
- * both states.
+ * tabs are replaced by the game's name, its odds, and the help button, left-aligned in the
+ * same spot the tabs occupy. The cheddar balance stays on the right in both states.
  */
 export default function XenCasinoNavbar() {
     const navigate = useNavigate();
@@ -58,9 +67,6 @@ export default function XenCasinoNavbar() {
             {titlebar && (
                 <Box
                     sx={{
-                        position: "absolute",
-                        left: "50%",
-                        transform: "translateX(-50%)",
                         display: "flex",
                         alignItems: "center",
                         gap: 1.5,
@@ -81,7 +87,7 @@ export default function XenCasinoNavbar() {
 
             <Chip
                 icon={<CasinoIcon />}
-                label={linked ? (balance ?? "—") : "—"}
+                label={linked ? formatCheddar(balance) : "—"}
                 variant="outlined"
                 sx={{
                     borderColor: "warning.main",
