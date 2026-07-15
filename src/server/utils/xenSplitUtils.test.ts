@@ -17,23 +17,38 @@ interface TestSettlement {
   currency: string;
 }
 
+interface TestExchange {
+  party_a: string;
+  currency_a: string;
+  amount_a: number;
+  party_b: string;
+  currency_b: string;
+  amount_b: number;
+  rate: number;
+}
+
 interface TestDoc {
   members: string[];
   expenses: TestExpense[];
   settlements: TestSettlement[];
+  exchanges?: TestExchange[];
 }
 
 function equalSplit(amount: number, participants: string[]) {
   return participants.map((user_id) => ({ user_id, amount_owed: amount / participants.length }));
 }
 
-function makeDoc(expenses: TestExpense[], settlements: TestSettlement[] = [], members?: string[]): TestDoc {
+function makeDoc(expenses: TestExpense[], settlements: TestSettlement[] = [], members?: string[], exchanges: TestExchange[] = []): TestDoc {
   const inferredMembers = new Set<string>();
   for (const e of expenses) {
     inferredMembers.add(e.paid_by);
     for (const s of e.splits) inferredMembers.add(s.user_id);
   }
-  return { members: members ?? [...inferredMembers], expenses, settlements };
+  for (const ex of exchanges) {
+    inferredMembers.add(ex.party_a);
+    inferredMembers.add(ex.party_b);
+  }
+  return { members: members ?? [...inferredMembers], expenses, settlements, exchanges };
 }
 
 // Sort transfers for order-independent comparison.
@@ -178,12 +193,77 @@ describe("calculateSimplifiedTransfers", () => {
     ]);
   });
 
-  // Known limitation (intentionally left as-is): this function nets unflagged
-  // expenses and settlements through the aggregate pool, but doc.exchanges is
-  // never consulted here at all -- exchanges affect calculateBalances but are
-  // silently absent from the settle-up transfer list this function produces.
-  // A group with exchanges gets correct balances but an incomplete/wrong
-  // settle-up suggestion. Flagged as a gap, not covered by a test here.
+  it("matches calculateMinimumTransfers(calculateBalances(doc)) when nothing is flagged, including an exchange", () => {
+    const doc = makeDoc(
+      [{ paid_by: "A", amount: 90, currency: "CAD", splits: equalSplit(90, ["A", "B", "C"]) }],
+      [],
+      undefined,
+      [{ party_a: "A", currency_a: "CAD", amount_a: 20, party_b: "B", currency_b: "USD", amount_b: 15, rate: 0.75 }],
+    );
+
+    const expected = calculateMinimumTransfers(calculateBalances(doc));
+    const actual = calculateSimplifiedTransfers(doc);
+
+    expect(sortTransfers(actual)).toEqual(sortTransfers(expected));
+  });
+
+  it("safely nets an exchange into a flagged pair when they're the only nonzero holders", () => {
+    const doc = makeDoc(
+      [{ paid_by: "Alice", amount: 5, currency: "CAD", do_not_simplify: true, splits: [{ user_id: "Bob", amount_owed: 5 }] }],
+      [],
+      undefined,
+      [{ party_a: "Bob", currency_a: "CAD", amount_a: 3, party_b: "Alice", currency_b: "USD", amount_b: 2, rate: 0.67 }],
+    );
+
+    // CAD: flagged debt (Bob owes Alice 5) + exchange leg (Bob owes Alice 3, only 2 holders) = 8.
+    // USD: exchange leg alone (Alice owes Bob 2, only 2 holders) merges straight into the protected ledger.
+    const transfers = sortTransfers(calculateSimplifiedTransfers(doc));
+    expect(transfers).toEqual([
+      { from: "Bob", to: "Alice", amount: 8, currency: "CAD" },
+      { from: "Alice", to: "Bob", amount: 2, currency: "USD" },
+    ]);
+  });
+
+  it("keeps an exchange-derived transfer unmerged when 3+ people hold aggregate balances", () => {
+    // Unflagged: A pays 90 split 3 ways, B pays 30 split 3 ways -> aggregate net: A=50, B=-10, C=-40 (CAD).
+    // Flagged: C pays 12 for A only -> protected: A owes C 12 (CAD).
+    // Exchange: B owes C 5 CAD (joins the 3-holder CAD pool, so it must NOT
+    // merge into the unrelated A<->C protected debt); B is owed 4 USD from C
+    // (only 2 USD holders, so that leg IS safe to net and does merge).
+    const doc = makeDoc(
+      [
+        { paid_by: "A", amount: 90, currency: "CAD", splits: equalSplit(90, ["A", "B", "C"]) },
+        { paid_by: "B", amount: 30, currency: "CAD", splits: equalSplit(30, ["A", "B", "C"]) },
+        { paid_by: "C", amount: 12, currency: "CAD", do_not_simplify: true, splits: [{ user_id: "A", amount_owed: 12 }] },
+      ],
+      [],
+      undefined,
+      [{ party_a: "B", currency_a: "CAD", amount_a: 5, party_b: "C", currency_b: "USD", amount_b: 4, rate: 0.8 }],
+    );
+
+    const transfers = sortTransfers(calculateSimplifiedTransfers(doc));
+    expect(transfers).toEqual([
+      { from: "A", to: "C", amount: 12, currency: "CAD" }, // protected, untouched by the 3-holder CAD pool
+      { from: "B", to: "A", amount: 15, currency: "CAD" }, // aggregate (unsafe to net: 3 holders)
+      { from: "C", to: "A", amount: 35, currency: "CAD" }, // aggregate (unsafe to net: 3 holders)
+      { from: "C", to: "B", amount: 4, currency: "USD" }, // exchange's USD leg, safely merged (only 2 holders)
+    ]);
+  });
+
+  it("combines a settlement and an exchange in the same currency without double-counting", () => {
+    const doc = makeDoc(
+      [],
+      [{ from: "Alice", to: "Bob", amount: 10, currency: "CAD" }],
+      undefined,
+      [{ party_a: "Bob", currency_a: "CAD", amount_a: 4, party_b: "Alice", currency_b: "USD", amount_b: 3, rate: 0.75 }],
+    );
+
+    const transfers = sortTransfers(calculateSimplifiedTransfers(doc));
+    expect(transfers).toEqual([
+      { from: "Bob", to: "Alice", amount: 14, currency: "CAD" }, // settlement (10) + exchange leg (4), each counted once
+      { from: "Alice", to: "Bob", amount: 3, currency: "USD" },
+    ]);
+  });
 
   it("resolves percentage splits correctly for a flagged expense", () => {
     const doc = makeDoc([

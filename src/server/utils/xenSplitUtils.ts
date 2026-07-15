@@ -271,8 +271,11 @@ export function calculateMinimumTransfers(balances: BalanceMap): Transfer[] {
 // settlement zero out a protected debt in the unambiguous case (only these
 // two people hold any aggregate balance at all).
 //
-// Unflagged expenses and all settlements are netted per-member and rerouted
-// via the existing greedy minimum-transfer algorithm, unchanged from today.
+// Unflagged expenses, all settlements, and all exchanges are netted per-member
+// and rerouted via the existing greedy minimum-transfer algorithm, unchanged
+// from today. Exchanges can't be flagged `do_not_simplify` (they aren't tied
+// to a specific expense), so they always join this aggregate pool — never
+// the protected ledger — same treatment as settlements.
 //
 // When no expense is flagged, the protected set is empty and this reduces
 // to exactly `calculateMinimumTransfers(calculateBalances(doc))` — today's
@@ -312,14 +315,14 @@ export function calculateSimplifiedTransfers(doc: XenSplitDocument): Transfer[] 
     }
   }
 
-  // Settlements always feed the aggregate pool — never routed directly into
-  // the protected ledger. Settlements aren't tagged to a specific expense,
-  // so there's no reliable way to tell "this settlement paid off the
-  // flagged debt" from "this settlement paid off something unrelated that
-  // happened to involve the same two people" (a real settlement from before
-  // the expense was even flagged would otherwise get misattributed and
-  // silently corrupt the protected number). The "safe to net" rule below
-  // still lets a settlement zero out a protected debt in the unambiguous
+  // Settlements and exchanges always feed the aggregate pool — never routed
+  // directly into the protected ledger. Neither is tagged to a specific
+  // expense, so there's no reliable way to tell "this paid off the flagged
+  // debt" from "this paid off something unrelated that happened to involve
+  // the same two people" (a real settlement or exchange from before the
+  // expense was even flagged would otherwise get misattributed and silently
+  // corrupt the protected number). The "safe to net" rule below still lets
+  // a settlement or exchange zero out a protected debt in the unambiguous
   // case — when only these two people hold any aggregate balance at all —
   // without risking that misattribution.
   const aggregateSettlement: BalanceMap = {};
@@ -333,7 +336,16 @@ export function calculateSimplifiedTransfers(doc: XenSplitDocument): Transfer[] 
     addAggregateSettlement(s.to, s.currency, -s.amount);
   }
 
-  // Aggregate pool: unflagged expenses + all settlements.
+  // Exchange legs, applied the same way calculateBalances applies them:
+  // party_a owes party_b in currency_a, party_b owes party_a in currency_b.
+  for (const ex of doc.exchanges ?? []) {
+    addAggregateSettlement(ex.party_a, ex.currency_a, -ex.amount_a);
+    addAggregateSettlement(ex.party_a, ex.currency_b, ex.amount_b);
+    addAggregateSettlement(ex.party_b, ex.currency_a, ex.amount_a);
+    addAggregateSettlement(ex.party_b, ex.currency_b, -ex.amount_b);
+  }
+
+  // Aggregate pool: unflagged expenses + all settlements + all exchanges.
   const aggregateBalance: BalanceMap = {};
   const aggregateUsers = new Set<string>([...doc.members, ...Object.keys(unflaggedNet), ...Object.keys(aggregateSettlement)]);
   for (const userId of aggregateUsers) {
