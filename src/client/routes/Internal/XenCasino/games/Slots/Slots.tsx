@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Box, Button, Card, CardContent, Typography, TextField, Stack } from "@mui/material";
 import { useSlots } from "./useSlots";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
+import { formatOddsRatio } from "../../utils/odds";
 
 const SYMBOL_EMOJI: Record<string, string> = {
     cherry: "🍒",
@@ -20,6 +21,8 @@ export default function Slots() {
     const wager = Number(wagerInput);
     const canSpin = !isPending && Number.isFinite(wager) && wager > 0;
 
+    const oddsLabel = formatOddsRatio(odds?.paytable.reduce((sum, row) => sum + row.probability, 0));
+
     const oddsSections: OddsSection[] = odds
         ? [
               {
@@ -35,7 +38,12 @@ export default function Slots() {
         : [];
 
     return (
-        <GameWrapper title="Slots" howToPlay="Spin the reels for a shot at the growing jackpot. Match 3 symbols to win." oddsSections={oddsSections}>
+        <GameWrapper
+            title="Slots"
+            oddsLabel={oddsLabel}
+            howToPlay="Spin the reels for a shot at the growing jackpot. Match 3 symbols to win."
+            oddsSections={oddsSections}
+        >
             <Card variant="outlined">
                 <CardContent sx={{ textAlign: "center", py: 6 }}>
                     {odds && (

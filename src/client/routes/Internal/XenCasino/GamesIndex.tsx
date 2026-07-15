@@ -1,32 +1,169 @@
-import { Grid, Card, CardActionArea, CardContent, Typography } from "@mui/material";
+import { ComponentType } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Box, Card, CardActionArea, CardContent, Typography, Chip, Avatar, SvgIconProps } from "@mui/material";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import CasinoIcon from "@mui/icons-material/Casino";
+import ConfirmationNumberIcon from "@mui/icons-material/ConfirmationNumber";
+import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
+import AddIcon from "@mui/icons-material/Add";
 import { useNavigate } from "react-router-dom";
-import { CASINO_GAMES_REGISTRY } from "./gamesRegistry";
+import { apiClient } from "../../../config/api";
+import { ApiResponse } from "../../../types/api";
+import { CASINO_GAMES_REGISTRY, CASINO_GAME_TYPE_LABELS, CasinoGameType } from "./gamesRegistry";
+import { formatOddsRatio } from "./utils/odds";
+
+interface CrashOddsSummary {
+    referenceOdds: { multiplier: number; probability: number }[];
+}
+interface SlotsOddsSummary {
+    paytable: { probability: number }[];
+}
+interface ScratchOddsSummary {
+    probabilityAtLeastOneWin: number;
+}
+
+// Same GET requests (and query keys) each game's own page uses to fetch its odds, so the
+// cache is shared and warm either way - just enough of the response shape to compute one
+// headline ratio per card.
+const fetchCrashOdds = async (): Promise<CrashOddsSummary> =>
+    (await apiClient.get<ApiResponse<CrashOddsSummary>>("/api/casino/games/crash/odds")).data.data!;
+const fetchSlotsOdds = async (): Promise<SlotsOddsSummary> =>
+    (await apiClient.get<ApiResponse<SlotsOddsSummary>>("/api/casino/games/slots/odds")).data.data!;
+const fetchScratchOdds = async (): Promise<ScratchOddsSummary> =>
+    (await apiClient.get<ApiResponse<ScratchOddsSummary>>("/api/casino/games/scratch/odds")).data.data!;
+
+const TYPE_ICON: Record<CasinoGameType, ComponentType<SvgIconProps>> = {
+    crash: TrendingUpIcon,
+    slots: CasinoIcon,
+    scratch: ConfirmationNumberIcon,
+    practice: SportsEsportsIcon,
+};
+
+const TYPE_ORDER: CasinoGameType[] = ["crash", "slots", "scratch", "practice"];
+
+// Only the real game types get a "more coming" placeholder - Practice isn't meant to grow.
+const GHOST_COPY: Partial<Record<CasinoGameType, string>> = {
+    crash: "Faster/slower variants land here as they ship.",
+    slots: "New reel sets and jackpots land here as they ship.",
+    scratch: "New ticket variants land here as they ship.",
+};
+
+const ODDS_CHIP_SX = {
+    alignSelf: "flex-start",
+    color: "warning.main",
+    bgcolor: "rgba(255, 167, 38, 0.12)",
+    border: "1px solid rgba(255, 167, 38, 0.3)",
+    fontWeight: 700,
+} as const;
 
 export default function GamesIndex() {
     const navigate = useNavigate();
 
+    const { data: crashOdds } = useQuery({ queryKey: ["crashOdds"], queryFn: fetchCrashOdds, staleTime: 5 * 60 * 1000 });
+    const { data: slotsOdds } = useQuery({ queryKey: ["slotsOdds"], queryFn: fetchSlotsOdds, staleTime: 15 * 1000 });
+    const { data: scratchOdds } = useQuery({ queryKey: ["scratchOdds"], queryFn: fetchScratchOdds, staleTime: 5 * 60 * 1000 });
+
+    const oddsLabelByKey: Record<string, string | undefined> = {
+        crash: formatOddsRatio(
+            crashOdds?.referenceOdds.find((o) => o.multiplier === 2)?.probability ?? crashOdds?.referenceOdds[0]?.probability
+        ),
+        slots: formatOddsRatio(slotsOdds?.paytable.reduce((sum, row) => sum + row.probability, 0)),
+        scratch: formatOddsRatio(scratchOdds?.probabilityAtLeastOneWin),
+        demo: "Practice",
+    };
+
+    const groups = TYPE_ORDER.map((type) => ({
+        type,
+        games: CASINO_GAMES_REGISTRY.filter((g) => g.type === type),
+    })).filter((g) => g.games.length > 0);
+
     return (
-        <Grid container spacing={3}>
-            {CASINO_GAMES_REGISTRY.map((game) => (
-                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={game.key}>
-                    <Card sx={{
-                        height: "100%",
-                        transition: "transform 0.2s, box-shadow 0.2s",
-                        "&:hover": { transform: "translateY(-4px)", boxShadow: 6 },
-                    }}>
-                        <CardActionArea onClick={() => navigate(game.path)} sx={{ height: "100%" }}>
-                            <CardContent>
-                                <Typography variant="h6" component="h2" sx={{ fontWeight: 600 }}>
-                                    {game.label}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    {game.description}
-                                </Typography>
-                            </CardContent>
-                        </CardActionArea>
-                    </Card>
-                </Grid>
-            ))}
-        </Grid>
+        <Box>
+            {groups.map((group, i) => {
+                const Icon = TYPE_ICON[group.type];
+                const ghostCopy = GHOST_COPY[group.type];
+                return (
+                    <Box key={group.type} sx={{ mt: i === 0 ? 0 : 5 }}>
+                        <Box
+                            sx={{
+                                display: "flex",
+                                alignItems: "baseline",
+                                gap: 1.5,
+                                mb: 2,
+                                pb: 1,
+                                borderBottom: "1px solid",
+                                borderColor: "divider",
+                            }}
+                        >
+                            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                {CASINO_GAME_TYPE_LABELS[group.type]}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                {group.games.length} variant{group.games.length === 1 ? "" : "s"}
+                            </Typography>
+                        </Box>
+
+                        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 2.5 }}>
+                            {group.games.map((game) => {
+                                const oddsLabel = oddsLabelByKey[game.key];
+                                return (
+                                    <Card
+                                        key={game.key}
+                                        sx={{
+                                            height: "100%",
+                                            transition: "transform 0.2s, box-shadow 0.2s",
+                                            "&:hover": { transform: "translateY(-4px)", boxShadow: 6 },
+                                        }}
+                                    >
+                                        <CardActionArea onClick={() => navigate(game.path)} sx={{ height: "100%" }}>
+                                            <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", gap: 1.25 }}>
+                                                <Avatar sx={{ bgcolor: "action.hover", color: "primary.light", width: 40, height: 40 }}>
+                                                    <Icon fontSize="small" />
+                                                </Avatar>
+                                                <Typography variant="h6" component="h2" sx={{ fontWeight: 600, fontSize: "1.05rem" }}>
+                                                    {game.label}
+                                                </Typography>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    {game.description}
+                                                </Typography>
+                                                {oddsLabel && <Chip label={oddsLabel} size="small" sx={ODDS_CHIP_SX} />}
+                                            </CardContent>
+                                        </CardActionArea>
+                                    </Card>
+                                );
+                            })}
+
+                            {ghostCopy && (
+                                <Card
+                                    variant="outlined"
+                                    sx={{ height: "100%", borderStyle: "dashed", display: "flex", alignItems: "flex-start", justifyContent: "center" }}
+                                >
+                                    <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
+                                        <Avatar
+                                            sx={{
+                                                bgcolor: "transparent",
+                                                border: "1px dashed",
+                                                borderColor: "divider",
+                                                color: "text.disabled",
+                                                width: 40,
+                                                height: 40,
+                                            }}
+                                        >
+                                            <AddIcon fontSize="small" />
+                                        </Avatar>
+                                        <Typography variant="body1" sx={{ fontWeight: 500, color: "text.secondary" }}>
+                                            More {CASINO_GAME_TYPE_LABELS[group.type].toLowerCase()} soon
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {ghostCopy}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </Box>
+                    </Box>
+                );
+            })}
+        </Box>
     );
 }

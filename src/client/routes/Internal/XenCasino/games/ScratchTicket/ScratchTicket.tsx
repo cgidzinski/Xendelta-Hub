@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Box, Button, Card, CardContent, Typography, TextField, Stack, Divider } from "@mui/material";
 import { useScratchTicket } from "./useScratchTicket";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
+import { formatOddsRatio } from "../../utils/odds";
 
 // Cosmetic only - actual win/payout logic is entirely server-determined.
 const BONUS_SYMBOLS = new Set(["2x", "5x", "10x", "20x"]);
@@ -45,6 +46,8 @@ export default function ScratchTicket() {
         0
     );
 
+    const oddsLabel = formatOddsRatio(odds?.probabilityAtLeastOneWin);
+
     const oddsSections: OddsSection[] = odds
         ? [
               {
@@ -71,6 +74,7 @@ export default function ScratchTicket() {
     return (
         <GameWrapper
             title="Scratch Ticket"
+            oddsLabel={oddsLabel}
             howToPlay="10 lines. Match all 3 symbols to win — then scratch the prize box to see how much. Reveal a rare 2x/5x/10x/20x bonus symbol and that line auto-wins at that multiple."
             oddsSections={oddsSections}
         >

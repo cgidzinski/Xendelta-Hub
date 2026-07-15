@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button, Card, CardContent, Typography, TextField, Stack } from "@mui/material";
 import { useCrash } from "./useCrash";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
+import { formatOddsRatio } from "../../utils/odds";
 
 export default function Crash() {
     const [wagerInput, setWagerInput] = useState("5");
@@ -9,6 +10,8 @@ export default function Crash() {
 
     const wager = Number(wagerInput);
     const canStart = !isPlaying && !isStarting && Number.isFinite(wager) && wager > 0;
+
+    const oddsLabel = formatOddsRatio(odds?.referenceOdds.find((o) => o.multiplier === 2)?.probability ?? odds?.referenceOdds[0]?.probability);
 
     const oddsSections: OddsSection[] = odds
         ? [
@@ -26,6 +29,7 @@ export default function Crash() {
     return (
         <GameWrapper
             title="Crash"
+            oddsLabel={oddsLabel}
             howToPlay="Cash out before it crashes. The longer you wait, the higher the multiplier — and the risk."
             oddsSections={oddsSections}
         >

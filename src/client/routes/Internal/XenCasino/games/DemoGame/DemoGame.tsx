@@ -8,6 +8,7 @@ export default function DemoGame() {
     return (
         <GameWrapper
             title="Demo Game"
+            oddsLabel="Practice"
             howToPlay="A placeholder to prove cheddar can move both ways. Win always pays +5, Lose always takes -5 - not a real game, just a way to test the money-movement wiring."
             oddsSections={[]}
         >
