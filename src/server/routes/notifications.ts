@@ -99,6 +99,9 @@ module.exports = function (app: express.Application) {
       const notification = await Notification.findOneAndDelete({ _id: notificationId, userId });
 
       if (notification) {
+        const socketManager = SocketManager.getInstance();
+        socketManager.notifyNotificationUpdate(userId.toString(), notificationId, { deleted: true });
+
         return res.json({
           status: true,
           message: "Notification dismissed",
