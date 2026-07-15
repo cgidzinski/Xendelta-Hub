@@ -54,7 +54,8 @@ import GamesIndex from "./routes/Internal/XenCasino/GamesIndex";
 import Ledger from "./routes/Internal/XenCasino/Ledger";
 import EasySpin from "./routes/Internal/XenCasino/games/EasySpin/EasySpin";
 import Spinmania from "./routes/Internal/XenCasino/games/Spinmania/Spinmania";
-import ScratchTicket from "./routes/Internal/XenCasino/games/ScratchTicket/ScratchTicket";
+import EasyScratch from "./routes/Internal/XenCasino/games/EasyScratch/EasyScratch";
+import Scratchmania from "./routes/Internal/XenCasino/games/Scratchmania/Scratchmania";
 // Routes - Xensplit
 import XensplitGroupsList from "./routes/Internal/Xensplit/GroupsList";
 import XensplitGroupDetail from "./routes/Internal/Xensplit/GroupDetail";
@@ -173,7 +174,8 @@ const router = createBrowserRouter(
           <Route path="ledger" element={<Ledger />} />
           <Route path="games/easy-spin" element={<EasySpin />} />
           <Route path="games/spinmania" element={<Spinmania />} />
-          <Route path="games/scratch" element={<ScratchTicket />} />
+          <Route path="games/easy-scratch" element={<EasyScratch />} />
+          <Route path="games/scratchmania" element={<Scratchmania />} />
         </Route>
         <Route path="xensplit" index element={<Navigate to="groups" replace />} />
         <Route path="xensplit/groups" element={<XensplitGroupsList />} />

@@ -1,32 +1,26 @@
 /**
- * Scratch Ticket — 10 lines, each with TWO separate hidden zones: 3 symbol boxes and one
- * prize box. The symbols only decide whether a line wins at all (3-of-a-kind, any regular
- * symbol - which one is irrelevant to the payout); the prize box is a completely separate,
- * pre-assigned value, only paid out if the symbol zone matched. Same odds on every line;
- * only the hidden prize amount differs per line, shuffled into random positions per ticket.
+ * Scratch Ticket — generic 10-line matching engine shared by every ticket. A ticket is just
+ * an entry in `TICKETS`: its own fixed price, its own prize table, its own symbol/bonus
+ * weights. Adding a new ticket is one new `TICKETS` entry plus one new frontend page (see
+ * `ScratchCard.tsx` on the client) - nothing else in this file changes. Routes are
+ * parameterized by `:ticket` (`/api/casino/games/scratch/:ticket/odds`, `/play`) and 404 on
+ * an unknown slug.
  *
- * On top of that: a handful of rare "instant multiplier" symbols (2x/5x/10x/20x) can also
- * appear in any of the 3 boxes. Revealing even ONE of these auto-wins the line's prize at
- * that multiple - no need for the other 2 boxes to match anything. If more than one bonus
- * symbol somehow lands on the same line, the higher multiple applies.
+ * Each line independently draws 3 symbols from the ticket's weighted symbol pool. Any rare
+ * "instant multiplier" bonus symbol in any of the 3 boxes auto-wins that line at that
+ * multiple (highest, if more than one lands); otherwise a plain 3-of-a-kind wins the line's
+ * own pre-assigned prize. Odds/RTP are solved by exact enumeration over all 3-box draws
+ * (not eyeballed), computed once per ticket at module load - see each `TICKETS` entry's own
+ * comment for the math.
  *
- * Math (exact enumeration over all 3-box draws, not eyeballed):
- *   Regular 3-of-a-kind: ~4.00% per line (~1-in-25)
- *   Any bonus symbol:    ~0.024% per line (~1-in-4167) - across all 10 lines, ~1-in-417
- *   per ticket
- *   Expected payout factor per line (per 1 unit of that line's prize) = 0.04097
- *   Prize amounts [0.5, 0.5, 1, 1, 1, 1.5, 2, 3, 4, 5] sum to 19.5, so RTP ≈ 79.9% - still
- *   authentically worse than Slots (90%), consistent with real retail scratch tickets.
- *   P(at least one winning line of 10, any kind) ≈33.7% (~1-in-3, matching OLG's real
- *   "1-in-3 to 1-in-5" range).
- *
- * Same debit-at-start pattern as Slots: the whole ticket (every line's symbols and
- * prize) is drawn and the total payout is fully decided *before* any money moves, then
- * persisted into a XenCasinoRound alongside the wager debit's idempotency key. The wager
- * is debited first; only then is the (already decided) payout transferred. If the process
- * dies between those two transfers, the round survives in the database and a periodic
- * sweep replays both idempotent transfers to finish the job - a ticket's outcome is never
- * re-drawn, only ever completed.
+ * The ticket's price is server-owned: `/play` never reads a client-supplied wager, it always
+ * charges `ticket.price`. Same debit-at-start pattern used across every game: the whole
+ * ticket (every line's symbols and prize) is drawn and the total payout is fully decided
+ * *before* any money moves, then persisted into a XenCasinoRound alongside the wager debit's
+ * idempotency key. The wager is debited first; only then is the (already decided) payout
+ * transferred. If the process dies between those two transfers, the round survives in the
+ * database and a periodic per-ticket sweep replays both idempotent transfers to finish the
+ * job - a ticket's outcome is never re-drawn, only ever completed.
  */
 import express = require("express");
 import { authenticateToken } from "../../middleware/auth";
@@ -54,35 +48,85 @@ interface TicketConditions {
     totalPayout: number;
 }
 
-// Integer weights over a large total for fine-grained precision with crypto.randomInt.
-const TOTAL_WEIGHT = 10_000_000;
-const BONUS_WEIGHT = { "2x": 500, "5x": 200, "10x": 75, "20x": 25 }; // sums to 800
-const REGULAR_WEIGHT = (TOTAL_WEIGHT - 800) / 5; // 1,999,840 each
+interface TicketConfig {
+    slug: string;
+    price: number;
+    linePrizes: number[];
+    symbolPool: PoolEntry[];
+}
 
-const SYMBOL_POOL: PoolEntry[] = [
-    { symbol: "🍒", weight: REGULAR_WEIGHT },
-    { symbol: "🍋", weight: REGULAR_WEIGHT },
-    { symbol: "🔔", weight: REGULAR_WEIGHT },
-    { symbol: "💎", weight: REGULAR_WEIGHT },
-    { symbol: "⭐", weight: REGULAR_WEIGHT },
-    { symbol: "2x", weight: BONUS_WEIGHT["2x"], bonusMultiple: 2 },
-    { symbol: "5x", weight: BONUS_WEIGHT["5x"], bonusMultiple: 5 },
-    { symbol: "10x", weight: BONUS_WEIGHT["10x"], bonusMultiple: 10 },
-    { symbol: "20x", weight: BONUS_WEIGHT["20x"], bonusMultiple: 20 },
-];
-
-const LINE_PRIZES = [0.5, 0.5, 1, 1, 1, 1.5, 2, 3, 4, 5]; // sums to 19.5
-const LINE_COUNT = LINE_PRIZES.length;
-const GAME_KEY = "scratch_ticket";
+const TICKETS: Record<string, TicketConfig> = {
+    // Original ticket, unchanged: exact enumeration gives ~4.00% regular-match probability
+    // per line (~1-in-25), ~0.024% any-bonus per line (~1-in-4167), P(at least one winning
+    // line of 10) ~33.7% (~1-in-3, matching OLG's real "1-in-3 to 1-in-5" range), RTP ~79.9%
+    // - authentically worse than Slots (90%), consistent with real retail scratch tickets.
+    "easy-scratch": {
+        slug: "easy-scratch",
+        price: 500,
+        linePrizes: [0.5, 0.5, 1, 1, 1, 1.5, 2, 3, 4, 5], // sums to 19.5
+        symbolPool: (() => {
+            const totalWeight = 10_000_000;
+            const bonusWeight = { "2x": 500, "5x": 200, "10x": 75, "20x": 25 }; // sums to 800
+            const regularWeight = (totalWeight - 800) / 5; // 1,999,840 each
+            return [
+                { symbol: "🍒", weight: regularWeight },
+                { symbol: "🍋", weight: regularWeight },
+                { symbol: "🔔", weight: regularWeight },
+                { symbol: "💎", weight: regularWeight },
+                { symbol: "⭐", weight: regularWeight },
+                { symbol: "2x", weight: bonusWeight["2x"], bonusMultiple: 2 },
+                { symbol: "5x", weight: bonusWeight["5x"], bonusMultiple: 5 },
+                { symbol: "10x", weight: bonusWeight["10x"], bonusMultiple: 10 },
+                { symbol: "20x", weight: bonusWeight["20x"], bonusMultiple: 20 },
+            ];
+        })(),
+    },
+    // Higher-denomination, higher-volatility ticket: a 6th regular symbol makes a plain
+    // match rarer (~2.78% per line vs Easy Scratch's ~4.00%), bonus symbols are rarer still
+    // but pay far bigger (2x/5x/15x/50x vs 2x/5x/10x/20x), and the prize table is bigger and
+    // more top-heavy. Solved by exact enumeration (see scratchmania_odds.js in this repo's
+    // history) for a comparable ~80% RTP, just shaped for bigger, rarer swings:
+    //   matchProbability ~2.78%, any-bonus ~0.0131% per line
+    //   P(at least one winning line of 10) ~24.6% (~1-in-4, rarer than Easy Scratch's ~1-in-3)
+    //   RTP ~80.1%
+    "scratchmania": {
+        slug: "scratchmania",
+        price: 2000,
+        linePrizes: [0.5, 0.75, 1, 1, 1.5, 1.5, 2.5, 3.5, 6, 10], // sums to 28.25
+        symbolPool: (() => {
+            const totalWeight = 10_000_000;
+            const bonusWeight = { "2x": 300, "5x": 100, "15x": 30, "50x": 8 }; // sums to 438
+            const regularWeight = (totalWeight - 438) / 6;
+            return [
+                { symbol: "🍒", weight: regularWeight },
+                { symbol: "🍋", weight: regularWeight },
+                { symbol: "🔔", weight: regularWeight },
+                { symbol: "💎", weight: regularWeight },
+                { symbol: "⭐", weight: regularWeight },
+                { symbol: "👑", weight: regularWeight },
+                { symbol: "2x", weight: bonusWeight["2x"], bonusMultiple: 2 },
+                { symbol: "5x", weight: bonusWeight["5x"], bonusMultiple: 5 },
+                { symbol: "15x", weight: bonusWeight["15x"], bonusMultiple: 15 },
+                { symbol: "50x", weight: bonusWeight["50x"], bonusMultiple: 50 },
+            ];
+        })(),
+    },
+};
 
 // A round's outcome (and thus its payout) is fully decided before it's even persisted, so
 // "stale" only ever means "the process died mid-settlement" - the sweep below finishes it.
 const ROUND_TTL_MS = 30 * 1000;
-setInterval(() => {
-    recoverStaleRounds().catch((err: Error) => {
-        console.error("scratch: stale round recovery failed", err);
-    });
-}, 60 * 1000).unref();
+for (const slug of Object.keys(TICKETS)) {
+    setInterval(() => {
+        recoverStaleRounds(slug).catch((err: Error) => {
+            console.error(`scratch(${slug}): stale round recovery failed`, err);
+        });
+    }, 60 * 1000).unref();
+}
+
+function totalWeight(pool: PoolEntry[]): number {
+    return pool.reduce((sum, entry) => sum + entry.weight, 0);
+}
 
 function shuffled<T>(items: T[]): T[] {
     const arr = [...items];
@@ -93,21 +137,22 @@ function shuffled<T>(items: T[]): T[] {
     return arr;
 }
 
-function drawSymbol(): PoolEntry {
-    const roll = crypto.randomInt(0, TOTAL_WEIGHT);
+function drawSymbol(pool: PoolEntry[]): PoolEntry {
+    const total = totalWeight(pool);
+    const roll = crypto.randomInt(0, total);
     let cumulative = 0;
-    for (const entry of SYMBOL_POOL) {
+    for (const entry of pool) {
         cumulative += entry.weight;
         if (roll < cumulative) {
             return entry;
         }
     }
-    return SYMBOL_POOL[SYMBOL_POOL.length - 1];
+    return pool[pool.length - 1];
 }
 
-function generateTicket(): TicketLine[] {
-    return shuffled(LINE_PRIZES).map((linePrize) => {
-        const draws = Array.from({ length: 3 }, () => drawSymbol());
+function generateTicket(ticket: TicketConfig): TicketLine[] {
+    return shuffled(ticket.linePrizes).map((linePrize) => {
+        const draws = Array.from({ length: 3 }, () => drawSymbol(ticket.symbolPool));
         const symbols = draws.map((d) => d.symbol);
         const bonusMultiples = draws.filter((d) => d.bonusMultiple).map((d) => d.bonusMultiple as number);
 
@@ -120,16 +165,17 @@ function generateTicket(): TicketLine[] {
     });
 }
 
-// Exact enumeration over all 3-box combinations (9^3 = 729) - precise, not a Monte Carlo
-// estimate, computed once at module load. Mirrors generateTicket()'s win logic exactly.
-function computeExactOdds() {
+// Exact enumeration over all 3-box combinations - precise, not a Monte Carlo estimate,
+// computed once per ticket at module load. Mirrors generateTicket()'s win logic exactly.
+function computeExactOdds(ticket: TicketConfig) {
+    const total = totalWeight(ticket.symbolPool);
     let expectedFactorPerLine = 0;
     let probabilityRegularMatch = 0;
     let probabilityAnyBonus = 0;
-    for (const a of SYMBOL_POOL) {
-        for (const b of SYMBOL_POOL) {
-            for (const c of SYMBOL_POOL) {
-                const p = (a.weight / TOTAL_WEIGHT) * (b.weight / TOTAL_WEIGHT) * (c.weight / TOTAL_WEIGHT);
+    for (const a of ticket.symbolPool) {
+        for (const b of ticket.symbolPool) {
+            for (const c of ticket.symbolPool) {
+                const p = (a.weight / total) * (b.weight / total) * (c.weight / total);
                 const draws = [a, b, c];
                 const bonusMultiples = draws.filter((d) => d.bonusMultiple).map((d) => d.bonusMultiple as number);
                 if (bonusMultiples.length > 0) {
@@ -143,21 +189,27 @@ function computeExactOdds() {
         }
     }
     const lineWinProbability = probabilityRegularMatch + probabilityAnyBonus;
-    const prizePoolSum = LINE_PRIZES.reduce((sum, p) => sum + p, 0);
+    const prizePoolSum = ticket.linePrizes.reduce((sum, p) => sum + p, 0);
+    const lineCount = ticket.linePrizes.length;
     return {
         matchProbability: probabilityRegularMatch,
         bonusProbability: probabilityAnyBonus,
-        probabilityAtLeastOneWin: 1 - Math.pow(1 - lineWinProbability, LINE_COUNT),
-        probabilityAtLeastOneBonus: 1 - Math.pow(1 - probabilityAnyBonus, LINE_COUNT),
+        probabilityAtLeastOneWin: 1 - Math.pow(1 - lineWinProbability, lineCount),
+        probabilityAtLeastOneBonus: 1 - Math.pow(1 - probabilityAnyBonus, lineCount),
         rtp: expectedFactorPerLine * prizePoolSum,
     };
 }
 
-const ODDS = computeExactOdds();
+const ODDS: Record<string, ReturnType<typeof computeExactOdds>> = Object.fromEntries(
+    Object.entries(TICKETS).map(([slug, ticket]) => [slug, computeExactOdds(ticket)])
+);
 
-// Pays out the ticket's already-decided total (if any). Shared by the live play handler
-// and the recovery sweep so both settle a round exactly the same way.
-async function settleRound(round: { _id: string; playerAccountId: number; conditions: TicketConditions }): Promise<{ balance?: string }> {
+// Pays out the ticket's already-decided total (if any). Shared by the live play handler and
+// the recovery sweep so both settle a round exactly the same way.
+async function settleRound(
+    ticket: TicketConfig,
+    round: { _id: string; playerAccountId: number; conditions: TicketConditions }
+): Promise<{ balance?: string }> {
     const { totalPayout } = round.conditions;
     if (totalPayout <= 0) {
         return {};
@@ -167,14 +219,15 @@ async function settleRound(round: { _id: string; playerAccountId: number; condit
         fromAccountId: xenCasinoAccountId,
         toAccountId: round.playerAccountId,
         amount: totalPayout.toFixed(10),
-        key: `xendelta-scratch-payout-${round._id}`,
-        note: "scratch_win",
+        key: `xendelta-scratch-${ticket.slug}-payout-${round._id}`,
+        note: `${ticket.slug}_win`,
     });
     return { balance: result.toNewBalance };
 }
 
-async function recoverStaleRounds(): Promise<void> {
-    const stale = await XenCasinoRound.sweepStale(GAME_KEY, ROUND_TTL_MS);
+async function recoverStaleRounds(slug: string): Promise<void> {
+    const ticket = TICKETS[slug];
+    const stale = await XenCasinoRound.sweepStale(slug, ROUND_TTL_MS);
     for (const round of stale) {
         try {
             const xenCasinoAccountId = await getXenCasinoAccountId();
@@ -185,42 +238,51 @@ async function recoverStaleRounds(): Promise<void> {
                 toAccountId: xenCasinoAccountId,
                 amount: round.wager.toFixed(10),
                 key: round.debitKey,
-                note: "scratch_wager",
+                note: `${slug}_wager`,
             });
-            await settleRound(round);
+            await settleRound(ticket, round);
             await XenCasinoRound.resolve(round._id);
         } catch (err) {
-            console.error(`scratch: failed to recover stale round ${round._id}`, err);
+            console.error(`scratch(${slug}): failed to recover stale round ${round._id}`, err);
         }
     }
 }
 
 module.exports = function (app: express.Application) {
 
-    app.get("/api/casino/games/scratch/odds", authenticateToken, function (_req: express.Request, res: express.Response) {
+    app.get("/api/casino/games/scratch/:ticket/odds", authenticateToken, function (req: express.Request, res: express.Response) {
+        const ticket = TICKETS[req.params.ticket];
+        if (!ticket) {
+            return res.status(404).json({ status: false, message: "Unknown ticket" });
+        }
+        const odds = ODDS[ticket.slug];
         return res.json({
             status: true,
             data: {
-                lineCount: LINE_COUNT,
-                matchProbability: ODDS.matchProbability,
-                linePrizes: [...LINE_PRIZES].sort((a, b) => a - b),
-                bonusSymbols: SYMBOL_POOL.filter((s) => s.bonusMultiple).map((s) => ({
-                    symbol: s.symbol,
-                    multiple: s.bonusMultiple,
-                    probability: s.weight / TOTAL_WEIGHT,
-                })),
-                probabilityAtLeastOneBonus: ODDS.probabilityAtLeastOneBonus,
-                probabilityAtLeastOneWin: ODDS.probabilityAtLeastOneWin,
-                rtp: ODDS.rtp,
+                price: ticket.price,
+                lineCount: ticket.linePrizes.length,
+                matchProbability: odds.matchProbability,
+                linePrizes: [...ticket.linePrizes].sort((a, b) => a - b),
+                bonusSymbols: ticket.symbolPool
+                    .filter((s) => s.bonusMultiple)
+                    .map((s) => ({
+                        symbol: s.symbol,
+                        multiple: s.bonusMultiple,
+                        probability: s.weight / totalWeight(ticket.symbolPool),
+                    })),
+                probabilityAtLeastOneBonus: odds.probabilityAtLeastOneBonus,
+                probabilityAtLeastOneWin: odds.probabilityAtLeastOneWin,
+                rtp: odds.rtp,
             },
         });
     });
 
-    app.post("/api/casino/games/scratch/play", authenticateToken, async function (req: express.Request, res: express.Response) {
-        const { wager } = req.body as { wager?: number };
-        if (typeof wager !== "number" || !Number.isFinite(wager) || wager <= 0) {
-            return res.status(400).json({ status: false, message: "wager must be a positive number" });
+    app.post("/api/casino/games/scratch/:ticket/play", authenticateToken, async function (req: express.Request, res: express.Response) {
+        const ticket = TICKETS[req.params.ticket];
+        if (!ticket) {
+            return res.status(404).json({ status: false, message: "Unknown ticket" });
         }
+        const wager = ticket.price;
 
         const userId = String((req as AuthenticatedRequest).user!._id);
         const user = await User.findById(userId).exec();
@@ -237,15 +299,15 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "Insufficient balance" });
             }
 
-            const lines = generateTicket();
+            const lines = generateTicket(ticket);
             const totalMultiplier = lines.reduce((sum, line) => sum + (line.won ? line.prizeMultiplier : 0), 0);
             const totalPayout = wager * totalMultiplier;
 
-            const debitKey = `xendelta-scratch-start-${userId}-${crypto.randomUUID()}`;
+            const debitKey = `xendelta-scratch-${ticket.slug}-start-${userId}-${crypto.randomUUID()}`;
             let round;
             try {
                 round = await XenCasinoRound.startRound({
-                    game: GAME_KEY,
+                    game: ticket.slug,
                     userId,
                     wager,
                     debitKey,
@@ -254,7 +316,7 @@ module.exports = function (app: express.Application) {
                 });
             } catch (err) {
                 if ((err as { code?: number }).code === 11000) {
-                    return res.status(400).json({ status: false, message: "You already have an active Scratch Ticket round" });
+                    return res.status(400).json({ status: false, message: "You already have an active round on this ticket" });
                 }
                 throw err;
             }
@@ -267,7 +329,7 @@ module.exports = function (app: express.Application) {
                     toAccountId: xenCasinoAccountId,
                     amount: wager.toFixed(10),
                     key: debitKey,
-                    note: "scratch_wager",
+                    note: `${ticket.slug}_wager`,
                 });
                 debitBalance = result.fromNewBalance;
             } catch (err) {
@@ -280,7 +342,7 @@ module.exports = function (app: express.Application) {
 
             // Debit succeeded - the payout (if any) is what's left; an ambiguous failure
             // here also leaves the round in place rather than answering with a guess.
-            const settled = await settleRound(round);
+            const settled = await settleRound(ticket, round);
             await XenCasinoRound.resolve(round._id);
 
             return res.json({ status: true, data: { lines, totalPayout, balance: settled.balance ?? debitBalance } });

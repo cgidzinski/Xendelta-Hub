@@ -19,11 +19,11 @@ interface ScratchOddsSummary {
 
 // Same GET requests (and query keys) each game's own page uses to fetch its odds, so the
 // cache is shared and warm either way - just enough of the response shape to compute one
-// headline ratio per card. Slots is per-machine now - each machine has its own odds.
+// headline ratio per card. Both slots and scratch are per-variant now - each has its own odds.
 const fetchSlotsOdds = async (machine: string): Promise<SlotsOddsSummary> =>
     (await apiClient.get<ApiResponse<SlotsOddsSummary>>(`/api/casino/games/slots/${machine}/odds`)).data.data!;
-const fetchScratchOdds = async (): Promise<ScratchOddsSummary> =>
-    (await apiClient.get<ApiResponse<ScratchOddsSummary>>("/api/casino/games/scratch/odds")).data.data!;
+const fetchScratchOdds = async (ticket: string): Promise<ScratchOddsSummary> =>
+    (await apiClient.get<ApiResponse<ScratchOddsSummary>>(`/api/casino/games/scratch/${ticket}/odds`)).data.data!;
 
 const TYPE_ICON: Record<CasinoGameType, ComponentType<SvgIconProps>> = {
     slots: CasinoIcon,
@@ -58,12 +58,22 @@ export default function GamesIndex() {
         queryFn: () => fetchSlotsOdds("spinmania"),
         staleTime: 15 * 1000,
     });
-    const { data: scratchOdds } = useQuery({ queryKey: ["scratchOdds"], queryFn: fetchScratchOdds, staleTime: 5 * 60 * 1000 });
+    const { data: easyScratchOdds } = useQuery({
+        queryKey: ["scratchOdds", "easy-scratch"],
+        queryFn: () => fetchScratchOdds("easy-scratch"),
+        staleTime: 5 * 60 * 1000,
+    });
+    const { data: scratchmaniaOdds } = useQuery({
+        queryKey: ["scratchOdds", "scratchmania"],
+        queryFn: () => fetchScratchOdds("scratchmania"),
+        staleTime: 5 * 60 * 1000,
+    });
 
     const oddsLabelByKey: Record<string, string | undefined> = {
         "easy-spin": formatOddsRatio(easySpinOdds?.paytable.reduce((sum, row) => sum + row.probability, 0)),
         spinmania: formatOddsRatio(spinmaniaOdds?.paytable.reduce((sum, row) => sum + row.probability, 0)),
-        scratch: formatOddsRatio(scratchOdds?.probabilityAtLeastOneWin),
+        "easy-scratch": formatOddsRatio(easyScratchOdds?.probabilityAtLeastOneWin),
+        scratchmania: formatOddsRatio(scratchmaniaOdds?.probabilityAtLeastOneWin),
     };
 
     const groups = TYPE_ORDER.map((type) => ({

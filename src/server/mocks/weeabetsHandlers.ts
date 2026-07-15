@@ -17,7 +17,7 @@
 import { http, HttpResponse } from "msw";
 import { MOCK_WEEABETS_BASE_URL, XENCASINO_DISCORD_ID } from "../config/weeabets";
 
-const STARTING_BALANCE = 1000;
+const STARTING_BALANCE = 1000000;
 const XENCASINO_STARTING_BALANCE = 1_000_000;
 const XENCASINO_ACCOUNT_ID = 999_999;
 

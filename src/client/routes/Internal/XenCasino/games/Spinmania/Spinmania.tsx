@@ -1,6 +1,4 @@
-import { useState } from "react";
-import { Box, Button, Dialog, IconButton, useMediaQuery, useTheme } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
+import { Box } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSnackbar } from "notistack";
 import { apiClient } from "../../../../../config/api";
@@ -8,6 +6,7 @@ import { ApiResponse } from "../../../../../types/api";
 import { casinoBalanceKeys } from "../../../../../hooks/casino/useCasinoBalance";
 import { casinoLedgerKeys } from "../../../../../hooks/casino/useCasinoLedger";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
+import PlayLauncher from "../../components/PlayLauncher";
 import SlotMachine, { SlotSpinResult } from "../../components/SlotMachine";
 import { formatOddsRatio } from "../../utils/odds";
 import { formatCheddar } from "../../utils/currency";
@@ -45,11 +44,8 @@ const spinReels = async (wager: number): Promise<SlotSpinResult> =>
     (await apiClient.post<ApiResponse<SlotSpinResult>>(`/api/casino/games/slots/${MACHINE}/spin`, { wager })).data.data!;
 
 export default function Spinmania() {
-    const [playing, setPlaying] = useState(false);
     const queryClient = useQueryClient();
     const { enqueueSnackbar } = useSnackbar();
-    const theme = useTheme();
-    const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
     const { data: odds } = useQuery({ queryKey: ["slotsOdds", MACHINE], queryFn: fetchOdds, staleTime: 15 * 1000 });
 
@@ -96,8 +92,8 @@ export default function Spinmania() {
             howToPlay="A 2000-credit high-roller machine with its own separate jackpot. Bigger swings than Easy Spin - the jackpot is rarer, but the top payout is much bigger."
             oddsSections={oddsSections}
         >
-            <Box sx={{ position: "relative", maxWidth: 480, mx: "auto" }}>
-                <Box sx={{ opacity: 0.45, filter: "blur(1px)", pointerEvents: "none" }}>
+            <PlayLauncher
+                preview={
                     <Box
                         sx={{
                             display: "flex",
@@ -127,38 +123,18 @@ export default function Spinmania() {
                             </Box>
                         ))}
                     </Box>
-                </Box>
-                <Box sx={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Button
-                        variant="contained"
-                        color="warning"
-                        size="large"
-                        onClick={() => setPlaying(true)}
-                        sx={{ borderRadius: 999, px: 5, py: 1.5, fontWeight: 800 }}
-                    >
-                        Start Playing
-                    </Button>
-                </Box>
-            </Box>
-
-            <Dialog fullScreen={fullScreen} maxWidth="md" fullWidth={!fullScreen} open={playing} onClose={() => setPlaying(false)}>
-                <Box sx={{ display: "flex", justifyContent: "flex-end", p: 1 }}>
-                    <IconButton onClick={() => setPlaying(false)} aria-label="Close">
-                        <CloseIcon />
-                    </IconButton>
-                </Box>
-                <Box sx={{ px: 3, pb: 4 }}>
-                    <SlotMachine
-                        symbols={SYMBOL_EMOJI}
-                        betOptions={BET_OPTIONS}
-                        jackpotPool={odds?.jackpotPool}
-                        denominationLabel="2000"
-                        isPending={isPending}
-                        spin={spinAsync}
-                        onResult={handleResult}
-                    />
-                </Box>
-            </Dialog>
+                }
+            >
+                <SlotMachine
+                    symbols={SYMBOL_EMOJI}
+                    betOptions={BET_OPTIONS}
+                    jackpotPool={odds?.jackpotPool}
+                    denominationLabel="2000"
+                    isPending={isPending}
+                    spin={spinAsync}
+                    onResult={handleResult}
+                />
+            </PlayLauncher>
         </GameWrapper>
     );
 }

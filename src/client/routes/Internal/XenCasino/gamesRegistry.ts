@@ -33,10 +33,17 @@ export const CASINO_GAMES_REGISTRY: CasinoGameRegistryItem[] = [
     type: "slots",
   },
   {
-    key: "scratch",
-    label: "Scratch Ticket",
-    path: "/internal/xencasino/games/scratch",
-    description: "Buy a ticket, match three symbols to win up to 100x.",
+    key: "easy-scratch",
+    label: "Easy Scratch",
+    path: "/internal/xencasino/games/easy-scratch",
+    description: "500-cheddar ticket - scratch to match three symbols and win up to 100x.",
+    type: "scratch",
+  },
+  {
+    key: "scratchmania",
+    label: "Scratchmania",
+    path: "/internal/xencasino/games/scratchmania",
+    description: "2000-cheddar high-roller ticket with rarer wins and a much bigger top prize.",
     type: "scratch",
   },
 ];
