@@ -4,6 +4,7 @@ import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useCasinoBalance } from "../../../../hooks/casino/useCasinoBalance";
 import { useXenCasinoTitlebar } from "../context/XenCasinoTitlebarContext";
+import { formatCheddar } from "../utils/currency";
 
 const ODDS_CHIP_SX = {
     color: "warning.main",
@@ -11,16 +12,6 @@ const ODDS_CHIP_SX = {
     border: "1px solid rgba(255, 167, 38, 0.3)",
     fontWeight: 700,
 } as const;
-
-// Balances come back as a Numeric(28, 10) string (e.g. "950.0000000000") - cheddar is
-// shown as a whole number, no decimals.
-function formatCheddar(balance: string | null): string {
-    if (balance === null) {
-        return "—";
-    }
-    const amount = Number(balance);
-    return Number.isFinite(amount) ? amount.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—";
-}
 
 /**
  * The one navbar shared between the games list, the ledger, and every game page. Full

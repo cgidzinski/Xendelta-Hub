@@ -19,10 +19,17 @@ export const CASINO_GAME_TYPE_LABELS: Record<CasinoGameType, string> = {
 // Tickets" section instead of getting its own).
 export const CASINO_GAMES_REGISTRY: CasinoGameRegistryItem[] = [
   {
-    key: "slots",
-    label: "Slots",
-    path: "/internal/xencasino/games/slots",
-    description: "Spin the reels for a shot at the growing jackpot.",
+    key: "easy-spin",
+    label: "Easy Spin",
+    path: "/internal/xencasino/games/easy-spin",
+    description: "500-credit machine - spin the reels for a shot at the growing jackpot.",
+    type: "slots",
+  },
+  {
+    key: "spinmania",
+    label: "Spinmania",
+    path: "/internal/xencasino/games/spinmania",
+    description: "2000-credit high-roller machine with its own jackpot.",
     type: "slots",
   },
   {

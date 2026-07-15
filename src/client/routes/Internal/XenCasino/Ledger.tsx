@@ -2,6 +2,7 @@ import { Box, Table, TableBody, TableCell, TableHead, TableRow, Typography, Chip
 import { useCasinoLedger } from "../../../hooks/casino/useCasinoLedger";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
+import { formatCheddar } from "./utils/currency";
 
 export default function Ledger() {
     const { entries, isLoading, isError, error } = useCasinoLedger();
@@ -45,7 +46,7 @@ export default function Ledger() {
                                 <Chip label={entry.note} size="small" color={playerWon ? "success" : "error"} variant="outlined" />
                             </TableCell>
                             <TableCell align="right" sx={{ color: playerWon ? "success.main" : "error.main", fontWeight: 600 }}>
-                                {playerWon ? "+" : "-"}{entry.amount}
+                                {playerWon ? "+" : "-"}{formatCheddar(entry.amount)}
                             </TableCell>
                             <TableCell align="right">{new Date(entry.createdAt).toLocaleString()}</TableCell>
                         </TableRow>

@@ -4,11 +4,15 @@ var mongoose = require("mongoose");
 // not a model per game. Games call the statics below rather than touching
 // the schema directly.
 
-var JACKPOT_SEED = 100;
-
+// Jackpot pools are per-machine (a Map keyed by machine slug, e.g. "easy-spin" /
+// "spinmania") since each slot machine has its own separate progressive jackpot - a hit
+// on one machine only resets that machine's own pool, not every machine sharing this
+// singleton document. Mongoose Map fields support atomic dot-path updates
+// ($inc/$set on `slotsJackpotPools.<slug>`) exactly like a plain nested field, as long as
+// the slug itself contains no dots.
 var xenCasinoSchema = new mongoose.Schema({
   _id: { type: String, default: "singleton" },
-  slotsJackpotPool: { type: Number, default: JACKPOT_SEED },
+  slotsJackpotPools: { type: Map, of: Number, default: {} },
 });
 
 xenCasinoSchema.statics.getSingleton = async function () {
@@ -19,23 +23,29 @@ xenCasinoSchema.statics.getSingleton = async function () {
   return this.create({ _id: "singleton" });
 };
 
-// Atomic - safe under concurrent spins.
-xenCasinoSchema.statics.incrementJackpotPool = async function (amount) {
-  var doc = await this.findByIdAndUpdate(
-    "singleton",
-    { $inc: { slotsJackpotPool: amount } },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  ).exec();
-  return doc.slotsJackpotPool;
+xenCasinoSchema.statics.getJackpotPool = async function (machine, seed) {
+  var doc = await this.getSingleton();
+  var value = doc.slotsJackpotPools.get(machine);
+  return value === undefined ? seed : value;
 };
 
-xenCasinoSchema.statics.resetJackpotPool = async function () {
+// Atomic - safe under concurrent spins on the same machine.
+xenCasinoSchema.statics.incrementJackpotPool = async function (machine, amount) {
   var doc = await this.findByIdAndUpdate(
     "singleton",
-    { $set: { slotsJackpotPool: JACKPOT_SEED } },
+    { $inc: { ["slotsJackpotPools." + machine]: amount } },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   ).exec();
-  return doc.slotsJackpotPool;
+  return doc.slotsJackpotPools.get(machine);
+};
+
+xenCasinoSchema.statics.resetJackpotPool = async function (machine, seed) {
+  var doc = await this.findByIdAndUpdate(
+    "singleton",
+    { $set: { ["slotsJackpotPools." + machine]: seed } },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  ).exec();
+  return doc.slotsJackpotPools.get(machine);
 };
 
 var XenCasino = mongoose.model("XenCasino", xenCasinoSchema);
@@ -103,4 +113,4 @@ xenCasinoRoundSchema.statics.sweepStale = async function (game, ttlMs) {
 
 var XenCasinoRound = mongoose.model("XenCasinoRound", xenCasinoRoundSchema);
 
-module.exports = { XenCasino, XenCasinoRound, JACKPOT_SEED };
+module.exports = { XenCasino, XenCasinoRound };

@@ -3,6 +3,7 @@ import { Box, Button, Card, CardContent, Typography, TextField, Stack, Divider }
 import { useScratchTicket } from "./useScratchTicket";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import { formatOddsRatio } from "../../utils/odds";
+import { formatCheddar } from "../../utils/currency";
 
 // Cosmetic only - actual win/payout logic is entirely server-determined.
 const BONUS_SYMBOLS = new Set(["2x", "5x", "10x", "20x"]);
@@ -180,8 +181,8 @@ export default function ScratchTicket() {
                             <Divider sx={{ my: 3 }} />
                             <Typography variant="h6" sx={{ textAlign: "center" }} color={revealedTotal > 0 ? "success.main" : "text.secondary"}>
                                 {allScratched
-                                    ? `Ticket complete — won ${revealedTotal.toFixed(2)} cheddar`
-                                    : `Revealed so far: ${revealedTotal.toFixed(2)} cheddar`}
+                                    ? `Ticket complete — won ${formatCheddar(revealedTotal)} cheddar`
+                                    : `Revealed so far: ${formatCheddar(revealedTotal)} cheddar`}
                             </Typography>
                         </>
                     )}
