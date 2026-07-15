@@ -6,6 +6,17 @@
  * Routes are parameterized by `:machine` (`/api/casino/games/slots/:machine/odds`,
  * `/spin`) and 404 on an unknown slug.
  *
+ * Symbols are plain generic keys, not themed names - this file never says "cherry" or
+ * "seven". Two keys are reserved and carry special meaning, shared by every machine:
+ *   - `JACKPOT_ITEM`: a triple of this symbol is the jackpot, no matter which machine.
+ *   - `ITEM_A`: exactly two of this symbol (the third being anything else) is the minor
+ *     "two of a kind" partial-match bonus.
+ * Every other symbol (`ITEM_B`, `ITEM_C`, `ITEM_D`, ...) just needs a weight and, if it
+ * pays on a triple, an entry in `tripleMultipliers` - the frontend owns 100% of what each
+ * key actually looks like (its own `symbols: Record<string, string>` emoji/icon map passed
+ * into `SlotMachine`). The backend only ever deals in these generic keys and the odds math
+ * built from them.
+ *
  * Each machine's paytable + jackpot contribution rate is solved (not guessed) for its
  * documented `targetRtp` - see the comment on each `MACHINES` entry for the math.
  *
@@ -33,10 +44,15 @@ const { XenCasino, XenCasinoRound } = require("../../models/xenCasino");
 const crypto = require("crypto");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 
-type Symbol = "cherry" | "lemon" | "bell" | "diamond" | "seven";
+type SlotSymbol = string;
+
+// Reserved keys every machine's `symbolWeights` may use - see the file-level comment.
+const JACKPOT_ITEM = "JACKPOT_ITEM";
+const MINOR_ITEM = "ITEM_A";
+const WILDCARD = "OTHER"; // the "any other symbol" slot in the two-of-a-kind paytable row
 
 interface SpinConditions {
-    reels: [Symbol, Symbol, Symbol];
+    reels: [SlotSymbol, SlotSymbol, SlotSymbol];
     multiplier: number;
     jackpot: boolean;
     payout: number;
@@ -44,59 +60,64 @@ interface SpinConditions {
 
 interface MachineConfig {
     slug: string;
-    symbolWeights: { symbol: Symbol; weight: number }[];
-    tripleMultipliers: Partial<Record<Symbol, number>>;
-    twoCherryMultiplier: number;
+    symbolWeights: { symbol: SlotSymbol; weight: number }[];
+    tripleMultipliers: Record<string, number>;
+    twoOfAKindMultiplier: number; // payout for exactly two MINOR_ITEM + one other
     jackpotContributionRate: number;
     jackpotSeed: number;
     targetRtp: number;
 }
 
 const MACHINES: Record<string, MachineConfig> = {
-    // Original machine, unchanged: paytable solved for a blended ~90% RTP -
-    //   EV from the ordinary paytable alone = 86.51%
+    // Friendlier, low-stakes machine - jackpot weight raised 3->5 of 100 (odds
+    // 1-in-37,037 -> 1-in-8,000) by trimming ITEM_A 40->38, then the paytable re-solved
+    // for a higher blended RTP than before (this machine's improvement is funded by
+    // Spinmania's, below, absorbing a worse edge instead):
+    //   EV from the ordinary paytable alone = 91.72%
     //   + 3.5% of every wager routed into the jackpot pool (contribution rate ~= its own
     //     long-run RTP contribution, since every dollar contributed is eventually paid
-    //     back out to whoever hits the jackpot)
-    //   = 90.01% blended RTP, i.e. ~10% house edge. Jackpot ~1-in-37,037.
+    //     back out to whoever hits the jackpot, so a rarer/commoner jackpot doesn't move
+    //     this number by itself)
+    //   = 95.2% blended RTP, i.e. ~4.8% house edge. Jackpot 1-in-8,000, resets to 0 (no
+    //   floor) after a hit.
     "easy-spin": {
         slug: "easy-spin",
         symbolWeights: [
-            { symbol: "cherry", weight: 40 },
-            { symbol: "lemon", weight: 30 },
-            { symbol: "bell", weight: 18 },
-            { symbol: "diamond", weight: 9 },
-            { symbol: "seven", weight: 3 },
+            { symbol: MINOR_ITEM, weight: 38 },
+            { symbol: "ITEM_B", weight: 30 },
+            { symbol: "ITEM_C", weight: 18 },
+            { symbol: "ITEM_D", weight: 9 },
+            { symbol: JACKPOT_ITEM, weight: 5 },
         ],
-        tripleMultipliers: { diamond: 36, bell: 14, lemon: 6, cherry: 3 },
-        twoCherryMultiplier: 1.4,
+        tripleMultipliers: { ITEM_D: 40.5, ITEM_C: 16, ITEM_B: 7, [MINOR_ITEM]: 3.2 },
+        twoOfAKindMultiplier: 1.6,
         jackpotContributionRate: 0.035,
-        jackpotSeed: 100,
-        targetRtp: 0.9001,
+        jackpotSeed: 0,
+        targetRtp: 0.952,
     },
-    // Higher-denomination, higher-volatility machine: rarer jackpot symbol (1.5% vs Easy
-    // Spin's 3%), rarer/bigger top triple, smaller/flatter minor wins (two-cherry pays
-    // even money, not 1.4x). Solved analytically (fix the common terms - cherry triple,
-    // two-cherry - to clean numbers, then solve the rare triples for the exact remaining
-    // RTP target) and verified by exact 5^3 enumeration + a 20M-spin simulation before
-    // shipping:
-    //   Paytable RTP = 85.74% (exact)
-    //   + 4.26% jackpot contribution = 90.00% blended RTP, matching Easy Spin's house
-    //     edge exactly, just shaped for bigger, rarer swings. Jackpot ~1-in-296,296.
+    // Higher-denomination, higher-volatility machine, and now the one funding Easy Spin's
+    // friendlier odds: jackpot weight raised 15->30 of 1000 (odds 1-in-296,296 ->
+    // 1-in-37,037 - still meaningfully rarer than Easy Spin's new 1-in-8,000, preserving
+    // the "big risk, big reward" contrast) by trimming ITEM_A 380->365, then the paytable
+    // re-solved for a lower blended RTP:
+    //   Paytable RTP = 80.58%
+    //   + 4.26% jackpot contribution = 84.8% blended RTP, i.e. ~15.2% house edge - the
+    //     tradeoff for Easy Spin's improvement above. Jackpot 1-in-37,037, resets to 0 (no
+    //     floor) after a hit.
     "spinmania": {
         slug: "spinmania",
         symbolWeights: [
-            { symbol: "cherry", weight: 380 },
-            { symbol: "lemon", weight: 300 },
-            { symbol: "bell", weight: 190 },
-            { symbol: "diamond", weight: 115 },
-            { symbol: "seven", weight: 15 },
+            { symbol: MINOR_ITEM, weight: 365 },
+            { symbol: "ITEM_B", weight: 300 },
+            { symbol: "ITEM_C", weight: 190 },
+            { symbol: "ITEM_D", weight: 115 },
+            { symbol: JACKPOT_ITEM, weight: 30 },
         ],
-        tripleMultipliers: { diamond: 87, bell: 23, lemon: 7, cherry: 2 },
-        twoCherryMultiplier: 1,
+        tripleMultipliers: { ITEM_D: 80, ITEM_C: 21, ITEM_B: 7, [MINOR_ITEM]: 2 },
+        twoOfAKindMultiplier: 1,
         jackpotContributionRate: 0.0426,
-        jackpotSeed: 400,
-        targetRtp: 0.9,
+        jackpotSeed: 0,
+        targetRtp: 0.848,
     },
 };
 
@@ -115,11 +136,11 @@ function totalWeight(machine: MachineConfig): number {
     return machine.symbolWeights.reduce((sum, s) => sum + s.weight, 0);
 }
 
-function weightOf(machine: MachineConfig, symbol: Symbol): number {
-    return machine.symbolWeights.find((s) => s.symbol === symbol)!.weight;
+function weightOf(machine: MachineConfig, symbol: SlotSymbol): number {
+    return machine.symbolWeights.find((s) => s.symbol === symbol)?.weight ?? 0;
 }
 
-function drawSymbol(machine: MachineConfig): Symbol {
+function drawSymbol(machine: MachineConfig): SlotSymbol {
     const total = totalWeight(machine);
     const roll = crypto.randomInt(0, total);
     let cumulative = 0;
@@ -132,21 +153,21 @@ function drawSymbol(machine: MachineConfig): Symbol {
     return machine.symbolWeights[machine.symbolWeights.length - 1].symbol;
 }
 
-function spinReels(machine: MachineConfig): [Symbol, Symbol, Symbol] {
+function spinReels(machine: MachineConfig): [SlotSymbol, SlotSymbol, SlotSymbol] {
     return [drawSymbol(machine), drawSymbol(machine), drawSymbol(machine)];
 }
 
-function resultFor(machine: MachineConfig, reels: [Symbol, Symbol, Symbol]): { multiplier: number; jackpot: boolean } {
+function resultFor(machine: MachineConfig, reels: [SlotSymbol, SlotSymbol, SlotSymbol]): { multiplier: number; jackpot: boolean } {
     const [a, b, c] = reels;
-    if (a === "seven" && b === "seven" && c === "seven") {
+    if (a === JACKPOT_ITEM && b === JACKPOT_ITEM && c === JACKPOT_ITEM) {
         return { multiplier: 0, jackpot: true };
     }
     if (a === b && b === c) {
         return { multiplier: machine.tripleMultipliers[a] ?? 0, jackpot: false };
     }
-    const cherryCount = reels.filter((s) => s === "cherry").length;
-    if (cherryCount === 2) {
-        return { multiplier: machine.twoCherryMultiplier, jackpot: false };
+    const minorCount = reels.filter((s) => s === MINOR_ITEM).length;
+    if (minorCount === 2) {
+        return { multiplier: machine.twoOfAKindMultiplier, jackpot: false };
     }
     return { multiplier: 0, jackpot: false };
 }
@@ -215,16 +236,32 @@ module.exports = function (app: express.Application) {
 
         const jackpotPool = await XenCasino.getJackpotPool(machine.slug, machine.jackpotSeed);
         const total = totalWeight(machine);
-        const p = (symbol: Symbol) => weightOf(machine, symbol) / total;
-        const pCherry = p("cherry");
-        const paytable = [
-            { combo: "7-7-7 (jackpot)", probability: Math.pow(p("seven"), 3) },
-            { combo: "diamond-diamond-diamond", probability: Math.pow(p("diamond"), 3), multiplier: machine.tripleMultipliers.diamond },
-            { combo: "bell-bell-bell", probability: Math.pow(p("bell"), 3), multiplier: machine.tripleMultipliers.bell },
-            { combo: "lemon-lemon-lemon", probability: Math.pow(p("lemon"), 3), multiplier: machine.tripleMultipliers.lemon },
-            { combo: "cherry-cherry-cherry", probability: Math.pow(pCherry, 3), multiplier: machine.tripleMultipliers.cherry },
-            { combo: "cherry-cherry-*", probability: 3 * pCherry * pCherry * (1 - pCherry), multiplier: machine.twoCherryMultiplier },
+        const p = (symbol: SlotSymbol) => weightOf(machine, symbol) / total;
+
+        // Built entirely from this machine's own config - a machine can add/remove/rename
+        // symbols freely and the paytable just follows, no hardcoded per-symbol rows here.
+        // Rarest triple first (biggest prize at the top), matching how a paytable usually
+        // reads.
+        const nonJackpotSymbols = machine.symbolWeights.map((s) => s.symbol).filter((s) => s !== JACKPOT_ITEM);
+        const byRarity = [...nonJackpotSymbols].sort((a, b) => weightOf(machine, a) - weightOf(machine, b));
+
+        const paytable: { symbols: string[]; probability: number; multiplier?: number; jackpot?: boolean }[] = [
+            { symbols: [JACKPOT_ITEM, JACKPOT_ITEM, JACKPOT_ITEM], probability: Math.pow(p(JACKPOT_ITEM), 3), jackpot: true },
+            ...byRarity.map((symbol) => ({
+                symbols: [symbol, symbol, symbol],
+                probability: Math.pow(p(symbol), 3),
+                multiplier: machine.tripleMultipliers[symbol] ?? 0,
+            })),
         ];
+        if (nonJackpotSymbols.includes(MINOR_ITEM)) {
+            const pMinor = p(MINOR_ITEM);
+            paytable.push({
+                symbols: [MINOR_ITEM, MINOR_ITEM, WILDCARD],
+                probability: 3 * pMinor * pMinor * (1 - pMinor),
+                multiplier: machine.twoOfAKindMultiplier,
+            });
+        }
+
         return res.json({
             status: true,
             data: {

@@ -1,29 +1,20 @@
-import { Box, Tabs, Tab, Chip, IconButton, Typography } from "@mui/material";
-import CasinoIcon from "@mui/icons-material/Casino";
-import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import { Box, Tabs, Tab, Typography } from "@mui/material";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useCasinoBalance } from "../../../../hooks/casino/useCasinoBalance";
 import { useXenCasinoTitlebar } from "../context/XenCasinoTitlebarContext";
-import { formatCheddar } from "../utils/currency";
-
-const ODDS_CHIP_SX = {
-    color: "warning.main",
-    bgcolor: "rgba(255, 167, 38, 0.12)",
-    border: "1px solid rgba(255, 167, 38, 0.3)",
-    fontWeight: 700,
-} as const;
+import CheddarBalanceChip from "./CheddarBalanceChip";
 
 /**
  * The one navbar shared between the games list, the ledger, and every game page. Full
  * width, slim, sticky just below the app's own AppBar. On the games list / ledger it shows
- * the Games/Ledger tabs; on a game page (registered via XenCasinoTitlebarContext) those
- * tabs are replaced by the game's name, its odds, and the help button, left-aligned in the
- * same spot the tabs occupy. The cheddar balance stays on the right in both states.
+ * the Games/Ledger tabs, left-aligned; on a game page (registered via
+ * XenCasinoTitlebarContext) those tabs are replaced by the game's name, left-aligned with a
+ * responsive max-width + ellipsis so it can't overflow/get cut off on narrow screens. (The
+ * odds ratio itself lives under the Start Playing button, not here - see PlayLauncher.) The
+ * cheddar balance stays on the right in both states.
  */
 export default function XenCasinoNavbar() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { linked, balance } = useCasinoBalance();
     const { titlebar } = useXenCasinoTitlebar();
 
     const activeTab = location.pathname.startsWith("/internal/xencasino/ledger") ? 1 : 0;
@@ -36,58 +27,41 @@ export default function XenCasinoNavbar() {
                 zIndex: (theme) => theme.zIndex.appBar - 1,
                 display: "flex",
                 alignItems: "center",
-                gap: 2,
+                gap: 1,
                 height: 56,
                 px: { xs: 2, sm: 3, md: 5 },
                 bgcolor: "background.paper",
                 borderBottom: "1px solid",
                 borderColor: "divider",
+                overflow: "hidden",
             }}
         >
-            {!titlebar && (
+            {!titlebar ? (
                 <Tabs
                     value={activeTab}
                     onChange={(_, v) => navigate(v === 0 ? "/internal/xencasino" : "/internal/xencasino/ledger")}
-                    sx={{ minHeight: 56, "& .MuiTab-root": { minHeight: 56 } }}
+                    sx={{ minHeight: 56, flexShrink: 0, "& .MuiTab-root": { minHeight: 56 } }}
                 >
                     <Tab label="Games" />
                     <Tab label="Ledger" />
                 </Tabs>
-            )}
-
-            {titlebar && (
-                <Box
+            ) : (
+                <Typography
+                    variant="h6"
+                    noWrap
                     sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1.5,
-                        maxWidth: "60vw",
+                        fontWeight: 700,
+                        flexShrink: 1,
+                        minWidth: 0,
                     }}
                 >
-                    <Typography variant="h6" noWrap sx={{ fontWeight: 700 }}>
-                        {titlebar.title}
-                    </Typography>
-                    {titlebar.oddsLabel && <Chip label={titlebar.oddsLabel} size="small" sx={ODDS_CHIP_SX} />}
-                    <IconButton size="small" onClick={titlebar.onOpenHelp} aria-label="How to play">
-                        <HelpOutlineIcon fontSize="small" />
-                    </IconButton>
-                </Box>
+                    {titlebar.title}
+                </Typography>
             )}
 
-            <Box sx={{ flex: 1 }} />
+            <Box sx={{ flex: 1, minWidth: 0 }} />
 
-            <Chip
-                icon={<CasinoIcon />}
-                label={linked ? formatCheddar(balance) : "—"}
-                variant="outlined"
-                sx={{
-                    borderColor: "warning.main",
-                    color: "warning.main",
-                    fontWeight: 700,
-                    "& .MuiChip-label": { fontVariantNumeric: "tabular-nums" },
-                    "& .MuiChip-icon": { color: "#FFD700" },
-                }}
-            />
+            <CheddarBalanceChip />
         </Box>
     );
 }

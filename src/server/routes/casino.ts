@@ -2,9 +2,25 @@ import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 const { User } = require("../models/user");
-import { resolveUserAccount, getLedger, WeeabetsUnavailable } from "../utils/weeabetsClient";
+import { resolveUserAccount, getAccount, getLedger, WeeabetsUnavailable } from "../utils/weeabetsClient";
+import { XENCASINO_DISCORD_ID } from "../config/weeabets";
 
 module.exports = function (app: express.Application) {
+
+    // The house's own live balance - fetched fresh each call (not the cached account-id
+    // lookup `getXenCasinoAccountId` uses) since the balance itself changes constantly.
+    app.get("/api/casino/house-balance", authenticateToken, async function (_req: express.Request, res: express.Response) {
+        try {
+            const account = await getAccount(XENCASINO_DISCORD_ID);
+            if (!account) {
+                return res.status(503).json({ status: false, message: "XenCasino account not found on Weeabets" });
+            }
+            return res.json({ status: true, data: { balance: account.balance } });
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
 
     // Live Weeabets balance for the current user, or {linked:false} if Discord isn't linked.
     app.get("/api/casino/balance", authenticateToken, async function (req: express.Request, res: express.Response) {

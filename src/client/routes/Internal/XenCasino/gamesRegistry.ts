@@ -6,6 +6,7 @@ export interface CasinoGameRegistryItem {
   path: string;
   description: string;
   type: CasinoGameType;
+  price: number; // fixed ticket price, or a slot machine's base (1x) bet
 }
 
 export const CASINO_GAME_TYPE_LABELS: Record<CasinoGameType, string> = {
@@ -24,6 +25,7 @@ export const CASINO_GAMES_REGISTRY: CasinoGameRegistryItem[] = [
     path: "/internal/xencasino/games/easy-spin",
     description: "500-credit machine - spin the reels for a shot at the growing jackpot.",
     type: "slots",
+    price: 500,
   },
   {
     key: "spinmania",
@@ -31,19 +33,22 @@ export const CASINO_GAMES_REGISTRY: CasinoGameRegistryItem[] = [
     path: "/internal/xencasino/games/spinmania",
     description: "2000-credit high-roller machine with its own jackpot.",
     type: "slots",
+    price: 2000,
   },
   {
-    key: "easy-scratch",
-    label: "Easy Scratch",
-    path: "/internal/xencasino/games/easy-scratch",
-    description: "500-cheddar ticket - scratch to match three symbols and win up to 100x.",
+    key: "kitty-scratch",
+    label: "Kitty Scratch",
+    path: "/internal/xencasino/games/kitty-scratch",
+    description: "500-cheddar ticket - scratch the whole card to reveal your prize.",
     type: "scratch",
+    price: 500,
   },
   {
-    key: "scratchmania",
-    label: "Scratchmania",
-    path: "/internal/xencasino/games/scratchmania",
-    description: "2000-cheddar high-roller ticket with rarer wins and a much bigger top prize.",
+    key: "crossword",
+    label: "Crossword",
+    path: "/internal/xencasino/games/crossword",
+    description: "2000-cheddar high-roller ticket - spell hidden words with your letters for big prizes.",
     type: "scratch",
+    price: 2000,
   },
 ];

@@ -1,18 +1,25 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Box, Button, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { formatCheddar } from "../utils/currency";
 
-export interface ScratchPlayResult {
+// Every ticket has a wildly different result shape (Kitty Scratch: just a prize; Crossword: a
+// grid/letters/found-words) - ScratchCard only ever needs `totalPayout`/`balance` off of it,
+// everything else is opaque and handed straight to the ticket's own `renderDynamicLayer`.
+export interface ScratchPlayResultBase {
     totalPayout: number;
     balance: string;
 }
 
-export interface ScratchCardProps {
+export interface ScratchCardProps<TResult extends ScratchPlayResultBase> {
     price: number; // THIS ticket's fixed price
     isPending: boolean; // network request in flight
-    result: ScratchPlayResult | null; // the current ticket's already-decided outcome, or null before buying
+    result: TResult | null; // the current ticket's already-decided outcome, or null before buying
     checked: boolean; // whether Check Ticket has been pressed for the current ticket
     onBuy: () => void; // buy (or buy another) ticket
+    backgroundImageSrc: string; // static premade background, always drawn full-bleed underneath everything
+    renderDynamicLayer: (result: TResult) => ReactNode; // outcome-dependent content, on top of the background
+    topImageSrc: string; // the foil texture that gets scratched off
+    renderVerdictDetails?: (result: TResult) => ReactNode; // ticket-specific "what won" breakdown, shown in the verdict banner
 }
 
 const BRUSH_SIZE = 16; // small square dab, not a soft circle
@@ -30,32 +37,96 @@ interface Particle {
 }
 
 const PARTICLE_COLORS = ["#c9ced3", "#aab0b8", "#8f97a1", "#e4e7ea"];
+const WIN_PARTICLE_COLORS = ["#FFD700", "#FF6B6B", "#4ECDC4", "#95E1D3", "#F38181", "#AA96DA"];
 const GRAVITY = 0.00035; // px/ms^2
 
 /**
  * The reusable scratch-off engine every ticket page renders - the scratch-off analog of
- * SlotMachine. Purely presentational + interaction: knows nothing about a specific ticket's
- * odds or backend route - `result`/`checked` are controlled by the parent page (which also
- * places the Check Ticket action in the modal's header bar), this component just owns the
- * canvas/particle mechanics and fills whatever space it's given: the entire screen on
- * mobile, a same-aspect-ratio boxed card on desktop.
+ * SlotMachine. Every ticket is composed of exactly three layers, in this order, and this
+ * component owns the composition of all three:
+ *   1. `backgroundImageSrc` - static premade background, drawn full-bleed.
+ *   2. `renderDynamicLayer(result)` - the outcome-dependent content, ticket-owned.
+ *   3. `topImageSrc` - the foil, drawn onto a canvas and scratched off via drag.
+ * `result`/`checked` are controlled by the parent page (which also places the Check Ticket
+ * action in the modal's header bar) - this component just owns the layer composition plus
+ * the canvas/particle scratch mechanics, and fills whatever space it's given: the entire
+ * screen on mobile, a same-aspect-ratio boxed card on desktop.
  *
  * Scratching reveals the real, already-decided outcome underneath as you go - no mystery
  * layer. Check Ticket (in the header) instantly finishes the reveal and stamps a clear
  * win/lose verdict banner on top, the one definitive "did I win" moment.
  */
-export default function ScratchCard({ price, isPending, result, checked, onBuy }: ScratchCardProps) {
+export default function ScratchCard<TResult extends ScratchPlayResultBase>({
+    price,
+    isPending,
+    result,
+    checked,
+    onBuy,
+    backgroundImageSrc,
+    renderDynamicLayer,
+    topImageSrc,
+    renderVerdictDetails,
+}: ScratchCardProps<TResult>) {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
+    const frameRef = useRef<HTMLDivElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const foilCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const particleCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const foilImageRef = useRef<HTMLImageElement | null>(null);
+    const [foilImageLoaded, setFoilImageLoaded] = useState(false);
+    const [mobileCardSize, setMobileCardSize] = useState<{ width: number; height: number } | null>(null);
+    const [verdictDismissed, setVerdictDismissed] = useState(false);
     const drawingRef = useRef(false);
     const lastPointRef = useRef<{ x: number; y: number } | null>(null);
     const particlesRef = useRef<Particle[]>([]);
     const animationRef = useRef<number | null>(null);
     const lastFrameTimeRef = useRef<number | null>(null);
+
+    // Every visible child of the card is position:absolute, so the card box itself has no
+    // normal-flow content to derive a size from - pure CSS (aspect-ratio + max-width/height
+    // alone) collapses it to 0x0 on mobile. Measure the available space in JS instead and
+    // compute an exact contain-fit (never cropped, letterboxed on whichever axis has slack).
+    useEffect(() => {
+        if (!isMobile) {
+            return;
+        }
+        const el = frameRef.current;
+        if (!el) {
+            return;
+        }
+        const CARD_RATIO = 9 / 16; // width / height
+        const measure = () => {
+            const rect = el.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) {
+                return;
+            }
+            const width = Math.min(rect.width, rect.height * CARD_RATIO);
+            setMobileCardSize({ width, height: width / CARD_RATIO });
+        };
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [isMobile]);
+
+    // Preload the foil image as soon as the ticket's src is known (well before the browser
+    // paints a scratch canvas for a real result) so `paintFoil` almost never has to fall back
+    // to the solid-color placeholder below.
+    useEffect(() => {
+        setFoilImageLoaded(false);
+        foilImageRef.current = null;
+        const img = new Image();
+        img.onload = () => {
+            foilImageRef.current = img;
+            setFoilImageLoaded(true);
+        };
+        img.src = topImageSrc;
+        return () => {
+            img.onload = null;
+        };
+    }, [topImageSrc]);
 
     const paintFoil = (width: number, height: number) => {
         const canvas = foilCanvasRef.current;
@@ -65,27 +136,35 @@ export default function ScratchCard({ price, isPending, result, checked, onBuy }
         }
         ctx.globalCompositeOperation = "source-over";
         ctx.globalAlpha = 1;
-        const gradient = ctx.createLinearGradient(0, 0, width, height);
-        gradient.addColorStop(0, "#9aa3ad");
-        gradient.addColorStop(0.5, "#d7dbe0");
-        gradient.addColorStop(1, "#9aa3ad");
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
-
-        ctx.strokeStyle = "rgba(255,255,255,0.25)";
-        ctx.lineWidth = 6;
-        for (let x = -height; x < width; x += 18) {
-            ctx.beginPath();
-            ctx.moveTo(x, height);
-            ctx.lineTo(x + height, 0);
-            ctx.stroke();
+        ctx.clearRect(0, 0, width, height);
+        const img = foilImageRef.current;
+        if (img) {
+            // Same "object-fit: cover" behavior as the plain <img> shown before a ticket
+            // exists (crop to fill, preserve aspect ratio) rather than a naive stretch-to-fit
+            // - otherwise the foil visibly shifts/distorts the instant a ticket is bought and
+            // this canvas replaces that <img>. Preserves the image's own per-pixel alpha as-is
+            // (including any mixed opaque/semi-transparent tint areas) - destination-out
+            // erasing on top of that works with no special handling.
+            const imgRatio = img.naturalWidth / img.naturalHeight;
+            const boxRatio = width / height;
+            let sx = 0;
+            let sy = 0;
+            let sw = img.naturalWidth;
+            let sh = img.naturalHeight;
+            if (imgRatio > boxRatio) {
+                sw = img.naturalHeight * boxRatio;
+                sx = (img.naturalWidth - sw) / 2;
+            } else {
+                sh = img.naturalWidth / boxRatio;
+                sy = (img.naturalHeight - sh) / 2;
+            }
+            ctx.drawImage(img, sx, sy, sw, sh, 0, 0, width, height);
+        } else {
+            // Image hasn't finished loading yet (rare - preloaded on mount) - a safe fully
+            // opaque fallback so the real result never shows through unpainted.
+            ctx.fillStyle = "#9aa3ad";
+            ctx.fillRect(0, 0, width, height);
         }
-
-        ctx.fillStyle = "rgba(60,60,60,0.55)";
-        ctx.font = "700 20px sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("SCRATCH HERE", width / 2, height / 2);
     };
 
     // Measures the container and paints both canvases at that resolution, all
@@ -112,15 +191,16 @@ export default function ScratchCard({ price, isPending, result, checked, onBuy }
         }
     };
 
-    // A fresh ticket gets measured and fully foil-painted before the browser paints - no
-    // frame where the real result underneath is visible unpainted.
+    // The canvas is always mounted (idle, pending, or active) and always painted fully
+    // opaque here - before a ticket exists, before a new one arrives, and the instant a new
+    // buy *starts* (isPending flipping true), so a previous ticket's scratched-away holes are
+    // covered again immediately rather than staying visible while the new one is in flight.
+    // Runs in a layout effect so this lands before the browser ever paints a frame.
     useLayoutEffect(() => {
-        if (result) {
-            particlesRef.current = [];
-            resizeAndPaint();
-        }
+        particlesRef.current = [];
+        resizeAndPaint();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [result]);
+    }, [result, foilImageLoaded, isPending]);
 
     // Keep the foil correctly sized (and repainted) across real container resizes too.
     useEffect(() => {
@@ -128,15 +208,11 @@ export default function ScratchCard({ price, isPending, result, checked, onBuy }
         if (!el) {
             return;
         }
-        const observer = new ResizeObserver(() => {
-            if (result) {
-                resizeAndPaint();
-            }
-        });
+        const observer = new ResizeObserver(() => resizeAndPaint());
         observer.observe(el);
         return () => observer.disconnect();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [result]);
+    }, []);
 
     // Check Ticket (owned by the parent/header) finishes the reveal instantly.
     useEffect(() => {
@@ -146,6 +222,12 @@ export default function ScratchCard({ price, isPending, result, checked, onBuy }
             ctx?.clearRect(0, 0, canvas.width, canvas.height);
         }
     }, [checked]);
+
+    // A dismissed verdict banner should only stay dismissed for *this* ticket - a fresh one
+    // (new `result`) always gets to show its own banner again.
+    useEffect(() => {
+        setVerdictDismissed(false);
+    }, [result]);
 
     useEffect(
         () => () => {
@@ -208,6 +290,45 @@ export default function ScratchCard({ price, isPending, result, checked, onBuy }
         }
     };
 
+    // A bigger, brighter, falling burst - visually distinct from the small gray scratch-debris
+    // puffs above - reusing the exact same particle canvas/animation loop, just a different
+    // spawn shape (many more particles, wider color set, falling from just above the card
+    // instead of radiating from a scratch point).
+    const spawnWinCelebration = () => {
+        const canvas = particleCanvasRef.current;
+        if (!canvas) {
+            return;
+        }
+        const width = canvas.width || 1;
+        for (let i = 0; i < 50; i++) {
+            particlesRef.current.push({
+                x: Math.random() * width,
+                y: -10 - Math.random() * 40,
+                vx: (Math.random() - 0.5) * 0.25,
+                vy: Math.random() * 0.15,
+                size: 4 + Math.random() * 4,
+                life: 0,
+                maxLife: 1400 + Math.random() * 800,
+                color: WIN_PARTICLE_COLORS[Math.floor(Math.random() * WIN_PARTICLE_COLORS.length)],
+            });
+        }
+        if (animationRef.current === null) {
+            lastFrameTimeRef.current = null;
+            animationRef.current = requestAnimationFrame(tickParticles);
+        }
+    };
+
+    // Fires exactly once per newly-revealed win: `checked` transitioning to true (Check
+    // Ticket) with a present, non-pending, winning result. Buying a new ticket resets
+    // `checked` to false before this could re-fire, and dismissing/reopening the verdict
+    // banner doesn't touch `checked`/`result`/`isPending` at all, so neither re-triggers it.
+    useEffect(() => {
+        if (checked && result && !isPending && result.totalPayout > 0) {
+            spawnWinCelebration();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [checked, result, isPending]);
+
     // Square dabs stepped along the drag segment (not a soft round stroke) so the scratch
     // reads as chipped-off foil bits, not a blurred half-alpha smear.
     const erase = (x0: number, y0: number, x1: number, y1: number) => {
@@ -235,8 +356,10 @@ export default function ScratchCard({ price, isPending, result, checked, onBuy }
         return { x: e.clientX - rect.left, y: e.clientY - rect.top };
     };
 
+    const canScratch = Boolean(result) && !isPending && !checked;
+
     const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-        if (checked) {
+        if (!canScratch) {
             return;
         }
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -247,7 +370,7 @@ export default function ScratchCard({ price, isPending, result, checked, onBuy }
     };
 
     const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-        if (!drawingRef.current || checked) {
+        if (!drawingRef.current || !canScratch) {
             return;
         }
         const point = pointFromEvent(e);
@@ -270,9 +393,13 @@ export default function ScratchCard({ price, isPending, result, checked, onBuy }
                 minHeight: 0,
                 display: "flex",
                 justifyContent: "center",
-                alignItems: isMobile ? "stretch" : "center",
+                // Always centered (never stretched) - the card below is a fixed ratio on
+                // every device now, so any leftover space is a deliberate letterbox, not
+                // something to stretch away.
+                alignItems: "center",
                 p: isMobile ? 0 : 2,
             }}
+            ref={frameRef}
         >
             <Box
                 ref={containerRef}
@@ -280,12 +407,22 @@ export default function ScratchCard({ price, isPending, result, checked, onBuy }
                     position: "relative",
                     overflow: "hidden",
                     bgcolor: "background.paper",
+                    aspectRatio: MOBILE_ASPECT_RATIO,
+                    // Every visible child here is position:absolute, so this box has no
+                    // normal-flow content to size itself from - CSS aspect-ratio alone
+                    // (max-width/max-height with no explicit width/height) collapses it to
+                    // 0x0. On mobile, `mobileCardSize` is measured in JS (see the effect
+                    // above) and gives an exact contain-fit pixel size instead; until that
+                    // first measurement lands, fall back to a rule that at least renders
+                    // something (letterboxed via height, capped via maxWidth) rather than
+                    // nothing.
                     ...(isMobile
-                        ? { width: "100%", height: "100%" }
+                        ? mobileCardSize
+                            ? { width: `${mobileCardSize.width}px`, height: `${mobileCardSize.height}px` }
+                            : { height: "100%", width: "auto", maxWidth: "100%" }
                         : {
                               width: "100%",
                               maxWidth: 420,
-                              aspectRatio: MOBILE_ASPECT_RATIO,
                               maxHeight: "75vh",
                               borderRadius: 3,
                               border: "3px solid",
@@ -294,77 +431,68 @@ export default function ScratchCard({ price, isPending, result, checked, onBuy }
                           }),
                 }}
             >
-                {/* Generic bottom layer: the real outcome, visible wherever the foil comes off */}
+                {/* Layer 1: background - static premade image, always full-bleed underneath
+                    everything. Owned entirely by ScratchCard - a ticket never renders its own
+                    background. */}
                 <Box
-                    sx={{
+                    component="img"
+                    src={backgroundImageSrc}
+                    alt=""
+                    sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                />
+
+                {/* Layer 2: dynamic - the outcome-dependent content, 100% ticket-owned. Could
+                    be a handful of positioned glyphs or a fully generated grid - ScratchCard
+                    has zero knowledge of which. Nothing to generate before a ticket exists -
+                    and while a new ticket is being bought (including "Buy Another Ticket"),
+                    treat it the same as not having one yet, so the *previous* ticket's already-
+                    revealed content never flashes on screen while the new one is in flight. */}
+                {result && !isPending && <Box sx={{ position: "absolute", inset: 0 }}>{renderDynamicLayer(result)}</Box>}
+
+                {/* Layer 3: the scratch-off foil - always this same canvas, always painted
+                    from the same preloaded image (see `foilImageRef`/`paintFoil`), whether
+                    idle, pending, or active. One decode, one draw call, one DOM node - so
+                    there's no second lower-fidelity render of the same image to visibly pop
+                    in/out when a ticket is bought. Only *scratchability* changes (`canScratch`),
+                    never what's actually painted. */}
+                <canvas
+                    ref={foilCanvasRef}
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerLeave={handlePointerUp}
+                    style={{
                         position: "absolute",
                         inset: 0,
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 1,
-                        background: result
-                            ? result.totalPayout > 0
-                                ? "linear-gradient(180deg, rgba(46,125,50,0.25) 0%, rgba(0,0,0,0.1) 100%)"
-                                : "linear-gradient(180deg, rgba(97,97,97,0.25) 0%, rgba(0,0,0,0.1) 100%)"
-                            : "linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0.15) 100%)",
+                        width: "100%",
+                        height: "100%",
+                        touchAction: "none",
+                        cursor: canScratch ? "crosshair" : "default",
                     }}
-                >
-                    {result ? (
-                        <>
-                            <Typography variant="h2" sx={{ lineHeight: 1 }}>
-                                {result.totalPayout > 0 ? "🎉" : "😢"}
-                            </Typography>
-                            <Typography variant="h5" sx={{ fontWeight: 800 }} color={result.totalPayout > 0 ? "success.main" : "text.secondary"}>
-                                {result.totalPayout > 0 ? `+${formatCheddar(result.totalPayout)} cheddar` : "No win this time"}
-                            </Typography>
-                        </>
-                    ) : (
-                        <Typography variant="h3" sx={{ opacity: 0.3 }}>
-                            🎟️
-                        </Typography>
-                    )}
-                </Box>
+                />
 
-                {/* Generic top layer: the scratch-off foil, erased via drag. A layout effect
-                    measures the container and paints this synchronously before the browser
-                    ever paints, so the real outcome above is never visible unpainted - no CSS
-                    background trick needed (that would also block the reveal once cleared). */}
-                {result && (
-                    <canvas
-                        ref={foilCanvasRef}
-                        onPointerDown={handlePointerDown}
-                        onPointerMove={handlePointerMove}
-                        onPointerUp={handlePointerUp}
-                        onPointerLeave={handlePointerUp}
-                        style={{
-                            position: "absolute",
-                            inset: 0,
-                            width: "100%",
-                            height: "100%",
-                            touchAction: "none",
-                            cursor: checked ? "default" : "crosshair",
-                        }}
-                    />
-                )}
-
-                {/* Transient scratch debris - never intercepts pointer events */}
-                {result && (
+                {/* Transient scratch debris (and, on a win, the celebration burst) - never
+                    intercepts pointer events. zIndex above the verdict banner below so the
+                    win celebration isn't dimmed/smothered by the banner's translucent backing. */}
+                {result && !isPending && (
                     <canvas
                         ref={particleCanvasRef}
-                        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
+                        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 2 }}
                     />
                 )}
 
-                {/* The verdict: only appears once Check Ticket is pressed, on top of everything */}
-                {checked && result && (
+                {/* The verdict: only appears once Check Ticket is pressed, on top of everything -
+                    never while a new ticket is already being bought (see layer 2/3 above), and
+                    dismissible - closing it just reveals the fully scratched ticket underneath,
+                    it doesn't reset `checked` or anything else. */}
+                {checked && result && !isPending && !verdictDismissed && (
                     <Box
                         sx={{
                             position: "absolute",
                             inset: 0,
                             width: "100%",
                             height: "100%",
+                            zIndex: 1,
                             display: "flex",
                             flexDirection: "column",
                             alignItems: "center",
@@ -386,21 +514,28 @@ export default function ScratchCard({ price, isPending, result, checked, onBuy }
                         <Typography variant="h4" sx={{ fontWeight: 800, color: result.totalPayout > 0 ? "success.light" : "grey.300" }}>
                             {result.totalPayout > 0 ? `You won ${formatCheddar(result.totalPayout)} cheddar!` : "No win this time"}
                         </Typography>
+                        {renderVerdictDetails && (
+                            <Box sx={{ maxWidth: "100%", color: "grey.200" }}>{renderVerdictDetails(result)}</Box>
+                        )}
+                        {/* Purely closes this overlay back to the plain scratched ticket - buying
+                            another ticket is the header button's job now (see each ticket
+                            page's `headerActions`), not this banner's. */}
                         <Button
                             variant="contained"
                             color="error"
                             size="large"
-                            onClick={onBuy}
-                            disabled={isPending}
+                            onClick={() => setVerdictDismissed(true)}
                             sx={{ mt: 2, borderRadius: 999, px: 5, py: 1.1, fontWeight: 800 }}
                         >
-                            {isPending ? "Buying…" : `Buy Another Ticket (${formatCheddar(price)})`}
+                            Dismiss
                         </Button>
                     </Box>
                 )}
 
-                {/* Buy Ticket: the only control before a ticket exists */}
-                {!result && (
+                {/* Buy Ticket: shown before any ticket exists, and also while a new one (first
+                    or "another") is in flight, since the verdict banner that normally hosts
+                    the buy button is hidden during that window (see layer 2/3 above). */}
+                {(!result || isPending) && (
                     <Box sx={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <Button
                             variant="contained"

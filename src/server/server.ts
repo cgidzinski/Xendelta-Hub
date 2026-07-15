@@ -71,4 +71,5 @@ require("./routes/xenlink.ts")(app);
 require("./routes/xensplit")(app);
 require("./routes/casino.ts")(app);
 require("./routes/casinoGames/slots.ts")(app);
-require("./routes/casinoGames/scratchTicket.ts")(app);
+require("./routes/casinoGames/kittyScratch.ts")(app);
+require("./routes/casinoGames/crossword.ts")(app);

@@ -9,21 +9,32 @@ import { apiClient } from "../../../config/api";
 import { ApiResponse } from "../../../types/api";
 import { CASINO_GAMES_REGISTRY, CASINO_GAME_TYPE_LABELS, CasinoGameType } from "./gamesRegistry";
 import { formatOddsRatio } from "./utils/odds";
+import { formatCheddar } from "./utils/currency";
 
 interface SlotsOddsSummary {
     paytable: { probability: number }[];
+    rtp: number;
 }
-interface ScratchOddsSummary {
-    probabilityAtLeastOneWin: number;
+interface KittyScratchOddsSummary {
+    rowCount: number;
+    rowDistribution: { value: number; probability: number }[];
+    rtp: number;
+}
+interface CrosswordOddsSummary {
+    distribution: { payout: number; probability: number }[];
+    rtp: number;
 }
 
 // Same GET requests (and query keys) each game's own page uses to fetch its odds, so the
 // cache is shared and warm either way - just enough of the response shape to compute one
-// headline ratio per card. Both slots and scratch are per-variant now - each has its own odds.
+// headline ratio per card. Every game/ticket is its own file/route now, so each has its own
+// fetch here too - no shared "scratch" odds shape to genericize over.
 const fetchSlotsOdds = async (machine: string): Promise<SlotsOddsSummary> =>
     (await apiClient.get<ApiResponse<SlotsOddsSummary>>(`/api/casino/games/slots/${machine}/odds`)).data.data!;
-const fetchScratchOdds = async (ticket: string): Promise<ScratchOddsSummary> =>
-    (await apiClient.get<ApiResponse<ScratchOddsSummary>>(`/api/casino/games/scratch/${ticket}/odds`)).data.data!;
+const fetchKittyScratchOdds = async (): Promise<KittyScratchOddsSummary> =>
+    (await apiClient.get<ApiResponse<KittyScratchOddsSummary>>(`/api/casino/games/kitty-scratch/odds`)).data.data!;
+const fetchCrosswordOdds = async (): Promise<CrosswordOddsSummary> =>
+    (await apiClient.get<ApiResponse<CrosswordOddsSummary>>(`/api/casino/games/crossword/odds`)).data.data!;
 
 const TYPE_ICON: Record<CasinoGameType, ComponentType<SvgIconProps>> = {
     slots: CasinoIcon,
@@ -58,23 +69,37 @@ export default function GamesIndex() {
         queryFn: () => fetchSlotsOdds("spinmania"),
         staleTime: 15 * 1000,
     });
-    const { data: easyScratchOdds } = useQuery({
-        queryKey: ["scratchOdds", "easy-scratch"],
-        queryFn: () => fetchScratchOdds("easy-scratch"),
+    const { data: kittyScratchOdds } = useQuery({
+        queryKey: ["kittyScratchOdds"],
+        queryFn: fetchKittyScratchOdds,
         staleTime: 5 * 60 * 1000,
     });
-    const { data: scratchmaniaOdds } = useQuery({
-        queryKey: ["scratchOdds", "scratchmania"],
-        queryFn: () => fetchScratchOdds("scratchmania"),
+    const { data: crosswordOdds } = useQuery({
+        queryKey: ["crosswordOdds"],
+        queryFn: fetchCrosswordOdds,
         staleTime: 5 * 60 * 1000,
     });
 
     const oddsLabelByKey: Record<string, string | undefined> = {
         "easy-spin": formatOddsRatio(easySpinOdds?.paytable.reduce((sum, row) => sum + row.probability, 0)),
         spinmania: formatOddsRatio(spinmaniaOdds?.paytable.reduce((sum, row) => sum + row.probability, 0)),
-        "easy-scratch": formatOddsRatio(easyScratchOdds?.probabilityAtLeastOneWin),
-        scratchmania: formatOddsRatio(scratchmaniaOdds?.probabilityAtLeastOneWin),
+        "kitty-scratch": formatOddsRatio(
+            kittyScratchOdds
+                ? 1 - Math.pow(kittyScratchOdds.rowDistribution.find((d) => d.value === 0)?.probability ?? 0, kittyScratchOdds.rowCount)
+                : undefined
+        ),
+        crossword: formatOddsRatio(crosswordOdds?.distribution.filter((d) => d.payout > 0).reduce((sum, d) => sum + d.probability, 0)),
     };
+
+    const rtpByKey: Record<string, number | undefined> = {
+        "easy-spin": easySpinOdds?.rtp,
+        spinmania: spinmaniaOdds?.rtp,
+        "kitty-scratch": kittyScratchOdds?.rtp,
+        crossword: crosswordOdds?.rtp,
+    };
+    const rtpLabelByKey: Record<string, string | undefined> = Object.fromEntries(
+        Object.entries(rtpByKey).map(([key, rtp]) => [key, rtp !== undefined ? `RTP ${(rtp * 100).toFixed(1)}%` : undefined])
+    );
 
     const groups = TYPE_ORDER.map((type) => ({
         type,
@@ -110,6 +135,7 @@ export default function GamesIndex() {
                         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 2.5 }}>
                             {group.games.map((game) => {
                                 const oddsLabel = oddsLabelByKey[game.key];
+                                const rtpLabel = rtpLabelByKey[game.key];
                                 return (
                                     <Card
                                         key={game.key}
@@ -121,16 +147,24 @@ export default function GamesIndex() {
                                     >
                                         <CardActionArea onClick={() => navigate(game.path)} sx={{ height: "100%" }}>
                                             <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", gap: 1.25 }}>
-                                                <Avatar sx={{ bgcolor: "action.hover", color: "primary.light", width: 40, height: 40 }}>
-                                                    <Icon fontSize="small" />
-                                                </Avatar>
+                                                <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+                                                    <Avatar sx={{ bgcolor: "action.hover", color: "primary.light", width: 40, height: 40 }}>
+                                                        <Icon fontSize="small" />
+                                                    </Avatar>
+                                                    <Typography variant="body2" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                                                        {formatCheddar(game.price)}
+                                                    </Typography>
+                                                </Box>
                                                 <Typography variant="h6" component="h2" sx={{ fontWeight: 600, fontSize: "1.05rem" }}>
                                                     {game.label}
                                                 </Typography>
                                                 <Typography variant="body2" color="text.secondary">
                                                     {game.description}
                                                 </Typography>
-                                                {oddsLabel && <Chip label={oddsLabel} size="small" sx={ODDS_CHIP_SX} />}
+                                                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                                                    {oddsLabel && <Chip label={oddsLabel} size="small" sx={ODDS_CHIP_SX} />}
+                                                    {rtpLabel && <Chip label={rtpLabel} size="small" sx={ODDS_CHIP_SX} />}
+                                                </Box>
                                             </CardContent>
                                         </CardActionArea>
                                     </Card>
