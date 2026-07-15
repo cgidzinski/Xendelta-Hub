@@ -160,6 +160,10 @@ module.exports = function (app: any) {
       }
       await group.save();
       await group.populate("members", "username avatar");
+
+      const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
+
       res.json({ status: true, message: "Group updated", data: await serializeXenSplitGroup(group) });
     } catch (error) {
       console.error("Error updating group:", error);
@@ -190,6 +194,10 @@ module.exports = function (app: any) {
       group.image_url = url;
       await group.save();
       await group.populate("members", "username avatar");
+
+      const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
+
       res.json({ status: true, message: "Group image updated", data: await serializeXenSplitGroup(group) });
     } catch (error) {
       console.error("Error uploading group image:", error);
@@ -212,8 +220,13 @@ module.exports = function (app: any) {
         return res.status(403).json({ status: false, message: "Only the creator can delete the group" });
       }
 
+      const memberIds = group.members.map((m: any) => m.toString());
+
       await XenSplit.findByIdAndDelete(groupId);
       await ScheduledTask.deleteMany({ task_type: XENSPLIT_RECURRING_TASK_TYPE, "payload.group_id": groupId });
+
+      SocketManager.getInstance().notifyXenSplitGroupsUpdated(memberIds);
+
       res.json({ status: true, message: "Group deleted" });
     } catch (error) {
       console.error("Error deleting group:", error);
@@ -246,6 +259,9 @@ module.exports = function (app: any) {
       group.created_by = newOwnerId;
       await group.save();
       await group.populate("members", "username avatar");
+
+      const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
 
       await notify(newOwnerId, "Group Ownership", `You are now the owner of ${group.name}`, `/internal/xensplit/groups/${groupId}/overview`, "person");
 
@@ -286,6 +302,10 @@ module.exports = function (app: any) {
 
       await group.save();
       await group.populate("members", "username avatar");
+
+      const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
+      SocketManager.getInstance().notifyXenSplitGroupsUpdated(newMemberIds);
 
       for (const memberId of newMemberIds) {
         await notify(memberId, "Added to Group", `You've been added to ${group.name}`, `/internal/xensplit/groups/${groupId}/overview`, "person");
@@ -350,8 +370,13 @@ module.exports = function (app: any) {
       if (group.members.length === 0) {
         await XenSplit.findByIdAndDelete(groupId);
         await ScheduledTask.deleteMany({ task_type: XENSPLIT_RECURRING_TASK_TYPE, "payload.group_id": groupId });
+        SocketManager.getInstance().notifyXenSplitGroupsUpdated([targetUserId]);
         return res.json({ status: true, message: "Member removed and group deleted" });
       }
+
+      const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
+      SocketManager.getInstance().notifyXenSplitGroupsUpdated([targetUserId]);
 
       res.json({ status: true, message: "Member removed", data: await serializeXenSplitGroup(group) });
     } catch (error) {
@@ -790,6 +815,10 @@ module.exports = function (app: any) {
 
       await group.save();
       await group.populate("members", "username avatar");
+
+      const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
+
       res.json({ status: true, message: "Images uploaded", data: await serializeXenSplitGroup(group) });
     } catch (error) {
       console.error("Error uploading expense images:", error);
@@ -827,6 +856,9 @@ module.exports = function (app: any) {
       expense.images.splice(imageIndex, 1);
       await group.save();
       await group.populate("members", "username avatar");
+
+      const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
 
       res.json({ status: true, message: "Image deleted", data: await serializeXenSplitGroup(group) });
     } catch (error) {
@@ -992,6 +1024,9 @@ module.exports = function (app: any) {
       await group.save();
       await group.populate("members", "username avatar");
 
+      const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
+
       const fromMember = (group.members as any[]).find((m: any) => m._id.toString() === from);
       const fromName = fromMember?.username || "Someone";
       await notify(to, "Settlement Received", `${fromName} paid you ${amount} ${currency} in ${group.name}`, `/internal/xensplit/groups/${groupId}/overview`);
@@ -1032,6 +1067,9 @@ module.exports = function (app: any) {
       group.settlements.splice(settlementIndex, 1);
       await group.save();
       await group.populate("members", "username avatar");
+
+      const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
+      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
 
       res.json({ status: true, message: "Settlement undone", data: await serializeXenSplitGroup(group) });
     } catch (error) {

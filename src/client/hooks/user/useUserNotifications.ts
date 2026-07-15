@@ -134,6 +134,29 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
           }
           return oldProfileData;
         });
+      } else if (data.update?.deleted) {
+        // Single notification dismissed/deleted
+        queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
+          if (!oldData) return oldData;
+          return oldData.filter(notif => notif._id !== data.notificationId);
+        });
+
+        queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
+          if (!oldData) return oldData;
+          const hasUnreadNotifications = oldData.some(notification => notification.unread);
+
+          queryClient.setQueryData(userProfileKeys.profile(), (oldProfileData: any) => {
+            if (oldProfileData) {
+              return {
+                ...oldProfileData,
+                unread_notifications: hasUnreadNotifications,
+              };
+            }
+            return oldProfileData;
+          });
+
+          return oldData;
+        });
       } else {
         // Single notification updated
         queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {

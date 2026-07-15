@@ -3,6 +3,7 @@ const { User } = require("../../models/user");
 const Conversation = require("../../models/conversation");
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
+import { SocketManager } from "../../infrastructure/SocketManager";
 
 module.exports = function (app: express.Application) {
   // Admin broadcast messages functionality removed - system user no longer exists
@@ -20,6 +21,11 @@ module.exports = function (app: express.Application) {
 
     // Delete all conversations
     await Conversation.deleteMany({}).exec();
+
+    const socketManager = SocketManager.getInstance();
+    for (const conversation of allConversations) {
+      socketManager.notifyConversationUpdate(conversation._id.toString(), { deleted: true });
+    }
 
     // Remove conversation references from all users
     const allUsers = await User.find({}).exec();

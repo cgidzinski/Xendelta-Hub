@@ -160,6 +160,10 @@ interface CompletedProps {
 export default function SettlementDetailDialog({ settlement, onClose, getMember, userId, deleteSettlement, isDeletingSettlement }: CompletedProps) {
     const [confirmUndo, setConfirmUndo] = useState(false);
 
+    useEffect(() => {
+        setConfirmUndo(false);
+    }, [settlement?._id]);
+
     if (!settlement) return null;
 
     const s = settlement;
@@ -176,7 +180,7 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
 
     return (
         <>
-            <Dialog fullWidth maxWidth="xs" open={!!settlement} onClose={onClose} PaperProps={{ sx: { borderRadius: 3 } }}>
+            <Dialog fullWidth maxWidth="xs" open={!!settlement && !confirmUndo} onClose={onClose} PaperProps={{ sx: { borderRadius: 3 } }}>
                 <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
                     <IconButton onClick={onClose} size="small" sx={{ position: "absolute", top: 12, right: 12 }}>
                         <CloseIcon fontSize="small" />
@@ -217,7 +221,7 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
 
                 {canUndo && (
                     <DialogActions sx={{ px: 3, pb: 2.5, pt: 0 }}>
-                        <Button fullWidth variant="outlined" color="error" startIcon={<UndoIcon />} onClick={() => { onClose(); setConfirmUndo(true); }}>
+                        <Button fullWidth variant="outlined" color="error" startIcon={<UndoIcon />} onClick={() => setConfirmUndo(true)}>
                             Undo Settlement
                         </Button>
                     </DialogActions>
