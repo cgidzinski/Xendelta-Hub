@@ -43,10 +43,12 @@ async function main() {
   }
 
   console.log(`Removing do_not_simplify from expenses in ${matchedGroups} group(s)...`);
-  const result = await XenSplit.updateMany(matchQuery, { $unset: { "expenses.$[].do_not_simplify": "" } });
-  const matched = result.matchedCount ?? result.n;
-  const modified = result.modifiedCount ?? result.nModified;
-  console.log(`Done: matched ${matched} group(s), modified ${modified}.`);
+  // Goes through the raw collection, not XenSplit.updateMany(): the field is no
+  // longer declared on expenseSchema, and Mongoose's strict mode silently strips
+  // unknown paths from $unset (collapsing the update to a no-op it doesn't even
+  // send to the server) rather than erroring, so the schema-level API can't do this.
+  const result = await XenSplit.collection.updateMany(matchQuery, { $unset: { "expenses.$[].do_not_simplify": "" } });
+  console.log(`Done: matched ${result.matchedCount} group(s), modified ${result.modifiedCount}.`);
 
   const remaining = await XenSplit.countDocuments(matchQuery);
   if (remaining > 0) {
