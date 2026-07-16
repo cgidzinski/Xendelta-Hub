@@ -341,9 +341,15 @@ export default function CreateExchangeDialog({
                                 Live Rate
                             </Typography>
                             <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
-                                Online rate
+                                Synced daily
                             </Typography>
                         </Button>
+
+                        <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", lineHeight: 1.3 }}>
+                            This is an ideal online rate.
+                            <br />
+                            Make sure the other party agrees with it before proceeding.
+                        </Typography>
 
                         {(() => {
                             const base = resolveRateBase(currencyA, currencyB, preferred, defaultCurrency ?? "CAD") === "b" ? currencyB : currencyA;
