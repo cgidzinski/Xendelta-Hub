@@ -20,8 +20,6 @@ import {
     StepButton,
     Divider,
     useMediaQuery,
-    ToggleButtonGroup,
-    ToggleButton,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
@@ -81,8 +79,6 @@ export default function CreateExchangeDialog({
     // preferred is the user's chosen base currency for the rate display, stored per group.
     const [preferred, setPreferred] = useState(() => getPreferredRateCurrency(groupId, defaultCurrency ?? "CAD"));
     const [note, setNote] = useState("");
-    // Which rate source the user has selected on the Rate step — null until they pick one, so nothing autofills.
-    const [rateMode, setRateMode] = useState<"live" | "cash" | null>(null);
 
     // Derived: whether the rate field is currently displayed as inverted (base = currencyB).
     const inverted = resolveRateBase(currencyA, currencyB, preferred, defaultCurrency ?? "CAD") === "b";
@@ -102,7 +98,6 @@ export default function CreateExchangeDialog({
             setPreviewRight("");
             setPreferred(getPreferredRateCurrency(groupId, defaultCurrency ?? "CAD"));
             setNote("");
-            setRateMode(null);
         }
     }, [open, defaultCurrency, currentUser.id, groupId]);
 
@@ -328,42 +323,27 @@ export default function CreateExchangeDialog({
                             />
                         </Box>
 
-                        <ToggleButtonGroup
-                            exclusive
-                            value={rateMode}
-                            onChange={async (_, v) => {
-                                if (!v) return;
-                                setRateMode(v);
+                        <Button
+                            variant="outlined"
+                            sx={{ alignSelf: "center", px: 2, py: 0.75, flexDirection: "column", gap: 0.25, textTransform: "none" }}
+                            onClick={async () => {
                                 try {
                                     const { rate } = await fetchLiveRate({ from: currencyA, to: currencyB });
-                                    // Cash/Real Rate is 4% worse than the live rate — a typical cash-exchange spread.
-                                    const resolved = v === "live" ? rate : rate * 1.04;
-                                    setRateNum(resolved);
+                                    setRateNum(rate);
                                     setPreviewLeft("1");
-                                    setPreviewRight(parseFloat((inverted ? 1 / resolved : resolved).toFixed(6)).toString());
+                                    setPreviewRight(parseFloat((inverted ? 1 / rate : rate).toFixed(6)).toString());
                                 } catch (e) {
                                     enqueueSnackbar(e instanceof Error ? e.message : "Failed to fetch live rate", { variant: "error" });
                                 }
                             }}
-                            sx={{ alignSelf: "center" }}
                         >
-                            <ToggleButton value="live" sx={{ px: 2, py: 0.75, flexDirection: "column", gap: 0.25, textTransform: "none" }}>
-                                <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                                    Live Rate
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
-                                    Online rate
-                                </Typography>
-                            </ToggleButton>
-                            <ToggleButton value="cash" sx={{ px: 2, py: 0.75, flexDirection: "column", gap: 0.25, textTransform: "none" }}>
-                                <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                                    Cash Rate
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
-                                    -4%
-                                </Typography>
-                            </ToggleButton>
-                        </ToggleButtonGroup>
+                            <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+                                Live Rate
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
+                                Online rate
+                            </Typography>
+                        </Button>
 
                         {(() => {
                             const base = resolveRateBase(currencyA, currencyB, preferred, defaultCurrency ?? "CAD") === "b" ? currencyB : currencyA;
