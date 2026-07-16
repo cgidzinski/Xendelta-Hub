@@ -114,7 +114,7 @@ export default function CreateExchangeDialog({
             setPreviewLeft("1");
             setPreviewRight(parseFloat((inverted ? 1 / rateNum : rateNum).toFixed(6)).toString());
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [step]);
 
     const amountANum = parseFloat(amountA);
