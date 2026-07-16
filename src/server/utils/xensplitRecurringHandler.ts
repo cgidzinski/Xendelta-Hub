@@ -27,7 +27,6 @@ function buildOccurrence(source: any, dueDate: Date, genesisId: any) {
       percentage: s.percentage,
     })),
     on_hold: false,
-    do_not_simplify: source.do_not_simplify === true,
     recurring_id: genesisId,
     created_at: new Date(),
   };

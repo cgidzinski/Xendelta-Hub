@@ -42,7 +42,6 @@ import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
-import LinkOffIcon from "@mui/icons-material/LinkOff";
 import RepeatIcon from "@mui/icons-material/Repeat";
 import { useTitle } from "../../../hooks/useTitle";
 import { useXenSplit } from "../../../hooks/xensplit/useGroup";
@@ -135,7 +134,6 @@ export default function GroupDetail() {
   const [addDate, setAddDate] = useState<Date>(new Date());
   const [addCategory, setAddCategory] = useState("");
   const [addOnHold, setAddOnHold] = useState(false);
-  const [addDoNotSimplify, setAddDoNotSimplify] = useState(false);
   const [addIsRecurring, setAddIsRecurring] = useState(false);
   const [addFrequency, setAddFrequency] = useState<RecurringFrequency>("monthly");
   const [addRecurringEndDate, setAddRecurringEndDate] = useState<Date | null>(null);
@@ -153,7 +151,6 @@ export default function GroupDetail() {
   const [editDate, setEditDate] = useState<Date>(new Date());
   const [editCategory, setEditCategory] = useState("");
   const [editOnHold, setEditOnHold] = useState(false);
-  const [editDoNotSimplify, setEditDoNotSimplify] = useState(false);
   const [editIsRecurring, setEditIsRecurring] = useState(false);
   const [editFrequency, setEditFrequency] = useState<RecurringFrequency>("monthly");
   const [editRecurringEndDate, setEditRecurringEndDate] = useState<Date | null>(null);
@@ -319,7 +316,6 @@ export default function GroupDetail() {
           split_type: addSplitType,
           splits,
           on_hold: addOnHold,
-          do_not_simplify: addDoNotSimplify,
           recurring: addIsRecurring
             ? {
               frequency: addFrequency,
@@ -355,7 +351,6 @@ export default function GroupDetail() {
             setAddPercentSplits({});
             setAddCategory("");
             setAddOnHold(false);
-            setAddDoNotSimplify(false);
             setAddIsRecurring(false);
             setAddFrequency("monthly");
             setAddRecurringEndDate(null);
@@ -419,7 +414,6 @@ export default function GroupDetail() {
             split_type: editSplitType,
             splits,
             on_hold: editOnHold,
-            do_not_simplify: editDoNotSimplify,
             recurring,
           }
         },
@@ -481,7 +475,6 @@ export default function GroupDetail() {
     const series = findSeriesForGenesis(expense._id);
     // Hold isn't available while recurring — saving a genesis clears any stale hold
     setEditOnHold(series ? false : (expense.on_hold ?? false));
-    setEditDoNotSimplify(expense.do_not_simplify ?? false);
     setEditIsRecurring(!!series);
     setEditFrequency(series?.frequency ?? "monthly");
     setEditRecurringEndDate(series?.end_date ? new Date(series.end_date) : null);
@@ -503,7 +496,6 @@ export default function GroupDetail() {
     setAddPercentSplits({});
     setAddCategory("");
     setAddOnHold(false);
-    setAddDoNotSimplify(false);
     setAddIsRecurring(false);
     setAddFrequency("monthly");
     setAddRecurringEndDate(null);
@@ -810,8 +802,6 @@ export default function GroupDetail() {
             onHold={addOnHold}
             onOnHoldChange={setAddOnHold}
             holdMode="free"
-            doNotSimplify={addDoNotSimplify}
-            onDoNotSimplifyChange={setAddDoNotSimplify}
             recurringMode="create"
             isRecurring={addIsRecurring}
             onIsRecurringChange={setAddIsRecurring}
@@ -916,8 +906,6 @@ export default function GroupDetail() {
                 selectedExpense?.created_by === user.id ? "oneWay" :
                   "hidden"
             }
-            doNotSimplify={editDoNotSimplify}
-            onDoNotSimplifyChange={setEditDoNotSimplify}
             recurringMode={selectedExpenseSeries ? "editSeries" : "off"}
             isRecurring={editIsRecurring}
             onIsRecurringChange={setEditIsRecurring}
@@ -974,15 +962,6 @@ export default function GroupDetail() {
                       label="On Hold"
                       size="small"
                       color="warning"
-                      sx={{ fontWeight: 600, fontSize: "0.7rem" }}
-                    />
-                  )}
-                  {e.do_not_simplify && (
-                    <Chip
-                      icon={<LinkOffIcon sx={{ fontSize: "14px !important" }} />}
-                      label="Direct"
-                      size="small"
-                      color="info"
                       sx={{ fontWeight: 600, fontSize: "0.7rem" }}
                     />
                   )}

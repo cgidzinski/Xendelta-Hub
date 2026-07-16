@@ -28,7 +28,6 @@ var expenseSchema = new Schema({
   splits: [splitSchema],
   images: [expenseImageSchema],
   on_hold: { type: Boolean, default: false },
-  do_not_simplify: { type: Boolean, default: false },
   // Set on generated occurrences; points at the genesis expense _id of the series
   recurring_id: { type: Schema.Types.ObjectId },
   created_at: { type: Date, default: Date.now },

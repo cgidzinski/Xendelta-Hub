@@ -25,7 +25,7 @@ import {
   createExchangeSchema,
   xenSplitExchangeParamSchema,
 } from "../utils/validation";
-import { calculateBalances, calculateSimplifiedTransfers, resolveSplits } from "../utils/xenSplitUtils";
+import { calculateBalances, calculateMinimumTransfers, resolveSplits } from "../utils/xenSplitUtils";
 import { notify } from "../utils/notificationUtils";
 import { advanceDate, applyAdvance } from "../utils/scheduleUtils";
 import { dispatchTask } from "../infrastructure/TaskDispatcher";
@@ -390,7 +390,7 @@ module.exports = function (app: any) {
     try {
       const userId = (req.user as any)._id.toString();
       const { groupId } = req.params;
-      const { paid_by, amount, currency, title, notes, category, date, split_type, splits, on_hold, do_not_simplify, recurring } = req.body;
+      const { paid_by, amount, currency, title, notes, category, date, split_type, splits, on_hold, recurring } = req.body;
 
       const group = await XenSplit.findById(groupId);
       if (!group) {
@@ -428,7 +428,6 @@ module.exports = function (app: any) {
         splits: resolvedSplits,
         // Hold is per-expense state; a recurring series is stopped by pausing it
         on_hold: recurring ? false : on_hold === true,
-        do_not_simplify: do_not_simplify === true,
         created_at: new Date(),
       };
 
@@ -567,8 +566,6 @@ module.exports = function (app: any) {
         }
         expense.on_hold = updates.on_hold;
       }
-      if (updates.do_not_simplify !== undefined) expense.do_not_simplify = updates.do_not_simplify;
-
       // Recalculate splits if needed
       if (updates.split_type || updates.amount) {
         const amount = expense.amount;
@@ -915,7 +912,7 @@ module.exports = function (app: any) {
       const groupObj = group.toObject();
       const groupForCalc = { ...groupObj, members: populatedMembers.map((m: any) => m._id.toString()) };
       const balances = calculateBalances(groupForCalc);
-      const settlements = calculateSimplifiedTransfers(groupForCalc);
+      const settlements = calculateMinimumTransfers(balances);
 
       // Enrich with user details
       const enrichedBalances: any = {};

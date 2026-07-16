@@ -21,12 +21,11 @@ const DATE_FILTERS: { label: string; value: DateFilter }[] = [
     { label: "This Year", value: "thisYear" },
 ];
 
-type FilterKey = "recurring" | "held" | "notSimplified";
+type FilterKey = "recurring" | "held";
 
 const PROPERTY_FILTERS: { label: string; value: FilterKey }[] = [
     { label: "Recurring", value: "recurring" },
     { label: "Held", value: "held" },
-    { label: "Direct", value: "notSimplified" },
 ];
 
 export default function GroupExpenses() {
@@ -47,11 +46,10 @@ export default function GroupExpenses() {
     const isRecurringExpense = (e: { _id: string; recurring_id?: string }) =>
         !!e.recurring_id || seriesByGenesisId.has(e._id);
 
-    const matchesActiveFilters = (e: { _id: string; recurring_id?: string; on_hold?: boolean; do_not_simplify?: boolean }) =>
+    const matchesActiveFilters = (e: { _id: string; recurring_id?: string; on_hold?: boolean }) =>
         activeFilter === "recurring" ? isRecurringExpense(e) :
             activeFilter === "held" ? !!e.on_hold :
-                activeFilter === "notSimplified" ? !!e.do_not_simplify :
-                    true;
+                true;
 
     const finalExpenseIds = useMemo(
         () => computeFinalExpenseIds(group.expenses, group.recurring_expenses),
@@ -59,7 +57,7 @@ export default function GroupExpenses() {
     );
 
     const hasActiveFilters = activeFilter !== null;
-    // A pending (not-yet-started) series has no expense yet, so it can't match "held" or "direct"
+    // A pending (not-yet-started) series has no expense yet, so it can't match "held"
     const pendingSeriesEligible = activeFilter === null || activeFilter === "recurring";
 
     // Future-start series that haven't created their first expense yet — exempt from date filter.

@@ -1,6 +1,5 @@
 import { Box, Typography, Avatar, alpha, Chip } from "@mui/material";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
-import LinkOffIcon from "@mui/icons-material/LinkOff";
 import RepeatIcon from "@mui/icons-material/Repeat";
 import type { XenSplitExpense, XenSplitRecurringSeries } from "../../../../hooks/xensplit/types";
 import { formatCurrency } from "../../../../utils/currencyUtils";
@@ -114,16 +113,6 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate, re
                         label="On Hold"
                         size="small"
                         color="warning"
-                        variant="outlined"
-                        sx={{ height: 18, fontSize: "0.6rem", mt: 0.25, "& .MuiChip-label": { px: 0.75 } }}
-                    />
-                )}
-                {expense.do_not_simplify && (
-                    <Chip
-                        icon={<LinkOffIcon sx={{ fontSize: "14px !important" }} />}
-                        label="Direct"
-                        size="small"
-                        color="info"
                         variant="outlined"
                         sx={{ height: 18, fontSize: "0.6rem", mt: 0.25, "& .MuiChip-label": { px: 0.75 } }}
                     />
