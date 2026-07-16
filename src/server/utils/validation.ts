@@ -259,7 +259,6 @@ export const createExpenseSchema = z.object({
   split_type: z.enum(["equal", "exact", "percent"]),
   splits: z.array(splitSchema).optional(),
   on_hold: z.boolean().optional(),
-  do_not_simplify: z.boolean().optional(),
   recurring: z.object({
     frequency: recurringFrequencySchema,
     end_date: z.string().datetime().optional(),
@@ -281,7 +280,6 @@ export const updateExpenseSchema = z.object({
   split_type: z.enum(["equal", "exact", "percent"]).optional(),
   splits: z.array(splitSchema).optional(),
   on_hold: z.boolean().optional(),
-  do_not_simplify: z.boolean().optional(),
   recurring: z.object({
     end_date: z.string().datetime().nullable().optional(),
     max_occurrences: z.number().int().min(2).nullable().optional(),

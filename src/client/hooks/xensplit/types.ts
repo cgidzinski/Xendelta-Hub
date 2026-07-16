@@ -30,7 +30,6 @@ export interface XenSplitExpense {
   splits: XenSplitExpenseSplit[];
   images?: XenSplitExpenseImage[];
   on_hold?: boolean;
-  do_not_simplify?: boolean;
   recurring_id?: string;
   created_at: string;
   payer?: {
@@ -168,7 +167,6 @@ export interface CreateExpenseInput {
   split_type: "equal" | "exact" | "percent";
   splits?: XenSplitExpenseSplit[];
   on_hold?: boolean;
-  do_not_simplify?: boolean;
   recurring?: {
     frequency: RecurringFrequency;
     end_date?: string;
@@ -194,7 +192,6 @@ export interface UpdateExpenseInput {
   split_type?: "equal" | "exact" | "percent";
   splits?: XenSplitExpenseSplit[];
   on_hold?: boolean;
-  do_not_simplify?: boolean;
   recurring?: {
     end_date?: string | null;
     max_occurrences?: number | null;

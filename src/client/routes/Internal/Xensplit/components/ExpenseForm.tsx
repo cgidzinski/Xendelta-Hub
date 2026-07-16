@@ -21,7 +21,6 @@ import {
   Collapse,
 } from "@mui/material";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
-import LinkOffIcon from "@mui/icons-material/LinkOff";
 import RepeatIcon from "@mui/icons-material/Repeat";
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import CloseIcon from "@mui/icons-material/Close";
@@ -80,8 +79,6 @@ interface ExpenseFormProps {
   onOnHoldChange: (v: boolean) => void;
   /** "free" = group creator (bidirectional), "oneWay" = expense creator (hold→unhold only), "hidden" = no access */
   holdMode?: "free" | "oneWay" | "hidden";
-  doNotSimplify: boolean;
-  onDoNotSimplifyChange: (v: boolean) => void;
   /** "off" hides recurrence entirely; "create" offers the toggle; "editSeries" edits a genesis expense's schedule */
   recurringMode?: "off" | "create" | "editSeries";
   isRecurring?: boolean;
@@ -150,8 +147,6 @@ export default function ExpenseForm({
   onHold,
   onOnHoldChange,
   holdMode = "hidden",
-  doNotSimplify,
-  onDoNotSimplifyChange,
   recurringMode = "off",
   isRecurring = false,
   onIsRecurringChange,
@@ -623,40 +618,6 @@ export default function ExpenseForm({
               />
             </Box>
           )}
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              px: 2,
-              py: 1.25,
-              borderRadius: 2,
-              border: "1px solid",
-              borderColor: doNotSimplify ? "info.main" : "divider",
-              bgcolor: (t) => doNotSimplify ? alpha(t.palette.info.main, 0.08) : "transparent",
-              transition: "all 0.2s",
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-              <LinkOffIcon
-                sx={{ fontSize: 22, color: doNotSimplify ? "info.main" : "text.secondary" }}
-              />
-              <Box>
-                <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
-                  Direct
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3, display: "block" }}>
-                  Always show as a direct debt, not routed through others
-                </Typography>
-              </Box>
-            </Box>
-            <Switch
-              checked={doNotSimplify}
-              onChange={(e) => onDoNotSimplifyChange(e.target.checked)}
-              color="info"
-              size="small"
-            />
-          </Box>
           {recurringMode !== "off" && (
             <Box
               sx={{

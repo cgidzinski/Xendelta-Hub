@@ -68,7 +68,6 @@ const TABS: { label: string; sections: HelpSection[] }[] = [
                 heading: "Extra options",
                 items: [
                     "Put an expense \"on hold\" to record it without having it count toward balances yet.",
-                    "Mark an expense \"Direct\" to keep it out of debt simplification when settling up.",
                 ],
             },
             {
@@ -85,7 +84,7 @@ const TABS: { label: string; sections: HelpSection[] }[] = [
             {
                 heading: "Filtering and browsing",
                 items: [
-                    "Use the second filter row (Recurring / Held / Direct) to isolate expenses with one of those properties.",
+                    "Use the second filter row (Recurring / Held) to isolate expenses with one of those properties.",
                     "The list is grouped by day, similar to the Overview feed.",
                 ],
             },
