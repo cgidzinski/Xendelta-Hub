@@ -4,6 +4,7 @@ import { Box, Card, CardActionArea, CardContent, Typography, Chip, Avatar, SvgIc
 import CasinoIcon from "@mui/icons-material/Casino";
 import ConfirmationNumberIcon from "@mui/icons-material/ConfirmationNumber";
 import ScatterPlotIcon from "@mui/icons-material/ScatterPlot";
+import AdjustIcon from "@mui/icons-material/Adjust";
 import AddIcon from "@mui/icons-material/Add";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../../config/api";
@@ -31,6 +32,11 @@ interface PlinkoOddsSummary {
     paytable: { slot: number; probability: number }[];
     rtp: number;
 }
+interface PachinkoOddsSummary {
+    paytable: { type: string; probability: number }[];
+    jackpotPool: number;
+    rtp: number;
+}
 
 // Same GET requests (and query keys) each game's own page uses to fetch its odds, so the
 // cache is shared and warm either way - just enough of the response shape to compute one
@@ -44,14 +50,17 @@ const fetchCrosswordOdds = async (): Promise<CrosswordOddsSummary> =>
     (await apiClient.get<ApiResponse<CrosswordOddsSummary>>(`/api/casino/games/crossword/odds`)).data.data!;
 const fetchPlinkoOdds = async (): Promise<PlinkoOddsSummary> =>
     (await apiClient.get<ApiResponse<PlinkoOddsSummary>>(`/api/casino/games/plinko/odds`)).data.data!;
+const fetchPachinkoOdds = async (): Promise<PachinkoOddsSummary> =>
+    (await apiClient.get<ApiResponse<PachinkoOddsSummary>>(`/api/casino/games/pachinko/odds`)).data.data!;
 
 const TYPE_ICON: Record<CasinoGameType, ComponentType<SvgIconProps>> = {
     slots: CasinoIcon,
     scratch: ConfirmationNumberIcon,
     plinko: ScatterPlotIcon,
+    pachinko: AdjustIcon,
 };
 
-const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko"];
+const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko"];
 
 const GHOST_COPY: Partial<Record<CasinoGameType, string>> = {
     slots: "New reel sets and jackpots land here as they ship.",
@@ -106,6 +115,12 @@ export default function GamesIndex() {
         queryFn: fetchPlinkoOdds,
         staleTime: 5 * 60 * 1000,
     });
+    const { data: pachinkoOdds } = useQuery({
+        queryKey: ["pachinkoOdds"],
+        queryFn: fetchPachinkoOdds,
+        staleTime: 15 * 1000,
+        refetchInterval: 15 * 1000, // keeps the jackpot chip ticking up while browsing, same as the slot machines
+    });
 
     const oddsLabelByKey: Record<string, string | undefined> = {
         "easy-spin": formatOddsRatio(easySpinOdds?.paytable.reduce((sum, row) => sum + row.probability, 0)),
@@ -117,6 +132,7 @@ export default function GamesIndex() {
         ),
         crossword: formatOddsRatio(crosswordOdds?.distribution.filter((d) => d.payout > 0).reduce((sum, d) => sum + d.probability, 0)),
         plinko: formatOddsRatio(plinkoOdds?.paytable.find((row) => row.slot === 0)?.probability),
+        pachinko: formatOddsRatio(pachinkoOdds?.paytable.filter((row) => row.type !== "miss").reduce((sum, row) => sum + row.probability, 0)),
     };
 
     const rtpByKey: Record<string, number | undefined> = {
@@ -125,6 +141,7 @@ export default function GamesIndex() {
         "kitty-scratch": kittyScratchOdds?.rtp,
         crossword: crosswordOdds?.rtp,
         plinko: plinkoOdds?.rtp,
+        pachinko: pachinkoOdds?.rtp,
     };
     const rtpLabelByKey: Record<string, string | undefined> = Object.fromEntries(
         Object.entries(rtpByKey).map(([key, rtp]) => [key, rtp !== undefined ? `RTP ${(rtp * 100).toFixed(1)}%` : undefined])
@@ -133,6 +150,7 @@ export default function GamesIndex() {
     const jackpotLabelByKey: Record<string, string | undefined> = {
         "easy-spin": easySpinOdds ? `🎰 ${formatCheddar(easySpinOdds.jackpotPool)}` : undefined,
         spinmania: spinmaniaOdds ? `🎰 ${formatCheddar(spinmaniaOdds.jackpotPool)}` : undefined,
+        pachinko: pachinkoOdds ? `🎰 ${formatCheddar(pachinkoOdds.jackpotPool)}` : undefined,
     };
 
     const groups = TYPE_ORDER.map((type) => ({

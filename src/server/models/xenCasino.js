@@ -10,9 +10,13 @@ var mongoose = require("mongoose");
 // singleton document. Mongoose Map fields support atomic dot-path updates
 // ($inc/$set on `slotsJackpotPools.<slug>`) exactly like a plain nested field, as long as
 // the slug itself contains no dots.
+// pachinkoJackpotPool is a plain scalar, not folded into slotsJackpotPools - there's exactly
+// one Pachinko board, so a per-slug Map buys nothing here. If a second jackpot-using board
+// ever ships, that's the point to generalize both fields into one shared Map, not before.
 var xenCasinoSchema = new mongoose.Schema({
   _id: { type: String, default: "singleton" },
   slotsJackpotPools: { type: Map, of: Number, default: {} },
+  pachinkoJackpotPool: { type: Number, default: 0 },
 });
 
 xenCasinoSchema.statics.getSingleton = async function () {
@@ -48,6 +52,22 @@ xenCasinoSchema.statics.resetJackpotPool = async function (machine, seed) {
   return doc.slotsJackpotPools.get(machine);
 };
 
+xenCasinoSchema.statics.getPachinkoJackpotPool = async function () {
+  var doc = await this.getSingleton();
+  return doc.pachinkoJackpotPool;
+};
+
+// Atomic - safe under concurrent launches, same as incrementJackpotPool above.
+xenCasinoSchema.statics.incrementPachinkoJackpotPool = async function (amount) {
+  var doc = await this.findByIdAndUpdate("singleton", { $inc: { pachinkoJackpotPool: amount } }, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
+  return doc.pachinkoJackpotPool;
+};
+
+xenCasinoSchema.statics.resetPachinkoJackpotPool = async function (seed) {
+  var doc = await this.findByIdAndUpdate("singleton", { $set: { pachinkoJackpotPool: seed } }, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
+  return doc.pachinkoJackpotPool;
+};
+
 var XenCasino = mongoose.model("XenCasino", xenCasinoSchema);
 
 // Durable record of one in-flight round - every game creates one of these before any
@@ -80,6 +100,13 @@ var xenCasinoRoundSchema = new mongoose.Schema({
   playerAccountId: { type: Number, required: false },
   conditions: { type: mongoose.Schema.Types.Mixed, required: true }, // game-specific state, e.g. { reels, payout }
   startedAt: { type: Date, default: Date.now },
+  // Touched by applyConditionsUpdate below, on top of startedAt - single-request games
+  // (Slots, Scratch, Plinko) never call that, so this stays equal to startedAt for them and
+  // sweepStale's fallback keeps their existing behavior exactly as it was. A multi-step game
+  // like Pachinko, whose round can legitimately stay open for minutes across many player
+  // actions, needs staleness measured from the last thing that actually happened, not from
+  // when the batch was first bought.
+  lastActivityAt: { type: Date, default: Date.now },
 });
 xenCasinoRoundSchema.index({ game: 1, userId: 1 }, { unique: true }); // one active round per user per game
 
@@ -102,13 +129,35 @@ xenCasinoRoundSchema.statics.resolve = async function (roundId) {
   await this.findByIdAndDelete(roundId).exec();
 };
 
+// Atomically applies an update (e.g. $inc/$push on `conditions.*`) to a round, gated by an
+// optional guard filter (e.g. "only if conditions.ballsRemaining > 0"). Returns the updated
+// doc, or null if the guard no longer matches - a concurrent request already consumed
+// whatever this one wanted to claim. Callers treat null as "nothing changed, nothing to
+// reconcile," never as an ambiguous failure. Always stamps lastActivityAt, which is the
+// point of this static existing separately from a plain findOneAndUpdate. Generic on
+// purpose, not Pachinko-specific - the extension point the comment above XenCasinoRound
+// anticipates for the next multi-step game.
+xenCasinoRoundSchema.statics.applyConditionsUpdate = async function (roundId, guard, update) {
+  var filter = Object.assign({ _id: roundId }, guard || {});
+  var withTimestamp = Object.assign({}, update);
+  withTimestamp.$set = Object.assign({ lastActivityAt: new Date() }, update.$set || {});
+  return this.findOneAndUpdate(filter, withTimestamp, { new: true }).exec();
+};
+
 // Scoped to one game on purpose - "stale" means something different per game (a game that
 // forfeits on abandonment vs. one like Slots/Scratch where the outcome was already decided
 // and may still owe a payout, which only that game's own recovery logic knows how to
 // replay). A blanket cross-game sweep would risk deleting an unsettled winning round
-// before it's paid.
+// before it's paid. Keys off lastActivityAt (falls back to startedAt for any pre-existing
+// round docs from before that field existed) rather than startedAt, so a long-running
+// multi-step session isn't swept just for having been open a while - see the field comment
+// above.
 xenCasinoRoundSchema.statics.sweepStale = async function (game, ttlMs) {
-  return this.find({ game: game, startedAt: { $lt: new Date(Date.now() - ttlMs) } }).exec();
+  var cutoff = new Date(Date.now() - ttlMs);
+  return this.find({
+    game: game,
+    $or: [{ lastActivityAt: { $lt: cutoff } }, { lastActivityAt: { $exists: false }, startedAt: { $lt: cutoff } }],
+  }).exec();
 };
 
 var XenCasinoRound = mongoose.model("XenCasinoRound", xenCasinoRoundSchema);
