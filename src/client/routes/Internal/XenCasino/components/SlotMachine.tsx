@@ -34,6 +34,9 @@ const STOP_STAGGER_MS = [0, 200, 400]; // stagger between reels once Stop is cli
 // A short beat after the last reel settles before the win/lose verdict appears - it reads as
 // "hold on... did I win?" instead of slamming in the instant the reel lands.
 const POST_STOP_PAUSE_MS = 500;
+// Backstop for a round that never lands (hung request, dropped response, anything else
+// unforeseen) - forces the reels back to resting rather than leaving Stop stuck forever.
+const WATCHDOG_MS = 25000;
 const CONFETTI_COLORS = ["#FFD700", "#FF6B6B", "#4ECDC4", "#95E1D3", "#F38181", "#FCE38A"];
 
 interface ConfettiPiece {
@@ -131,6 +134,14 @@ export default function SlotMachine({
     const stopTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
     const pendingResultRef = useRef<SlotSpinResult | null>(null); // set once spin() resolves
     const stopRequestedRef = useRef(false); // set once the player clicks Stop
+    const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const clearWatchdog = () => {
+        if (watchdogRef.current !== null) {
+            clearTimeout(watchdogRef.current);
+            watchdogRef.current = null;
+        }
+    };
 
     const clearTimers = () => {
         if (rafRef.current !== null) {
@@ -140,6 +151,7 @@ export default function SlotMachine({
         lastFrameRef.current = null;
         stopTimeoutsRef.current.forEach(clearTimeout);
         stopTimeoutsRef.current = [];
+        clearWatchdog();
     };
 
     useEffect(() => () => clearTimers(), []);
@@ -219,6 +231,14 @@ export default function SlotMachine({
     // Stagger every reel's decelerating stop, then (once the last one lands, plus a short
     // pause) reveal the verdict and update the session tally.
     const beginStopSequence = (result: SlotSpinResult) => {
+        // A malformed payload must never be allowed to schedule a per-reel timeout that
+        // throws deep inside a setTimeout callback - that would orphan just that one reel's
+        // rAF loop (stoppingRef never flips) with nothing left to stop it. Bail out to the
+        // same recovery path a network error already uses instead.
+        if (!Array.isArray(result.reels) || result.reels.length !== reelCount || !Number.isFinite(result.payout)) {
+            resetReelsAfterError();
+            return;
+        }
         setStopping(true);
         for (let i = 0; i < reelCount; i++) {
             const delay = STOP_STAGGER_MS[i] ?? STOP_STAGGER_MS[STOP_STAGGER_MS.length - 1] + (i - (STOP_STAGGER_MS.length - 1)) * 200;
@@ -228,6 +248,7 @@ export default function SlotMachine({
         const lastStagger = STOP_STAGGER_MS[reelCount - 1] ?? STOP_STAGGER_MS[STOP_STAGGER_MS.length - 1];
         const totalWait = lastStagger + LANDING_DURATION_MS + POST_STOP_PAUSE_MS;
         const t = setTimeout(() => {
+            clearWatchdog();
             onResult?.(result);
             // Rounds/wagered already counted the instant Spin was clicked - only the payout
             // is new information at this point.
@@ -283,6 +304,10 @@ export default function SlotMachine({
         setStrips(Array.from({ length: reelCount }, () => Array.from({ length: TOTAL_COUNT }, () => randomSymbol())));
         lastFrameRef.current = null;
         rafRef.current = requestAnimationFrame(spinLoop);
+        watchdogRef.current = setTimeout(() => {
+            watchdogRef.current = null;
+            resetReelsAfterError();
+        }, WATCHDOG_MS);
 
         try {
             const result = await spin(wager);

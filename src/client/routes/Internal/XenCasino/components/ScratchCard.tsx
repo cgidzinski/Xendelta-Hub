@@ -22,7 +22,7 @@ export interface ScratchCardProps<TResult extends ScratchPlayResultBase> {
     renderVerdictDetails?: (result: TResult) => ReactNode; // ticket-specific "what won" breakdown, shown in the verdict banner
 }
 
-const BRUSH_SIZE = 16; // small square dab, not a soft circle
+const BRUSH_SIZE = 16; // diameter of the round scratch dab
 const MOBILE_ASPECT_RATIO = "9 / 16"; // desktop mirrors the phone-shaped fill mobile gets for free
 
 interface Particle {
@@ -329,8 +329,8 @@ export default function ScratchCard<TResult extends ScratchPlayResultBase>({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [checked, result, isPending]);
 
-    // Square dabs stepped along the drag segment (not a soft round stroke) so the scratch
-    // reads as chipped-off foil bits, not a blurred half-alpha smear.
+    // Round dabs stepped along the drag segment, full-alpha (not a soft blurred stroke) so
+    // the scratch still reads as chipped-off foil, just circular chips instead of square ones.
     const erase = (x0: number, y0: number, x1: number, y1: number) => {
         const ctx = foilCanvasRef.current?.getContext("2d");
         if (!ctx) {
@@ -344,7 +344,9 @@ export default function ScratchCard<TResult extends ScratchPlayResultBase>({
             const t = i / steps;
             const x = x0 + (x1 - x0) * t;
             const y = y0 + (y1 - y0) * t;
-            ctx.fillRect(Math.round(x - BRUSH_SIZE / 2), Math.round(y - BRUSH_SIZE / 2), BRUSH_SIZE, BRUSH_SIZE);
+            ctx.beginPath();
+            ctx.arc(x, y, BRUSH_SIZE / 2, 0, Math.PI * 2);
+            ctx.fill();
             if (i % 2 === 0) {
                 spawnParticles(x, y);
             }

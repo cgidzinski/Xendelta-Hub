@@ -12,7 +12,7 @@ import { formatOddsRatio } from "../../utils/odds";
 // Everything Spinmania needs lives in this one file - same shape as EasySpin.tsx, just
 // its own theme/denomination/machine slug. Proves SlotMachine's two axes of genericity:
 // different images (this reskins the same backend symbol keys with different emoji) and
-// different amounts (2000-credit denomination vs Easy Spin's 500).
+// different amounts (20,000-credit denomination vs Easy Spin's 5,000).
 const MACHINE = "spinmania";
 
 // Reskins the same generic backend symbol keys (JACKPOT_ITEM, ITEM_A, ITEM_B, ...) with a
@@ -25,7 +25,7 @@ const SYMBOL_EMOJI: Record<string, string> = {
     ITEM_D: "💠",
     JACKPOT_ITEM: "👑",
 };
-const BASE_BET = 2000;
+const BASE_BET = 20000;
 const BET_MULTIPLIERS = [1, 2, 5, 10, 50, 100];
 const BET_OPTIONS = BET_MULTIPLIERS.map((m) => m * BASE_BET);
 const BET_LABELS = BET_MULTIPLIERS.map((m) => `${m}x`);
@@ -94,7 +94,7 @@ export default function Spinmania() {
     return (
         <GameWrapper
             title="Spinmania"
-            howToPlay="A 2000-credit high-roller machine with its own separate jackpot. Spin the reels for a shot at the growing jackpot - match 3 symbols to win."
+            howToPlay="A 20,000-credit high-roller machine with its own separate jackpot. Spin the reels for a shot at the growing jackpot - match 3 symbols to win."
             oddsSections={oddsSections}
         >
             <PlayLauncher title="Spinmania" oddsLabel={oddsLabel} rtpLabel={rtpLabel}>
@@ -103,7 +103,7 @@ export default function Spinmania() {
                     betOptions={BET_OPTIONS}
                     betLabels={BET_LABELS}
                     jackpotPool={odds?.jackpotPool}
-                    denominationLabel="2000"
+                    denominationLabel="20000"
                     oddsLabel={oddsLabel}
                     rtpLabel={rtpLabel}
                     isPending={isPending}

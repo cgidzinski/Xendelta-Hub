@@ -24,7 +24,7 @@ const SYMBOL_EMOJI: Record<string, string> = {
     ITEM_D: "💎",
     JACKPOT_ITEM: "7️⃣",
 };
-const BASE_BET = 500;
+const BASE_BET = 5000;
 const BET_MULTIPLIERS = [1, 2, 5, 10, 50, 100];
 const BET_OPTIONS = BET_MULTIPLIERS.map((m) => m * BASE_BET);
 const BET_LABELS = BET_MULTIPLIERS.map((m) => `${m}x`);
@@ -93,7 +93,7 @@ export default function EasySpin() {
     return (
         <GameWrapper
             title="Easy Spin"
-            howToPlay="A 500-credit machine. Spin the reels for a shot at the growing jackpot - match 3 symbols to win."
+            howToPlay="A 5,000-credit machine. Spin the reels for a shot at the growing jackpot - match 3 symbols to win."
             oddsSections={oddsSections}
         >
             <PlayLauncher title="Easy Spin" oddsLabel={oddsLabel} rtpLabel={rtpLabel}>
@@ -102,7 +102,7 @@ export default function EasySpin() {
                     betOptions={BET_OPTIONS}
                     betLabels={BET_LABELS}
                     jackpotPool={odds?.jackpotPool}
-                    denominationLabel="500"
+                    denominationLabel="5000"
                     oddsLabel={oddsLabel}
                     rtpLabel={rtpLabel}
                     isPending={isPending}

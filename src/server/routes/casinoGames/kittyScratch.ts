@@ -20,22 +20,24 @@ import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailabl
 import { PrizeWeight, drawPrize, prizeDistribution } from "./prizeWeights";
 
 const SLUG = "kitty-scratch";
-const PRICE = 500;
+const PRICE = 5000;
 const ROW_COUNT = 4; // matches the background art's 4 boxes
 
 // Each of the 4 rows independently draws one of these amounts (0 = that row doesn't win).
-// Exact-average, not simulated: 80% chance a given row is a loss (so most tickets have 0-1
-// winning rows, not "several every time" - with 4 independent rows this gives P(0 win)~41%,
-// P(1 win)~41%, P(2+)~18%), a rare $28,000 top row (~1-in-5,180).
+// Nicer round-number tier values (x10 pass over the previous 140/280/700/1400/2800/7000/28000
+// table), weights re-solved (nonzero-tier ratios kept at 500:300:150:60:20:5:1, only the $0
+// weight re-solved) to land back on the same ~89.9% RTP this table was tuned to before.
+// Per-row loss probability ~=81.7% (was 80% pre-rebalance - close enough that multi-row-win
+// frequency stays in the same ballpark as the already-approved fix).
 const ROW_PRIZE_WEIGHTS: PrizeWeight[] = [
-    { value: 0, weight: 4144 },
-    { value: 140, weight: 500 },
-    { value: 280, weight: 300 },
-    { value: 700, weight: 150 },
-    { value: 1400, weight: 60 },
-    { value: 2800, weight: 20 },
-    { value: 7000, weight: 5 },
-    { value: 28000, weight: 1 },
+    { value: 0, weight: 4626 },
+    { value: 1500, weight: 500 },
+    { value: 3000, weight: 300 },
+    { value: 8000, weight: 150 },
+    { value: 15000, weight: 60 },
+    { value: 30000, weight: 20 },
+    { value: 80000, weight: 5 },
+    { value: 300000, weight: 1 },
 ];
 
 // Applied once to the sum of the 4 rows - independent of which rows won. Mostly 1x, a rare 5x.

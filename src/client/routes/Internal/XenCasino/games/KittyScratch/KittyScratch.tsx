@@ -216,7 +216,7 @@ export default function KittyScratch() {
     return (
         <GameWrapper
             title="Kitty Scratch"
-            howToPlay="A 500-cheddar ticket. Scratch to reveal 4 rows - each row independently wins its own shown amount (3 matching symbols means that row won), and a bonus multiplier at the bottom applies to your total. Check Ticket instantly finishes the reveal."
+            howToPlay="A 5,000-cheddar ticket. Scratch to reveal 4 rows - each row independently wins its own shown amount (3 matching symbols means that row won), and a bonus multiplier at the bottom applies to your total. Check Ticket instantly finishes the reveal."
             oddsSections={oddsSections}
         >
             <PlayLauncher
@@ -246,7 +246,7 @@ export default function KittyScratch() {
                 }
             >
                 <ScratchCard<KittyScratchResult>
-                    price={odds?.price ?? 500}
+                    price={odds?.price ?? 5000}
                     isPending={isPending}
                     result={result}
                     checked={checked}

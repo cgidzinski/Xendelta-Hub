@@ -23,7 +23,7 @@ import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailabl
 import { drawPrizeWeight, prizeRtp } from "./prizeWeights";
 
 const SLUG = "crossword";
-const PRICE = 2000;
+const PRICE = 20000;
 // Padding target for "your letters" - typical found-counts (2-4 words) comfortably fit; the
 // background art has 30 baked-in circle positions, so this leaves headroom. In the rare case
 // a big found-count (7-8 words) needs more letters than this, the bag simply grows past it
@@ -50,17 +50,21 @@ const WORD_BANK: Record<number, string[]> = {
 };
 
 // Prize is by count of words found (0-8), not which ones. 0 and 1 words found both pay $0
-// (merged into one "count: 0" tier). Solved (see rebalance notes) for RTP ~81%, any-win
-// ~35%, jackpot (all 8 found) ~1-in-4,762.
+// (merged into one "count: 0" tier). Weights for counts 2-8 are a monotonically decreasing
+// geometric ladder (each tier ~2.35x rarer than the one below it) - a prior rebalance had
+// count:3's weight (10000) exceeding count:2's (4000), making 3 words *more* likely than 2,
+// which should never happen. Re-solved keeping weight(0)=43313 and the overall any-win
+// probability (~35%) exactly as before, just fixing the ordering: RTP ~81.1%, jackpot (all 8
+// found) ~1-in-823.
 const TIERS: { count: number; value: number; weight: number }[] = [
     { count: 0, value: 0, weight: 43313 },
-    { count: 2, value: 500, weight: 4000 },
-    { count: 3, value: 1500, weight: 10000 },
-    { count: 4, value: 4000, weight: 6000 },
-    { count: 5, value: 10000, weight: 2500 },
-    { count: 6, value: 30000, weight: 700 },
-    { count: 7, value: 100000, weight: 140 },
-    { count: 8, value: 500000, weight: 14 },
+    { count: 2, value: 5000, weight: 13432 },
+    { count: 3, value: 15000, weight: 5726 },
+    { count: 4, value: 40000, weight: 2441 },
+    { count: 5, value: 100000, weight: 1041 },
+    { count: 6, value: 300000, weight: 444 },
+    { count: 7, value: 1000000, weight: 189 },
+    { count: 8, value: 5000000, weight: 81 },
 ];
 
 function payoutForCount(n: number): number {

@@ -201,7 +201,7 @@ export default function Crossword() {
     return (
         <GameWrapper
             title="Crossword"
-            howToPlay="A 2000-cheddar high-roller ticket. Buy it, then scratch to reveal your letters and the crossword grid - spell as many hidden words as you can using only your letters. The more words you find, the bigger the prize."
+            howToPlay="A 20,000-cheddar high-roller ticket. Buy it, then scratch to reveal your letters and the crossword grid - spell as many hidden words as you can using only your letters. The more words you find, the bigger the prize."
             oddsSections={oddsSections}
         >
             <PlayLauncher
@@ -231,7 +231,7 @@ export default function Crossword() {
                 }
             >
                 <ScratchCard<CrosswordResult>
-                    price={odds?.price ?? 2000}
+                    price={odds?.price ?? 20000}
                     isPending={isPending}
                     result={result}
                     checked={checked}

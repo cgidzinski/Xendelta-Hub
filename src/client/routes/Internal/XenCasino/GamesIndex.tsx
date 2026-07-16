@@ -13,6 +13,7 @@ import { formatCheddar } from "./utils/currency";
 
 interface SlotsOddsSummary {
     paytable: { probability: number }[];
+    jackpotPool: number;
     rtp: number;
 }
 interface KittyScratchOddsSummary {
@@ -56,6 +57,16 @@ const ODDS_CHIP_SX = {
     fontWeight: 700,
 } as const;
 
+// Distinct from the odds/RTP chips - gold and a little louder, since the point is to catch
+// the eye and make the pool feel like it's actually growing while you browse.
+const JACKPOT_CHIP_SX = {
+    alignSelf: "flex-start",
+    color: "#000",
+    bgcolor: "warning.main",
+    border: "1px solid rgba(255, 193, 7, 0.6)",
+    fontWeight: 800,
+} as const;
+
 export default function GamesIndex() {
     const navigate = useNavigate();
 
@@ -63,11 +74,13 @@ export default function GamesIndex() {
         queryKey: ["slotsOdds", "easy-spin"],
         queryFn: () => fetchSlotsOdds("easy-spin"),
         staleTime: 15 * 1000,
+        refetchInterval: 15 * 1000, // keeps the jackpot chip below ticking up while browsing
     });
     const { data: spinmaniaOdds } = useQuery({
         queryKey: ["slotsOdds", "spinmania"],
         queryFn: () => fetchSlotsOdds("spinmania"),
         staleTime: 15 * 1000,
+        refetchInterval: 15 * 1000,
     });
     const { data: kittyScratchOdds } = useQuery({
         queryKey: ["kittyScratchOdds"],
@@ -100,6 +113,11 @@ export default function GamesIndex() {
     const rtpLabelByKey: Record<string, string | undefined> = Object.fromEntries(
         Object.entries(rtpByKey).map(([key, rtp]) => [key, rtp !== undefined ? `RTP ${(rtp * 100).toFixed(1)}%` : undefined])
     );
+
+    const jackpotLabelByKey: Record<string, string | undefined> = {
+        "easy-spin": easySpinOdds ? `🎰 ${formatCheddar(easySpinOdds.jackpotPool)}` : undefined,
+        spinmania: spinmaniaOdds ? `🎰 ${formatCheddar(spinmaniaOdds.jackpotPool)}` : undefined,
+    };
 
     const groups = TYPE_ORDER.map((type) => ({
         type,
@@ -136,6 +154,7 @@ export default function GamesIndex() {
                             {group.games.map((game) => {
                                 const oddsLabel = oddsLabelByKey[game.key];
                                 const rtpLabel = rtpLabelByKey[game.key];
+                                const jackpotLabel = jackpotLabelByKey[game.key];
                                 return (
                                     <Card
                                         key={game.key}
@@ -162,6 +181,7 @@ export default function GamesIndex() {
                                                     {game.description}
                                                 </Typography>
                                                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                                                    {jackpotLabel && <Chip label={jackpotLabel} size="small" sx={JACKPOT_CHIP_SX} />}
                                                     {oddsLabel && <Chip label={oddsLabel} size="small" sx={ODDS_CHIP_SX} />}
                                                     {rtpLabel && <Chip label={rtpLabel} size="small" sx={ODDS_CHIP_SX} />}
                                                 </Box>
