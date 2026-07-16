@@ -220,7 +220,7 @@ module.exports = function (app: express.Application) {
     // Emit socket event for real-time notification (non-blocking)
     try {
       const socketManager = SocketManager.getInstance();
-      socketManager.emitToUser(user._id.toString(), "notification", notification);
+      socketManager.sendNotification(user._id.toString(), notification);
     } catch (err) {
       console.error("Failed to emit socket notification:", err);
     }

@@ -213,8 +213,8 @@ export class SocketManager {
     });
   }
 
-  // Notify user about notification update (e.g., marked as read)
-  notifyNotificationUpdate(userId: string, notificationId: string, update: { unread?: boolean }) {
+  // Notify user about notification update (e.g., marked as read, or deleted)
+  notifyNotificationUpdate(userId: string, notificationId: string, update: { unread?: boolean; deleted?: boolean }) {
     this.io.to(`user:${userId}`).emit("notification:update", {
       notificationId,
       update,

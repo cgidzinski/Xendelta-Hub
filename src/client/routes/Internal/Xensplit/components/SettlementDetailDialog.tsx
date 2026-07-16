@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSnackbar } from "notistack";
-import { Box, Typography, Button, Avatar, Dialog, DialogContent, DialogActions, TextField, InputAdornment, Chip, IconButton } from "@mui/material";
+import { Box, Typography, Button, Avatar, Dialog, DialogContent, DialogActions, TextField, InputAdornment, IconButton } from "@mui/material";
 import EastIcon from "@mui/icons-material/East";
 import UndoIcon from "@mui/icons-material/Undo";
 import CheckIcon from "@mui/icons-material/Check";
@@ -9,7 +9,7 @@ import LockIcon from "@mui/icons-material/Lock";
 import type { XenSplitSettlement, XenSplitSettlementTransfer, SettleDebtInput } from "../../../../hooks/xensplit/types";
 import { formatCurrency, sanitizeAmount } from "../../../../utils/currencyUtils";
 
-function PersonStack({ avatar, name }: { avatar?: string | null; name: string }) {
+export function PersonStack({ avatar, name }: { avatar?: string | null; name: string }) {
     return (
         <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, minWidth: 0, flex: 1 }}>
             <Avatar src={avatar || undefined} sx={{ width: 34, height: 34 }}>
@@ -160,6 +160,10 @@ interface CompletedProps {
 export default function SettlementDetailDialog({ settlement, onClose, getMember, userId, deleteSettlement, isDeletingSettlement }: CompletedProps) {
     const [confirmUndo, setConfirmUndo] = useState(false);
 
+    useEffect(() => {
+        setConfirmUndo(false);
+    }, [settlement?._id]);
+
     if (!settlement) return null;
 
     const s = settlement;
@@ -176,7 +180,7 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
 
     return (
         <>
-            <Dialog fullWidth maxWidth="xs" open={!!settlement} onClose={onClose} PaperProps={{ sx: { borderRadius: 3 } }}>
+            <Dialog fullWidth maxWidth="xs" open={!!settlement && !confirmUndo} onClose={onClose} PaperProps={{ sx: { borderRadius: 3 } }}>
                 <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
                     <IconButton onClick={onClose} size="small" sx={{ position: "absolute", top: 12, right: 12 }}>
                         <CloseIcon fontSize="small" />
@@ -188,7 +192,6 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
                         <Typography variant="caption" color="text.secondary">
                             {new Date(s.settled_at).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric" })}
                         </Typography>
-                        {s.is_partial && <Chip label="Partial" size="small" sx={{ fontSize: "0.65rem", height: 18 }} />}
                     </Box>
                 </Box>
 
@@ -218,7 +221,7 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
 
                 {canUndo && (
                     <DialogActions sx={{ px: 3, pb: 2.5, pt: 0 }}>
-                        <Button fullWidth variant="outlined" color="error" startIcon={<UndoIcon />} onClick={() => { onClose(); setConfirmUndo(true); }}>
+                        <Button fullWidth variant="outlined" color="error" startIcon={<UndoIcon />} onClick={() => setConfirmUndo(true)}>
                             Undo Settlement
                         </Button>
                     </DialogActions>

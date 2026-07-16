@@ -30,12 +30,31 @@ export interface XenSplitExpense {
   splits: XenSplitExpenseSplit[];
   images?: XenSplitExpenseImage[];
   on_hold?: boolean;
+  recurring_id?: string;
   created_at: string;
   payer?: {
     user_id: string;
     username: string;
     avatar: string | null;
   } | null;
+}
+
+export type RecurringFrequency = "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+
+export interface XenSplitRecurringSeries {
+  _id: string;
+  genesis_expense_id?: string;
+  pending_expense?: Partial<XenSplitExpense>;
+  frequency: RecurringFrequency;
+  start_date: string;
+  end_date?: string;
+  max_occurrences?: number;
+  active: boolean;
+  occurrence_count: number;
+  next_run_at: string;
+  last_generated_at?: string;
+  created_by?: string;
+  created_at: string;
 }
 
 export interface XenSplitSettlement {
@@ -45,20 +64,38 @@ export interface XenSplitSettlement {
   amount: number;
   currency: string;
   settled_at: string;
-  is_partial?: boolean;
   note?: string;
+}
+
+export interface XenSplitExchange {
+  _id: string;
+  party_a: string;
+  currency_a: string;
+  amount_a: number;
+  party_b: string;
+  currency_b: string;
+  amount_b: number;
+  rate: number;
+  rate_from_currency?: string;
+  created_by?: string;
+  note?: string;
+  date: string;
+  created_at: string;
 }
 
 export interface XenSplit {
   _id: string;
   name: string;
   default_currency: string;
+  secondary_currencies: string[];
   image_url?: string;
   created_by: string;
   created_at: string;
   members: XenSplitMember[];
   expenses: XenSplitExpense[];
   settlements: XenSplitSettlement[];
+  exchanges: XenSplitExchange[];
+  recurring_expenses?: XenSplitRecurringSeries[];
 }
 
 export interface XenSplitBalance {
@@ -112,7 +149,7 @@ export interface DirectDebt {
 // One signed line item explaining a member's net balance in a currency.
 // The sum of `amount` across all lines equals the member's net balance.
 export interface BreakdownLine {
-  kind: "paid" | "share" | "settlement";
+  kind: "paid" | "share" | "settlement" | "exchange";
   label: string;
   hint?: string; // short plain-language explanation of the line's direction
   amount: number; // signed: positive increases balance (owed to them), negative decreases
@@ -130,12 +167,18 @@ export interface CreateExpenseInput {
   split_type: "equal" | "exact" | "percent";
   splits?: XenSplitExpenseSplit[];
   on_hold?: boolean;
+  recurring?: {
+    frequency: RecurringFrequency;
+    end_date?: string;
+    max_occurrences?: number;
+  };
 }
 
 export interface CreateXenSplitInput {
   name: string;
   memberIds?: string[];
   default_currency?: string;
+  secondary_currencies?: string[];
 }
 
 export interface UpdateExpenseInput {
@@ -149,6 +192,12 @@ export interface UpdateExpenseInput {
   split_type?: "equal" | "exact" | "percent";
   splits?: XenSplitExpenseSplit[];
   on_hold?: boolean;
+  recurring?: {
+    end_date?: string | null;
+    max_occurrences?: number | null;
+    active?: boolean;
+    cancel?: true;
+  };
 }
 
 export interface SettleDebtInput {
@@ -157,4 +206,16 @@ export interface SettleDebtInput {
   amount: number;
   currency: string;
   note?: string;
+}
+
+export interface CreateExchangeInput {
+  party_a: string;
+  currency_a: string;
+  amount_a: number;
+  party_b: string;
+  currency_b: string;
+  rate: number;
+  rate_from_currency?: string;
+  note?: string;
+  date?: string;
 }

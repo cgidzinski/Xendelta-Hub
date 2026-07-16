@@ -5,7 +5,7 @@ import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 // Admin middleware - checks if user has admin role
 export const requireAdmin = async (req: Request, res: Response, next: NextFunction) => {
   const user = (req as AuthenticatedRequest).user;
-  
+
   if (!user || !user._id) {
     return res.status(401).json({
       status: false,
@@ -14,7 +14,7 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
   }
 
   const fullUser = await User.findOne({ _id: user._id }).exec();
-  
+
   if (!fullUser) {
     return res.status(404).json({
       status: false,

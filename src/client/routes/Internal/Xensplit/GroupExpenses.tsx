@@ -1,11 +1,15 @@
 import { useState, useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Box, Typography, TextField, InputAdornment, ToggleButtonGroup, ToggleButton } from "@mui/material";
+import { Box, Typography, TextField, InputAdornment, ToggleButtonGroup, ToggleButton, Avatar, IconButton, alpha } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
+import RepeatIcon from "@mui/icons-material/Repeat";
+import CloseIcon from "@mui/icons-material/Close";
 import { startOfWeek, startOfMonth, startOfYear, subWeeks } from "date-fns";
 import type { GroupDetailContext } from "./GroupDetail";
-import ExpenseListItem from "./components/ExpenseListItem";
+import ExpenseListItem, { FREQUENCY_LABELS, computeFinalExpenseIds } from "./components/ExpenseListItem";
 import { formatCurrency } from "../../../utils/currencyUtils";
+import { groupByDay } from "../../../utils/dateGrouping";
+import { xsCardSx, xsBadgeSx } from "./components/rowStyles";
 
 type DateFilter = "all" | "thisWeek" | "lastWeek" | "thisMonth" | "thisYear";
 
@@ -17,22 +21,70 @@ const DATE_FILTERS: { label: string; value: DateFilter }[] = [
     { label: "This Year", value: "thisYear" },
 ];
 
+type FilterKey = "recurring" | "held";
+
+const PROPERTY_FILTERS: { label: string; value: FilterKey }[] = [
+    { label: "Recurring", value: "recurring" },
+    { label: "Held", value: "held" },
+];
+
 export default function GroupExpenses() {
-    const { group, onViewExpense, user } = useOutletContext<GroupDetailContext>();
+    const { group, onViewExpense, user, cancelRecurring, isCancellingRecurring } = useOutletContext<GroupDetailContext>();
     const [search, setSearch] = useState("");
     const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+    const [activeFilter, setActiveFilter] = useState<FilterKey | null>(null);
 
-    // Held expenses, visible to all group members — exempt from date filter
+    // Genesis expense id -> its recurring series, for chips on genesis rows
+    const seriesByGenesisId = useMemo(() => {
+        const map = new Map<string, NonNullable<typeof group.recurring_expenses>[number]>();
+        for (const r of group.recurring_expenses ?? []) {
+            if (r.genesis_expense_id) map.set(r.genesis_expense_id, r);
+        }
+        return map;
+    }, [group.recurring_expenses]);
+
+    const isRecurringExpense = (e: { _id: string; recurring_id?: string }) =>
+        !!e.recurring_id || seriesByGenesisId.has(e._id);
+
+    const matchesActiveFilters = (e: { _id: string; recurring_id?: string; on_hold?: boolean }) =>
+        activeFilter === "recurring" ? isRecurringExpense(e) :
+            activeFilter === "held" ? !!e.on_hold :
+                true;
+
+    const finalExpenseIds = useMemo(
+        () => computeFinalExpenseIds(group.expenses, group.recurring_expenses),
+        [group.expenses, group.recurring_expenses]
+    );
+
+    const hasActiveFilters = activeFilter !== null;
+    // A pending (not-yet-started) series has no expense yet, so it can't match "held"
+    const pendingSeriesEligible = activeFilter === null || activeFilter === "recurring";
+
+    // Future-start series that haven't created their first expense yet — exempt from date filter.
+    // Folded away once a filter that a pending series can never match is active.
+    const pendingSeries = useMemo(() => {
+        if (!pendingSeriesEligible) return [];
+        const q = search.trim().toLowerCase();
+        return (group.recurring_expenses ?? [])
+            .filter((r) => !r.genesis_expense_id && r.active)
+            .filter((r) => !q || (r.pending_expense?.title ?? "").toLowerCase().includes(q))
+            .sort((a, b) => new Date(a.next_run_at).getTime() - new Date(b.next_run_at).getTime());
+    }, [group.recurring_expenses, search, pendingSeriesEligible]);
+
+    // Held expenses, visible to all group members — pinned + exempt from date filter by
+    // default. Once any filter chip is active, held items move into the normal filtered
+    // list instead (so "held" becomes a real filter, not a permanent pin).
     const heldVisible = useMemo(() => {
+        if (hasActiveFilters) return [];
         const q = search.trim().toLowerCase();
         return [...group.expenses]
             .filter((e) => e.on_hold)
             .filter((e) => !q || e.title.toLowerCase().includes(q))
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [group.expenses, search]);
+    }, [group.expenses, search, hasActiveFilters]);
 
-    // Active expenses only — subject to date + search filters
-    const sortedExpenses = useMemo(() => {
+    // Active expenses + exchanges merged and date-filtered
+    const sortedItems = useMemo(() => {
         const now = new Date();
         const dateStart: Date | null =
             dateFilter === "thisWeek" ? startOfWeek(now) :
@@ -43,17 +95,22 @@ export default function GroupExpenses() {
         const dateEnd: Date | null =
             dateFilter === "lastWeek" ? startOfWeek(now) : null;
 
-        return [...group.expenses]
-            .filter((e) => !e.on_hold)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        const expenses = group.expenses
+            .filter((e) => hasActiveFilters ? matchesActiveFilters(e) : !e.on_hold)
             .filter((e) => {
                 if (search.trim() && !e.title.toLowerCase().includes(search.toLowerCase())) return false;
                 const d = new Date(e.date);
                 if (dateStart && d < dateStart) return false;
                 if (dateEnd && d >= dateEnd) return false;
                 return true;
-            });
-    }, [group.expenses, search, dateFilter]);
+            })
+            .map((e) => ({ type: "expense" as const, date: e.date, item: e }));
+
+        return expenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [group.expenses, group.exchanges, search, dateFilter, activeFilter]);
+
+    // Group the (already date-desc sorted) list into ordered day-groups, like the Overview feed
+    const groupedItems = useMemo(() => groupByDay(sortedItems, (row) => row.date), [sortedItems]);
 
     return (
         <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
@@ -73,7 +130,7 @@ export default function GroupExpenses() {
                     exclusive
                     onChange={(_, v) => v && setDateFilter(v)}
                     fullWidth
-                    sx={{ mb: 2, height: 30 }}
+                    sx={{ mb: 1.5, height: 30 }}
                 >
                     {DATE_FILTERS.map((f) => (
                         <ToggleButton key={f.value} value={f.value} sx={{ px: 1, fontSize: "0.7rem", textTransform: "none", whiteSpace: "nowrap" }}>
@@ -81,8 +138,81 @@ export default function GroupExpenses() {
                         </ToggleButton>
                     ))}
                 </ToggleButtonGroup>
+                <ToggleButtonGroup
+                    size="small"
+                    value={activeFilter}
+                    exclusive
+                    onChange={(_, v: FilterKey | null) => setActiveFilter(v)}
+                    fullWidth
+                    sx={{ mb: 2, height: 30 }}
+                >
+                    {PROPERTY_FILTERS.map((f) => (
+                        <ToggleButton key={f.value} value={f.value} sx={{ px: 1, fontSize: "0.7rem", textTransform: "none", whiteSpace: "nowrap" }}>
+                            {f.label}
+                        </ToggleButton>
+                    ))}
+                </ToggleButtonGroup>
             </Box>
             <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pb: { xs: 11, md: 1 } }}>
+                {pendingSeries.length > 0 && (
+                    <Box sx={{ mb: 2 }}>
+                        <Typography
+                            variant="caption"
+                            sx={{ px: 0.5, mb: 0.75, display: "block", color: "secondary.main", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", fontSize: "0.65rem" }}
+                        >
+                            Upcoming Recurring
+                        </Typography>
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                            {pendingSeries.map((series) => (
+                                <Box
+                                    key={series._id}
+                                    sx={{
+                                        ...xsCardSx,
+                                        display: "grid",
+                                        gridTemplateColumns: "40px 1fr auto",
+                                        alignItems: "center",
+                                        columnGap: 1.25,
+                                        opacity: 0.75,
+                                        borderStyle: "dashed",
+                                    }}
+                                >
+                                    <Avatar sx={{ ...xsBadgeSx, bgcolor: (t) => alpha(t.palette.secondary.main, 0.15) }}>
+                                        <RepeatIcon sx={{ fontSize: 22, color: "secondary.main" }} />
+                                    </Avatar>
+                                    <Box sx={{ minWidth: 0 }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                                            {series.pending_expense?.title ?? "Recurring expense"}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                                            Starts {new Date(series.next_run_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                                            {" · "}{FREQUENCY_LABELS[series.frequency]}
+                                        </Typography>
+                                    </Box>
+                                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                                        {series.pending_expense?.amount != null && (
+                                            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                                                {formatCurrency(series.pending_expense.amount, series.pending_expense.currency ?? group.default_currency)}
+                                            </Typography>
+                                        )}
+                                        {(series.created_by === user.id || group.created_by === user.id) && (
+                                            <IconButton
+                                                size="small"
+                                                disabled={isCancellingRecurring}
+                                                onClick={() => {
+                                                    if (window.confirm("Cancel this upcoming recurring expense? No expenses have been created yet.")) {
+                                                        cancelRecurring(series._id);
+                                                    }
+                                                }}
+                                            >
+                                                <CloseIcon sx={{ fontSize: 16 }} />
+                                            </IconButton>
+                                        )}
+                                    </Box>
+                                </Box>
+                            ))}
+                        </Box>
+                    </Box>
+                )}
                 {heldVisible.length > 0 && (
                     <Box sx={{ mb: 2 }}>
                         <Typography
@@ -98,28 +228,44 @@ export default function GroupExpenses() {
                                     expense={expense}
                                     onClick={() => onViewExpense(expense)}
                                     userId={user.id}
+                                    recurringSeries={seriesByGenesisId.get(expense._id)}
+                                    isFinal={finalExpenseIds.has(expense._id)}
                                 />
                             ))}
                         </Box>
                     </Box>
                 )}
-                {sortedExpenses.length === 0 ? (
+                {sortedItems.length === 0 ? (
                     <Box sx={{ textAlign: "center", py: heldVisible.length > 0 ? 3 : 6 }}>
                         <Typography variant="body1" color="text.secondary">
-                            {search.trim() || dateFilter !== "all" ? "No expenses match your filters" : "No expenses yet"}
+                            {search.trim() || dateFilter !== "all" || hasActiveFilters ? "No expenses match your filters" : "No expenses yet"}
                         </Typography>
                     </Box>
                 ) : (
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                        {sortedExpenses.map((expense) => (
-                            <ExpenseListItem
-                                key={expense._id}
-                                expense={expense}
-                                onClick={() => onViewExpense(expense)}
-                                userId={user.id}
-                            />
-                        ))}
-                    </Box>
+                    groupedItems.map((dateGroup) => (
+                        <Box key={dateGroup.key} sx={{ mb: 2.5 }}>
+                            <Typography
+                                variant="caption"
+                                color="text.disabled"
+                                sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1, ml: 0.25 }}
+                            >
+                                {dateGroup.label}
+                            </Typography>
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                                {dateGroup.items.map((row) => (
+                                    <ExpenseListItem
+                                        key={row.item._id}
+                                        expense={row.item}
+                                        onClick={() => onViewExpense(row.item)}
+                                        userId={user.id}
+                                        hideDate
+                                        recurringSeries={seriesByGenesisId.get(row.item._id)}
+                                        isFinal={finalExpenseIds.has(row.item._id)}
+                                    />
+                                ))}
+                            </Box>
+                        </Box>
+                    ))
                 )}
             </Box>
         </Box>

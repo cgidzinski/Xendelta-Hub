@@ -53,6 +53,17 @@ export function useXenSplitExpenses(groupId: string) {
     },
   });
 
+  const cancelRecurringMutation = useMutation({
+    mutationFn: async (recurringId: string) => {
+      const res = await apiClient.delete(`/api/xensplit/groups/${groupId}/recurring/${recurringId}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["xensplit", "balances", groupId] });
+    },
+  });
+
   const uploadExpenseImagesMutation = useMutation({
     mutationFn: async ({ expenseId, files }: { expenseId: string; files: File[] }) => {
       const formData = new FormData();
@@ -89,6 +100,8 @@ export function useXenSplitExpenses(groupId: string) {
     deleteExpense: deleteExpenseMutation.mutate,
     isDeletingExpense: deleteExpenseMutation.isPending,
     deleteExpenseError: deleteExpenseMutation.error,
+    cancelRecurring: cancelRecurringMutation.mutate,
+    isCancellingRecurring: cancelRecurringMutation.isPending,
     uploadExpenseImages: uploadExpenseImagesMutation.mutateAsync,
     isUploadingImages: uploadExpenseImagesMutation.isPending,
     deleteExpenseImage: deleteExpenseImageMutation.mutate,

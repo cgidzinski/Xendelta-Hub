@@ -227,20 +227,26 @@ export const splitSchema = z.object({
   percentage: z.number().min(0).max(100).optional(),
 });
 
+const secondaryCurrenciesSchema = z.array(z.string().min(1).max(10)).max(20).optional();
+
 export const createXenSplitSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name too long"),
   memberIds: z.array(objectIdSchema).optional(),
   default_currency: z.string().optional(),
+  secondary_currencies: secondaryCurrenciesSchema,
 });
 
 export const updateXenSplitSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   default_currency: z.string().optional(),
+  secondary_currencies: secondaryCurrenciesSchema,
 });
 
 export const addXenSplitMembersSchema = z.object({
   memberIds: z.array(objectIdSchema).min(1, "At least one member required"),
 });
+
+const recurringFrequencySchema = z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]);
 
 export const createExpenseSchema = z.object({
   paid_by: objectIdSchema,
@@ -253,6 +259,14 @@ export const createExpenseSchema = z.object({
   split_type: z.enum(["equal", "exact", "percent"]),
   splits: z.array(splitSchema).optional(),
   on_hold: z.boolean().optional(),
+  recurring: z.object({
+    frequency: recurringFrequencySchema,
+    end_date: z.string().datetime().optional(),
+    max_occurrences: z.number().int().min(2).optional(),
+  }).optional(),
+}).refine((d) => !d.recurring?.end_date || !d.date || new Date(d.recurring.end_date) > new Date(d.date), {
+  message: "End date must be after the start date",
+  path: ["recurring", "end_date"],
 });
 
 export const updateExpenseSchema = z.object({
@@ -266,6 +280,12 @@ export const updateExpenseSchema = z.object({
   split_type: z.enum(["equal", "exact", "percent"]).optional(),
   splits: z.array(splitSchema).optional(),
   on_hold: z.boolean().optional(),
+  recurring: z.object({
+    end_date: z.string().datetime().nullable().optional(),
+    max_occurrences: z.number().int().min(2).nullable().optional(),
+    active: z.boolean().optional(),
+    cancel: z.literal(true).optional(),
+  }).optional(),
 });
 
 export const settleDebtSchema = z.object({
@@ -288,6 +308,11 @@ export const xenSplitMemberParamSchema = z.object({
   userId: objectIdSchema,
 });
 
+export const xenSplitRecurringParamSchema = z.object({
+  groupId: objectIdSchema,
+  recurringId: objectIdSchema,
+});
+
 export const xenSplitExpenseParamSchema = z.object({
   groupId: objectIdSchema,
   expenseId: objectIdSchema,
@@ -302,5 +327,31 @@ export const xenSplitExpenseImageParamSchema = z.object({
 export const xenSplitSettlementParamSchema = z.object({
   groupId: objectIdSchema,
   settlementId: objectIdSchema,
+});
+
+export const createExchangeSchema = z.object({
+  party_a: objectIdSchema,
+  currency_a: z.string().min(1, "Currency A is required"),
+  amount_a: z.number().positive("Amount must be positive"),
+  party_b: objectIdSchema,
+  currency_b: z.string().min(1, "Currency B is required"),
+  rate: z.number().positive("Rate must be positive"),
+  rate_from_currency: z.string().optional(),
+  note: z.string().max(500).optional(),
+  date: z.string().datetime().optional(),
+}).refine((data) => data.party_a !== data.party_b, {
+  message: "Party A and Party B must be different members",
+  path: ["party_b"],
+}).refine((data) => data.currency_a !== data.currency_b, {
+  message: "Currency A and Currency B must be different",
+  path: ["currency_b"],
+}).refine((data) => !data.rate_from_currency || data.rate_from_currency === data.currency_a || data.rate_from_currency === data.currency_b, {
+  message: "rate_from_currency must be currency_a or currency_b",
+  path: ["rate_from_currency"],
+});
+
+export const xenSplitExchangeParamSchema = z.object({
+  groupId: objectIdSchema,
+  exchangeId: objectIdSchema,
 });
 

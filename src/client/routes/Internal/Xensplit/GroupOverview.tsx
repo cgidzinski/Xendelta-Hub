@@ -1,21 +1,23 @@
 import { useMemo, useState } from "react";
 import { useOutletContext, useNavigate, useParams } from "react-router-dom";
-import { Box, Typography, Button, Switch } from "@mui/material";
-import { alpha } from "@mui/material/styles";
+import { Box, Typography, Button, Switch, Avatar } from "@mui/material";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import type { GroupDetailContext } from "./GroupDetail";
-import type { XenSplitExpense, XenSplitSettlement } from "../../../hooks/xensplit/types";
-import ExpenseListItem from "./components/ExpenseListItem";
+import type { XenSplitExpense, XenSplitSettlement, XenSplitExchange } from "../../../hooks/xensplit/types";
+import ExpenseListItem, { computeFinalExpenseIds } from "./components/ExpenseListItem";
+import ExchangeListItem from "./components/ExchangeListItem";
 import SettlementDetailDialog from "./components/SettlementDetailDialog";
-import { xsCardSx, xsBadgeSx } from "./components/rowStyles";
+import { xsCardSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
+import { groupByDay } from "../../../utils/dateGrouping";
 
 type ActivityItem =
     | { type: "expense"; date: string; expense: XenSplitExpense }
-    | { type: "settlement"; date: string; settlement: XenSplitSettlement };
+    | { type: "settlement"; date: string; settlement: XenSplitSettlement }
+    | { type: "exchange"; date: string; exchange: XenSplitExchange };
 
 export default function GroupOverview() {
-    const { group, balancesData, user, onViewExpense, deleteSettlement, isDeletingSettlement } = useOutletContext<GroupDetailContext>();
+    const { group, balancesData, user, onViewExpense, deleteSettlement, isDeletingSettlement, deleteExchange, isDeletingExchange, isCreator } = useOutletContext<GroupDetailContext>();
     const navigate = useNavigate();
     const { groupId } = useParams<{ groupId: string }>();
     const lsKey = `xensplit_myActivityOnly_${groupId}`;
@@ -23,6 +25,20 @@ export default function GroupOverview() {
     const [viewSettlement, setViewSettlement] = useState<XenSplitSettlement | null>(null);
 
     const getMember = (userId: string) => group.members.find((m) => m.user_id === userId);
+
+    // Genesis expense id -> its recurring series, for chips on genesis rows
+    const seriesByGenesisId = useMemo(() => {
+        const map = new Map<string, NonNullable<typeof group.recurring_expenses>[number]>();
+        for (const r of group.recurring_expenses ?? []) {
+            if (r.genesis_expense_id) map.set(r.genesis_expense_id, r);
+        }
+        return map;
+    }, [group.recurring_expenses]);
+
+    const finalExpenseIds = useMemo(
+        () => computeFinalExpenseIds(group.expenses, group.recurring_expenses),
+        [group.expenses, group.recurring_expenses]
+    );
 
     const handleActivityToggle = (checked: boolean) => {
         setMyActivityOnly(checked);
@@ -44,6 +60,11 @@ export default function GroupOverview() {
             date: s.settled_at,
             settlement: s,
         })),
+        ...(group.exchanges ?? []).map((ex) => ({
+            type: "exchange" as const,
+            date: ex.date,
+            exchange: ex,
+        })),
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const filteredFeed = myActivityOnly
@@ -52,23 +73,15 @@ export default function GroupOverview() {
                 const e = item.expense;
                 return e.paid_by === user.id || e.splits.some((sp) => sp.user_id === user.id);
             }
+            if (item.type === "exchange") {
+                return item.exchange.party_a === user.id || item.exchange.party_b === user.id;
+            }
             return item.settlement.from === user.id || item.settlement.to === user.id;
         })
         : feed;
 
     // Group the (already date-desc sorted) feed into ordered day-groups
-    const groupedFeed = useMemo(() => {
-        const groups: { key: string; label: string; items: ActivityItem[] }[] = [];
-        for (const item of filteredFeed) {
-            const d = new Date(item.date);
-            const key = d.toDateString();
-            const label = d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-            const last = groups[groups.length - 1];
-            if (last && last.key === key) last.items.push(item);
-            else groups.push({ key, label, items: [item] });
-        }
-        return groups;
-    }, [filteredFeed]);
+    const groupedFeed = useMemo(() => groupByDay(filteredFeed, (item) => item.date), [filteredFeed]);
 
     const settleNames = (s: XenSplitSettlement) => ({
         from: s.from === user.id ? "You" : getMember(s.from)?.username ?? "?",
@@ -85,12 +98,35 @@ export default function GroupOverview() {
                     onClick={() => onViewExpense(e)}
                     userId={user.id}
                     hideDate
+                    recurringSeries={seriesByGenesisId.get(e._id)}
+                    isFinal={finalExpenseIds.has(e._id)}
+                />
+            );
+        }
+        if (item.type === "exchange") {
+            const ex = item.exchange;
+            return (
+                <ExchangeListItem
+                    key={`ex-${ex._id}`}
+                    exchange={ex}
+                    members={group.members}
+                    currentUserId={user.id}
+                    canDelete={isCreator || ex.created_by === user.id || ex.party_a === user.id || ex.party_b === user.id}
+                    onDelete={deleteExchange}
+                    isDeletingExchange={isDeletingExchange}
+                    groupId={groupId!}
+                    defaultCurrency={group.default_currency}
                 />
             );
         }
         const s = item.settlement;
         const { from, to } = settleNames(s);
-        const involvesMe = s.from === user.id || s.to === user.id;
+        const fromMember = getMember(s.from);
+        const toMember = getMember(s.to);
+        const fromAvatar = s.from === user.id ? user.avatar : fromMember?.avatar;
+        const toAvatar = s.to === user.id ? user.avatar : toMember?.avatar;
+        const fromInitial = (s.from === user.id ? user.username : fromMember?.username ?? "?")[0]?.toUpperCase() ?? "?";
+        const toInitial = (s.to === user.id ? user.username : toMember?.username ?? "?")[0]?.toUpperCase() ?? "?";
         return (
             <Box
                 key={`s-${dateKey}-${idx}`}
@@ -99,25 +135,67 @@ export default function GroupOverview() {
                     ...xsCardSx,
                     display: "grid",
                     gridTemplateColumns: "40px 1fr auto",
-                    alignItems: "center",
+                    alignItems: "flex-start",
                     columnGap: 1.25,
-                    borderColor: (t) => (involvesMe ? alpha(t.palette.primary.main, 0.6) : t.palette.divider),
-                    bgcolor: (t) => (involvesMe ? alpha(t.palette.primary.main, 0.12) : "inherit"),
                     cursor: "pointer",
+                    "&:hover": { bgcolor: "action.hover" },
                 }}
             >
-                <Box sx={{ ...xsBadgeSx, borderRadius: 1, bgcolor: "primary.main", lineHeight: 1 }}>
-                    <SwapHorizIcon sx={{ fontSize: 22, color: "grey.900" }} />
+                <Box sx={{ position: "relative", width: 40, height: 40 }}>
+                    <Avatar
+                        src={fromAvatar || undefined}
+                        sx={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            width: 26,
+                            height: 26,
+                            fontSize: "0.6875rem",
+                            zIndex: 1,
+                        }}
+                    >
+                        {fromInitial}
+                    </Avatar>
+                    <Avatar
+                        src={toAvatar || undefined}
+                        sx={{
+                            position: "absolute",
+                            bottom: 0,
+                            right: 0,
+                            width: 26,
+                            height: 26,
+                            fontSize: "0.6875rem",
+                        }}
+                    >
+                        {toInitial}
+                    </Avatar>
+                    <Box
+                        sx={{
+                            position: "absolute",
+                            top: "50%",
+                            left: "50%",
+                            transform: "translate(-50%, -50%)",
+                            width: 14,
+                            height: 14,
+                            borderRadius: "50%",
+                            bgcolor: "background.paper",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "text.secondary",
+                        }}
+                    >
+                        <SwapHorizIcon sx={{ fontSize: 12 }} />
+                    </Box>
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{from} → {to}</Typography>
                     <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
-                        Settlement{s.is_partial ? " · Partial" : ""}
+                        Settled
                     </Typography>
                 </Box>
                 <Box sx={{ textAlign: "right", flexShrink: 0 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, color: s.from === user.id ? "error.main" : s.to === user.id ? "success.main" : "text.primary", lineHeight: 1.3 }}>{formatCurrency(s.amount, s.currency)}</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.2 }}>{s.is_partial ? "Partial" : "Full"}</Typography>
                 </Box>
             </Box>
         );

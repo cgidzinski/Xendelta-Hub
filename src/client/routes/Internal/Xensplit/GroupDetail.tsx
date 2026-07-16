@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from "react";
-import { formatCurrency } from "../../../utils/currencyUtils";
+import { formatCurrency, getGroupCurrencies } from "../../../utils/currencyUtils";
 import { useQueryClient } from "@tanstack/react-query";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useSnackbar } from "notistack";
@@ -42,11 +42,13 @@ import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
+import RepeatIcon from "@mui/icons-material/Repeat";
 import { useTitle } from "../../../hooks/useTitle";
 import { useXenSplit } from "../../../hooks/xensplit/useGroup";
 import { useXenSplits } from "../../../hooks/xensplit/useGroups";
 import { useXenSplitBalances } from "../../../hooks/xensplit/useBalances";
 import { useXenSplitExpenses, useExpenseImageUrls } from "../../../hooks/xensplit/useExpenses";
+import { useXenSplitExchanges } from "../../../hooks/xensplit/useExchanges";
 import { useXenSplitSocket } from "../../../hooks/xensplit/useXenSplitSocket";
 import { useAuth } from "../../../contexts/AuthContext";
 import LoadingSpinner from "../../../components/LoadingSpinner";
@@ -54,9 +56,11 @@ import ErrorDisplay from "../../../components/ErrorDisplay";
 import UserSelect from "../../../components/UserSelect";
 import { SearchedUser } from "../../../hooks/useUserSearch";
 import ExpenseForm from "./components/ExpenseForm";
+import { recurringSeriesCaption, computeFinalExpenseIds, isSeriesEnded } from "./components/ExpenseListItem";
 import GroupAvatar from "./components/GroupAvatar";
+import CreateExchangeDialog from "./components/CreateExchangeDialog";
 import { apiClient } from "../../../config/api";
-import type { XenSplit, XenSplitBalancesData, XenSplitExpense, SettleDebtInput } from "../../../hooks/xensplit/types";
+import type { XenSplit, XenSplitBalancesData, XenSplitExpense, SettleDebtInput, CreateExchangeInput, RecurringFrequency, UpdateExpenseInput } from "../../../hooks/xensplit/types";
 
 export interface GroupDetailContext {
   group: XenSplit;
@@ -68,14 +72,21 @@ export interface GroupDetailContext {
   onViewExpense: (expense: XenSplitExpense) => void;
   settleDebt: (input: SettleDebtInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
   isSettlingDebt: boolean;
+  onAddExchange: () => void;
+  addExchange: (input: CreateExchangeInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
+  isAddingExchange: boolean;
+  deleteExchange: (exchangeId: string) => void;
+  isDeletingExchange: boolean;
   onAddMembers: () => void;
   onMemberMenu: (memberId: string, anchor: HTMLElement) => void;
-  updateGroup: (updates: { name?: string; default_currency?: string }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
+  updateGroup: (updates: { name?: string; default_currency?: string; secondary_currencies?: string[] }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
   isUpdating: boolean;
   uploadGroupImage: (file: File, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
   isUploadingImage: boolean;
   deleteSettlement: (settlementId: string) => void;
   isDeletingSettlement: boolean;
+  cancelRecurring: (recurringId: string) => void;
+  isCancellingRecurring: boolean;
 }
 
 export default function GroupDetail() {
@@ -89,7 +100,8 @@ export default function GroupDetail() {
   useTitle("Xensplit");
   const { deleteGroup } = useXenSplits();
   const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useXenSplitBalances(groupId!);
-  const { updateExpense, updateExpenseAsync, isUpdatingExpense, addExpense, addExpenseAsync, isAddingExpense, deleteExpense, isDeletingExpense, uploadExpenseImages, isUploadingImages, deleteExpenseImage, isDeletingExpenseImage } = useXenSplitExpenses(groupId!);
+  const { updateExpense, updateExpenseAsync, isUpdatingExpense, addExpense, addExpenseAsync, isAddingExpense, deleteExpense, isDeletingExpense, cancelRecurring, isCancellingRecurring, uploadExpenseImages, isUploadingImages, deleteExpenseImage, isDeletingExpenseImage } = useXenSplitExpenses(groupId!);
+  const { addExchange, isAddingExchange, deleteExchange, isDeletingExchange, fetchLiveRate, isFetchingLiveRate } = useXenSplitExchanges(groupId!);
   useXenSplitSocket(groupId!);
   const location = useLocation();
   const activeTab = location.pathname.endsWith("/overview")
@@ -122,6 +134,10 @@ export default function GroupDetail() {
   const [addDate, setAddDate] = useState<Date>(new Date());
   const [addCategory, setAddCategory] = useState("");
   const [addOnHold, setAddOnHold] = useState(false);
+  const [addIsRecurring, setAddIsRecurring] = useState(false);
+  const [addFrequency, setAddFrequency] = useState<RecurringFrequency>("monthly");
+  const [addRecurringEndDate, setAddRecurringEndDate] = useState<Date | null>(null);
+  const [addMaxOccurrences, setAddMaxOccurrences] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editAmount, setEditAmount] = useState("");
@@ -135,8 +151,14 @@ export default function GroupDetail() {
   const [editDate, setEditDate] = useState<Date>(new Date());
   const [editCategory, setEditCategory] = useState("");
   const [editOnHold, setEditOnHold] = useState(false);
+  const [editIsRecurring, setEditIsRecurring] = useState(false);
+  const [editFrequency, setEditFrequency] = useState<RecurringFrequency>("monthly");
+  const [editRecurringEndDate, setEditRecurringEndDate] = useState<Date | null>(null);
+  const [editMaxOccurrences, setEditMaxOccurrences] = useState("");
+  const [editSeriesActive, setEditSeriesActive] = useState(true);
   const [showViewExpenseModal, setShowViewExpenseModal] = useState(false);
   const [viewExpenseItem, setViewExpenseItem] = useState<XenSplitExpense | null>(null);
+  const [showAddExchangeModal, setShowAddExchangeModal] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [confirmDialogText, setConfirmDialogText] = useState("");
   const [confirmAction, setConfirmAction] = useState<() => void>(() => { });
@@ -154,6 +176,11 @@ export default function GroupDetail() {
     groupId ?? "",
     selectedExpense?._id,
     selectedExpense?.images?.length ?? 0
+  );
+
+  const finalExpenseIds = useMemo(
+    () => computeFinalExpenseIds(group?.expenses ?? [], group?.recurring_expenses),
+    [group?.expenses, group?.recurring_expenses]
   );
 
   const handleConfirm = () => {
@@ -181,6 +208,10 @@ export default function GroupDetail() {
   if (!group) return null;
 
   const isCreator = group.created_by === user?.id;
+
+  const findSeriesForGenesis = (expenseId: string) =>
+    group.recurring_expenses?.find((r) => r.genesis_expense_id === expenseId);
+  const selectedExpenseSeries = selectedExpense ? findSeriesForGenesis(selectedExpense._id) : undefined;
 
   const handleAddMembers = async () => {
     if (selectedMembers.length === 0) return;
@@ -285,6 +316,13 @@ export default function GroupDetail() {
           split_type: addSplitType,
           splits,
           on_hold: addOnHold,
+          recurring: addIsRecurring
+            ? {
+              frequency: addFrequency,
+              end_date: addRecurringEndDate ? addRecurringEndDate.toISOString() : undefined,
+              max_occurrences: addMaxOccurrences ? parseInt(addMaxOccurrences, 10) : undefined,
+            }
+            : undefined,
         },
         {
           onSuccess: async (result) => {
@@ -296,7 +334,10 @@ export default function GroupDetail() {
                 enqueueSnackbar("Expense added but some images failed to upload", { variant: "warning" });
               }
             }
-            enqueueSnackbar("Expense added", { variant: "success" });
+            enqueueSnackbar(
+              addIsRecurring && !newExpenseId ? "Recurring expense scheduled" : "Expense added",
+              { variant: "success" }
+            );
             setShowAddExpenseModal(false);
             setAddTitle("");
             setAddNotes("");
@@ -310,6 +351,10 @@ export default function GroupDetail() {
             setAddPercentSplits({});
             setAddCategory("");
             setAddOnHold(false);
+            setAddIsRecurring(false);
+            setAddFrequency("monthly");
+            setAddRecurringEndDate(null);
+            setAddMaxOccurrences("");
             setAddImages([]);
             resolve();
           },
@@ -344,6 +389,17 @@ export default function GroupDetail() {
       }));
     }
 
+    let recurring: UpdateExpenseInput["recurring"] = undefined;
+    if (selectedExpenseSeries) {
+      recurring = editIsRecurring
+        ? {
+          end_date: editRecurringEndDate ? editRecurringEndDate.toISOString() : null,
+          max_occurrences: editMaxOccurrences ? parseInt(editMaxOccurrences, 10) : null,
+          active: editSeriesActive,
+        }
+        : { cancel: true };
+    }
+
     await new Promise<void>((resolve) => {
       updateExpense(
         {
@@ -358,6 +414,7 @@ export default function GroupDetail() {
             split_type: editSplitType,
             splits,
             on_hold: editOnHold,
+            recurring,
           }
         },
         {
@@ -415,7 +472,14 @@ export default function GroupDetail() {
     }
     setEditDate(expense.date ? new Date(expense.date) : new Date());
     setEditCategory(expense.category || "");
-    setEditOnHold(expense.on_hold ?? false);
+    const series = findSeriesForGenesis(expense._id);
+    // Hold isn't available while recurring — saving a genesis clears any stale hold
+    setEditOnHold(series ? false : (expense.on_hold ?? false));
+    setEditIsRecurring(!!series);
+    setEditFrequency(series?.frequency ?? "monthly");
+    setEditRecurringEndDate(series?.end_date ? new Date(series.end_date) : null);
+    setEditMaxOccurrences(series?.max_occurrences ? series.max_occurrences.toString() : "");
+    setEditSeriesActive(series?.active ?? true);
     setShowEditExpenseModal(true);
   };
 
@@ -432,6 +496,10 @@ export default function GroupDetail() {
     setAddPercentSplits({});
     setAddCategory("");
     setAddOnHold(false);
+    setAddIsRecurring(false);
+    setAddFrequency("monthly");
+    setAddRecurringEndDate(null);
+    setAddMaxOccurrences("");
     setAddImages([]);
     setAddDate(new Date());
     setShowAddExpenseModal(true);
@@ -450,6 +518,11 @@ export default function GroupDetail() {
     },
     settleDebt,
     isSettlingDebt,
+    onAddExchange: () => setShowAddExchangeModal(true),
+    addExchange,
+    isAddingExchange,
+    deleteExchange,
+    isDeletingExchange,
     onAddMembers: () => setShowAddMemberModal(true),
     onMemberMenu: (memberId, anchor) => {
       setMenuAnchor(anchor);
@@ -461,6 +534,8 @@ export default function GroupDetail() {
     isUploadingImage,
     deleteSettlement,
     isDeletingSettlement,
+    cancelRecurring,
+    isCancellingRecurring,
   };
 
   const handleLightboxTouchStart = (e: React.TouchEvent) => {
@@ -714,7 +789,7 @@ export default function GroupDetail() {
             percentSplits={addPercentSplits}
             onPercentSplitsChange={setAddPercentSplits}
             members={group.members}
-            defaultCurrency={group.default_currency}
+            currencyOptions={getGroupCurrencies(group.default_currency, group.secondary_currencies, addCurrency)}
             onSubmit={handleAddExpense}
             submitDisabled={!addTitle.trim() || !addAmount || !addPaidBy || !isExactValid || !isPercentValid}
             loading={isAddingExpense || isUploadingImages}
@@ -727,6 +802,15 @@ export default function GroupDetail() {
             onHold={addOnHold}
             onOnHoldChange={setAddOnHold}
             holdMode="free"
+            recurringMode="create"
+            isRecurring={addIsRecurring}
+            onIsRecurringChange={setAddIsRecurring}
+            frequency={addFrequency}
+            onFrequencyChange={setAddFrequency}
+            recurringEndDate={addRecurringEndDate}
+            onRecurringEndDateChange={setAddRecurringEndDate}
+            maxOccurrences={addMaxOccurrences}
+            onMaxOccurrencesChange={setAddMaxOccurrences}
           />
         </DialogContent>
       </Dialog>
@@ -734,9 +818,10 @@ export default function GroupDetail() {
       <Dialog
         fullWidth
         maxWidth="sm"
+        fullScreen={isMobile}
         open={showEditExpenseModal}
         onClose={() => { setShowEditExpenseModal(false); setEditImages([]); }}
-        PaperProps={{ sx: { borderRadius: 2 } }}
+        PaperProps={{ sx: { borderRadius: isMobile ? 0 : 2 } }}
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -747,7 +832,10 @@ export default function GroupDetail() {
               size="small"
               onClick={async () => {
                 if (!selectedExpense) return;
-                if (window.confirm("Delete this expense? This cannot be undone.")) {
+                const confirmText = selectedExpenseSeries
+                  ? "Delete this expense? This also stops its recurring schedule. Already-created expenses will be kept."
+                  : "Delete this expense? This cannot be undone.";
+                if (window.confirm(confirmText)) {
                   await new Promise<void>((resolve) => {
                     deleteExpense(selectedExpense._id, {
                       onSuccess: () => {
@@ -795,7 +883,7 @@ export default function GroupDetail() {
             percentSplits={editPercentSplits}
             onPercentSplitsChange={setEditPercentSplits}
             members={group.members}
-            defaultCurrency={group.default_currency}
+            currencyOptions={getGroupCurrencies(group.default_currency, group.secondary_currencies, editCurrency)}
             onSubmit={handleEditExpense}
             submitDisabled={!editTitle.trim() || !editAmount || !editPaidBy || !isEditExactValid || !isEditPercentValid}
             submitLabel="Save Changes"
@@ -818,6 +906,19 @@ export default function GroupDetail() {
                 selectedExpense?.created_by === user.id ? "oneWay" :
                   "hidden"
             }
+            recurringMode={selectedExpenseSeries ? "editSeries" : "off"}
+            isRecurring={editIsRecurring}
+            onIsRecurringChange={setEditIsRecurring}
+            frequency={editFrequency}
+            onFrequencyChange={setEditFrequency}
+            recurringEndDate={editRecurringEndDate}
+            onRecurringEndDateChange={setEditRecurringEndDate}
+            maxOccurrences={editMaxOccurrences}
+            onMaxOccurrencesChange={setEditMaxOccurrences}
+            seriesActive={editSeriesActive}
+            onSeriesActiveChange={setEditSeriesActive}
+            seriesEnded={selectedExpenseSeries ? isSeriesEnded(selectedExpenseSeries) : false}
+            seriesWasInactive={selectedExpenseSeries ? !selectedExpenseSeries.active : false}
           />
         </DialogContent>
       </Dialog>
@@ -864,6 +965,23 @@ export default function GroupDetail() {
                       sx={{ fontWeight: 600, fontSize: "0.7rem" }}
                     />
                   )}
+                  {(() => {
+                    const series = findSeriesForGenesis(e._id);
+                    if (!series && !e.recurring_id) return null;
+                    const isFinal = finalExpenseIds.has(e._id);
+                    const label = series
+                      ? `Recurring · ${recurringSeriesCaption(series)}`
+                      : "Recurring";
+                    return (
+                      <Chip
+                        icon={<RepeatIcon sx={{ fontSize: "14px !important" }} />}
+                        label={isFinal ? `${label} · Final` : label}
+                        size="small"
+                        color="secondary"
+                        sx={{ fontWeight: 600, fontSize: "0.7rem" }}
+                      />
+                    );
+                  })()}
                 </Box>
               </Box>
 
@@ -953,21 +1071,86 @@ export default function GroupDetail() {
               </DialogContent>
 
               <DialogActions sx={{ px: 3, pb: 2.5 }}>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  onClick={() => {
-                    setShowViewExpenseModal(false);
-                    handleOpenEditExpense(e);
-                  }}
-                >
-                  Edit Expense
-                </Button>
+                {e.recurring_id ? (
+                  (() => {
+                    const genesisExpense = group.expenses.find((x) => x._id === e.recurring_id);
+                    const canDelete = isCreator || !e.created_by || e.created_by === user.id;
+                    return (
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%" }}>
+                        {genesisExpense ? (
+                          <Button
+                            fullWidth
+                            variant="outlined"
+                            color="secondary"
+                            startIcon={<RepeatIcon />}
+                            onClick={() => setViewExpenseItem(genesisExpense)}
+                          >
+                            View Original Expense
+                          </Button>
+                        ) : (
+                          <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+                            Created by a recurring expense that no longer exists
+                          </Typography>
+                        )}
+                        {canDelete && (
+                          <Button
+                            fullWidth
+                            variant="outlined"
+                            color="error"
+                            startIcon={<DeleteIcon />}
+                            disabled={isDeletingExpense}
+                            onClick={() => {
+                              if (window.confirm("Delete this occurrence? The recurring schedule is unaffected — future occurrences will still be created.")) {
+                                deleteExpense(e._id, {
+                                  onSuccess: () => {
+                                    enqueueSnackbar("Expense deleted", { variant: "success" });
+                                    setShowViewExpenseModal(false);
+                                    setViewExpenseItem(null);
+                                  },
+                                  onError: (error: Error) => {
+                                    enqueueSnackbar(error?.message || "Failed to delete expense", { variant: "error" });
+                                  },
+                                });
+                              }
+                            }}
+                          >
+                            Delete This Occurrence
+                          </Button>
+                        )}
+                      </Box>
+                    );
+                  })()
+                ) : (
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    onClick={() => {
+                      setShowViewExpenseModal(false);
+                      handleOpenEditExpense(e);
+                    }}
+                  >
+                    Edit Expense
+                  </Button>
+                )}
               </DialogActions>
             </>
           );
         })()}
       </Dialog>
+
+      <CreateExchangeDialog
+        open={showAddExchangeModal}
+        onClose={() => setShowAddExchangeModal(false)}
+        members={group.members}
+        currentUser={{ id: user.id, username: user.username, avatar: user.avatar }}
+        defaultCurrency={group.default_currency}
+        secondaryCurrencies={group.secondary_currencies}
+        groupId={groupId!}
+        addExchange={addExchange}
+        isAddingExchange={isAddingExchange}
+        fetchLiveRate={fetchLiveRate}
+        isFetchingLiveRate={isFetchingLiveRate}
+      />
 
       {/* Lightbox */}
       <Dialog

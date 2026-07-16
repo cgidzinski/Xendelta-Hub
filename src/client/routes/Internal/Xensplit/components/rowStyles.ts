@@ -12,7 +12,7 @@ export const xsCardSx = {
 export const xsBadgeSx = {
     width: 40,
     height: 40,
-    borderRadius: "50%",
+    borderRadius: 1,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",

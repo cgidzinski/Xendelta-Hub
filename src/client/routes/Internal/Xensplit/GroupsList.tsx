@@ -15,18 +15,22 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Tooltip,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import GroupsIcon from "@mui/icons-material/Groups";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import { useXenSplits } from "../../../hooks/xensplit/useGroups";
 import { useXenSplitGroupsSocket } from "../../../hooks/xensplit/useXenSplitSocket";
 import { useTitle } from "../../../hooks/useTitle";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import GroupCard from "./components/GroupCard";
+import HelpModal from "./components/HelpModal";
 import { useAuth } from "../../../contexts/AuthContext";
-import { ALL_CURRENCIES } from "../../../utils/currencyUtils";
+import { ALL_CURRENCIES, withoutCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
+import SecondaryCurrenciesSelect from "./components/SecondaryCurrenciesSelect";
 
 export default function GroupsList() {
   useTitle("Xensplit");
@@ -34,19 +38,27 @@ export default function GroupsList() {
   const { groups, isLoading, isError, error, createGroup, isCreating } = useXenSplits();
   const { user } = useAuth();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [primaryCurrency, setPrimaryCurrency] = useState("CAD");
+  const [secondaryCurrencies, setSecondaryCurrencies] = useState<string[]>([]);
+
+  const handlePrimaryCurrencyChange = (next: string) => {
+    setPrimaryCurrency(next);
+    setSecondaryCurrencies((prev) => withoutCurrency(prev, next));
+  };
 
   const handleCreate = async () => {
     if (!groupName.trim()) return;
     await new Promise<void>((resolve) => {
       createGroup(
-        { name: groupName, default_currency: primaryCurrency },
+        { name: groupName, default_currency: primaryCurrency, secondary_currencies: secondaryCurrencies },
         {
           onSuccess: () => {
             setShowCreateModal(false);
             setGroupName("");
             setPrimaryCurrency("CAD");
+            setSecondaryCurrencies([]);
             resolve();
           },
         }
@@ -83,14 +95,21 @@ export default function GroupsList() {
                 : "Split expenses with friends"}
             </Typography>
           </Box>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setShowCreateModal(true)}
-            size="medium"
-          >
-            New Group
-          </Button>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Tooltip title="Help">
+              <IconButton onClick={() => setShowHelpModal(true)} size="small">
+                <HelpOutlineIcon />
+              </IconButton>
+            </Tooltip>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setShowCreateModal(true)}
+              size="medium"
+            >
+              New Group
+            </Button>
+          </Box>
         </Box>
 
         {/* Group list */}
@@ -174,13 +193,21 @@ export default function GroupsList() {
             <Select
               value={primaryCurrency}
               label="Primary Currency"
-              onChange={(e) => setPrimaryCurrency(e.target.value)}
+              onChange={(e) => handlePrimaryCurrencyChange(e.target.value)}
+              MenuProps={STABLE_CURRENCY_MENU_PROPS}
             >
               {ALL_CURRENCIES.map((c) => (
                 <MenuItem key={c} value={c}>{c}</MenuItem>
               ))}
             </Select>
           </FormControl>
+          <Box sx={{ mt: 2 }}>
+            <SecondaryCurrenciesSelect
+              primaryCurrency={primaryCurrency}
+              value={secondaryCurrencies}
+              onChange={setSecondaryCurrencies}
+            />
+          </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Button fullWidth variant="outlined" onClick={() => setShowCreateModal(false)}>
@@ -197,6 +224,8 @@ export default function GroupsList() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <HelpModal open={showHelpModal} onClose={() => setShowHelpModal(false)} />
     </Box>
   );
 }

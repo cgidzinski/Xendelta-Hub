@@ -10,13 +10,14 @@ function shareFor(expense: XenSplitExpense, split: XenSplitExpense["splits"][num
   return 0;
 }
 
-// Distinct currencies present across (non-held) expenses and settlements, with
-// the group's default currency sorted first.
+// Distinct currencies present across (non-held) expenses, settlements, and exchanges,
+// with the group's default currency sorted first.
 export function currenciesInGroup(group: XenSplit): string[] {
   const defaultCurrency = group.default_currency || "CAD";
   const seen = new Set<string>();
   group.expenses.filter((e) => !e.on_hold).forEach((e) => seen.add(e.currency));
   group.settlements.forEach((s) => seen.add(s.currency));
+  (group.exchanges ?? []).forEach((ex) => { seen.add(ex.currency_a); seen.add(ex.currency_b); });
   if (seen.size === 0) seen.add(defaultCurrency);
   return [...seen].sort((a, b) => (a === defaultCurrency ? -1 : b === defaultCurrency ? 1 : a.localeCompare(b)));
 }
@@ -45,6 +46,12 @@ export function computeDirectDebts(group: XenSplit, currency: string): DirectDeb
   for (const s of group.settlements) {
     if (s.currency !== currency) continue;
     add(s.from, s.to, -s.amount);
+  }
+
+  // Exchanges: party_a owes party_b in currency_a, party_b owes party_a in currency_b.
+  for (const ex of group.exchanges ?? []) {
+    if (ex.currency_a === currency) add(ex.party_a, ex.party_b, ex.amount_a);
+    if (ex.currency_b === currency) add(ex.party_b, ex.party_a, ex.amount_b);
   }
 
   // Net each unordered pair into a single positive directed debt.
@@ -119,6 +126,56 @@ export function computeBalanceBreakdown(group: XenSplit, userId: string, currenc
         amount: -Number(s.amount.toFixed(2)),
         date: s.settled_at,
       });
+    }
+  }
+
+  // Exchanges: party_a owes party_b in currency_a; party_b owes party_a in currency_b.
+  for (const ex of group.exchanges ?? []) {
+    const otherParty = ex.party_a === userId ? ex.party_b : ex.party_b === userId ? ex.party_a : null;
+    if (!otherParty) continue;
+
+    if (ex.currency_a === currency) {
+      if (ex.party_a === userId) {
+        // This user owes party_b in currency_a -> negative balance effect
+        lines.push({
+          kind: "exchange",
+          label: `Exchange with ${nameOf(ex.party_b)}`,
+          hint: `Owes ${nameOf(ex.party_b)} ${ex.amount_a} ${ex.currency_a}`,
+          amount: -Number(ex.amount_a.toFixed(2)),
+          date: ex.date,
+        });
+      } else if (ex.party_b === userId) {
+        // party_b is owed currency_a from party_a -> positive balance effect
+        lines.push({
+          kind: "exchange",
+          label: `Exchange with ${nameOf(ex.party_a)}`,
+          hint: `${nameOf(ex.party_a)} owes them ${ex.amount_a} ${ex.currency_a}`,
+          amount: Number(ex.amount_a.toFixed(2)),
+          date: ex.date,
+        });
+      }
+    }
+
+    if (ex.currency_b === currency) {
+      if (ex.party_b === userId) {
+        // party_b owes party_a in currency_b -> negative balance effect
+        lines.push({
+          kind: "exchange",
+          label: `Exchange with ${nameOf(ex.party_a)}`,
+          hint: `Owes ${nameOf(ex.party_a)} ${ex.amount_b} ${ex.currency_b}`,
+          amount: -Number(ex.amount_b.toFixed(2)),
+          date: ex.date,
+        });
+      } else if (ex.party_a === userId) {
+        // party_a is owed currency_b from party_b -> positive balance effect
+        lines.push({
+          kind: "exchange",
+          label: `Exchange with ${nameOf(ex.party_b)}`,
+          hint: `${nameOf(ex.party_b)} owes them ${ex.amount_b} ${ex.currency_b}`,
+          amount: Number(ex.amount_b.toFixed(2)),
+          date: ex.date,
+        });
+      }
     }
   }
 

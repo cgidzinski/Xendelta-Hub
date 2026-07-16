@@ -267,13 +267,7 @@ export async function cleanupOldSessions(): Promise<void> {
   }
   await Promise.all(cleanupPromises);
 }
-
-// Run cleanup every 30 minutes
-setInterval(() => {
-  cleanupOldSessions().catch((err) => {
-    console.error("Error cleaning up old upload sessions:", err);
-  });
-}, 30 * 60 * 1000);
+// Periodic cleanup is registered as a Scheduler job in server.ts
 
 /**
  * Check if user has enough quota for a file upload
