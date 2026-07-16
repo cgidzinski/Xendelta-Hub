@@ -44,7 +44,14 @@ async function main() {
 
   console.log(`Removing do_not_simplify from expenses in ${matchedGroups} group(s)...`);
   const result = await XenSplit.updateMany(matchQuery, { $unset: { "expenses.$[].do_not_simplify": "" } });
-  console.log(`Done: matched ${result.matchedCount} group(s), modified ${result.modifiedCount}.`);
+  const matched = result.matchedCount ?? result.n;
+  const modified = result.modifiedCount ?? result.nModified;
+  console.log(`Done: matched ${matched} group(s), modified ${modified}.`);
+
+  const remaining = await XenSplit.countDocuments(matchQuery);
+  if (remaining > 0) {
+    console.warn(`Warning: ${remaining} group(s) still have a do_not_simplify field after the update.`);
+  }
 }
 
 main()
