@@ -40,6 +40,17 @@ function assertServiceConfigured(): void {
   }
 }
 
+// Weeabets stores/returns amounts in raw units, but displays them (its bot, its own UI)
+// multiplied by 100 - e.g. a raw balance of "1950" reads as "195,000" everywhere else.
+// Every amount in/out of this file is converted at the wire boundary so the rest of
+// XenCasino only ever deals in that same x100 "display" unit.
+function toDisplayAmount(raw: string): string {
+  return (Number(raw) * 100).toFixed(10);
+}
+function toRawAmount(display: string): string {
+  return (Number(display) / 100).toFixed(10);
+}
+
 export async function getAccount(discordId: string): Promise<WeeabetsAccount | null> {
   assertServiceConfigured();
   const res = await fetch(`${WEEABETS_API_URL}/api/xencasino/user/${encodeURIComponent(discordId)}`, {
@@ -61,7 +72,7 @@ export async function getAccount(discordId: string): Promise<WeeabetsAccount | n
     accountId: body.account_id,
     displayName: body.display_name,
     avatarUrl: body.avatar_url,
-    balance: body.balance,
+    balance: toDisplayAmount(body.balance),
   };
 }
 
@@ -82,7 +93,7 @@ export async function transfer(params: {
     body: JSON.stringify({
       from_account_id: params.fromAccountId,
       to_account_id: params.toAccountId,
-      amount: params.amount,
+      amount: toRawAmount(params.amount),
       key: params.key,
       note: params.note,
     }),
@@ -91,7 +102,7 @@ export async function transfer(params: {
     throw new WeeabetsTransferError(res.status, await res.text());
   }
   const body = (await res.json()) as { from_new_balance: string; to_new_balance: string };
-  return { fromNewBalance: body.from_new_balance, toNewBalance: body.to_new_balance };
+  return { fromNewBalance: toDisplayAmount(body.from_new_balance), toNewBalance: toDisplayAmount(body.to_new_balance) };
 }
 
 export async function getLedger(params: { limit?: number; beforeId?: number } = {}): Promise<LedgerEntry[]> {
@@ -120,7 +131,7 @@ export async function getLedger(params: { limit?: number; beforeId?: number } = 
   return body.entries.map((e) => ({
     id: e.id,
     entryType: e.entry_type,
-    amount: e.amount,
+    amount: toDisplayAmount(e.amount),
     counterpartyId: e.counterparty_id,
     key: e.key,
     note: e.note,
