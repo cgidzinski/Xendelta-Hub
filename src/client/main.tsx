@@ -56,6 +56,7 @@ import EasySpin from "./routes/Internal/XenCasino/games/EasySpin/EasySpin";
 import Spinmania from "./routes/Internal/XenCasino/games/Spinmania/Spinmania";
 import KittyScratch from "./routes/Internal/XenCasino/games/KittyScratch/KittyScratch";
 import Crossword from "./routes/Internal/XenCasino/games/Crossword/Crossword";
+import Plinko from "./routes/Internal/XenCasino/games/Plinko/Plinko";
 // Routes - Xensplit
 import XensplitGroupsList from "./routes/Internal/Xensplit/GroupsList";
 import XensplitGroupDetail from "./routes/Internal/Xensplit/GroupDetail";
@@ -176,6 +177,7 @@ const router = createBrowserRouter(
           <Route path="games/spinmania" element={<Spinmania />} />
           <Route path="games/kitty-scratch" element={<KittyScratch />} />
           <Route path="games/crossword" element={<Crossword />} />
+          <Route path="games/plinko" element={<Plinko />} />
         </Route>
         <Route path="xensplit" index element={<Navigate to="groups" replace />} />
         <Route path="xensplit/groups" element={<XensplitGroupsList />} />
