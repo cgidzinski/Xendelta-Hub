@@ -2,8 +2,20 @@ import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 const { User } = require("../models/user");
-import { resolveUserAccount, getAccount, getLedger, WeeabetsUnavailable } from "../utils/weeabetsClient";
+const { XenCasinoUserState, dailyQuestDateKey } = require("../models/xenCasino");
+import {
+    resolveUserAccount,
+    getAccount,
+    getLedger,
+    transfer,
+    getXenCasinoAccountId,
+    WeeabetsUnavailable,
+    WeeabetsTransferError,
+} from "../utils/weeabetsClient";
 import { XENCASINO_DISCORD_ID } from "../config/weeabets";
+
+// Flat cheddar (display-unit) reward for completing the daily quest - tunable.
+const DAILY_QUEST_REWARD = 1000;
 
 module.exports = function (app: express.Application) {
 
@@ -65,6 +77,56 @@ module.exports = function (app: express.Application) {
             return res.json({ status: true, data: { entries: enriched } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    // Today's "play N casino rounds" progress - resets lazily the moment the stored date
+    // no longer matches today (UTC), no cron job involved.
+    app.get("/api/casino/daily-quest", authenticateToken, async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+        const questStatus = await XenCasinoUserState.getDailyQuestStatus(userId);
+        return res.json({ status: true, data: questStatus });
+    });
+
+    app.post("/api/casino/daily-quest/claim", authenticateToken, async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+        const user = await User.findById(userId).exec();
+        if (!user) {
+            return res.status(404).json({ status: false, message: "User not found" });
+        }
+
+        try {
+            const questStatus = await XenCasinoUserState.getDailyQuestStatus(userId);
+            if (!questStatus.canClaim) {
+                return res.status(400).json({ status: false, message: "Daily quest not ready to claim" });
+            }
+
+            const resolved = await resolveUserAccount(user);
+            if (!resolved.linked || !resolved.account) {
+                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
+            }
+
+            // Idempotency key is derived from userId+date (not a random id) so a
+            // concurrent/duplicate claim can never pay out twice, regardless of any race
+            // on the local `claimed` flag below.
+            const date = dailyQuestDateKey();
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+            const result = await transfer({
+                fromAccountId: xenCasinoAccountId,
+                toAccountId: resolved.account.accountId,
+                amount: DAILY_QUEST_REWARD.toFixed(10),
+                key: `xendelta-daily-quest-${userId}-${date}`,
+                note: "daily_quest_reward",
+            });
+
+            // Only recorded after the transfer actually succeeds - if it fails, the quest
+            // stays claimable and the next attempt just replays the same idempotent key.
+            await XenCasinoUserState.markDailyQuestClaimed(userId, date);
+
+            return res.json({ status: true, data: { balance: result.toNewBalance } });
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });
         }
     });

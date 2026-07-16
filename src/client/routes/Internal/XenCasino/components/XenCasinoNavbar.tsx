@@ -1,6 +1,8 @@
-import { Box, Tabs, Tab, Typography } from "@mui/material";
+import { Box, Tabs, Tab, Typography, Chip } from "@mui/material";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useXenCasinoTitlebar } from "../context/XenCasinoTitlebarContext";
+import { useCasinoDailyQuest } from "../../../../hooks/casino/useCasinoDailyQuest";
 import CheddarBalanceChip from "./CheddarBalanceChip";
 
 /**
@@ -18,6 +20,7 @@ export default function XenCasinoNavbar() {
     const { titlebar } = useXenCasinoTitlebar();
 
     const activeTab = location.pathname.startsWith("/internal/xencasino/ledger") ? 1 : 0;
+    const { canClaim } = useCasinoDailyQuest();
 
     return (
         <Box
@@ -61,6 +64,16 @@ export default function XenCasinoNavbar() {
 
             <Box sx={{ flex: 1, minWidth: 0 }} />
 
+            {canClaim && (
+                <Chip
+                    icon={<EmojiEventsIcon />}
+                    label="Quest ready"
+                    color="warning"
+                    size="small"
+                    onClick={() => navigate("/internal/xencasino")}
+                    sx={{ fontWeight: 700, flexShrink: 0 }}
+                />
+            )}
             <CheddarBalanceChip />
         </Box>
     );

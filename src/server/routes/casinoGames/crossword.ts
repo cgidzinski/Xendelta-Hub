@@ -20,6 +20,7 @@ const { User } = require("../../models/user");
 const { XenCasinoRound } = require("../../models/xenCasino");
 const crypto = require("crypto");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
+import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
 import { drawPrizeWeight, prizeRtp } from "./prizeWeights";
 
 const SLUG = "crossword";
@@ -349,6 +350,7 @@ async function recoverStaleRounds(): Promise<void> {
             });
             await settleRound(round);
             await XenCasinoRound.resolve(round._id);
+            await recordCasinoRoundPlayed(round.userId);
         } catch (err) {
             console.error(`${SLUG}: failed to recover stale round ${round._id}`, err);
         }
@@ -429,6 +431,7 @@ module.exports = function (app: express.Application) {
 
             const settled = await settleRound(round);
             await XenCasinoRound.resolve(round._id);
+            await recordCasinoRoundPlayed(userId);
 
             return res.json({
                 status: true,

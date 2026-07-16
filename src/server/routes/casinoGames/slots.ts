@@ -43,6 +43,7 @@ const { User } = require("../../models/user");
 const { XenCasino, XenCasinoRound } = require("../../models/xenCasino");
 const crypto = require("crypto");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
+import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
 
 type SlotSymbol = string;
 
@@ -220,6 +221,7 @@ async function recoverStaleRounds(machineSlug: string): Promise<void> {
             });
             await settleRound(machine, round);
             await XenCasinoRound.resolve(round._id);
+            await recordCasinoRoundPlayed(round.userId);
         } catch (err) {
             console.error(`slots(${machineSlug}): failed to recover stale round ${round._id}`, err);
         }
@@ -344,6 +346,7 @@ module.exports = function (app: express.Application) {
             // here also leaves the round in place rather than answering with a guess.
             const settled = await settleRound(machine, round);
             await XenCasinoRound.resolve(round._id);
+            await recordCasinoRoundPlayed(userId);
 
             return res.json({ status: true, data: { reels, multiplier, jackpot, payout, balance: settled.balance ?? debitBalance } });
         } catch (err) {
