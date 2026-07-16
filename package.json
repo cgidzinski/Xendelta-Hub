@@ -11,7 +11,8 @@
     "type-check:client": "tsc --noEmit --project src/client/tsconfig.json",
     "test": "vitest run",
     "db:export": "tsx scripts/db-backup.ts export",
-    "db:import": "tsx scripts/db-backup.ts import"
+    "db:import": "tsx scripts/db-backup.ts import",
+    "xensplit:cleanup-do-not-simplify": "tsx scripts/cleanup-do-not-simplify.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
