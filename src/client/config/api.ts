@@ -11,6 +11,7 @@ import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 const createAxiosInstance = (): AxiosInstance => {
   const instance = axios.create({
     baseURL: "", // Use relative URLs, Vite proxy handles routing
+    timeout: 20000, // a hung request must eventually reject, not hang callers forever
   });
 
   // Request interceptor to add auth token

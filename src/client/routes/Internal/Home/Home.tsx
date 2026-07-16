@@ -6,6 +6,7 @@ import RecipaintCardBody from "./components/RecipaintCardBody";
 import XenBoxCardBody from "./components/XenBoxCardBody";
 import XenLinkCardBody from "./components/XenLinkCardBody";
 import XenSplitCardBody from "./components/XenSplitCardBody";
+import XenCasinoCardBody from "./components/XenCasinoCardBody";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
 import { usePinnedApps } from "../../../hooks/user/usePinnedApps";
 import { resolvePinnedApps } from "../../../constants/apps";
@@ -27,6 +28,7 @@ export default function Home() {
     xenbox: <XenBoxCardBody />,
     xenlink: <XenLinkCardBody />,
     xensplit: <XenSplitCardBody />,
+    xencasino: <XenCasinoCardBody />,
   };
 
   return (

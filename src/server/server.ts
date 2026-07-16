@@ -1,4 +1,9 @@
 require("dotenv").config({ quiet: true });
+
+if (process.env.MOCK_WEEABETS === "true" && process.env.NODE_ENV !== "production") {
+  require("./mocks/node").startWeeabetsMock();
+}
+
 const express = require("express");
 const passport = require("passport");
 const cors = require("cors");
@@ -94,3 +99,7 @@ require("./routes/recipaint.ts")(app);
 require("./routes/xenbox.ts")(app);
 require("./routes/xenlink.ts")(app);
 require("./routes/xensplit")(app);
+require("./routes/casino.ts")(app);
+require("./routes/casinoGames/slots.ts")(app);
+require("./routes/casinoGames/kittyScratch.ts")(app);
+require("./routes/casinoGames/crossword.ts")(app);

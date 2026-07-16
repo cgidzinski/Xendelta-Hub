@@ -39,6 +39,7 @@ var userSchema = new mongoose.Schema({
   roles: [{ type: String }],
   password: { type: String }, // For local authentication
   points: { type: Number, default: 1000 },
+  weeabetsAccountId: { type: Number, index: true, sparse: true }, // cached from Weeabets XenCasino lookups
   authProviders: [authProviderSchema], // Multiple authentication methods
   conversations: [userConversationMetadataSchema], // References to conversations with user-specific metadata
   resetPassword: {

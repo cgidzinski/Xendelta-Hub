@@ -27,6 +27,4 @@ src/server/public/**
 src/server/public/avatars/**
 !src/server/public/avatars/default-avatar.png
 gcs-service-account.json
-
-# Database backups produced by scripts/db-backup.ts - never commit, contains raw data dumps
-/backups/
+backups/**
