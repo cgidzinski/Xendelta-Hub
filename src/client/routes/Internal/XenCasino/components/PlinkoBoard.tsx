@@ -2,8 +2,34 @@ import { useEffect, useRef, useState } from "react";
 import { Box, Button, Typography, ToggleButtonGroup, ToggleButton } from "@mui/material";
 import { formatCheddar } from "../utils/currency";
 
+export interface PlinkoTrajectorySample {
+    x: number;
+    y: number;
+    r: number; // ball rotation, radians - purely cosmetic
+}
+
+export interface PlinkoPegPosition {
+    x: number;
+    y: number;
+}
+
+export interface PlinkoLayoutData {
+    canvasWidth: number;
+    canvasHeight: number;
+    boardTop: number;
+    boardBottom: number;
+    slotFloorY: number;
+    dropY: number;
+    dropMinX: number;
+    dropMaxX: number;
+    pegRadius: number;
+    ballRadius: number;
+    pegPositions: PlinkoPegPosition[];
+    slotBoundaries: number[]; // length multipliers.length + 1
+}
+
 export interface PlinkoDropResult {
-    path: number[]; // 0=left, 1=right, one entry per row - the server-decided bounce sequence
+    trajectory: PlinkoTrajectorySample[];
     slot: number;
     multiplier: number;
     payout: number;
@@ -14,24 +40,22 @@ export interface PlinkoBoardProps {
     betOptions: number[];
     betLabels?: string[];
     defaultBet?: number;
-    rows: number; // peg rows - board has rows+1 landing slots
-    multipliers: number[]; // length rows+1, indexed by landing slot
-    oddsLabel?: string;
-    rtpLabel?: string;
+    layout: PlinkoLayoutData | null;
+    multipliers: number[]; // indexed by landing slot
     isPending: boolean;
-    drop: (wager: number) => Promise<PlinkoDropResult>;
+    drop: (wager: number, dropX: number) => Promise<PlinkoDropResult>;
     onResult?: (result: PlinkoDropResult) => void; // fired once the ball has visually landed
 }
 
-const CANVAS_WIDTH = 440;
-const CANVAS_HEIGHT = 460;
-const BOARD_TOP = 30;
-const BOARD_BOTTOM = 360;
-const SLOT_LABEL_Y = 400;
-const PEG_RADIUS = 3.5;
-const BALL_RADIUS = 8;
-const ROW_DURATION_MS = 170; // how long the ball takes to fall past one peg row
+// Fallback board dimensions, used only for the very first render before /odds has resolved
+// and handed us the real layout - the board redraws against the real thing the moment it
+// arrives.
+const FALLBACK_CANVAS_WIDTH = 440;
+const FALLBACK_CANVAS_HEIGHT = 460;
+
+const FRAME_MS = 1000 / 30; // matches the server's ~30fps trajectory sampling rate
 const LANDING_PAUSE_MS = 500; // beat before the verdict appears, once the ball actually lands
+const INDICATOR_PERIOD_MS = 2200; // one full sweep left-to-right-to-left while idle
 
 interface SessionStats {
     rounds: number;
@@ -39,37 +63,40 @@ interface SessionStats {
     won: number;
 }
 
-// The ball's horizontal position at any point mid-fall is expressed the same way a real
-// Galton board narrows toward its final slot: after `bounces` flips with `rights` of them
-// going right, offset (in half-peg-spacing units, relative to center) = 2*rights - bounces.
-// At bounces===rows this lands exactly on evenly-spaced slot centers, matching the pegs
-// drawn above it row by row.
-function ballOffset(rights: number, bounces: number): number {
-    return 2 * rights - bounces;
-}
-
 /**
- * The reusable Plinko board every board-config variant would render - the canvas analog of
- * SlotMachine/ScratchCard for this game. Purely presentational: knows nothing about odds,
- * the backend route, or RTP math - it's handed a peg-row count, a per-slot multiplier
- * table (for the bucket labels), and a `drop` function that resolves with the real
- * (server-decided) path once wagered.
+ * The reusable Plinko board - the canvas analog of SlotMachine/ScratchCard for this game.
+ * Purely presentational: knows nothing about the backend route or how a drop is decided -
+ * it's handed the real board geometry (from the server, so it draws exactly what the physics
+ * sim ran against), a per-slot multiplier table for the bucket labels, and a `drop` function
+ * that resolves with the real (server-simulated) trajectory once wagered.
  *
- * The server decides the entire bounce path *before* any money moves, so there's nothing
- * to simulate here - the ball just walks the returned `path` deterministically, one peg
- * row at a time, via a plain requestAnimationFrame position interpolation. No physics
- * engine needed.
+ * The one interactive element beyond the wager/drop button is the aim marker gliding back
+ * and forth above the peg field - wherever it is the instant "Drop Ball" is clicked becomes
+ * `dropX`, a genuine physics input the server's real ball actually falls from. Everything
+ * after that - the fall itself - is a real matter-js simulation on the server; the client
+ * only replays the returned trajectory samples via plain requestAnimationFrame interpolation,
+ * same as every other physics-backed game in this app (see PachinkoBoard.tsx).
  */
-export default function PlinkoBoard({ betOptions, betLabels, defaultBet, rows, multipliers, oddsLabel, rtpLabel, isPending, drop, onResult }: PlinkoBoardProps) {
+export default function PlinkoBoard({ betOptions, betLabels, defaultBet, layout, multipliers, isPending, drop, onResult }: PlinkoBoardProps) {
     const [wager, setWager] = useState(defaultBet ?? betOptions[0]);
     const [dropping, setDropping] = useState(false); // a round is active (Drop clicked, ball not yet landed)
     const [landedResult, setLandedResult] = useState<PlinkoDropResult | null>(null);
     const [stats, setStats] = useState<SessionStats>({ rounds: 0, wagered: 0, won: 0 });
+    // Mirrors indicatorXRef's "has a real value yet" state as an actual re-render trigger -
+    // the ref itself is written 60x/second by the idle animation below and reading it alone
+    // wouldn't ever re-enable the Drop button once the layout first arrives (ref writes
+    // don't cause re-renders).
+    const [indicatorReady, setIndicatorReady] = useState(false);
 
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const rafRef = useRef<number | null>(null);
     const landingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const pathRef = useRef<number[] | null>(null); // the path currently animating, once known
+    const trajectoryRef = useRef<PlinkoTrajectorySample[] | null>(null); // the trajectory currently animating, once known
+    const indicatorXRef = useRef<number | null>(null); // current aim marker x - read at click time as dropX
+    const droppedAtXRef = useRef<number | null>(null); // frozen marker position while a ball is in the air
+
+    const canvasWidth = layout?.canvasWidth ?? FALLBACK_CANVAS_WIDTH;
+    const canvasHeight = layout?.canvasHeight ?? FALLBACK_CANVAS_HEIGHT;
 
     const clearTimers = () => {
         if (rafRef.current !== null) {
@@ -84,85 +111,115 @@ export default function PlinkoBoard({ betOptions, betLabels, defaultBet, rows, m
 
     useEffect(() => () => clearTimers(), []);
 
-    const pegSpacing = CANVAS_WIDTH / (rows + 2);
-    const rowHeight = (BOARD_BOTTOM - BOARD_TOP) / rows;
-    const centerX = CANVAS_WIDTH / 2;
-
-    const xFor = (rights: number, bounces: number) => centerX + ballOffset(rights, bounces) * (pegSpacing / 2);
-
-    // Draws the static peg triangle, the slot/multiplier labels, and (if given) the ball at
-    // its current fractional fall position.
-    const draw = (ballProgress: number | null, landedSlot: number | null) => {
+    // Draws the static peg field, slot/multiplier labels, the aim marker (idle) or its
+    // frozen drop point (mid-fall), and the ball itself at its current fractional fall
+    // position, if any.
+    const draw = (ball: { x: number; y: number } | null, landedSlot: number | null) => {
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext("2d");
-        if (!canvas || !ctx) {
+        if (!canvas || !ctx || !layout) {
             return;
         }
-        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-        // Pegs: row i (0-indexed) has i+1 positions, matching every reachable ball offset.
         ctx.fillStyle = "rgba(255,255,255,0.55)";
-        for (let row = 0; row < rows; row++) {
-            const y = BOARD_TOP + row * rowHeight;
-            for (let j = 0; j <= row; j++) {
-                const x = xFor(j, row);
-                ctx.beginPath();
-                ctx.arc(x, y, PEG_RADIUS, 0, Math.PI * 2);
-                ctx.fill();
-            }
+        for (const peg of layout.pegPositions) {
+            ctx.beginPath();
+            ctx.arc(peg.x, peg.y, layout.pegRadius, 0, Math.PI * 2);
+            ctx.fill();
         }
 
-        // Slot/multiplier labels along the bottom, highlighting the landed one (if any).
+        const slotLabelY = layout.slotFloorY + 18;
         for (let slot = 0; slot < multipliers.length; slot++) {
-            const x = xFor(slot, rows);
+            const x = (layout.slotBoundaries[slot] + layout.slotBoundaries[slot + 1]) / 2;
             const isLanded = landedSlot === slot;
             ctx.fillStyle = isLanded ? "#FFD700" : "rgba(255,255,255,0.7)";
             ctx.font = isLanded ? "bold 12px sans-serif" : "11px sans-serif";
             ctx.textAlign = "center";
-            ctx.fillText(`${multipliers[slot]}x`, x, SLOT_LABEL_Y);
+            ctx.fillText(`${multipliers[slot]}x`, x, slotLabelY);
         }
 
-        // The ball, mid-fall - interpolates linearly between its position after `bounces`
-        // flips and its position after `bounces+1`, using the fractional part of progress.
-        if (ballProgress !== null && pathRef.current) {
-            const bounces = Math.min(rows, Math.floor(ballProgress));
-            const frac = Math.min(1, ballProgress - bounces);
-            const rightsSoFar = pathRef.current.slice(0, bounces).filter((b) => b === 1).length;
-            const x0 = xFor(rightsSoFar, bounces);
-            const y0 = BOARD_TOP + bounces * rowHeight;
-            let x = x0;
-            let y = y0;
-            if (bounces < rows) {
-                const nextRights = rightsSoFar + pathRef.current[bounces];
-                const x1 = xFor(nextRights, bounces + 1);
-                const y1 = BOARD_TOP + (bounces + 1) * rowHeight;
-                x = x0 + (x1 - x0) * frac;
-                y = y0 + (y1 - y0) * frac;
-            }
+        // The aim marker - either gliding back and forth (idle) or frozen at the position it
+        // was captured from (mid-fall), with a faint dashed guide line down to the peg field
+        // so the drop point actually reads as a drop point.
+        const markerX = dropping ? droppedAtXRef.current : indicatorXRef.current;
+        if (markerX !== null && markerX !== undefined) {
+            ctx.strokeStyle = "rgba(255,255,255,0.15)";
+            ctx.setLineDash([3, 4]);
+            ctx.beginPath();
+            ctx.moveTo(markerX, layout.dropY + 6);
+            ctx.lineTo(markerX, layout.boardTop);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            ctx.fillStyle = dropping ? "rgba(255,193,7,0.5)" : "#FFC107";
+            ctx.beginPath();
+            ctx.moveTo(markerX, layout.dropY + 6);
+            ctx.lineTo(markerX - 5, layout.dropY - 4);
+            ctx.lineTo(markerX + 5, layout.dropY - 4);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        if (ball) {
             ctx.fillStyle = "#FF6B6B";
             ctx.beginPath();
-            ctx.arc(x, y, BALL_RADIUS, 0, Math.PI * 2);
+            ctx.arc(ball.x, ball.y, layout.ballRadius, 0, Math.PI * 2);
             ctx.fill();
         }
     };
 
+    // Idle animation: the aim marker sweeps back and forth across the drop range on a plain
+    // sine wave, purely client-side (there's nothing server-authoritative about *where the
+    // marker currently is* - only the dropX value captured at click time ever reaches the
+    // server, and that's a real physics input to the simulation, not a display concern).
     useEffect(() => {
-        draw(null, landedResult?.slot ?? null);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [rows, multipliers, landedResult]);
-
-    const animatePath = (result: PlinkoDropResult) => {
-        pathRef.current = result.path;
+        if (!layout || dropping) {
+            return;
+        }
+        const centerX = (layout.dropMinX + layout.dropMaxX) / 2;
+        const amplitude = (layout.dropMaxX - layout.dropMinX) / 2;
+        if (indicatorXRef.current === null) {
+            indicatorXRef.current = centerX;
+        }
+        setIndicatorReady(true);
         const start = performance.now();
-        const totalMs = rows * ROW_DURATION_MS;
         const tick = (now: number) => {
-            const progress = Math.min(rows, ((now - start) / totalMs) * rows);
-            draw(progress, null);
-            if (progress < rows) {
+            const phase = ((now - start) % INDICATOR_PERIOD_MS) / INDICATOR_PERIOD_MS;
+            indicatorXRef.current = centerX + amplitude * Math.sin(phase * Math.PI * 2);
+            draw(null, landedResult?.slot ?? null);
+            rafRef.current = requestAnimationFrame(tick);
+        };
+        rafRef.current = requestAnimationFrame(tick);
+        return () => {
+            if (rafRef.current !== null) {
+                cancelAnimationFrame(rafRef.current);
+                rafRef.current = null;
+            }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [layout, dropping, landedResult]);
+
+    const animateTrajectory = (result: PlinkoDropResult) => {
+        trajectoryRef.current = result.trajectory;
+        const start = performance.now();
+        const lastIndex = result.trajectory.length - 1;
+        const tick = (now: number) => {
+            const rawIndex = (now - start) / FRAME_MS;
+            const index = Math.min(lastIndex, rawIndex);
+            const i0 = Math.floor(index);
+            const frac = index - i0;
+            const s0 = result.trajectory[i0];
+            const s1 = result.trajectory[Math.min(lastIndex, i0 + 1)];
+            const x = s0.x + (s1.x - s0.x) * frac;
+            const y = s0.y + (s1.y - s0.y) * frac;
+            draw({ x, y }, null);
+            if (index < lastIndex) {
                 rafRef.current = requestAnimationFrame(tick);
             } else {
                 rafRef.current = null;
-                draw(rows, result.slot);
+                const final = result.trajectory[lastIndex];
+                draw({ x: final.x, y: final.y }, result.slot);
                 landingTimeoutRef.current = setTimeout(() => {
                     setStats((prev) => ({ ...prev, won: prev.won + result.payout }));
                     setLandedResult(result);
@@ -180,27 +237,30 @@ export default function PlinkoBoard({ betOptions, betLabels, defaultBet, rows, m
     // timeout, so a hung request still rejects (and lands here) rather than never settling.
     const resetAfterError = () => {
         clearTimers();
-        pathRef.current = null;
+        trajectoryRef.current = null;
+        droppedAtXRef.current = null;
         setDropping(false);
         draw(null, null);
     };
 
-    const canDrop = !isPending && !dropping && wager > 0;
+    const canDrop = !isPending && !dropping && wager > 0 && !!layout && indicatorReady;
 
     const handleDrop = async () => {
-        if (!canDrop) {
+        if (!canDrop || indicatorXRef.current === null) {
             return;
         }
+        const dropX = indicatorXRef.current;
         clearTimers();
-        pathRef.current = null;
+        trajectoryRef.current = null;
+        droppedAtXRef.current = dropX;
         setLandedResult(null);
         setDropping(true);
         setStats((prev) => ({ ...prev, rounds: prev.rounds + 1, wagered: prev.wagered + wager }));
         draw(null, null);
 
         try {
-            const result = await drop(wager);
-            animatePath(result);
+            const result = await drop(wager, dropX);
+            animateTrajectory(result);
         } catch {
             // The caller's own mutation already surfaces the error (e.g. a toast) - there's
             // nothing decided to land on, so just go back to idle.
@@ -225,13 +285,11 @@ export default function PlinkoBoard({ betOptions, betLabels, defaultBet, rows, m
                     boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
                 }}
             >
-                {(oddsLabel || rtpLabel) && (
-                    <Box sx={{ textAlign: "center", mb: 1 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
-                            {[oddsLabel, rtpLabel].filter(Boolean).join(" · ")}
-                        </Typography>
-                    </Box>
-                )}
+                <Box sx={{ textAlign: "center", mb: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
+                        Click Drop Ball when the marker's where you want to aim
+                    </Typography>
+                </Box>
 
                 <Box
                     sx={{
@@ -246,7 +304,7 @@ export default function PlinkoBoard({ betOptions, betLabels, defaultBet, rows, m
                         overflow: "hidden",
                     }}
                 >
-                    <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} style={{ maxWidth: "100%", height: "auto" }} />
+                    <canvas ref={canvasRef} width={canvasWidth} height={canvasHeight} style={{ maxWidth: "100%", height: "auto" }} />
 
                     {landedResult && (
                         <Box
