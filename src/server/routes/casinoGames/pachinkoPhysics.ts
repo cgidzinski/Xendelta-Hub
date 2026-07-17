@@ -1,27 +1,40 @@
 /**
  * Server-only Pachinko physics sim (matter-js). Never imported from src/client - the client
- * only replays the trajectory this produces, it never runs its own simulation, so there's no
- * cross-environment float-determinism risk to reason about (see pachinko.ts's file header
- * for the fuller "why" of this split).
+ * only replays the trajectory this produces, it never runs its own simulation.
  *
- * The board's actual pocket odds are decided by pachinkoOdds.pickTargetPocket() before any
- * of this runs - simulateDrop's job is only to produce a physically real trajectory that
- * happens to end in that pre-chosen pocket, via rejection sampling: run a real sim with
- * randomized launch position, launch spin, and per-pin bounciness, keep the attempt if it
- * lands in the target pocket, otherwise throw it away and try again with fresh randomness.
- * Every kept trajectory is an unmodified physics simulation - nothing is scripted or steered
- * into place. Bounded by both an attempt cap and a wall-clock cap so a request can never
- * hang; the rare case both are exhausted falls back to a short glide into the target pocket
- * (logged, so board/jitter tuning can be revisited if that ever fires more than negligibly).
- *
- * Every attempt builds fresh Matter bodies and its own Engine rather than reusing bodies
- * across attempts/requests - simulateDrop() runs fully synchronously (no `await` anywhere in
- * the loop), so within Node's single-threaded event loop no two requests' simulations can
- * ever interleave, but keeping each attempt's bodies self-contained avoids relying on that
- * property to stay correct if this is ever moved off the main thread.
+ * There's no pre-selected target outcome here (unlike Plinko, and unlike this game's own
+ * first draft). The player's launch power is a genuine physics input - it's converted to an
+ * initial rail speed, the ball is driven along the scripted rail path (see pachinkoLayout.ts
+ * for why that phase is scripted rather than simulated: a fast body against thin curved rail
+ * geometry is exactly the kind of thing that can tunnel through under normal discrete
+ * collision detection), and once it reaches the release point it becomes a real, unmodified
+ * free body - gravity, nail clusters with per-shot restitution jitter, windmill bumpers,
+ * tulip catchers sized by whatever state the caller passed in. Whatever it actually hits is
+ * the outcome. A small amount of honest per-shot randomness (nail jitter, a touch of launch
+ * noise) means a fixed power value doesn't deterministically reproduce the same outcome.
  */
 import Matter = require("matter-js");
-import { BOARD_TOP, BOARD_BOTTOM, POCKET_FLOOR_Y, CANVAS_WIDTH, CANVAS_HEIGHT, PIN_RADIUS, BALL_RADIUS, WALL_THICKNESS, LAUNCH_Y, generatePins, pocketAt, pocketCenterX, POCKETS, PocketConfig } from "./pachinkoLayout";
+import {
+    CANVAS_WIDTH,
+    CANVAS_HEIGHT,
+    BOUNDARY_RIGHT_POINTS,
+    BOUNDARY_LEFT_POINTS,
+    RAIL_PATH,
+    RELEASE_POINT,
+    LAUNCHER_POSITION,
+    BALL_RADIUS,
+    PIN_RADIUS,
+    WINDMILLS,
+    TULIPS,
+    TulipConfig,
+    tulipCatcherHalfWidth,
+    generateNailField,
+    launchPowerToRailSpeed,
+    GUTTER_POCKET,
+    GUTTER_DRAIN_Y,
+    GUTTER_CUTOUT_Y,
+    Point,
+} from "./pachinkoLayout";
 
 export interface TrajectorySample {
     x: number;
@@ -29,137 +42,180 @@ export interface TrajectorySample {
     r: number; // ball rotation, radians - purely cosmetic on the client
 }
 
-export interface SimResult {
+export type PachinkoOutcome = "gutter" | "tulipLeft" | "tulipRight" | "tulipCenter";
+
+export interface TulipState {
+    leftOpen: boolean;
+    rightOpen: boolean;
+}
+
+export interface ShotResult {
     trajectory: TrajectorySample[];
-    landedPocketIndex: number;
+    outcome: PachinkoOutcome;
 }
 
 const FIXED_TIMESTEP_MS = 1000 / 60;
-const SAMPLE_EVERY_N_STEPS = 2; // ~30fps trajectory, half the physics step rate
-const MAX_STEPS = 500; // generous upper bound - real boards settle well before this
-// Pockets right next to a jackpot edge are empirically much harder for a real physics
-// attempt to land in than the edge itself (a ball that gets close to a wall tends to slide
-// the rest of the way to it) - measured hit rates as low as ~5% per attempt even with the
-// launch bias below. 120 attempts keeps the exhausted-glide fallback rare (<1%) even for
-// those pockets; each attempt is cheap (~10-15ms), so this still comfortably fits under
-// MAX_WALL_CLOCK_MS in the overwhelming majority of cases.
-const MAX_SIM_ATTEMPTS = 120;
-const MAX_WALL_CLOCK_MS = 2000;
+const SAMPLE_EVERY_N_STEPS = 2; // ~30fps trajectory
+const MAX_STEPS = 500; // generous upper bound for the free-body phase
+const nailPositions = generateNailField(); // plain data, rebuilt into fresh Bodies every shot
 
-const pinPositions = generatePins(); // plain data, safe to share - rebuilt into Bodies fresh per attempt
+function outcomeForTulip(id: TulipConfig["id"]): PachinkoOutcome {
+    return id === "left" ? "tulipLeft" : id === "right" ? "tulipRight" : "tulipCenter";
+}
 
-// A pure "launch dead center every time, hope randomness eventually wanders into whatever
-// pocket was picked" rejection sampler is impractically slow for pockets a centered launch
-// rarely reaches on its own (the far edges) - MAX_SIM_ATTEMPTS would need to be huge to keep
-// the exhausted-glide fallback rare for every pocket, not just the popular ones. Instead,
-// each attempt's launch position is nudged toward the target pocket's side of the board
-// before gravity and the pins take over - this doesn't script or fake anything about how the
-// ball actually falls (every attempt is still a full, unmodified simulation, and can still
-// miss the target and get rejected same as before), it's just choosing where a real launcher
-// would aim for that lane, the same way a player would aim for one side of a real board.
-const LAUNCH_BIAS_WEIGHT = 0.85;
+function isTulipOpen(tulip: TulipConfig, state: TulipState): boolean {
+    if (tulip.id === "left") return state.leftOpen;
+    if (tulip.id === "right") return state.rightOpen;
+    return state.leftOpen && state.rightOpen; // center is "open" (primed) only when both sides are
+}
 
-function buildAttemptWorld(target: PocketConfig): { engine: Matter.Engine; ball: Matter.Body } {
-    // Higher position/velocity iterations than matter-js's default (6/4) - a fast ball
-    // against a thin divider is exactly the kind of fast-body/thin-wall pair standard
-    // discrete collision detection can tunnel through if under-resolved, and a divider
-    // failing to stop a ball is a correctness bug here (it'd land in the wrong pocket), not
-    // just a visual glitch.
+// One thin static rectangle per consecutive point pair - the boundary's collision geometry.
+// Built once per shot (fresh bodies, same reasoning as the pins below) from the exact
+// polylines the client draws, split into two separate point lists so the gutter cutout at
+// the bottom is a genuine gap: no segment connects BOUNDARY_RIGHT_POINTS' last point to
+// BOUNDARY_LEFT_POINTS' first point.
+function buildWallSegments(points: Point[]): Matter.Body[] {
+    const segments: Matter.Body[] = [];
+    for (let i = 0; i < points.length - 1; i++) {
+        const a = points[i];
+        const b = points[i + 1];
+        const midX = (a.x + b.x) / 2;
+        const midY = (a.y + b.y) / 2;
+        const length = Math.hypot(b.x - a.x, b.y - a.y);
+        const angle = Math.atan2(b.y - a.y, b.x - a.x);
+        segments.push(Matter.Bodies.rectangle(midX, midY, length, 3, { isStatic: true, angle, label: "wall" }));
+    }
+    return segments;
+}
+
+function buildAttemptWorld(tulipState: TulipState): { engine: Matter.Engine; ball: Matter.Body } {
     const engine = Matter.Engine.create({ gravity: { x: 0, y: 1, scale: 0.001 }, positionIterations: 12, velocityIterations: 10 });
 
-    const bodies: Matter.Body[] = pinPositions.map((pin) =>
-        Matter.Bodies.circle(pin.x, pin.y, PIN_RADIUS, {
-            isStatic: true,
-            restitution: 0.25 + Math.random() * 0.3, // per-attempt jitter - what makes repeat drops to the same pocket look distinct
-            friction: 0.05,
-            label: "pin",
-        })
-    );
-    bodies.push(Matter.Bodies.rectangle(-WALL_THICKNESS / 2, CANVAS_HEIGHT / 2, WALL_THICKNESS, CANVAS_HEIGHT, { isStatic: true, label: "wall" }));
-    bodies.push(Matter.Bodies.rectangle(CANVAS_WIDTH + WALL_THICKNESS / 2, CANVAS_HEIGHT / 2, WALL_THICKNESS, CANVAS_HEIGHT, { isStatic: true, label: "wall" }));
-    // Pocket dividers - walls between adjacent pockets from the bottom of the pin field past
-    // the floor line, so the ball settles into exactly one pocket instead of sliding along
-    // the bottom. Full WALL_THICKNESS (not a thinner rail) for the same tunneling reason as
-    // the higher iteration counts above.
-    for (let i = 1; i < POCKETS.length; i++) {
-        const x = POCKETS[i].xStart;
-        bodies.push(Matter.Bodies.rectangle(x, (BOARD_BOTTOM + CANVAS_HEIGHT) / 2, WALL_THICKNESS, CANVAS_HEIGHT - BOARD_BOTTOM, { isStatic: true, label: "divider" }));
+    const bodies: Matter.Body[] = [
+        ...buildWallSegments(BOUNDARY_RIGHT_POINTS),
+        ...buildWallSegments(BOUNDARY_LEFT_POINTS),
+    ];
+
+    for (const pin of nailPositions) {
+        bodies.push(
+            Matter.Bodies.circle(pin.x, pin.y, PIN_RADIUS, {
+                isStatic: true,
+                restitution: 0.3 + Math.random() * 0.3, // per-shot jitter - what makes repeat drops look distinct
+                friction: 0.05,
+                label: "pin",
+            })
+        );
     }
 
-    const targetX = pocketCenterX(target);
-    const biasedCenter = CANVAS_WIDTH / 2 + (targetX - CANVAS_WIDTH / 2) * LAUNCH_BIAS_WEIGHT;
-    const launchX = biasedCenter + (Math.random() - 0.5) * 25;
-    const ball = Matter.Bodies.circle(launchX, LAUNCH_Y, BALL_RADIUS, {
-        restitution: 0.4,
+    for (const windmill of WINDMILLS) {
+        bodies.push(
+            Matter.Bodies.circle(windmill.position.x, windmill.position.y, windmill.radius, {
+                isStatic: true,
+                restitution: 0.6,
+                friction: 0.02,
+                label: "windmill",
+            })
+        );
+    }
+
+    const ball = Matter.Bodies.circle(RELEASE_POINT.x, RELEASE_POINT.y, BALL_RADIUS, {
+        restitution: 0.45,
         friction: 0.02,
         frictionAir: 0.001,
         label: "ball",
     });
-    // A small velocity nudge toward the target, on top of the position bias - keeps the
-    // ball's initial motion from immediately fighting the lane it launched into.
-    const launchVx = (targetX - CANVAS_WIDTH / 2) * 0.01 + (Math.random() - 0.5) * 1;
-    Matter.Body.setVelocity(ball, { x: launchVx, y: 0 });
     bodies.push(ball);
 
     Matter.Composite.add(engine.world, bodies);
     return { engine, ball };
 }
 
-// landedPocket is null when the ball never actually reached the floor within MAX_STEPS
-// (rare - e.g. wedged in a stable bounce between two pins). That's a real "this attempt
-// didn't produce a result" case, not "wherever it happened to be counts" - a stuck ball's
-// x could coincidentally overlap any pocket's range at that height, so crediting it there
-// would be crediting a pocket the ball never actually fell into. simulateDrop's rejection
-// loop treats null the same as "landed in the wrong pocket": discard and retry.
-function runOneAttempt(target: PocketConfig): { trajectory: TrajectorySample[]; landedPocket: PocketConfig | null } {
-    const { engine, ball } = buildAttemptWorld(target);
-
-    const trajectory: TrajectorySample[] = [];
-    let landedPocket: PocketConfig | null = null;
-    for (let step = 0; step < MAX_STEPS; step++) {
-        Matter.Engine.update(engine, FIXED_TIMESTEP_MS);
-        if (step % SAMPLE_EVERY_N_STEPS === 0) {
-            trajectory.push({ x: ball.position.x, y: ball.position.y, r: ball.angle });
-        }
-        if (ball.position.y >= POCKET_FLOOR_Y) {
-            landedPocket = pocketAt(ball.position.x);
-            trajectory.push({ x: ball.position.x, y: POCKET_FLOOR_Y, r: ball.angle });
-            break;
-        }
+// The rail phase is scripted, not simulated - see the file header. Returns the sample points
+// (already at the ~30fps sampling rate) and the exit velocity to hand off to the free body.
+function railTrajectory(launchPower: number): { samples: TrajectorySample[]; exitSpeed: number } {
+    const speed = launchPowerToRailSpeed(launchPower);
+    const distance = LAUNCHER_POSITION.y - RELEASE_POINT.y;
+    const totalSteps = Math.max(1, Math.round(distance / speed));
+    const samples: TrajectorySample[] = [];
+    for (let step = 0; step <= totalSteps; step += SAMPLE_EVERY_N_STEPS) {
+        const t = step / totalSteps;
+        const y = LAUNCHER_POSITION.y - t * distance;
+        samples.push({ x: RAIL_PATH[0].x, y, r: (step * speed) / BALL_RADIUS });
     }
-
-    return { trajectory, landedPocket };
+    return { samples, exitSpeed: speed };
 }
 
-// Appends a short, smooth glide from the last real sample into the target pocket's center -
-// only used on the rare exhausted-retries fallback (see file header).
-function glideInto(trajectory: TrajectorySample[], target: PocketConfig): TrajectorySample[] {
-    const last = trajectory[trajectory.length - 1] ?? { x: CANVAS_WIDTH / 2, y: BOARD_TOP, r: 0 };
-    const targetX = (target.xStart + target.xEnd) / 2;
-    const glideSteps = 10;
-    const glided = [...trajectory];
-    for (let i = 1; i <= glideSteps; i++) {
-        const t = i / glideSteps;
-        glided.push({
-            x: last.x + (targetX - last.x) * t,
-            y: last.y + (POCKET_FLOOR_Y - last.y) * t,
-            r: last.r + t * Math.PI,
+function tulipHit(ball: Matter.Body, tulipState: TulipState): TulipConfig | null {
+    for (const tulip of TULIPS) {
+        const halfWidth = tulipCatcherHalfWidth(tulip, isTulipOpen(tulip, tulipState));
+        const withinX = Math.abs(ball.position.x - tulip.position.x) <= halfWidth;
+        const withinY = Math.abs(ball.position.y - tulip.position.y) <= 8;
+        if (withinX && withinY) {
+            return tulip;
+        }
+    }
+    return null;
+}
+
+// Short scripted glide from wherever the ball fell through the gutter cutout down to the
+// drain, for visual continuity - purely cosmetic, the outcome is already decided by the time
+// this runs.
+function gutterPocketTrajectory(lastSample: TrajectorySample): TrajectorySample[] {
+    const drain = GUTTER_POCKET[Math.floor(GUTTER_POCKET.length / 2)] ?? { x: lastSample.x, y: GUTTER_DRAIN_Y };
+    const steps = 6;
+    const samples: TrajectorySample[] = [];
+    for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        samples.push({
+            x: lastSample.x + (drain.x - lastSample.x) * t,
+            y: lastSample.y + (GUTTER_DRAIN_Y - lastSample.y) * t,
+            r: lastSample.r + t * Math.PI,
         });
     }
-    return glided;
+    return samples;
 }
 
-export function simulateDrop(targetPocketIndex: number): SimResult {
-    const target = POCKETS[targetPocketIndex];
-    const start = Date.now();
-    for (let attempt = 0; attempt < MAX_SIM_ATTEMPTS && Date.now() - start < MAX_WALL_CLOCK_MS; attempt++) {
-        const { trajectory, landedPocket } = runOneAttempt(target);
-        if (landedPocket?.index === targetPocketIndex) {
-            return { trajectory, landedPocketIndex: targetPocketIndex };
+export function simulateShot(launchPower: number, tulipState: TulipState): ShotResult {
+    const { samples: railSamples, exitSpeed } = railTrajectory(launchPower);
+
+    const { engine, ball } = buildAttemptWorld(tulipState);
+    Matter.Body.setVelocity(ball, { x: (Math.random() - 0.5) * 1.2, y: -exitSpeed * 0.2 });
+
+    const freeBodySamples: TrajectorySample[] = [];
+    let outcome: PachinkoOutcome | null = null;
+
+    for (let step = 0; step < MAX_STEPS; step++) {
+        Matter.Engine.update(engine, FIXED_TIMESTEP_MS);
+
+        const hit = tulipHit(ball, tulipState);
+        if (hit) {
+            outcome = outcomeForTulip(hit.id);
+            freeBodySamples.push({ x: ball.position.x, y: ball.position.y, r: ball.angle });
+            break;
+        }
+        if (ball.position.y > GUTTER_CUTOUT_Y + 10) {
+            outcome = "gutter";
+            freeBodySamples.push({ x: ball.position.x, y: ball.position.y, r: ball.angle });
+            break;
+        }
+        if (step % SAMPLE_EVERY_N_STEPS === 0) {
+            freeBodySamples.push({ x: ball.position.x, y: ball.position.y, r: ball.angle });
         }
     }
 
-    console.warn(`pachinko: exhausted ${MAX_SIM_ATTEMPTS} sim attempts / ${MAX_WALL_CLOCK_MS}ms targeting pocket ${targetPocketIndex} - falling back to a guided glide`);
-    const { trajectory } = runOneAttempt(target);
-    return { trajectory: glideInto(trajectory, target), landedPocketIndex: targetPocketIndex };
+    // The ball never resolved within the step cap (rare - e.g. wedged in a stable bounce) -
+    // treat it as a gutter rather than looping forever.
+    if (!outcome) {
+        outcome = "gutter";
+    }
+
+    const trajectory = [...railSamples, ...freeBodySamples];
+    if (outcome === "gutter") {
+        const last = trajectory[trajectory.length - 1];
+        trajectory.push(...gutterPocketTrajectory(last));
+    }
+
+    return { trajectory, outcome };
 }
+
+export { CANVAS_WIDTH, CANVAS_HEIGHT };

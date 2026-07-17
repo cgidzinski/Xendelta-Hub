@@ -32,10 +32,11 @@ interface PlinkoOddsSummary {
     paytable: { slot: number; probability: number }[];
     rtp: number;
 }
+// No paytable/rtp here (unlike every other game) - the outcome comes from a real physics
+// simulation driven by the player's own launch power, not a pre-selected weighted draw, so
+// there's no fixed probability table to summarize into an odds ratio.
 interface PachinkoOddsSummary {
-    paytable: { type: string; probability: number }[];
     jackpotPool: number;
-    rtp: number;
 }
 
 // Same GET requests (and query keys) each game's own page uses to fetch its odds, so the
@@ -132,7 +133,8 @@ export default function GamesIndex() {
         ),
         crossword: formatOddsRatio(crosswordOdds?.distribution.filter((d) => d.payout > 0).reduce((sum, d) => sum + d.probability, 0)),
         plinko: formatOddsRatio(plinkoOdds?.paytable.find((row) => row.slot === 0)?.probability),
-        pachinko: formatOddsRatio(pachinkoOdds?.paytable.filter((row) => row.type !== "miss").reduce((sum, row) => sum + row.probability, 0)),
+        // pachinko intentionally omitted - no fixed probability table to summarize (see
+        // PachinkoOddsSummary above).
     };
 
     const rtpByKey: Record<string, number | undefined> = {
@@ -141,7 +143,7 @@ export default function GamesIndex() {
         "kitty-scratch": kittyScratchOdds?.rtp,
         crossword: crosswordOdds?.rtp,
         plinko: plinkoOdds?.rtp,
-        pachinko: pachinkoOdds?.rtp,
+        // pachinko intentionally omitted - RTP tuning is a deliberate later pass (see the plan doc).
     };
     const rtpLabelByKey: Record<string, string | undefined> = Object.fromEntries(
         Object.entries(rtpByKey).map(([key, rtp]) => [key, rtp !== undefined ? `RTP ${(rtp * 100).toFixed(1)}%` : undefined])

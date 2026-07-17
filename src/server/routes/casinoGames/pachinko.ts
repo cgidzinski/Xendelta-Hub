@@ -5,28 +5,19 @@
  * as an actual multi-step session rather than a one-shot durable record (see xenCasino.js's
  * file header, which already anticipated this).
  *
- * Every ball's outcome is still decided the same way every other game's is - fully, before
- * anything is persisted or any money moves:
- *   1. pachinkoOdds.pickTargetPocket() weighted-draws a pocket via crypto.randomInt (see
- *      pachinkoOdds.ts for the weight table and RTP derivation).
- *   2. pachinkoPhysics.simulateDrop(pocket) runs a real matter-js simulation - server-side
- *      only - until it produces a trajectory that actually lands in that pocket (rejection
- *      sampling: the physics is never steered, a "wrong" attempt is just discarded and
- *      retried with fresh randomness - see pachinkoPhysics.ts). The client never runs its
- *      own simulation; it only replays the trajectory this returns, so there's no
- *      client/server fairness gap and no cross-environment physics-determinism risk to
- *      reason about.
- *   3. The payout is computed from the *already-decided* pocket before any DB write for
- *      that ball happens.
- * Only after all of that is one atomic update applied to the round - claiming the ball slot
- * and recording its decided result together (XenCasinoRound.applyConditionsUpdate) - exactly
- * mirroring the "decide, then persist, then pay" order every other game uses, just applied
- * per-ball instead of per-round.
+ * Unlike Plinko (and this game's own first draft), there's no pre-selected target outcome.
+ * The player's launch power is a genuine physics input - pachinkoPhysics.simulateShot() runs
+ * one real matter-js simulation using it, and whatever the ball actually hits *is* the
+ * outcome. That's still decided fully before anything is persisted or any money moves - the
+ * simulation runs, then one atomic update claims the ball slot and records the decided
+ * result together (XenCasinoRound.applyConditionsUpdate), mirroring the "decide, then
+ * persist, then pay" order every other game uses.
  *
- * The jackpot pool (the "start" pocket) follows the exact same shape Slots' pool does: every
- * non-hit ball feeds it by CONTRIBUTION_RATE * pricePerBall, a hit pays out the live pool
- * value and resets it to JACKPOT_SEED. See pachinkoOdds.ts for why FIXED_RTP +
- * CONTRIBUTION_RATE is solved to land on the same 95% target Plinko uses.
+ * Tulip open/closed state lives on the player's own round (conditions.leftTulipOpen /
+ * rightTulipOpen), not shared across players - each player works through their own priming
+ * sequence within their own batch. The jackpot pool *is* shared (same pattern Slots' pool
+ * already uses): every non-jackpot ball feeds it by CONTRIBUTION_RATE * pricePerBall, and a
+ * primed center-tulip catch pays out the live pool value and resets it.
  */
 import express = require("express");
 import { authenticateToken } from "../../middleware/auth";
@@ -36,17 +27,33 @@ const { XenCasino, XenCasinoRound } = require("../../models/xenCasino");
 const crypto = require("crypto");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
-import { POCKETS, CANVAS_WIDTH, CANVAS_HEIGHT, BOARD_TOP, BOARD_BOTTOM, POCKET_FLOOR_Y, generatePins } from "./pachinkoLayout";
-import { pickTargetPocket, fixedPocketPayout, paytable, CONTRIBUTION_RATE, JACKPOT_SEED, TARGET_RTP } from "./pachinkoOdds";
-import { simulateDrop, TrajectorySample } from "./pachinkoPhysics";
+import {
+    CANVAS_WIDTH,
+    CANVAS_HEIGHT,
+    BOUNDARY_RIGHT_ARC,
+    BOUNDARY_LEFT_ARC,
+    LAUNCHER_POSITION,
+    RELEASE_POINT,
+    CHANNEL_INNER_X,
+    CHANNEL_OUTER_X,
+    GUTTER_CUTOUT_X_START,
+    GUTTER_CUTOUT_X_END,
+    GUTTER_POCKET,
+    TULIPS,
+    WINDMILLS,
+    generateNailField,
+    MIN_LAUNCH_POWER,
+    MAX_LAUNCH_POWER,
+} from "./pachinkoLayout";
+import { SIDE_TULIP_MULTIPLIER, CONTRIBUTION_RATE, JACKPOT_SEED, sideTulipPayout } from "./pachinkoPayouts";
+import { simulateShot, PachinkoOutcome, TrajectorySample } from "./pachinkoPhysics";
 
 const SLUG = "pachinko";
 const PRICE_PER_BALL = 100;
 const BATCH_SIZES = [10, 25, 50, 100];
 
 interface PachinkoBallResult {
-    pocket: number;
-    pocketType: string;
+    outcome: PachinkoOutcome;
     payout: number;
     trajectory: TrajectorySample[];
 }
@@ -56,10 +63,12 @@ interface PachinkoConditions {
     ballsRemaining: number;
     pricePerBall: number;
     totalPayout: number;
+    leftTulipOpen: boolean;
+    rightTulipOpen: boolean;
     results: PachinkoBallResult[];
 }
 
-const pins = generatePins(); // static geometry, computed once and reused for every /odds response
+const nailField = generateNailField(); // static geometry, computed once and reused for every /odds response
 
 // A session can legitimately sit open for minutes between launches (think-time between
 // balls) - far longer than Plinko's 30s, which only ever needs to cover a mid-settlement
@@ -90,12 +99,12 @@ async function settleBall(
             toAccountId: round.playerAccountId,
             amount: result.payout.toFixed(10),
             key: `xendelta-${SLUG}-payout-${round._id}-${ballIndex}`,
-            note: result.pocketType === "jackpot" ? `${SLUG}_jackpot` : result.pocketType === "start" ? `${SLUG}_bonus` : `${SLUG}_win`,
+            note: result.outcome === "tulipCenter" ? `${SLUG}_jackpot` : `${SLUG}_win`,
         });
         balance = transferResult.toNewBalance;
     }
 
-    if (result.pocketType === "start") {
+    if (result.outcome === "tulipCenter") {
         await XenCasino.resetPachinkoJackpotPool(JACKPOT_SEED);
     } else {
         await XenCasino.incrementPachinkoJackpotPool(pricePerBall * CONTRIBUTION_RATE);
@@ -169,18 +178,25 @@ module.exports = function (app: express.Application) {
             data: {
                 pricePerBall: PRICE_PER_BALL,
                 batchSizes: BATCH_SIZES,
+                launchPowerRange: { min: MIN_LAUNCH_POWER, max: MAX_LAUNCH_POWER },
                 layout: {
                     canvasWidth: CANVAS_WIDTH,
                     canvasHeight: CANVAS_HEIGHT,
-                    boardTop: BOARD_TOP,
-                    boardBottom: BOARD_BOTTOM,
-                    pocketFloorY: POCKET_FLOOR_Y,
-                    pins,
-                    pockets: POCKETS,
+                    boundaryRightArc: BOUNDARY_RIGHT_ARC,
+                    boundaryLeftArc: BOUNDARY_LEFT_ARC,
+                    launcherPosition: LAUNCHER_POSITION,
+                    releasePoint: RELEASE_POINT,
+                    channelInnerX: CHANNEL_INNER_X,
+                    channelOuterX: CHANNEL_OUTER_X,
+                    gutterCutoutXStart: GUTTER_CUTOUT_X_START,
+                    gutterCutoutXEnd: GUTTER_CUTOUT_X_END,
+                    gutterPocket: GUTTER_POCKET,
+                    nailField,
+                    tulips: TULIPS,
+                    windmills: WINDMILLS,
                 },
-                paytable: paytable(),
+                sideTulipMultiplier: SIDE_TULIP_MULTIPLIER,
                 jackpotPool,
-                rtp: TARGET_RTP,
             },
         });
     });
@@ -201,9 +217,11 @@ module.exports = function (app: express.Application) {
                 ballsRemaining: conditions.ballsRemaining,
                 pricePerBall: conditions.pricePerBall,
                 totalPayout: conditions.totalPayout,
+                leftTulipOpen: conditions.leftTulipOpen,
+                rightTulipOpen: conditions.rightTulipOpen,
                 // Trajectories deliberately omitted for already-launched balls - resuming
                 // shows a summary, not a replay, so this stays small regardless of batch size.
-                results: conditions.results.map((r) => ({ pocket: r.pocket, pocketType: r.pocketType, payout: r.payout })),
+                results: conditions.results.map((r) => ({ outcome: r.outcome, payout: r.payout })),
             },
         });
     });
@@ -231,7 +249,15 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "Insufficient balance" });
             }
 
-            const conditions: PachinkoConditions = { ballsTotal, ballsRemaining: ballsTotal, pricePerBall: PRICE_PER_BALL, totalPayout: 0, results: [] };
+            const conditions: PachinkoConditions = {
+                ballsTotal,
+                ballsRemaining: ballsTotal,
+                pricePerBall: PRICE_PER_BALL,
+                totalPayout: 0,
+                leftTulipOpen: false,
+                rightTulipOpen: false,
+                results: [],
+            };
             const debitKey = `xendelta-${SLUG}-start-${userId}-${crypto.randomUUID()}`;
 
             let round;
@@ -272,7 +298,16 @@ module.exports = function (app: express.Application) {
 
             return res.json({
                 status: true,
-                data: { roundId: round._id, ballsTotal, ballsRemaining: ballsTotal, pricePerBall: PRICE_PER_BALL, totalPayout: 0, balance },
+                data: {
+                    roundId: round._id,
+                    ballsTotal,
+                    ballsRemaining: ballsTotal,
+                    pricePerBall: PRICE_PER_BALL,
+                    totalPayout: 0,
+                    leftTulipOpen: false,
+                    rightTulipOpen: false,
+                    balance,
+                },
             });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : 500;
@@ -282,6 +317,11 @@ module.exports = function (app: express.Application) {
 
     app.post(`/api/casino/games/${SLUG}/launch`, authenticateToken, async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
+        const { launchPower } = req.body as { launchPower?: number };
+        if (typeof launchPower !== "number" || !Number.isFinite(launchPower) || launchPower < MIN_LAUNCH_POWER || launchPower > MAX_LAUNCH_POWER) {
+            return res.status(400).json({ status: false, message: `launchPower must be between ${MIN_LAUNCH_POWER} and ${MAX_LAUNCH_POWER}` });
+        }
+
         try {
             const round = await XenCasinoRound.findActive(SLUG, userId);
             if (!round) {
@@ -292,19 +332,41 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "No balls remaining in this batch" });
             }
 
-            // Fully decided before anything is persisted - see the file header.
-            const target = pickTargetPocket();
-            const { trajectory, landedPocketIndex } = simulateDrop(target.index);
-            const pocket = POCKETS[landedPocketIndex];
-            const payout = pocket.type === "start" ? await XenCasino.getPachinkoJackpotPool() : fixedPocketPayout(pocket, conditions.pricePerBall);
+            // Fully decided before anything is persisted - see the file header. Tulip state
+            // is per-round (not shared), so this is a plain read-simulate-write, no
+            // compare-and-swap needed against other players.
+            const { trajectory, outcome } = simulateShot(launchPower, {
+                leftOpen: conditions.leftTulipOpen,
+                rightOpen: conditions.rightTulipOpen,
+            });
+
+            let payout = 0;
+            let nextLeftOpen = conditions.leftTulipOpen;
+            let nextRightOpen = conditions.rightTulipOpen;
+            if (outcome === "tulipLeft") {
+                payout = sideTulipPayout(conditions.pricePerBall);
+                nextLeftOpen = !conditions.leftTulipOpen;
+            } else if (outcome === "tulipRight") {
+                payout = sideTulipPayout(conditions.pricePerBall);
+                nextRightOpen = !conditions.rightTulipOpen;
+            } else if (outcome === "tulipCenter") {
+                payout = await XenCasino.getPachinkoJackpotPool();
+                nextLeftOpen = false;
+                nextRightOpen = false;
+            }
 
             const ballIndex = conditions.results.length;
-            const result: PachinkoBallResult = { pocket: pocket.index, pocketType: pocket.type, payout, trajectory };
+            const result: PachinkoBallResult = { outcome, payout, trajectory };
 
-            const updated = await XenCasinoRound.applyConditionsUpdate(round._id, { "conditions.ballsRemaining": { $gt: 0 } }, {
-                $inc: { "conditions.ballsRemaining": -1, "conditions.totalPayout": payout },
-                $push: { "conditions.results": result },
-            });
+            const updated = await XenCasinoRound.applyConditionsUpdate(
+                round._id,
+                { "conditions.ballsRemaining": { $gt: 0 } },
+                {
+                    $inc: { "conditions.ballsRemaining": -1, "conditions.totalPayout": payout },
+                    $push: { "conditions.results": result },
+                    $set: { "conditions.leftTulipOpen": nextLeftOpen, "conditions.rightTulipOpen": nextRightOpen },
+                }
+            );
             if (!updated) {
                 // A concurrent request (double-click, duplicate tab) already claimed the
                 // last ball - nothing was decided for *this* request, so nothing to unwind.
@@ -322,10 +384,11 @@ module.exports = function (app: express.Application) {
             return res.json({
                 status: true,
                 data: {
-                    pocket: pocket.index,
-                    pocketType: pocket.type,
+                    outcome,
                     payout,
                     trajectory,
+                    leftTulipOpen: updatedConditions.leftTulipOpen,
+                    rightTulipOpen: updatedConditions.rightTulipOpen,
                     ballsRemaining: updatedConditions.ballsRemaining,
                     totalPayout: updatedConditions.totalPayout,
                     balance: settled.balance,

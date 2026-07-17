@@ -8,36 +8,26 @@ import { casinoLedgerKeys } from "../../../../../hooks/casino/useCasinoLedger";
 import { casinoDailyQuestKeys } from "../../../../../hooks/casino/useCasinoDailyQuest";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import PlayLauncher from "../../components/PlayLauncher";
-import PachinkoBoard, { PachinkoLaunchResult, PachinkoLayoutData, PachinkoPocketType, PachinkoSession } from "../../components/PachinkoBoard";
+import PachinkoBoard, { PachinkoLaunchResult, PachinkoLayoutData, PachinkoSession } from "../../components/PachinkoBoard";
 import PachinkoBuyPanel from "../../components/PachinkoBuyPanel";
-import { formatOddsRatio } from "../../utils/odds";
 
 // Everything Pachinko needs lives in this one file, same shape as Plinko.tsx - it only
-// imports shared infrastructure (GameWrapper, the board/buy-panel components, the odds/
-// currency utils). Unlike every other game, Pachinko has two "screens" inside the
-// PlayLauncher modal (buy a batch, then launch it) instead of one - which of the two shows
-// is just local `session` state here, not anything PlayLauncher itself needs to know about.
-const POCKET_LABELS: Record<PachinkoPocketType, string> = {
-    jackpot: "Jackpot",
-    small: "Small Win",
-    start: "Start (Jackpot Pool)",
-    miss: "Miss",
-};
-
-interface PachinkoPaytableRow {
-    index: number;
-    type: PachinkoPocketType;
-    probability: number;
-    multiplier?: number;
-}
-
+// imports shared infrastructure (GameWrapper, the board/buy-panel components). Unlike every
+// other game, Pachinko has two "screens" inside the PlayLauncher modal (buy a batch, then
+// launch it) instead of one - which of the two shows is just local `session` state here, not
+// anything PlayLauncher itself needs to know about.
+//
+// There's no fixed paytable/probability table or RTP figure to show (unlike every other
+// game) - the outcome comes from a real physics simulation driven by the player's own launch
+// power, not a pre-selected weighted draw, so there's nothing to derive one from. The odds
+// section below is a qualitative description instead of a probability table.
 interface PachinkoOddsResponse {
     pricePerBall: number;
     batchSizes: number[];
+    launchPowerRange: { min: number; max: number };
     layout: PachinkoLayoutData;
-    paytable: PachinkoPaytableRow[];
+    sideTulipMultiplier: number;
     jackpotPool: number;
-    rtp: number;
 }
 
 interface ActiveBatchResponse {
@@ -47,6 +37,8 @@ interface ActiveBatchResponse {
     ballsRemaining?: number;
     pricePerBall?: number;
     totalPayout?: number;
+    leftTulipOpen?: boolean;
+    rightTulipOpen?: boolean;
 }
 
 interface BuyResponse {
@@ -55,6 +47,8 @@ interface BuyResponse {
     ballsRemaining: number;
     pricePerBall: number;
     totalPayout: number;
+    leftTulipOpen: boolean;
+    rightTulipOpen: boolean;
     balance: string;
 }
 
@@ -62,7 +56,8 @@ const fetchOdds = async (): Promise<PachinkoOddsResponse> => (await apiClient.ge
 const fetchActive = async (): Promise<ActiveBatchResponse> => (await apiClient.get<ApiResponse<ActiveBatchResponse>>("/api/casino/games/pachinko/active")).data.data!;
 const buyBalls = async (ballsTotal: number): Promise<BuyResponse> =>
     (await apiClient.post<ApiResponse<BuyResponse>>("/api/casino/games/pachinko/buy", { ballsTotal })).data.data!;
-const launchBall = async (): Promise<PachinkoLaunchResult> => (await apiClient.post<ApiResponse<PachinkoLaunchResult>>("/api/casino/games/pachinko/launch")).data.data!;
+const launchBall = async (launchPower: number): Promise<PachinkoLaunchResult> =>
+    (await apiClient.post<ApiResponse<PachinkoLaunchResult>>("/api/casino/games/pachinko/launch", { launchPower })).data.data!;
 
 export default function Pachinko() {
     const queryClient = useQueryClient();
@@ -82,7 +77,15 @@ export default function Pachinko() {
     const { mutateAsync: buyAsync, isPending: isBuying } = useMutation({
         mutationFn: buyBalls,
         onSuccess: (data) => {
-            setSession({ roundId: data.roundId, ballsTotal: data.ballsTotal, ballsRemaining: data.ballsRemaining, pricePerBall: data.pricePerBall, totalPayout: data.totalPayout });
+            setSession({
+                roundId: data.roundId,
+                ballsTotal: data.ballsTotal,
+                ballsRemaining: data.ballsRemaining,
+                pricePerBall: data.pricePerBall,
+                totalPayout: data.totalPayout,
+                leftTulipOpen: data.leftTulipOpen,
+                rightTulipOpen: data.rightTulipOpen,
+            });
             invalidateShared();
         },
         onError: (error: Error) => enqueueSnackbar(error.message || "Failed to buy balls", { variant: "error" }),
@@ -108,6 +111,8 @@ export default function Pachinko() {
                     ballsRemaining: active.ballsRemaining,
                     pricePerBall: active.pricePerBall,
                     totalPayout: active.totalPayout ?? 0,
+                    leftTulipOpen: active.leftTulipOpen ?? false,
+                    rightTulipOpen: active.rightTulipOpen ?? false,
                 });
             } else {
                 setSession(null);
@@ -119,19 +124,17 @@ export default function Pachinko() {
         }
     };
 
-    const oddsLabel = formatOddsRatio(odds?.paytable.filter((row) => row.type !== "miss").reduce((sum, row) => sum + row.probability, 0));
-    const rtpLabel = odds ? `RTP ${(odds.rtp * 100).toFixed(1)}%` : undefined;
-
     const oddsSections: OddsSection[] = odds
         ? [
               {
-                  title: "Paytable",
-                  rows: odds.paytable.map((row) => ({
-                      label: POCKET_LABELS[row.type],
-                      probability: row.probability,
-                      payout: row.type === "start" ? "Pool" : row.multiplier ? `${row.multiplier}x` : "—",
-                  })),
-                  footnote: "Most balls miss, like a real pachinko board - rare scoring pockets pay a fixed multiplier, and the Start pocket pays out the entire jackpot pool.",
+                  title: "How balls score",
+                  rows: [
+                      { label: "Miss (most balls)", payout: "—" },
+                      { label: "Side tulip (left or right)", payout: `${odds.sideTulipMultiplier}x` },
+                      { label: "Center tulip, primed", payout: "Jackpot Pool" },
+                  ],
+                  footnote:
+                      "Most balls miss, like a real pachinko board. Side tulips toggle open/closed each time they catch a ball; the center tulip is nearly impossible to catch until both side tulips are open at once, then it pays out the entire jackpot pool.",
               },
           ]
         : [];
@@ -139,10 +142,10 @@ export default function Pachinko() {
     return (
         <GameWrapper
             title="Pachinko"
-            howToPlay="Buy a batch of balls, then launch them one at a time into the pin field. Most balls miss - land in a scoring pocket for a fixed multiplier, or hit the Start pocket to win the whole jackpot pool."
+            howToPlay="Buy a batch of balls, then launch them one at a time with your own launch power. Most balls miss - land in a side tulip for a fixed multiplier, or open both side tulips to prime the center tulip and win the whole jackpot pool."
             oddsSections={oddsSections}
         >
-            <PlayLauncher title="Pachinko" oddsLabel={oddsLabel} rtpLabel={rtpLabel} onOpen={handleOpen}>
+            <PlayLauncher title="Pachinko" onOpen={handleOpen}>
                 {!session ? (
                     <PachinkoBuyPanel batchSizes={odds?.batchSizes ?? []} pricePerBall={odds?.pricePerBall ?? 0} isPending={isBuying || checkingActive} onBuy={buyAsync} />
                 ) : (
@@ -150,6 +153,7 @@ export default function Pachinko() {
                         session={session}
                         layout={odds?.layout ?? null}
                         jackpotPool={odds?.jackpotPool ?? 0}
+                        launchPowerRange={odds?.launchPowerRange ?? { min: 0, max: 100 }}
                         isPending={isLaunching}
                         launch={launchAsync}
                         onSessionUpdate={setSession}
