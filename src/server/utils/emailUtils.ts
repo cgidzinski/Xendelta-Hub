@@ -6,7 +6,11 @@ export interface PasswordResetEmailData {
   resetUrl: string;
 }
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+if (!process.env.RESEND_API_KEY) {
+  console.warn("⚠️  WARNING: RESEND_API_KEY not found in environment variables. Email sending will not work.");
+}
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 /**
  * Send a password reset email
@@ -36,6 +40,10 @@ export async function sendPasswordResetEmail(data: PasswordResetEmailData): Prom
       </div>
     `,
   };
+
+  if (!resend) {
+    return { success: false, error: "RESEND_API_KEY is not configured" };
+  }
 
   try {
     const { data: result, error } = await resend.emails.send(emailConfig);
