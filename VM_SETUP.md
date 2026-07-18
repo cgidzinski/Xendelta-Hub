@@ -11,6 +11,7 @@ This guide walks you through setting up a production server for Xendelta Hub on 
 
 ## Table of Contents
 
+0. [Automated Deploys (CI/CD)](#automated-deploys-cicd)
 1. [Initial Setup](#initial-setup)
 2. [Node.js Installation](#nodejs-installation)
 3. [Application Setup](#application-setup)
@@ -22,6 +23,39 @@ This guide walks you through setting up a production server for Xendelta Hub on 
 9. [Adding Additional Subdomains](#adding-additional-subdomains)
 
 ---
+
+## Automated Deploys (CI/CD)
+
+Once the one-time setup below has been done, deploys are automated via
+GitHub Actions and this VM should not need manual `git pull`/`pm2 restart`
+day-to-day. The model:
+
+- **Staging**: every push to an open PR (targeting `main`) triggers
+  `.github/workflows/build-staging.yml`, which installs dependencies, runs
+  tests and type-checking, runs `npm run build`, and force-pushes the result
+  (source + freshly built `dist/`, no `node_modules`) to the `staging`
+  branch. That push triggers `.github/workflows/deploy-staging.yml`, which
+  SSHes into this VM, resets the `~/xendelta-hub-staging` checkout to
+  `origin/staging`, runs `npm ci --omit=dev` (production dependencies only —
+  no bundler or dev toolchain ever runs on this VM), and restarts the
+  `xendelta-hub-staging` PM2 process.
+- **Production**: publishing is manual and deliberate.
+  `.github/workflows/build-prod.yml` only runs when someone triggers it by
+  hand (Actions tab -> "Run workflow", or `gh workflow run build-prod.yml`),
+  choosing which ref to publish. It does the same build-and-publish as
+  staging, but force-pushes to the `production` branch instead, which
+  triggers `.github/workflows/deploy-prod.yml` against
+  `~/xendelta-hub-prod` and the `xendelta-hub` PM2 process. Pushing to `main`
+  by itself does **not** deploy anything.
+- Both `staging` and `production` are force-pushed on every build — treat
+  their history as disposable, not something to branch protect.
+- The rest of this document (manual clone, PM2, nginx, certbot) is still
+  useful for the initial one-time VM bring-up and as a reference for how the
+  pieces fit together, but day-to-day deploys should go through the
+  workflows above rather than by hand.
+- Adding a subdomain (proxied app or plain redirect) is a single command via
+  `infra/gcp-vm/manage-subdomain.sh` — see
+  [Adding Additional Subdomains](#adding-additional-subdomains) below.
 
 ## Initial Setup
 
@@ -58,6 +92,21 @@ Install Git:
 ```bash
 sudo apt install git
 ```
+
+> **For the production/staging pair driven by CI/CD** (see
+> [Automated Deploys](#automated-deploys-cicd)), clone the `production` and
+> `staging` branches into two separate directories instead of a single plain
+> clone, so each has its own working tree, `.env`, and PM2 process:
+>
+> ```bash
+> git clone -b production https://github.com/cgidzinski/Xendelta-Hub ~/xendelta-hub-prod
+> git clone -b staging https://github.com/cgidzinski/Xendelta-Hub ~/xendelta-hub-staging
+> ```
+>
+> The rest of this section (env vars, `npm install`, first-run `npm start`)
+> applies to each of those directories individually. The single-clone
+> instructions below are for a from-scratch/manual setup outside the CI/CD
+> model.
 
 Clone and set up the application:
 
@@ -182,7 +231,26 @@ cd ~/
 sudo npm install -g pm2
 ```
 
-Start your application with PM2:
+> **For the production/staging pair**, use the repo's `ecosystem.config.cjs`
+> instead of ad hoc `pm2 start` commands — it declares both the
+> `xendelta-hub` (prod, `~/xendelta-hub-prod`) and `xendelta-hub-staging`
+> (staging, `~/xendelta-hub-staging`) processes in one place, which is what
+> `deploy-staging.yml`/`deploy-prod.yml` expect to find when they run
+> `pm2 restart <name>`:
+>
+> ```bash
+> cd ~/xendelta-hub-prod && pm2 start ecosystem.config.cjs --only xendelta-hub
+> cd ~/xendelta-hub-staging && pm2 start ecosystem.config.cjs --only xendelta-hub-staging
+> ```
+>
+> Both apps run in PM2 `fork` mode with a single instance each — do not
+> switch either to `cluster`/multiple instances. `server.ts` has in-memory
+> singletons (the scheduler, Socket.IO without a Redis adapter); multiple
+> instances would duplicate scheduled jobs and break socket session
+> affinity.
+
+For a from-scratch/manual setup outside the CI/CD model, start the
+application directly:
 
 ```bash
 cd ~/Xendelta-Hub
@@ -393,128 +461,50 @@ sudo certbot renew --dry-run
 
 ## Adding Additional Subdomains
 
-To add another subdomain (e.g., `demo.xendelta.com`), follow these steps:
+Use `infra/gcp-vm/manage-subdomain.sh` (ships with the repo, so it's already
+present in `~/xendelta-hub-prod/infra/gcp-vm/` and
+`~/xendelta-hub-staging/infra/gcp-vm/` once those checkouts exist) instead of
+hand-editing nginx config. It collapses DNS-is-already-pointed-here ->
+nginx config -> cert issuance -> reload into one command, using certbot's
+`--nginx` plugin to add the HTTPS block and cert paths automatically instead
+of the two-pass manual edit the old instructions required.
 
-### 1. Update DNS
+**Prerequisite** (still manual, provider-dependent): add a DNS A record for
+the subdomain pointing at this VM's IP before running either command below.
 
-Add an A record for your subdomain pointing to your server's IP address in your DNS provider.
-
-### 2. Create New Nginx Config File
-
-Create a new config file for the subdomain:
-
-```bash
-sudo vi /etc/nginx/sites-available/demo.xendelta.com.conf
-```
-
-Add this configuration (replace `demo.xendelta.com` with your subdomain and `3001` with your desired port):
-
-```nginx
-# HTTP redirect to HTTPS
-server {
-    listen 80;
-    listen [::]:80;
-    
-    server_name demo.xendelta.com;
-    
-    return 301 https://demo.xendelta.com$request_uri;
-}
-
-# Main HTTPS server block
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    
-    server_name demo.xendelta.com;
-
-    # SSL certificates managed by Certbot
-    # Note: Initially use main domain cert, then update after getting subdomain cert
-    ssl_certificate /etc/letsencrypt/live/xendelta.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/xendelta.com/privkey.pem;
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
-
-    # Increase client body size limit for file uploads (if needed)
-    client_max_body_size 100M;
-
-    # WebSocket route (if needed)
-    location /socket.io/ {
-        proxy_pass http://localhost:3001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 86400;
-    }
-
-    # Main application route
-    location / {
-        proxy_pass http://localhost:3001;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-### 3. Enable the Site
+### Proxy a subdomain to an app running on a local port
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/demo.xendelta.com.conf /etc/nginx/sites-enabled/
+sudo ~/xendelta-hub-prod/infra/gcp-vm/manage-subdomain.sh add-proxy demo.xendelta.com 3001 you@example.com
 ```
 
-### 4. Test Nginx Configuration
+Writes an HTTP server block proxying `/` and `/socket.io/` to
+`localhost:3001` (with the same `client_max_body_size 100M` and WebSocket
+upgrade headers as the main site), reloads nginx, then runs
+`certbot --nginx` to add TLS and the 80->443 redirect.
+
+### Make a subdomain redirect elsewhere
 
 ```bash
-sudo nginx -t
+sudo ~/xendelta-hub-prod/infra/gcp-vm/manage-subdomain.sh add-redirect old.xendelta.com https://xendelta.com you@example.com
 ```
 
-### 5. Get SSL Certificate
+Same flow, but the subdomain just issues a 301 to the target URL instead of
+proxying to a local app.
+
+### Remove a subdomain
 
 ```bash
-sudo certbot certonly --nginx -d demo.xendelta.com
+sudo ~/xendelta-hub-prod/infra/gcp-vm/manage-subdomain.sh remove demo.xendelta.com
 ```
 
-Certbot will create a new certificate for the subdomain. After it completes, update the certificate paths in your config file.
+Deletes the nginx config and reloads. The TLS certificate is intentionally
+left in place — the command prints the `certbot delete --cert-name` command
+to run separately if you also want that gone.
 
-### 6. Update the Config with New Certificate Path
-
-Edit the config again:
-
-```bash
-sudo vi /etc/nginx/sites-available/demo.xendelta.com.conf
-```
-
-Change the certificate lines to:
-
-```nginx
-ssl_certificate /etc/letsencrypt/live/demo.xendelta.com/fullchain.pem;
-ssl_certificate_key /etc/letsencrypt/live/demo.xendelta.com/privkey.pem;
-```
-
-### 7. Reload Nginx
-
-```bash
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-### 8. Start Your Application on the New Port
-
-Make sure your application is running on the specified port (e.g., 3001). Update the `PORT` in your `.env` file, then start with PM2:
-
-```bash
-cd /path/to/your/app
-pm2 start npm --name "demo-app" -- start
-pm2 save
-```
-
-> **Note:** Each subdomain can run on a different port. Make sure to make the `PORT` environment variable in the .env and the Nginx `proxy_pass` directive to match.
+Both `add-proxy` and `add-redirect` refuse to overwrite an existing config
+for that domain unless you pass `--force`. Run the script with no arguments
+for full usage.
 
 ---
 
