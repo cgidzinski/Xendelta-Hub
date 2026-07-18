@@ -18,8 +18,10 @@ import {
 describe("generatePegPositions", () => {
     const pegs = generatePegPositions();
 
-    it("has one more peg per row, ROWS rows total (12+11+...+1 = 78 pegs)", () => {
-        expect(pegs.length).toBe((ROWS * (ROWS + 1)) / 2);
+    it("alternates SLOT_COUNT/ROWS pegs per row across all ROWS rows (a rectangular grid, not a triangle)", () => {
+        const evenRows = Math.ceil(ROWS / 2);
+        const oddRows = Math.floor(ROWS / 2);
+        expect(pegs.length).toBe(evenRows * SLOT_COUNT + oddRows * ROWS);
     });
 
     it("stays within the canvas and the board's vertical span", () => {
@@ -35,10 +37,19 @@ describe("generatePegPositions", () => {
         expect(generatePegPositions()).toEqual(pegs);
     });
 
-    it("row 0 has exactly one peg, dead center", () => {
+    it("row 0 is inset, not full - no peg sits directly under DROP_MIN_X/DROP_MAX_X at the very top", () => {
         const row0 = pegs.filter((p) => p.y === BOARD_TOP);
-        expect(row0.length).toBe(1);
-        expect(row0[0].x).toBeCloseTo(CANVAS_WIDTH / 2);
+        expect(row0.length).toBe(ROWS);
+        expect(Math.min(...row0.map((p) => p.x))).toBeGreaterThan(DROP_MIN_X);
+        expect(Math.max(...row0.map((p) => p.x))).toBeLessThan(DROP_MAX_X);
+    });
+
+    it("row 1 is the first full row and spans the whole drop range, including its outer columns landing on it", () => {
+        const rowYs = [...new Set(pegs.map((p) => p.y))].sort((a, b) => a - b);
+        const row1 = pegs.filter((p) => p.y === rowYs[1]);
+        expect(row1.length).toBe(SLOT_COUNT);
+        expect(Math.min(...row1.map((p) => p.x))).toBeCloseTo(DROP_MIN_X);
+        expect(Math.max(...row1.map((p) => p.x))).toBeCloseTo(DROP_MAX_X);
     });
 });
 
@@ -101,9 +112,14 @@ describe("MULTIPLIERS", () => {
         }
     });
 
-    it("pays the least at the crowded center and the most at the rare edges", () => {
+    it("pays nothing at the two extreme edge slots", () => {
+        expect(MULTIPLIERS[0]).toBe(0);
+        expect(MULTIPLIERS[SLOT_COUNT - 1]).toBe(0);
+    });
+
+    it("pays more just inside the dead edges than at the crowded center", () => {
         const center = Math.floor(ROWS / 2);
-        expect(MULTIPLIERS[0]).toBeGreaterThan(MULTIPLIERS[center]);
-        expect(MULTIPLIERS[SLOT_COUNT - 1]).toBeGreaterThan(MULTIPLIERS[center]);
+        expect(MULTIPLIERS[1]).toBeGreaterThan(MULTIPLIERS[center]);
+        expect(MULTIPLIERS[SLOT_COUNT - 2]).toBeGreaterThan(MULTIPLIERS[center]);
     });
 });

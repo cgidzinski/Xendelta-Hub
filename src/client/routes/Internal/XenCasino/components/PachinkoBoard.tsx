@@ -43,6 +43,7 @@ export interface PachinkoLayoutData {
     releasePoint: PachinkoPoint;
     channelInnerX: number;
     channelOuterX: number;
+    channelBottomY: number;
     gutterCutoutXStart: number;
     gutterCutoutXEnd: number;
     gutterPocket: PachinkoPoint[];
@@ -69,24 +70,30 @@ export interface PachinkoLaunchResult {
     rightTulipOpen: boolean;
     ballsRemaining: number;
     totalPayout: number;
-    balance?: string;
 }
 
 export interface PachinkoBoardProps {
-    session: PachinkoSession;
+    session: PachinkoSession | null;
     layout: PachinkoLayoutData | null;
     jackpotPool: number;
     launchPowerRange: { min: number; max: number };
-    isPending: boolean;
+    pricePerBall: number; // needed even when session is null, so reup button costs can show before any batch exists
+    isResuming: boolean; // the post-open "resume an existing batch?" check is in flight
     launch: (launchPower: number) => Promise<PachinkoLaunchResult>;
+    reup: (balls: number) => Promise<unknown>;
+    isReuping: boolean;
     onSessionUpdate: (session: PachinkoSession) => void;
-    onBuyMore: () => void; // starts a fresh batch once this one's fully launched
 }
 
 const BALL_RADIUS = 3.5; // matches pachinkoLayout.ts's BALL_RADIUS
 const PIN_RADIUS = 2.2;
 const FRAME_MS = 1000 / 30; // matches the server's ~30fps trajectory sample rate
-const LANDING_PAUSE_MS = 500;
+const POOF_MS = 450; // how long the ball+particle burst takes once a trajectory finishes
+const CALLOUT_MS = 1000; // how long the center win/loss callout stays on screen
+const FIRE_INTERVAL_MS = 600; // 100 balls/minute while the launch button is held
+const MAX_CONCURRENT_BALLS = 8; // client-side cap - narrower oval canvas than Plinko's peg field, so a bit below its MAX_CONCURRENT_BALLS=10
+const PARTICLE_COUNT = 12;
+const REUP_AMOUNTS = [100, 1000];
 
 const OUTCOME_LABEL: Record<PachinkoOutcome, string> = {
     gutter: "Miss",
@@ -94,6 +101,43 @@ const OUTCOME_LABEL: Record<PachinkoOutcome, string> = {
     tulipRight: "Side Tulip!",
     tulipCenter: "JACKPOT!",
 };
+
+interface Particle {
+    angle: number;
+    speed: number; // px/sec
+    radius: number;
+}
+
+interface Callout {
+    id: number;
+    outcome: PachinkoOutcome;
+    payout: number;
+    won: boolean;
+}
+
+// One ball's whole client-side lifecycle, same shape as PlinkoBoard's ActiveBall: "pending"
+// from the instant the launch request goes out (rendered immediately at the launcher so
+// there's no dead gap while the server simulates the shot), "falling" once the real
+// trajectory comes back and starts interpolating, "landed" (poof + particle burst) before
+// it's removed. `seq` on "falling"/"landed" is this ball's own launch order, used so a
+// late-arriving response for an earlier-fired ball can never clobber session state a
+// later-arriving one already applied (see the tick loop below).
+type ActiveBall =
+    | { id: number; phase: "pending" }
+    | { id: number; phase: "falling"; result: PachinkoLaunchResult; startTime: number; seq: number }
+    | { id: number; phase: "landed"; result: PachinkoLaunchResult; landedAt: number; particles: Particle[] };
+
+let nextBallId = 0;
+let nextCalloutId = 0;
+let nextLaunchSeq = 0;
+
+function makeParticles(): Particle[] {
+    return Array.from({ length: PARTICLE_COUNT }, () => ({
+        angle: Math.random() * Math.PI * 2,
+        speed: 50 + Math.random() * 70,
+        radius: 1.5 + Math.random() * 2,
+    }));
+}
 
 function drawArc(ctx: CanvasRenderingContext2D, arc: PachinkoBezierSegment[]) {
     if (arc.length === 0) {
@@ -106,36 +150,53 @@ function drawArc(ctx: CanvasRenderingContext2D, arc: PachinkoBezierSegment[]) {
 }
 
 /**
- * The reusable Pachinko board - canvas analog of PlinkoBoard, but replaying a physics
- * trajectory captured server-side instead of walking a discrete peg-row path. The server
- * decides the whole outcome (a real matter-js simulation driven by the player's own launch
- * power) before any of this runs; this component's only job is to play that trajectory back
- * and reflect the session state it's handed - there's no simulation and no odds logic here.
+ * The reusable Pachinko board - canvas analog of PlinkoBoard, replaying physics trajectories
+ * captured server-side. The server decides the whole outcome (a real matter-js simulation
+ * driven by the player's own launch power) before any of this runs; this component's only
+ * job is to play trajectories back and reflect the session state it's handed.
+ *
+ * Multiple balls can be in flight at once, same as Plinko: holding the launch button fires
+ * one shot immediately and then one every FIRE_INTERVAL_MS while held, and every active ball
+ * animates concurrently off a single shared rAF loop (activeBallsRef). Balls, buying, and
+ * launching aren't gated behind separate screens - the board (and its +100/+1000 reup
+ * buttons) render even before any batch has ever been bought (`session === null`).
  */
-export default function PachinkoBoard({ session, layout, jackpotPool, launchPowerRange, isPending, launch, onSessionUpdate, onBuyMore }: PachinkoBoardProps) {
-    const [launching, setLaunching] = useState(false);
-    const [landedResult, setLandedResult] = useState<PachinkoLaunchResult | null>(null);
-    const [launchPower, setLaunchPower] = useState(() => (launchPowerRange.min + launchPowerRange.max) / 2);
+export default function PachinkoBoard({ session, layout, jackpotPool, launchPowerRange, pricePerBall, isResuming, launch, reup, isReuping, onSessionUpdate }: PachinkoBoardProps) {
+    const [activeCount, setActiveCount] = useState(0); // mirrors activeBallsRef.current.size for rendering
+    const [callouts, setCallouts] = useState<Callout[]>([]);
+    const [launchPower, setLaunchPower] = useState(() => launchPowerRange.min); // starts at 0, same value the plunger springs back to on release
 
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const rafRef = useRef<number | null>(null);
-    const landingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const trajectoryRef = useRef<PachinkoTrajectorySample[] | null>(null);
+    const fireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const activeBallsRef = useRef<Map<number, ActiveBall>>(new Map());
+    const latestAppliedSeqRef = useRef(0); // highest launch seq whose response has actually been applied to session
 
-    const clearTimers = () => {
-        if (rafRef.current !== null) {
-            cancelAnimationFrame(rafRef.current);
-            rafRef.current = null;
-        }
-        if (landingTimeoutRef.current !== null) {
-            clearTimeout(landingTimeoutRef.current);
-            landingTimeoutRef.current = null;
-        }
-    };
+    // "Latest ref" mirrors of props/state that the persistent rAF loop below needs to read
+    // fresh values from without being recreated on every render (it's only ever recreated
+    // when `layout` changes, same as PlinkoBoard's own tick effect).
+    const sessionRef = useRef(session);
+    sessionRef.current = session;
+    const launchPowerRef = useRef(launchPower);
+    launchPowerRef.current = launchPower;
 
-    useEffect(() => () => clearTimers(), []);
+    // Tracks the ball count used to gate hold-to-fire's self-throttle. Deliberately NOT kept
+    // in sync on every render (see the dedicated effect below, keyed only on the server's own
+    // ballsRemaining) - fireOnce decrements this optimistically at request time so the
+    // interval stops itself right around the true depletion point instead of a couple of
+    // round-trips late, and an unconditional per-render resync here would immediately erase
+    // that optimism.
+    const ballsRemainingRef = useRef(session?.ballsRemaining ?? 0);
+    useEffect(() => {
+        ballsRemainingRef.current = session?.ballsRemaining ?? 0;
+    }, [session?.ballsRemaining]);
 
-    const draw = (ball: PachinkoTrajectorySample | null, leftOpen: boolean, rightOpen: boolean, highlightOutcome: PachinkoOutcome | null) => {
+    // The plunger's current window-level release listener, if a press is in progress - tracked
+    // so it can be torn down on unmount too (see the cleanup effect below), not just on an
+    // actual pointerup/pointercancel.
+    const plungerReleaseRef = useRef<(() => void) | null>(null);
+
+    const draw = (now: number, hotTulips: Set<PachinkoTulipLayout["id"]>) => {
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext("2d");
         if (!canvas || !ctx || !layout) {
@@ -165,14 +226,20 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
         drawArc(ctx, layout.boundaryLeftArc);
         ctx.stroke();
 
-        // Rail/channel - thin, one ball-width, along the boundary's straight segment down to
-        // the launcher below the field.
+        // Rail/channel decoration - only drawn below channelBottomY, where the field's own
+        // boundary curves away and the rail becomes a genuinely separate structure leading
+        // down to the launcher. From releasePoint.y to channelBottomY, that same x=400 line is
+        // already the field's own right wall (drawn above via the boundary arcs) - filling it
+        // a second time here used to visually bury the release deflector nail (which sits
+        // just a few px inside that stretch, right where the ball needs an early catch point)
+        // under an unrelated "rail" graphic, making it look like a nail stuck inside the
+        // launcher mechanism instead of the field.
         ctx.fillStyle = "rgba(255,215,0,0.12)";
-        ctx.fillRect(layout.channelInnerX, layout.releasePoint.y, layout.channelOuterX - layout.channelInnerX, layout.launcherPosition.y - layout.releasePoint.y);
+        ctx.fillRect(layout.channelInnerX, layout.channelBottomY, layout.channelOuterX - layout.channelInnerX, layout.launcherPosition.y - layout.channelBottomY);
         ctx.strokeStyle = "rgba(255,215,0,0.5)";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(layout.channelInnerX, layout.releasePoint.y);
+        ctx.moveTo(layout.channelInnerX, layout.channelBottomY);
         ctx.lineTo(layout.channelInnerX, layout.launcherPosition.y);
         ctx.stroke();
 
@@ -210,124 +277,260 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
             ctx.stroke();
             for (const angle of [0, Math.PI / 2]) {
                 ctx.beginPath();
-                ctx.moveTo(
-                    windmill.position.x - Math.cos(angle) * windmill.radius,
-                    windmill.position.y - Math.sin(angle) * windmill.radius
-                );
-                ctx.lineTo(
-                    windmill.position.x + Math.cos(angle) * windmill.radius,
-                    windmill.position.y + Math.sin(angle) * windmill.radius
-                );
+                ctx.moveTo(windmill.position.x - Math.cos(angle) * windmill.radius, windmill.position.y - Math.sin(angle) * windmill.radius);
+                ctx.lineTo(windmill.position.x + Math.cos(angle) * windmill.radius, windmill.position.y + Math.sin(angle) * windmill.radius);
                 ctx.stroke();
             }
         }
 
-        // Tulips - open/primed state highlighted.
+        // Tulips - open/closed sizing and color are Pachinko-specific and unchanged; the
+        // highlight-on-hit treatment now matches Plinko's cups (translucent gold overlay
+        // instead of a solid fill), and can apply to more than one tulip at once now that
+        // balls can land concurrently (hotTulips is a Set, not a single "last outcome").
+        const leftOpen = sessionRef.current?.leftTulipOpen ?? false;
+        const rightOpen = sessionRef.current?.rightTulipOpen ?? false;
         for (const tulip of layout.tulips) {
             const isOpen = tulip.id === "left" ? leftOpen : tulip.id === "right" ? rightOpen : leftOpen && rightOpen;
-            const isHighlighted =
-                (highlightOutcome === "tulipLeft" && tulip.id === "left") ||
-                (highlightOutcome === "tulipRight" && tulip.id === "right") ||
-                (highlightOutcome === "tulipCenter" && tulip.id === "center");
+            const isHot = hotTulips.has(tulip.id);
             const halfWidth = isOpen ? tulip.openHalfWidth : tulip.closedHalfWidth;
-            ctx.fillStyle = isHighlighted ? "#FFD700" : isOpen ? "rgba(100,220,140,0.85)" : "rgba(255,255,255,0.15)";
-            ctx.strokeStyle = tulip.id === "center" ? "#FF6B6B" : "rgba(255,255,255,0.6)";
-            ctx.lineWidth = tulip.id === "center" ? 2 : 1.4;
+            ctx.fillStyle = isHot ? "rgba(255,215,0,0.35)" : isOpen ? "rgba(100,220,140,0.85)" : "rgba(255,255,255,0.15)";
+            ctx.strokeStyle = isHot ? "#FFD700" : tulip.id === "center" ? "#FF6B6B" : "rgba(255,255,255,0.6)";
+            ctx.lineWidth = isHot ? 2 : tulip.id === "center" ? 2 : 1.4;
             ctx.beginPath();
             ctx.ellipse(tulip.position.x, tulip.position.y, halfWidth, 8, 0, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
         }
 
-        if (ball) {
-            ctx.fillStyle = "#FF6B6B";
-            ctx.beginPath();
-            ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
-            ctx.fill();
+        // Pending balls - appear instantly at the launcher the moment a shot is fired, same
+        // "something shows up immediately" principle as Plinko's pending balls, even though
+        // the real trajectory (which starts riding up the rail from here) hasn't come back yet.
+        for (const ball of activeBallsRef.current.values()) {
+            if (ball.phase === "pending") {
+                ctx.fillStyle = "#FF6B6B";
+                ctx.beginPath();
+                ctx.arc(layout.launcherPosition.x, layout.launcherPosition.y, BALL_RADIUS, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        for (const ball of activeBallsRef.current.values()) {
+            if (ball.phase === "falling") {
+                const frames = ball.result.trajectory;
+                const lastIndex = frames.length - 1;
+                if (lastIndex < 0) {
+                    continue; // empty trajectory - promoted to landed on the very next tick
+                }
+                const rawIndex = Math.max(0, (now - ball.startTime) / FRAME_MS);
+                const index = Math.min(lastIndex, rawIndex);
+                const i0 = Math.floor(index);
+                const frac = index - i0;
+                const s0 = frames[i0];
+                const s1 = frames[Math.min(lastIndex, i0 + 1)];
+                const x = s0.x + (s1.x - s0.x) * frac;
+                const y = s0.y + (s1.y - s0.y) * frac;
+                ctx.fillStyle = "#FF6B6B";
+                ctx.beginPath();
+                ctx.arc(x, y, BALL_RADIUS, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (ball.phase === "landed") {
+                const frames = ball.result.trajectory;
+                const final = frames[frames.length - 1] ?? layout.releasePoint;
+                const t = Math.min(1, (now - ball.landedAt) / POOF_MS);
+
+                // The ball itself shrinks and fades as it "settles"...
+                const remainingRadius = BALL_RADIUS * (1 - t);
+                if (remainingRadius > 0.3) {
+                    ctx.fillStyle = `rgba(255,107,107,${1 - t})`;
+                    ctx.beginPath();
+                    ctx.arc(final.x, final.y, remainingRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // ...while a burst of particles poofs outward from the same spot - every
+                // landing gets one, gutter misses included.
+                const won = ball.result.payout > 0;
+                for (const particle of ball.particles) {
+                    const dist = particle.speed * (t * (POOF_MS / 1000));
+                    const px = final.x + Math.cos(particle.angle) * dist;
+                    const py = final.y + Math.sin(particle.angle) * dist;
+                    const alpha = 1 - t;
+                    ctx.fillStyle = won ? `rgba(255,215,0,${alpha})` : `rgba(200,200,200,${alpha * 0.6})`;
+                    ctx.beginPath();
+                    ctx.arc(px, py, particle.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
         }
     };
 
+    // One persistent loop for the whole board's lifetime (once the real layout has arrived):
+    // interpolates every falling ball's position, promotes a ball whose trajectory just
+    // finished into its poof phase (firing the one-time callout/session-update side effects
+    // exactly once via landedAt), and retires any ball whose poof has finished. Mirrors
+    // PlinkoBoard's own persistent rAF loop.
     useEffect(() => {
-        draw(null, session.leftTulipOpen, session.rightTulipOpen, landedResult?.outcome ?? null);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [layout, session.leftTulipOpen, session.rightTulipOpen, landedResult]);
-
-    const animateTrajectory = (result: PachinkoLaunchResult) => {
-        trajectoryRef.current = result.trajectory;
-        const frames = result.trajectory;
-        if (frames.length === 0) {
-            setLandedResult(result);
-            setLaunching(false);
+        if (!layout) {
             return;
         }
-        const start = performance.now();
-        const totalMs = (frames.length - 1) * FRAME_MS;
         const tick = (now: number) => {
-            const elapsed = Math.min(totalMs, now - start);
-            const progress = totalMs > 0 ? elapsed / FRAME_MS : frames.length - 1;
-            const i0 = Math.min(frames.length - 1, Math.floor(progress));
-            const i1 = Math.min(frames.length - 1, i0 + 1);
-            const frac = progress - i0;
-            const sample: PachinkoTrajectorySample = {
-                x: frames[i0].x + (frames[i1].x - frames[i0].x) * frac,
-                y: frames[i0].y + (frames[i1].y - frames[i0].y) * frac,
-                r: frames[i0].r + (frames[i1].r - frames[i0].r) * frac,
-            };
-            draw(sample, session.leftTulipOpen, session.rightTulipOpen, null);
-            if (elapsed < totalMs) {
-                rafRef.current = requestAnimationFrame(tick);
-            } else {
-                rafRef.current = null;
-                draw(frames[frames.length - 1], result.leftTulipOpen, result.rightTulipOpen, result.outcome);
-                landingTimeoutRef.current = setTimeout(() => {
-                    setLandedResult(result);
-                    setLaunching(false);
-                    onSessionUpdate({
-                        ...session,
-                        ballsRemaining: result.ballsRemaining,
-                        totalPayout: result.totalPayout,
-                        leftTulipOpen: result.leftTulipOpen,
-                        rightTulipOpen: result.rightTulipOpen,
-                    });
-                }, LANDING_PAUSE_MS);
+            const hotTulips = new Set<PachinkoTulipLayout["id"]>();
+            const toRemove: number[] = [];
+            for (const ball of activeBallsRef.current.values()) {
+                if (ball.phase === "falling") {
+                    const lastIndex = ball.result.trajectory.length - 1;
+                    const elapsedFrames = (now - ball.startTime) / FRAME_MS;
+                    if (elapsedFrames >= lastIndex) {
+                        const { result, seq } = ball;
+                        activeBallsRef.current.set(ball.id, { id: ball.id, phase: "landed", result, landedAt: now, particles: makeParticles() });
+
+                        const calloutId = nextCalloutId++;
+                        setCallouts((prev) => [...prev, { id: calloutId, outcome: result.outcome, payout: result.payout, won: result.payout > 0 }]);
+                        setTimeout(() => setCallouts((prev) => prev.filter((c) => c.id !== calloutId)), CALLOUT_MS);
+
+                        // Responses can arrive out of order under hold-to-fire (several
+                        // concurrent launches in flight) - only apply this one's session
+                        // state if it's actually the freshest launch to land so far, so a
+                        // late response for an earlier ball can't regress totalPayout or
+                        // stomp a more recent tulip toggle.
+                        if (seq > latestAppliedSeqRef.current && sessionRef.current) {
+                            latestAppliedSeqRef.current = seq;
+                            onSessionUpdate({
+                                ...sessionRef.current,
+                                ballsRemaining: result.ballsRemaining,
+                                totalPayout: result.totalPayout,
+                                leftTulipOpen: result.leftTulipOpen,
+                                rightTulipOpen: result.rightTulipOpen,
+                            });
+                        }
+                    }
+                } else if (ball.phase === "landed") {
+                    if (now - ball.landedAt >= POOF_MS) {
+                        toRemove.push(ball.id);
+                    } else if (ball.result.outcome === "tulipLeft") {
+                        hotTulips.add("left");
+                    } else if (ball.result.outcome === "tulipRight") {
+                        hotTulips.add("right");
+                    } else if (ball.result.outcome === "tulipCenter") {
+                        hotTulips.add("center");
+                    }
+                }
+                // "pending" balls have nothing to advance here - they just render via draw()
+                // until their launch response promotes them to "falling".
             }
+            if (toRemove.length > 0) {
+                for (const id of toRemove) {
+                    activeBallsRef.current.delete(id);
+                }
+                setActiveCount(activeBallsRef.current.size);
+            }
+
+            draw(now, hotTulips);
+            rafRef.current = requestAnimationFrame(tick);
         };
         rafRef.current = requestAnimationFrame(tick);
+        return () => {
+            if (rafRef.current !== null) {
+                cancelAnimationFrame(rafRef.current);
+                rafRef.current = null;
+            }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [layout]);
+
+    useEffect(
+        () => () => {
+            if (fireIntervalRef.current !== null) {
+                clearInterval(fireIntervalRef.current);
+            }
+            if (plungerReleaseRef.current !== null) {
+                window.removeEventListener("pointerup", plungerReleaseRef.current);
+                window.removeEventListener("pointercancel", plungerReleaseRef.current);
+            }
+        },
+        []
+    );
+
+    const ballsRemaining = session?.ballsRemaining ?? 0;
+    const canLaunch = !isResuming && ballsRemaining > 0;
+
+    const fireOnce = () => {
+        if (ballsRemainingRef.current <= 0) {
+            stopFiring();
+            return;
+        }
+        if (activeBallsRef.current.size >= MAX_CONCURRENT_BALLS) {
+            return; // cap reached - skip this tick only, interval keeps running for the next one
+        }
+        const id = nextBallId++;
+        const seq = ++nextLaunchSeq;
+        activeBallsRef.current.set(id, { id, phase: "pending" });
+        setActiveCount((c) => c + 1);
+        // Decremented at request time, not response time - otherwise the interval's own
+        // self-throttle would lag a couple of round-trips behind the true depletion point,
+        // firing a trailing burst of "no balls remaining" requests right as a batch ends.
+        ballsRemainingRef.current -= 1;
+
+        launch(launchPowerRef.current)
+            .then((result) => {
+                activeBallsRef.current.set(id, { id, phase: "falling", result, startTime: performance.now(), seq });
+            })
+            .catch(() => {
+                // The launch mutation's own onError already surfaces a toast - this ball
+                // never actually fired, so release the slot and balance it reserved, and
+                // stop auto-firing rather than immediately retrying into the same error.
+                activeBallsRef.current.delete(id);
+                setActiveCount((c) => c - 1);
+                ballsRemainingRef.current += 1;
+                stopFiring();
+            });
     };
 
-    const resetAfterError = () => {
-        clearTimers();
-        trajectoryRef.current = null;
-        setLaunching(false);
-        draw(null, session.leftTulipOpen, session.rightTulipOpen, null);
-    };
+    function startFiring() {
+        if (!canLaunch || fireIntervalRef.current !== null) {
+            return;
+        }
+        // Deferred one frame, not called synchronously: pointerdown fires before the browser's
+        // own mousedown (which is what the Slider's onChange listens on), so at the instant
+        // this runs, launchPower/launchPowerRef may still hold whatever it was before this
+        // very press - a plain rAF is enough to let that onChange's setState commit first, so
+        // the very first shot actually uses the power the player just pressed at.
+        requestAnimationFrame(fireOnce);
+        fireIntervalRef.current = setInterval(fireOnce, FIRE_INTERVAL_MS);
+    }
 
-    const complete = session.ballsRemaining <= 0;
-    const canLaunch = !isPending && !launching && !complete;
+    function stopFiring() {
+        if (fireIntervalRef.current !== null) {
+            clearInterval(fireIntervalRef.current);
+            fireIntervalRef.current = null;
+        }
+    }
 
-    const handleLaunch = async () => {
+    // The launch power dial doubles as the fire control, like a spring-loaded plunger: press
+    // and drag it to set power, hold it to keep firing at that power (adjustable mid-hold),
+    // release anywhere to stop and let it spring back to 0. Listening on `window` for the
+    // release (not just the slider's own onPointerUp/Leave) is what makes the spring-back
+    // reliable even if the player drags off the slider before releasing.
+    function handlePlungerDown() {
         if (!canLaunch) {
             return;
         }
-        clearTimers();
-        trajectoryRef.current = null;
-        setLandedResult(null);
-        setLaunching(true);
-        draw(null, session.leftTulipOpen, session.rightTulipOpen, null);
+        startFiring();
+        const release = () => {
+            stopFiring();
+            setLaunchPower(launchPowerRange.min);
+            window.removeEventListener("pointerup", release);
+            window.removeEventListener("pointercancel", release);
+            plungerReleaseRef.current = null;
+        };
+        plungerReleaseRef.current = release;
+        window.addEventListener("pointerup", release);
+        window.addEventListener("pointercancel", release);
+    }
 
-        try {
-            const result = await launch(launchPower);
-            animateTrajectory(result);
-        } catch {
-            // The launch mutation's own onError already surfaces a toast - nothing was
-            // decided to animate, so just go back to idle.
-            resetAfterError();
-        }
-    };
-
-    const spent = session.ballsTotal * session.pricePerBall;
-    const netResult = session.totalPayout - spent;
-    const ballsLaunched = session.ballsTotal - session.ballsRemaining;
+    const spent = (session?.ballsTotal ?? 0) * (session?.pricePerBall ?? pricePerBall);
+    const totalPayout = session?.totalPayout ?? 0;
+    const netResult = totalPayout - spent;
 
     return (
         <Box sx={{ maxWidth: 480, mx: "auto" }}>
@@ -345,7 +548,7 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
             >
                 <Box sx={{ textAlign: "center", mb: 1 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
-                        Balls {ballsLaunched}/{session.ballsTotal} · Pool {formatCheddar(jackpotPool)}
+                        {ballsRemaining} balls · Pool {formatCheddar(jackpotPool)}
                     </Typography>
                 </Box>
 
@@ -372,76 +575,83 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
                         </Box>
                     )}
 
-                    {landedResult && (
+                    {callouts.map((callout) => (
                         <Box
+                            key={callout.id}
                             sx={{
                                 position: "absolute",
-                                top: 8,
+                                top: "50%",
                                 left: "50%",
-                                transform: "translateX(-50%)",
                                 display: "flex",
                                 flexDirection: "column",
                                 alignItems: "center",
-                                bgcolor: landedResult.payout > 0 ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.55)",
+                                bgcolor: "rgba(13,13,13,0.55)",
+                                border: "2px solid",
+                                borderColor: callout.won ? "#FFD700" : "grey.700",
                                 borderRadius: 1,
                                 px: 2,
-                                py: 0.5,
-                                animation: "pachinkoVerdictIn 0.3s ease-out",
-                                "@keyframes pachinkoVerdictIn": {
-                                    "0%": { opacity: 0, transform: "translateX(-50%) scale(0.8)" },
-                                    "100%": { opacity: 1, transform: "translateX(-50%) scale(1)" },
+                                py: 0.75,
+                                pointerEvents: "none",
+                                animation: `pachinkoCalloutPop ${CALLOUT_MS}ms ease-out`,
+                                "@keyframes pachinkoCalloutPop": {
+                                    "0%": { opacity: 0, transform: "translate(-50%, -50%) scale(0.7)" },
+                                    "15%": { opacity: 1, transform: "translate(-50%, -50%) scale(1.1)" },
+                                    "30%": { transform: "translate(-50%, -50%) scale(1)" },
+                                    "80%": { opacity: 1, transform: "translate(-50%, -50%) scale(1)" },
+                                    "100%": { opacity: 0, transform: "translate(-50%, -50%) scale(0.9)" },
                                 },
                             }}
                         >
-                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: landedResult.payout > 0 ? "success.light" : "grey.300" }}>
-                                {OUTCOME_LABEL[landedResult.outcome]}
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: callout.won ? "success.light" : "grey.300" }}>
+                                {OUTCOME_LABEL[callout.outcome]}
                             </Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 800, color: "warning.light" }}>
-                                {landedResult.payout > 0 ? `+${formatCheddar(landedResult.payout)}` : "—"}
+                            <Typography variant="body1" sx={{ fontWeight: 800, color: "warning.light" }}>
+                                {callout.payout > 0 ? `+${formatCheddar(callout.payout)}` : "—"}
                             </Typography>
                         </Box>
-                    )}
+                    ))}
                 </Box>
             </Box>
 
             <Box sx={{ px: 2, mt: 2.5 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", mb: 0.5 }}>
-                    Launch Power
+                    {ballsRemaining <= 0
+                        ? "No balls - reup below"
+                        : activeCount >= MAX_CONCURRENT_BALLS
+                          ? "Max balls in flight"
+                          : `Hold & drag the plunger to launch (${ballsRemaining} left)`}
                 </Typography>
+                {/* The power dial doubles as the fire control (a spring-loaded plunger, not a
+                    separate button + slider) - press and drag it to set power, hold to keep
+                    firing at that power, release anywhere to stop and snap back to 0. See
+                    handlePlungerDown. */}
                 <Slider
                     value={launchPower}
                     onChange={(_, value) => typeof value === "number" && setLaunchPower(value)}
+                    onPointerDown={handlePlungerDown}
                     min={launchPowerRange.min}
                     max={launchPowerRange.max}
-                    disabled={!canLaunch}
                     color="warning"
-                    aria-label="Launch power"
+                    valueLabelDisplay="auto"
+                    disabled={!canLaunch}
+                    aria-label="Launch power - hold and drag, release to fire"
+                    sx={{ touchAction: "none" }}
                 />
             </Box>
 
-            <Box sx={{ textAlign: "center", mt: 1.5 }}>
-                {!complete ? (
+            <Box sx={{ display: "flex", justifyContent: "center", gap: 1.5, mt: 2 }}>
+                {REUP_AMOUNTS.map((amount) => (
                     <Button
-                        variant="contained"
-                        color="error"
-                        size="large"
-                        onClick={handleLaunch}
-                        disabled={!canLaunch}
-                        sx={{ borderRadius: 999, px: 6, py: 1.25, fontWeight: 800, fontSize: "1.05rem" }}
-                    >
-                        {launching ? "Launching…" : `Launch Ball (${session.ballsRemaining} left)`}
-                    </Button>
-                ) : (
-                    <Button
-                        variant="contained"
+                        key={amount}
+                        variant="outlined"
                         color="warning"
-                        size="large"
-                        onClick={onBuyMore}
-                        sx={{ borderRadius: 999, px: 6, py: 1.25, fontWeight: 800, fontSize: "1.05rem" }}
+                        onClick={() => reup(amount)}
+                        disabled={isReuping || isResuming}
+                        sx={{ borderRadius: 999, px: 3, fontWeight: 700, textTransform: "none" }}
                     >
-                        Buy More Balls
+                        +{amount} ({formatCheddar(amount * pricePerBall)})
                     </Button>
-                )}
+                ))}
             </Box>
 
             <Box
@@ -479,7 +689,7 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
                         Ratio
                     </Typography>
                     <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-                        {spent > 0 ? (session.totalPayout / spent).toFixed(2) : "0.00"}x
+                        {spent > 0 ? (totalPayout / spent).toFixed(2) : "0.00"}x
                     </Typography>
                 </Box>
             </Box>

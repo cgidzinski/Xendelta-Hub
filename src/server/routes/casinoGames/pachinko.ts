@@ -36,6 +36,7 @@ import {
     RELEASE_POINT,
     CHANNEL_INNER_X,
     CHANNEL_OUTER_X,
+    CHANNEL_BOTTOM_Y,
     GUTTER_CUTOUT_X_START,
     GUTTER_CUTOUT_X_END,
     GUTTER_POCKET,
@@ -50,12 +51,17 @@ import { simulateShot, PachinkoOutcome, TrajectorySample } from "./pachinkoPhysi
 
 const SLUG = "pachinko";
 const PRICE_PER_BALL = 100;
-const BATCH_SIZES = [10, 25, 50, 100];
+const REUP_SIZES = [100, 1000];
 
 interface PachinkoBallResult {
     outcome: PachinkoOutcome;
     payout: number;
     trajectory: TrajectorySample[];
+}
+
+interface PachinkoTopup {
+    debitKey: string;
+    balls: number;
 }
 
 interface PachinkoConditions {
@@ -66,6 +72,16 @@ interface PachinkoConditions {
     leftTulipOpen: boolean;
     rightTulipOpen: boolean;
     results: PachinkoBallResult[];
+    // How many of `results` have had their settlement (payout transfer + jackpot pool update)
+    // confirmed - bumped via $max (not $inc) since concurrent launches settle independently
+    // and can finish out of order. recoverStaleRounds replays from here, not just the last
+    // result, now that launches can be concurrent and settlement is deferred past the
+    // response (see /launch below).
+    settledThrough: number;
+    // Reup debits beyond the round's original startRound debitKey - each is its own
+    // idempotency key, replayed by recoverStaleRounds alongside the original so an ambiguous
+    // reup failure stays recoverable the same way the original buy's debit already is.
+    topups: PachinkoTopup[];
 }
 
 const nailField = generateNailField(); // static geometry, computed once and reused for every /odds response
@@ -121,7 +137,9 @@ async function recoverStaleRounds(): Promise<void> {
             const xenCasinoAccountId = await getXenCasinoAccountId();
 
             // Replaying the batch debit is safe even if it already went through - the key
-            // makes it a no-op on the ledger, not a double charge.
+            // makes it a no-op on the ledger, not a double charge. Every reup debit gets the
+            // same treatment via its own key - the original buy's debitKey alone no longer
+            // covers everything this round was ever charged for.
             await transfer({
                 fromAccountId: round.playerAccountId,
                 toAccountId: xenCasinoAccountId,
@@ -129,16 +147,22 @@ async function recoverStaleRounds(): Promise<void> {
                 key: round.debitKey,
                 note: `${SLUG}_wager`,
             });
+            for (const topup of conditions.topups ?? []) {
+                await transfer({
+                    fromAccountId: round.playerAccountId,
+                    toAccountId: xenCasinoAccountId,
+                    amount: (topup.balls * conditions.pricePerBall).toFixed(10),
+                    key: topup.debitKey,
+                    note: `${SLUG}_wager`,
+                });
+            }
 
-            // The most recently launched ball's outcome was already decided and persisted
-            // (see the file header) - only its *settlement* (payout + pool update) might not
-            // have completed if the process died mid-request. Every earlier ball's
-            // settlement already completed, or this round couldn't have progressed past it.
-            // Same accepted shape as Slots' own recovery sweep (which replays settleRound
-            // wholesale on sweep too).
-            if (conditions.results.length > 0) {
-                const lastIndex = conditions.results.length - 1;
-                await settleBall({ _id: round._id, playerAccountId: round.playerAccountId }, lastIndex, conditions.results[lastIndex], conditions.pricePerBall);
+            // Any ball not yet confirmed settled might have died mid-settlement - replay from
+            // settledThrough onward (not just the last ball; concurrent launches can leave
+            // more than one settlement pending at once). Safe to replay: each settlement's
+            // payout transfer has its own per-ball idempotency key.
+            for (let i = conditions.settledThrough ?? 0; i < conditions.results.length; i++) {
+                await settleBall({ _id: round._id, playerAccountId: round.playerAccountId }, i, conditions.results[i], conditions.pricePerBall);
             }
 
             // No outcome was ever decided for balls that were never launched, so there's
@@ -177,7 +201,7 @@ module.exports = function (app: express.Application) {
             status: true,
             data: {
                 pricePerBall: PRICE_PER_BALL,
-                batchSizes: BATCH_SIZES,
+                reupSizes: REUP_SIZES,
                 launchPowerRange: { min: MIN_LAUNCH_POWER, max: MAX_LAUNCH_POWER },
                 layout: {
                     canvasWidth: CANVAS_WIDTH,
@@ -188,6 +212,7 @@ module.exports = function (app: express.Application) {
                     releasePoint: RELEASE_POINT,
                     channelInnerX: CHANNEL_INNER_X,
                     channelOuterX: CHANNEL_OUTER_X,
+                    channelBottomY: CHANNEL_BOTTOM_Y,
                     gutterCutoutXStart: GUTTER_CUTOUT_X_START,
                     gutterCutoutXEnd: GUTTER_CUTOUT_X_END,
                     gutterPocket: GUTTER_POCKET,
@@ -226,10 +251,14 @@ module.exports = function (app: express.Application) {
         });
     });
 
+    // Buys balls - creates a fresh batch if the player has no active round, or reups
+    // (tops up) their existing one if they do. One endpoint covers both because that's the
+    // player's actual mental model (the +100/+1000 buttons on the board work the same way
+    // whether or not a round already exists) - the branch is an internal detail.
     app.post(`/api/casino/games/${SLUG}/buy`, authenticateToken, async function (req: express.Request, res: express.Response) {
-        const { ballsTotal } = req.body as { ballsTotal?: number };
-        if (typeof ballsTotal !== "number" || !BATCH_SIZES.includes(ballsTotal)) {
-            return res.status(400).json({ status: false, message: `ballsTotal must be one of ${BATCH_SIZES.join(", ")}` });
+        const { balls } = req.body as { balls?: number };
+        if (typeof balls !== "number" || !REUP_SIZES.includes(balls)) {
+            return res.status(400).json({ status: false, message: `balls must be one of ${REUP_SIZES.join(", ")}` });
         }
 
         const userId = String((req as AuthenticatedRequest).user!._id);
@@ -238,7 +267,7 @@ module.exports = function (app: express.Application) {
             return res.status(404).json({ status: false, message: "User not found" });
         }
 
-        const wager = ballsTotal * PRICE_PER_BALL;
+        const wager = balls * PRICE_PER_BALL;
 
         try {
             const resolved = await resolveUserAccount(user);
@@ -249,14 +278,70 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "Insufficient balance" });
             }
 
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+            const existing = await XenCasinoRound.findActive(SLUG, userId);
+
+            if (existing) {
+                // Reup: reserve the balls on the existing round first (a durable record that
+                // this money is owed) before attempting the debit - same "record before
+                // money moves" order the create branch below uses. Each reup gets its own
+                // debit key, tracked in conditions.topups, so an ambiguous debit failure
+                // below stays recoverable by the stale-round sweep the same way the
+                // original buy's debit already is.
+                const debitKey = `xendelta-${SLUG}-topup-${existing._id}-${crypto.randomUUID()}`;
+                const reserved = await XenCasinoRound.applyConditionsUpdate(existing._id, {}, {
+                    $inc: { "conditions.ballsTotal": balls, "conditions.ballsRemaining": balls },
+                    $push: { "conditions.topups": { debitKey, balls } },
+                });
+
+                let balance: string;
+                try {
+                    const result = await transfer({
+                        fromAccountId: resolved.account.accountId,
+                        toAccountId: xenCasinoAccountId,
+                        amount: wager.toFixed(10),
+                        key: debitKey,
+                        note: `${SLUG}_wager`,
+                    });
+                    balance = result.fromNewBalance;
+                } catch (err) {
+                    if (err instanceof WeeabetsTransferError && err.status === 400) {
+                        // Clean failure - nothing was actually charged, undo the reservation.
+                        await XenCasinoRound.applyConditionsUpdate(existing._id, {}, {
+                            $inc: { "conditions.ballsTotal": -balls, "conditions.ballsRemaining": -balls },
+                            $pull: { "conditions.topups": { debitKey } },
+                        });
+                        return res.status(400).json({ status: false, message: "Insufficient balance" });
+                    }
+                    throw err; // ambiguous - leave the reservation in place, the recovery sweep will retry it via conditions.topups
+                }
+
+                const conditions = reserved.conditions as PachinkoConditions;
+                return res.json({
+                    status: true,
+                    data: {
+                        roundId: reserved._id,
+                        ballsTotal: conditions.ballsTotal,
+                        ballsRemaining: conditions.ballsRemaining,
+                        pricePerBall: conditions.pricePerBall,
+                        totalPayout: conditions.totalPayout,
+                        leftTulipOpen: conditions.leftTulipOpen,
+                        rightTulipOpen: conditions.rightTulipOpen,
+                        balance,
+                    },
+                });
+            }
+
             const conditions: PachinkoConditions = {
-                ballsTotal,
-                ballsRemaining: ballsTotal,
+                ballsTotal: balls,
+                ballsRemaining: balls,
                 pricePerBall: PRICE_PER_BALL,
                 totalPayout: 0,
                 leftTulipOpen: false,
                 rightTulipOpen: false,
                 results: [],
+                settledThrough: 0,
+                topups: [],
             };
             const debitKey = `xendelta-${SLUG}-start-${userId}-${crypto.randomUUID()}`;
 
@@ -272,12 +357,13 @@ module.exports = function (app: express.Application) {
                 });
             } catch (err) {
                 if ((err as { code?: number }).code === 11000) {
-                    return res.status(400).json({ status: false, message: "You already have an active batch - finish it or wait for it to expire" });
+                    // A concurrent request already created the round between the findActive
+                    // check above and here - rare, but the client can just retry as a reup.
+                    return res.status(400).json({ status: false, message: "You already have an active batch - try again" });
                 }
                 throw err;
             }
 
-            const xenCasinoAccountId = await getXenCasinoAccountId();
             let balance: string;
             try {
                 const result = await transfer({
@@ -300,8 +386,8 @@ module.exports = function (app: express.Application) {
                 status: true,
                 data: {
                     roundId: round._id,
-                    ballsTotal,
-                    ballsRemaining: ballsTotal,
+                    ballsTotal: balls,
+                    ballsRemaining: balls,
                     pricePerBall: PRICE_PER_BALL,
                     totalPayout: 0,
                     leftTulipOpen: false,
@@ -368,20 +454,24 @@ module.exports = function (app: express.Application) {
                 }
             );
             if (!updated) {
-                // A concurrent request (double-click, duplicate tab) already claimed the
-                // last ball - nothing was decided for *this* request, so nothing to unwind.
+                // A concurrent request (double-click, duplicate tab, hold-to-fire) already
+                // claimed the last ball - nothing was decided for *this* request, so nothing
+                // to unwind.
                 return res.status(409).json({ status: false, message: "No balls remaining" });
             }
 
-            const settled = await settleBall({ _id: round._id, playerAccountId: round.playerAccountId }, ballIndex, result, conditions.pricePerBall);
-
             const updatedConditions = updated.conditions as PachinkoConditions;
-            if (updatedConditions.ballsRemaining === 0) {
-                await XenCasinoRound.resolve(round._id);
-                await recordCasinoRoundPlayed(userId);
-            }
 
-            return res.json({
+            // The outcome is fully decided and durably persisted above - the client has
+            // everything it needs to animate, so respond now rather than making it wait on
+            // the payout transfer too. This matters a lot more here than for a single-shot
+            // game: launches can now fire every 600ms while held, so a slow payout transfer
+            // on every single one would compound into visible lag. No `balance` field here
+            // (unlike Plinko's /drop) - launch never debits anything, only the deferred
+            // payout below moves money, so there's no fresh pre-payout balance to return
+            // without an extra lookup; the client's own invalidateShared() on success already
+            // refetches the real balance shortly after.
+            res.json({
                 status: true,
                 data: {
                     outcome,
@@ -391,9 +481,37 @@ module.exports = function (app: express.Application) {
                     rightTulipOpen: updatedConditions.rightTulipOpen,
                     ballsRemaining: updatedConditions.ballsRemaining,
                     totalPayout: updatedConditions.totalPayout,
-                    balance: settled.balance,
                 },
             });
+
+            // Payout settlement, settledThrough bookkeeping, and round cleanup all happen
+            // after the response - none of their results affect what the client renders. Own
+            // try/catch since this runs after the outer one has already returned; if the
+            // process dies before this finishes, recoverStaleRounds (using settledThrough)
+            // is what finishes it.
+            (async () => {
+                try {
+                    await settleBall({ _id: round._id, playerAccountId: round.playerAccountId }, ballIndex, result, conditions.pricePerBall);
+                    // $max, not $inc - concurrent launches settle independently and can
+                    // finish out of order, so this only ever advances to the highest
+                    // confirmed index, never regresses past a later settlement that beat
+                    // this one to it.
+                    await XenCasinoRound.applyConditionsUpdate(round._id, {}, { $max: { "conditions.settledThrough": ballIndex + 1 } });
+                    if (updatedConditions.ballsRemaining === 0) {
+                        // Guarded, not unconditional - a reup that lands in the gap between
+                        // this settlement finishing and this check running would have already
+                        // pushed ballsRemaining back above 0, and an unconditional delete
+                        // here would wipe that freshly-paid-for round out from under it.
+                        const deleted = await XenCasinoRound.resolveIfConditions(round._id, { "conditions.ballsRemaining": 0 });
+                        if (deleted) {
+                            await recordCasinoRoundPlayed(userId);
+                        }
+                    }
+                } catch (err) {
+                    console.error(`${SLUG}: post-response settlement failed for round ${round._id}, ball ${ballIndex}`, err);
+                }
+            })();
+            return;
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });

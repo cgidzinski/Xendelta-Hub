@@ -19,7 +19,11 @@ export default function XenCasinoNavbar() {
     const location = useLocation();
     const { titlebar } = useXenCasinoTitlebar();
 
-    const activeTab = location.pathname.startsWith("/internal/xencasino/ledger") ? 1 : 0;
+    const activeTab = location.pathname.startsWith("/internal/xencasino/stats")
+        ? 2
+        : location.pathname.startsWith("/internal/xencasino/ledger")
+            ? 1
+            : 0;
     const { canClaim } = useCasinoDailyQuest();
 
     return (
@@ -42,11 +46,16 @@ export default function XenCasinoNavbar() {
             {!titlebar ? (
                 <Tabs
                     value={activeTab}
-                    onChange={(_, v) => navigate(v === 0 ? "/internal/xencasino" : "/internal/xencasino/ledger")}
+                    onChange={(_, v) => {
+                        if (v === 0) navigate("/internal/xencasino");
+                        else if (v === 1) navigate("/internal/xencasino/ledger");
+                        else navigate("/internal/xencasino/stats");
+                    }}
                     sx={{ minHeight: 56, flexShrink: 0, "& .MuiTab-root": { minHeight: 56 } }}
                 >
                     <Tab label="Games" />
                     <Tab label="Ledger" />
+                    <Tab label="Stats" />
                 </Tabs>
             ) : (
                 <Typography

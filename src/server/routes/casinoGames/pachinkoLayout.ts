@@ -56,8 +56,16 @@ export function sampleBezier(seg: BezierSegment, steps: number): Point[] {
 }
 
 // Flattens a run of connected bezier segments into one polyline, without duplicating the
-// point shared by consecutive segments' start/end.
-export function sampleArc(arc: BezierSegment[], stepsPerSegment = 14): Point[] {
+// point shared by consecutive segments' start/end. 32, not the original 14 - even though
+// consecutive segments' tangents match exactly at their shared endpoint (verified: the top
+// curve's end tangent and the straight rail segment's own direction are both purely
+// vertical), each individual straight chord is still only an approximation of the curve
+// between its two sampled points, not the true tangent line. With only 14 chords per segment,
+// the last chord approaching that joint was long enough to visibly deviate from vertical,
+// so a fast ball riding up near the wall picked up a small unwanted sideways kick right where
+// the straight rail met the curve, instead of a clean transition. Doubling the resolution
+// halves each chord's own angular error there.
+export function sampleArc(arc: BezierSegment[], stepsPerSegment = 32): Point[] {
     const points: Point[] = [];
     arc.forEach((seg, i) => {
         const segPoints = sampleBezier(seg, stepsPerSegment);
@@ -75,7 +83,13 @@ export const BOUNDARY_LEFT_POINTS = sampleArc(BOUNDARY_LEFT_ARC);
 // and the boundary starts curving again - that point is the release point, where the ball
 // leaves the scripted rail phase and becomes a free body in the open field.
 export const CHANNEL_OUTER_X = 400; // = the boundary's own straight segment; no separate outer wall
-export const CHANNEL_WIDTH = 8; // ~ one ball-width
+// 12, not exactly one ball-width (8) - the release point/ball spawn sits at this channel's
+// center, and with only 8px it landed close enough to the wall's own collision geometry
+// (which has some real thickness, not a zero-width line) that the ball spawned slightly
+// embedded in it - confirmed empirically as a strong, velocity-independent "kick" masking any
+// power tuning at the low end. The extra clearance here is what actually fixes that, not
+// anything in the physics module itself.
+export const CHANNEL_WIDTH = 12;
 export const CHANNEL_INNER_X = CHANNEL_OUTER_X - CHANNEL_WIDTH;
 export const CHANNEL_TOP_Y = 260; // top of the straight segment = release point's y
 export const CHANNEL_BOTTOM_Y = 620; // bottom of the straight segment, where the channel meets the field's own boundary
@@ -189,9 +203,11 @@ const STRAY_NAILS: Point[] = [
 
 // A short diagonal line of nails right where the ball first lands after release (396, 260) -
 // without something directly in that initial fall line, the ball just drops straight down
-// along the right wall and never gets meaningfully deflected toward the tulip field.
-const RELEASE_DEFLECTOR: Point[] = [
-    { x: 393, y: 272 },
+// along the right wall and never gets meaningfully deflected toward the tulip field. Exported
+// (unlike the other nail groups) so pachinkoPhysics.ts can give just this cluster a lower
+// restitution than the rest of the nail field - see the comment there for why.
+export const RELEASE_DEFLECTOR: Point[] = [
+    { x: 387, y: 274 },
     { x: 380, y: 283 },
     { x: 364, y: 292 },
     { x: 346, y: 300 },
@@ -221,10 +237,41 @@ export function generateNailField(): PinPosition[] {
 export const MIN_LAUNCH_POWER = 0;
 export const MAX_LAUNCH_POWER = 100;
 
-// Pure mapping from the player's dial position to an initial speed up the rail - centralized
-// so it's easy to retune later during balancing, without touching the physics module itself.
+// The scripted rail-climb speed - deliberately NOT scaled by power anymore. It used to be
+// (4 + t*10), which made a low-power shot crawl slowly up the launcher for ~2 real seconds
+// before ever reaching the field - that read as broken/laggy, not "weak," since a weak *pull*
+// should still be a fast, immediate mechanical action (like a real plunger - you can pull it
+// back gently or hard, but releasing it is always quick either way). All of the actual power
+// differentiation now lives in launchPowerToExitVelocity below; this only paces the climb
+// animation. Still takes `power` (unused) so its own call sites/tests don't need to change if
+// this ever needs to vary again.
 export function launchPowerToRailSpeed(power: number): number {
+    void power;
+    return 22; // px per physics step - tuned so the rail-climb is quick at any power
+}
+
+// The free body's actual exit velocity magnitude once it leaves the rail - this is the real
+// "how hard was this shot" input, independent of the rail-climb pacing above. Tuned
+// empirically (see pachinkoPhysics.ts's simulateShot, and the plan doc) against this board's
+// actual geometry: minimum power should only just barely crest over the release point edge
+// before gravity takes it back down (a couple dozen px of rise, immediately falling into the
+// release deflector nails right below); maximum power should carry the ball all the way up to
+// the top boundary with enough speed left to ride along its curve rather than just bonking
+// into it - a real "loop" across the top of the field before it comes back down the other
+// side, not just a taller version of the same weak arc.
+export function launchPowerToExitVelocity(power: number): number {
     const clamped = Math.min(MAX_LAUNCH_POWER, Math.max(MIN_LAUNCH_POWER, power));
     const t = clamped / MAX_LAUNCH_POWER;
-    return 4 + t * 10; // px per physics step, roughly - tune visually, not derived
+    // 1 to 16.8 - measured empirically against buildAttemptWorld's actual gravity/wall setup.
+    // The low end matters more than it looks: a test harness bug (testing raw velocities
+    // below the old 3.5 floor by feeding this function a negative `power` - which the clamp
+    // above silently snaps back to 0) made it look like the minimum rise was stuck at a fixed
+    // value no matter what this constant was set to, when the real explanation was just that
+    // power=0 always evaluates to this exact y-intercept - there's no way to get a *weaker*
+    // shot than whatever this is set to, so it has to be genuinely small on its own, not tuned
+    // relative to some lower baseline that doesn't actually exist. The high end caps out
+    // around ~218px of rise (near the very top of the field) once velocity passes ~12, so
+    // anything past that mostly shows up as more speed/energy at the top (a harder hit
+    // against the boundary, more sideways travel riding its curve) rather than more rise.
+    return 1 + t * 15.8;
 }

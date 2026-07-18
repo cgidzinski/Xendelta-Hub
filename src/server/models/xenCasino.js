@@ -108,7 +108,13 @@ var xenCasinoRoundSchema = new mongoose.Schema({
   // when the batch was first bought.
   lastActivityAt: { type: Date, default: Date.now },
 });
-xenCasinoRoundSchema.index({ game: 1, userId: 1 }, { unique: true }); // one active round per user per game
+// One active round per user per game - except Plinko, which allows several balls in flight
+// at once (see plinko.ts's own count-based cap for that). Every other game (Pachinko's
+// buy/resume flow in particular) still genuinely depends on there being at most one active
+// round to find/resume, so the constraint stays a real DB guarantee for them; Plinko is the
+// one place a single request fully decides and settles its own round in one shot, so nothing
+// here needs "the" active round to look anything up against.
+xenCasinoRoundSchema.index({ game: 1, userId: 1 }, { unique: true, partialFilterExpression: { game: { $ne: "plinko" } } });
 
 xenCasinoRoundSchema.statics.startRound = async function (params) {
   return this.create({
@@ -127,6 +133,18 @@ xenCasinoRoundSchema.statics.findActive = async function (game, userId) {
 
 xenCasinoRoundSchema.statics.resolve = async function (roundId) {
   await this.findByIdAndDelete(roundId).exec();
+};
+
+// Guarded version of resolve() - only deletes if the round still matches `guard` at delete
+// time. Needed wherever a round's deferred/async close-out (e.g. Pachinko's post-response
+// settlement once its last ball's payout confirms) could otherwise race a player action that
+// legitimately revives the round in between (e.g. buying more balls) - an unconditional
+// delete there would silently wipe a round with freshly-paid-for state on it. Returns whether
+// the delete actually happened, so callers know if their close-out actions (e.g. recording a
+// completed round) still apply.
+xenCasinoRoundSchema.statics.resolveIfConditions = async function (roundId, guard) {
+  var doc = await this.findOneAndDelete(Object.assign({ _id: roundId }, guard)).exec();
+  return !!doc;
 };
 
 // Atomically applies an update (e.g. $inc/$push on `conditions.*`) to a round, gated by an

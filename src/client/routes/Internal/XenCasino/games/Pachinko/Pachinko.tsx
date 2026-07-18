@@ -9,13 +9,12 @@ import { casinoDailyQuestKeys } from "../../../../../hooks/casino/useCasinoDaily
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import PlayLauncher from "../../components/PlayLauncher";
 import PachinkoBoard, { PachinkoLaunchResult, PachinkoLayoutData, PachinkoSession } from "../../components/PachinkoBoard";
-import PachinkoBuyPanel from "../../components/PachinkoBuyPanel";
 
 // Everything Pachinko needs lives in this one file, same shape as Plinko.tsx - it only
-// imports shared infrastructure (GameWrapper, the board/buy-panel components). Unlike every
-// other game, Pachinko has two "screens" inside the PlayLauncher modal (buy a batch, then
-// launch it) instead of one - which of the two shows is just local `session` state here, not
-// anything PlayLauncher itself needs to know about.
+// imports shared infrastructure (GameWrapper, the board). Unlike before, there's no separate
+// "buy panel" screen gating the board - the board renders immediately (even with no active
+// batch, `session === null`) and reup buttons live inside it, matching how Plinko's own board
+// keeps its bet controls inline rather than behind a gate.
 //
 // There's no fixed paytable/probability table or RTP figure to show (unlike every other
 // game) - the outcome comes from a real physics simulation driven by the player's own launch
@@ -23,7 +22,7 @@ import PachinkoBuyPanel from "../../components/PachinkoBuyPanel";
 // section below is a qualitative description instead of a probability table.
 interface PachinkoOddsResponse {
     pricePerBall: number;
-    batchSizes: number[];
+    reupSizes: number[];
     launchPowerRange: { min: number; max: number };
     layout: PachinkoLayoutData;
     sideTulipMultiplier: number;
@@ -54,8 +53,9 @@ interface BuyResponse {
 
 const fetchOdds = async (): Promise<PachinkoOddsResponse> => (await apiClient.get<ApiResponse<PachinkoOddsResponse>>("/api/casino/games/pachinko/odds")).data.data!;
 const fetchActive = async (): Promise<ActiveBatchResponse> => (await apiClient.get<ApiResponse<ActiveBatchResponse>>("/api/casino/games/pachinko/active")).data.data!;
-const buyBalls = async (ballsTotal: number): Promise<BuyResponse> =>
-    (await apiClient.post<ApiResponse<BuyResponse>>("/api/casino/games/pachinko/buy", { ballsTotal })).data.data!;
+// Same endpoint creates a fresh batch or reups an existing one - the server decides which
+// based on whether the player already has an active round (see pachinko.ts's /buy handler).
+const buyBalls = async (balls: number): Promise<BuyResponse> => (await apiClient.post<ApiResponse<BuyResponse>>("/api/casino/games/pachinko/buy", { balls })).data.data!;
 const launchBall = async (launchPower: number): Promise<PachinkoLaunchResult> =>
     (await apiClient.post<ApiResponse<PachinkoLaunchResult>>("/api/casino/games/pachinko/launch", { launchPower })).data.data!;
 
@@ -74,32 +74,34 @@ export default function Pachinko() {
         queryClient.invalidateQueries({ queryKey: ["pachinkoOdds"] }); // jackpot pool moved
     };
 
-    const { mutateAsync: buyAsync, isPending: isBuying } = useMutation({
+    const applyBuyResponse = (data: BuyResponse) => {
+        setSession({
+            roundId: data.roundId,
+            ballsTotal: data.ballsTotal,
+            ballsRemaining: data.ballsRemaining,
+            pricePerBall: data.pricePerBall,
+            totalPayout: data.totalPayout,
+            leftTulipOpen: data.leftTulipOpen,
+            rightTulipOpen: data.rightTulipOpen,
+        });
+        invalidateShared();
+    };
+
+    const { mutateAsync: reupAsync, isPending: isReuping } = useMutation({
         mutationFn: buyBalls,
-        onSuccess: (data) => {
-            setSession({
-                roundId: data.roundId,
-                ballsTotal: data.ballsTotal,
-                ballsRemaining: data.ballsRemaining,
-                pricePerBall: data.pricePerBall,
-                totalPayout: data.totalPayout,
-                leftTulipOpen: data.leftTulipOpen,
-                rightTulipOpen: data.rightTulipOpen,
-            });
-            invalidateShared();
-        },
+        onSuccess: applyBuyResponse,
         onError: (error: Error) => enqueueSnackbar(error.message || "Failed to buy balls", { variant: "error" }),
     });
 
-    const { mutateAsync: launchAsync, isPending: isLaunching } = useMutation({
+    const { mutateAsync: launchAsync } = useMutation({
         mutationFn: launchBall,
         onSuccess: invalidateShared,
         onError: (error: Error) => enqueueSnackbar(error.message || "Failed to launch", { variant: "error" }),
     });
 
     // Fires every time the modal opens (not just the first time) - a batch bought in a
-    // previous visit may still be open, so this decides whether to resume the board or show
-    // the buy panel instead of always defaulting to "no session."
+    // previous visit may still be open, so this decides whether to resume it or start with no
+    // session (the board still renders either way - see PachinkoBoard).
     const handleOpen = async () => {
         setCheckingActive(true);
         try {
@@ -142,24 +144,22 @@ export default function Pachinko() {
     return (
         <GameWrapper
             title="Pachinko"
-            howToPlay="Buy a batch of balls, then launch them one at a time with your own launch power. Most balls miss - land in a side tulip for a fixed multiplier, or open both side tulips to prime the center tulip and win the whole jackpot pool."
+            howToPlay="Buy balls with the +100/+1000 buttons, then hold Launch to fire them at your own power - balls fly one every 600ms while held. Most balls miss - land in a side tulip for a fixed multiplier, or open both side tulips to prime the center tulip and win the whole jackpot pool."
             oddsSections={oddsSections}
         >
             <PlayLauncher title="Pachinko" onOpen={handleOpen}>
-                {!session ? (
-                    <PachinkoBuyPanel batchSizes={odds?.batchSizes ?? []} pricePerBall={odds?.pricePerBall ?? 0} isPending={isBuying || checkingActive} onBuy={buyAsync} />
-                ) : (
-                    <PachinkoBoard
-                        session={session}
-                        layout={odds?.layout ?? null}
-                        jackpotPool={odds?.jackpotPool ?? 0}
-                        launchPowerRange={odds?.launchPowerRange ?? { min: 0, max: 100 }}
-                        isPending={isLaunching}
-                        launch={launchAsync}
-                        onSessionUpdate={setSession}
-                        onBuyMore={() => setSession(null)}
-                    />
-                )}
+                <PachinkoBoard
+                    session={session}
+                    layout={odds?.layout ?? null}
+                    jackpotPool={odds?.jackpotPool ?? 0}
+                    launchPowerRange={odds?.launchPowerRange ?? { min: 0, max: 100 }}
+                    pricePerBall={odds?.pricePerBall ?? 0}
+                    isResuming={checkingActive}
+                    launch={launchAsync}
+                    reup={reupAsync}
+                    isReuping={isReuping}
+                    onSessionUpdate={setSession}
+                />
             </PlayLauncher>
         </GameWrapper>
     );

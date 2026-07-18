@@ -61,4 +61,20 @@ describe("simulateDrop", () => {
         simulateDrop(DROP_MAX_X);
         expect(Date.now() - start).toBeLessThan(2000);
     });
+
+    it("actually reaches the floor, rather than getting wedged against a wall or balanced on a peg", () => {
+        // A ball pinned between the outer wall and a peg (or balanced dead-center on one)
+        // never reaches SLOT_FLOOR_Y within MAX_STEPS - the sim just gives up and returns
+        // wherever it got stuck, still high up the board. Sample across the whole drop range,
+        // not just the extremes, so any lingering trap at another alignment point would show
+        // up too as a trajectory ending well short of the floor.
+        for (let i = 0; i < 10; i++) {
+            for (let j = 0; j < 8; j++) {
+                const dropX = DROP_MIN_X + (j / 7) * (DROP_MAX_X - DROP_MIN_X);
+                const { trajectory } = simulateDrop(dropX);
+                const last = trajectory[trajectory.length - 1];
+                expect(last.y).toBeGreaterThan(390); // SLOT_FLOOR_Y is 400
+            }
+        }
+    });
 }, 20000);

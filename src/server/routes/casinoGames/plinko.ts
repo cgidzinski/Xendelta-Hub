@@ -9,11 +9,9 @@
  * gliding back and forth above the board was when they clicked) and a real ball falls
  * through the real peg field from there - gravity, per-shot peg-restitution jitter, real
  * collisions. Whatever slot the ball actually lands in is the outcome; nothing is
- * pre-selected. `MULTIPLIERS` (in plinkoLayout.ts) is carried over unchanged from the
- * coin-flip build, but is no longer solved for an exact RTP target - there's no closed-form
- * probability model to solve against anymore now that the drop position is a player input
- * and the pegs are real obstacles rather than an abstract binomial walk. Rough starting
- * values, same "playable first, tune later" call already made for Pachinko's payouts.
+ * pre-selected. `MULTIPLIERS` (in plinkoLayout.ts) is a Monte Carlo-derived table, not a
+ * closed-form solve - see the comment above it for the methodology and PLINKO_WORST_CASE_RTP
+ * for the measured result.
  *
  * Same debit-at-start pattern used across every game in this app: the drop is fully decided
  * before any money moves, then persisted into a XenCasinoRound alongside the wager debit's
@@ -42,12 +40,20 @@ import {
     PEG_RADIUS,
     BALL_RADIUS,
     MULTIPLIERS,
+    PLINKO_WORST_CASE_RTP,
     generatePegPositions,
     slotBoundaries,
 } from "./plinkoLayout";
 import { simulateDrop, TrajectorySample } from "./plinkoPhysics";
 
 const SLUG = "plinko";
+
+// Plinko is the one game exempted from the "one active round" DB constraint (see the partial
+// index in xenCasino.js) - multiple balls can be in flight at once. This is the actual limit
+// on that: a plain count check, same best-effort/race-tolerant character as the balance
+// pre-check below (a concurrent request or two could squeeze past it) - it's a spam guard, not
+// a financial safety mechanism, so that's an acceptable gap.
+const MAX_CONCURRENT_ROUNDS = 10;
 
 interface PlinkoConditions {
     dropX: number;
@@ -121,6 +127,7 @@ module.exports = function (app: express.Application) {
                 rows: ROWS,
                 slotCount: SLOT_COUNT,
                 multipliers: MULTIPLIERS,
+                rtp: PLINKO_WORST_CASE_RTP,
                 layout: {
                     canvasWidth: CANVAS_WIDTH,
                     canvasHeight: CANVAS_HEIGHT,
@@ -155,33 +162,30 @@ module.exports = function (app: express.Application) {
         }
 
         try {
-            const resolved = await resolveUserAccount(user);
+            // Independent reads - neither depends on the other's result, so there's no reason
+            // to pay for them sequentially.
+            const [resolved, inFlight] = await Promise.all([resolveUserAccount(user), XenCasinoRound.countDocuments({ game: SLUG, userId })]);
             if (!resolved.linked || !resolved.account) {
                 return res.status(400).json({ status: false, message: "Link your Discord account to play" });
             }
             if (Number(resolved.account.balance) < wager) {
                 return res.status(400).json({ status: false, message: "Insufficient balance" });
             }
+            if (inFlight >= MAX_CONCURRENT_ROUNDS) {
+                return res.status(400).json({ status: false, message: `Only ${MAX_CONCURRENT_ROUNDS} balls can be in flight at once` });
+            }
 
             const { conditions, trajectory } = decideDrop(wager, dropX);
 
             const debitKey = `xendelta-${SLUG}-start-${userId}-${crypto.randomUUID()}`;
-            let round;
-            try {
-                round = await XenCasinoRound.startRound({
-                    game: SLUG,
-                    userId,
-                    wager,
-                    debitKey,
-                    playerAccountId: resolved.account.accountId,
-                    conditions,
-                });
-            } catch (err) {
-                if ((err as { code?: number }).code === 11000) {
-                    return res.status(400).json({ status: false, message: "You already have an active round on this board" });
-                }
-                throw err;
-            }
+            const round = await XenCasinoRound.startRound({
+                game: SLUG,
+                userId,
+                wager,
+                debitKey,
+                playerAccountId: resolved.account.accountId,
+                conditions,
+            });
 
             const xenCasinoAccountId = await getXenCasinoAccountId();
             let debitBalance: string;
@@ -202,13 +206,28 @@ module.exports = function (app: express.Application) {
                 throw err; // ambiguous - leave round in place, the recovery sweep will retry
             }
 
-            // Debit succeeded - the payout (if any) is what's left; an ambiguous failure
-            // here also leaves the round in place rather than answering with a guess.
-            const settled = await settleRound(round);
-            await XenCasinoRound.resolve(round._id);
-            await recordCasinoRoundPlayed(userId);
+            // The debit is durably recorded and the outcome is fully decided - the client has
+            // everything it needs to start animating, so respond now rather than making it
+            // wait on the payout transfer too. `balance` here is pre-payout; the client
+            // already invalidates/refetches the real balance on success, so a winning drop's
+            // displayed balance just lags a beat behind the animation instead of being wrong.
+            res.json({ status: true, data: { ...conditions, trajectory, balance: debitBalance } });
 
-            return res.json({ status: true, data: { ...conditions, trajectory, balance: settled.balance ?? debitBalance } });
+            // Payout settlement, round cleanup, and daily-quest tracking all happen after the
+            // response - none of their results affect what the client renders. Own try/catch
+            // since this runs after the outer one has already returned; if the process dies
+            // before this finishes, the existing stale-round recovery sweep above is what
+            // finishes it, exactly as it's already designed to.
+            (async () => {
+                try {
+                    await settleRound(round);
+                    await XenCasinoRound.resolve(round._id);
+                    await recordCasinoRoundPlayed(userId);
+                } catch (err) {
+                    console.error(`${SLUG}: post-response settlement failed for round ${round._id}`, err);
+                }
+            })();
+            return;
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });

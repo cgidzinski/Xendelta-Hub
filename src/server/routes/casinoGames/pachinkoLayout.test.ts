@@ -61,8 +61,12 @@ describe("rail / channel", () => {
         expect(LAUNCHER_POSITION.x).toBe(RELEASE_POINT.x);
     });
 
-    it("is about one ball-width wide, not several", () => {
-        expect(CHANNEL_OUTER_X - CHANNEL_INNER_X).toBeLessThan(10);
+    it("is narrow (a couple ball-widths, not a wide lane) but wide enough to clear the wall's own collision thickness", () => {
+        // CHANNEL_WIDTH's own comment explains why this isn't a single ball-width anymore -
+        // the release point/ball spawn sits at this channel's center, and too little
+        // clearance from the wall meant the ball spawned slightly embedded in its collision
+        // geometry (confirmed empirically as a strong, velocity-independent kick).
+        expect(CHANNEL_OUTER_X - CHANNEL_INNER_X).toBeLessThan(20);
     });
 });
 

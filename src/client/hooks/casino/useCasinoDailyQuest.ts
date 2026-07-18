@@ -10,6 +10,7 @@ export interface CasinoDailyQuestStatus {
   roundsPlayed: number;
   claimed: boolean;
   canClaim: boolean;
+  reward: number;
 }
 
 export const casinoDailyQuestKeys = {
@@ -50,6 +51,7 @@ export const useCasinoDailyQuest = () => {
     roundsPlayed: data?.roundsPlayed ?? 0,
     claimed: data?.claimed ?? false,
     canClaim: data?.canClaim ?? false,
+    reward: data?.reward ?? 0,
     isLoading,
     claim,
     isClaiming,

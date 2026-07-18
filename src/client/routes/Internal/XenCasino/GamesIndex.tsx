@@ -28,10 +28,16 @@ interface CrosswordOddsSummary {
     distribution: { payout: number; probability: number }[];
     rtp: number;
 }
-// No paytable/rtp on either of these (unlike Slots/Kitty Scratch/Crossword) - the outcome
-// comes from a real physics simulation driven by the player's own aim (drop position for
-// Plinko, launch power for Pachinko), not a pre-selected weighted draw, so there's no fixed
-// probability table to summarize into an odds ratio.
+// No paytable on either of these (unlike Slots/Kitty Scratch/Crossword) - the outcome comes
+// from a real physics simulation driven by the player's own aim (drop position for Plinko,
+// launch power for Pachinko), not a pre-selected weighted draw, so there's no fixed
+// probability table to summarize into an odds ratio. Plinko does have a real `rtp` now (a
+// Monte Carlo-derived worst-case figure - see the comment above MULTIPLIERS in
+// plinkoLayout.ts); Pachinko's is still the deliberate later pass this comment used to flag
+// for both of them.
+interface PlinkoOddsSummary {
+    rtp: number;
+}
 interface PachinkoOddsSummary {
     jackpotPool: number;
 }
@@ -46,6 +52,8 @@ const fetchKittyScratchOdds = async (): Promise<KittyScratchOddsSummary> =>
     (await apiClient.get<ApiResponse<KittyScratchOddsSummary>>(`/api/casino/games/kitty-scratch/odds`)).data.data!;
 const fetchCrosswordOdds = async (): Promise<CrosswordOddsSummary> =>
     (await apiClient.get<ApiResponse<CrosswordOddsSummary>>(`/api/casino/games/crossword/odds`)).data.data!;
+const fetchPlinkoOdds = async (): Promise<PlinkoOddsSummary> =>
+    (await apiClient.get<ApiResponse<PlinkoOddsSummary>>(`/api/casino/games/plinko/odds`)).data.data!;
 const fetchPachinkoOdds = async (): Promise<PachinkoOddsSummary> =>
     (await apiClient.get<ApiResponse<PachinkoOddsSummary>>(`/api/casino/games/pachinko/odds`)).data.data!;
 
@@ -106,6 +114,11 @@ export default function GamesIndex() {
         queryFn: fetchCrosswordOdds,
         staleTime: 5 * 60 * 1000,
     });
+    const { data: plinkoOdds } = useQuery({
+        queryKey: ["plinkoOdds"],
+        queryFn: fetchPlinkoOdds,
+        staleTime: 5 * 60 * 1000,
+    });
     const { data: pachinkoOdds } = useQuery({
         queryKey: ["pachinkoOdds"],
         queryFn: fetchPachinkoOdds,
@@ -122,8 +135,8 @@ export default function GamesIndex() {
                 : undefined
         ),
         crossword: formatOddsRatio(crosswordOdds?.distribution.filter((d) => d.payout > 0).reduce((sum, d) => sum + d.probability, 0)),
-        // plinko/pachinko intentionally omitted - no fixed probability table to summarize
-        // (see the comment above PachinkoOddsSummary).
+        // plinko has an RTP (below) but no per-slot probability table to turn into a "1 in N"
+        // odds ratio the way the weighted-draw games do; pachinko still has neither.
     };
 
     const rtpByKey: Record<string, number | undefined> = {
@@ -131,8 +144,8 @@ export default function GamesIndex() {
         spinmania: spinmaniaOdds?.rtp,
         "kitty-scratch": kittyScratchOdds?.rtp,
         crossword: crosswordOdds?.rtp,
-        // plinko/pachinko intentionally omitted - RTP tuning is a deliberate later pass for
-        // both physics-driven games (see the plan doc).
+        plinko: plinkoOdds?.rtp,
+        // pachinko intentionally omitted - RTP tuning is still a deliberate later pass for it.
     };
     const rtpLabelByKey: Record<string, string | undefined> = Object.fromEntries(
         Object.entries(rtpByKey).map(([key, rtp]) => [key, rtp !== undefined ? `RTP ${(rtp * 100).toFixed(1)}%` : undefined])

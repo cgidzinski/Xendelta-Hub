@@ -14,7 +14,7 @@ interface DailyQuestCardProps {
 // game to actually play.
 export default function DailyQuestCard({ sx }: DailyQuestCardProps) {
     const { enqueueSnackbar } = useSnackbar();
-    const { target, roundsPlayed, claimed, canClaim, isLoading, claim, isClaiming } = useCasinoDailyQuest();
+    const { target, roundsPlayed, claimed, canClaim, reward, isLoading, claim, isClaiming } = useCasinoDailyQuest();
 
     if (isLoading && target === 0) {
         return null;
@@ -50,7 +50,9 @@ export default function DailyQuestCard({ sx }: DailyQuestCardProps) {
                         Daily Quest
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        {claimed ? "Reward claimed - come back tomorrow." : `Play ${target} XenCasino rounds today`}
+                        {claimed
+                            ? "Reward claimed - come back tomorrow."
+                            : `Play ${target} XenCasino rounds today for ${formatCheddar(reward)} cheddar`}
                     </Typography>
                     <LinearProgress
                         variant="determinate"
