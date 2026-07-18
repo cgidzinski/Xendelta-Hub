@@ -30,25 +30,19 @@ Once the one-time setup below has been done, deploys are automated via
 GitHub Actions and this VM should not need manual `git pull`/`pm2 restart`
 day-to-day. The model:
 
-- **Staging**: every push to an open PR (targeting `main`) triggers
-  `.github/workflows/build-staging.yml`, which installs dependencies, runs
-  tests and type-checking, runs `npm run build`, and force-pushes the result
-  (source + freshly built `dist/`, no `node_modules`) to the `staging`
-  branch. That push triggers `.github/workflows/deploy-staging.yml`, which
-  SSHes into this VM, resets the `~/xendelta-hub-staging` checkout to
-  `origin/staging`, runs `npm ci --omit=dev` (production dependencies only —
-  no bundler or dev toolchain ever runs on this VM), and restarts the
-  `xendelta-hub-staging` PM2 process.
 - **Production**: publishing is manual and deliberate.
   `.github/workflows/build-prod.yml` only runs when someone triggers it by
   hand (Actions tab -> "Run workflow", or `gh workflow run build-prod.yml`),
-  choosing which ref to publish. It does the same build-and-publish as
-  staging, but force-pushes to the `production` branch instead, which
-  triggers `.github/workflows/deploy-prod.yml` against
-  `~/xendelta-hub-prod` and the `xendelta-hub` PM2 process. Pushing to `main`
-  by itself does **not** deploy anything.
-- Both `staging` and `production` are force-pushed on every build — treat
-  their history as disposable, not something to branch protect.
+  choosing which ref to publish. It installs dependencies, runs tests and
+  type-checking, runs `npm run build`, and force-pushes the result (source +
+  freshly built `dist/`, no `node_modules`) to the `production` branch. That
+  push triggers `.github/workflows/deploy-prod.yml`, which SSHes into this
+  VM, resets the `~/xendelta-hub-prod` checkout to `origin/production`, runs
+  `npm ci --omit=dev` (production dependencies only — no bundler or dev
+  toolchain ever runs on this VM), and restarts the `xendelta-hub` PM2
+  process. Pushing to `main` by itself does **not** deploy anything.
+- `production` is force-pushed on every build — treat its history as
+  disposable, not something to branch protect.
 - The rest of this document (manual clone, PM2, nginx, certbot) is still
   useful for the initial one-time VM bring-up and as a reference for how the
   pieces fit together, but day-to-day deploys should go through the
@@ -93,20 +87,17 @@ Install Git:
 sudo apt install git
 ```
 
-> **For the production/staging pair driven by CI/CD** (see
-> [Automated Deploys](#automated-deploys-cicd)), clone the `production` and
-> `staging` branches into two separate directories instead of a single plain
-> clone, so each has its own working tree, `.env`, and PM2 process:
+> **For the CI/CD-driven deploy** (see
+> [Automated Deploys](#automated-deploys-cicd)), clone the `production`
+> branch into its own directory instead of a plain clone:
 >
 > ```bash
 > git clone -b production https://github.com/cgidzinski/Xendelta-Hub ~/xendelta-hub-prod
-> git clone -b staging https://github.com/cgidzinski/Xendelta-Hub ~/xendelta-hub-staging
 > ```
 >
 > The rest of this section (env vars, `npm install`, first-run `npm start`)
-> applies to each of those directories individually. The single-clone
-> instructions below are for a from-scratch/manual setup outside the CI/CD
-> model.
+> applies to that directory. The single-clone instructions below are for a
+> from-scratch/manual setup outside the CI/CD model.
 
 Clone and set up the application:
 
@@ -231,23 +222,19 @@ cd ~/
 sudo npm install -g pm2
 ```
 
-> **For the production/staging pair**, use the repo's `ecosystem.config.cjs`
-> instead of ad hoc `pm2 start` commands — it declares both the
-> `xendelta-hub` (prod, `~/xendelta-hub-prod`) and `xendelta-hub-staging`
-> (staging, `~/xendelta-hub-staging`) processes in one place, which is what
-> `deploy-staging.yml`/`deploy-prod.yml` expect to find when they run
-> `pm2 restart <name>`:
+> **For the CI/CD-driven deploy**, use the repo's `ecosystem.config.cjs`
+> instead of an ad hoc `pm2 start` command — it declares the `xendelta-hub`
+> process (`~/xendelta-hub-prod`), which is what `deploy-prod.yml` expects to
+> find when it runs `pm2 restart xendelta-hub`:
 >
 > ```bash
 > cd ~/xendelta-hub-prod && pm2 start ecosystem.config.cjs --only xendelta-hub
-> cd ~/xendelta-hub-staging && pm2 start ecosystem.config.cjs --only xendelta-hub-staging
 > ```
 >
-> Both apps run in PM2 `fork` mode with a single instance each — do not
-> switch either to `cluster`/multiple instances. `server.ts` has in-memory
-> singletons (the scheduler, Socket.IO without a Redis adapter); multiple
-> instances would duplicate scheduled jobs and break socket session
-> affinity.
+> Runs in PM2 `fork` mode with a single instance — do not switch to
+> `cluster`/multiple instances. `server.ts` has in-memory singletons (the
+> scheduler, Socket.IO without a Redis adapter); multiple instances would
+> duplicate scheduled jobs and break socket session affinity.
 
 For a from-scratch/manual setup outside the CI/CD model, start the
 application directly:
@@ -462,12 +449,12 @@ sudo certbot renew --dry-run
 ## Adding Additional Subdomains
 
 Use `infra/gcp-vm/manage-subdomain.sh` (ships with the repo, so it's already
-present in `~/xendelta-hub-prod/infra/gcp-vm/` and
-`~/xendelta-hub-staging/infra/gcp-vm/` once those checkouts exist) instead of
-hand-editing nginx config. It collapses DNS-is-already-pointed-here ->
-nginx config -> cert issuance -> reload into one command, using certbot's
-`--nginx` plugin to add the HTTPS block and cert paths automatically instead
-of the two-pass manual edit the old instructions required.
+present in `~/xendelta-hub-prod/infra/gcp-vm/` once that checkout exists)
+instead of hand-editing nginx config. It collapses
+DNS-is-already-pointed-here -> nginx config -> cert issuance -> reload into
+one command, using certbot's `--nginx` plugin to add the HTTPS block and
+cert paths automatically instead of the two-pass manual edit the old
+instructions required.
 
 **Prerequisite** (still manual, provider-dependent): add a DNS A record for
 the subdomain pointing at this VM's IP before running either command below.
