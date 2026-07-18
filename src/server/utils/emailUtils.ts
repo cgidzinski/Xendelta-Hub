@@ -6,8 +6,6 @@ export interface PasswordResetEmailData {
   resetUrl: string;
 }
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 /**
  * Send a password reset email
  */
@@ -38,6 +36,7 @@ export async function sendPasswordResetEmail(data: PasswordResetEmailData): Prom
   };
 
   try {
+    const resend = new Resend(process.env.RESEND_API_KEY);
     const { data: result, error } = await resend.emails.send(emailConfig);
     
     if (error) {
