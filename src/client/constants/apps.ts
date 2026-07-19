@@ -1,5 +1,4 @@
 import BrushIcon from "@mui/icons-material/Brush";
-import CasinoIcon from "@mui/icons-material/Casino";
 import FolderIcon from "@mui/icons-material/Folder";
 import LinkIcon from "@mui/icons-material/Link";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
@@ -46,11 +45,12 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
         path: "/internal/xensplit",
         description: "Split expenses with friends",
     },
-    {
-        key: "xencasino",
-        label: "XenCasino",
-        icon: CasinoIcon,
-        path: "/internal/xencasino",
-        description: "Play casino games with your Weeabets cheddar",
-    },
+    // XenCasino hidden from side nav
+    // {
+    //     key: "xencasino",
+    //     label: "XenCasino",
+    //     icon: CasinoIcon,
+    //     path: "/internal/xencasino",
+    //     description: "Play casino games with your Weeabets cheddar",
+    // },
 ];
