@@ -1,4 +1,4 @@
-export type CasinoGameType = "slots" | "scratch" | "plinko";
+export type CasinoGameType = "slots" | "scratch" | "plinko" | "pachinko";
 
 export interface CasinoGameRegistryItem {
   key: string;
@@ -13,6 +13,7 @@ export const CASINO_GAME_TYPE_LABELS: Record<CasinoGameType, string> = {
   slots: "Slots",
   scratch: "Scratch Tickets",
   plinko: "Plinko",
+  pachinko: "Pachinko",
 };
 
 // Add a new game by adding an entry here plus its own folder under games/ - nothing else
@@ -59,5 +60,13 @@ export const CASINO_GAMES_REGISTRY: CasinoGameRegistryItem[] = [
     description: "500-cheddar base bet - drop a ball through 12 rows of pegs for a shot at an 18.6x edge slot.",
     type: "plinko",
     price: 500,
+  },
+  {
+    key: "pachinko",
+    label: "Pachinko",
+    path: "/internal/xencasino/games/pachinko",
+    description: "100-cheddar balls, sold in batches - launch them into the pin field for a shot at the jackpot pool.",
+    type: "pachinko",
+    price: 100,
   },
 ];

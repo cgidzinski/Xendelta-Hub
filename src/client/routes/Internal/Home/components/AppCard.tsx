@@ -28,12 +28,12 @@ export default function AppCard({ app, children, fullWidth }: AppCardProps) {
                         {app.label}
                     </Typography>
                 </Box>
-                {children && (
-                    <CardContent sx={{ pt: 1 }}>
-                        {children}
-                    </CardContent>
-                )}
             </CardActionArea>
+            {children && (
+                <CardContent sx={{ pt: 1 }}>
+                    {children}
+                </CardContent>
+            )}
         </Card>
     );
 }

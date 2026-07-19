@@ -4,6 +4,7 @@ import { Box, Card, CardActionArea, CardContent, Typography, Chip, Avatar, SvgIc
 import CasinoIcon from "@mui/icons-material/Casino";
 import ConfirmationNumberIcon from "@mui/icons-material/ConfirmationNumber";
 import ScatterPlotIcon from "@mui/icons-material/ScatterPlot";
+import AdjustIcon from "@mui/icons-material/Adjust";
 import AddIcon from "@mui/icons-material/Add";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../../config/api";
@@ -27,9 +28,18 @@ interface CrosswordOddsSummary {
     distribution: { payout: number; probability: number }[];
     rtp: number;
 }
+// No paytable on either of these (unlike Slots/Kitty Scratch/Crossword) - the outcome comes
+// from a real physics simulation driven by the player's own aim (drop position for Plinko,
+// launch power for Pachinko), not a pre-selected weighted draw, so there's no fixed
+// probability table to summarize into an odds ratio. Plinko does have a real `rtp` now (a
+// Monte Carlo-derived worst-case figure - see the comment above MULTIPLIERS in
+// plinkoLayout.ts); Pachinko's is still the deliberate later pass this comment used to flag
+// for both of them.
 interface PlinkoOddsSummary {
-    paytable: { slot: number; probability: number }[];
     rtp: number;
+}
+interface PachinkoOddsSummary {
+    jackpotPool: number;
 }
 
 // Same GET requests (and query keys) each game's own page uses to fetch its odds, so the
@@ -44,14 +54,17 @@ const fetchCrosswordOdds = async (): Promise<CrosswordOddsSummary> =>
     (await apiClient.get<ApiResponse<CrosswordOddsSummary>>(`/api/casino/games/crossword/odds`)).data.data!;
 const fetchPlinkoOdds = async (): Promise<PlinkoOddsSummary> =>
     (await apiClient.get<ApiResponse<PlinkoOddsSummary>>(`/api/casino/games/plinko/odds`)).data.data!;
+const fetchPachinkoOdds = async (): Promise<PachinkoOddsSummary> =>
+    (await apiClient.get<ApiResponse<PachinkoOddsSummary>>(`/api/casino/games/pachinko/odds`)).data.data!;
 
 const TYPE_ICON: Record<CasinoGameType, ComponentType<SvgIconProps>> = {
     slots: CasinoIcon,
     scratch: ConfirmationNumberIcon,
     plinko: ScatterPlotIcon,
+    pachinko: AdjustIcon,
 };
 
-const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko"];
+const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko"];
 
 const GHOST_COPY: Partial<Record<CasinoGameType, string>> = {
     slots: "New reel sets and jackpots land here as they ship.",
@@ -106,6 +119,12 @@ export default function GamesIndex() {
         queryFn: fetchPlinkoOdds,
         staleTime: 5 * 60 * 1000,
     });
+    const { data: pachinkoOdds } = useQuery({
+        queryKey: ["pachinkoOdds"],
+        queryFn: fetchPachinkoOdds,
+        staleTime: 15 * 1000,
+        refetchInterval: 15 * 1000, // keeps the jackpot chip ticking up while browsing, same as the slot machines
+    });
 
     const oddsLabelByKey: Record<string, string | undefined> = {
         "easy-spin": formatOddsRatio(easySpinOdds?.paytable.reduce((sum, row) => sum + row.probability, 0)),
@@ -116,7 +135,8 @@ export default function GamesIndex() {
                 : undefined
         ),
         crossword: formatOddsRatio(crosswordOdds?.distribution.filter((d) => d.payout > 0).reduce((sum, d) => sum + d.probability, 0)),
-        plinko: formatOddsRatio(plinkoOdds?.paytable.find((row) => row.slot === 0)?.probability),
+        // plinko has an RTP (below) but no per-slot probability table to turn into a "1 in N"
+        // odds ratio the way the weighted-draw games do; pachinko still has neither.
     };
 
     const rtpByKey: Record<string, number | undefined> = {
@@ -125,6 +145,7 @@ export default function GamesIndex() {
         "kitty-scratch": kittyScratchOdds?.rtp,
         crossword: crosswordOdds?.rtp,
         plinko: plinkoOdds?.rtp,
+        // pachinko intentionally omitted - RTP tuning is still a deliberate later pass for it.
     };
     const rtpLabelByKey: Record<string, string | undefined> = Object.fromEntries(
         Object.entries(rtpByKey).map(([key, rtp]) => [key, rtp !== undefined ? `RTP ${(rtp * 100).toFixed(1)}%` : undefined])
@@ -133,6 +154,7 @@ export default function GamesIndex() {
     const jackpotLabelByKey: Record<string, string | undefined> = {
         "easy-spin": easySpinOdds ? `🎰 ${formatCheddar(easySpinOdds.jackpotPool)}` : undefined,
         spinmania: spinmaniaOdds ? `🎰 ${formatCheddar(spinmaniaOdds.jackpotPool)}` : undefined,
+        pachinko: pachinkoOdds ? `🎰 ${formatCheddar(pachinkoOdds.jackpotPool)}` : undefined,
     };
 
     const groups = TYPE_ORDER.map((type) => ({
