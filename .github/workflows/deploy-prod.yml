@@ -25,5 +25,6 @@ jobs:
             set -euo pipefail
             cd ~/Xendelta-Hub
             git pull origin main
+            npm i
             pm2 restart xendelta-hub
             echo "Deployed $(git rev-parse HEAD) to production"
