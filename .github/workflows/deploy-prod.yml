@@ -1,8 +1,8 @@
 name: Deploy production
 
-# Manual-only: pushing to main does NOT deploy by itself. Run this on
-# purpose (Actions tab -> Run workflow, or `gh workflow run deploy-prod.yml`)
-# when you want the VM to pick up the latest main.
+# Manual-only: pushing to a branch does NOT deploy by itself. Run this on
+# purpose (Actions tab -> Run workflow, or `gh workflow run deploy-prod.yml`),
+# picking the branch to deploy via the "Use workflow from" selector.
 on:
   workflow_dispatch:
 
@@ -24,7 +24,7 @@ jobs:
           script: |
             set -euo pipefail
             cd ~/Xendelta-Hub
-            git pull origin main
+            git pull origin ${{ github.ref_name }}
             npm i
             pm2 restart xendelta-hub
             echo "Deployed $(git rev-parse HEAD) to production"
