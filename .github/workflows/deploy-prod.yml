@@ -1,8 +1,10 @@
 name: Deploy production
 
+# Manual-only: pushing to main does NOT deploy by itself. Run this on
+# purpose (Actions tab -> Run workflow, or `gh workflow run deploy-prod.yml`)
+# when you want the VM to pick up the latest main.
 on:
-  push:
-    branches: [production]
+  workflow_dispatch:
 
 concurrency:
   group: deploy-prod
@@ -22,9 +24,6 @@ jobs:
           script: |
             set -euo pipefail
             cd ~/xendelta-hub-prod
-            git fetch origin production
-            git reset --hard origin/production
-            npm ci --omit=dev
-            pm2 restart xendelta-hub --update-env || pm2 start ecosystem.config.cjs --only xendelta-hub
-            pm2 save
+            git pull origin main
+            pm2 restart xendelta-hub
             echo "Deployed $(git rev-parse HEAD) to production"
