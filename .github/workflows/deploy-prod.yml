@@ -1,0 +1,30 @@
+name: Deploy production
+
+# Manual-only: pushing to main does NOT deploy by itself. Run this on
+# purpose (Actions tab -> Run workflow, or `gh workflow run deploy-prod.yml`)
+# when you want the VM to pick up the latest main.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH deploy
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        with:
+          host: ${{ vars.VM_HOST }}
+          username: ${{ vars.VM_SSH_USER }}
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.VM_SSH_KNOWN_HOSTS }}
+          script: |
+            set -euo pipefail
+            cd ~/Xendelta-Hub
+            git pull origin main
+            npm i
+            pm2 restart xendelta-hub
+            echo "Deployed $(git rev-parse HEAD) to production"
