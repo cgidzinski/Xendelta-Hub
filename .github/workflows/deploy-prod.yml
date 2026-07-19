@@ -23,7 +23,7 @@ jobs:
           known_hosts: ${{ secrets.VM_SSH_KNOWN_HOSTS }}
           script: |
             set -euo pipefail
-            cd ~/xendelta-hub-prod
+            cd ~/Xendelta-Hub
             git pull origin main
             pm2 restart xendelta-hub
             echo "Deployed $(git rev-parse HEAD) to production"
