@@ -101,6 +101,7 @@ require("./routes/xenlink.ts")(app);
 require("./routes/xensplit")(app);
 require("./routes/casino.ts")(app);
 require("./routes/casinoGames/slots.ts")(app);
+require("./routes/casinoGames/spinmania.ts")(app);
 require("./routes/casinoGames/kittyScratch.ts")(app);
 require("./routes/casinoGames/crossword.ts")(app);
 require("./routes/casinoGames/plinko.ts")(app);
