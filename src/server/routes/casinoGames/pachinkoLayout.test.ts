@@ -29,7 +29,25 @@ import {
     GUTTER_CUTOUT_X_START,
     GUTTER_CUTOUT_X_END,
     GUTTER_CUTOUT_Y,
+    FIELD_CX,
+    FIELD_CY,
+    FIELD_RX,
+    FIELD_RY,
 } from "./pachinkoLayout";
+
+// Same hybrid ellipse-above/circle-below shape the boundary curve itself uses (see the file
+// header) - a positive return means the point sits this many px inside the true curve, negative
+// means it's past the glass entirely. Used below to catch a pin sitting outside the *actual*
+// boundary, which the plain canvas-rectangle check further down can't see at all.
+function marginInsideBoundary(x: number, y: number): number {
+    if (y <= FIELD_CY) {
+        const nx = (x - FIELD_CX) / FIELD_RX;
+        const ny = (y - FIELD_CY) / FIELD_RY;
+        const onEllipseR = Math.hypot(nx, ny);
+        return (1 - onEllipseR) * Math.min(FIELD_RX, FIELD_RY);
+    }
+    return FIELD_RX - Math.hypot(x - FIELD_CX, y - FIELD_CY);
+}
 
 describe("boundary", () => {
     it("closes at the top - right arc starts where the left arc ends", () => {
@@ -167,7 +185,7 @@ describe("scoring pockets", () => {
 });
 
 describe("nail field", () => {
-    it("is clustered, not a uniform lattice - stays inside the canvas", () => {
+    it("is a real staggered lattice - stays inside the canvas", () => {
         const pins = generateNailField();
         expect(pins.length).toBeGreaterThan(20);
         for (const pin of pins) {
@@ -175,6 +193,15 @@ describe("nail field", () => {
             expect(pin.x).toBeLessThan(CANVAS_WIDTH);
             expect(pin.y).toBeGreaterThan(0);
             expect(pin.y).toBeLessThan(CANVAS_HEIGHT);
+        }
+    });
+
+    it("every pin stays inside the true boundary curve, not just the canvas rectangle", () => {
+        // A pin can sit well inside the 0..460 canvas rectangle checked above while still being
+        // physically past the board's own oval glass - the canvas check alone can't catch that.
+        const pins = generateNailField();
+        for (const pin of pins) {
+            expect(marginInsideBoundary(pin.x, pin.y)).toBeGreaterThan(0);
         }
     });
 

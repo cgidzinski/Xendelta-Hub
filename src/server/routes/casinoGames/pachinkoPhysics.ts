@@ -83,8 +83,8 @@ const ALL_POCKETS: FixedPocket[] = [...BONUS_POCKETS, CHUCKER, ATTACKER, ...TULI
 // first point. Thickness is 3 - thin enough that a fast free body can cross it within a single
 // collision check and tunnel straight through undetected without the SUBSTEPS splitting below,
 // but thick enough to clear the nail field's own collision geometry without burying any pin
-// inside solid wall (every nail cluster keeps a real gap from the boundary on both halves of
-// this board - see pachinkoLayout.ts's clearance comments on RELEASE_DEFLECTOR/CLUSTER_CENTERS).
+// inside solid wall (the generated grid keeps a real, derived-from-the-boundary-formula gap from
+// the glass on both halves of this board - see pachinkoLayout.ts's generateNailField).
 function buildWallSegments(points: Point[]): Matter.Body[] {
     const segments: Matter.Body[] = [];
     for (let i = 0; i < points.length - 1; i++) {

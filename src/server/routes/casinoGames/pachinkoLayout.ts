@@ -40,10 +40,10 @@ const DEG = Math.PI / 180;
 // ellipse (FIELD_RY=190, "just slightly longer than round"), bottom half a true circle of
 // radius FIELD_RX. Angle convention throughout this file: 0 = the rightmost point, +90deg =
 // straight down (matching canvas y-down), -90deg = straight up.
-const FIELD_CX = 230;
-const FIELD_CY = 230;
-const FIELD_RX = 170;
-const FIELD_RY = 190;
+export const FIELD_CX = 230;
+export const FIELD_CY = 230;
+export const FIELD_RX = 170;
+export const FIELD_RY = 190;
 
 function ellipsePoint(theta: number, rx: number, ry: number): Point {
     return { x: FIELD_CX + rx * Math.cos(theta), y: FIELD_CY + ry * Math.sin(theta) };
@@ -274,10 +274,10 @@ export const CHUCKER: FixedPocket = { id: "chucker", position: { x: 230, y: 185 
 // nothing is entirely a route-level decision (conditions.attackerOpenUntil vs. the clock, see
 // pachinko.ts) - this module doesn't need to know the timer state at all.
 //
-// Moved from y=185's immediate neighbor (225) down to 250 - it used to sit on a totally
-// pin-free vertical lane just below the chucker, so a centered ball could reach this wide,
-// 25-ball pocket almost untouched. Same size, same payout, just deeper behind the center
-// gauntlet below (see CENTER_GAUNTLET) so getting here means surviving more nail bounces first.
+// Moved from y=185's immediate neighbor (225) down to 250 - it used to sit on what was, under
+// an earlier hand-placed nail field, a totally pin-free vertical lane just below the chucker.
+// Same size, same payout, just deeper into the field - now backed by the generated nail lattice
+// (see generateNailField below) and its own dedicated ATTACKER_WALL gate.
 export const ATTACKER: FixedPocket = { id: "attacker", position: { x: 230, y: 250 }, halfWidth: 32 };
 
 // Every pocket's physical depth (and the y-tolerance the hit test uses) - the "cup" a ball has
@@ -298,54 +298,100 @@ export const WINDMILLS: WindmillConfig[] = [
 ];
 
 // --- Nail field -----------------------------------------------------------------------------
-// Built from distinct clusters (not a uniform lattice), each placed at a functional point, plus
-// a handful of sparse stray nails and a diagonal release-deflector chain that redirects the
-// ball leftward right after it leaves the rail. Deterministic (no randomness) so the client and
-// physics agree without shipping coordinates over the wire.
+// Real nail rows (a "kejime" row, the actual term for this in a real machine) at a handful of
+// deliberate y-levels, each one generated - not hand-placed pin-by-pin - from the board's own
+// boundary formula, so a row's extent can never drift past the glass. This replaced two earlier
+// attempts:
+//   1. A handful of hand-placed 8-pin blob clusters. Left the board's own centerline entirely
+//      empty (a ball drifting to center had a clear vertical lane through the chucker and the
+//      wide attacker pocket), and one cluster's offsets pushed several pins physically outside
+//      the boundary curve - dead pins past the glass, because nothing ever checked a pin's
+//      position against the *actual curve*, only the canvas rectangle.
+//   2. A uniform lattice covering the *entire* field, every ~25px in both directions (the same
+//      quincunx idea Plinko's own peg field uses, see plinkoLayout.ts's generatePegPositions).
+//      Structurally correct and genuinely bug-free, but it measurably backfired: simulated
+//      miss rate dropped from 87.6% to 75.4% and almost every pocket got *easier*, not harder.
+//      Filling every gap removes the open lanes a real machine actually relies on to send most
+//      balls straight to the drain untouched - density everywhere just means more chances to be
+//      knocked *down* into whatever's below rather than *past* it into the gutter.
+// This version keeps real open channels between a few short rows bridging just the center
+// column at the board's actual empty stretches (see CENTER_ROW_HALF_SPAN below - a full-width
+// version of these rows was tried too and made things worse still), plus the deflector (already
+// a genuine diagonal "ramp") and a dedicated gate-wall over the attacker - rows for chaos, a
+// wall for a specific hard gate, generous open space on both flanks the rest of the way down.
 
 export interface PinPosition {
     x: number;
     y: number;
 }
 
-const CLUSTER_LOCAL_OFFSETS: Point[] = [
-    { x: -13, y: -4 },
-    { x: -5, y: -13 },
-    { x: 6, y: -10 },
-    { x: 13, y: 0 },
-    { x: 8, y: 11 },
-    { x: -3, y: 12 },
-    { x: -13, y: 5 },
-    { x: 0, y: -1 },
-];
+// One row bridging just the center corridor at each of the board's own genuinely nail-free
+// stretches (identified from the pocket layout above): just below the release deflector, in the
+// chucker-to-attacker corridor, and in the long attacker-to-jackpot corridor. A first attempt
+// made these full-width (all the way out to the glass on both sides) - structurally sound, but
+// it measurably backfired anyway: every shot now had to cross all three rows with no way around
+// them, and miss rate dropped further still (76.9%, worse than the wall-to-wall lattice's own
+// 75.4% on two of the three metrics that matter). A real board's outer flanks stay genuinely
+// open - the original board's own flanking clusters never reached the glass either - so these
+// rows are capped at CENTER_ROW_HALF_SPAN either side of center: wide enough to fix the actual
+// bug (the empty vertical lane straight through chucker/attacker), narrow enough to leave both
+// flanks as real, untouched lanes to the drain.
+const NAIL_ROW_YS = [165, 205, 300];
+const CENTER_ROW_HALF_SPAN = 95;
+const GRID_COL_SPACING = 25;
+const GRID_GLASS_CLEARANCE = PIN_RADIUS + BALL_RADIUS + 4; // normal margin off the boundary curve
+// The rail hugs the *inside* of the glass on the right side over almost this whole y-range (see
+// RAIL_WIDTH/RELEASE_THETA/LAUNCH_THETA above); moot once rows are capped at CENTER_ROW_HALF_SPAN
+// (95 is already well clear of the rail channel at every one of these y-levels) but kept as a
+// defensive clamp in case that span is ever widened later.
+const GRID_RAIL_CLEARANCE = RAIL_WIDTH + PIN_RADIUS + BALL_RADIUS + 6;
 
-// Kept out of the central column entirely - the chucker/attacker/bonus/tulip/jackpot pockets
-// already occupy that vertical band, so these sit in the flanking gaps between rows instead,
-// each individually clear of every pocket, the rail, and its neighbors.
-const CLUSTER_CENTERS: Point[] = [
-    { x: 330, y: 165 },
-    { x: 150, y: 175 },
-    { x: 108, y: 218 },
-    { x: 352, y: 218 },
-    { x: 222, y: 300 },
-    { x: 105, y: 345 },
-    { x: 305, y: 345 },
-];
+// The boundary's own half-width at a given y (ellipse above center, true circle at/below it -
+// same hybrid the boundary curve itself uses, see the file header).
+function boundaryHalfWidthAtY(y: number): number {
+    if (y <= FIELD_CY) {
+        const t = (y - FIELD_CY) / FIELD_RY;
+        return FIELD_RX * Math.sqrt(Math.max(0, 1 - t * t));
+    }
+    const dy = y - FIELD_CY;
+    return Math.sqrt(Math.max(0, FIELD_RX * FIELD_RX - dy * dy));
+}
 
-const STRAY_NAILS: Point[] = [
-    { x: 230, y: 60 },
-    { x: 265, y: 78 },
-    { x: 296, y: 96 },
-    { x: 230, y: 315 },
-    { x: 185, y: 335 },
-    { x: 275, y: 335 },
-];
+// Whether the rail channel occupies the right edge of the boundary at this y - inverts the same
+// theta-from-y relationship boundaryHalfWidthAtY uses, since y is monotonic in theta along the
+// right half of the boundary over this board's whole vertical range.
+function railActiveAtY(y: number): boolean {
+    const ratio = y <= FIELD_CY ? (y - FIELD_CY) / FIELD_RY : (y - FIELD_CY) / FIELD_RX;
+    const theta = Math.asin(Math.max(-1, Math.min(1, ratio)));
+    return theta >= RELEASE_THETA && theta <= LAUNCH_THETA;
+}
+
+function gridRowXs(y: number, rowIndex: number): number[] {
+    const boundaryHalfWidth = Math.min(boundaryHalfWidthAtY(y), CENTER_ROW_HALF_SPAN);
+    const rightLimit = FIELD_CX + boundaryHalfWidth - (railActiveAtY(y) ? GRID_RAIL_CLEARANCE : GRID_GLASS_CLEARANCE);
+    const leftLimit = FIELD_CX - (boundaryHalfWidth - GRID_GLASS_CLEARANCE);
+    const offset = rowIndex % 2 === 0 ? 0 : GRID_COL_SPACING / 2;
+    const xs: number[] = [];
+    for (let x = FIELD_CX + offset; x <= rightLimit; x += GRID_COL_SPACING) xs.push(x);
+    for (let x = FIELD_CX + offset - GRID_COL_SPACING; x >= leftLimit; x -= GRID_COL_SPACING) xs.push(x);
+    return xs;
+}
+
+function generateRowPins(): Point[] {
+    const pins: Point[] = [];
+    NAIL_ROW_YS.forEach((y, rowIndex) => {
+        for (const x of gridRowXs(y, rowIndex)) {
+            pins.push({ x, y });
+        }
+    });
+    return pins;
+}
 
 // A short diagonal line of nails right where the ball first lands after release, redirecting it
 // leftward toward the tulip field - without something directly in that initial path, the ball
-// would just ride the boundary curve (or drop) with no meaningful deflection. Exported (unlike
-// the other nail groups) so pachinkoPhysics.ts can give just this cluster a lower restitution
-// than the rest of the field.
+// would just ride the boundary curve (or drop) with no meaningful deflection. Sits above the
+// topmost nail row (no overlap with it) and is exported (unlike the rows) so pachinkoPhysics.ts
+// can give just this chain a lower restitution than the rest of the field.
 export const RELEASE_DEFLECTOR: Point[] = [
     { x: 322, y: 100 },
     { x: 308, y: 112 },
@@ -357,62 +403,57 @@ export const RELEASE_DEFLECTOR: Point[] = [
     { x: 156, y: 140 },
 ];
 
-// Fills the two genuinely empty stretches of the board's own centerline (x=230) that every
-// other nail group deliberately avoids (see CLUSTER_CENTERS' own comment): chucker-to-attacker,
-// and attacker-to-jackpot. Deliberately stops short of the zone right below the release
-// deflector (~y100-150) - an earlier pass put pins there and it fought the deflector's own
-// leftward redirection, flipping the tulip catch rate the wrong way (right easier than left,
-// backwards from the original board). Kept out of that zone, these two rows just add the
-// missing bounce-before-the-mouth step for chucker/attacker/jackpot without touching what the
-// deflector already does upstream.
-export const CENTER_GAUNTLET: Point[] = [
-    { x: 215, y: 205 },
-    { x: 245, y: 205 },
-    { x: 215, y: 270 },
-    { x: 245, y: 270 },
-];
+// A real gate wall over the attacker's mouth, not a floating pair of flanking dots - a tightly
+// spaced run of nails with one deliberate center gap, the same idiom a real machine's attacker
+// (yakumono) gate uses: the pocket underneath is wide, but the way in is a narrow door. An
+// earlier pass used two widely-spaced flanking pins instead (a ball could drift in almost
+// anywhere along the mouth); this is meant to actually be harder, not just visually busier.
+const ATTACKER_WALL_Y = 230; // well clear of the pocket's own +-9px depth window at y=250
+const ATTACKER_WALL_SPACING = 5;
+const ATTACKER_WALL_HALF_SPAN = 30;
+const ATTACKER_WALL_GAP_HALF = 9; // ~18px door - wider than the ball, narrow next to the mouth's 64px
+function generateAttackerWall(): Point[] {
+    const wall: Point[] = [];
+    for (let dx = -ATTACKER_WALL_HALF_SPAN; dx <= ATTACKER_WALL_HALF_SPAN; dx += ATTACKER_WALL_SPACING) {
+        if (Math.abs(dx) < ATTACKER_WALL_GAP_HALF) continue;
+        wall.push({ x: ATTACKER.position.x + dx, y: ATTACKER_WALL_Y });
+    }
+    return wall;
+}
+export const ATTACKER_WALL: Point[] = generateAttackerWall();
 
-// Gate-nail pairs flanking each pocket's own mouth, just outside its half-width - the standard
-// way a real board narrows a specific target's *effective* catch window (a ball has to be
-// aimed cleanly between the pair) without changing the pocket's own physical size. No dedicated
-// chucker gate - a first pass had one, but stacked with CENTER_GAUNTLET's own nearby rows it
-// buried that small an 8px-halfwidth mouth three rows deep and made it all but unreachable (0
-// catches in 4000 simulated shots).
-export const ATTACKER_GATE: Point[] = [
-    { x: 183, y: 250 },
-    { x: 277, y: 250 },
-];
-export const BONUS_GATES: Point[] = [
-    { x: 108, y: 258 },
-    { x: 152, y: 258 },
-    { x: 308, y: 258 },
-    { x: 352, y: 258 },
-];
-// No dedicated tulip/jackpot gates - two separate placements were tried (flush beside the
-// mouth, then raised further upstream) and both empirically made jackpot's catch rate *worse*
-// (0.68% baseline -> 1.48% -> 1.64%), not better: for these two small, dead-center mouths, a
-// nearby symmetric pin pair tends to funnel a scattered ball back toward center and into the
-// slot rather than deflect it away, the opposite of every other gate on this board. Left alone
-// at their original positions/spacing rather than chasing a fix that kept backfiring.
+const ALL_POCKETS_FOR_CLEARANCE: FixedPocket[] = [...TULIPS, JACKPOT, ATTACKER, ...BONUS_POCKETS, CHUCKER];
+const POCKET_PIN_CLEARANCE = PIN_RADIUS + BALL_RADIUS; // beyond the pocket's own halfWidth/depth, so a grid pin never sits flush against a pocket wall
+
+function conflictsWithPocket(p: Point): boolean {
+    return ALL_POCKETS_FOR_CLEARANCE.some(
+        (pocket) => Math.abs(p.x - pocket.position.x) <= pocket.halfWidth + POCKET_PIN_CLEARANCE && Math.abs(p.y - pocket.position.y) <= POCKET_DEPTH / 2 + POCKET_PIN_CLEARANCE
+    );
+}
+
+function conflictsWithWindmill(p: Point): boolean {
+    return WINDMILLS.some((w) => Math.hypot(p.x - w.position.x, p.y - w.position.y) < w.radius + PIN_RADIUS + BALL_RADIUS + 2);
+}
+
+function conflictsWithLauncher(p: Point): boolean {
+    return Math.hypot(p.x - LAUNCHER_POSITION.x, p.y - LAUNCHER_POSITION.y) < RAIL_WIDTH + PIN_RADIUS + BALL_RADIUS + 2;
+}
+
+function conflictsWithAttackerWall(p: Point): boolean {
+    return ATTACKER_WALL.some((w) => Math.hypot(p.x - w.x, p.y - w.y) < GRID_COL_SPACING * 0.6);
+}
 
 export function generateNailField(): PinPosition[] {
     const pins: PinPosition[] = [];
     for (const deflector of RELEASE_DEFLECTOR) {
         pins.push({ x: deflector.x, y: deflector.y });
     }
-    for (const center of CLUSTER_CENTERS) {
-        for (const offset of CLUSTER_LOCAL_OFFSETS) {
-            pins.push({ x: center.x + offset.x, y: center.y + offset.y });
-        }
+    for (const wall of ATTACKER_WALL) {
+        pins.push({ x: wall.x, y: wall.y });
     }
-    for (const stray of STRAY_NAILS) {
-        pins.push({ x: stray.x, y: stray.y });
-    }
-    for (const gauntlet of CENTER_GAUNTLET) {
-        pins.push({ x: gauntlet.x, y: gauntlet.y });
-    }
-    for (const gate of [...ATTACKER_GATE, ...BONUS_GATES]) {
-        pins.push({ x: gate.x, y: gate.y });
+    for (const row of generateRowPins()) {
+        if (conflictsWithPocket(row) || conflictsWithWindmill(row) || conflictsWithLauncher(row) || conflictsWithAttackerWall(row)) continue;
+        pins.push({ x: row.x, y: row.y });
     }
     return pins;
 }
