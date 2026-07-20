@@ -119,7 +119,7 @@ export const BOUNDARY_RIGHT_POINTS = sampleArc(BOUNDARY_RIGHT_ARC);
 export const BOUNDARY_LEFT_POINTS = sampleArc(BOUNDARY_LEFT_ARC);
 
 export const BALL_RADIUS = 3.5;
-export const PIN_RADIUS = 1.6; // down from 2.2 - smaller, more delicate pins, matched here and in the client's own rendering so what you see is what you collide with
+export const PIN_RADIUS = 1.1; // down from 1.6 (originally 2.2) - smaller, more delicate pins to match a real modern board's dense nail field; matched here and in the client's own rendering so what you see is what you collide with
 
 // Gutter: a real gap in the boundary itself, with a pocket hanging below it that narrows down
 // to a drain - same construction the original board used, just recomputed for the new circular
@@ -298,68 +298,75 @@ export const WINDMILLS: WindmillConfig[] = [
 ];
 
 // --- Nail field -----------------------------------------------------------------------------
-// Real nail rows (a "kejime" row, the actual term for this in a real machine) at a handful of
-// deliberate y-levels, each one generated - not hand-placed pin-by-pin - from the board's own
-// boundary formula, so a row's extent can never drift past the glass. This replaced two earlier
-// attempts:
-//   1. A handful of hand-placed 8-pin blob clusters. Left the board's own centerline entirely
-//      empty (a ball drifting to center had a clear vertical lane through the chucker and the
-//      wide attacker pocket), and one cluster's offsets pushed several pins physically outside
-//      the boundary curve - dead pins past the glass, because nothing ever checked a pin's
-//      position against the *actual curve*, only the canvas rectangle.
-//   2. A uniform lattice covering the *entire* field, every ~25px in both directions (the same
-//      quincunx idea Plinko's own peg field uses, see plinkoLayout.ts's generatePegPositions).
-//      Structurally correct and genuinely bug-free, but it measurably backfired: simulated
-//      miss rate dropped from 87.6% to 75.4% and almost every pocket got *easier*, not harder.
-//      Filling every gap removes the open lanes a real machine actually relies on to send most
-//      balls straight to the drain untouched - density everywhere just means more chances to be
-//      knocked *down* into whatever's below rather than *past* it into the gutter.
-// This version keeps real open channels between a few short rows bridging just the center
-// column at the board's actual empty stretches (see CENTER_ROW_HALF_SPAN below - a full-width
-// version of these rows was tried too and made things worse still), plus the deflector (already
-// a genuine diagonal "ramp") and a dedicated gate-wall over the attacker - rows for chaos, a
-// wall for a specific hard gate, generous open space on both flanks the rest of the way down.
+// A genuinely dense staggered lattice (100+ small pins) covering nearly the whole playfield -
+// what an actual modern machine's board looks like: nails nearly everywhere, not a handful of
+// widely-spaced rows. Generated from the board's own boundary formula (a pin can't drift outside
+// the glass by construction) rather than hand-placed, same as every version before this one.
+//
+// This is the third design this field has gone through:
+//   1. Hand-placed 8-pin blob clusters. Left the centerline entirely empty (a ball drifting to
+//      center had a clear lane through the chucker and the wide attacker pocket), and one
+//      cluster's offsets pushed several pins physically outside the boundary curve.
+//   2. A handful of short nail rows, capped to just the center corridor, leaving both flanks
+//      deliberately empty. Fixed the difficulty regression a full lattice caused (see below) at
+//      the cost of looking sparse and patchy on the outer two-thirds of the board - correct
+//      simulated numbers, but nothing like a real machine's own density.
+// Going back to full density (per direct request, prioritizing "look at a real board" over the
+// difficulty-tuning result) reproduces the same tension noted in (2)'s own history, and smaller
+// pins don't meaningfully offset it: simulated against the real matter-js engine, every pocket
+// got measurably easier than the original board, including the attacker (4.68% -> 6.60% catch
+// rate when open, worse than where this started, despite its own dedicated gate wall - see
+// ATTACKER_WALL below). A first pass at this density (19px spacing, 209 pins) was far worse still
+// (attacker at 12.13%); backing off to 24px spacing (140 pins) recovered some of that but not all
+// of it. This board's own layout is the reason: nearly every scoring pocket sits in the same
+// center column the field's main traffic already funnels through, so any density increase there
+// mostly means more chances to be knocked into a nearby pocket instead of past it - unlike a real
+// machine, where the dense field mostly surrounds a much smaller, more isolated scoring area.
+// RELEASE_DEFLECTOR (a real diagonal ramp) and ATTACKER_WALL (a dedicated gate over the
+// attacker's mouth) stay as their own denser, purposeful structures layered on top of the general
+// lattice, same as a real board's gimmick housings sit inside its own nail field rather than
+// replacing it - they just aren't strong enough on their own to fully counteract this board's
+// own geometry once the surrounding field gets this dense.
 
 export interface PinPosition {
     x: number;
     y: number;
 }
 
-// One row bridging just the center corridor at each of the board's own genuinely nail-free
-// stretches (identified from the pocket layout above): just below the release deflector, in the
-// chucker-to-attacker corridor, and in the long attacker-to-jackpot corridor. A first attempt
-// made these full-width (all the way out to the glass on both sides) - structurally sound, but
-// it measurably backfired anyway: every shot now had to cross all three rows with no way around
-// them, and miss rate dropped further still (76.9%, worse than the wall-to-wall lattice's own
-// 75.4% on two of the three metrics that matter). A real board's outer flanks stay genuinely
-// open - the original board's own flanking clusters never reached the glass either - so these
-// rows are capped at CENTER_ROW_HALF_SPAN either side of center: wide enough to fix the actual
-// bug (the empty vertical lane straight through chucker/attacker), narrow enough to leave both
-// flanks as real, untouched lanes to the drain.
-const NAIL_ROW_YS = [165, 205, 300];
-const CENTER_ROW_HALF_SPAN = 95;
-const GRID_COL_SPACING = 25;
-const GRID_GLASS_CLEARANCE = PIN_RADIUS + BALL_RADIUS + 4; // normal margin off the boundary curve
+const GRID_ROW_SPACING = 24;
+const GRID_COL_SPACING = 24;
+const GRID_TOP_Y = 60; // just below the crown of the boundary
+const GRID_BOTTOM_Y = 380; // just above the gutter cutout/drain
+const GRID_GLASS_CLEARANCE = PIN_RADIUS + BALL_RADIUS + 3; // normal margin off the boundary curve
 // The rail hugs the *inside* of the glass on the right side over almost this whole y-range (see
-// RAIL_WIDTH/RELEASE_THETA/LAUNCH_THETA above); moot once rows are capped at CENTER_ROW_HALF_SPAN
-// (95 is already well clear of the rail channel at every one of these y-levels) but kept as a
-// defensive clamp in case that span is ever widened later.
-const GRID_RAIL_CLEARANCE = RAIL_WIDTH + PIN_RADIUS + BALL_RADIUS + 6;
+// RAIL_WIDTH/RELEASE_THETA/LAUNCH_THETA above) - rows there need a bigger right-side margin so a
+// grid pin never lands inside the rail channel itself, not just inside the canvas rectangle.
+const GRID_RAIL_CLEARANCE = RAIL_WIDTH + PIN_RADIUS + BALL_RADIUS + 5;
 
-// The boundary's own half-width at a given y (ellipse above center, true circle at/below it -
-// same hybrid the boundary curve itself uses, see the file header).
-function boundaryHalfWidthAtY(y: number): number {
+// The half-width, at a given y, of the boundary shrunk inward by `inset` on every side (a
+// properly inset ellipse/circle - same hybrid the boundary curve itself uses, see the file
+// header - not the boundary's own half-width minus a flat x-offset). Subtracting a flat x-offset
+// from the *unshrunk* half-width looks equivalent at the very widest point but under-delivers
+// real clearance everywhere else: for a point away from center, the boundary's own inward normal
+// isn't purely horizontal, so a flat x-margin doesn't correspond to the same radial distance from
+// the true curve. Shrinking the ellipse/circle's own radii first keeps genuine clearance at every
+// y, not just at y=FIELD_CY.
+function insetHalfWidthAtY(y: number, inset: number): number {
+    const rx = FIELD_RX - inset;
     if (y <= FIELD_CY) {
-        const t = (y - FIELD_CY) / FIELD_RY;
-        return FIELD_RX * Math.sqrt(Math.max(0, 1 - t * t));
+        const ry = FIELD_RY - inset;
+        if (ry <= 0) return 0;
+        const t = (y - FIELD_CY) / ry;
+        if (Math.abs(t) > 1) return 0;
+        return rx * Math.sqrt(Math.max(0, 1 - t * t));
     }
     const dy = y - FIELD_CY;
-    return Math.sqrt(Math.max(0, FIELD_RX * FIELD_RX - dy * dy));
+    return Math.sqrt(Math.max(0, rx * rx - dy * dy));
 }
 
 // Whether the rail channel occupies the right edge of the boundary at this y - inverts the same
-// theta-from-y relationship boundaryHalfWidthAtY uses, since y is monotonic in theta along the
-// right half of the boundary over this board's whole vertical range.
+// theta-from-y relationship the (unshrunk) boundary curve itself uses, since y is monotonic in
+// theta along the right half of the boundary over this board's whole vertical range.
 function railActiveAtY(y: number): boolean {
     const ratio = y <= FIELD_CY ? (y - FIELD_CY) / FIELD_RY : (y - FIELD_CY) / FIELD_RX;
     const theta = Math.asin(Math.max(-1, Math.min(1, ratio)));
@@ -367,9 +374,10 @@ function railActiveAtY(y: number): boolean {
 }
 
 function gridRowXs(y: number, rowIndex: number): number[] {
-    const boundaryHalfWidth = Math.min(boundaryHalfWidthAtY(y), CENTER_ROW_HALF_SPAN);
-    const rightLimit = FIELD_CX + boundaryHalfWidth - (railActiveAtY(y) ? GRID_RAIL_CLEARANCE : GRID_GLASS_CLEARANCE);
-    const leftLimit = FIELD_CX - (boundaryHalfWidth - GRID_GLASS_CLEARANCE);
+    const rightHalfWidth = insetHalfWidthAtY(y, railActiveAtY(y) ? GRID_RAIL_CLEARANCE : GRID_GLASS_CLEARANCE);
+    const leftHalfWidth = insetHalfWidthAtY(y, GRID_GLASS_CLEARANCE);
+    const rightLimit = FIELD_CX + rightHalfWidth;
+    const leftLimit = FIELD_CX - leftHalfWidth;
     const offset = rowIndex % 2 === 0 ? 0 : GRID_COL_SPACING / 2;
     const xs: number[] = [];
     for (let x = FIELD_CX + offset; x <= rightLimit; x += GRID_COL_SPACING) xs.push(x);
@@ -377,13 +385,14 @@ function gridRowXs(y: number, rowIndex: number): number[] {
     return xs;
 }
 
-function generateRowPins(): Point[] {
+function generateGridPins(): Point[] {
     const pins: Point[] = [];
-    NAIL_ROW_YS.forEach((y, rowIndex) => {
+    let rowIndex = 0;
+    for (let y = GRID_TOP_Y; y <= GRID_BOTTOM_Y; y += GRID_ROW_SPACING, rowIndex++) {
         for (const x of gridRowXs(y, rowIndex)) {
             pins.push({ x, y });
         }
-    });
+    }
     return pins;
 }
 
@@ -443,6 +452,13 @@ function conflictsWithAttackerWall(p: Point): boolean {
     return ATTACKER_WALL.some((w) => Math.hypot(p.x - w.x, p.y - w.y) < GRID_COL_SPACING * 0.6);
 }
 
+// The grid now reaches up into the deflector's own y-range (see GRID_TOP_Y) - without this, some
+// grid points would land right on top of that chain instead of respecting it as its own
+// dedicated (lower-restitution, see pachinkoPhysics.ts) structure.
+function conflictsWithDeflector(p: Point): boolean {
+    return RELEASE_DEFLECTOR.some((d) => Math.hypot(p.x - d.x, p.y - d.y) < GRID_COL_SPACING * 0.6);
+}
+
 export function generateNailField(): PinPosition[] {
     const pins: PinPosition[] = [];
     for (const deflector of RELEASE_DEFLECTOR) {
@@ -451,9 +467,9 @@ export function generateNailField(): PinPosition[] {
     for (const wall of ATTACKER_WALL) {
         pins.push({ x: wall.x, y: wall.y });
     }
-    for (const row of generateRowPins()) {
-        if (conflictsWithPocket(row) || conflictsWithWindmill(row) || conflictsWithLauncher(row) || conflictsWithAttackerWall(row)) continue;
-        pins.push({ x: row.x, y: row.y });
+    for (const grid of generateGridPins()) {
+        if (conflictsWithPocket(grid) || conflictsWithWindmill(grid) || conflictsWithLauncher(grid) || conflictsWithAttackerWall(grid) || conflictsWithDeflector(grid)) continue;
+        pins.push({ x: grid.x, y: grid.y });
     }
     return pins;
 }

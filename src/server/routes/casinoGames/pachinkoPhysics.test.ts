@@ -85,4 +85,9 @@ describe("simulateShot", () => {
         simulateShot(MAX_LAUNCH_POWER);
         expect(Date.now() - start).toBeLessThan(2000);
     });
-}, 20000);
+    // Raised from 20000 - the denser (100+ pin) nail field means more Matter.js static bodies
+    // per shot, so a single simulateShot() now costs ~70ms instead of ~10ms. The large-N
+    // reachability tests above (hundreds of shots each, needed to catch a rare outcome without
+    // being flaky) need real headroom for that, even though a single production /launch request
+    // is still well under 100ms either way.
+}, 120000);

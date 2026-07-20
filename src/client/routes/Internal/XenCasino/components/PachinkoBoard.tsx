@@ -100,7 +100,7 @@ export interface PachinkoBoardProps {
 }
 
 const BALL_RADIUS = 3.5; // matches pachinkoLayout.ts's BALL_RADIUS
-const PIN_RADIUS = 1.6; // matches pachinkoLayout.ts's PIN_RADIUS
+const PIN_RADIUS = 1.1; // matches pachinkoLayout.ts's PIN_RADIUS
 const POCKET_HEIGHT = 18; // matches pachinkoLayout.ts's POCKET_DEPTH - the physical cup every pocket collides against, not just a visual choice
 const FRAME_MS = 1000 / 30; // matches the server's ~30fps trajectory sample rate
 const POOF_MS = 450; // how long the ball+particle burst takes once a trajectory finishes
