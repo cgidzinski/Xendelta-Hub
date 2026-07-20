@@ -57,6 +57,7 @@ import {
 } from "./pachinkoLayout";
 import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, ATTACKER_OPEN_MS, ATTACKER_BALLS, CONTRIBUTION_RATE, JACKPOT_SEED, CASH_OUT_RATE, jackpotBalls, cashOutAmount } from "./pachinkoPayouts";
 import { simulateShot, PachinkoOutcome, TrajectorySample } from "./pachinkoPhysics";
+import { spinReel, ReelSpinResult } from "./pachinkoReels";
 
 const SLUG = "pachinko";
 const PRICE_PER_BALL = 100;
@@ -66,6 +67,7 @@ interface PachinkoBallResult {
     outcome: PachinkoOutcome;
     ballsAwarded: number;
     trajectory: TrajectorySample[];
+    reelSpin?: ReelSpinResult; // only present on a chucker catch - see pachinkoReels.ts
 }
 
 interface PachinkoTopup {
@@ -427,6 +429,7 @@ module.exports = function (app: express.Application) {
             let nextAttackerOpenUntil = conditions.attackerOpenUntil;
             let poolContribution = 0;
             let resetPool = false;
+            let reelSpin: ReelSpinResult | undefined;
 
             if (outcome === "bonusLeft" || outcome === "bonusRight") {
                 ballsAwarded = BONUS_POCKET_BALLS;
@@ -440,7 +443,14 @@ module.exports = function (app: express.Application) {
                 nextRightOpen = !conditions.rightTulipOpen;
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
             } else if (outcome === "chucker") {
-                nextAttackerOpenUntil = now + ATTACKER_OPEN_MS;
+                // Fires the board's own central reel gimmick - a real machine's "heso" -> LCD
+                // reel -> bonus round flow (see pachinkoReels.ts). The reel's own bonus balls
+                // and attacker-window extension are layered on top of the chucker's existing,
+                // unconditional attacker-open below - a miss on the reel (matchTier "none")
+                // leaves today's behavior completely unchanged.
+                reelSpin = spinReel();
+                nextAttackerOpenUntil = now + ATTACKER_OPEN_MS + reelSpin.attackerBonusMs;
+                ballsAwarded = reelSpin.ballsAwarded;
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
             } else if (outcome === "attacker") {
                 // Physics only ever returns "attacker" while attackerActive was true, i.e. it
@@ -461,7 +471,7 @@ module.exports = function (app: express.Application) {
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
             }
 
-            const result: PachinkoBallResult = { outcome, ballsAwarded, trajectory };
+            const result: PachinkoBallResult = { outcome, ballsAwarded, trajectory, reelSpin };
 
             const updated = await XenCasinoRound.applyConditionsUpdate(
                 round._id,
@@ -500,6 +510,7 @@ module.exports = function (app: express.Application) {
                     outcome,
                     ballsAwarded,
                     trajectory,
+                    reelSpin,
                     leftTulipOpen: updatedConditions.leftTulipOpen,
                     rightTulipOpen: updatedConditions.rightTulipOpen,
                     attackerOpenUntil: updatedConditions.attackerOpenUntil,

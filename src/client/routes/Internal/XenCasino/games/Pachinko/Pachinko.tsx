@@ -166,12 +166,14 @@ export default function Pachinko() {
                     { label: "Miss (most balls)", payout: "—" },
                     { label: "Bonus pocket", payout: `+${odds.bonusPocketBalls} balls` },
                     { label: "Side tulip (left or right)", payout: `+${odds.sideTulipBalls} balls` },
-                    { label: "Chucker", payout: `Opens attacker (${Math.round(odds.attackerOpenMs / 1000)}s)` },
+                    { label: "Chucker", payout: `Opens attacker (${Math.round(odds.attackerOpenMs / 1000)}s) + spins the reel` },
+                    { label: "Reel, 2 of a kind", payout: "Small ball bonus" },
+                    { label: "Reel, 3 of a kind", payout: "Bigger bonus + longer attacker" },
                     { label: "Attacker (while open)", payout: `+${odds.attackerBalls} balls` },
                     { label: "Jackpot, primed", payout: "Pool → balls" },
                 ],
                 footnote:
-                    "Every catch pays out in balls, never cheddar directly - closing the game cashes out your tray automatically. Most balls miss, like a real pachinko board. Side tulips toggle open/closed each time they catch a ball; the jackpot pocket is nearly impossible to catch until both side tulips are open at once, then it pays the whole jackpot pool, converted to balls. The chucker doesn't pay anything itself, but opens the attacker gate for a few seconds - and stops blocking balls itself while that gate is open.",
+                    "Every catch pays out in balls, never cheddar directly - closing the game cashes out your tray automatically. Most balls miss, like a real pachinko board. Side tulips toggle open/closed each time they catch a ball; the jackpot pocket is nearly impossible to catch until both side tulips are open at once, then it pays the whole jackpot pool, converted to balls. The chucker doesn't pay anything itself directly, but opens the attacker gate for a few seconds and spins the board's central reel - a real modern machine's own start-chucker-triggers-the-LCD-reel gimmick. Two or three matching symbols add a modest ball bonus on top, and three of a kind also extends the attacker's open window.",
             },
         ]
         : [];

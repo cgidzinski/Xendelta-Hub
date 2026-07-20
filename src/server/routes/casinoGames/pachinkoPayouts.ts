@@ -21,6 +21,15 @@ export const SIDE_TULIP_BALLS = 8;
 // The chucker itself never pays - it only opens the attacker gate for this long.
 export const ATTACKER_OPEN_MS = 6000;
 
+// The chucker also fires the board's central reel gimmick (see pachinkoReels.ts) - a real
+// modern machine's own "heso" -> LCD reel -> bonus round flow. Two-of-a-kind is a small top-up;
+// three-of-a-kind is bigger and also extends the attacker's own open window, same real-machine
+// shape (the reel result IS the bonus-round trigger, not decoration). Modest starting values,
+// same caveat as every other payout in this file.
+export const REEL_TWO_MATCH_BALLS = 5;
+export const REEL_THREE_MATCH_BALLS = 15;
+export const REEL_THREE_MATCH_BONUS_MS = 4000;
+
 // A big, rare payout - the attacker is a wide target, but only reachable during its short open
 // window, and only reachable AT ALL via the chucker (a small, always-open target of its own).
 export const ATTACKER_BALLS = 25;

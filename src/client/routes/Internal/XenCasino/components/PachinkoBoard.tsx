@@ -72,10 +72,20 @@ export interface PachinkoSession {
     attackerOpenUntil: number; // epoch ms; attacker pays while Date.now() < this
 }
 
+export type ReelMatchTier = "none" | "two" | "three";
+
+export interface PachinkoReelSpin {
+    symbols: [string, string, string];
+    matchTier: ReelMatchTier;
+    ballsAwarded: number;
+    attackerBonusMs: number;
+}
+
 export interface PachinkoLaunchResult {
     outcome: PachinkoOutcome;
     ballsAwarded: number;
     trajectory: PachinkoTrajectorySample[];
+    reelSpin?: PachinkoReelSpin; // only present on a chucker catch - see pachinkoReels.ts (server)
     leftTulipOpen: boolean;
     rightTulipOpen: boolean;
     attackerOpenUntil: number;
@@ -109,6 +119,33 @@ const FIRE_INTERVAL_MS = 400; // 100 balls/minute while the launch button is hel
 const MAX_CONCURRENT_BALLS = 20;
 const PARTICLE_COUNT = 12;
 const REUP_AMOUNTS = [100, 1000];
+
+// The board's central digital reel - a real modern machine's own "heso" (start chucker) -> LCD
+// reel -> bonus round gimmick (see pachinko.ts's chucker branch and pachinkoReels.ts on the
+// server for how the result is decided). Sits in the one stretch of the upper-mid field that's
+// naturally clear of the release deflector, the windmills, and the chucker's own mouth - no
+// board changes needed to make room for it. The server only ever deals in generic symbol keys
+// (matching slots.ts's own ITEM_A/ITEM_B/.../JACKPOT_ITEM vocabulary); this board owns what each
+// one looks like, same as every slots machine page owns its own symbol map.
+const REEL_SYMBOLS: Record<string, string> = {
+    ITEM_A: "🍒",
+    ITEM_B: "🔔",
+    ITEM_C: "⭐",
+    ITEM_D: "💎",
+    JACKPOT_ITEM: "7️⃣",
+};
+const REEL_FLICKER_POOL = Object.values(REEL_SYMBOLS);
+const REEL_BOX = { x: 230, y: 158, width: 120, height: 26 };
+const REEL_SPIN_MS = 900; // base spin duration before the first reel starts landing
+const REEL_STOP_STAGGER_MS = [0, 220, 440]; // per-reel landing stagger, added to REEL_SPIN_MS
+const REEL_FLICKER_INTERVAL_MS = 70;
+const REEL_RESULT_GLOW_MS = 1600; // how long a match keeps its glow after the last reel lands
+
+interface ReelAnimState {
+    symbols: [string, string, string];
+    matchTier: ReelMatchTier;
+    startTime: number;
+}
 
 const OUTCOME_LABEL: Record<PachinkoOutcome, string> = {
     gutter: "Miss",
@@ -238,6 +275,63 @@ function drawPocketAmount(ctx: CanvasRenderingContext2D, x: number, y: number, t
     ctx.fillText(text, x, y + 3);
 }
 
+// The central digital reel display - a real modern machine's own "heso -> LCD reel" gimmick
+// (see REEL_BOX's own comment above for why this exact spot). `anim` is null until the first
+// chucker catch of the session; each reel flickers through REEL_FLICKER_POOL until its own
+// staggered landing time, then shows its true (server-decided) symbol - same spin-then-land
+// shape SlotMachine.tsx's reels use, ported into plain canvas draws since this board is one
+// continuous canvas (a ball needs to visibly fly in front of this, which only works if it's
+// painted in the same pass as everything else, not a separate DOM layer).
+function drawReelDisplay(ctx: CanvasRenderingContext2D, now: number, anim: ReelAnimState | null) {
+    const { x, y, width, height } = REEL_BOX;
+    ctx.save();
+    ctx.fillStyle = "rgba(8,8,14,0.92)";
+    ctx.strokeStyle = "rgba(255,215,0,0.5)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(x - width / 2, y - height / 2, width, height, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    const reelWidth = width / 3;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "16px sans-serif";
+    for (let i = 0; i < 3; i++) {
+        const cx = x - width / 2 + reelWidth * i + reelWidth / 2;
+        let symbol = "❔";
+        if (anim) {
+            const elapsed = now - anim.startTime;
+            const stopAt = REEL_SPIN_MS + (REEL_STOP_STAGGER_MS[i] ?? 0);
+            symbol = elapsed < stopAt ? REEL_FLICKER_POOL[Math.floor(elapsed / REEL_FLICKER_INTERVAL_MS) % REEL_FLICKER_POOL.length] : REEL_SYMBOLS[anim.symbols[i]] ?? "❔";
+        }
+        ctx.fillStyle = "rgba(255,255,255,0.92)";
+        ctx.fillText(symbol, cx, y + 1);
+        if (i > 0) {
+            ctx.strokeStyle = "rgba(255,255,255,0.15)";
+            ctx.beginPath();
+            ctx.moveTo(x - width / 2 + reelWidth * i, y - height / 2);
+            ctx.lineTo(x - width / 2 + reelWidth * i, y + height / 2);
+            ctx.stroke();
+        }
+    }
+
+    // A glow once every reel has landed on a real match, fading away after REEL_RESULT_GLOW_MS -
+    // the reel keeps showing the landed symbols after that, it just stops glowing.
+    if (anim && anim.matchTier !== "none") {
+        const lastStopAt = REEL_SPIN_MS + (REEL_STOP_STAGGER_MS[REEL_STOP_STAGGER_MS.length - 1] ?? 0);
+        const sinceLanded = now - anim.startTime - lastStopAt;
+        if (sinceLanded >= 0 && sinceLanded < REEL_RESULT_GLOW_MS) {
+            ctx.strokeStyle = anim.matchTier === "three" ? "#FFD700" : "#7CFFB2";
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.roundRect(x - width / 2 - 2, y - height / 2 - 2, width + 4, height + 4, 5);
+            ctx.stroke();
+        }
+    }
+    ctx.restore();
+}
+
 /**
  * The reusable Pachinko board - canvas analog of PlinkoBoard, replaying physics trajectories
  * captured server-side. The server decides the whole outcome (a real matter-js simulation
@@ -277,6 +371,7 @@ export default function PachinkoBoard({
     const fireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const activeBallsRef = useRef<Map<number, ActiveBall>>(new Map());
     const latestAppliedSeqRef = useRef(0);
+    const reelStateRef = useRef<ReelAnimState | null>(null);
 
     const sessionRef = useRef(session);
     sessionRef.current = session;
@@ -356,6 +451,10 @@ export default function PachinkoBoard({
             ctx.arc(pin.x, pin.y, PIN_RADIUS, 0, Math.PI * 2);
             ctx.fill();
         }
+
+        // Central digital reel - drawn here (after the nail field, before the ball) so a ball
+        // still visibly flies in front of it, matching a real screen module's own depth.
+        drawReelDisplay(ctx, now, reelStateRef.current);
 
         // Windmills - static bumpers for now (real rotation is a later visual pass).
         ctx.strokeStyle = "rgba(200,200,200,0.6)";
@@ -560,6 +659,14 @@ export default function PachinkoBoard({
                             const calloutId = nextCalloutId++;
                             setCallouts((prev) => [...prev, { id: calloutId, outcome: result.outcome, ballsAwarded: result.ballsAwarded, won: result.ballsAwarded > 0 }]);
                             setTimeout(() => setCallouts((prev) => prev.filter((c) => c.id !== calloutId)), CALLOUT_MS);
+                        }
+
+                        // The chucker fires the central reel the instant the ball actually lands
+                        // there (not the instant the response arrives) - same "catch has to be
+                        // visible before its consequence shows up" causality the callouts above
+                        // already follow.
+                        if (result.outcome === "chucker" && result.reelSpin) {
+                            reelStateRef.current = { symbols: result.reelSpin.symbols, matchTier: result.reelSpin.matchTier, startTime: now };
                         }
 
                         // Responses can arrive out of order under hold-to-fire - only apply this
