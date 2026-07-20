@@ -1,10 +1,12 @@
 /**
- * Slots — generic weighted 3-reel engine shared by every slot machine. A machine is just
- * an entry in `MACHINES`: its own symbol weights, its own paytable, its own jackpot
- * contribution rate/seed. Adding a new machine is one new `MACHINES` entry plus one new
- * frontend page (see `SlotMachine.tsx` on the client) - nothing else in this file changes.
- * Routes are parameterized by `:machine` (`/api/casino/games/slots/:machine/odds`,
- * `/spin`) and 404 on an unknown slug.
+ * Slots — generic weighted 3-reel engine for Easy Spin (SpinMania moved to its own 5x3
+ * cascading-grid engine, see spinmania.ts/spinmaniaGrid.ts - a genuinely different game
+ * shape, not a config variant of this one). A machine is just an entry in `MACHINES`: its
+ * own symbol weights, its own paytable, its own jackpot contribution rate/seed. Adding
+ * another 3-reel machine is one new `MACHINES` entry plus one new frontend page (see
+ * `SlotMachine.tsx` on the client) - nothing else in this file changes. Routes are
+ * parameterized by `:machine` (`/api/casino/games/slots/:machine/odds`, `/spin`) and 404
+ * on an unknown slug.
  *
  * Symbols are plain generic keys, not themed names - this file never says "cherry" or
  * "seven". Two keys are reserved and carry special meaning, shared by every machine:
@@ -24,7 +26,9 @@
  * so a jackpot hit on one machine only resets that machine's own pool. The jackpot pool
  * itself is local bookkeeping - that wager money already sits in XenCasino's real
  * Weeabets balance the moment it's lost; only the jackpot *payout* triggers an actual
- * transfer.
+ * transfer. Settlement itself (the payout transfer + pool update) is shared with
+ * spinmania.ts via slotsSettlement.ts - the one deliberate point of code sharing between
+ * the two engines, since it has no opinion about reel shape.
  *
  * Same debit-at-start pattern used across every game: the reels are drawn and the payout
  * is fully decided *before* any money moves, then persisted into a XenCasinoRound
@@ -43,8 +47,9 @@ const { User } = require("../../models/user");
 const { XenCasino, XenCasinoRound } = require("../../models/xenCasino");
 const crypto = require("crypto");
 const mongoose = require("mongoose");
-import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
+import { resolveUserAccount, getXenCasinoAccountId, transfer, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
+import { settleSlotsRound } from "./slotsSettlement";
 
 type SlotSymbol = string;
 
@@ -73,8 +78,7 @@ interface MachineConfig {
 const MACHINES: Record<string, MachineConfig> = {
     // Friendlier, low-stakes machine - jackpot weight raised 3->5 of 100 (odds
     // 1-in-37,037 -> 1-in-8,000) by trimming ITEM_A 40->38, then the paytable re-solved
-    // for a higher blended RTP than before (this machine's improvement is funded by
-    // Spinmania's, below, absorbing a worse edge instead):
+    // for a higher blended RTP than before:
     //   EV from the ordinary paytable alone = 91.72%
     //   + 3.5% of every wager routed into the jackpot pool (contribution rate ~= its own
     //     long-run RTP contribution, since every dollar contributed is eventually paid
@@ -96,30 +100,6 @@ const MACHINES: Record<string, MachineConfig> = {
         jackpotContributionRate: 0.035,
         jackpotSeed: 0,
         targetRtp: 0.952,
-    },
-    // Higher-denomination, higher-volatility machine, and now the one funding Easy Spin's
-    // friendlier odds: jackpot weight raised 15->30 of 1000 (odds 1-in-296,296 ->
-    // 1-in-37,037 - still meaningfully rarer than Easy Spin's new 1-in-8,000, preserving
-    // the "big risk, big reward" contrast) by trimming ITEM_A 380->365, then the paytable
-    // re-solved for a lower blended RTP:
-    //   Paytable RTP = 80.58%
-    //   + 4.26% jackpot contribution = 84.8% blended RTP, i.e. ~15.2% house edge - the
-    //     tradeoff for Easy Spin's improvement above. Jackpot 1-in-37,037, resets to 0 (no
-    //     floor) after a hit.
-    "spinmania": {
-        slug: "spinmania",
-        symbolWeights: [
-            { symbol: MINOR_ITEM, weight: 365 },
-            { symbol: "ITEM_B", weight: 300 },
-            { symbol: "ITEM_C", weight: 190 },
-            { symbol: "ITEM_D", weight: 115 },
-            { symbol: JACKPOT_ITEM, weight: 30 },
-        ],
-        tripleMultipliers: { ITEM_D: 80, ITEM_C: 21, ITEM_B: 7, [MINOR_ITEM]: 2 },
-        twoOfAKindMultiplier: 1,
-        jackpotContributionRate: 0.0426,
-        jackpotSeed: 0,
-        targetRtp: 0.848,
     },
 };
 
@@ -177,35 +157,13 @@ function resultFor(machine: MachineConfig, reels: [SlotSymbol, SlotSymbol, SlotS
     return { multiplier: 0, jackpot: false };
 }
 
-// Pays out the round's already-decided payout (if any) and updates the jackpot pool.
-// Shared by the live spin handler and the recovery sweep so both settle a round exactly
-// the same way.
+// Thin wrapper over the shared settlement helper (see slotsSettlement.ts) - kept as its own
+// function only so every call site below still reads "settleRound(machine, round)" as before.
 async function settleRound(
     machine: MachineConfig,
     round: { _id: string; wager: number; playerAccountId: number; conditions: SpinConditions }
 ): Promise<{ balance?: string }> {
-    const { jackpot, payout } = round.conditions;
-
-    let balance: string | undefined;
-    if (payout > 0) {
-        const xenCasinoAccountId = await getXenCasinoAccountId();
-        const result = await transfer({
-            fromAccountId: xenCasinoAccountId,
-            toAccountId: round.playerAccountId,
-            amount: payout.toFixed(10),
-            key: `xendelta-slots-${machine.slug}-payout-${round._id}`,
-            note: jackpot ? `${machine.slug}_jackpot` : `${machine.slug}_win`,
-        });
-        balance = result.toNewBalance;
-    }
-
-    if (jackpot) {
-        await XenCasino.resetJackpotPool(machine.slug, machine.jackpotSeed);
-    } else {
-        await XenCasino.incrementJackpotPool(machine.slug, round.wager * machine.jackpotContributionRate);
-    }
-
-    return { balance };
+    return settleSlotsRound(machine.slug, machine.jackpotContributionRate, machine.jackpotSeed, round, round.conditions);
 }
 
 async function recoverStaleRounds(machineSlug: string): Promise<void> {
