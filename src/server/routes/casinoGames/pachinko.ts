@@ -447,16 +447,13 @@ module.exports = function (app: express.Application) {
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
             } else if (outcome === "chucker") {
                 // Fires the board's own central reel gimmick - a real machine's "heso" -> LCD
-                // reel -> bonus round flow (see pachinkoReels.ts). A catch with no match or a
-                // two-of-a-kind opens nothing; only a three-of-a-kind match opens the attacker
-                // for ATTACKER_OPEN_MS, ADDED on top of whatever's currently left on the clock
-                // (not reset to it) - queued chucker catches landing close together under
-                // hold-to-fire stack their time instead of one clobbering another's.
+                // reel -> bonus round flow (see pachinkoReels.ts). The reel's own bonus balls
+                // and attacker-window extension are layered on top of the chucker's existing,
+                // unconditional attacker-open below - a miss on the reel (matchTier "none")
+                // leaves today's behavior completely unchanged.
                 reelSpin = spinReel();
+                nextAttackerOpenUntil = now + ATTACKER_OPEN_MS + reelSpin.attackerBonusMs;
                 ballsAwarded = reelSpin.ballsAwarded;
-                if (reelSpin.attackerOpenMs > 0) {
-                    nextAttackerOpenUntil = Math.max(now, conditions.attackerOpenUntil) + reelSpin.attackerOpenMs;
-                }
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
             } else if (outcome === "attacker") {
                 // Physics only ever returns "attacker" while attackerActive was true, i.e. it
@@ -473,13 +470,6 @@ module.exports = function (app: express.Application) {
                 resetPool = true;
             } else {
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
-            }
-
-            // If the jackpot window has expired, close any open tulips - they exist only to
-            // prime the jackpot, so there's no reason to leave them open once the window ends.
-            if (nextJackpotOpenUntil <= now) {
-                nextLeftOpen = false;
-                nextRightOpen = false;
             }
 
             const result: PachinkoBallResult = { outcome, ballsAwarded, trajectory, reelSpin };

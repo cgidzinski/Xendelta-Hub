@@ -83,6 +83,15 @@ export interface PachinkoReelSpin {
     attackerBonusMs: number;
 }
 
+export type ReelMatchTier = "none" | "two" | "three";
+
+export interface PachinkoReelSpin {
+    symbols: [string, string, string];
+    matchTier: ReelMatchTier;
+    ballsAwarded: number;
+    attackerBonusMs: number;
+}
+
 export interface PachinkoLaunchResult {
     outcome: PachinkoOutcome;
     ballsAwarded: number;
@@ -138,22 +147,16 @@ const REEL_SYMBOLS: Record<string, string> = {
     JACKPOT_ITEM: "7️⃣",
 };
 const REEL_FLICKER_POOL = Object.values(REEL_SYMBOLS);
-const REEL_BOX = { x: 230, y: 142, width: 120, height: 26 };
+const REEL_BOX = { x: 230, y: 158, width: 120, height: 26 };
 const REEL_SPIN_MS = 900; // base spin duration before the first reel starts landing
 const REEL_STOP_STAGGER_MS = [0, 220, 440]; // per-reel landing stagger, added to REEL_SPIN_MS
 const REEL_FLICKER_INTERVAL_MS = 70;
 const REEL_RESULT_GLOW_MS = 1600; // how long a match keeps its glow after the last reel lands
-const MAX_QUEUED_SPINS = 6; // chucker goes inactive once this many spins are queued (queue + current)
 
 interface ReelAnimState {
     symbols: [string, string, string];
     matchTier: ReelMatchTier;
     startTime: number;
-}
-
-interface ReelQueueItem {
-    symbols: [string, string, string];
-    matchTier: ReelMatchTier;
 }
 
 const OUTCOME_LABEL: Record<PachinkoOutcome, string> = {
@@ -380,10 +383,7 @@ export default function PachinkoBoard({
     const fireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const activeBallsRef = useRef<Map<number, ActiveBall>>(new Map());
     const latestAppliedSeqRef = useRef(0);
-    const reelQueueRef = useRef<ReelQueueItem[]>([]);
-    const currentReelAnimRef = useRef<ReelAnimState | null>(null);
-    const latestSpinnerAnglesRef = useRef<number[] | undefined>(undefined);
-    const latestBallPositionsRef = useRef<{ x: number; y: number }[]>([]);
+    const reelStateRef = useRef<ReelAnimState | null>(null);
 
     const sessionRef = useRef(session);
     sessionRef.current = session;
@@ -491,41 +491,12 @@ export default function PachinkoBoard({
 
         // Central digital reel - drawn here (after the nail field, before the ball) so a ball
         // still visibly flies in front of it, matching a real screen module's own depth.
-        drawReelDisplay(ctx, now, currentReelAnimRef.current);
+        drawReelDisplay(ctx, now, reelStateRef.current);
 
-        // Stars under the reel: one ⭐ per queued spin (excluding the currently-animating one).
-        // Gold stars, centered under the reel box, so rapid chucker catches visibly stack.
-        if (reelQueueRef.current.length > 0) {
-            ctx.save();
-            const queueCount = reelQueueRef.current.length;
-            const starSpacing = 13;
-            const totalWidth = queueCount * starSpacing;
-            const startX = REEL_BOX.x - totalWidth / 2 + starSpacing / 2;
-            ctx.font = "10px sans-serif";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "top";
-            for (let i = 0; i < queueCount; i++) {
-                ctx.fillText("⭐", startX + i * starSpacing, REEL_BOX.y + REEL_BOX.height / 2 + 3);
-            }
-            ctx.restore();
-        }
-
-        // Spinners - paddle wheels that actually spin and react to ball contact.
-        // Rotation angle comes from the server's physics sim via trajectory spinnerAngles.
-        // When a ball is near a spinner, it glows brighter (visual "hit" reaction).
-        const spinnerAngles = latestSpinnerAnglesRef.current;
-        const ballPositions = latestBallPositionsRef.current;
-        for (let si = 0; si < layout.windmills.length; si++) {
-            const wm = layout.windmills[si];
-            const angle = spinnerAngles?.[si] ?? 0;
-            // Check if any ball is close to this spinner
-            const nearBall = ballPositions.some((bp) => Math.hypot(bp.x - wm.position.x, bp.y - wm.position.y) < wm.radius + BALL_RADIUS + 4);
-            const strokeColor = nearBall ? "rgba(255,220,100,0.95)" : "rgba(200,180,140,0.65)";
-            const lineW = nearBall ? 2 : 1.4;
-
-            // Outer ring
-            ctx.strokeStyle = strokeColor;
-            ctx.lineWidth = lineW;
+        // Windmills - static bumpers for now (real rotation is a later visual pass).
+        ctx.strokeStyle = "rgba(200,200,200,0.6)";
+        ctx.lineWidth = 1.2;
+        for (const windmill of layout.windmills) {
             ctx.beginPath();
             ctx.arc(wm.position.x, wm.position.y, wm.radius, 0, Math.PI * 2);
             ctx.stroke();
@@ -765,15 +736,9 @@ export default function PachinkoBoard({
                         // The chucker fires the central reel the instant the ball actually lands
                         // there (not the instant the response arrives) - same "catch has to be
                         // visible before its consequence shows up" causality the callouts above
-                        // already follow. Each catch queues a spin; they animate one at a time
-                        // so rapid chucker hits stack visually instead of clobbering each other.
-                        // Capped at MAX_QUEUED_SPINS total (current + queued) - once full, the
-                        // chucker greys out and further catches are silently dropped.
+                        // already follow.
                         if (result.outcome === "chucker" && result.reelSpin) {
-                            const totalQueued = (currentReelAnimRef.current ? 1 : 0) + reelQueueRef.current.length;
-                            if (totalQueued < MAX_QUEUED_SPINS) {
-                                reelQueueRef.current.push({ symbols: result.reelSpin.symbols, matchTier: result.reelSpin.matchTier });
-                            }
+                            reelStateRef.current = { symbols: result.reelSpin.symbols, matchTier: result.reelSpin.matchTier, startTime: now };
                         }
 
                         // Responses can arrive out of order under hold-to-fire - only apply this

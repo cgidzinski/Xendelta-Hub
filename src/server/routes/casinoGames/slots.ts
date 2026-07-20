@@ -50,7 +50,6 @@ import { resolveUserAccount, getXenCasinoAccountId, transfer, WeeabetsUnavailabl
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
 import { settleSlotsRound } from "./slotsSettlement";
 import { drawWeighted } from "../../utils/weightedDraw";
-import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
 
 type SlotSymbol = string;
 

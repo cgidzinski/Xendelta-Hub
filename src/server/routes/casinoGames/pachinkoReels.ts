@@ -13,7 +13,7 @@
  * deliberately modest starting values, not solved for a target return.
  */
 import { drawWeighted } from "../../utils/weightedDraw";
-import { REEL_TWO_MATCH_BALLS, REEL_THREE_MATCH_BALLS, ATTACKER_OPEN_MS } from "./pachinkoPayouts";
+import { REEL_TWO_MATCH_BALLS, REEL_THREE_MATCH_BALLS, REEL_THREE_MATCH_BONUS_MS } from "./pachinkoPayouts";
 
 export type ReelSymbol = string;
 export type ReelMatchTier = "none" | "two" | "three";
@@ -22,10 +22,7 @@ export interface ReelSpinResult {
     symbols: [ReelSymbol, ReelSymbol, ReelSymbol];
     matchTier: ReelMatchTier;
     ballsAwarded: number;
-    // Only a three-of-a-kind match opens the attacker (ATTACKER_OPEN_MS); two-of-a-kind and
-    // misses award zero attacker time. pachinko.ts's chucker branch ADDS this to whatever's
-    // currently left on the attacker's clock rather than resetting it.
-    attackerOpenMs: number;
+    attackerBonusMs: number;
 }
 
 const REEL_SYMBOL_WEIGHTS = [
@@ -57,6 +54,6 @@ export function spinReel(): ReelSpinResult {
         symbols,
         matchTier,
         ballsAwarded: matchTier === "three" ? REEL_THREE_MATCH_BALLS : matchTier === "two" ? REEL_TWO_MATCH_BALLS : 0,
-        attackerOpenMs: matchTier === "three" ? ATTACKER_OPEN_MS : 0,
+        attackerBonusMs: matchTier === "three" ? REEL_THREE_MATCH_BONUS_MS : 0,
     };
 }
