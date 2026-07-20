@@ -273,7 +273,12 @@ export const CHUCKER: FixedPocket = { id: "chucker", position: { x: 230, y: 185 
 // Attacker - a wide gate, always this same width. Whether a catch here pays ATTACKER_BALLS or
 // nothing is entirely a route-level decision (conditions.attackerOpenUntil vs. the clock, see
 // pachinko.ts) - this module doesn't need to know the timer state at all.
-export const ATTACKER: FixedPocket = { id: "attacker", position: { x: 230, y: 225 }, halfWidth: 32 };
+//
+// Moved from y=185's immediate neighbor (225) down to 250 - it used to sit on a totally
+// pin-free vertical lane just below the chucker, so a centered ball could reach this wide,
+// 25-ball pocket almost untouched. Same size, same payout, just deeper behind the center
+// gauntlet below (see CENTER_GAUNTLET) so getting here means surviving more nail bounces first.
+export const ATTACKER: FixedPocket = { id: "attacker", position: { x: 230, y: 250 }, halfWidth: 32 };
 
 // Every pocket's physical depth (and the y-tolerance the hit test uses) - the "cup" a ball has
 // to actually drop into, top open, walls on the other three sides. Shared by pachinkoPhysics.ts
@@ -352,6 +357,44 @@ export const RELEASE_DEFLECTOR: Point[] = [
     { x: 156, y: 140 },
 ];
 
+// Fills the two genuinely empty stretches of the board's own centerline (x=230) that every
+// other nail group deliberately avoids (see CLUSTER_CENTERS' own comment): chucker-to-attacker,
+// and attacker-to-jackpot. Deliberately stops short of the zone right below the release
+// deflector (~y100-150) - an earlier pass put pins there and it fought the deflector's own
+// leftward redirection, flipping the tulip catch rate the wrong way (right easier than left,
+// backwards from the original board). Kept out of that zone, these two rows just add the
+// missing bounce-before-the-mouth step for chucker/attacker/jackpot without touching what the
+// deflector already does upstream.
+export const CENTER_GAUNTLET: Point[] = [
+    { x: 215, y: 205 },
+    { x: 245, y: 205 },
+    { x: 215, y: 270 },
+    { x: 245, y: 270 },
+];
+
+// Gate-nail pairs flanking each pocket's own mouth, just outside its half-width - the standard
+// way a real board narrows a specific target's *effective* catch window (a ball has to be
+// aimed cleanly between the pair) without changing the pocket's own physical size. No dedicated
+// chucker gate - a first pass had one, but stacked with CENTER_GAUNTLET's own nearby rows it
+// buried that small an 8px-halfwidth mouth three rows deep and made it all but unreachable (0
+// catches in 4000 simulated shots).
+export const ATTACKER_GATE: Point[] = [
+    { x: 183, y: 250 },
+    { x: 277, y: 250 },
+];
+export const BONUS_GATES: Point[] = [
+    { x: 108, y: 258 },
+    { x: 152, y: 258 },
+    { x: 308, y: 258 },
+    { x: 352, y: 258 },
+];
+// No dedicated tulip/jackpot gates - two separate placements were tried (flush beside the
+// mouth, then raised further upstream) and both empirically made jackpot's catch rate *worse*
+// (0.68% baseline -> 1.48% -> 1.64%), not better: for these two small, dead-center mouths, a
+// nearby symmetric pin pair tends to funnel a scattered ball back toward center and into the
+// slot rather than deflect it away, the opposite of every other gate on this board. Left alone
+// at their original positions/spacing rather than chasing a fix that kept backfiring.
+
 export function generateNailField(): PinPosition[] {
     const pins: PinPosition[] = [];
     for (const deflector of RELEASE_DEFLECTOR) {
@@ -364,6 +407,12 @@ export function generateNailField(): PinPosition[] {
     }
     for (const stray of STRAY_NAILS) {
         pins.push({ x: stray.x, y: stray.y });
+    }
+    for (const gauntlet of CENTER_GAUNTLET) {
+        pins.push({ x: gauntlet.x, y: gauntlet.y });
+    }
+    for (const gate of [...ATTACKER_GATE, ...BONUS_GATES]) {
+        pins.push({ x: gate.x, y: gate.y });
     }
     return pins;
 }
