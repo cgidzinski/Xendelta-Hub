@@ -16,6 +16,7 @@ interface PlayLauncherProps {
     rtpLabel?: string; // e.g. "RTP 95.2%" - shown beside oddsLabel, always
     startLabel?: string;
     onOpen?: () => void; // fires right as the modal opens - lets the game reset a finished round first
+    onClose?: () => void; // fires right as the modal closes (X button or Escape, not a backdrop click) - lets a game settle up (e.g. Pachinko cashing out) on the way out
     headerActions?: ReactNode; // extra controls in the top bar, right of the balance, left of the close X
     fullBleed?: boolean; // edge-to-edge content (no padding), fills the dialog entirely
     children: ReactNode; // rendered inside the modal once open
@@ -39,7 +40,7 @@ interface PlayLauncherProps {
  * finished round back to idle, since simply closing and reopening the dialog wouldn't do that
  * on its own.
  */
-export default function PlayLauncher({ title, oddsLabel, rtpLabel, startLabel = "Start Playing", onOpen, headerActions, fullBleed, children }: PlayLauncherProps) {
+export default function PlayLauncher({ title, oddsLabel, rtpLabel, startLabel = "Start Playing", onOpen, onClose, headerActions, fullBleed, children }: PlayLauncherProps) {
     const [playing, setPlaying] = useState(false);
     const theme = useTheme();
     const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
@@ -77,6 +78,7 @@ export default function PlayLauncher({ title, oddsLabel, rtpLabel, startLabel = 
                 onClose={(_event, reason) => {
                     if (reason !== "backdropClick") {
                         setPlaying(false);
+                        onClose?.();
                     }
                 }}
                 aria-label={title}
@@ -97,7 +99,13 @@ export default function PlayLauncher({ title, oddsLabel, rtpLabel, startLabel = 
                     <CheddarBalanceChip />
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
                         {headerActions}
-                        <IconButton onClick={() => setPlaying(false)} aria-label="Close">
+                        <IconButton
+                            onClick={() => {
+                                setPlaying(false);
+                                onClose?.();
+                            }}
+                            aria-label="Close"
+                        >
                             <CloseIcon />
                         </IconButton>
                     </Box>

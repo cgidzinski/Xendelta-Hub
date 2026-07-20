@@ -1,23 +1,27 @@
 /**
  * Pachinko — a batch-of-balls board game, unlike every other XenCasino game so far.
- * Slots/Scratch/Plinko are all single-request (bet, get an outcome, done); Pachinko is "buy
- * a batch of balls, then launch them one at a time" - the first game to use XenCasinoRound
- * as an actual multi-step session rather than a one-shot durable record (see xenCasino.js's
- * file header, which already anticipated this).
+ * Slots/Scratch/Plinko are all single-request (bet, get an outcome, done); Pachinko is "buy a
+ * batch of balls, then launch them one at a time" - a multi-step session built on
+ * XenCasinoRound, not a one-shot durable record.
  *
- * Unlike Plinko (and this game's own first draft), there's no pre-selected target outcome.
- * The player's launch power is a genuine physics input - pachinkoPhysics.simulateShot() runs
- * one real matter-js simulation using it, and whatever the ball actually hits *is* the
- * outcome. That's still decided fully before anything is persisted or any money moves - the
- * simulation runs, then one atomic update claims the ball slot and records the decided
- * result together (XenCasinoRound.applyConditionsUpdate), mirroring the "decide, then
- * persist, then pay" order every other game uses.
+ * Unlike Plinko, there's no pre-selected target outcome. The player's launch power is a genuine
+ * physics input - pachinkoPhysics.simulateShot() runs one real matter-js simulation using it,
+ * and whatever the ball actually hits *is* the outcome, decided fully before anything is
+ * persisted or any balls move.
  *
- * Tulip open/closed state lives on the player's own round (conditions.leftTulipOpen /
- * rightTulipOpen), not shared across players - each player works through their own priming
- * sequence within their own batch. The jackpot pool *is* shared (same pattern Slots' pool
- * already uses): every non-jackpot ball feeds it by CONTRIBUTION_RATE * pricePerBall, and a
- * primed center-tulip catch pays out the live pool value and resets it.
+ * The economy is ball-only, not instant cash: every pocket (bonus, tulip, chucker, attacker,
+ * jackpot) awards more balls, credited straight into the round's own ballsRemaining via one
+ * atomic update alongside the decided outcome - there's no per-ball money transfer or deferred
+ * settlement step the way earlier drafts of this game had, because no real money moves on a
+ * launch at all. Real cheddar only moves on /buy, /cashout, and the stale-round recovery
+ * sweep's refund of never-fired balls - see /cashout's own comment for how it stays
+ * crash-recoverable the same way /buy already is.
+ *
+ * Tulip open/closed state and the attacker's open-until timestamp live on the player's own
+ * round (conditions.*), not shared across players - each player works through their own
+ * priming sequence within their own batch. The jackpot pool *is* shared (same pattern Slots'
+ * own pool already uses): every non-jackpot ball feeds it by CONTRIBUTION_RATE * pricePerBall,
+ * and a primed jackpot catch converts the live pool value to balls and resets it.
  */
 import express = require("express");
 import { authenticateToken } from "../../middleware/auth";
@@ -32,21 +36,26 @@ import {
     CANVAS_HEIGHT,
     BOUNDARY_RIGHT_ARC,
     BOUNDARY_LEFT_ARC,
+    RAIL_OUTER_ARC,
+    RAIL_INNER_ARC,
+    RAIL_CAP,
     LAUNCHER_POSITION,
     RELEASE_POINT,
-    CHANNEL_INNER_X,
-    CHANNEL_OUTER_X,
-    CHANNEL_BOTTOM_Y,
     GUTTER_CUTOUT_X_START,
     GUTTER_CUTOUT_X_END,
     GUTTER_POCKET,
     TULIPS,
+    JACKPOT,
+    ATTACKER,
+    BONUS_POCKETS,
+    CHUCKER,
     WINDMILLS,
     generateNailField,
+    isJackpotPrimed,
     MIN_LAUNCH_POWER,
     MAX_LAUNCH_POWER,
 } from "./pachinkoLayout";
-import { SIDE_TULIP_MULTIPLIER, CONTRIBUTION_RATE, JACKPOT_SEED, sideTulipPayout } from "./pachinkoPayouts";
+import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, ATTACKER_OPEN_MS, ATTACKER_BALLS, CONTRIBUTION_RATE, JACKPOT_SEED, CASH_OUT_RATE, jackpotBalls, cashOutAmount } from "./pachinkoPayouts";
 import { simulateShot, PachinkoOutcome, TrajectorySample } from "./pachinkoPhysics";
 
 const SLUG = "pachinko";
@@ -55,7 +64,7 @@ const REUP_SIZES = [100, 1000];
 
 interface PachinkoBallResult {
     outcome: PachinkoOutcome;
-    payout: number;
+    ballsAwarded: number;
     trajectory: TrajectorySample[];
 }
 
@@ -64,70 +73,39 @@ interface PachinkoTopup {
     balls: number;
 }
 
+interface CashOutPending {
+    balls: number;
+    amount: number;
+}
+
 interface PachinkoConditions {
-    ballsTotal: number;
-    ballsRemaining: number;
+    ballsTotal: number; // balls ever purchased - only grows from /buy or /reup, never from in-round catches, so "spent" stays an honest reflection of real money in
+    ballsRemaining: number; // balls left to fire - grows from pocket catches, shrinks by 1 per launch
     pricePerBall: number;
-    totalPayout: number;
     leftTulipOpen: boolean;
     rightTulipOpen: boolean;
+    attackerOpenUntil: number; // epoch ms; attacker pays while Date.now() < this - 0 means never opened yet
     results: PachinkoBallResult[];
-    // How many of `results` have had their settlement (payout transfer + jackpot pool update)
-    // confirmed - bumped via $max (not $inc) since concurrent launches settle independently
-    // and can finish out of order. recoverStaleRounds replays from here, not just the last
-    // result, now that launches can be concurrent and settlement is deferred past the
-    // response (see /launch below).
-    settledThrough: number;
-    // Reup debits beyond the round's original startRound debitKey - each is its own
-    // idempotency key, replayed by recoverStaleRounds alongside the original so an ambiguous
-    // reup failure stays recoverable the same way the original buy's debit already is.
     topups: PachinkoTopup[];
+    // Set atomically the instant a cash-out claims the round's balls (before the real-money
+    // transfer even starts), cleared once that transfer confirms. If the process dies in
+    // between, the round's balls are already zeroed but the player hasn't been paid yet -
+    // recoverStaleRounds finishes that transfer using the same idempotent key a live request
+    // would have used, so a crash mid-cashout can't strand the player's cheddar.
+    cashOutPending: CashOutPending | null;
 }
 
 const nailField = generateNailField(); // static geometry, computed once and reused for every /odds response
 
-// A session can legitimately sit open for minutes between launches (think-time between
-// balls) - far longer than Plinko's 30s, which only ever needs to cover a mid-settlement
-// crash. sweepStale keys off lastActivityAt (see xenCasino.js), so an actively-playing
-// session is never mistaken for an abandoned one.
+// A session can legitimately sit open for minutes between launches (think-time between balls).
+// sweepStale keys off lastActivityAt (see xenCasino.js), so an actively-playing session is
+// never mistaken for an abandoned one.
 const ROUND_TTL_MS = 5 * 60 * 1000;
 setInterval(() => {
     recoverStaleRounds().catch((err: Error) => {
         console.error(`${SLUG}: stale round recovery failed`, err);
     });
 }, 60 * 1000).unref();
-
-// Pays out one ball's already-decided result (if any) and updates the jackpot pool - shared
-// by the live launch handler and the recovery sweep so both settle a ball exactly the same
-// way. Idempotency key is per-ball (round + its index in `results`), so replaying this for
-// the same ball is always safe.
-async function settleBall(
-    round: { _id: string; playerAccountId: number },
-    ballIndex: number,
-    result: PachinkoBallResult,
-    pricePerBall: number
-): Promise<{ balance?: string }> {
-    let balance: string | undefined;
-    if (result.payout > 0) {
-        const xenCasinoAccountId = await getXenCasinoAccountId();
-        const transferResult = await transfer({
-            fromAccountId: xenCasinoAccountId,
-            toAccountId: round.playerAccountId,
-            amount: result.payout.toFixed(10),
-            key: `xendelta-${SLUG}-payout-${round._id}-${ballIndex}`,
-            note: result.outcome === "tulipCenter" ? `${SLUG}_jackpot` : `${SLUG}_win`,
-        });
-        balance = transferResult.toNewBalance;
-    }
-
-    if (result.outcome === "tulipCenter") {
-        await XenCasino.resetPachinkoJackpotPool(JACKPOT_SEED);
-    } else {
-        await XenCasino.incrementPachinkoJackpotPool(pricePerBall * CONTRIBUTION_RATE);
-    }
-
-    return { balance };
-}
 
 async function recoverStaleRounds(): Promise<void> {
     const stale = await XenCasinoRound.sweepStale(SLUG, ROUND_TTL_MS);
@@ -136,10 +114,9 @@ async function recoverStaleRounds(): Promise<void> {
             const conditions = round.conditions as PachinkoConditions;
             const xenCasinoAccountId = await getXenCasinoAccountId();
 
-            // Replaying the batch debit is safe even if it already went through - the key
-            // makes it a no-op on the ledger, not a double charge. Every reup debit gets the
-            // same treatment via its own key - the original buy's debitKey alone no longer
-            // covers everything this round was ever charged for.
+            // Replaying the batch debit is safe even if it already went through - the key makes
+            // it a no-op on the ledger, not a double charge. Every reup debit gets the same
+            // treatment via its own key.
             await transfer({
                 fromAccountId: round.playerAccountId,
                 toAccountId: xenCasinoAccountId,
@@ -157,17 +134,21 @@ async function recoverStaleRounds(): Promise<void> {
                 });
             }
 
-            // Any ball not yet confirmed settled might have died mid-settlement - replay from
-            // settledThrough onward (not just the last ball; concurrent launches can leave
-            // more than one settlement pending at once). Safe to replay: each settlement's
-            // payout transfer has its own per-ball idempotency key.
-            for (let i = conditions.settledThrough ?? 0; i < conditions.results.length; i++) {
-                await settleBall({ _id: round._id, playerAccountId: round.playerAccountId }, i, conditions.results[i], conditions.pricePerBall);
+            // Finish an interrupted cash-out first - the balls it claimed are already zeroed,
+            // so this is the only place that money still owes the player.
+            if (conditions.cashOutPending) {
+                const transferResult = await transfer({
+                    fromAccountId: xenCasinoAccountId,
+                    toAccountId: round.playerAccountId,
+                    amount: conditions.cashOutPending.amount.toFixed(10),
+                    key: `xendelta-${SLUG}-cashout-${round._id}`,
+                    note: `${SLUG}_cashout`,
+                });
+                void transferResult;
             }
 
-            // No outcome was ever decided for balls that were never launched, so there's
-            // nothing to pay out for them - refund their pro-rated cost instead of either
-            // forfeiting it or leaving the round stuck open forever.
+            // Any balls never fired have no decided outcome to pay out - refund their
+            // pro-rated cost instead of either forfeiting it or leaving the round stuck open.
             if (conditions.ballsRemaining > 0) {
                 const refund = conditions.ballsRemaining * conditions.pricePerBall;
                 if (refund > 0) {
@@ -182,10 +163,10 @@ async function recoverStaleRounds(): Promise<void> {
             }
 
             await XenCasinoRound.resolve(round._id);
-            // Only counts as "played" if at least one ball was actually launched -
-            // otherwise a buy-then-abandon cycle (fully refunded above) would let a player
+            // Only counts as "played" if at least one ball was actually launched or cashed out
+            // - otherwise a buy-then-abandon cycle (fully refunded above) would let a player
             // farm daily quest progress for free with no risk.
-            if (conditions.results.length > 0) {
+            if (conditions.results.length > 0 || conditions.cashOutPending) {
                 await recordCasinoRoundPlayed(round.userId);
             }
         } catch (err) {
@@ -208,19 +189,27 @@ module.exports = function (app: express.Application) {
                     canvasHeight: CANVAS_HEIGHT,
                     boundaryRightArc: BOUNDARY_RIGHT_ARC,
                     boundaryLeftArc: BOUNDARY_LEFT_ARC,
+                    railOuterArc: RAIL_OUTER_ARC,
+                    railInnerArc: RAIL_INNER_ARC,
+                    railCap: RAIL_CAP,
                     launcherPosition: LAUNCHER_POSITION,
                     releasePoint: RELEASE_POINT,
-                    channelInnerX: CHANNEL_INNER_X,
-                    channelOuterX: CHANNEL_OUTER_X,
-                    channelBottomY: CHANNEL_BOTTOM_Y,
                     gutterCutoutXStart: GUTTER_CUTOUT_X_START,
                     gutterCutoutXEnd: GUTTER_CUTOUT_X_END,
                     gutterPocket: GUTTER_POCKET,
                     nailField,
                     tulips: TULIPS,
+                    jackpot: JACKPOT,
+                    attacker: ATTACKER,
+                    bonusPockets: BONUS_POCKETS,
+                    chucker: CHUCKER,
                     windmills: WINDMILLS,
                 },
-                sideTulipMultiplier: SIDE_TULIP_MULTIPLIER,
+                sideTulipBalls: SIDE_TULIP_BALLS,
+                bonusPocketBalls: BONUS_POCKET_BALLS,
+                attackerBalls: ATTACKER_BALLS,
+                attackerOpenMs: ATTACKER_OPEN_MS,
+                cashOutRate: CASH_OUT_RATE,
                 jackpotPool,
             },
         });
@@ -241,20 +230,18 @@ module.exports = function (app: express.Application) {
                 ballsTotal: conditions.ballsTotal,
                 ballsRemaining: conditions.ballsRemaining,
                 pricePerBall: conditions.pricePerBall,
-                totalPayout: conditions.totalPayout,
                 leftTulipOpen: conditions.leftTulipOpen,
                 rightTulipOpen: conditions.rightTulipOpen,
-                // Trajectories deliberately omitted for already-launched balls - resuming
-                // shows a summary, not a replay, so this stays small regardless of batch size.
-                results: conditions.results.map((r) => ({ outcome: r.outcome, payout: r.payout })),
+                attackerOpenUntil: conditions.attackerOpenUntil,
+                // Trajectories deliberately omitted for already-launched balls - resuming shows
+                // a summary, not a replay, so this stays small regardless of batch size.
+                results: conditions.results.map((r) => ({ outcome: r.outcome, ballsAwarded: r.ballsAwarded })),
             },
         });
     });
 
-    // Buys balls - creates a fresh batch if the player has no active round, or reups
-    // (tops up) their existing one if they do. One endpoint covers both because that's the
-    // player's actual mental model (the +100/+1000 buttons on the board work the same way
-    // whether or not a round already exists) - the branch is an internal detail.
+    // Buys balls - creates a fresh batch if the player has no active round, or reups (tops up)
+    // their existing one if they do.
     app.post(`/api/casino/games/${SLUG}/buy`, authenticateToken, async function (req: express.Request, res: express.Response) {
         const { balls } = req.body as { balls?: number };
         if (typeof balls !== "number" || !REUP_SIZES.includes(balls)) {
@@ -282,12 +269,6 @@ module.exports = function (app: express.Application) {
             const existing = await XenCasinoRound.findActive(SLUG, userId);
 
             if (existing) {
-                // Reup: reserve the balls on the existing round first (a durable record that
-                // this money is owed) before attempting the debit - same "record before
-                // money moves" order the create branch below uses. Each reup gets its own
-                // debit key, tracked in conditions.topups, so an ambiguous debit failure
-                // below stays recoverable by the stale-round sweep the same way the
-                // original buy's debit already is.
                 const debitKey = `xendelta-${SLUG}-topup-${existing._id}-${crypto.randomUUID()}`;
                 const reserved = await XenCasinoRound.applyConditionsUpdate(existing._id, {}, {
                     $inc: { "conditions.ballsTotal": balls, "conditions.ballsRemaining": balls },
@@ -306,14 +287,13 @@ module.exports = function (app: express.Application) {
                     balance = result.fromNewBalance;
                 } catch (err) {
                     if (err instanceof WeeabetsTransferError && err.status === 400) {
-                        // Clean failure - nothing was actually charged, undo the reservation.
                         await XenCasinoRound.applyConditionsUpdate(existing._id, {}, {
                             $inc: { "conditions.ballsTotal": -balls, "conditions.ballsRemaining": -balls },
                             $pull: { "conditions.topups": { debitKey } },
                         });
                         return res.status(400).json({ status: false, message: "Insufficient balance" });
                     }
-                    throw err; // ambiguous - leave the reservation in place, the recovery sweep will retry it via conditions.topups
+                    throw err;
                 }
 
                 const conditions = reserved.conditions as PachinkoConditions;
@@ -324,9 +304,9 @@ module.exports = function (app: express.Application) {
                         ballsTotal: conditions.ballsTotal,
                         ballsRemaining: conditions.ballsRemaining,
                         pricePerBall: conditions.pricePerBall,
-                        totalPayout: conditions.totalPayout,
                         leftTulipOpen: conditions.leftTulipOpen,
                         rightTulipOpen: conditions.rightTulipOpen,
+                        attackerOpenUntil: conditions.attackerOpenUntil,
                         balance,
                     },
                 });
@@ -336,12 +316,12 @@ module.exports = function (app: express.Application) {
                 ballsTotal: balls,
                 ballsRemaining: balls,
                 pricePerBall: PRICE_PER_BALL,
-                totalPayout: 0,
                 leftTulipOpen: false,
                 rightTulipOpen: false,
+                attackerOpenUntil: 0,
                 results: [],
-                settledThrough: 0,
                 topups: [],
+                cashOutPending: null,
             };
             const debitKey = `xendelta-${SLUG}-start-${userId}-${crypto.randomUUID()}`;
 
@@ -357,8 +337,6 @@ module.exports = function (app: express.Application) {
                 });
             } catch (err) {
                 if ((err as { code?: number }).code === 11000) {
-                    // A concurrent request already created the round between the findActive
-                    // check above and here - rare, but the client can just retry as a reup.
                     return res.status(400).json({ status: false, message: "You already have an active batch - try again" });
                 }
                 throw err;
@@ -379,7 +357,7 @@ module.exports = function (app: express.Application) {
                     await XenCasinoRound.resolve(round._id);
                     return res.status(400).json({ status: false, message: "Insufficient balance" });
                 }
-                throw err; // ambiguous - leave round in place, the recovery sweep will retry
+                throw err;
             }
 
             return res.json({
@@ -389,9 +367,9 @@ module.exports = function (app: express.Application) {
                     ballsTotal: balls,
                     ballsRemaining: balls,
                     pricePerBall: PRICE_PER_BALL,
-                    totalPayout: 0,
                     leftTulipOpen: false,
                     rightTulipOpen: false,
+                    attackerOpenUntil: 0,
                     balance,
                 },
             });
@@ -418,101 +396,162 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "No balls remaining in this batch" });
             }
 
-            // Fully decided before anything is persisted - see the file header. Tulip state
-            // is per-round (not shared), so this is a plain read-simulate-write, no
-            // compare-and-swap needed against other players.
-            const { trajectory, outcome } = simulateShot(launchPower, {
-                leftOpen: conditions.leftTulipOpen,
-                rightOpen: conditions.rightTulipOpen,
-            });
+            const now = Date.now();
+            // The chucker, the attacker, and the jackpot are each only ever physically present
+            // (real walls, real catch) while active - see pachinkoPhysics.ts's own comment on
+            // chuckerActive/attackerActive/jackpotActive. The chucker has no collision while the
+            // attacker it opens is still counting down; the attacker has none until a chucker
+            // catch opens it; the jackpot has none until both tulips are open, and closes back
+            // up the instant it's caught (see the "jackpot" branch below, which re-closes the
+            // tulips too).
+            const attackerOpen = conditions.attackerOpenUntil > now;
+            const jackpotPrimed = isJackpotPrimed(conditions.leftTulipOpen, conditions.rightTulipOpen);
 
-            let payout = 0;
+            // Fully decided before anything is persisted - see the file header.
+            const { trajectory, outcome } = simulateShot(launchPower, !attackerOpen, attackerOpen, jackpotPrimed);
+
+            let ballsAwarded = 0;
             let nextLeftOpen = conditions.leftTulipOpen;
             let nextRightOpen = conditions.rightTulipOpen;
-            if (outcome === "tulipLeft") {
-                payout = sideTulipPayout(conditions.pricePerBall);
+            let nextAttackerOpenUntil = conditions.attackerOpenUntil;
+            let poolContribution = 0;
+            let resetPool = false;
+
+            if (outcome === "bonusLeft" || outcome === "bonusRight") {
+                ballsAwarded = BONUS_POCKET_BALLS;
+                poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
+            } else if (outcome === "tulipLeft") {
+                ballsAwarded = SIDE_TULIP_BALLS;
                 nextLeftOpen = !conditions.leftTulipOpen;
+                poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
             } else if (outcome === "tulipRight") {
-                payout = sideTulipPayout(conditions.pricePerBall);
+                ballsAwarded = SIDE_TULIP_BALLS;
                 nextRightOpen = !conditions.rightTulipOpen;
-            } else if (outcome === "tulipCenter") {
-                payout = await XenCasino.getPachinkoJackpotPool();
+                poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
+            } else if (outcome === "chucker") {
+                nextAttackerOpenUntil = now + ATTACKER_OPEN_MS;
+                poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
+            } else if (outcome === "attacker") {
+                // Physics only ever returns "attacker" while attackerActive was true, i.e. it
+                // was actually open for this shot - no need to re-check attackerOpen here.
+                ballsAwarded = ATTACKER_BALLS;
+                poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
+            } else if (outcome === "jackpot") {
+                // Physics only ever returns "jackpot" while jackpotActive was true, i.e. both
+                // tulips were actually open for this shot - no need to re-check jackpotPrimed
+                // here. Catching it re-closes both tulips, which is what makes the pocket
+                // physically disappear again until they're both reopened.
+                const pool = await XenCasino.getPachinkoJackpotPool();
+                ballsAwarded = jackpotBalls(pool, conditions.pricePerBall);
                 nextLeftOpen = false;
                 nextRightOpen = false;
+                resetPool = true;
+            } else {
+                poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
             }
 
-            const ballIndex = conditions.results.length;
-            const result: PachinkoBallResult = { outcome, payout, trajectory };
+            const result: PachinkoBallResult = { outcome, ballsAwarded, trajectory };
 
             const updated = await XenCasinoRound.applyConditionsUpdate(
                 round._id,
                 { "conditions.ballsRemaining": { $gt: 0 } },
                 {
-                    $inc: { "conditions.ballsRemaining": -1, "conditions.totalPayout": payout },
+                    $inc: { "conditions.ballsRemaining": ballsAwarded - 1 },
                     $push: { "conditions.results": result },
-                    $set: { "conditions.leftTulipOpen": nextLeftOpen, "conditions.rightTulipOpen": nextRightOpen },
+                    $set: {
+                        "conditions.leftTulipOpen": nextLeftOpen,
+                        "conditions.rightTulipOpen": nextRightOpen,
+                        "conditions.attackerOpenUntil": nextAttackerOpenUntil,
+                    },
                 }
             );
             if (!updated) {
                 // A concurrent request (double-click, duplicate tab, hold-to-fire) already
-                // claimed the last ball - nothing was decided for *this* request, so nothing
-                // to unwind.
+                // claimed the last ball - nothing was decided for *this* request that needs
+                // unwinding (no money moved on a launch at all, unlike the old cash-payout
+                // version of this game).
                 return res.status(409).json({ status: false, message: "No balls remaining" });
             }
 
-            const updatedConditions = updated.conditions as PachinkoConditions;
+            // Jackpot pool bookkeeping happens after the ball count is durably persisted, same
+            // "decide, persist, then side-effect" order as before - no money moves here either,
+            // just the shared pool's own value.
+            if (resetPool) {
+                await XenCasino.resetPachinkoJackpotPool(JACKPOT_SEED);
+            } else if (poolContribution > 0) {
+                await XenCasino.incrementPachinkoJackpotPool(poolContribution);
+            }
 
-            // The outcome is fully decided and durably persisted above - the client has
-            // everything it needs to animate, so respond now rather than making it wait on
-            // the payout transfer too. This matters a lot more here than for a single-shot
-            // game: launches can now fire every 600ms while held, so a slow payout transfer
-            // on every single one would compound into visible lag. No `balance` field here
-            // (unlike Plinko's /drop) - launch never debits anything, only the deferred
-            // payout below moves money, so there's no fresh pre-payout balance to return
-            // without an extra lookup; the client's own invalidateShared() on success already
-            // refetches the real balance shortly after.
-            res.json({
+            const updatedConditions = updated.conditions as PachinkoConditions;
+            return res.json({
                 status: true,
                 data: {
                     outcome,
-                    payout,
+                    ballsAwarded,
                     trajectory,
                     leftTulipOpen: updatedConditions.leftTulipOpen,
                     rightTulipOpen: updatedConditions.rightTulipOpen,
+                    attackerOpenUntil: updatedConditions.attackerOpenUntil,
                     ballsRemaining: updatedConditions.ballsRemaining,
-                    totalPayout: updatedConditions.totalPayout,
                 },
             });
-
-            // Payout settlement, settledThrough bookkeeping, and round cleanup all happen
-            // after the response - none of their results affect what the client renders. Own
-            // try/catch since this runs after the outer one has already returned; if the
-            // process dies before this finishes, recoverStaleRounds (using settledThrough)
-            // is what finishes it.
-            (async () => {
-                try {
-                    await settleBall({ _id: round._id, playerAccountId: round.playerAccountId }, ballIndex, result, conditions.pricePerBall);
-                    // $max, not $inc - concurrent launches settle independently and can
-                    // finish out of order, so this only ever advances to the highest
-                    // confirmed index, never regresses past a later settlement that beat
-                    // this one to it.
-                    await XenCasinoRound.applyConditionsUpdate(round._id, {}, { $max: { "conditions.settledThrough": ballIndex + 1 } });
-                    if (updatedConditions.ballsRemaining === 0) {
-                        // Guarded, not unconditional - a reup that lands in the gap between
-                        // this settlement finishing and this check running would have already
-                        // pushed ballsRemaining back above 0, and an unconditional delete
-                        // here would wipe that freshly-paid-for round out from under it.
-                        const deleted = await XenCasinoRound.resolveIfConditions(round._id, { "conditions.ballsRemaining": 0 });
-                        if (deleted) {
-                            await recordCasinoRoundPlayed(userId);
-                        }
-                    }
-                } catch (err) {
-                    console.error(`${SLUG}: post-response settlement failed for round ${round._id}, ball ${ballIndex}`, err);
-                }
-            })();
-            return;
         } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    // Converts the whole current ball count to cheddar at CASH_OUT_RATE and ends the round -
+    // the only point (besides the initial /buy) where real money moves. Claims the balls
+    // atomically first (an optimistic match on the exact count just read, so a launch racing
+    // this request loses cleanly with a 409 rather than either request clobbering the other),
+    // then transfers - if the transfer itself fails ambiguously, the claim (conditions.
+    // cashOutPending) is left in place for recoverStaleRounds to finish, same "reserve before
+    // money moves, replay on ambiguous failure" shape every other transfer in this file uses.
+    app.post(`/api/casino/games/${SLUG}/cashout`, authenticateToken, async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+        try {
+            const round = await XenCasinoRound.findActive(SLUG, userId);
+            if (!round) {
+                return res.status(400).json({ status: false, message: "No active batch" });
+            }
+            const conditions = round.conditions as PachinkoConditions;
+            if (conditions.ballsRemaining <= 0) {
+                return res.status(400).json({ status: false, message: "No balls to cash out" });
+            }
+
+            const balls = conditions.ballsRemaining;
+            const amount = cashOutAmount(balls, conditions.pricePerBall);
+
+            const claimed = await XenCasinoRound.applyConditionsUpdate(
+                round._id,
+                { "conditions.ballsRemaining": balls },
+                { $set: { "conditions.ballsRemaining": 0, "conditions.cashOutPending": { balls, amount } } }
+            );
+            if (!claimed) {
+                return res.status(409).json({ status: false, message: "Balance changed - try again" });
+            }
+
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+            const transferResult = await transfer({
+                fromAccountId: xenCasinoAccountId,
+                toAccountId: round.playerAccountId,
+                amount: amount.toFixed(10),
+                key: `xendelta-${SLUG}-cashout-${round._id}`,
+                note: `${SLUG}_cashout`,
+            });
+
+            await XenCasinoRound.resolve(round._id);
+            await recordCasinoRoundPlayed(userId);
+
+            return res.json({
+                status: true,
+                data: { ballsCashedOut: balls, amount, balance: transferResult.toNewBalance },
+            });
+        } catch (err) {
+            // The claim (cashOutPending) is already durable even if we got here - leave the
+            // round in place rather than trying to unwind it; recoverStaleRounds replays the
+            // same idempotently-keyed transfer once the round goes stale.
             const status = err instanceof WeeabetsUnavailable ? 503 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });
         }

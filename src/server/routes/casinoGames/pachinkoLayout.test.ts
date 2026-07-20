@@ -7,25 +7,36 @@ import {
     CANVAS_WIDTH,
     CANVAS_HEIGHT,
     TULIPS,
-    tulipCatcherHalfWidth,
+    JACKPOT,
+    ATTACKER,
+    BONUS_POCKETS,
+    CHUCKER,
+    isJackpotPrimed,
     generateNailField,
-    RAIL_PATH,
+    RAIL_CLIMB_PATH,
+    RAIL_OUTER_ARC,
+    RAIL_INNER_ARC,
+    RAIL_CAP,
     LAUNCHER_POSITION,
     RELEASE_POINT,
-    CHANNEL_INNER_X,
-    CHANNEL_OUTER_X,
+    RELEASE_TANGENT,
+    PIN_RADIUS,
+    POCKET_DEPTH,
+    BALL_RADIUS,
     launchPowerToRailSpeed,
     MIN_LAUNCH_POWER,
     MAX_LAUNCH_POWER,
     GUTTER_CUTOUT_X_START,
     GUTTER_CUTOUT_X_END,
+    GUTTER_CUTOUT_Y,
 } from "./pachinkoLayout";
 
 describe("boundary", () => {
     it("closes at the top - right arc starts where the left arc ends", () => {
         const rightStart = BOUNDARY_RIGHT_ARC[0].p0;
         const leftEnd = BOUNDARY_LEFT_ARC[BOUNDARY_LEFT_ARC.length - 1].p1;
-        expect(rightStart).toEqual(leftEnd);
+        expect(rightStart.x).toBeCloseTo(leftEnd.x, 6);
+        expect(rightStart.y).toBeCloseTo(leftEnd.y, 6);
     });
 
     it("leaves a genuine gap at the bottom for the gutter cutout - the two arcs do not meet there", () => {
@@ -45,40 +56,113 @@ describe("boundary", () => {
         }
     });
 
-    it("the right arc's middle segment is a straight vertical line - what the rail runs alongside", () => {
-        const straightSegment = BOUNDARY_RIGHT_ARC[1];
-        expect(straightSegment.p0.x).toBe(straightSegment.c1.x);
-        expect(straightSegment.c1.x).toBe(straightSegment.c2.x);
-        expect(straightSegment.c2.x).toBe(straightSegment.p1.x);
-        expect(straightSegment.p0.x).toBe(CHANNEL_OUTER_X);
+    it("the top and bottom halves meet exactly at the widest point on each side, matching radii", () => {
+        // Right side: the top-ellipse segment and the bottom-circle segment share an endpoint.
+        const topRightEnd = BOUNDARY_RIGHT_ARC[0].p1;
+        const bottomRightStart = BOUNDARY_RIGHT_ARC[1].p0;
+        expect(topRightEnd.x).toBeCloseTo(bottomRightStart.x, 6);
+        expect(topRightEnd.y).toBeCloseTo(bottomRightStart.y, 6);
+    });
+
+    it("is a genuinely round-ish egg, not an elongated capsule - height is close to width", () => {
+        const top = BOUNDARY_RIGHT_ARC[0].p0.y; // top of the ellipse
+        const bottom = GUTTER_CUTOUT_Y; // roughly the bottom of the circle half
+        const width = 340; // field half-width (170) * 2
+        const height = bottom - top;
+        expect(height / width).toBeGreaterThan(1);
+        expect(height / width).toBeLessThan(1.3);
     });
 });
 
-describe("rail / channel", () => {
-    it("runs straight from the launcher (below the field) up to the release point", () => {
-        expect(RAIL_PATH).toEqual([LAUNCHER_POSITION, RELEASE_POINT]);
-        expect(LAUNCHER_POSITION.y).toBeGreaterThan(RELEASE_POINT.y);
-        expect(LAUNCHER_POSITION.x).toBe(RELEASE_POINT.x);
+describe("rail", () => {
+    it("runs from the launcher up to the release point, entirely inside the boundary curve", () => {
+        expect(RAIL_CLIMB_PATH[0]).toEqual(LAUNCHER_POSITION);
+        expect(RAIL_CLIMB_PATH[RAIL_CLIMB_PATH.length - 1].x).toBeCloseTo(RELEASE_POINT.x, 6);
+        expect(RAIL_CLIMB_PATH[RAIL_CLIMB_PATH.length - 1].y).toBeCloseTo(RELEASE_POINT.y, 6);
     });
 
-    it("is narrow (a couple ball-widths, not a wide lane) but wide enough to clear the wall's own collision thickness", () => {
-        // CHANNEL_WIDTH's own comment explains why this isn't a single ball-width anymore -
-        // the release point/ball spawn sits at this channel's center, and too little
-        // clearance from the wall meant the ball spawned slightly embedded in its collision
-        // geometry (confirmed empirically as a strong, velocity-independent kick).
-        expect(CHANNEL_OUTER_X - CHANNEL_INNER_X).toBeLessThan(20);
+    it("outer wall is flush with the boundary itself (zero gap) at the shared widest-point seam", () => {
+        // Both RAIL_OUTER_ARC and BOUNDARY_RIGHT_ARC have a segment boundary at theta=0 (the
+        // widest point) - RAIL_OUTER_ARC[0].p1 and BOUNDARY_RIGHT_ARC[0].p1 should be the same
+        // point, since the rail's outer wall is the boundary curve itself over that span.
+        expect(RAIL_OUTER_ARC[0].p1.x).toBeCloseTo(BOUNDARY_RIGHT_ARC[0].p1.x, 4);
+        expect(RAIL_OUTER_ARC[0].p1.y).toBeCloseTo(BOUNDARY_RIGHT_ARC[0].p1.y, 4);
     });
-});
 
-describe("tulips", () => {
-    it("pays every tulip id a strictly wider catcher when open/primed than closed", () => {
-        for (const tulip of TULIPS) {
-            expect(tulipCatcherHalfWidth(tulip, true)).toBeGreaterThan(tulipCatcherHalfWidth(tulip, false));
+    it("inner wall stays strictly inside the outer wall at every matching endpoint, including the widest-point seam", () => {
+        for (let i = 0; i < RAIL_OUTER_ARC.length; i++) {
+            for (const point of ["p0", "p1"] as const) {
+                const outer = RAIL_OUTER_ARC[i][point];
+                const inner = RAIL_INNER_ARC[i][point];
+                const dist = Math.hypot(outer.x - inner.x, outer.y - inner.y);
+                expect(dist).toBeGreaterThan(0);
+            }
         }
     });
 
-    it("has exactly one of each tulip id", () => {
-        expect(TULIPS.map((t) => t.id).sort()).toEqual(["center", "left", "right"]);
+    it("release tangent is a unit vector", () => {
+        const mag = Math.hypot(RELEASE_TANGENT.x, RELEASE_TANGENT.y);
+        expect(mag).toBeCloseTo(1, 6);
+    });
+
+    it("release tangent points up and to the left (into the field, away from the launcher)", () => {
+        expect(RELEASE_TANGENT.x).toBeLessThan(0);
+        expect(RELEASE_TANGENT.y).toBeLessThan(0);
+    });
+
+    it("the launcher end cap is centered on LAUNCHER_POSITION", () => {
+        expect(RAIL_CAP.center).toEqual(LAUNCHER_POSITION);
+        expect(RAIL_CAP.radius).toBeGreaterThan(0);
+    });
+});
+
+describe("scoring pockets", () => {
+    // Every pocket is a fixed-width physical cup now (see pachinkoLayout.ts's own header on
+    // this) - priming/open-closed/timer state changes color and payout, never the hitbox. There
+    // are no more "open" vs "closed" widths to compare.
+    it("every pocket has a positive, fixed half-width", () => {
+        for (const pocket of [...TULIPS, JACKPOT, ATTACKER, ...BONUS_POCKETS, CHUCKER]) {
+            expect(pocket.halfWidth).toBeGreaterThan(0);
+        }
+    });
+
+    it("has exactly one tulip per side", () => {
+        expect(TULIPS.map((t) => t.id).sort()).toEqual(["left", "right"]);
+    });
+
+    it("jackpot is only primed when both tulips are open", () => {
+        expect(isJackpotPrimed(false, false)).toBe(false);
+        expect(isJackpotPrimed(true, false)).toBe(false);
+        expect(isJackpotPrimed(false, true)).toBe(false);
+        expect(isJackpotPrimed(true, true)).toBe(true);
+    });
+
+    it("the jackpot pocket is tiny - barely wider than the ball, even though it's always this size", () => {
+        expect(JACKPOT.halfWidth).toBeLessThan(BALL_RADIUS * 3);
+    });
+
+    it("has exactly two bonus pockets and a chucker, both smaller/no-frills than the tulips", () => {
+        expect(BONUS_POCKETS).toHaveLength(2);
+        expect(CHUCKER.halfWidth).toBeGreaterThan(0);
+    });
+
+    it("pocket width scales inversely with payout - bonus > tulip > jackpot", () => {
+        expect(BONUS_POCKETS[0].halfWidth).toBeGreaterThan(TULIPS[0].halfWidth);
+        expect(TULIPS[0].halfWidth).toBeGreaterThan(JACKPOT.halfWidth);
+    });
+
+    it("no two pockets' hit-rectangles overlap", () => {
+        // The real hit test (see pachinkoPhysics.ts's withinPocket) is a rectangle, not a
+        // circle - independent x (halfWidth) and y (fixed +-POCKET_DEPTH/2) thresholds - so two
+        // pockets only actually overlap if both axes overlap at once.
+        const points = [...TULIPS, JACKPOT, ATTACKER, ...BONUS_POCKETS, CHUCKER].map((p) => ({ ...p.position, halfWidth: p.halfWidth }));
+        for (let i = 0; i < points.length; i++) {
+            for (let j = i + 1; j < points.length; j++) {
+                const xOverlap = Math.abs(points[i].x - points[j].x) < points[i].halfWidth + points[j].halfWidth;
+                const yOverlap = Math.abs(points[i].y - points[j].y) < POCKET_DEPTH;
+                expect(xOverlap && yOverlap).toBe(false);
+            }
+        }
     });
 });
 
@@ -96,6 +180,28 @@ describe("nail field", () => {
 
     it("is deterministic - two calls produce the same field", () => {
         expect(generateNailField()).toEqual(generateNailField());
+    });
+
+    it("no two pins overlap each other", () => {
+        const pins = generateNailField();
+        for (let i = 0; i < pins.length; i++) {
+            for (let j = i + 1; j < pins.length; j++) {
+                const dist = Math.hypot(pins[i].x - pins[j].x, pins[i].y - pins[j].y);
+                expect(dist).toBeGreaterThan(PIN_RADIUS * 2);
+            }
+        }
+    });
+
+    it("no pin sits inside any scoring pocket's catcher", () => {
+        const pins = generateNailField();
+        const pockets = [...TULIPS, JACKPOT, ATTACKER, ...BONUS_POCKETS, CHUCKER].map((p) => ({ ...p.position, halfWidth: p.halfWidth }));
+        for (const pin of pins) {
+            for (const pocket of pockets) {
+                if (Math.abs(pin.y - pocket.y) <= POCKET_DEPTH / 2) {
+                    expect(Math.abs(pin.x - pocket.x)).toBeGreaterThan(pocket.halfWidth);
+                }
+            }
+        }
     });
 });
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Box, Button, Slider, Typography } from "@mui/material";
 import { formatCheddar } from "../utils/currency";
 
-export type PachinkoOutcome = "gutter" | "tulipLeft" | "tulipRight" | "tulipCenter";
+export type PachinkoOutcome = "gutter" | "tulipLeft" | "tulipRight" | "jackpot" | "bonusLeft" | "bonusRight" | "chucker" | "attacker";
 
 export interface PachinkoTrajectorySample {
     x: number;
@@ -22,11 +22,10 @@ export interface PachinkoBezierSegment {
     p1: PachinkoPoint;
 }
 
-export interface PachinkoTulipLayout {
-    id: "left" | "right" | "center";
+export interface PachinkoFixedPocket {
+    id: string;
     position: PachinkoPoint;
-    closedHalfWidth: number;
-    openHalfWidth: number;
+    halfWidth: number;
 }
 
 export interface PachinkoWindmillLayout {
@@ -34,21 +33,32 @@ export interface PachinkoWindmillLayout {
     radius: number;
 }
 
+export interface PachinkoRailCap {
+    center: PachinkoPoint;
+    radius: number;
+    startAngle: number;
+    endAngle: number;
+}
+
 export interface PachinkoLayoutData {
     canvasWidth: number;
     canvasHeight: number;
     boundaryRightArc: PachinkoBezierSegment[];
     boundaryLeftArc: PachinkoBezierSegment[];
+    railOuterArc: PachinkoBezierSegment[];
+    railInnerArc: PachinkoBezierSegment[];
+    railCap: PachinkoRailCap;
     launcherPosition: PachinkoPoint;
     releasePoint: PachinkoPoint;
-    channelInnerX: number;
-    channelOuterX: number;
-    channelBottomY: number;
     gutterCutoutXStart: number;
     gutterCutoutXEnd: number;
     gutterPocket: PachinkoPoint[];
     nailField: PachinkoPoint[];
-    tulips: PachinkoTulipLayout[];
+    tulips: PachinkoFixedPocket[];
+    jackpot: PachinkoFixedPocket;
+    attacker: PachinkoFixedPocket;
+    bonusPockets: PachinkoFixedPocket[];
+    chucker: PachinkoFixedPocket;
     windmills: PachinkoWindmillLayout[];
 }
 
@@ -57,25 +67,29 @@ export interface PachinkoSession {
     ballsTotal: number;
     ballsRemaining: number;
     pricePerBall: number;
-    totalPayout: number;
     leftTulipOpen: boolean;
     rightTulipOpen: boolean;
+    attackerOpenUntil: number; // epoch ms; attacker pays while Date.now() < this
 }
 
 export interface PachinkoLaunchResult {
     outcome: PachinkoOutcome;
-    payout: number;
+    ballsAwarded: number;
     trajectory: PachinkoTrajectorySample[];
     leftTulipOpen: boolean;
     rightTulipOpen: boolean;
+    attackerOpenUntil: number;
     ballsRemaining: number;
-    totalPayout: number;
 }
 
 export interface PachinkoBoardProps {
     session: PachinkoSession | null;
     layout: PachinkoLayoutData | null;
     jackpotPool: number;
+    cashOutRate: number;
+    bonusPocketBalls: number;
+    sideTulipBalls: number;
+    attackerBalls: number;
     launchPowerRange: { min: number; max: number };
     pricePerBall: number; // needed even when session is null, so reup button costs can show before any batch exists
     isResuming: boolean; // the post-open "resume an existing batch?" check is in flight
@@ -86,20 +100,25 @@ export interface PachinkoBoardProps {
 }
 
 const BALL_RADIUS = 3.5; // matches pachinkoLayout.ts's BALL_RADIUS
-const PIN_RADIUS = 2.2;
+const PIN_RADIUS = 1.6; // matches pachinkoLayout.ts's PIN_RADIUS
+const POCKET_HEIGHT = 18; // matches pachinkoLayout.ts's POCKET_DEPTH - the physical cup every pocket collides against, not just a visual choice
 const FRAME_MS = 1000 / 30; // matches the server's ~30fps trajectory sample rate
 const POOF_MS = 450; // how long the ball+particle burst takes once a trajectory finishes
 const CALLOUT_MS = 1000; // how long the center win/loss callout stays on screen
-const FIRE_INTERVAL_MS = 600; // 100 balls/minute while the launch button is held
-const MAX_CONCURRENT_BALLS = 8; // client-side cap - narrower oval canvas than Plinko's peg field, so a bit below its MAX_CONCURRENT_BALLS=10
+const FIRE_INTERVAL_MS = 400; // 100 balls/minute while the launch button is held
+const MAX_CONCURRENT_BALLS = 20;
 const PARTICLE_COUNT = 12;
 const REUP_AMOUNTS = [100, 1000];
 
 const OUTCOME_LABEL: Record<PachinkoOutcome, string> = {
     gutter: "Miss",
+    bonusLeft: "Bonus!",
+    bonusRight: "Bonus!",
     tulipLeft: "Side Tulip!",
     tulipRight: "Side Tulip!",
-    tulipCenter: "JACKPOT!",
+    chucker: "Gate Open!",
+    attacker: "Attacker!",
+    jackpot: "JACKPOT!",
 };
 
 interface Particle {
@@ -111,7 +130,7 @@ interface Particle {
 interface Callout {
     id: number;
     outcome: PachinkoOutcome;
-    payout: number;
+    ballsAwarded: number;
     won: boolean;
 }
 
@@ -149,54 +168,129 @@ function drawArc(ctx: CanvasRenderingContext2D, arc: PachinkoBezierSegment[]) {
     }
 }
 
+// Same curve-drawing as drawArc, but WITHOUT the leading moveTo - for appending an arc onto a
+// path that's already mid-subpath (e.g. the rail's outer curve -> cap -> inner curve, which
+// needs to stay one continuous subpath so closePath() connects back to the true start instead
+// of silently starting a second, wrongly-closed subpath - drawArc's own unconditional moveTo
+// would break that).
+function appendArc(ctx: CanvasRenderingContext2D, arc: PachinkoBezierSegment[]) {
+    for (const seg of arc) {
+        ctx.bezierCurveTo(seg.c1.x, seg.c1.y, seg.c2.x, seg.c2.y, seg.p1.x, seg.p1.y);
+    }
+}
+
+// A shared open-top, rounded-bottom pocket shape - every scoring target on this board (bonus,
+// tulip, jackpot, chucker, attacker) uses this same construction (mirrors Plinko's own landing
+// cups), just at different sizes/colors, so difficulty reads as pocket width, not as an
+// inconsistent mix of dots and ellipses.
+function drawPocket(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    halfWidth: number,
+    height: number,
+    fill: string,
+    stroke: string,
+    options?: { glow?: string; dashed?: boolean }
+) {
+    const w = halfWidth * 2;
+    const r = Math.min(halfWidth, height / 2);
+    if (options?.glow) {
+        ctx.save();
+        ctx.shadowColor = options.glow;
+        ctx.shadowBlur = 7;
+    }
+    ctx.beginPath();
+    ctx.roundRect(x - w / 2, y - height / 2, w, height, [0, 0, r, r]);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    if (options?.glow) {
+        ctx.restore();
+    }
+    ctx.save();
+    if (options?.dashed) {
+        ctx.setLineDash([3, 2]);
+    }
+    ctx.beginPath();
+    ctx.roundRect(x - w / 2, y - height / 2, w, height, [0, 0, r, r]);
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+    ctx.restore();
+}
+
+// A short name label above a pocket, so its type is identifiable at a glance rather than only
+// by color/size - every scoring target gets one, not just the ones that happen to have room for
+// a payout number inside them.
+function drawPocketLabel(ctx: CanvasRenderingContext2D, x: number, y: number, height: number, text: string, color: string) {
+    ctx.fillStyle = color;
+    ctx.font = "bold 7px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(text, x, y - height / 2 - 3);
+}
+
+// The ball award, INSIDE the pocket itself (not just implied by color/label) - used for the
+// pockets whose payout is a single fixed number worth spelling out at a glance (bonus, attacker).
+function drawPocketAmount(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, color: string) {
+    ctx.fillStyle = color;
+    ctx.font = "bold 8px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(text, x, y + 3);
+}
+
 /**
  * The reusable Pachinko board - canvas analog of PlinkoBoard, replaying physics trajectories
  * captured server-side. The server decides the whole outcome (a real matter-js simulation
  * driven by the player's own launch power) before any of this runs; this component's only
  * job is to play trajectories back and reflect the session state it's handed.
  *
- * Multiple balls can be in flight at once, same as Plinko: holding the launch button fires
- * one shot immediately and then one every FIRE_INTERVAL_MS while held, and every active ball
- * animates concurrently off a single shared rAF loop (activeBallsRef). Balls, buying, and
- * launching aren't gated behind separate screens - the board (and its +100/+1000 reup
- * buttons) render even before any batch has ever been bought (`session === null`).
+ * The economy is ball-only: every catch adds balls to the session's own ballsRemaining, never
+ * cheddar directly (see pachinko.ts). The board shows the tray's current cash value; cashing
+ * out happens automatically when the game modal closes (see Pachinko.tsx), not via a button
+ * here.
+ *
+ * Multiple balls can be in flight at once, same as Plinko: holding the launch button fires one
+ * shot immediately and then one every FIRE_INTERVAL_MS while held, and every active ball
+ * animates concurrently off a single shared rAF loop (activeBallsRef).
  */
-export default function PachinkoBoard({ session, layout, jackpotPool, launchPowerRange, pricePerBall, isResuming, launch, reup, isReuping, onSessionUpdate }: PachinkoBoardProps) {
-    const [activeCount, setActiveCount] = useState(0); // mirrors activeBallsRef.current.size for rendering
+export default function PachinkoBoard({
+    session,
+    layout,
+    jackpotPool,
+    cashOutRate,
+    bonusPocketBalls,
+    sideTulipBalls,
+    attackerBalls,
+    launchPowerRange,
+    pricePerBall,
+    isResuming,
+    launch,
+    reup,
+    isReuping,
+    onSessionUpdate,
+}: PachinkoBoardProps) {
     const [callouts, setCallouts] = useState<Callout[]>([]);
-    const [launchPower, setLaunchPower] = useState(() => launchPowerRange.min); // starts at 0, same value the plunger springs back to on release
+    const [launchPower, setLaunchPower] = useState(() => launchPowerRange.min);
 
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const rafRef = useRef<number | null>(null);
     const fireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const activeBallsRef = useRef<Map<number, ActiveBall>>(new Map());
-    const latestAppliedSeqRef = useRef(0); // highest launch seq whose response has actually been applied to session
+    const latestAppliedSeqRef = useRef(0);
 
-    // "Latest ref" mirrors of props/state that the persistent rAF loop below needs to read
-    // fresh values from without being recreated on every render (it's only ever recreated
-    // when `layout` changes, same as PlinkoBoard's own tick effect).
     const sessionRef = useRef(session);
     sessionRef.current = session;
     const launchPowerRef = useRef(launchPower);
     launchPowerRef.current = launchPower;
 
-    // Tracks the ball count used to gate hold-to-fire's self-throttle. Deliberately NOT kept
-    // in sync on every render (see the dedicated effect below, keyed only on the server's own
-    // ballsRemaining) - fireOnce decrements this optimistically at request time so the
-    // interval stops itself right around the true depletion point instead of a couple of
-    // round-trips late, and an unconditional per-render resync here would immediately erase
-    // that optimism.
     const ballsRemainingRef = useRef(session?.ballsRemaining ?? 0);
     useEffect(() => {
         ballsRemainingRef.current = session?.ballsRemaining ?? 0;
     }, [session?.ballsRemaining]);
 
-    // The plunger's current window-level release listener, if a press is in progress - tracked
-    // so it can be torn down on unmount too (see the cleanup effect below), not just on an
-    // actual pointerup/pointercancel.
     const plungerReleaseRef = useRef<(() => void) | null>(null);
 
-    const draw = (now: number, hotTulips: Set<PachinkoTulipLayout["id"]>) => {
+    const draw = (now: number, hotPockets: Set<string>) => {
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext("2d");
         if (!canvas || !ctx || !layout) {
@@ -204,9 +298,10 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
         }
         ctx.clearRect(0, 0, layout.canvasWidth, layout.canvasHeight);
 
-        // The one true playfield boundary - drawn as two separate arcs so the gutter cutout
-        // at the bottom is a genuine gap in the line, not a shape drawn over an intact edge.
-        ctx.fillStyle = "rgba(255,255,255,0.04)";
+        // The one true playfield boundary - fully continuous (no gap anywhere near the rail,
+        // see pachinkoLayout.ts's own header comment for why), drawn as two arcs matching the
+        // gutter cutout at the bottom.
+        ctx.fillStyle = "rgba(255,255,255,0.035)";
         ctx.beginPath();
         drawArc(ctx, layout.boundaryRightArc);
         ctx.lineTo(layout.gutterCutoutXStart, layout.boundaryRightArc[layout.boundaryRightArc.length - 1]?.p1.y ?? 0);
@@ -226,28 +321,22 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
         drawArc(ctx, layout.boundaryLeftArc);
         ctx.stroke();
 
-        // Rail/channel decoration - only drawn below channelBottomY, where the field's own
-        // boundary curves away and the rail becomes a genuinely separate structure leading
-        // down to the launcher. From releasePoint.y to channelBottomY, that same x=400 line is
-        // already the field's own right wall (drawn above via the boundary arcs) - filling it
-        // a second time here used to visually bury the release deflector nail (which sits
-        // just a few px inside that stretch, right where the ball needs an early catch point)
-        // under an unrelated "rail" graphic, making it look like a nail stuck inside the
-        // launcher mechanism instead of the field.
-        ctx.fillStyle = "rgba(255,215,0,0.12)";
-        ctx.fillRect(layout.channelInnerX, layout.channelBottomY, layout.channelOuterX - layout.channelInnerX, layout.launcherPosition.y - layout.channelBottomY);
-        ctx.strokeStyle = "rgba(255,215,0,0.5)";
+        // Rail - a channel flush against the inside of the glass, outer wall shared with the
+        // boundary itself, inner wall offset in, capped with a half circle at the launcher end
+        // (railCap) rather than a flat line.
+        const railGrad = ctx.createLinearGradient(layout.railInnerArc[0]?.p0.x ?? 0, 0, layout.railOuterArc[0]?.p0.x ?? 0, 0);
+        railGrad.addColorStop(0, "#4a3a1a");
+        railGrad.addColorStop(1, "#2a2110");
+        ctx.beginPath();
+        drawArc(ctx, layout.railOuterArc); // starts the one subpath (moveTo + curves)
+        ctx.arc(layout.railCap.center.x, layout.railCap.center.y, layout.railCap.radius, layout.railCap.startAngle, layout.railCap.endAngle, false);
+        const reversedInner = [...layout.railInnerArc].reverse().map((seg) => ({ p0: seg.p1, c1: seg.c2, c2: seg.c1, p1: seg.p0 }));
+        appendArc(ctx, reversedInner); // continues the SAME subpath - no moveTo, or closePath() below would close the wrong shape
+        ctx.closePath();
+        ctx.fillStyle = railGrad;
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,215,0,0.55)";
         ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(layout.channelInnerX, layout.channelBottomY);
-        ctx.lineTo(layout.channelInnerX, layout.launcherPosition.y);
-        ctx.stroke();
-
-        // Launcher dial, below the field entirely.
-        ctx.strokeStyle = "#FFD700";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(layout.launcherPosition.x, layout.launcherPosition.y, 10, 0, Math.PI * 2);
         ctx.stroke();
 
         // Gutter pocket hanging below the boundary's own cutout.
@@ -283,28 +372,115 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
             }
         }
 
-        // Tulips - open/closed sizing and color are Pachinko-specific and unchanged; the
-        // highlight-on-hit treatment now matches Plinko's cups (translucent gold overlay
-        // instead of a solid fill), and can apply to more than one tulip at once now that
-        // balls can land concurrently (hotTulips is a Set, not a single "last outcome").
+        // Every scoring target is a pocket (see drawPocket) - bonus, tulip, jackpot, chucker,
+        // attacker, all the same open-top-cup construction, sized by difficulty rather than
+        // drawn as a mix of dots and ellipses.
+        // Every pocket on this board is a fixed size now - open/closed/primed state only ever
+        // changes color (and, for the attacker, whether it currently pays) never the hitbox -
+        // matching pachinkoLayout.ts, which backs every one of these with a real physical cup
+        // rather than a shrinking/growing detection zone.
+        const attackerOpenUntil = sessionRef.current?.attackerOpenUntil ?? 0;
+        const attackerOpen = attackerOpenUntil > Date.now();
+
+        for (const bonus of layout.bonusPockets) {
+            const isHot = hotPockets.has(`bonus-${bonus.id}`);
+            const stroke = isHot ? "#FFD700" : "rgba(189,245,240,0.9)";
+            drawPocket(ctx, bonus.position.x, bonus.position.y, bonus.halfWidth, POCKET_HEIGHT, isHot ? "rgba(255,215,0,0.35)" : "rgba(79,209,197,0.22)", stroke);
+            drawPocketLabel(ctx, bonus.position.x, bonus.position.y, POCKET_HEIGHT, "BONUS", stroke);
+            drawPocketAmount(ctx, bonus.position.x, bonus.position.y, `+${bonusPocketBalls}`, stroke);
+        }
+
         const leftOpen = sessionRef.current?.leftTulipOpen ?? false;
         const rightOpen = sessionRef.current?.rightTulipOpen ?? false;
         for (const tulip of layout.tulips) {
-            const isOpen = tulip.id === "left" ? leftOpen : tulip.id === "right" ? rightOpen : leftOpen && rightOpen;
-            const isHot = hotTulips.has(tulip.id);
-            const halfWidth = isOpen ? tulip.openHalfWidth : tulip.closedHalfWidth;
-            ctx.fillStyle = isHot ? "rgba(255,215,0,0.35)" : isOpen ? "rgba(100,220,140,0.85)" : "rgba(255,255,255,0.15)";
-            ctx.strokeStyle = isHot ? "#FFD700" : tulip.id === "center" ? "#FF6B6B" : "rgba(255,255,255,0.6)";
-            ctx.lineWidth = isHot ? 2 : tulip.id === "center" ? 2 : 1.4;
-            ctx.beginPath();
-            ctx.ellipse(tulip.position.x, tulip.position.y, halfWidth, 8, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
+            const isOpen = tulip.id === "left" ? leftOpen : rightOpen;
+            const isHot = hotPockets.has(`tulip-${tulip.id}`);
+            // Both states are green - a tulip being closed isn't "inactive" the way the
+            // chucker/attacker are, it's just not toggled yet, so it shouldn't read as grey/off.
+            // Open needs to be unmistakably brighter though: a vivid, near-solid glowing green
+            // vs. a light, translucent green when closed.
+            const stroke = isHot ? "#FFD700" : isOpen ? "#7CFFB2" : "#BFF0D2";
+            drawPocket(
+                ctx,
+                tulip.position.x,
+                tulip.position.y,
+                tulip.halfWidth,
+                POCKET_HEIGHT,
+                isHot ? "rgba(255,215,0,0.35)" : isOpen ? "rgba(99,214,138,0.75)" : "rgba(99,214,138,0.22)",
+                stroke,
+                { glow: isHot ? undefined : isOpen ? "rgba(124,255,178,0.9)" : undefined }
+            );
+            drawPocketLabel(ctx, tulip.position.x, tulip.position.y, POCKET_HEIGHT, isOpen ? "TULIP - OPEN" : "TULIP", stroke);
+            drawPocketAmount(ctx, tulip.position.x, tulip.position.y, `+${sideTulipBalls}`, isOpen ? "#08321a" : stroke);
         }
 
-        // Pending balls - appear instantly at the launcher the moment a shot is fired, same
-        // "something shows up immediately" principle as Plinko's pending balls, even though
-        // the real trajectory (which starts riding up the rail from here) hasn't come back yet.
+        // Chucker - fixed width, never highlighted for its own sake beyond a catch; also reads
+        // as grey/dashed (matching the attacker's own closed look) while the attacker it just
+        // opened is still counting down, so it's visually obvious there's nothing to gain from
+        // hitting it again right now.
+        const chuckerHot = hotPockets.has("chucker");
+        const chuckerStroke = chuckerHot ? "#FFD700" : attackerOpen ? "rgba(170,170,170,0.7)" : "rgba(255,230,150,0.9)";
+        drawPocket(
+            ctx,
+            layout.chucker.position.x,
+            layout.chucker.position.y,
+            layout.chucker.halfWidth,
+            POCKET_HEIGHT,
+            chuckerHot ? "rgba(255,215,0,0.4)" : attackerOpen ? "rgba(140,140,140,0.18)" : "rgba(255,215,0,0.2)",
+            chuckerStroke,
+            { dashed: attackerOpen && !chuckerHot }
+        );
+        drawPocketLabel(ctx, layout.chucker.position.x, layout.chucker.position.y, POCKET_HEIGHT, "CHUCKER", chuckerStroke);
+
+        // Attacker - fixed width always (see pachinkoLayout.ts). Grey and dashed while closed,
+        // solid and colored while open, with the ball award shown inside and a live countdown
+        // UNDERNEATH (not overlapping the amount), read straight off session.attackerOpenUntil
+        // against the real clock every frame, not a locally-tracked timer.
+        const attackerHot = hotPockets.has("attacker");
+        const attackerStroke = attackerHot ? "#FFD700" : attackerOpen ? "rgba(189,245,207,0.95)" : "rgba(170,170,170,0.7)";
+        drawPocket(
+            ctx,
+            layout.attacker.position.x,
+            layout.attacker.position.y,
+            layout.attacker.halfWidth,
+            POCKET_HEIGHT,
+            attackerHot ? "rgba(255,215,0,0.4)" : attackerOpen ? "rgba(99,214,138,0.35)" : "rgba(140,140,140,0.18)",
+            attackerStroke,
+            { dashed: !attackerOpen && !attackerHot }
+        );
+        drawPocketLabel(ctx, layout.attacker.position.x, layout.attacker.position.y, POCKET_HEIGHT, attackerOpen ? "ATTACKER - OPEN" : "ATTACKER", attackerStroke);
+        drawPocketAmount(ctx, layout.attacker.position.x, layout.attacker.position.y, `+${attackerBalls}`, attackerStroke);
+        if (attackerOpen) {
+            // 2 decimals, not a whole-second countdown - ticking visibly every frame is what
+            // actually reads as "fast" and urgent, a whole number only appears to update once a
+            // second.
+            const secondsLeft = Math.max(0, (attackerOpenUntil - Date.now()) / 1000);
+            ctx.fillStyle = "rgba(189,245,207,0.95)";
+            ctx.font = "bold 9px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(`${secondsLeft.toFixed(2)}s`, layout.attacker.position.x, layout.attacker.position.y + POCKET_HEIGHT / 2 + 12);
+        }
+
+        // Jackpot - the tightest pocket on the board, fixed width even when primed. Grey/inert
+        // until both tulips are open, then lights up (colored + glow) - only reachable-and-
+        // paying state changes, never the target size.
+        const primed = leftOpen && rightOpen;
+        const jackpotHot = hotPockets.has("jackpot");
+        const jackpotHeight = layout.jackpot.halfWidth * 2.4;
+        const jackpotStroke = jackpotHot ? "#FFD700" : primed ? "#ffd0dd" : "rgba(170,170,170,0.7)";
+        drawPocket(
+            ctx,
+            layout.jackpot.position.x,
+            layout.jackpot.position.y,
+            layout.jackpot.halfWidth,
+            jackpotHeight,
+            jackpotHot ? "rgba(255,215,0,0.4)" : primed ? "rgba(255,77,125,0.4)" : "rgba(140,140,140,0.18)",
+            jackpotStroke,
+            { glow: jackpotHot || !primed ? undefined : "rgba(255,77,125,0.9)", dashed: !primed && !jackpotHot }
+        );
+        drawPocketLabel(ctx, layout.jackpot.position.x, layout.jackpot.position.y, jackpotHeight, "JACKPOT", jackpotStroke);
+
+        // Pending balls - appear instantly at the launcher the moment a shot is fired.
         for (const ball of activeBallsRef.current.values()) {
             if (ball.phase === "pending") {
                 ctx.fillStyle = "#FF6B6B";
@@ -319,7 +495,7 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
                 const frames = ball.result.trajectory;
                 const lastIndex = frames.length - 1;
                 if (lastIndex < 0) {
-                    continue; // empty trajectory - promoted to landed on the very next tick
+                    continue;
                 }
                 const rawIndex = Math.max(0, (now - ball.startTime) / FRAME_MS);
                 const index = Math.min(lastIndex, rawIndex);
@@ -338,7 +514,6 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
                 const final = frames[frames.length - 1] ?? layout.releasePoint;
                 const t = Math.min(1, (now - ball.landedAt) / POOF_MS);
 
-                // The ball itself shrinks and fades as it "settles"...
                 const remainingRadius = BALL_RADIUS * (1 - t);
                 if (remainingRadius > 0.3) {
                     ctx.fillStyle = `rgba(255,107,107,${1 - t})`;
@@ -347,9 +522,7 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
                     ctx.fill();
                 }
 
-                // ...while a burst of particles poofs outward from the same spot - every
-                // landing gets one, gutter misses included.
-                const won = ball.result.payout > 0;
+                const won = ball.result.ballsAwarded > 0;
                 for (const particle of ball.particles) {
                     const dist = particle.speed * (t * (POOF_MS / 1000));
                     const px = final.x + Math.cos(particle.angle) * dist;
@@ -364,17 +537,12 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
         }
     };
 
-    // One persistent loop for the whole board's lifetime (once the real layout has arrived):
-    // interpolates every falling ball's position, promotes a ball whose trajectory just
-    // finished into its poof phase (firing the one-time callout/session-update side effects
-    // exactly once via landedAt), and retires any ball whose poof has finished. Mirrors
-    // PlinkoBoard's own persistent rAF loop.
     useEffect(() => {
         if (!layout) {
             return;
         }
         const tick = (now: number) => {
-            const hotTulips = new Set<PachinkoTulipLayout["id"]>();
+            const hotPockets = new Set<string>();
             const toRemove: number[] = [];
             for (const ball of activeBallsRef.current.values()) {
                 if (ball.phase === "falling") {
@@ -384,48 +552,56 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
                         const { result, seq } = ball;
                         activeBallsRef.current.set(ball.id, { id: ball.id, phase: "landed", result, landedAt: now, particles: makeParticles() });
 
-                        const calloutId = nextCalloutId++;
-                        setCallouts((prev) => [...prev, { id: calloutId, outcome: result.outcome, payout: result.payout, won: result.payout > 0 }]);
-                        setTimeout(() => setCallouts((prev) => prev.filter((c) => c.id !== calloutId)), CALLOUT_MS);
+                        // Misses don't get a popup - they're the most common outcome by far, so
+                        // surfacing them would mostly just be clutter; only an actual catch
+                        // (even a 0-ball one like the chucker, which still opened the attacker)
+                        // is worth calling out.
+                        if (result.outcome !== "gutter") {
+                            const calloutId = nextCalloutId++;
+                            setCallouts((prev) => [...prev, { id: calloutId, outcome: result.outcome, ballsAwarded: result.ballsAwarded, won: result.ballsAwarded > 0 }]);
+                            setTimeout(() => setCallouts((prev) => prev.filter((c) => c.id !== calloutId)), CALLOUT_MS);
+                        }
 
-                        // Responses can arrive out of order under hold-to-fire (several
-                        // concurrent launches in flight) - only apply this one's session
-                        // state if it's actually the freshest launch to land so far, so a
-                        // late response for an earlier ball can't regress totalPayout or
-                        // stomp a more recent tulip toggle.
+                        // Responses can arrive out of order under hold-to-fire - only apply this
+                        // one's session state if it's actually the freshest launch to land so
+                        // far, so a late response for an earlier ball can't regress ballsRemaining
+                        // or stomp a more recent tulip/attacker state change.
                         if (seq > latestAppliedSeqRef.current && sessionRef.current) {
                             latestAppliedSeqRef.current = seq;
                             onSessionUpdate({
                                 ...sessionRef.current,
                                 ballsRemaining: result.ballsRemaining,
-                                totalPayout: result.totalPayout,
                                 leftTulipOpen: result.leftTulipOpen,
                                 rightTulipOpen: result.rightTulipOpen,
+                                attackerOpenUntil: result.attackerOpenUntil,
                             });
                         }
                     }
                 } else if (ball.phase === "landed") {
                     if (now - ball.landedAt >= POOF_MS) {
                         toRemove.push(ball.id);
+                    } else if (ball.result.outcome === "bonusLeft") {
+                        hotPockets.add("bonus-left");
+                    } else if (ball.result.outcome === "bonusRight") {
+                        hotPockets.add("bonus-right");
                     } else if (ball.result.outcome === "tulipLeft") {
-                        hotTulips.add("left");
+                        hotPockets.add("tulip-left");
                     } else if (ball.result.outcome === "tulipRight") {
-                        hotTulips.add("right");
-                    } else if (ball.result.outcome === "tulipCenter") {
-                        hotTulips.add("center");
+                        hotPockets.add("tulip-right");
+                    } else if (ball.result.outcome === "chucker") {
+                        hotPockets.add("chucker");
+                    } else if (ball.result.outcome === "attacker") {
+                        hotPockets.add("attacker");
+                    } else if (ball.result.outcome === "jackpot") {
+                        hotPockets.add("jackpot");
                     }
                 }
-                // "pending" balls have nothing to advance here - they just render via draw()
-                // until their launch response promotes them to "falling".
             }
-            if (toRemove.length > 0) {
-                for (const id of toRemove) {
-                    activeBallsRef.current.delete(id);
-                }
-                setActiveCount(activeBallsRef.current.size);
+            for (const id of toRemove) {
+                activeBallsRef.current.delete(id);
             }
 
-            draw(now, hotTulips);
+            draw(now, hotPockets);
             rafRef.current = requestAnimationFrame(tick);
         };
         rafRef.current = requestAnimationFrame(tick);
@@ -460,15 +636,11 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
             return;
         }
         if (activeBallsRef.current.size >= MAX_CONCURRENT_BALLS) {
-            return; // cap reached - skip this tick only, interval keeps running for the next one
+            return;
         }
         const id = nextBallId++;
         const seq = ++nextLaunchSeq;
         activeBallsRef.current.set(id, { id, phase: "pending" });
-        setActiveCount((c) => c + 1);
-        // Decremented at request time, not response time - otherwise the interval's own
-        // self-throttle would lag a couple of round-trips behind the true depletion point,
-        // firing a trailing burst of "no balls remaining" requests right as a batch ends.
         ballsRemainingRef.current -= 1;
 
         launch(launchPowerRef.current)
@@ -476,11 +648,7 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
                 activeBallsRef.current.set(id, { id, phase: "falling", result, startTime: performance.now(), seq });
             })
             .catch(() => {
-                // The launch mutation's own onError already surfaces a toast - this ball
-                // never actually fired, so release the slot and balance it reserved, and
-                // stop auto-firing rather than immediately retrying into the same error.
                 activeBallsRef.current.delete(id);
-                setActiveCount((c) => c - 1);
                 ballsRemainingRef.current += 1;
                 stopFiring();
             });
@@ -490,11 +658,6 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
         if (!canLaunch || fireIntervalRef.current !== null) {
             return;
         }
-        // Deferred one frame, not called synchronously: pointerdown fires before the browser's
-        // own mousedown (which is what the Slider's onChange listens on), so at the instant
-        // this runs, launchPower/launchPowerRef may still hold whatever it was before this
-        // very press - a plain rAF is enough to let that onChange's setState commit first, so
-        // the very first shot actually uses the power the player just pressed at.
         requestAnimationFrame(fireOnce);
         fireIntervalRef.current = setInterval(fireOnce, FIRE_INTERVAL_MS);
     }
@@ -506,11 +669,6 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
         }
     }
 
-    // The launch power dial doubles as the fire control, like a spring-loaded plunger: press
-    // and drag it to set power, hold it to keep firing at that power (adjustable mid-hold),
-    // release anywhere to stop and let it spring back to 0. Listening on `window` for the
-    // release (not just the slider's own onPointerUp/Leave) is what makes the spring-back
-    // reliable even if the player drags off the slider before releasing.
     function handlePlungerDown() {
         if (!canLaunch) {
             return;
@@ -529,8 +687,8 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
     }
 
     const spent = (session?.ballsTotal ?? 0) * (session?.pricePerBall ?? pricePerBall);
-    const totalPayout = session?.totalPayout ?? 0;
-    const netResult = totalPayout - spent;
+    const cashValue = ballsRemaining * (session?.pricePerBall ?? pricePerBall) * cashOutRate;
+    const net = cashValue - spent;
 
     return (
         <Box sx={{ maxWidth: 480, mx: "auto" }}>
@@ -574,57 +732,10 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
                             </Typography>
                         </Box>
                     )}
-
-                    {callouts.map((callout) => (
-                        <Box
-                            key={callout.id}
-                            sx={{
-                                position: "absolute",
-                                top: "50%",
-                                left: "50%",
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "center",
-                                bgcolor: "rgba(13,13,13,0.55)",
-                                border: "2px solid",
-                                borderColor: callout.won ? "#FFD700" : "grey.700",
-                                borderRadius: 1,
-                                px: 2,
-                                py: 0.75,
-                                pointerEvents: "none",
-                                animation: `pachinkoCalloutPop ${CALLOUT_MS}ms ease-out`,
-                                "@keyframes pachinkoCalloutPop": {
-                                    "0%": { opacity: 0, transform: "translate(-50%, -50%) scale(0.7)" },
-                                    "15%": { opacity: 1, transform: "translate(-50%, -50%) scale(1.1)" },
-                                    "30%": { transform: "translate(-50%, -50%) scale(1)" },
-                                    "80%": { opacity: 1, transform: "translate(-50%, -50%) scale(1)" },
-                                    "100%": { opacity: 0, transform: "translate(-50%, -50%) scale(0.9)" },
-                                },
-                            }}
-                        >
-                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: callout.won ? "success.light" : "grey.300" }}>
-                                {OUTCOME_LABEL[callout.outcome]}
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 800, color: "warning.light" }}>
-                                {callout.payout > 0 ? `+${formatCheddar(callout.payout)}` : "—"}
-                            </Typography>
-                        </Box>
-                    ))}
                 </Box>
             </Box>
 
             <Box sx={{ px: 2, mt: 2.5 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", mb: 0.5 }}>
-                    {ballsRemaining <= 0
-                        ? "No balls - reup below"
-                        : activeCount >= MAX_CONCURRENT_BALLS
-                          ? "Max balls in flight"
-                          : `Hold & drag the plunger to launch (${ballsRemaining} left)`}
-                </Typography>
-                {/* The power dial doubles as the fire control (a spring-loaded plunger, not a
-                    separate button + slider) - press and drag it to set power, hold to keep
-                    firing at that power, release anywhere to stop and snap back to 0. See
-                    handlePlungerDown. */}
                 <Slider
                     value={launchPower}
                     onChange={(_, value) => typeof value === "number" && setLaunchPower(value)}
@@ -632,7 +743,7 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
                     min={launchPowerRange.min}
                     max={launchPowerRange.max}
                     color="warning"
-                    valueLabelDisplay="auto"
+                    valueLabelDisplay="off"
                     disabled={!canLaunch}
                     aria-label="Launch power - hold and drag, release to fire"
                     sx={{ touchAction: "none" }}
@@ -654,6 +765,8 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
                 ))}
             </Box>
 
+            {/* Tray: every catch adds balls here, never cheddar directly - Cash Out is the only
+                thing that ever converts the tray back to real money (see pachinko.ts). */}
             <Box
                 sx={{
                     display: "flex",
@@ -677,21 +790,66 @@ export default function PachinkoBoard({ session, layout, jackpotPool, launchPowe
                 </Box>
                 <Box sx={{ textAlign: "center" }}>
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.3 }}>
-                        Won / Lost
+                        Cash Value
                     </Typography>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 800, color: netResult >= 0 ? "success.main" : "error.main" }}>
-                        {netResult >= 0 ? "+" : "-"}
-                        {formatCheddar(Math.abs(netResult))}
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "warning.main" }}>
+                        {formatCheddar(cashValue)}
                     </Typography>
                 </Box>
                 <Box sx={{ textAlign: "center" }}>
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.3 }}>
-                        Ratio
+                        Net if Cashed
                     </Typography>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-                        {spent > 0 ? (totalPayout / spent).toFixed(2) : "0.00"}x
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, color: net >= 0 ? "success.main" : "error.main" }}>
+                        {net >= 0 ? "+" : "-"}
+                        {formatCheddar(Math.abs(net))}
                     </Typography>
                 </Box>
+            </Box>
+
+            {/* Catch popups - live below the Spent/Cash Value/Net box rather than floating over
+                the board, so they never obscure the play field. Misses are filtered out before
+                they ever reach `callouts` (see the tick loop) - this row only ever shows actual
+                catches. Two things pin this box's height to a true constant, not just a
+                minimum: it's ALWAYS rendered (never conditionally mounted on callouts.length -
+                toggling the whole row in and out of the DOM was the first cause of the desktop
+                modal resizing), and it's noWrap + horizontally scrollable rather than wrapping
+                - a burst of simultaneous catches under hold-to-fire (several balls landing
+                close together) used to wrap onto a second line and grow the row, which was the
+                second cause. Rare enough to need more than a couple of these that scrolling to
+                see the rest is an acceptable tradeoff for a height that truly never changes. */}
+            <Box sx={{ display: "flex", justifyContent: "center", flexWrap: "nowrap", overflowX: "auto", gap: 1, mt: 1.5, height: 44 }}>
+                {callouts.map((callout) => (
+                    <Box
+                        key={callout.id}
+                        sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 1,
+                            bgcolor: "rgba(13,13,13,0.55)",
+                            border: "2px solid",
+                            borderColor: callout.won ? "#FFD700" : "grey.700",
+                            borderRadius: 999,
+                            px: 2,
+                            py: 0.5,
+                            animation: `pachinkoCalloutPop ${CALLOUT_MS}ms ease-out`,
+                            "@keyframes pachinkoCalloutPop": {
+                                "0%": { opacity: 0, transform: "scale(0.7)" },
+                                "15%": { opacity: 1, transform: "scale(1.08)" },
+                                "30%": { transform: "scale(1)" },
+                                "80%": { opacity: 1, transform: "scale(1)" },
+                                "100%": { opacity: 0, transform: "scale(0.92)" },
+                            },
+                        }}
+                    >
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: callout.won ? "success.light" : "grey.300" }}>
+                            {OUTCOME_LABEL[callout.outcome]}
+                        </Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 800, color: "warning.light" }}>
+                            {callout.ballsAwarded > 0 ? `+${callout.ballsAwarded} balls` : "—"}
+                        </Typography>
+                    </Box>
+                ))}
             </Box>
         </Box>
     );

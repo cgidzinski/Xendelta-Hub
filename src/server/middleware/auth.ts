@@ -14,9 +14,10 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
   passport.authenticate('jwt', { session: false }, (err: Error | null, user: UserDocument | false, info: { message?: string } | undefined) => {
     if (err) {
       console.error("Authentication error:", err);
-      return res.status(500).json({
+      return res.status(503).json({
         status: false,
-        message: "Authentication failed",
+        code: "SERVICE_UNAVAILABLE",
+        message: "Authentication service temporarily unavailable",
       });
     }
 

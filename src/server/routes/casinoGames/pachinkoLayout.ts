@@ -4,13 +4,19 @@
  * simulation ran against. No matter-js import here - keeps this trivially unit-testable
  * without a physics engine in the loop.
  *
- * The shape was worked out against a reference diagram before any of this was written (see
- * the plan doc) - a single symmetric oval boundary with a genuine gap cut into its own edge
- * at the bottom (the gutter), and a separate straight channel below/alongside the one part
- * of the boundary that's itself a straight vertical line (the right wall). Both the boundary
- * and the channel are expressed as raw bezier control points here so the client can draw
- * smooth curves with them directly, plus a sampler that flattens them into polylines for the
- * physics module's static collision segments.
+ * The boundary is a true circle/ellipse hybrid, not the elongated capsule this board started
+ * as: the top half is a genuine ellipse (a "slightly stretched egg, just longer than round"),
+ * but the bottom half is a true half-circle (same radius as the field's own half-width)
+ * instead of continuing the wider ellipse down - a proper rounded-off bottom rim, not a
+ * stretched oval floor. Both halves meet exactly at the widest point on either side, where the
+ * two formulas agree.
+ *
+ * The launch rail lives entirely INSIDE that curve now (not below the field, not a separate
+ * straight channel bolted onto the outside) - a channel flush against the inside of the glass,
+ * running from a launcher slot at the bottom right up to a release point at the top right. Its
+ * walls are concentric with the boundary at every point along the run, so a ball leaving the
+ * rail is already moving tangent to the glass - a full-power shot can keep riding that same
+ * curve on its own momentum instead of bouncing off an angled seam.
  */
 
 export interface Point {
@@ -26,22 +32,46 @@ export interface BezierSegment {
 }
 
 export const CANVAS_WIDTH = 460;
-export const CANVAS_HEIGHT = 780;
+export const CANVAS_HEIGHT = 460;
 
-// The boundary is split into two arcs, not one closed loop - the gutter cutout at the bottom
-// (between the two arcs' endpoints) is a genuine gap, not a shape drawn over an intact edge.
-// Segment index 1 of the right arc is the one part of the whole boundary that's a straight
-// vertical line (constant x=400) - that's what the rail/channel runs alongside.
-export const BOUNDARY_RIGHT_ARC: BezierSegment[] = [
-    { p0: { x: 230, y: 34 }, c1: { x: 344, y: 34 }, c2: { x: 400, y: 100 }, p1: { x: 400, y: 260 } },
-    { p0: { x: 400, y: 260 }, c1: { x: 400, y: 460 }, c2: { x: 400, y: 560 }, p1: { x: 400, y: 620 } },
-    { p0: { x: 400, y: 620 }, c1: { x: 400, y: 690 }, c2: { x: 352, y: 710 }, p1: { x: 284, y: 710 } },
-];
-export const BOUNDARY_LEFT_ARC: BezierSegment[] = [
-    { p0: { x: 176, y: 710 }, c1: { x: 108, y: 710 }, c2: { x: 60, y: 690 }, p1: { x: 60, y: 620 } },
-    { p0: { x: 60, y: 620 }, c1: { x: 60, y: 560 }, c2: { x: 60, y: 460 }, p1: { x: 60, y: 260 } },
-    { p0: { x: 60, y: 260 }, c1: { x: 60, y: 100 }, c2: { x: 116, y: 34 }, p1: { x: 230, y: 34 } },
-];
+const DEG = Math.PI / 180;
+
+// Field center/radii: 340px wide (unchanged from the original board), top half a genuine
+// ellipse (FIELD_RY=190, "just slightly longer than round"), bottom half a true circle of
+// radius FIELD_RX. Angle convention throughout this file: 0 = the rightmost point, +90deg =
+// straight down (matching canvas y-down), -90deg = straight up.
+const FIELD_CX = 230;
+const FIELD_CY = 230;
+const FIELD_RX = 170;
+const FIELD_RY = 190;
+
+function ellipsePoint(theta: number, rx: number, ry: number): Point {
+    return { x: FIELD_CX + rx * Math.cos(theta), y: FIELD_CY + ry * Math.sin(theta) };
+}
+
+// True cubic-bezier approximation of an elliptical arc from theta0 to theta1, using the
+// standard kappa = 4/3*tan(dTheta/4) construction, split into <=maxStepDeg chunks so the
+// approximation stays accurate over a wide sweep. Passing rx=ry draws a circular arc (used for
+// the bottom half of the boundary, and for both halves of the rail's inner wall, which needs to
+// shrink in x too, not just y - a circle is just an ellipse with equal radii, so this is one
+// function either way, not two unrelated hand-fitted curves.
+function ellipseArcSegments(theta0: number, theta1: number, rx: number, ry: number, maxStepDeg = 95): BezierSegment[] {
+    const totalDeg = ((theta1 - theta0) * 180) / Math.PI;
+    const steps = Math.max(1, Math.ceil(Math.abs(totalDeg) / maxStepDeg));
+    const segments: BezierSegment[] = [];
+    const step = (theta1 - theta0) / steps;
+    for (let i = 0; i < steps; i++) {
+        const t0 = theta0 + i * step;
+        const t1 = theta0 + (i + 1) * step;
+        const kappa = (4 / 3) * Math.tan((t1 - t0) / 4);
+        const p0 = ellipsePoint(t0, rx, ry);
+        const p1 = ellipsePoint(t1, rx, ry);
+        const c1 = { x: p0.x - kappa * rx * Math.sin(t0), y: p0.y + kappa * ry * Math.cos(t0) };
+        const c2 = { x: p1.x + kappa * rx * Math.sin(t1), y: p1.y - kappa * ry * Math.cos(t1) };
+        segments.push({ p0, c1, c2, p1 });
+    }
+    return segments;
+}
 
 export function sampleBezier(seg: BezierSegment, steps: number): Point[] {
     const points: Point[] = [];
@@ -55,16 +85,8 @@ export function sampleBezier(seg: BezierSegment, steps: number): Point[] {
     return points;
 }
 
-// Flattens a run of connected bezier segments into one polyline, without duplicating the
-// point shared by consecutive segments' start/end. 32, not the original 14 - even though
-// consecutive segments' tangents match exactly at their shared endpoint (verified: the top
-// curve's end tangent and the straight rail segment's own direction are both purely
-// vertical), each individual straight chord is still only an approximation of the curve
-// between its two sampled points, not the true tangent line. With only 14 chords per segment,
-// the last chord approaching that joint was long enough to visibly deviate from vertical,
-// so a fast ball riding up near the wall picked up a small unwanted sideways kick right where
-// the straight rail met the curve, instead of a clean transition. Doubling the resolution
-// halves each chord's own angular error there.
+// Flattens a run of connected bezier segments into one polyline, without duplicating the point
+// shared by consecutive segments' start/end.
 export function sampleArc(arc: BezierSegment[], stepsPerSegment = 32): Point[] {
     const points: Point[] = [];
     arc.forEach((seg, i) => {
@@ -74,148 +96,260 @@ export function sampleArc(arc: BezierSegment[], stepsPerSegment = 32): Point[] {
     return points;
 }
 
+// Gutter cutout: a genuine gap in the boundary's own outline at the bottom, sized by x-extent
+// (176 to 284) same as the original board - solved for the matching angle on the true circle.
+export const GUTTER_CUTOUT_X_START = 176;
+export const GUTTER_CUTOUT_X_END = 284;
+const GUTTER_THETA = Math.acos((GUTTER_CUTOUT_X_END - FIELD_CX) / FIELD_RX); // ~71.48deg
+
+// Right arc: top (-90deg) -> widest point (0deg) -> gutter-right (+GUTTER_THETA). Left arc
+// mirrors it. Both are fully continuous - no notch or gap anywhere near the rail; a real
+// machine's round glass is one unbroken piece. What forms the rail (see RAIL_* below) is a
+// separate inner guide that runs alongside this same curve, not a cut into it.
+export const BOUNDARY_RIGHT_ARC: BezierSegment[] = [
+    ...ellipseArcSegments(-90 * DEG, 0, FIELD_RX, FIELD_RY), // top: ellipse
+    ...ellipseArcSegments(0, GUTTER_THETA, FIELD_RX, FIELD_RX), // bottom: true circle
+];
+export const BOUNDARY_LEFT_ARC: BezierSegment[] = [
+    ...ellipseArcSegments(Math.PI - GUTTER_THETA, Math.PI, FIELD_RX, FIELD_RX), // bottom: true circle
+    ...ellipseArcSegments(Math.PI, 270 * DEG, FIELD_RX, FIELD_RY), // top: ellipse
+];
+
 export const BOUNDARY_RIGHT_POINTS = sampleArc(BOUNDARY_RIGHT_ARC);
 export const BOUNDARY_LEFT_POINTS = sampleArc(BOUNDARY_LEFT_ARC);
 
-// The rail/channel: thin (about one ball-width), starting below the field entirely at the
-// launcher and running straight up alongside the boundary's one straight vertical segment
-// (BOUNDARY_RIGHT_ARC[1], x=400 from y=260 to y=620), ending exactly where that segment ends
-// and the boundary starts curving again - that point is the release point, where the ball
-// leaves the scripted rail phase and becomes a free body in the open field.
-export const CHANNEL_OUTER_X = 400; // = the boundary's own straight segment; no separate outer wall
-// 12, not exactly one ball-width (8) - the release point/ball spawn sits at this channel's
-// center, and with only 8px it landed close enough to the wall's own collision geometry
-// (which has some real thickness, not a zero-width line) that the ball spawned slightly
-// embedded in it - confirmed empirically as a strong, velocity-independent "kick" masking any
-// power tuning at the low end. The extra clearance here is what actually fixes that, not
-// anything in the physics module itself.
-export const CHANNEL_WIDTH = 12;
-export const CHANNEL_INNER_X = CHANNEL_OUTER_X - CHANNEL_WIDTH;
-export const CHANNEL_TOP_Y = 260; // top of the straight segment = release point's y
-export const CHANNEL_BOTTOM_Y = 620; // bottom of the straight segment, where the channel meets the field's own boundary
+export const BALL_RADIUS = 3.5;
+export const PIN_RADIUS = 1.6; // down from 2.2 - smaller, more delicate pins, matched here and in the client's own rendering so what you see is what you collide with
 
-const CHANNEL_CENTER_X = (CHANNEL_OUTER_X + CHANNEL_INNER_X) / 2;
-export const RELEASE_POINT: Point = { x: CHANNEL_CENTER_X, y: CHANNEL_TOP_Y };
-export const LAUNCHER_POSITION: Point = { x: CHANNEL_CENTER_X, y: 746 }; // below the field entirely, not touching its edge
-
-// The ball's scripted position while it's still "on the rail" - a straight line from the
-// launcher up to the release point. Only two points are needed since the whole run is a
-// straight line; the physics module interpolates along it.
-export const RAIL_PATH: Point[] = [LAUNCHER_POSITION, RELEASE_POINT];
-
-export const BALL_RADIUS = 3.5; // small relative to both nail spacing and the channel width
-export const PIN_RADIUS = 2.2;
-
-// Gutter: a real gap in the boundary itself (between the two arcs above), with a pocket
-// hanging below it that narrows down to a drain - the ball falls through the cutout, into
-// the pocket, and out through the drain, the same construction pattern the launcher uses to
-// poke below the field.
-export const GUTTER_CUTOUT_X_START = 176;
-export const GUTTER_CUTOUT_X_END = 284;
-export const GUTTER_CUTOUT_Y = 710;
+// Gutter: a real gap in the boundary itself, with a pocket hanging below it that narrows down
+// to a drain - same construction the original board used, just recomputed for the new circular
+// bottom (GUTTER_CUTOUT_Y moved up from 710 to ~391 as a result).
+export const GUTTER_CUTOUT_Y = FIELD_CY + FIELD_RX * Math.sin(GUTTER_THETA); // ~391.2
 export const GUTTER_POCKET: Point[] = [
-    { x: 284, y: 710 },
-    { x: 258, y: 748 },
-    { x: 202, y: 748 },
-    { x: 176, y: 710 },
+    { x: GUTTER_CUTOUT_X_END, y: GUTTER_CUTOUT_Y },
+    { x: 258, y: GUTTER_CUTOUT_Y + 38 },
+    { x: 202, y: GUTTER_CUTOUT_Y + 38 },
+    { x: GUTTER_CUTOUT_X_START, y: GUTTER_CUTOUT_Y },
 ];
-export const GUTTER_DRAIN_Y = 745; // once the ball crosses this, it's gone
+export const GUTTER_DRAIN_Y = GUTTER_CUTOUT_Y + 35; // once the ball crosses this, it's gone
+
+// --- Rail ---------------------------------------------------------------------------------
+// The rail sits just inside the glass, flush against it (zero gap - its outer wall IS the
+// boundary curve over the same span), from a launch point at the bottom right (LAUNCH_THETA)
+// up to a release point at the top right (RELEASE_THETA). Both ends are inside the curve; the
+// launcher is not a separate mechanism bolted below the field the way the original board's was.
+export const RAIL_WIDTH = 13;
+export const RELEASE_THETA = -50 * DEG;
+export const LAUNCH_THETA = 55 * DEG;
+
+// The rail's centerline radius is FIELD_RX/RY minus half the rail width - hybrid the same way
+// the boundary itself is: ellipse above the widest point (theta<0), true circle at/below it.
+function centerlinePoint(theta: number): Point {
+    const r = FIELD_RX - RAIL_WIDTH / 2;
+    const ry = theta < 0 ? FIELD_RY - RAIL_WIDTH / 2 : r;
+    return { x: FIELD_CX + r * Math.cos(theta), y: FIELD_CY + ry * Math.sin(theta) };
+}
+
+export const RELEASE_POINT: Point = centerlinePoint(RELEASE_THETA); // where the ball becomes a free body
+export const LAUNCHER_POSITION: Point = centerlinePoint(LAUNCH_THETA); // where the ball sits before firing - inside the field, not below it
+
+// Rail walls, purely for the client's own rendering - the physics sim never collides against
+// these, only the true boundary (see pachinkoPhysics.ts's buildWallSegments). Outer wall is
+// flush with the boundary itself over the RELEASE_THETA-to-LAUNCH_THETA span; inner wall is the
+// same hybrid curve offset in by RAIL_WIDTH.
+export const RAIL_OUTER_ARC: BezierSegment[] = [
+    ...ellipseArcSegments(RELEASE_THETA, 0, FIELD_RX, FIELD_RY),
+    ...ellipseArcSegments(0, LAUNCH_THETA, FIELD_RX, FIELD_RX),
+];
+export const RAIL_INNER_ARC: BezierSegment[] = [
+    ...ellipseArcSegments(RELEASE_THETA, 0, FIELD_RX - RAIL_WIDTH, FIELD_RY - RAIL_WIDTH),
+    ...ellipseArcSegments(0, LAUNCH_THETA, FIELD_RX - RAIL_WIDTH, FIELD_RX - RAIL_WIDTH),
+];
+
+// The rail's launcher-end cap - a half circle bulging in the direction of travel, not a flat
+// line, so the launcher reads as the rail's own rounded terminus rather than a separate
+// free-floating shape. Center is exactly LAUNCHER_POSITION (the midpoint between the two walls
+// at LAUNCH_THETA); sent as plain center/radius/angles so the client can draw it with a single
+// ctx.arc call without needing to know anything about the underlying ellipse math.
+export const RAIL_CAP = {
+    center: LAUNCHER_POSITION,
+    radius: RAIL_WIDTH / 2,
+    startAngle: LAUNCH_THETA,
+    endAngle: LAUNCH_THETA + Math.PI,
+};
+
+// Scripted rail-climb path (LAUNCHER_POSITION up to RELEASE_POINT), following the rail's own
+// centerline curve. Unlike the boundary/rail-wall arcs above (bezier, built for drawing), this
+// is a plain polyline - pachinkoPhysics's railTrajectory just walks it step by step, and
+// nothing ever collides against it, so bezier fidelity buys nothing here.
+const RAIL_CLIMB_STEPS = 48;
+export const RAIL_CLIMB_PATH: Point[] = Array.from({ length: RAIL_CLIMB_STEPS + 1 }, (_, i) => {
+    const t = i / RAIL_CLIMB_STEPS;
+    const theta = LAUNCH_THETA + t * (RELEASE_THETA - LAUNCH_THETA);
+    return centerlinePoint(theta);
+});
+
+// The free body's initial velocity direction at RELEASE_POINT - tangent to the boundary curve
+// there (ball travels in the direction of decreasing theta, i.e. the reverse of the curve's own
+// "increasing theta" tangent). This is what makes a full-power shot able to keep riding the
+// glass past the release point instead of launching straight up into it: the ball leaves the
+// rail already moving parallel to the wall, not at some unrelated fixed angle.
+function releaseTangentUnit(): Point {
+    const dx = FIELD_RX * Math.sin(RELEASE_THETA);
+    const dy = -FIELD_RY * Math.cos(RELEASE_THETA); // RELEASE_THETA < 0, always in the ellipse region
+    const mag = Math.hypot(dx, dy);
+    return { x: dx / mag, y: dy / mag };
+}
+export const RELEASE_TANGENT: Point = releaseTangentUnit();
+
+export const MIN_LAUNCH_POWER = 0;
+export const MAX_LAUNCH_POWER = 100;
+
+// The scripted rail-climb speed - deliberately not scaled by power (see the original board's
+// own reasoning, unchanged here): a weak pull should still be a fast, immediate mechanical
+// action once released, not a slow crawl. Only paces the climb animation; the free body's exit
+// speed (launchPowerToExitVelocity below) is what actually differentiates a shot's power.
+export function launchPowerToRailSpeed(power: number): number {
+    void power;
+    return 22; // px per physics step
+}
+
+// The free body's exit speed along RELEASE_TANGENT. Empirically tuned (see pachinkoPhysics.ts's
+// simulateShot and its own verification script) against this board's geometry: minimum power
+// should only just carry the ball clear of the release point before gravity pulls it back down
+// into the release-deflector nails right below; maximum power should carry it up near the top
+// boundary with speed left to ride the curve across, not just arc weakly and fall straight back.
+export function launchPowerToExitVelocity(power: number): number {
+    const clamped = Math.min(MAX_LAUNCH_POWER, Math.max(MIN_LAUNCH_POWER, power));
+    const t = clamped / MAX_LAUNCH_POWER;
+    return 1.4 + t * 11.6; // 1.4 to 13
+}
+
+// --- Scoring pockets ------------------------------------------------------------------------
+
+export interface FixedPocket {
+    id: string;
+    position: Point;
+    halfWidth: number;
+}
+
+// Every scoring pocket on this board is now the SAME shape of thing: a fixed-width physical cup
+// (see POCKET_DEPTH/buildPocketWalls in pachinkoPhysics.ts - real side/bottom walls, so a ball
+// can only ever enter through the open top and bounces off if it hits a side, it never "jumps
+// in" sideways) that never changes size. Priming/open-closed state (tulips toggling, the
+// jackpot needing both tulips open, the attacker's timed window) only ever changes what a catch
+// there PAYS or what it visually looks like - never whether it's physically reachable. That's a
+// deliberate simplification from an earlier draft where some of these gates literally shrank
+// when "closed" - a real pachinko pocket's opening doesn't change size, only whether it's lit.
+
+// Side tulips - catching one toggles it open/closed and awards SIDE_TULIP_BALLS unconditionally
+// (see pachinkoPayouts.ts). Both open at once is what primes the jackpot pocket below.
+export const TULIPS: FixedPocket[] = [
+    { id: "left", position: { x: 144, y: 315 }, halfWidth: 12 },
+    { id: "right", position: { x: 316, y: 315 }, halfWidth: 12 },
+];
+
+// Jackpot pocket - a real "just fits one ball" target, always this same tiny width. Physically
+// catchable at any time, but only actually PAYS (and visually lights up, vs. sitting grey) once
+// both side tulips are open - see pachinko.ts's own "jackpot" branch for that gating.
+export const JACKPOT: FixedPocket = { id: "jackpot", position: { x: 230, y: 360 }, halfWidth: 7 };
+
+export function isJackpotPrimed(leftOpen: boolean, rightOpen: boolean): boolean {
+    return leftOpen && rightOpen;
+}
+
+// Bonus pockets - frequent, small top-ups. Sized bigger than the tulips (30px wide vs 24px)
+// since they pay less - pocket width scales inversely with payout throughout this board, the
+// same logic the jackpot's own tiny pocket follows at the other end.
+export const BONUS_POCKETS: FixedPocket[] = [
+    { id: "left", position: { x: 130, y: 258 }, halfWidth: 15 },
+    { id: "right", position: { x: 330, y: 258 }, halfWidth: 15 },
+];
+
+// Chucker - small, always-open trigger. Catching it doesn't pay anything on its own; it's what
+// opens the attacker gate below for ATTACKER_OPEN_MS (see pachinkoPayouts.ts).
+export const CHUCKER: FixedPocket = { id: "chucker", position: { x: 230, y: 185 }, halfWidth: 8 };
+
+// Attacker - a wide gate, always this same width. Whether a catch here pays ATTACKER_BALLS or
+// nothing is entirely a route-level decision (conditions.attackerOpenUntil vs. the clock, see
+// pachinko.ts) - this module doesn't need to know the timer state at all.
+export const ATTACKER: FixedPocket = { id: "attacker", position: { x: 230, y: 225 }, halfWidth: 32 };
+
+// Every pocket's physical depth (and the y-tolerance the hit test uses) - the "cup" a ball has
+// to actually drop into, top open, walls on the other three sides. Shared by pachinkoPhysics.ts
+// (real collision geometry) and the client (matching visual height), so what you see is what
+// you collide with.
+export const POCKET_DEPTH = 18;
 
 export interface WindmillConfig {
     position: Point;
     radius: number;
 }
 
-// Flanking the release area, upper-mid field - static bumper obstacles (higher restitution
-// than a plain pin) rather than modeled as rotating blades for now; real rotation is a later
-// visual/physics polish pass, not needed to make the board playable.
+// Static bumper obstacles flanking the release area, upper-mid field.
 export const WINDMILLS: WindmillConfig[] = [
-    { position: { x: 112, y: 280 }, radius: 12 },
-    { position: { x: 348, y: 280 }, radius: 12 },
+    { position: { x: 110, y: 150 }, radius: 12 },
+    { position: { x: 350, y: 150 }, radius: 12 },
 ];
 
-export type TulipId = "left" | "right" | "center";
-
-export interface TulipConfig {
-    id: TulipId;
-    position: Point;
-    closedHalfWidth: number;
-    openHalfWidth: number; // for "center", this is the primed (both side tulips open) width
-}
-
-// Two side tulips flanking center, one larger center tulip ("start chucker") below them. The
-// center tulip is narrow/hard to catch unless both side tulips are open - see
-// tulipCatcherHalfWidth below, which is what actually turns "state" into a physics input.
-export const TULIPS: TulipConfig[] = [
-    { id: "left", position: { x: 144, y: 460 }, closedHalfWidth: 11, openHalfWidth: 20 },
-    { id: "right", position: { x: 316, y: 460 }, closedHalfWidth: 11, openHalfWidth: 20 },
-    { id: "center", position: { x: 222, y: 563 }, closedHalfWidth: 6, openHalfWidth: 55 },
-];
-
-export function tulipCatcherHalfWidth(tulip: TulipConfig, isOpenOrPrimed: boolean): number {
-    return isOpenOrPrimed ? tulip.openHalfWidth : tulip.closedHalfWidth;
-}
+// --- Nail field -----------------------------------------------------------------------------
+// Built from distinct clusters (not a uniform lattice), each placed at a functional point, plus
+// a handful of sparse stray nails and a diagonal release-deflector chain that redirects the
+// ball leftward right after it leaves the rail. Deterministic (no randomness) so the client and
+// physics agree without shipping coordinates over the wire.
 
 export interface PinPosition {
     x: number;
     y: number;
 }
 
-// Nail field: built from distinct clusters (not a uniform lattice, not a sparse grid), each
-// placed at a functional point - spreading the ball off the release point, guarding the
-// center tulip, funneling toward each side tulip/windmill - with real open gaps between
-// clusters, plus a handful of sparse stray nails in those open lanes. Deterministic (no
-// randomness) so the client and physics agree without shipping coordinates over the wire.
 const CLUSTER_LOCAL_OFFSETS: Point[] = [
-    { x: -15, y: -5 },
-    { x: -6, y: -15 },
-    { x: 7, y: -12 },
-    { x: 15, y: 0 },
-    { x: 9, y: 13 },
-    { x: -4, y: 14 },
-    { x: -15, y: 6 },
+    { x: -13, y: -4 },
+    { x: -5, y: -13 },
+    { x: 6, y: -10 },
+    { x: 13, y: 0 },
+    { x: 8, y: 11 },
+    { x: -3, y: 12 },
+    { x: -13, y: 5 },
     { x: 0, y: -1 },
 ];
 
-// Positioned along the ball's actual downward path from the release point (396, 260) toward
-// the tulip band (~460-563) and on to the gutter - each cluster gives the falling ball a
-// real leftward/rightward deflection rather than just being scattered decoration.
+// Kept out of the central column entirely - the chucker/attacker/bonus/tulip/jackpot pockets
+// already occupy that vertical band, so these sit in the flanking gaps between rows instead,
+// each individually clear of every pocket, the rail, and its neighbors.
 const CLUSTER_CENTERS: Point[] = [
-    { x: 368, y: 305 }, // first deflection, right below the release point
-    { x: 300, y: 345 }, // feeds toward the right windmill
-    { x: 150, y: 330 }, // feeds toward the left windmill
-    { x: 235, y: 385 }, // splits the field toward either side tulip
-    { x: 150, y: 425 }, // funnels toward the left tulip
-    { x: 305, y: 420 }, // funnels toward the right tulip
-    { x: 222, y: 495 }, // guards the center tulip's approach
-    { x: 98, y: 550 },
-    { x: 362, y: 550 },
+    { x: 330, y: 165 },
+    { x: 150, y: 175 },
+    { x: 108, y: 218 },
+    { x: 352, y: 218 },
+    { x: 222, y: 300 },
+    { x: 105, y: 345 },
+    { x: 305, y: 345 },
 ];
 
 const STRAY_NAILS: Point[] = [
-    { x: 230, y: 240 },
-    { x: 195, y: 270 },
-    { x: 265, y: 270 },
-    { x: 230, y: 480 },
-    { x: 185, y: 520 },
-    { x: 275, y: 520 },
+    { x: 230, y: 60 },
+    { x: 265, y: 78 },
+    { x: 296, y: 96 },
+    { x: 230, y: 315 },
+    { x: 185, y: 335 },
+    { x: 275, y: 335 },
 ];
 
-// A short diagonal line of nails right where the ball first lands after release (396, 260) -
-// without something directly in that initial fall line, the ball just drops straight down
-// along the right wall and never gets meaningfully deflected toward the tulip field. Exported
-// (unlike the other nail groups) so pachinkoPhysics.ts can give just this cluster a lower
-// restitution than the rest of the nail field - see the comment there for why.
+// A short diagonal line of nails right where the ball first lands after release, redirecting it
+// leftward toward the tulip field - without something directly in that initial path, the ball
+// would just ride the boundary curve (or drop) with no meaningful deflection. Exported (unlike
+// the other nail groups) so pachinkoPhysics.ts can give just this cluster a lower restitution
+// than the rest of the field.
 export const RELEASE_DEFLECTOR: Point[] = [
-    { x: 387, y: 274 },
-    { x: 380, y: 283 },
-    { x: 364, y: 292 },
-    { x: 346, y: 300 },
-    { x: 326, y: 306 },
-    { x: 300, y: 312 },
-    { x: 270, y: 316 },
-    { x: 236, y: 318 },
-    { x: 200, y: 320 },
+    { x: 322, y: 100 },
+    { x: 308, y: 112 },
+    { x: 288, y: 121 },
+    { x: 264, y: 128 },
+    { x: 238, y: 132 },
+    { x: 210, y: 135 },
+    { x: 182, y: 137 },
+    { x: 156, y: 140 },
 ];
 
 export function generateNailField(): PinPosition[] {
@@ -232,46 +366,4 @@ export function generateNailField(): PinPosition[] {
         pins.push({ x: stray.x, y: stray.y });
     }
     return pins;
-}
-
-export const MIN_LAUNCH_POWER = 0;
-export const MAX_LAUNCH_POWER = 100;
-
-// The scripted rail-climb speed - deliberately NOT scaled by power anymore. It used to be
-// (4 + t*10), which made a low-power shot crawl slowly up the launcher for ~2 real seconds
-// before ever reaching the field - that read as broken/laggy, not "weak," since a weak *pull*
-// should still be a fast, immediate mechanical action (like a real plunger - you can pull it
-// back gently or hard, but releasing it is always quick either way). All of the actual power
-// differentiation now lives in launchPowerToExitVelocity below; this only paces the climb
-// animation. Still takes `power` (unused) so its own call sites/tests don't need to change if
-// this ever needs to vary again.
-export function launchPowerToRailSpeed(power: number): number {
-    void power;
-    return 22; // px per physics step - tuned so the rail-climb is quick at any power
-}
-
-// The free body's actual exit velocity magnitude once it leaves the rail - this is the real
-// "how hard was this shot" input, independent of the rail-climb pacing above. Tuned
-// empirically (see pachinkoPhysics.ts's simulateShot, and the plan doc) against this board's
-// actual geometry: minimum power should only just barely crest over the release point edge
-// before gravity takes it back down (a couple dozen px of rise, immediately falling into the
-// release deflector nails right below); maximum power should carry the ball all the way up to
-// the top boundary with enough speed left to ride along its curve rather than just bonking
-// into it - a real "loop" across the top of the field before it comes back down the other
-// side, not just a taller version of the same weak arc.
-export function launchPowerToExitVelocity(power: number): number {
-    const clamped = Math.min(MAX_LAUNCH_POWER, Math.max(MIN_LAUNCH_POWER, power));
-    const t = clamped / MAX_LAUNCH_POWER;
-    // 1 to 16.8 - measured empirically against buildAttemptWorld's actual gravity/wall setup.
-    // The low end matters more than it looks: a test harness bug (testing raw velocities
-    // below the old 3.5 floor by feeding this function a negative `power` - which the clamp
-    // above silently snaps back to 0) made it look like the minimum rise was stuck at a fixed
-    // value no matter what this constant was set to, when the real explanation was just that
-    // power=0 always evaluates to this exact y-intercept - there's no way to get a *weaker*
-    // shot than whatever this is set to, so it has to be genuinely small on its own, not tuned
-    // relative to some lower baseline that doesn't actually exist. The high end caps out
-    // around ~218px of rise (near the very top of the field) once velocity passes ~12, so
-    // anything past that mostly shows up as more speed/energy at the top (a harder hit
-    // against the boundary, more sideways travel riding its curve) rather than more rise.
-    return 1 + t * 15.8;
 }

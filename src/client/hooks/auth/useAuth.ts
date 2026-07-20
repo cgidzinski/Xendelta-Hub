@@ -62,7 +62,7 @@ const checkAuthStatus = async (): Promise<AuthUser | null> => {
   // It returns { status, user, token } directly
   const response = await apiClient.post<AuthVerifyResponse>("/api/auth/verify");
   const data = response.data;
-  
+
   if (data.status && data.user) {
     // Save new token if provided (automatic refresh)
     if (data.token) {
@@ -77,7 +77,9 @@ const checkAuthStatus = async (): Promise<AuthUser | null> => {
       avatar: user.avatar || "",
     };
   } else {
-    localStorage.removeItem("token");
+    // The 401 interceptor in api.ts handles token removal for genuine
+    // invalid tokens. Server errors (503, network failures, etc.) should
+    // NOT delete the token — they are transient and the session is still valid.
     return null;
   }
 };
@@ -89,11 +91,11 @@ const loginUser = async (email: string, password: string): Promise<LoginResponse
   });
 
   const data = response.data;
-  
+
   if (data.success && data.token && data.user) {
     localStorage.setItem("token", data.token);
   }
-  
+
   return data;
 };
 
@@ -101,11 +103,11 @@ const signupUser = async (signupData: SignupData): Promise<SignupResponse> => {
   const response = await apiClient.post<SignupResponse>("/api/auth/signup", signupData);
 
   const data = response.data;
-  
+
   if (data.success && data.token && data.user) {
     localStorage.setItem("token", data.token);
   }
-  
+
   return data;
 };
 
@@ -159,7 +161,7 @@ export const useAuthHook = () => {
       if (data.success && data.user) {
         // Clear all queries first to remove any previous user's data
         queryClient.clear();
-        
+
         // Convert user to AuthUser format
         const authUser: AuthUser = {
           id: data.user.id || (data.user as any)._id || "",
@@ -182,7 +184,7 @@ export const useAuthHook = () => {
       if (data.success && data.user) {
         // Clear all queries first to remove any previous user's data
         queryClient.clear();
-        
+
         // Convert user to AuthUser format
         const authUser: AuthUser = {
           id: data.user.id || (data.user as any)._id || "",

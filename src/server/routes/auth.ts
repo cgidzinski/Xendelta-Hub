@@ -14,14 +14,14 @@ module.exports = function (app: express.Application) {
   // Role verification endpoint - returns user's roles from database
   app.get("/api/auth/roles/verify", authenticateToken, async function (req: express.Request, res: express.Response) {
     const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
-    
+
     if (!user) {
       return res.status(404).json({
         status: false,
         message: "User not found",
       });
     }
-    
+
     return res.json({
       status: true,
       message: "",
@@ -33,7 +33,7 @@ module.exports = function (app: express.Application) {
 
   app.post("/api/auth/verify", authenticateToken, async function (req: express.Request, res: express.Response) {
     const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
-    
+
     if (user) {
       // Generate new token for automatic refresh
       const newToken = generateToken({
@@ -41,7 +41,7 @@ module.exports = function (app: express.Application) {
         username: user.username,
         email: user.email,
       });
-      
+
       return res.json({
         status: true,
         message: "",
@@ -54,7 +54,7 @@ module.exports = function (app: express.Application) {
         token: newToken,
       });
     } else {
-      return res.json({
+      return res.status(401).json({
         status: false,
         message: "User Not Found.",
       });
@@ -104,17 +104,17 @@ module.exports = function (app: express.Application) {
       newUser.username = username;
       newUser.roles = [];
       await newUser.save();
-      
+
       // Add local authentication provider
       await newUser.addAuthProvider('local', null, email);
-      
+
       // Generate token for new user
       const token = generateToken({
         _id: newUser._id,
         username: newUser.username,
         email: newUser.email,
       });
-      
+
       return res.json({
         success: true,
         token: token,
@@ -129,7 +129,7 @@ module.exports = function (app: express.Application) {
       // User exists - check what authentication providers they have
       const hasGoogle = user.hasAuthProvider('google');
       const hasLocal = user.hasAuthProvider('local');
-      
+
       if (hasGoogle && !hasLocal) {
         return res.json({
           success: false,
@@ -308,7 +308,7 @@ module.exports = function (app: express.Application) {
     const user = req.user as any; // Passport sets full User document, not AuthenticatedRequest structure
     const state = req.query.state;
     const userId = req.query.userId;
-    
+
     // Check if this is an account linking request
     if (state === 'link' && userId) {
       // Link OAuth account to existing local account
@@ -317,23 +317,23 @@ module.exports = function (app: express.Application) {
         const providerId = provider === 'google'
           ? user.googleId
           : provider === 'github'
-          ? user.authProviders.find((p: any) => p.provider === 'github')?.providerId
-          : user.authProviders.find((p: any) => p.provider === 'discord')?.providerId;
-        
+            ? user.authProviders.find((p: any) => p.provider === 'github')?.providerId
+            : user.authProviders.find((p: any) => p.provider === 'discord')?.providerId;
+
         await existingUser.addAuthProvider(provider, providerId, user.email);
-        
+
         // Generate token for the linked account
         const token = generateToken({
           _id: existingUser._id,
           username: existingUser.username,
           email: existingUser.email,
         });
-        
+
         res.redirect(`/auth/callback?token=${token}&linked=true`);
         return;
       }
     }
-    
+
     // Regular OAuth flow
     const token = generateToken({
       _id: user._id,
@@ -346,11 +346,11 @@ module.exports = function (app: express.Application) {
   };
 
   // Google OAuth Routes
-  app.get("/api/auth/google", 
+  app.get("/api/auth/google",
     passport.authenticate('google', { scope: ['profile', 'email'], session: false })
   );
 
-  app.get("/api/auth/google/callback", 
+  app.get("/api/auth/google/callback",
     passport.authenticate('google', { failureRedirect: '/login', session: false }),
     async function (req: express.Request, res: express.Response) {
       try {
