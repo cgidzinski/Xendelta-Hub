@@ -28,7 +28,7 @@ import { authenticateToken } from "../../middleware/auth";
 import { AuthenticatedRequest } from "../../types/AuthenticatedRequest";
 const { User } = require("../../models/user");
 const { XenCasino, XenCasinoRound } = require("../../models/xenCasino");
-const crypto = require("crypto");
+const mongoose = require("mongoose");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
 import {
@@ -101,6 +101,9 @@ const nailField = generateNailField(); // static geometry, computed once and reu
 // sweepStale keys off lastActivityAt (see xenCasino.js), so an actively-playing session is
 // never mistaken for an abandoned one.
 const ROUND_TTL_MS = 5 * 60 * 1000;
+// A round that fails this many consecutive sweep attempts is treated as genuinely stuck
+// (not just transient) and gets a louder log line - see recoverStaleRounds below.
+const SWEEP_FAILURE_ALERT_THRESHOLD = 5;
 setInterval(() => {
     recoverStaleRounds().catch((err: Error) => {
         console.error(`${SLUG}: stale round recovery failed`, err);
@@ -170,7 +173,12 @@ async function recoverStaleRounds(): Promise<void> {
                 await recordCasinoRoundPlayed(round.userId);
             }
         } catch (err) {
-            console.error(`${SLUG}: failed to recover stale round ${round._id}`, err);
+            const failureCount = await XenCasinoRound.recordSweepFailure(round._id);
+            if (failureCount !== null && failureCount >= SWEEP_FAILURE_ALERT_THRESHOLD) {
+                console.error(`${SLUG}: round ${round._id} has failed sweep recovery ${failureCount} times in a row - needs investigation`, err);
+            } else {
+                console.error(`${SLUG}: failed to recover stale round ${round._id}`, err);
+            }
         }
     }
 }
@@ -269,7 +277,8 @@ module.exports = function (app: express.Application) {
             const existing = await XenCasinoRound.findActive(SLUG, userId);
 
             if (existing) {
-                const debitKey = `xendelta-${SLUG}-topup-${existing._id}-${crypto.randomUUID()}`;
+                const topupId = new mongoose.Types.ObjectId();
+                const debitKey = `xendelta-${SLUG}-topup-${topupId}`;
                 const reserved = await XenCasinoRound.applyConditionsUpdate(existing._id, {}, {
                     $inc: { "conditions.ballsTotal": balls, "conditions.ballsRemaining": balls },
                     $push: { "conditions.topups": { debitKey, balls } },
@@ -323,11 +332,13 @@ module.exports = function (app: express.Application) {
                 topups: [],
                 cashOutPending: null,
             };
-            const debitKey = `xendelta-${SLUG}-start-${userId}-${crypto.randomUUID()}`;
+            const roundId = new mongoose.Types.ObjectId();
+            const debitKey = `xendelta-${SLUG}-start-${roundId}`;
 
             let round;
             try {
                 round = await XenCasinoRound.startRound({
+                    roundId,
                     game: SLUG,
                     userId,
                     wager,

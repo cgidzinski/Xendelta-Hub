@@ -19,6 +19,7 @@ import { AuthenticatedRequest } from "../../types/AuthenticatedRequest";
 const { User } = require("../../models/user");
 const { XenCasinoRound } = require("../../models/xenCasino");
 const crypto = require("crypto");
+const mongoose = require("mongoose");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
 import { drawPrizeWeight, prizeRtp } from "./prizeWeights";
@@ -314,6 +315,9 @@ function generateRound(): CrosswordConditions {
 // A round's outcome (and thus its payout) is fully decided before it's even persisted, so
 // "stale" only ever means "the process died mid-settlement" - the sweep below finishes it.
 const ROUND_TTL_MS = 30 * 1000;
+// A round that fails this many consecutive sweep attempts is treated as genuinely stuck
+// (not just transient) and gets a louder log line - see recoverStaleRounds below.
+const SWEEP_FAILURE_ALERT_THRESHOLD = 5;
 setInterval(() => {
     recoverStaleRounds().catch((err: Error) => {
         console.error(`${SLUG}: stale round recovery failed`, err);
@@ -352,7 +356,12 @@ async function recoverStaleRounds(): Promise<void> {
             await XenCasinoRound.resolve(round._id);
             await recordCasinoRoundPlayed(round.userId);
         } catch (err) {
-            console.error(`${SLUG}: failed to recover stale round ${round._id}`, err);
+            const failureCount = await XenCasinoRound.recordSweepFailure(round._id);
+            if (failureCount !== null && failureCount >= SWEEP_FAILURE_ALERT_THRESHOLD) {
+                console.error(`${SLUG}: round ${round._id} has failed sweep recovery ${failureCount} times in a row - needs investigation`, err);
+            } else {
+                console.error(`${SLUG}: failed to recover stale round ${round._id}`, err);
+            }
         }
     }
 }
@@ -392,10 +401,12 @@ module.exports = function (app: express.Application) {
 
             const conditions = generateRound();
 
-            const debitKey = `xendelta-${SLUG}-start-${userId}-${crypto.randomUUID()}`;
+            const roundId = new mongoose.Types.ObjectId();
+            const debitKey = `xendelta-${SLUG}-start-${roundId}`;
             let round;
             try {
                 round = await XenCasinoRound.startRound({
+                    roundId,
                     game: SLUG,
                     userId,
                     wager,
