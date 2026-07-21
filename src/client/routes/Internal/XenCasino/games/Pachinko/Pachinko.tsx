@@ -88,17 +88,26 @@ export default function Pachinko() {
         queryClient.invalidateQueries({ queryKey: ["pachinkoOdds"] }); // jackpot pool moved
     };
 
+    // A reup response's gate fields (leftTulipOpen/rightTulipOpen/attackerOpenUntil/
+    // jackpotOpenUntil) are just whatever the DB happened to hold at that read - reup doesn't
+    // change any of them - and this request has no seq/staleness guard the way launch responses
+    // do (see PachinkoBoard.tsx's latestAppliedSeqRef). If a reup fired while balls were still
+    // resolving from hold-to-fire, applying it wholesale could clobber fresher gate state a
+    // just-landed launch response already applied. So: only overwrite the fields a buy/reup
+    // response actually owns, and carry forward the existing session's gate state when there
+    // already is one - a fresh buy (no prior session) still gets correct initial values from the
+    // response itself, since those start false/0 for a brand new round anyway.
     const applyBuyResponse = (data: BuyResponse) => {
-        setSession({
+        setSession((prev) => ({
             roundId: data.roundId,
             ballsTotal: data.ballsTotal,
             ballsRemaining: data.ballsRemaining,
             pricePerBall: data.pricePerBall,
-            leftTulipOpen: data.leftTulipOpen,
-            rightTulipOpen: data.rightTulipOpen,
-            attackerOpenUntil: data.attackerOpenUntil,
-            jackpotOpenUntil: data.jackpotOpenUntil,
-        });
+            leftTulipOpen: prev?.leftTulipOpen ?? data.leftTulipOpen,
+            rightTulipOpen: prev?.rightTulipOpen ?? data.rightTulipOpen,
+            attackerOpenUntil: prev?.attackerOpenUntil ?? data.attackerOpenUntil,
+            jackpotOpenUntil: prev?.jackpotOpenUntil ?? data.jackpotOpenUntil,
+        }));
         invalidateShared();
     };
 
@@ -171,14 +180,14 @@ export default function Pachinko() {
                     { label: "Miss (most balls)", payout: "—" },
                     { label: "Bonus pocket", payout: `+${odds.bonusPocketBalls} balls` },
                     { label: "Side tulip (left or right)", payout: `+${odds.sideTulipBalls} balls` },
-                    { label: "Chucker", payout: `Opens attacker (${Math.round(odds.attackerOpenMs / 1000)}s) + spins the reel` },
+                    { label: "Chucker", payout: "Spins the reel" },
                     { label: "Reel, 2 of a kind", payout: "Small ball bonus" },
-                    { label: "Reel, 3 of a kind", payout: "Bigger bonus + longer attacker" },
+                    { label: "Reel, 3 of a kind", payout: `Bigger bonus + opens attacker (${Math.round(odds.attackerOpenMs / 1000)}s)` },
                     { label: "Attacker (while open)", payout: `+${odds.attackerBalls} balls` },
                     { label: "Jackpot, primed", payout: "Pool → balls" },
                 ],
                 footnote:
-                    "Every catch pays out in balls, never cheddar directly - closing the game cashes out your tray automatically. Most balls miss, like a real pachinko board. Side tulips toggle open/closed each time they catch a ball; the jackpot pocket is nearly impossible to catch until both side tulips are open at once, then it pays the whole jackpot pool, converted to balls. The chucker doesn't pay anything itself directly, but opens the attacker gate for a few seconds and spins the board's central reel - a real modern machine's own start-chucker-triggers-the-LCD-reel gimmick. Two or three matching symbols add a modest ball bonus on top, and three of a kind also extends the attacker's open window.",
+                    "Every catch pays out in balls, never cheddar directly - closing the game cashes out your tray automatically. Most balls miss, like a real pachinko board. Side tulips toggle open/closed each time they catch a ball; the jackpot pocket is nearly impossible to catch until both side tulips are open at once, then it pays the whole jackpot pool, converted to balls. The chucker doesn't pay anything itself directly, but spins the board's central reel - a real modern machine's own start-chucker-triggers-the-LCD-reel gimmick. Two matching symbols add a modest ball bonus; three matching symbols add a bigger bonus AND opens the attacker gate for a few seconds - the attacker only opens on a 3x reel match, not on every chucker catch.",
             },
         ]
         : [];

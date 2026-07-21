@@ -17,11 +17,7 @@ export default function XenCasinoNavbar() {
     const location = useLocation();
     const { titlebar } = useXenCasinoTitlebar();
 
-    const activeTab = location.pathname.startsWith("/internal/xencasino/stats")
-        ? 2
-        : location.pathname.startsWith("/internal/xencasino/ledger")
-            ? 1
-            : 0;
+    const activeTab = location.pathname.startsWith("/internal/xencasino/ledger") ? 1 : 0;
 
     return (
         <Box
@@ -45,14 +41,12 @@ export default function XenCasinoNavbar() {
                     value={activeTab}
                     onChange={(_, v) => {
                         if (v === 0) navigate("/internal/xencasino");
-                        else if (v === 1) navigate("/internal/xencasino/ledger");
-                        else navigate("/internal/xencasino/stats");
+                        else navigate("/internal/xencasino/ledger");
                     }}
                     sx={{ minHeight: 56, flexShrink: 0, "& .MuiTab-root": { minHeight: 56 } }}
                 >
                     <Tab label="Games" />
                     <Tab label="Ledger" />
-                    <Tab label="Stats" />
                 </Tabs>
             ) : (
                 <Typography

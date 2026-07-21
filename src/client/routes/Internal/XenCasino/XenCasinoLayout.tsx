@@ -1,11 +1,14 @@
 import { useEffect } from "react";
 import { Box, Alert, Button } from "@mui/material";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuthProviders } from "../../../hooks/auth/useAuthProviders";
 import { useCasinoBalance } from "../../../hooks/casino/useCasinoBalance";
+import { useCasinoStatus } from "../../../hooks/casino/useCasinoStatus";
 import { useTitle } from "../../../hooks/useTitle";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import XenCasinoNavbar from "./components/XenCasinoNavbar";
+import CasinoClosedOverlay from "./components/CasinoClosedOverlay";
+import { CASINO_GAMES_REGISTRY } from "./gamesRegistry";
 import { XenCasinoTitlebarProvider } from "./context/XenCasinoTitlebarContext";
 
 function CasinoGate({
@@ -39,7 +42,9 @@ export default function XenCasinoLayout() {
     useTitle("XenCasino");
     const { authProviders, loading: providersLoading, linkDiscordAccount } = useAuthProviders();
     const { linked, balance, isLoading: balanceLoading, isError, error, refetch } = useCasinoBalance();
+    const { open: casinoOpen, reason: casinoClosedReason, bankBalance, disabledGames, isLoading: statusLoading } = useCasinoStatus();
     const location = useLocation();
+    const navigate = useNavigate();
 
     // Client-side route changes don't reset window scroll on their own - without this, landing
     // on a game page keeps whatever scroll position the (often tall) games list was at.
@@ -96,12 +101,39 @@ export default function XenCasinoLayout() {
         );
     }
 
+    const currentGame = CASINO_GAMES_REGISTRY.find((g) => location.pathname.startsWith(g.path));
+    const gameDisabled = !!currentGame && disabledGames.includes(currentGame.key);
+
+    // The "closed" state only takes over the routed content area, not the navbar or the rest
+    // of the app - players can still switch tabs (Ledger/Games) or navigate away entirely,
+    // they just can't play while it's up.
     return (
         <XenCasinoTitlebarProvider>
             <Box>
                 <XenCasinoNavbar />
-                <Box sx={{ px: { xs: 2, sm: 3, md: 5 }, py: { xs: 3, sm: 4 } }}>
-                    <Outlet />
+                <Box sx={{ position: "relative", px: { xs: 2, sm: 3, md: 5 }, py: { xs: 3, sm: 4 }, minHeight: "calc(100vh - 56px)" }}>
+                    {statusLoading ? (
+                        <LoadingSpinner />
+                    ) : (
+                        <>
+                            {gameDisabled ? (
+                                <CasinoGate
+                                    severity="warning"
+                                    message={`${currentGame!.label} is temporarily disabled — check back soon.`}
+                                    actionLabel="Back to Games"
+                                    onAction={() => navigate("/internal/xencasino")}
+                                />
+                            ) : (
+                                <Outlet />
+                            )}
+                            {/* Rendered on top of the (still-mounted) games/ledger content below, rather
+                                than replacing it - the point is a takeover banner you can see through to
+                                the games behind, not a blank page. */}
+                            {!casinoOpen && (
+                                <CasinoClosedOverlay reason={casinoClosedReason} bankBalance={bankBalance} />
+                            )}
+                        </>
+                    )}
                 </Box>
             </Box>
         </XenCasinoTitlebarProvider>

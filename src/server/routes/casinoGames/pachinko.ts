@@ -38,6 +38,7 @@ const { XenCasino, XenCasinoRound } = require("../../models/xenCasino");
 const mongoose = require("mongoose");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
+import { requireGameEnabled } from "../../utils/casinoStatus";
 import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
 import {
     CANVAS_WIDTH,
@@ -61,6 +62,7 @@ import {
     ROADS,
     generateNailField,
     isJackpotPrimed,
+    shouldCloseLapsedTulips,
     MIN_LAUNCH_POWER,
     MAX_LAUNCH_POWER,
 } from "./pachinkoLayout";
@@ -244,7 +246,7 @@ module.exports = function (app: express.Application) {
 
     // Buys balls - creates a fresh batch if the player has no active round, or reups (tops up)
     // their existing one if they do.
-    app.post(`/api/casino/games/${SLUG}/buy`, authenticateToken, async function (req: express.Request, res: express.Response) {
+    app.post(`/api/casino/games/${SLUG}/buy`, authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const { balls } = req.body as { balls?: number };
         if (typeof balls !== "number" || !REUP_SIZES.includes(balls)) {
             return res.status(400).json({ status: false, message: `balls must be one of ${REUP_SIZES.join(", ")}` });
@@ -475,9 +477,11 @@ module.exports = function (app: express.Application) {
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
             }
 
-            // If the jackpot window has expired, close any open tulips - they exist only to
-            // prime the jackpot, so there's no reason to leave them open once the window ends.
-            if (nextJackpotOpenUntil <= now) {
+            // If a jackpot window WAS actually primed and has since expired, close any open
+            // tulips - they exist only to prime the jackpot, so there's no reason to leave them
+            // open once the window ends (see shouldCloseLapsedTulips's own comment for why this
+            // can't just be "there's currently no open window").
+            if (shouldCloseLapsedTulips(conditions.jackpotOpenUntil, nextJackpotOpenUntil, nextLeftOpen, nextRightOpen, now)) {
                 nextLeftOpen = false;
                 nextRightOpen = false;
             }

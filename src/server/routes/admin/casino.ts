@@ -3,12 +3,11 @@ import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
 import { getLedger, getAccount, WeeabetsUnavailable } from "../../utils/weeabetsClient";
 import { XENCASINO_DISCORD_ID } from "../../config/weeabets";
+import { getCasinoStatus } from "../../utils/casinoStatus";
 const { XenCasino } = require("../../models/xenCasino");
 
 // Mirrors the client-side CASINO_GAMES_REGISTRY order - stats are returned in this
-// order so the admin table is deterministic. Keep this in sync with
-// CASINO_GAMES_REGISTRY (src/client/routes/Internal/XenCasino/gamesRegistry.ts)
-// whenever a game is added or removed.
+// order so the admin table is deterministic.
 var GAME_LABELS: Record<string, string> = {
     "easy-spin": "Easy Spin",
     "spinmania": "Spinmania",
@@ -44,7 +43,7 @@ function parseGameNote(note: string): { slug: string; isWin: boolean } | null {
 module.exports = function (app: express.Application) {
 
     // Per-game win/loss/round counts from the Weeabets ledger, plus current jackpot
-    // pool values from the XenCasino singleton. Always returns all registered games
+    // pool values from the XenCasino singleton. Always returns all 6 registered games
     // (zero-filled when there's no ledger activity for a game).
     app.get("/api/admin/casino/stats", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
         try {
@@ -137,6 +136,23 @@ module.exports = function (app: express.Application) {
         } catch (err) {
             var status = err instanceof WeeabetsUnavailable ? 503 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    // Resets every progressive jackpot (all slot machines plus Pachinko) back to its seed
+    // value. All current jackpot machines seed at 0 (see JACKPOT_SEED in pachinkoPayouts.ts
+    // and each slot machine's jackpotSeed config), so this always resets to 0 rather than
+    // looking up each machine's individual seed.
+    app.post("/api/admin/casino/jackpots/clear", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+        try {
+            for (var j = 0; j < JACKPOT_MACHINES.length; j++) {
+                await XenCasino.resetJackpotPool(JACKPOT_MACHINES[j], 0);
+            }
+            await XenCasino.resetPachinkoJackpotPool(0);
+
+            return res.json({ status: true });
+        } catch (err) {
+            return res.status(500).json({ status: false, message: (err as Error).message });
         }
     });
 
@@ -243,6 +259,60 @@ module.exports = function (app: express.Application) {
         } catch (err) {
             var status = err instanceof WeeabetsUnavailable ? 503 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    // Every registered game plus its enabled/disabled state, alongside the current
+    // casino-wide open/closed status - the admin "Casino Controls" panel renders entirely
+    // off this one call.
+    app.get("/api/admin/casino/games", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+        try {
+            var casinoState = await XenCasino.getSingleton();
+            var slugs = Object.keys(GAME_LABELS);
+            var games = slugs.map(function (slug) {
+                return {
+                    slug: slug,
+                    label: GAME_LABELS[slug],
+                    disabled: !!casinoState.disabledGames.get(slug),
+                };
+            });
+            var casinoStatus = await getCasinoStatus();
+
+            return res.json({ status: true, data: { games: games, casino: casinoStatus } });
+        } catch (err) {
+            var status = err instanceof WeeabetsUnavailable ? 503 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    // Enables/disables a single game - only blocks that game's wager-starting route
+    // (see requireGameEnabled usage in each casinoGames route file); in-progress rounds
+    // for that game can still resume/cash out normally.
+    app.post("/api/admin/casino/games/:slug/toggle", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+        try {
+            var slug = req.params.slug;
+            if (!GAME_LABELS[slug]) {
+                return res.status(404).json({ status: false, message: "Unknown game" });
+            }
+            var disabled = !!req.body.disabled;
+            await XenCasino.setGameDisabled(slug, disabled);
+            return res.json({ status: true, data: { slug: slug, disabled: disabled } });
+        } catch (err) {
+            return res.status(500).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    // Whole-casino manual kill switch - combined with the live bank-balance auto-close check
+    // in getCasinoStatus(). Reopening here clears the manual flag, but the casino stays
+    // computed-closed if the bank is still under CASINO_MIN_BANK_BALANCE.
+    app.post("/api/admin/casino/toggle-open", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+        try {
+            var open = !!req.body.open;
+            await XenCasino.setManuallyClosed(!open);
+            var casinoStatus = await getCasinoStatus();
+            return res.json({ status: true, data: casinoStatus });
+        } catch (err) {
+            return res.status(500).json({ status: false, message: (err as Error).message });
         }
     });
 };

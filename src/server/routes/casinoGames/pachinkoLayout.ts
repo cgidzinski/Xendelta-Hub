@@ -247,16 +247,16 @@ export interface FixedPocket {
 // (JACKPOT_OPEN_MS) and immediately resets both back to closed - see pachinko.ts's own
 // tulipLeft/tulipRight branches.
 export const TULIPS: FixedPocket[] = [
-    { id: "left", position: { x: 144, y: 315 }, halfWidth: 10 },
-    { id: "right", position: { x: 316, y: 315 }, halfWidth: 10 },
+    { id: "left", position: { x: 172, y: 250 }, halfWidth: 10 },
+    { id: "right", position: { x: 288, y: 250 }, halfWidth: 10 },
 ];
 
 // Jackpot pocket - a real "just fits one ball" target, barely wider than the ball itself
-// (BALL_RADIUS*2 = 5px across; this pocket is 6px), always this same tiny width.
+// (BALL_RADIUS*2 = 5px across; this pocket is 8px), always this same tiny width.
 // Physically catchable at any time, but only actually PAYS (and visually lights up, vs. sitting
 // grey) while primed - see pachinko.ts's own "jackpot" branch and JACKPOT_OPEN_MS in
 // pachinkoPayouts.ts for that timed window.
-export const JACKPOT: FixedPocket = { id: "jackpot", position: { x: 230, y: 360 }, halfWidth: 3 };
+export const JACKPOT: FixedPocket = { id: "jackpot", position: { x: 230, y: 372 }, halfWidth: 4 };
 
 // True the instant both tulips are simultaneously open - pachinko.ts uses this to detect the
 // priming *moment* (which starts the jackpot's timed window and immediately resets both tulips,
@@ -267,27 +267,36 @@ export function isJackpotPrimed(leftOpen: boolean, rightOpen: boolean): boolean 
     return leftOpen && rightOpen;
 }
 
+// Whether a lapsed jackpot window should force any still-open tulips closed. Only true when a
+// window actually existed before this shot (previousJackpotOpenUntil > 0) and has since expired
+// without re-priming - NOT simply "there's currently no open window", which is also true on an
+// ordinary single-tulip catch where no window was ever primed at all (previousJackpotOpenUntil
+// still its default 0). Conflating those two cases was a real bug: it stomped a tulip's toggle
+// back closed on effectively every catch, before the toggle was ever persisted - see
+// pachinko.ts's own chucker/tulip branch, the only caller.
+export function shouldCloseLapsedTulips(previousJackpotOpenUntil: number, nextJackpotOpenUntil: number, leftOpen: boolean, rightOpen: boolean, now: number): boolean {
+    return previousJackpotOpenUntil > 0 && nextJackpotOpenUntil <= now && !isJackpotPrimed(leftOpen, rightOpen);
+}
+
 // Bonus pockets - frequent, small top-ups. Sized bigger than the tulips (22px wide vs 20px)
 // since they pay less - pocket width scales inversely with payout throughout this board, the
 // same logic the jackpot's own tiny pocket follows at the other end.
 export const BONUS_POCKETS: FixedPocket[] = [
-    { id: "left", position: { x: 130, y: 258 }, halfWidth: 11 },
-    { id: "right", position: { x: 330, y: 258 }, halfWidth: 11 },
+    { id: "left", position: { x: 105, y: 285 }, halfWidth: 11 },
+    { id: "right", position: { x: 355, y: 285 }, halfWidth: 11 },
 ];
 
-// Chucker - small, always-open trigger. Catching it doesn't pay anything on its own; it's what
-// opens the attacker gate below for ATTACKER_OPEN_MS (see pachinkoPayouts.ts).
-export const CHUCKER: FixedPocket = { id: "chucker", position: { x: 230, y: 185 }, halfWidth: 6 };
+// Chucker (heso) - small, always-open trigger, sitting directly below the stage/life-nails (see
+// STAGE_BOX/LIFE_NAILS below) - the real anatomy this board now follows. Catching it doesn't pay
+// anything on its own; it's what opens the attacker gate below for ATTACKER_OPEN_MS (see
+// pachinkoPayouts.ts).
+export const CHUCKER: FixedPocket = { id: "chucker", position: { x: 230, y: 248 }, halfWidth: 6 };
 
-// Attacker - a wide gate, always this same width. Whether a catch here pays ATTACKER_BALLS or
-// nothing is entirely a route-level decision (conditions.attackerOpenUntil vs. the clock, see
-// pachinko.ts) - this module doesn't need to know the timer state at all.
-//
-// Moved from y=185's immediate neighbor (225) down to 250 - it used to sit on what was, under
-// an earlier hand-placed nail field, a totally pin-free vertical lane just below the chucker.
-// Same size, same payout, just deeper into the field - now backed by the generated nail lattice
-// (see generateNailField below) and its own dedicated ATTACKER_WALL gate.
-export const ATTACKER: FixedPocket = { id: "attacker", position: { x: 230, y: 250 }, halfWidth: 32 };
+// Attacker - a wide gate, always this same width, directly below the chucker in the classic
+// column real machines use. Whether a catch here pays ATTACKER_BALLS or nothing is entirely a
+// route-level decision (conditions.attackerOpenUntil vs. the clock, see pachinko.ts) - this
+// module doesn't need to know the timer state at all.
+export const ATTACKER: FixedPocket = { id: "attacker", position: { x: 230, y: 284 }, halfWidth: 32 };
 
 // Every pocket's physical depth (and the y-tolerance the hit test uses) - the "cup" a ball has
 // to actually drop into, top open, walls on the other three sides. Shared by pachinkoPhysics.ts
@@ -300,17 +309,40 @@ export interface WindmillConfig {
     radius: number;
 }
 
-// Static bumper obstacles flanking the release area, upper-mid field.
+// Static bumper obstacles flanking the stage/reel - real "kazaguruma," diverting whatever misses
+// the warp funnels back toward center instead of sitting isolated up near the top corners.
 export const WINDMILLS: WindmillConfig[] = [
-    { position: { x: 110, y: 150 }, radius: 12 },
-    { position: { x: 350, y: 150 }, radius: 12 },
+    { position: { x: 155, y: 210 }, radius: 12 },
+    { position: { x: 305, y: 210 }, radius: 12 },
+];
+
+// The stage - a deliberately nail-free ledge directly under the LCD reel (see the client's
+// REEL_BOX, centered at the same x=230), where the ball visibly rolls before dropping toward the
+// chucker below - real players call this the single biggest factor in whether a ball actually
+// reaches the heso. Every generated candidate nail landing in this box is dropped (see
+// conflictsWithStage below), same as the exclusion pockets/windmills already get.
+export const STAGE_BOX = { xMin: 165, xMax: 295, yMin: 205, yMax: 232 };
+
+// Life-nails ("inochi-kugi") - a real machine's own most important nails: a fixed pair flanking
+// the chucker's approach, just outside the chucker's own pocket-clearance zone so they survive
+// the generic pocket-clearance filter below. They don't block the chucker's mouth outright (that
+// hitbox is still governed entirely by the chucker's own pocket walls) - they just mean the
+// field right above it isn't wide open the way the rest of the stage corridor is, catching balls
+// that come in too far off-center and knocking them back toward the middle.
+export const LIFE_NAILS: Point[] = [
+    { x: 212, y: 233 },
+    { x: 248, y: 233 },
 ];
 
 // --- Nail field: Branching Roads ------------------------------------------------------------
 // Instead of rings or grids, the nail field is 5 sweeping curved "roads" that branch from the
 // release area. Each road is a chain of closely-spaced nails — balls thread through the gaps
 // between them, and power determines which road a ball enters. Roads are visual guides, not
-// solid walls — balls can cross between them.
+// solid walls — balls can cross between them. Roads 2 and 4 curl inward as "warp funnels" that
+// feed the stage from either side (real "road nails"/"warp" anatomy); roads 1 and 5 stay wider
+// and outer, feeding the two bonus pockets; road 3 is the center column running from the stage
+// down through the chucker/attacker/jackpot corridor (the STAGE_BOX/LIFE_NAILS exclusions above
+// carve the actual stage and life-nail gap out of it - see conflictsWithStage below).
 
 export interface PinPosition {
     x: number;
@@ -319,11 +351,11 @@ export interface PinPosition {
 
 // Five branching roads. The chucker sits on Road 3 — that's the skill-shot lane.
 const ROAD_PATHS: Point[][] = [
-    [{ x: 195, y: 148 }, { x: 180, y: 168 }, { x: 168, y: 192 }, { x: 156, y: 218 }, { x: 148, y: 245 }, { x: 143, y: 275 }, { x: 143, y: 300 }, { x: 144, y: 315 }],
-    [{ x: 212, y: 142 }, { x: 200, y: 165 }, { x: 188, y: 192 }, { x: 175, y: 218 }, { x: 163, y: 242 }, { x: 153, y: 258 }, { x: 146, y: 280 }, { x: 142, y: 305 }],
-    [{ x: 232, y: 130 }, { x: 232, y: 150 }, { x: 232, y: 170 }, { x: 230, y: 208 }, { x: 230, y: 230 }, { x: 230, y: 275 }, { x: 230, y: 300 }, { x: 230, y: 328 }, { x: 230, y: 355 }],
-    [{ x: 252, y: 142 }, { x: 265, y: 165 }, { x: 278, y: 192 }, { x: 290, y: 218 }, { x: 302, y: 242 }, { x: 312, y: 258 }, { x: 320, y: 280 }, { x: 324, y: 305 }],
-    [{ x: 275, y: 148 }, { x: 292, y: 168 }, { x: 306, y: 192 }, { x: 318, y: 218 }, { x: 326, y: 245 }, { x: 332, y: 275 }, { x: 334, y: 300 }, { x: 330, y: 320 }],
+    [{ x: 178, y: 146 }, { x: 160, y: 168 }, { x: 145, y: 192 }, { x: 130, y: 218 }, { x: 118, y: 246 }, { x: 110, y: 272 }, { x: 106, y: 296 }],
+    [{ x: 206, y: 143 }, { x: 192, y: 160 }, { x: 180, y: 178 }, { x: 170, y: 198 }, { x: 163, y: 218 }, { x: 163, y: 236 }, { x: 168, y: 252 }, { x: 176, y: 266 }],
+    [{ x: 230, y: 128 }, { x: 230, y: 148 }, { x: 230, y: 168 }, { x: 230, y: 188 }, { x: 230, y: 208 }, { x: 230, y: 270 }],
+    [{ x: 254, y: 143 }, { x: 268, y: 160 }, { x: 280, y: 178 }, { x: 290, y: 198 }, { x: 297, y: 218 }, { x: 297, y: 236 }, { x: 292, y: 252 }, { x: 284, y: 266 }],
+    [{ x: 282, y: 146 }, { x: 300, y: 168 }, { x: 315, y: 192 }, { x: 330, y: 218 }, { x: 342, y: 246 }, { x: 350, y: 272 }, { x: 354, y: 296 }],
 ];
 
 const ROAD_NAIL_SPACING = 10;
@@ -334,7 +366,11 @@ function sampleRoadNails(road: Point[]): Point[] {
         const a = road[i], b = road[i + 1];
         const segLen = Math.hypot(b.x - a.x, b.y - a.y);
         const steps = Math.max(1, Math.round(segLen / ROAD_NAIL_SPACING));
-        for (let s = 0; s <= steps; s++) {
+        // Skip s=0 after the first segment - it's the same point as the previous segment's
+        // s=steps, so without this every joint between consecutive points in a road produces
+        // the same pin twice.
+        const startS = i === 0 ? 0 : 1;
+        for (let s = startS; s <= steps; s++) {
             const t = s / steps;
             nails.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
         }
@@ -347,18 +383,42 @@ export const ROADS = ROAD_PATHS;
 
 // --- Funnel rows (lower field density) -------------------------------
 const FUNNEL_ROWS: { y: number; halfWidth: number }[] = [
-    { y: 275, halfWidth: 108 }, { y: 305, halfWidth: 82 }, { y: 335, halfWidth: 58 },
+    { y: 302, halfWidth: 100 }, { y: 322, halfWidth: 80 }, { y: 340, halfWidth: 58 },
 ];
+
+// Gathering nails ("yori-kugi") - two explicit diagonal guide lines converging from just below
+// the attacker down to the jackpot's mouth, same road/polyline mechanism as the warp funnels
+// above. A real machine leans on angled nails like this, not a plain grid, to actually gather a
+// ball toward a tiny target instead of relying on chance alignment through staggered rows. Given
+// the full run from just under the attacker to the jackpot's mouth to actually do their job.
+const JACKPOT_GUIDES: Point[][] = [
+    [{ x: 125, y: 300 }, { x: 148, y: 316 }, { x: 170, y: 332 }, { x: 190, y: 346 }, { x: 206, y: 358 }, { x: 218, y: 366 }],
+    [{ x: 335, y: 300 }, { x: 312, y: 316 }, { x: 290, y: 332 }, { x: 270, y: 346 }, { x: 254, y: 358 }, { x: 242, y: 366 }],
+];
+function generateJackpotGuideNails(): Point[] { return JACKPOT_GUIDES.flatMap(sampleRoadNails); }
 const FUNNEL_COL_SPACING = 22;
 
-function funnelRowPoints(row: { y: number; halfWidth: number }, rowIndex: number): Point[] {
-    const offset = rowIndex % 2 === 0 ? 0 : FUNNEL_COL_SPACING / 2;
+// Every row uses the SAME non-zero offset (not alternating by row index) - alternating would
+// place a pin dead-center on every other row, which stacks into a checkerboard that blocks the
+// direct approach to the jackpot below far more than a real funnel would. A constant offset
+// instead leaves a permanent, un-blocked channel straight down the centerline at every row, the
+// halfWidth taper alone doing the converging.
+function funnelRowPoints(row: { y: number; halfWidth: number }): Point[] {
+    const offset = FUNNEL_COL_SPACING / 2;
     const pts: Point[] = [];
     for (let x = FIELD_CX + offset; x <= FIELD_CX + row.halfWidth; x += FUNNEL_COL_SPACING) pts.push({ x, y: row.y });
     for (let x = FIELD_CX + offset - FUNNEL_COL_SPACING; x >= FIELD_CX - row.halfWidth; x -= FUNNEL_COL_SPACING) pts.push({ x, y: row.y });
     return pts;
 }
-function generateFunnelRows(): Point[] { const p: Point[] = []; FUNNEL_ROWS.forEach((r, i) => p.push(...funnelRowPoints(r, i))); return p; }
+function generateFunnelRows(): Point[] { return FUNNEL_ROWS.flatMap(funnelRowPoints); }
+
+// Top nails ("tenkugi") - a few extra fixed pins right at the very top of the glass, above the
+// release deflector, so the ball gets an extra scatter point immediately after it becomes a free
+// body (RELEASE_POINT sits around y~89) rather than the deflector row being the first thing it
+// can hit.
+export const TOP_NAILS: Point[] = [
+    { x: 190, y: 78 }, { x: 215, y: 70 }, { x: 245, y: 70 }, { x: 270, y: 78 }, { x: 200, y: 92 }, { x: 260, y: 92 },
+];
 
 // --- Release deflector & second road --------------------------------
 export const RELEASE_DEFLECTOR: Point[] = [
@@ -366,7 +426,7 @@ export const RELEASE_DEFLECTOR: Point[] = [
     { x: 238, y: 132 }, { x: 210, y: 135 }, { x: 182, y: 137 }, { x: 156, y: 140 },
 ];
 export const SECOND_ROAD: Point[] = [
-    { x: 130, y: 160 }, { x: 142, y: 172 }, { x: 152, y: 186 }, { x: 160, y: 202 }, { x: 166, y: 220 },
+    { x: 130, y: 160 }, { x: 142, y: 172 }, { x: 152, y: 184 }, { x: 162, y: 194 }, { x: 172, y: 200 },
 ];
 
 // --- Pin conflicts & assembly ---------------------------------------
@@ -379,12 +439,17 @@ function conflictsWithPocket(p: Point): boolean {
 function conflictsWithWindmill(p: Point): boolean { return WINDMILLS.some(w => Math.hypot(p.x - w.position.x, p.y - w.position.y) < w.radius + PIN_RADIUS + BALL_RADIUS + 2); }
 function conflictsWithLauncher(p: Point): boolean { return Math.hypot(p.x - LAUNCHER_POSITION.x, p.y - LAUNCHER_POSITION.y) < RAIL_WIDTH + PIN_RADIUS + BALL_RADIUS + 2; }
 function conflictsWithRoads(p: Point): boolean { return [...RELEASE_DEFLECTOR, ...SECOND_ROAD].some(r => Math.hypot(p.x - r.x, p.y - r.y) < FUNNEL_COL_SPACING * 0.6); }
-function conflictsWithAny(p: Point): boolean { return conflictsWithPocket(p) || conflictsWithWindmill(p) || conflictsWithLauncher(p) || conflictsWithRoads(p); }
+function conflictsWithStage(p: Point): boolean {
+    return p.x >= STAGE_BOX.xMin && p.x <= STAGE_BOX.xMax && p.y >= STAGE_BOX.yMin && p.y <= STAGE_BOX.yMax;
+}
+function conflictsWithAny(p: Point): boolean {
+    return conflictsWithPocket(p) || conflictsWithWindmill(p) || conflictsWithLauncher(p) || conflictsWithRoads(p) || conflictsWithStage(p);
+}
 
 export function generateNailField(): PinPosition[] {
     const pins: PinPosition[] = [];
-    for (const road of [...RELEASE_DEFLECTOR, ...SECOND_ROAD]) pins.push({ x: road.x, y: road.y });
-    for (const candidate of [...generateRoadNails(), ...generateFunnelRows()]) {
+    for (const fixedPin of [...TOP_NAILS, ...RELEASE_DEFLECTOR, ...SECOND_ROAD, ...LIFE_NAILS]) pins.push({ x: fixedPin.x, y: fixedPin.y });
+    for (const candidate of [...generateRoadNails(), ...generateFunnelRows(), ...generateJackpotGuideNails()]) {
         if (conflictsWithAny(candidate)) continue;
         pins.push({ x: candidate.x, y: candidate.y });
     }

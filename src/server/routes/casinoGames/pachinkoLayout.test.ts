@@ -12,6 +12,7 @@ import {
     BONUS_POCKETS,
     CHUCKER,
     isJackpotPrimed,
+    shouldCloseLapsedTulips,
     generateNailField,
     RAIL_CLIMB_PATH,
     RAIL_OUTER_ARC,
@@ -153,6 +154,30 @@ describe("scoring pockets", () => {
         expect(isJackpotPrimed(true, false)).toBe(false);
         expect(isJackpotPrimed(false, true)).toBe(false);
         expect(isJackpotPrimed(true, true)).toBe(true);
+    });
+
+    describe("shouldCloseLapsedTulips", () => {
+        const now = 1_000_000;
+
+        it("does NOT close a tulip an ordinary catch just opened, when no window was ever primed", () => {
+            // Regression case for the real bug this function exists to fix: a single-tulip catch
+            // with previousJackpotOpenUntil still its default 0 must not immediately stomp the
+            // toggle that same shot just set.
+            expect(shouldCloseLapsedTulips(0, 0, true, false, now)).toBe(false);
+            expect(shouldCloseLapsedTulips(0, 0, false, true, now)).toBe(false);
+        });
+
+        it("closes both tulips once a previously-primed window has actually expired", () => {
+            expect(shouldCloseLapsedTulips(now - 1, now - 1, false, false, now)).toBe(true);
+        });
+
+        it("does not close tulips while a previously-primed window is still open", () => {
+            expect(shouldCloseLapsedTulips(now - 1, now + 5000, false, false, now)).toBe(false);
+        });
+
+        it("does not close tulips on the exact shot that just primed the jackpot (both open)", () => {
+            expect(shouldCloseLapsedTulips(0, now + 10000, true, true, now)).toBe(false);
+        });
     });
 
     it("the jackpot pocket is tiny - barely wider than the ball, even though it's always this size", () => {

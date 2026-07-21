@@ -48,6 +48,7 @@ const { XenCasino, XenCasinoRound } = require("../../models/xenCasino");
 const mongoose = require("mongoose");
 import { resolveUserAccount, getXenCasinoAccountId, transfer, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
+import { requireGameEnabled } from "../../utils/casinoStatus";
 import { settleSlotsRound } from "./slotsSettlement";
 import { drawWeighted } from "../../utils/weightedDraw";
 import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
@@ -219,7 +220,11 @@ module.exports = function (app: express.Application) {
         });
     });
 
-    app.post("/api/casino/games/slots/:machine/spin", authenticateToken, async function (req: express.Request, res: express.Response) {
+    app.post(
+        "/api/casino/games/slots/:machine/spin",
+        authenticateToken,
+        requireGameEnabled((req) => req.params.machine),
+        async function (req: express.Request, res: express.Response) {
         const machine = MACHINES[req.params.machine];
         if (!machine) {
             return res.status(404).json({ status: false, message: "Unknown machine" });

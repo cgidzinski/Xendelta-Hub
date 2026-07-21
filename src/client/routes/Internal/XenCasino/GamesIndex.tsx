@@ -14,6 +14,7 @@ import { CASINO_GAMES_REGISTRY, CASINO_GAME_TYPE_LABELS, CasinoGameType } from "
 import { formatOddsRatio } from "./utils/odds";
 import { formatCheddar } from "./utils/currency";
 import DailyQuestCard from "./components/DailyQuestCard";
+import { useCasinoStatus } from "../../../hooks/casino/useCasinoStatus";
 
 interface SlotsOddsSummary {
     paytable: { probability: number }[];
@@ -109,6 +110,7 @@ const JACKPOT_CHIP_SX = {
 
 export default function GamesIndex() {
     const navigate = useNavigate();
+    const { disabledGames } = useCasinoStatus();
 
     const { data: easySpinOdds } = useQuery({
         queryKey: ["slotsOdds", "easy-spin"],
@@ -220,16 +222,23 @@ export default function GamesIndex() {
                                 const oddsLabel = oddsLabelByKey[game.key];
                                 const rtpLabel = rtpLabelByKey[game.key];
                                 const jackpotLabel = jackpotLabelByKey[game.key];
+                                const disabled = disabledGames.includes(game.key);
                                 return (
                                     <Card
                                         key={game.key}
                                         sx={{
                                             height: "100%",
                                             transition: "transform 0.2s, box-shadow 0.2s",
-                                            "&:hover": { transform: "translateY(-4px)", boxShadow: 6 },
+                                            ...(disabled
+                                                ? { opacity: 0.5 }
+                                                : { "&:hover": { transform: "translateY(-4px)", boxShadow: 6 } }),
                                         }}
                                     >
-                                        <CardActionArea onClick={() => navigate(game.path)} sx={{ height: "100%" }}>
+                                        <CardActionArea
+                                            onClick={() => navigate(game.path)}
+                                            disabled={disabled}
+                                            sx={{ height: "100%" }}
+                                        >
                                             <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", p: 2.5, "&:last-child": { pb: 2.5 } }}>
                                                 {/* Header: icon + label, jackpot top-right */}
                                                 <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, mb: 1.5 }}>
@@ -247,8 +256,12 @@ export default function GamesIndex() {
                                                             {" / play"}
                                                         </Typography>
                                                     </Box>
-                                                    {jackpotLabel && (
-                                                        <Chip label={jackpotLabel} size="small" sx={{ ...JACKPOT_CHIP_SX, flexShrink: 0 }} />
+                                                    {disabled ? (
+                                                        <Chip label="Unavailable" size="small" color="default" sx={{ flexShrink: 0, fontWeight: 700 }} />
+                                                    ) : (
+                                                        jackpotLabel && (
+                                                            <Chip label={jackpotLabel} size="small" sx={{ ...JACKPOT_CHIP_SX, flexShrink: 0 }} />
+                                                        )
                                                     )}
                                                 </Box>
 

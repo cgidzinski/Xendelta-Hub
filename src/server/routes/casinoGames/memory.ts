@@ -21,7 +21,7 @@
  * pattern with certainty. The "peek then shuffle" flourish the player sees client-side is
  * built entirely from the public, round-independent SYMBOL_GROUPS composition, never from
  * this round's real, secret assignment. A round abandoned after /start but never revealed
- * (no resume mechanism) simply forfeits when it goes stale - see scheduleStaleRoundSweep below.
+ * (no resume mechanism) simply forfeits when it goes stale - see recoverStaleRounds.
  */
 import express = require("express");
 import { authenticateToken } from "../../middleware/auth";
@@ -32,7 +32,7 @@ const crypto = require("crypto");
 const mongoose = require("mongoose");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
-import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
+import { requireGameEnabled } from "../../utils/casinoStatus";
 
 const SLUG = "memory";
 const BASE_PRICE = 10000; // the 1x denomination shown on the lobby card / odds route
@@ -154,40 +154,61 @@ interface MemoryConditions {
 // abandoned one before this. There's no resume flow (see the file header's anti-cheat
 // note), so a round that outlives this TTL without ever calling /reveal simply forfeits.
 const ROUND_TTL_MS = 2 * 60 * 1000;
-scheduleStaleRoundSweep(SLUG, ROUND_TTL_MS, async (round) => {
-    const conditions = round.conditions as MemoryConditions;
-    const xenCasinoAccountId = await getXenCasinoAccountId();
-
-    // Replaying the debit is safe even if it already went through - the key makes
-    // it a no-op on the ledger, not a double charge.
-    await transfer({
-        fromAccountId: round.playerAccountId,
-        toAccountId: xenCasinoAccountId,
-        amount: round.wager.toFixed(10),
-        key: round.debitKey,
-        note: `${SLUG}_wager`,
+// A round that fails this many consecutive sweep attempts is treated as genuinely stuck
+// (not just transient) and gets a louder log line - see recoverStaleRounds below.
+const SWEEP_FAILURE_ALERT_THRESHOLD = 5;
+setInterval(() => {
+    recoverStaleRounds().catch((err: Error) => {
+        console.error(`${SLUG}: stale round recovery failed`, err);
     });
+}, 60 * 1000).unref();
 
-    // Only a round that already reached /reveal (and got as far as claiming
-    // revealPending before dying) has a decided payout to finish - anything earlier
-    // never had an outcome and simply forfeits (see the file header).
-    if (conditions.revealPending && conditions.revealPending.payout > 0) {
-        await transfer({
-            fromAccountId: xenCasinoAccountId,
-            toAccountId: round.playerAccountId,
-            amount: conditions.revealPending.payout.toFixed(10),
-            key: `xendelta-${SLUG}-payout-${round._id}`,
-            note: `${SLUG}_win`,
-        });
-    }
+async function recoverStaleRounds(): Promise<void> {
+    const stale = await XenCasinoRound.sweepStale(SLUG, ROUND_TTL_MS);
+    for (const round of stale) {
+        try {
+            const conditions = round.conditions as MemoryConditions;
+            const xenCasinoAccountId = await getXenCasinoAccountId();
 
-    await XenCasinoRound.resolve(round._id);
-    // Only counts as "played" if the round actually reached a reveal - a paid-then-
-    // abandoned round shouldn't let a player farm daily quest progress for free.
-    if (conditions.revealPending) {
-        await recordCasinoRoundPlayed(round.userId);
+            // Replaying the debit is safe even if it already went through - the key makes
+            // it a no-op on the ledger, not a double charge.
+            await transfer({
+                fromAccountId: round.playerAccountId,
+                toAccountId: xenCasinoAccountId,
+                amount: round.wager.toFixed(10),
+                key: round.debitKey,
+                note: `${SLUG}_wager`,
+            });
+
+            // Only a round that already reached /reveal (and got as far as claiming
+            // revealPending before dying) has a decided payout to finish - anything earlier
+            // never had an outcome and simply forfeits (see the file header).
+            if (conditions.revealPending && conditions.revealPending.payout > 0) {
+                await transfer({
+                    fromAccountId: xenCasinoAccountId,
+                    toAccountId: round.playerAccountId,
+                    amount: conditions.revealPending.payout.toFixed(10),
+                    key: `xendelta-${SLUG}-payout-${round._id}`,
+                    note: `${SLUG}_win`,
+                });
+            }
+
+            await XenCasinoRound.resolve(round._id);
+            // Only counts as "played" if the round actually reached a reveal - a paid-then-
+            // abandoned round shouldn't let a player farm daily quest progress for free.
+            if (conditions.revealPending) {
+                await recordCasinoRoundPlayed(round.userId);
+            }
+        } catch (err) {
+            const failureCount = await XenCasinoRound.recordSweepFailure(round._id);
+            if (failureCount !== null && failureCount >= SWEEP_FAILURE_ALERT_THRESHOLD) {
+                console.error(`${SLUG}: round ${round._id} has failed sweep recovery ${failureCount} times in a row - needs investigation`, err);
+            } else {
+                console.error(`${SLUG}: failed to recover stale round ${round._id}`, err);
+            }
+        }
     }
-});
+}
 
 module.exports = function (app: express.Application) {
 
@@ -208,7 +229,7 @@ module.exports = function (app: express.Application) {
         });
     });
 
-    app.post(`/api/casino/games/${SLUG}/start`, authenticateToken, async function (req: express.Request, res: express.Response) {
+    app.post(`/api/casino/games/${SLUG}/start`, authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const { wager } = req.body as { wager?: number };
         if (typeof wager !== "number" || !Number.isFinite(wager) || wager <= 0) {
             return res.status(400).json({ status: false, message: "wager must be a positive number" });
@@ -344,8 +365,8 @@ module.exports = function (app: express.Application) {
             });
         } catch (err) {
             // The decision (if claimed) is already durable even if we got here - leave the
-            // round in place rather than trying to unwind it; the stale-round sweep replays
-            // the same idempotently-keyed payout transfer once the round goes stale.
+            // round in place rather than trying to unwind it; recoverStaleRounds replays the
+            // same idempotently-keyed payout transfer once the round goes stale.
             const status = err instanceof WeeabetsUnavailable ? 503 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });
         }
