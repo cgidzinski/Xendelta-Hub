@@ -186,10 +186,10 @@ xenCasinoRoundSchema.statics.sweepStale = async function (game, ttlMs) {
   }).exec();
 };
 
-// Called from each game's recoverStaleRounds catch block whenever a sweep attempt on a round
-// throws, so a round that fails the same way on every retry (instead of eventually recovering)
-// can be told apart from a one-off transient failure - see each route file's
-// SWEEP_FAILURE_ALERT_THRESHOLD. Never touches wager/debitKey/conditions, only this counter.
+// Called from the shared stale-round sweep loop (see staleRoundRecovery.ts) whenever a
+// settlement attempt on a round throws, so a round that fails the same way on every retry
+// (instead of eventually recovering) can be told apart from a one-off transient failure - see
+// SWEEP_FAILURE_ALERT_THRESHOLD there. Never touches wager/debitKey/conditions, only this counter.
 xenCasinoRoundSchema.statics.recordSweepFailure = async function (roundId) {
   var doc = await this.findByIdAndUpdate(roundId, { $inc: { sweepFailureCount: 1 } }, { new: true }).exec();
   return doc ? doc.sweepFailureCount : null;
