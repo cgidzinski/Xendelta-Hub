@@ -51,6 +51,7 @@ import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
 import { requireGameEnabled } from "../../utils/casinoStatus";
 import { settleSlotsRound } from "./slotsSettlement";
 import { drawWeighted } from "../../utils/weightedDraw";
+import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
 
 type SlotSymbol = string;
 

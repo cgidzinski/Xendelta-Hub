@@ -39,6 +39,7 @@ const mongoose = require("mongoose");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
 import { requireGameEnabled } from "../../utils/casinoStatus";
+import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
 import {
     CANVAS_WIDTH,
     CANVAS_HEIGHT,

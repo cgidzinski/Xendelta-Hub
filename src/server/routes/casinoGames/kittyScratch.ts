@@ -20,6 +20,7 @@ import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailabl
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
 import { requireGameEnabled } from "../../utils/casinoStatus";
 import { PrizeWeight, drawPrize, prizeDistribution } from "./prizeWeights";
+import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
 
 const SLUG = "kitty-scratch";
 const PRICE = 5000;
