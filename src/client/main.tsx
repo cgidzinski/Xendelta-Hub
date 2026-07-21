@@ -59,6 +59,7 @@ import KittyScratch from "./routes/Internal/XenCasino/games/KittyScratch/KittySc
 import Crossword from "./routes/Internal/XenCasino/games/Crossword/Crossword";
 import Plinko from "./routes/Internal/XenCasino/games/Plinko/Plinko";
 import Pachinko from "./routes/Internal/XenCasino/games/Pachinko/Pachinko";
+import Memory from "./routes/Internal/XenCasino/games/Memory/Memory";
 // Routes - Xensplit
 import XensplitGroupsList from "./routes/Internal/Xensplit/GroupsList";
 import XensplitGroupDetail from "./routes/Internal/Xensplit/GroupDetail";
@@ -183,6 +184,7 @@ const router = createBrowserRouter(
           <Route path="games/crossword" element={<Crossword />} />
           <Route path="games/plinko" element={<Plinko />} />
           <Route path="games/pachinko" element={<Pachinko />} />
+          <Route path="games/memory" element={<Memory />} />
         </Route>
         <Route path="xensplit" index element={<Navigate to="groups" replace />} />
         <Route path="xensplit/groups" element={<XensplitGroupsList />} />

@@ -5,6 +5,7 @@ import CasinoIcon from "@mui/icons-material/Casino";
 import ConfirmationNumberIcon from "@mui/icons-material/ConfirmationNumber";
 import ScatterPlotIcon from "@mui/icons-material/ScatterPlot";
 import AdjustIcon from "@mui/icons-material/Adjust";
+import GridViewIcon from "@mui/icons-material/GridView";
 import AddIcon from "@mui/icons-material/Add";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../../config/api";
@@ -41,6 +42,10 @@ interface PlinkoOddsSummary {
 interface PachinkoOddsSummary {
     jackpotPool: number;
 }
+interface MemoryOddsSummary {
+    distribution: { multiplier: number; probability: number }[];
+    rtp: number;
+}
 
 // Same GET requests (and query keys) each game's own page uses to fetch its odds, so the
 // cache is shared and warm either way - just enough of the response shape to compute one
@@ -58,15 +63,18 @@ const fetchPachinkoOdds = async (): Promise<PachinkoOddsSummary> =>
     (await apiClient.get<ApiResponse<PachinkoOddsSummary>>(`/api/casino/games/pachinko/odds`)).data.data!;
 const fetchSpinmaniaOdds = async (): Promise<SlotsOddsSummary> =>
     (await apiClient.get<ApiResponse<SlotsOddsSummary>>(`/api/casino/games/spinmania/odds`)).data.data!;
+const fetchMemoryOdds = async (): Promise<MemoryOddsSummary> =>
+    (await apiClient.get<ApiResponse<MemoryOddsSummary>>(`/api/casino/games/memory/odds`)).data.data!;
 
 const TYPE_ICON: Record<CasinoGameType, ComponentType<SvgIconProps>> = {
     slots: CasinoIcon,
     scratch: ConfirmationNumberIcon,
     plinko: ScatterPlotIcon,
     pachinko: AdjustIcon,
+    memory: GridViewIcon,
 };
 
-const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko"];
+const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko", "memory"];
 
 const GHOST_COPY: Partial<Record<CasinoGameType, string>> = {
     slots: "New reel sets and jackpots land here as they ship.",
@@ -135,6 +143,11 @@ export default function GamesIndex() {
         staleTime: 15 * 1000,
         refetchInterval: 15 * 1000, // keeps the jackpot chip ticking up while browsing, same as the slot machines
     });
+    const { data: memoryOdds } = useQuery({
+        queryKey: ["memoryOdds"],
+        queryFn: fetchMemoryOdds,
+        staleTime: 5 * 60 * 1000,
+    });
 
     const oddsLabelByKey: Record<string, string | undefined> = {
         "easy-spin": formatOddsRatio(easySpinOdds?.paytable.reduce((sum, row) => sum + row.probability, 0)),
@@ -145,6 +158,7 @@ export default function GamesIndex() {
                 : undefined
         ),
         crossword: formatOddsRatio(crosswordOdds?.distribution.filter((d) => d.payout > 0).reduce((sum, d) => sum + d.probability, 0)),
+        memory: formatOddsRatio(memoryOdds?.distribution.filter((d) => d.multiplier > 0).reduce((sum, d) => sum + d.probability, 0)),
         // plinko has an RTP (below) but no per-slot probability table to turn into a "1 in N"
         // odds ratio the way the weighted-draw games do; pachinko still has neither.
     };
@@ -155,6 +169,7 @@ export default function GamesIndex() {
         "kitty-scratch": kittyScratchOdds?.rtp,
         crossword: crosswordOdds?.rtp,
         plinko: plinkoOdds?.rtp,
+        memory: memoryOdds?.rtp,
         // pachinko intentionally omitted - RTP tuning is still a deliberate later pass for it.
     };
     const rtpLabelByKey: Record<string, string | undefined> = Object.fromEntries(

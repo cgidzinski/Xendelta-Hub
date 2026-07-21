@@ -105,5 +105,6 @@ require("./routes/casinoGames/slots.ts")(app);
 require("./routes/casinoGames/spinmania.ts")(app);
 require("./routes/casinoGames/kittyScratch.ts")(app);
 require("./routes/casinoGames/crossword.ts")(app);
+require("./routes/casinoGames/memory.ts")(app);
 require("./routes/casinoGames/plinko.ts")(app);
 require("./routes/casinoGames/pachinko.ts")(app);
