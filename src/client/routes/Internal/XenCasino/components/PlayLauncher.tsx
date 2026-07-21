@@ -1,80 +1,134 @@
 import { ReactNode, useState } from "react";
-import { Box, Button, Chip, Dialog, IconButton, useMediaQuery, useTheme } from "@mui/material";
+import { Box, Button, Card, CardContent, Chip, Dialog, IconButton, Typography, useMediaQuery, useTheme } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import CheddarBalanceChip from "./CheddarBalanceChip";
+import { formatCheddar } from "../utils/currency";
 
 const ODDS_CHIP_SX = {
-    color: "warning.main",
-    bgcolor: "rgba(255, 167, 38, 0.12)",
-    border: "1px solid rgba(255, 167, 38, 0.3)",
+    alignSelf: "flex-start",
+    color: "info.main",
+    bgcolor: "rgba(25, 118, 210, 0.12)",
+    border: "1px solid rgba(25, 118, 210, 0.3)",
     fontWeight: 700,
 } as const;
 
+const RTP_CHIP_SX = {
+    alignSelf: "flex-start",
+    color: "secondary.main",
+    bgcolor: "rgba(156, 39, 176, 0.12)",
+    border: "1px solid rgba(156, 39, 176, 0.3)",
+    fontWeight: 700,
+} as const;
+
+const JACKPOT_CHIP_SX = {
+    alignSelf: "flex-start",
+    color: "#000",
+    bgcolor: "warning.main",
+    border: "1px solid rgba(255, 193, 7, 0.6)",
+    fontWeight: 800,
+} as const;
+
 interface PlayLauncherProps {
-    title?: string; // the game's name, shown centered in the top bar
-    oddsLabel?: string; // e.g. "1:2.97" - shown under the Start Playing button
+    title?: string; // game name, shown in the card header
+    description?: string; // short game description, shown under the title
+    jackpotLabel?: string; // e.g. "🎰 1.2M" - jackpot chip, top-right
+    price?: number; // cost per play in cheddar
+    oddsLabel?: string; // e.g. "1:2.97" - shown in the stats footer
     rtpLabel?: string; // e.g. "RTP 95.2%" - shown beside oddsLabel, always
     startLabel?: string;
-    onOpen?: () => void; // fires right as the modal opens - lets the game reset a finished round first
-    onClose?: () => void; // fires right as the modal closes (X button or Escape, not a backdrop click) - lets a game settle up (e.g. Pachinko cashing out) on the way out
-    headerActions?: ReactNode; // extra controls in the top bar, right of the balance, left of the close X
-    fullBleed?: boolean; // edge-to-edge content (no padding), fills the dialog entirely
-    children: ReactNode; // rendered inside the modal once open
+    onOpen?: () => void;
+    onClose?: () => void;
+    headerActions?: ReactNode;
+    fullBleed?: boolean;
+    children: ReactNode;
 }
 
 /**
- * The reusable "click Start, a modal opens" shell every game page uses: a plain centered
- * start button (no background art - keep the idle state simple) with the odds ratio shown
- * just underneath it, and a Dialog (fullScreen on mobile, md on desktop) with a top bar. The
- * outer XenCasinoNavbar (its balance chip) is hidden behind this modal, so the top bar carries
- * its own copy: cheddar balance on the left, and the close X (plus any game-specific
- * `headerActions`, e.g. Scratch's Check Ticket) on the right, on a slightly darker bar than
- * the rest of the dialog to set it apart. `title` is kept only as the dialog's accessible
- * name (`aria-label`) - it's deliberately not shown visually, the game is already obvious from
- * context once the modal is open. Below
- * that, the actual game component (SlotMachine, ScratchCard, ...) - this component knows
- * nothing about what's being played, just opens/closes and renders children. `onOpen` fires
- * every time the modal opens (not just the first time) - games whose finished state lives
- * outside the modal-scoped subtree (e.g. a scratch ticket's `result`/`checked`, which live in
- * the page component so the header's Check Ticket button can reach them) use it to reset a
- * finished round back to idle, since simply closing and reopening the dialog wouldn't do that
- * on its own.
+ * Card-shelled launcher shown on every game's page before the modal opens. Mirrors the
+ * GamesIndex card layout: game title, cost-per-play in red, an optional jackpot chip
+ * top-right, a centred Start Playing button, and a stats footer with odds (blue) and RTP
+ * (purple) chips. Clicking the button opens the modal Dialog that hosts the actual game.
  */
-export default function PlayLauncher({ title, oddsLabel, rtpLabel, startLabel = "Start Playing", onOpen, onClose, headerActions, fullBleed, children }: PlayLauncherProps) {
+export default function PlayLauncher({
+    title,
+    description,
+    jackpotLabel,
+    price,
+    oddsLabel,
+    rtpLabel,
+    startLabel = "Start Playing",
+    onOpen,
+    onClose,
+    headerActions,
+    fullBleed,
+    children,
+}: PlayLauncherProps) {
     const [playing, setPlaying] = useState(false);
     const theme = useTheme();
     const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
     return (
         <>
-            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5, py: 6 }}>
-                <Button
-                    variant="contained"
-                    color="warning"
-                    size="large"
-                    onClick={() => {
-                        onOpen?.();
-                        setPlaying(true);
-                    }}
-                    sx={{ borderRadius: 999, px: 5, py: 1.5, fontWeight: 800 }}
-                >
-                    {startLabel}
-                </Button>
-                {(oddsLabel || rtpLabel) && (
-                    <Box sx={{ display: "flex", gap: 1 }}>
-                        {oddsLabel && <Chip label={oddsLabel} size="small" sx={ODDS_CHIP_SX} />}
-                        {rtpLabel && <Chip label={rtpLabel} size="small" sx={ODDS_CHIP_SX} />}
+            <Card
+                sx={{
+                    my: 4,
+                }}
+            >
+                <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
+                    {/* Header: cost (left), jackpot (right) */}
+                    <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1.5, mb: 2 }}>
+                        {price !== undefined && (
+                            <Typography variant="body2" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                                <Typography component="span" variant="body2" color="error.main" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                                    {formatCheddar(price)}
+                                </Typography>
+                                {" / play"}
+                            </Typography>
+                        )}
+                        {jackpotLabel && (
+                            <Chip label={jackpotLabel} size="small" sx={{ ...JACKPOT_CHIP_SX, flexShrink: 0 }} />
+                        )}
                     </Box>
-                )}
-            </Box>
+
+                    {/* Start Playing button */}
+                    <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+                        <Button
+                            variant="contained"
+                            color="warning"
+                            size="large"
+                            onClick={() => {
+                                onOpen?.();
+                                setPlaying(true);
+                            }}
+                            sx={{ borderRadius: 999, px: 5, py: 1.5, fontWeight: 800 }}
+                        >
+                            {startLabel}
+                        </Button>
+                    </Box>
+
+                    {/* Stats footer: odds + RTP */}
+                    <Box
+                        sx={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            justifyContent: "space-between",
+                            gap: 0.75,
+                            pt: 1.5,
+                            borderTop: "1px solid",
+                            borderColor: "divider",
+                        }}
+                    >
+                        <Chip label={oddsLabel ?? "???"} size="small" sx={ODDS_CHIP_SX} />
+                        <Chip label={rtpLabel ?? "???"} size="small" sx={RTP_CHIP_SX} />
+                    </Box>
+                </CardContent>
+            </Card>
 
             <Dialog
                 fullScreen={fullScreen}
                 maxWidth="md"
                 fullWidth={!fullScreen}
                 open={playing}
-                // Only the X (or Escape) closes this - a stray backdrop click mid-scratch/spin
-                // shouldn't dismiss the game, so backdropClick is explicitly ignored here.
                 onClose={(_event, reason) => {
                     if (reason !== "backdropClick") {
                         setPlaying(false);

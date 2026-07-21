@@ -1,4 +1,4 @@
-import { SxProps, Theme, Box, Card, CardContent, Typography, LinearProgress, Button, Avatar } from "@mui/material";
+import { SxProps, Theme, Box, Card, CardContent, Typography, LinearProgress, Button } from "@mui/material";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import { useSnackbar } from "notistack";
 import { useCasinoDailyQuest } from "../../../../hooks/casino/useCasinoDailyQuest";
@@ -40,40 +40,45 @@ export default function DailyQuestCard({ sx }: DailyQuestCardProps) {
                 ...sx,
             }}
         >
-            <CardContent sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
-                <Avatar sx={{ bgcolor: "action.hover", color: "warning.main", width: 40, height: 40, flexShrink: 0 }}>
-                    <EmojiEventsIcon fontSize="small" />
-                </Avatar>
+            <CardContent sx={{ p: "12px 16px !important" }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+                    <EmojiEventsIcon fontSize="small" sx={{ color: "warning.main", flexShrink: 0 }} />
 
-                <Box sx={{ flex: 1, minWidth: 200 }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                        Daily Quest
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        {claimed
-                            ? "Reward claimed - come back tomorrow."
-                            : `Play ${target} XenCasino rounds today for ${formatCheddar(reward)} cheddar`}
-                    </Typography>
-                    <LinearProgress
-                        variant="determinate"
-                        value={progress}
-                        color={canClaim ? "warning" : "primary"}
-                        sx={{ height: 8, borderRadius: 999 }}
-                    />
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
-                        {Math.min(roundsPlayed, target)}/{target} rounds played
-                    </Typography>
+                    <Box sx={{ flexShrink: 0 }}>
+                        <Typography variant="body2" component="span" sx={{ fontWeight: 700 }}>
+                            Daily Quest
+                        </Typography>
+                        <Typography variant="body2" component="span" color="text.secondary" sx={{ ml: 1 }}>
+                            {claimed
+                                ? "Reward claimed - come back tomorrow."
+                                : `Play ${target} rounds today for ${formatCheddar(reward)} cheddar`}
+                        </Typography>
+                    </Box>
+
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1, minWidth: 120 }}>
+                        <Box sx={{ flex: 1, minWidth: 60 }}>
+                            <LinearProgress
+                                variant="determinate"
+                                value={progress}
+                                color={canClaim ? "warning" : "primary"}
+                                sx={{ height: 6, borderRadius: 999 }}
+                            />
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 40, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                            {Math.min(roundsPlayed, target)}/{target}
+                        </Typography>
+                        <Button
+                            variant="contained"
+                            color="warning"
+                            size="small"
+                            disabled={!canClaim || isClaiming}
+                            onClick={handleClaim}
+                            sx={{ borderRadius: 999, px: 2, fontWeight: 800, minWidth: 80 }}
+                        >
+                            {claimed ? "Claimed" : canClaim ? "Claim" : "Play"}
+                        </Button>
+                    </Box>
                 </Box>
-
-                <Button
-                    variant="contained"
-                    color="warning"
-                    disabled={!canClaim || isClaiming}
-                    onClick={handleClaim}
-                    sx={{ borderRadius: 999, px: 3, fontWeight: 800, flexShrink: 0 }}
-                >
-                    {claimed ? "Claimed" : canClaim ? "Claim" : "In Progress"}
-                </Button>
             </CardContent>
         </Card>
     );

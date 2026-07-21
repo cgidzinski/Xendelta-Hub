@@ -1,6 +1,7 @@
 import SecurityIcon from "@mui/icons-material/Security";
 import PeopleIcon from "@mui/icons-material/People";
 import ArticleIcon from "@mui/icons-material/Article";
+import CasinoIcon from "@mui/icons-material/Casino";
 import HomeIcon from "@mui/icons-material/Home";
 import IconButton from "@mui/material/IconButton";
 import { Link } from "react-router-dom";
@@ -31,6 +32,13 @@ export default function AdminNavBar() {
       icon: <ArticleIcon />,
       path: "/admin/blog",
       isSelected: (pathname) => pathname.startsWith("/admin/blog"),
+    },
+    {
+      key: "casino",
+      label: "Casino",
+      icon: <CasinoIcon />,
+      path: "/admin/casino",
+      isSelected: (pathname) => pathname === "/admin/casino",
     },
   ];
 

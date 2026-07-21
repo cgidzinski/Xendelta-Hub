@@ -67,9 +67,9 @@ export async function initiateChunkedUpload(userId: string, filename: string, to
   const uploadId = `xenbox-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
   const finalFilename = generateXenboxFilename(filename);
   const gcsPath = `xenbox/${userId}/${finalFilename}`;
-  
+
   const gcsFile = privateBucket.file(gcsPath);
-  
+
   // Start resumable upload session
   const contentType = detectContentType(finalFilename);
   const [resumableUri] = await gcsFile.createResumableUpload({
@@ -78,7 +78,7 @@ export async function initiateChunkedUpload(userId: string, filename: string, to
       cacheControl: "no-cache, no-store, must-revalidate",
     },
   });
-  
+
   const session: UploadSession = {
     userId,
     filename: finalFilename,
@@ -89,7 +89,7 @@ export async function initiateChunkedUpload(userId: string, filename: string, to
     bytesUploaded: 0,
     createdAt: Date.now(),
   };
-  
+
   uploadSessions.set(uploadId, session);
   return uploadId;
 }
@@ -119,11 +119,11 @@ export async function uploadChunk(uploadId: string, chunkIndex: number, chunkDat
   // The resumable URI from createResumableUpload includes authentication
   await new Promise<void>((resolve, reject) => {
     const url = new URL(session.resumableUri);
-    
+
     // For the last chunk, include total size; otherwise use * for unknown total
     const totalSize = isLastChunk ? (endByte + 1) : "*";
     const contentRange = `bytes ${startByte}-${endByte}/${totalSize}`;
-    
+
     const options = {
       hostname: url.hostname,
       port: url.port || 443,
@@ -282,7 +282,7 @@ export async function checkQuota(userId: string, fileSize: number): Promise<{ ca
   }
 
   const spaceAllowed = user.xenbox?.spaceAllowed || 0;
-  
+
   // Calculate current space used by querying XenBoxMedia directly
   // Note: location check is redundant since we're querying XenBoxMedia collection
   const files = await XenBoxMedia.find({ uploadedBy: userId }).exec();

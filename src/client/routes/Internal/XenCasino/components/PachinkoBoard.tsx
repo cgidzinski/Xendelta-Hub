@@ -8,6 +8,7 @@ export interface PachinkoTrajectorySample {
     x: number;
     y: number;
     r: number;
+    spinnerAngles?: number[]; // per-windmill rotation angles, index matches layout.windmills
 }
 
 export interface PachinkoPoint {
@@ -70,6 +71,7 @@ export interface PachinkoSession {
     leftTulipOpen: boolean;
     rightTulipOpen: boolean;
     attackerOpenUntil: number; // epoch ms; attacker pays while Date.now() < this
+    jackpotOpenUntil: number; // epoch ms; jackpot pays while Date.now() < this
 }
 
 export type ReelMatchTier = "none" | "two" | "three";
@@ -89,6 +91,7 @@ export interface PachinkoLaunchResult {
     leftTulipOpen: boolean;
     rightTulipOpen: boolean;
     attackerOpenUntil: number;
+    jackpotOpenUntil: number;
     ballsRemaining: number;
 }
 
@@ -109,7 +112,7 @@ export interface PachinkoBoardProps {
     onSessionUpdate: (session: PachinkoSession) => void;
 }
 
-const BALL_RADIUS = 3.5; // matches pachinkoLayout.ts's BALL_RADIUS
+const BALL_RADIUS = 2.5; // matches pachinkoLayout.ts's BALL_RADIUS
 const PIN_RADIUS = 1.1; // matches pachinkoLayout.ts's PIN_RADIUS
 const POCKET_HEIGHT = 18; // matches pachinkoLayout.ts's POCKET_DEPTH - the physical cup every pocket collides against, not just a visual choice
 const FRAME_MS = 1000 / 30; // matches the server's ~30fps trajectory sample rate
@@ -135,16 +138,22 @@ const REEL_SYMBOLS: Record<string, string> = {
     JACKPOT_ITEM: "7️⃣",
 };
 const REEL_FLICKER_POOL = Object.values(REEL_SYMBOLS);
-const REEL_BOX = { x: 230, y: 158, width: 120, height: 26 };
+const REEL_BOX = { x: 230, y: 142, width: 120, height: 26 };
 const REEL_SPIN_MS = 900; // base spin duration before the first reel starts landing
 const REEL_STOP_STAGGER_MS = [0, 220, 440]; // per-reel landing stagger, added to REEL_SPIN_MS
 const REEL_FLICKER_INTERVAL_MS = 70;
 const REEL_RESULT_GLOW_MS = 1600; // how long a match keeps its glow after the last reel lands
+const MAX_QUEUED_SPINS = 6; // chucker goes inactive once this many spins are queued (queue + current)
 
 interface ReelAnimState {
     symbols: [string, string, string];
     matchTier: ReelMatchTier;
     startTime: number;
+}
+
+interface ReelQueueItem {
+    symbols: [string, string, string];
+    matchTier: ReelMatchTier;
 }
 
 const OUTCOME_LABEL: Record<PachinkoOutcome, string> = {
@@ -261,16 +270,16 @@ function drawPocket(
 // a payout number inside them.
 function drawPocketLabel(ctx: CanvasRenderingContext2D, x: number, y: number, height: number, text: string, color: string) {
     ctx.fillStyle = color;
-    ctx.font = "bold 7px sans-serif";
+    ctx.font = "bold 9px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(text, x, y - height / 2 - 3);
+    ctx.fillText(text, x, y - height / 2 - 4);
 }
 
 // The ball award, INSIDE the pocket itself (not just implied by color/label) - used for the
 // pockets whose payout is a single fixed number worth spelling out at a glance (bonus, attacker).
 function drawPocketAmount(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, color: string) {
     ctx.fillStyle = color;
-    ctx.font = "bold 8px sans-serif";
+    ctx.font = "bold 11px sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(text, x, y + 3);
 }
@@ -371,7 +380,10 @@ export default function PachinkoBoard({
     const fireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const activeBallsRef = useRef<Map<number, ActiveBall>>(new Map());
     const latestAppliedSeqRef = useRef(0);
-    const reelStateRef = useRef<ReelAnimState | null>(null);
+    const reelQueueRef = useRef<ReelQueueItem[]>([]);
+    const currentReelAnimRef = useRef<ReelAnimState | null>(null);
+    const latestSpinnerAnglesRef = useRef<number[] | undefined>(undefined);
+    const latestBallPositionsRef = useRef<{ x: number; y: number }[]>([]);
 
     const sessionRef = useRef(session);
     sessionRef.current = session;
@@ -392,6 +404,31 @@ export default function PachinkoBoard({
             return;
         }
         ctx.clearRect(0, 0, layout.canvasWidth, layout.canvasHeight);
+
+        // Collect current ball positions (used by spinners for hit-reaction detection)
+        const positions: { x: number; y: number }[] = [];
+        for (const ball of activeBallsRef.current.values()) {
+            if (ball.phase === "pending") {
+                positions.push({ x: layout.launcherPosition.x, y: layout.launcherPosition.y });
+            } else if (ball.phase === "falling") {
+                const frames = ball.result.trajectory;
+                const lastIndex = frames.length - 1;
+                if (lastIndex >= 0) {
+                    const rawIndex = Math.max(0, (now - ball.startTime) / FRAME_MS);
+                    const index = Math.min(lastIndex, rawIndex);
+                    const i0 = Math.floor(index);
+                    const frac = index - i0;
+                    const s0 = frames[i0];
+                    const s1 = frames[Math.min(lastIndex, i0 + 1)];
+                    positions.push({ x: s0.x + (s1.x - s0.x) * frac, y: s0.y + (s1.y - s0.y) * frac });
+                }
+            } else if (ball.phase === "landed") {
+                const frames = ball.result.trajectory;
+                const final = frames[frames.length - 1];
+                if (final) positions.push({ x: final.x, y: final.y });
+            }
+        }
+        latestBallPositionsRef.current = positions;
 
         // The one true playfield boundary - fully continuous (no gap anywhere near the rail,
         // see pachinkoLayout.ts's own header comment for why), drawn as two arcs matching the
@@ -454,20 +491,67 @@ export default function PachinkoBoard({
 
         // Central digital reel - drawn here (after the nail field, before the ball) so a ball
         // still visibly flies in front of it, matching a real screen module's own depth.
-        drawReelDisplay(ctx, now, reelStateRef.current);
+        drawReelDisplay(ctx, now, currentReelAnimRef.current);
 
-        // Windmills - static bumpers for now (real rotation is a later visual pass).
-        ctx.strokeStyle = "rgba(200,200,200,0.6)";
-        ctx.lineWidth = 1.2;
-        for (const windmill of layout.windmills) {
+        // Stars under the reel: one ⭐ per queued spin (excluding the currently-animating one).
+        // Gold stars, centered under the reel box, so rapid chucker catches visibly stack.
+        if (reelQueueRef.current.length > 0) {
+            ctx.save();
+            const queueCount = reelQueueRef.current.length;
+            const starSpacing = 13;
+            const totalWidth = queueCount * starSpacing;
+            const startX = REEL_BOX.x - totalWidth / 2 + starSpacing / 2;
+            ctx.font = "10px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+            for (let i = 0; i < queueCount; i++) {
+                ctx.fillText("⭐", startX + i * starSpacing, REEL_BOX.y + REEL_BOX.height / 2 + 3);
+            }
+            ctx.restore();
+        }
+
+        // Spinners - paddle wheels that actually spin and react to ball contact.
+        // Rotation angle comes from the server's physics sim via trajectory spinnerAngles.
+        // When a ball is near a spinner, it glows brighter (visual "hit" reaction).
+        const spinnerAngles = latestSpinnerAnglesRef.current;
+        const ballPositions = latestBallPositionsRef.current;
+        for (let si = 0; si < layout.windmills.length; si++) {
+            const wm = layout.windmills[si];
+            const angle = spinnerAngles?.[si] ?? 0;
+            // Check if any ball is close to this spinner
+            const nearBall = ballPositions.some((bp) => Math.hypot(bp.x - wm.position.x, bp.y - wm.position.y) < wm.radius + BALL_RADIUS + 4);
+            const strokeColor = nearBall ? "rgba(255,220,100,0.95)" : "rgba(200,180,140,0.65)";
+            const lineW = nearBall ? 2 : 1.4;
+
+            // Outer ring
+            ctx.strokeStyle = strokeColor;
+            ctx.lineWidth = lineW;
             ctx.beginPath();
-            ctx.arc(windmill.position.x, windmill.position.y, windmill.radius, 0, Math.PI * 2);
+            ctx.arc(wm.position.x, wm.position.y, wm.radius, 0, Math.PI * 2);
             ctx.stroke();
-            for (const angle of [0, Math.PI / 2]) {
+            // Center hub
+            ctx.fillStyle = strokeColor;
+            ctx.beginPath();
+            ctx.arc(wm.position.x, wm.position.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+            // Paddle arms - 4 curved blades like a real pachinko spinner
+            for (let arm = 0; arm < 4; arm++) {
+                const a = angle + (arm * Math.PI) / 2;
+                const tipX = wm.position.x + Math.cos(a) * wm.radius;
+                const tipY = wm.position.y + Math.sin(a) * wm.radius;
+                const midX = wm.position.x + Math.cos(a) * wm.radius * 0.55;
+                const midY = wm.position.y + Math.sin(a) * wm.radius * 0.55;
+                ctx.strokeStyle = strokeColor;
+                ctx.lineWidth = lineW + 1;
                 ctx.beginPath();
-                ctx.moveTo(windmill.position.x - Math.cos(angle) * windmill.radius, windmill.position.y - Math.sin(angle) * windmill.radius);
-                ctx.lineTo(windmill.position.x + Math.cos(angle) * windmill.radius, windmill.position.y + Math.sin(angle) * windmill.radius);
+                ctx.moveTo(wm.position.x, wm.position.y);
+                ctx.quadraticCurveTo(midX + Math.cos(a + 0.5) * 4, midY + Math.sin(a + 0.5) * 4, tipX, tipY);
                 ctx.stroke();
+                // Small paddle tip
+                ctx.fillStyle = strokeColor;
+                ctx.beginPath();
+                ctx.arc(tipX, tipY, 2.5, 0, Math.PI * 2);
+                ctx.fill();
             }
         }
 
@@ -486,7 +570,7 @@ export default function PachinkoBoard({
             const stroke = isHot ? "#FFD700" : "rgba(189,245,240,0.9)";
             drawPocket(ctx, bonus.position.x, bonus.position.y, bonus.halfWidth, POCKET_HEIGHT, isHot ? "rgba(255,215,0,0.35)" : "rgba(79,209,197,0.22)", stroke);
             drawPocketLabel(ctx, bonus.position.x, bonus.position.y, POCKET_HEIGHT, "BONUS", stroke);
-            drawPocketAmount(ctx, bonus.position.x, bonus.position.y, `+${bonusPocketBalls}`, stroke);
+            drawPocketAmount(ctx, bonus.position.x, bonus.position.y, `${bonusPocketBalls}`, stroke);
         }
 
         const leftOpen = sessionRef.current?.leftTulipOpen ?? false;
@@ -510,26 +594,27 @@ export default function PachinkoBoard({
                 { glow: isHot ? undefined : isOpen ? "rgba(124,255,178,0.9)" : undefined }
             );
             drawPocketLabel(ctx, tulip.position.x, tulip.position.y, POCKET_HEIGHT, isOpen ? "TULIP - OPEN" : "TULIP", stroke);
-            drawPocketAmount(ctx, tulip.position.x, tulip.position.y, `+${sideTulipBalls}`, isOpen ? "#08321a" : stroke);
+            drawPocketAmount(ctx, tulip.position.x, tulip.position.y, `${sideTulipBalls}`, isOpen ? "#08321a" : stroke);
         }
 
-        // Chucker - fixed width, never highlighted for its own sake beyond a catch; also reads
-        // as grey/dashed (matching the attacker's own closed look) while the attacker it just
-        // opened is still counting down, so it's visually obvious there's nothing to gain from
-        // hitting it again right now.
+        // Chucker - always active and catchable unless the reel spin queue is full (6 spins
+        // queued). When full it greys out so it's visually obvious there's nothing to gain
+        // from hitting it again until some spins clear.
+        const totalQueuedSpins = (currentReelAnimRef.current ? 1 : 0) + reelQueueRef.current.length;
+        const chuckerFull = totalQueuedSpins >= MAX_QUEUED_SPINS;
         const chuckerHot = hotPockets.has("chucker");
-        const chuckerStroke = chuckerHot ? "#FFD700" : attackerOpen ? "rgba(170,170,170,0.7)" : "rgba(255,230,150,0.9)";
+        const chuckerStroke = chuckerHot ? "#FFD700" : chuckerFull ? "rgba(170,170,170,0.7)" : "rgba(255,230,150,0.9)";
         drawPocket(
             ctx,
             layout.chucker.position.x,
             layout.chucker.position.y,
             layout.chucker.halfWidth,
             POCKET_HEIGHT,
-            chuckerHot ? "rgba(255,215,0,0.4)" : attackerOpen ? "rgba(140,140,140,0.18)" : "rgba(255,215,0,0.2)",
+            chuckerHot ? "rgba(255,215,0,0.4)" : chuckerFull ? "rgba(140,140,140,0.18)" : "rgba(255,215,0,0.2)",
             chuckerStroke,
-            { dashed: attackerOpen && !chuckerHot }
+            { dashed: chuckerFull && !chuckerHot }
         );
-        drawPocketLabel(ctx, layout.chucker.position.x, layout.chucker.position.y, POCKET_HEIGHT, "CHUCKER", chuckerStroke);
+        drawPocketLabel(ctx, layout.chucker.position.x, layout.chucker.position.y, POCKET_HEIGHT, chuckerFull ? "CHUCKER - FULL" : "CHUCKER", chuckerStroke);
 
         // Attacker - fixed width always (see pachinkoLayout.ts). Grey and dashed while closed,
         // solid and colored while open, with the ball award shown inside and a live countdown
@@ -547,8 +632,14 @@ export default function PachinkoBoard({
             attackerStroke,
             { dashed: !attackerOpen && !attackerHot }
         );
-        drawPocketLabel(ctx, layout.attacker.position.x, layout.attacker.position.y, POCKET_HEIGHT, attackerOpen ? "ATTACKER - OPEN" : "ATTACKER", attackerStroke);
-        drawPocketAmount(ctx, layout.attacker.position.x, layout.attacker.position.y, `+${attackerBalls}`, attackerStroke);
+        // Attacker text drawn below the pocket, not above/inside - keeps the wide pocket clean.
+        ctx.fillStyle = attackerStroke;
+        ctx.font = "bold 9px sans-serif";
+        ctx.textAlign = "center";
+        const attackerLabelY = layout.attacker.position.y + POCKET_HEIGHT / 2 + 5;
+        ctx.fillText(attackerOpen ? "ATTACKER - OPEN" : "ATTACKER", layout.attacker.position.x, attackerLabelY);
+        ctx.font = "bold 11px sans-serif";
+        ctx.fillText(`${attackerBalls}`, layout.attacker.position.x, attackerLabelY + 14);
         if (attackerOpen) {
             // 2 decimals, not a whole-second countdown - ticking visibly every frame is what
             // actually reads as "fast" and urgent, a whole number only appears to update once a
@@ -557,27 +648,35 @@ export default function PachinkoBoard({
             ctx.fillStyle = "rgba(189,245,207,0.95)";
             ctx.font = "bold 9px sans-serif";
             ctx.textAlign = "center";
-            ctx.fillText(`${secondsLeft.toFixed(2)}s`, layout.attacker.position.x, layout.attacker.position.y + POCKET_HEIGHT / 2 + 12);
+            ctx.fillText(`${secondsLeft.toFixed(2)}s`, layout.attacker.position.x, attackerLabelY + 28);
         }
 
-        // Jackpot - the tightest pocket on the board, fixed width even when primed. Grey/inert
-        // until both tulips are open, then lights up (colored + glow) - only reachable-and-
-        // paying state changes, never the target size.
-        const primed = leftOpen && rightOpen;
+        // Jackpot - the tightest pocket on the board, fixed width even when primed. Lights up
+        // when either the jackpot's timed window is open OR both tulips are simultaneously open
+        // (the priming moment before the server resets them).
+        const jackpotOpenUntil = sessionRef.current?.jackpotOpenUntil ?? 0;
+        const jackpotOpen = jackpotOpenUntil > Date.now() || (leftOpen && rightOpen);
         const jackpotHot = hotPockets.has("jackpot");
         const jackpotHeight = layout.jackpot.halfWidth * 2.4;
-        const jackpotStroke = jackpotHot ? "#FFD700" : primed ? "#ffd0dd" : "rgba(170,170,170,0.7)";
+        const jackpotStroke = jackpotHot ? "#FFD700" : jackpotOpen ? "#ffd0dd" : "rgba(170,170,170,0.7)";
         drawPocket(
             ctx,
             layout.jackpot.position.x,
             layout.jackpot.position.y,
             layout.jackpot.halfWidth,
             jackpotHeight,
-            jackpotHot ? "rgba(255,215,0,0.4)" : primed ? "rgba(255,77,125,0.4)" : "rgba(140,140,140,0.18)",
+            jackpotHot ? "rgba(255,215,0,0.4)" : jackpotOpen ? "rgba(255,77,125,0.4)" : "rgba(140,140,140,0.18)",
             jackpotStroke,
-            { glow: jackpotHot || !primed ? undefined : "rgba(255,77,125,0.9)", dashed: !primed && !jackpotHot }
+            { glow: jackpotHot || !jackpotOpen ? undefined : "rgba(255,77,125,0.9)", dashed: !jackpotOpen && !jackpotHot }
         );
-        drawPocketLabel(ctx, layout.jackpot.position.x, layout.jackpot.position.y, jackpotHeight, "JACKPOT", jackpotStroke);
+        drawPocketLabel(ctx, layout.jackpot.position.x, layout.jackpot.position.y, jackpotHeight, jackpotOpen ? "JACKPOT - OPEN" : "JACKPOT", jackpotStroke);
+        if (jackpotOpen) {
+            const secondsLeft = jackpotOpenUntil > Date.now() ? Math.max(0, (jackpotOpenUntil - Date.now()) / 1000) : 0;
+            ctx.fillStyle = "rgba(255,77,125,0.95)";
+            ctx.font = "bold 9px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(`${secondsLeft.toFixed(2)}s`, layout.jackpot.position.x, layout.jackpot.position.y + jackpotHeight / 2 + 12);
+        }
 
         // Pending balls - appear instantly at the launcher the moment a shot is fired.
         for (const ball of activeBallsRef.current.values()) {
@@ -604,6 +703,8 @@ export default function PachinkoBoard({
                 const s1 = frames[Math.min(lastIndex, i0 + 1)];
                 const x = s0.x + (s1.x - s0.x) * frac;
                 const y = s0.y + (s1.y - s0.y) * frac;
+                // Capture spinner angles from the current trajectory frame for rendering
+                if (s0.spinnerAngles) latestSpinnerAnglesRef.current = s0.spinnerAngles;
                 ctx.fillStyle = "#FF6B6B";
                 ctx.beginPath();
                 ctx.arc(x, y, BALL_RADIUS, 0, Math.PI * 2);
@@ -664,9 +765,15 @@ export default function PachinkoBoard({
                         // The chucker fires the central reel the instant the ball actually lands
                         // there (not the instant the response arrives) - same "catch has to be
                         // visible before its consequence shows up" causality the callouts above
-                        // already follow.
+                        // already follow. Each catch queues a spin; they animate one at a time
+                        // so rapid chucker hits stack visually instead of clobbering each other.
+                        // Capped at MAX_QUEUED_SPINS total (current + queued) - once full, the
+                        // chucker greys out and further catches are silently dropped.
                         if (result.outcome === "chucker" && result.reelSpin) {
-                            reelStateRef.current = { symbols: result.reelSpin.symbols, matchTier: result.reelSpin.matchTier, startTime: now };
+                            const totalQueued = (currentReelAnimRef.current ? 1 : 0) + reelQueueRef.current.length;
+                            if (totalQueued < MAX_QUEUED_SPINS) {
+                                reelQueueRef.current.push({ symbols: result.reelSpin.symbols, matchTier: result.reelSpin.matchTier });
+                            }
                         }
 
                         // Responses can arrive out of order under hold-to-fire - only apply this
@@ -681,6 +788,7 @@ export default function PachinkoBoard({
                                 leftTulipOpen: result.leftTulipOpen,
                                 rightTulipOpen: result.rightTulipOpen,
                                 attackerOpenUntil: result.attackerOpenUntil,
+                                jackpotOpenUntil: result.jackpotOpenUntil,
                             });
                         }
                     }
@@ -706,6 +814,22 @@ export default function PachinkoBoard({
             }
             for (const id of toRemove) {
                 activeBallsRef.current.delete(id);
+            }
+
+            // Reel spin queue: if the current animation has fully finished (all reels landed +
+            // glow elapsed) and there's a queued spin waiting, start the next one.
+            if (currentReelAnimRef.current) {
+                const lastStopAt = REEL_SPIN_MS + (REEL_STOP_STAGGER_MS[REEL_STOP_STAGGER_MS.length - 1] ?? 0);
+                const finishedAt = currentReelAnimRef.current.startTime + lastStopAt + REEL_RESULT_GLOW_MS;
+                if (now >= finishedAt && reelQueueRef.current.length > 0) {
+                    const next = reelQueueRef.current.shift()!;
+                    currentReelAnimRef.current = { symbols: next.symbols, matchTier: next.matchTier, startTime: now };
+                } else if (now >= finishedAt && reelQueueRef.current.length === 0) {
+                    currentReelAnimRef.current = null;
+                }
+            } else if (reelQueueRef.current.length > 0) {
+                const next = reelQueueRef.current.shift()!;
+                currentReelAnimRef.current = { symbols: next.symbols, matchTier: next.matchTier, startTime: now };
             }
 
             draw(now, hotPockets);
@@ -953,7 +1077,7 @@ export default function PachinkoBoard({
                             {OUTCOME_LABEL[callout.outcome]}
                         </Typography>
                         <Typography variant="body1" sx={{ fontWeight: 800, color: "warning.light" }}>
-                            {callout.ballsAwarded > 0 ? `+${callout.ballsAwarded} balls` : "—"}
+                            {callout.ballsAwarded > 0 ? `${callout.ballsAwarded} balls` : "—"}
                         </Typography>
                     </Box>
                 ))}

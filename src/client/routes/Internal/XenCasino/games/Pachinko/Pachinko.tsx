@@ -9,6 +9,7 @@ import { casinoDailyQuestKeys } from "../../../../../hooks/casino/useCasinoDaily
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import PlayLauncher from "../../components/PlayLauncher";
 import PachinkoBoard, { PachinkoLaunchResult, PachinkoLayoutData, PachinkoSession } from "../../components/PachinkoBoard";
+import { formatCheddar } from "../../utils/currency";
 
 // Everything Pachinko needs lives in this one file, same shape as Plinko.tsx - it only imports
 // shared infrastructure (GameWrapper, the board). There's no separate "buy panel" screen gating
@@ -42,6 +43,7 @@ interface ActiveBatchResponse {
     leftTulipOpen?: boolean;
     rightTulipOpen?: boolean;
     attackerOpenUntil?: number;
+    jackpotOpenUntil?: number;
 }
 
 interface BuyResponse {
@@ -52,6 +54,7 @@ interface BuyResponse {
     leftTulipOpen: boolean;
     rightTulipOpen: boolean;
     attackerOpenUntil: number;
+    jackpotOpenUntil: number;
     balance: string;
 }
 
@@ -94,6 +97,7 @@ export default function Pachinko() {
             leftTulipOpen: data.leftTulipOpen,
             rightTulipOpen: data.rightTulipOpen,
             attackerOpenUntil: data.attackerOpenUntil,
+            jackpotOpenUntil: data.jackpotOpenUntil,
         });
         invalidateShared();
     };
@@ -147,6 +151,7 @@ export default function Pachinko() {
                     leftTulipOpen: active.leftTulipOpen ?? false,
                     rightTulipOpen: active.rightTulipOpen ?? false,
                     attackerOpenUntil: active.attackerOpenUntil ?? 0,
+                    jackpotOpenUntil: active.jackpotOpenUntil ?? 0,
                 });
             } else {
                 setSession(null);
@@ -184,7 +189,14 @@ export default function Pachinko() {
             howToPlay="Buy balls with the +100/+1000 buttons, then hold Launch to fire them at your own power - balls fly one every 600ms while held. Most balls miss - catches add more balls to your tray instead of paying cash. Closing the game cashes out your tray automatically."
             oddsSections={oddsSections}
         >
-            <PlayLauncher title="Pachinko" onOpen={handleOpen} onClose={handleClose}>
+            <PlayLauncher
+                title="Pachinko"
+                description="Buy balls and fire them at your own power - catches add balls to your tray."
+                jackpotLabel={odds?.jackpotPool ? `🎰 ${formatCheddar(odds.jackpotPool)}` : undefined}
+                price={odds?.pricePerBall}
+                onOpen={handleOpen}
+                onClose={handleClose}
+            >
                 <PachinkoBoard
                     session={session}
                     layout={odds?.layout ?? null}

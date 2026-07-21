@@ -160,19 +160,25 @@ module.exports = function (app: express.Application) {
         // Built entirely from this machine's own config, same convention as slots.ts's
         // /odds - probability here is "this symbol appears at least once in each of the
         // first N columns," the same condition evaluateWins requires for an N-column win.
-        const paySymbols = Object.keys(SPINMANIA_CONFIG.paytable);
+        // Grouped by symbol (rarest/highest-paying symbol first - config order is commonest
+        // first, so reversed) rather than sorted flat by probability: a flat probability sort
+        // interleaves every symbol's rows and reads as a jumble, whereas grouping matches how
+        // every real paytable is laid out (each symbol's own row of run-length payouts,
+        // biggest prize at the top) and stays readable as run lengths grow within a symbol.
+        const paySymbols = [...Object.keys(SPINMANIA_CONFIG.paytable)].reverse();
         const paytable = paySymbols.flatMap((symbol) =>
-            Object.entries(SPINMANIA_CONFIG.paytable[symbol]).map(([runLength, multiplier]) => {
-                const columnProbability = 1 - Math.pow(1 - p(symbol), GRID_ROWS);
-                return {
-                    symbol,
-                    runLength: Number(runLength),
-                    probability: Math.pow(columnProbability, Number(runLength)),
-                    multiplier,
-                };
-            })
+            Object.entries(SPINMANIA_CONFIG.paytable[symbol])
+                .map(([runLength, multiplier]) => {
+                    const columnProbability = 1 - Math.pow(1 - p(symbol), GRID_ROWS);
+                    return {
+                        symbol,
+                        runLength: Number(runLength),
+                        probability: Math.pow(columnProbability, Number(runLength)),
+                        multiplier,
+                    };
+                })
+                .sort((a, b) => a.runLength - b.runLength)
         );
-        paytable.sort((a, b) => a.probability - b.probability);
 
         const jackpotProbability = binomialTailProbability(GRID_COLS * GRID_ROWS, p(JACKPOT_ITEM), SPINMANIA_CONFIG.jackpotScatterCount);
 

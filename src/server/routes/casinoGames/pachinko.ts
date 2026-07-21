@@ -17,11 +17,18 @@
  * sweep's refund of never-fired balls - see /cashout's own comment for how it stays
  * crash-recoverable the same way /buy already is.
  *
- * Tulip open/closed state and the attacker's open-until timestamp live on the player's own
- * round (conditions.*), not shared across players - each player works through their own
- * priming sequence within their own batch. The jackpot pool *is* shared (same pattern Slots'
- * own pool already uses): every non-jackpot ball feeds it by CONTRIBUTION_RATE * pricePerBall,
- * and a primed jackpot catch converts the live pool value to balls and resets it.
+ * Tulip open/closed state and the attacker's/jackpot's own open-until timestamps live on the
+ * player's own round (conditions.*), not shared across players - each player works through their
+ * own priming sequence within their own batch. Both the attacker and the jackpot are real timed
+ * windows, not standing "primed" flags: a chucker catch spins the board's central reel (see
+ * pachinkoReels.ts), and only a match opens the attacker, for ATTACKER_OPEN_MS - queued matches
+ * (multiple chucker catches landing close together under hold-to-fire) each ADD that much time on
+ * top of whatever's currently left rather than resetting it. Hitting both tulips simultaneously
+ * opens the jackpot for JACKPOT_OPEN_MS and immediately resets both tulips - there's no standing
+ * "primed" state to sit open indefinitely, just that one window. The jackpot pool *is* shared
+ * (same pattern Slots' own pool already uses): every non-jackpot ball feeds it by
+ * CONTRIBUTION_RATE * pricePerBall, and a jackpot catch converts the live pool value to balls,
+ * resets it, and closes the window immediately.
  */
 import express = require("express");
 import { authenticateToken } from "../../middleware/auth";
@@ -50,12 +57,13 @@ import {
     BONUS_POCKETS,
     CHUCKER,
     WINDMILLS,
+    ROADS,
     generateNailField,
     isJackpotPrimed,
     MIN_LAUNCH_POWER,
     MAX_LAUNCH_POWER,
 } from "./pachinkoLayout";
-import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, ATTACKER_OPEN_MS, ATTACKER_BALLS, CONTRIBUTION_RATE, JACKPOT_SEED, CASH_OUT_RATE, jackpotBalls, cashOutAmount } from "./pachinkoPayouts";
+import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, ATTACKER_OPEN_MS, ATTACKER_BALLS, JACKPOT_OPEN_MS, CONTRIBUTION_RATE, JACKPOT_SEED, CASH_OUT_RATE, jackpotBalls, cashOutAmount } from "./pachinkoPayouts";
 import { simulateShot, PachinkoOutcome, TrajectorySample } from "./pachinkoPhysics";
 import { spinReel, ReelSpinResult } from "./pachinkoReels";
 
@@ -87,6 +95,7 @@ interface PachinkoConditions {
     leftTulipOpen: boolean;
     rightTulipOpen: boolean;
     attackerOpenUntil: number; // epoch ms; attacker pays while Date.now() < this - 0 means never opened yet
+    jackpotOpenUntil: number; // epoch ms; jackpot pays while Date.now() < this - 0 means never primed yet. Set the instant both tulips are simultaneously open, which also immediately resets both back to closed (see the tulip branches below) - there's no standing "primed" state, only this timed window.
     results: PachinkoBallResult[];
     topups: PachinkoTopup[];
     // Set atomically the instant a cash-out claims the round's balls (before the real-money
@@ -214,11 +223,13 @@ module.exports = function (app: express.Application) {
                     bonusPockets: BONUS_POCKETS,
                     chucker: CHUCKER,
                     windmills: WINDMILLS,
+                    roads: ROADS,
                 },
                 sideTulipBalls: SIDE_TULIP_BALLS,
                 bonusPocketBalls: BONUS_POCKET_BALLS,
                 attackerBalls: ATTACKER_BALLS,
                 attackerOpenMs: ATTACKER_OPEN_MS,
+                jackpotOpenMs: JACKPOT_OPEN_MS,
                 cashOutRate: CASH_OUT_RATE,
                 jackpotPool,
             },
@@ -243,6 +254,7 @@ module.exports = function (app: express.Application) {
                 leftTulipOpen: conditions.leftTulipOpen,
                 rightTulipOpen: conditions.rightTulipOpen,
                 attackerOpenUntil: conditions.attackerOpenUntil,
+                jackpotOpenUntil: conditions.jackpotOpenUntil,
                 // Trajectories deliberately omitted for already-launched balls - resuming shows
                 // a summary, not a replay, so this stays small regardless of batch size.
                 results: conditions.results.map((r) => ({ outcome: r.outcome, ballsAwarded: r.ballsAwarded })),
@@ -318,6 +330,7 @@ module.exports = function (app: express.Application) {
                         leftTulipOpen: conditions.leftTulipOpen,
                         rightTulipOpen: conditions.rightTulipOpen,
                         attackerOpenUntil: conditions.attackerOpenUntil,
+                        jackpotOpenUntil: conditions.jackpotOpenUntil,
                         balance,
                     },
                 });
@@ -330,6 +343,7 @@ module.exports = function (app: express.Application) {
                 leftTulipOpen: false,
                 rightTulipOpen: false,
                 attackerOpenUntil: 0,
+                jackpotOpenUntil: 0,
                 results: [],
                 topups: [],
                 cashOutPending: null,
@@ -383,6 +397,7 @@ module.exports = function (app: express.Application) {
                     leftTulipOpen: false,
                     rightTulipOpen: false,
                     attackerOpenUntil: 0,
+                    jackpotOpenUntil: 0,
                     balance,
                 },
             });
@@ -413,20 +428,19 @@ module.exports = function (app: express.Application) {
             // The chucker, the attacker, and the jackpot are each only ever physically present
             // (real walls, real catch) while active - see pachinkoPhysics.ts's own comment on
             // chuckerActive/attackerActive/jackpotActive. The chucker has no collision while the
-            // attacker it opens is still counting down; the attacker has none until a chucker
-            // catch opens it; the jackpot has none until both tulips are open, and closes back
-            // up the instant it's caught (see the "jackpot" branch below, which re-closes the
-            // tulips too).
+            // attacker it opens is still counting down; the attacker has none until a reel match
+            // opens it; the jackpot has none outside its own timed window (see jackpotOpenUntil).
             const attackerOpen = conditions.attackerOpenUntil > now;
-            const jackpotPrimed = isJackpotPrimed(conditions.leftTulipOpen, conditions.rightTulipOpen);
+            const jackpotOpen = conditions.jackpotOpenUntil > now;
 
             // Fully decided before anything is persisted - see the file header.
-            const { trajectory, outcome } = simulateShot(launchPower, !attackerOpen, attackerOpen, jackpotPrimed);
+            const { trajectory, outcome } = simulateShot(launchPower, !attackerOpen, attackerOpen, jackpotOpen);
 
             let ballsAwarded = 0;
             let nextLeftOpen = conditions.leftTulipOpen;
             let nextRightOpen = conditions.rightTulipOpen;
             let nextAttackerOpenUntil = conditions.attackerOpenUntil;
+            let nextJackpotOpenUntil = conditions.jackpotOpenUntil;
             let poolContribution = 0;
             let resetPool = false;
             let reelSpin: ReelSpinResult | undefined;
@@ -434,23 +448,35 @@ module.exports = function (app: express.Application) {
             if (outcome === "bonusLeft" || outcome === "bonusRight") {
                 ballsAwarded = BONUS_POCKET_BALLS;
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
-            } else if (outcome === "tulipLeft") {
+            } else if (outcome === "tulipLeft" || outcome === "tulipRight") {
                 ballsAwarded = SIDE_TULIP_BALLS;
-                nextLeftOpen = !conditions.leftTulipOpen;
-                poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
-            } else if (outcome === "tulipRight") {
-                ballsAwarded = SIDE_TULIP_BALLS;
-                nextRightOpen = !conditions.rightTulipOpen;
+                if (outcome === "tulipLeft") {
+                    nextLeftOpen = !conditions.leftTulipOpen;
+                } else {
+                    nextRightOpen = !conditions.rightTulipOpen;
+                }
+                // The instant both are simultaneously open is the priming moment itself - starts
+                // the jackpot's own timed window (see JACKPOT_OPEN_MS) and immediately resets
+                // both tulips, so there's no standing "primed" state to sit open indefinitely;
+                // catching both again from scratch is what earns another shot at the window.
+                if (isJackpotPrimed(nextLeftOpen, nextRightOpen)) {
+                    nextJackpotOpenUntil = now + JACKPOT_OPEN_MS;
+                    nextLeftOpen = false;
+                    nextRightOpen = false;
+                }
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
             } else if (outcome === "chucker") {
                 // Fires the board's own central reel gimmick - a real machine's "heso" -> LCD
-                // reel -> bonus round flow (see pachinkoReels.ts). The reel's own bonus balls
-                // and attacker-window extension are layered on top of the chucker's existing,
-                // unconditional attacker-open below - a miss on the reel (matchTier "none")
-                // leaves today's behavior completely unchanged.
+                // reel -> bonus round flow (see pachinkoReels.ts). A catch with no match or a
+                // two-of-a-kind opens nothing; only a three-of-a-kind match opens the attacker
+                // for ATTACKER_OPEN_MS, ADDED on top of whatever's currently left on the clock
+                // (not reset to it) - queued chucker catches landing close together under
+                // hold-to-fire stack their time instead of one clobbering another's.
                 reelSpin = spinReel();
-                nextAttackerOpenUntil = now + ATTACKER_OPEN_MS + reelSpin.attackerBonusMs;
                 ballsAwarded = reelSpin.ballsAwarded;
+                if (reelSpin.attackerOpenMs > 0) {
+                    nextAttackerOpenUntil = Math.max(now, conditions.attackerOpenUntil) + reelSpin.attackerOpenMs;
+                }
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
             } else if (outcome === "attacker") {
                 // Physics only ever returns "attacker" while attackerActive was true, i.e. it
@@ -458,17 +484,22 @@ module.exports = function (app: express.Application) {
                 ballsAwarded = ATTACKER_BALLS;
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
             } else if (outcome === "jackpot") {
-                // Physics only ever returns "jackpot" while jackpotActive was true, i.e. both
-                // tulips were actually open for this shot - no need to re-check jackpotPrimed
-                // here. Catching it re-closes both tulips, which is what makes the pocket
-                // physically disappear again until they're both reopened.
+                // Physics only ever returns "jackpot" while jackpotActive was true, i.e. within
+                // its own timed window - no need to re-check jackpotOpen here. Catching it closes
+                // the window immediately rather than letting it run out naturally.
                 const pool = await XenCasino.getPachinkoJackpotPool();
                 ballsAwarded = jackpotBalls(pool, conditions.pricePerBall);
-                nextLeftOpen = false;
-                nextRightOpen = false;
+                nextJackpotOpenUntil = 0;
                 resetPool = true;
             } else {
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
+            }
+
+            // If the jackpot window has expired, close any open tulips - they exist only to
+            // prime the jackpot, so there's no reason to leave them open once the window ends.
+            if (nextJackpotOpenUntil <= now) {
+                nextLeftOpen = false;
+                nextRightOpen = false;
             }
 
             const result: PachinkoBallResult = { outcome, ballsAwarded, trajectory, reelSpin };
@@ -483,6 +514,7 @@ module.exports = function (app: express.Application) {
                         "conditions.leftTulipOpen": nextLeftOpen,
                         "conditions.rightTulipOpen": nextRightOpen,
                         "conditions.attackerOpenUntil": nextAttackerOpenUntil,
+                        "conditions.jackpotOpenUntil": nextJackpotOpenUntil,
                     },
                 }
             );
@@ -514,6 +546,7 @@ module.exports = function (app: express.Application) {
                     leftTulipOpen: updatedConditions.leftTulipOpen,
                     rightTulipOpen: updatedConditions.rightTulipOpen,
                     attackerOpenUntil: updatedConditions.attackerOpenUntil,
+                    jackpotOpenUntil: updatedConditions.jackpotOpenUntil,
                     ballsRemaining: updatedConditions.ballsRemaining,
                 },
             });

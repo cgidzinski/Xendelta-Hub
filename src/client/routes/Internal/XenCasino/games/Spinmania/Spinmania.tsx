@@ -8,6 +8,7 @@ import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import PlayLauncher from "../../components/PlayLauncher";
 import SpinmaniaGrid, { SpinmaniaSpinResult } from "../../components/SpinmaniaGrid";
 import { formatOddsRatio } from "../../utils/odds";
+import { formatCheddar } from "../../utils/currency";
 
 // SpinMania has its own dedicated 5x3 cascading-grid engine (spinmaniaGrid.ts/spinmania.ts
 // on the server, SpinmaniaGrid.tsx here) - a genuinely different game shape from Easy Spin's
@@ -73,40 +74,45 @@ export default function Spinmania() {
 
     const oddsSections: OddsSection[] = odds
         ? [
-              {
-                  title: "Paytable (per matching way)",
-                  rows: [
-                      ...odds.paytable.map((row) => ({
-                          label: formatCombo(row),
-                          probability: row.probability,
-                          payout: `${row.multiplier}x`,
-                      })),
-                      {
-                          label: `${odds.jackpotScatterCount}+ ${SYMBOL_EMOJI.JACKPOT_ITEM} anywhere`,
-                          probability: odds.jackpotProbability,
-                          payout: "Jackpot pool",
-                      },
-                  ],
-                  footnote: `Cascades: each consecutive win in one spin multiplies by ${odds.cascadeMultipliers.join("x, ")}x. ${(odds.jackpotContributionRate * 100).toFixed(1)}% of every wager feeds the jackpot.`,
-              },
-          ]
+            {
+                title: "Paytable (per matching way, left-to-right)",
+                rows: [
+                    {
+                        label: `${odds.jackpotScatterCount}+ ${SYMBOL_EMOJI.JACKPOT_ITEM} anywhere on the grid`,
+                        probability: odds.jackpotProbability,
+                        payout: "Jackpot pool",
+                    },
+                    ...odds.paytable.map((row) => ({
+                        label: formatCombo(row),
+                        probability: row.probability,
+                        payout: `${row.multiplier}x`,
+                    })),
+                ],
+                footnote: `Cascade multiplier: each consecutive win within the same spin is worth more than the last - ${odds.cascadeMultipliers.join("x, ")}x, then holding at ${odds.cascadeMultipliers[odds.cascadeMultipliers.length - 1]}x for any further chain. ${(odds.jackpotContributionRate * 100).toFixed(1)}% of every wager feeds the jackpot pool.`,
+            },
+        ]
         : [];
 
     return (
         <GameWrapper
             title="Spinmania"
-            howToPlay="A 20,000-credit high-roller machine with a 5x3 grid and cascading wins - matched symbols clear and new ones drop in for a chance to chain multiple wins (with an escalating multiplier) from a single spin. Land enough crowns anywhere on the grid for a shot at the growing jackpot."
+            howToPlay={`A 20,000-credit high-roller machine with a 5x3 grid that pays all ways, not fixed lines: land 3, 4, or 5 matching symbols in a row of consecutive columns starting from the left (any row, any position within the column) and it pays - more matches per column means more "ways" and a bigger payout. Click Spin to get the grid rolling, then Stop whenever you're ready to reveal the result. Every winning symbol clears and new ones cascade down to refill the gaps, and if that refill creates another win it pays too - each consecutive cascade within the same spin is worth more than the last, so a single spin can chain into a much bigger payout than the base hit. Land ${odds?.jackpotScatterCount ?? 6} or more crowns anywhere on the grid before any cascade for a shot at the growing jackpot instead.`}
             oddsSections={oddsSections}
         >
-            <PlayLauncher title="Spinmania" oddsLabel={oddsLabel} rtpLabel={rtpLabel}>
+            <PlayLauncher
+                title="Spinmania"
+                description="20,000-credit high-roller machine with its own jackpot."
+                jackpotLabel={odds?.jackpotPool ? `🎰 ${formatCheddar(odds.jackpotPool)}` : undefined}
+                price={20000}
+                oddsLabel={oddsLabel}
+                rtpLabel={rtpLabel}
+            >
                 <SpinmaniaGrid
                     symbols={SYMBOL_EMOJI}
                     betOptions={BET_OPTIONS}
                     betLabels={BET_LABELS}
                     jackpotPool={odds?.jackpotPool}
                     denominationLabel="20000"
-                    oddsLabel={oddsLabel}
-                    rtpLabel={rtpLabel}
                     isPending={isPending}
                     spin={spinAsync}
                 />

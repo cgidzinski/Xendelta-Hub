@@ -192,25 +192,25 @@ export default function KittyScratch() {
 
     const oddsSections: OddsSection[] = odds
         ? [
-              {
-                  title: "Per Row",
-                  rows: odds.rowDistribution.map((d) => ({
-                      label: d.value > 0 ? `Win ${formatCheddar(d.value)}` : "No win",
-                      probability: d.probability,
-                      payout: d.value > 0 ? formatCheddar(d.value) : "—",
-                  })),
-                  footnote: `Each of the ${odds.rowCount} rows draws independently.`,
-              },
-              {
-                  title: "Bonus Multiplier",
-                  rows: odds.multiplierDistribution.map((d) => ({
-                      label: `${d.value}x`,
-                      probability: d.probability,
-                      payout: `${d.value}x total`,
-                  })),
-                  footnote: "Applied once to the sum of all 4 rows.",
-              },
-          ]
+            {
+                title: "Per Row",
+                rows: odds.rowDistribution.map((d) => ({
+                    label: d.value > 0 ? `Win ${formatCheddar(d.value)}` : "No win",
+                    probability: d.probability,
+                    payout: d.value > 0 ? formatCheddar(d.value) : "—",
+                })),
+                footnote: `Each of the ${odds.rowCount} rows draws independently.`,
+            },
+            {
+                title: "Bonus Multiplier",
+                rows: odds.multiplierDistribution.map((d) => ({
+                    label: `${d.value}x`,
+                    probability: d.probability,
+                    payout: `${d.value}x total`,
+                })),
+                footnote: "Applied once to the sum of all 4 rows.",
+            },
+        ]
         : [];
 
     return (
@@ -221,6 +221,8 @@ export default function KittyScratch() {
         >
             <PlayLauncher
                 title="Kitty Scratch"
+                description="5,000-cheddar ticket - scratch the whole card to reveal your prize."
+                price={odds?.price ?? 5000}
                 oddsLabel={oddsLabel}
                 rtpLabel={rtpLabel}
                 fullBleed

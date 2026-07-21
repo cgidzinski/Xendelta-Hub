@@ -372,20 +372,6 @@ export default function SlotMachine({
                         )}
                     </Box>
 
-                    {(oddsLabel || rtpLabel) && (
-                        <Box sx={{ textAlign: "center" }}>
-                            <Typography
-                                variant="overline"
-                                sx={{ letterSpacing: 1.5, color: "text.secondary", fontWeight: 700, display: "block", lineHeight: 1.2, fontSize: "0.65rem" }}
-                            >
-                                Odds
-                            </Typography>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
-                                {[oddsLabel, rtpLabel].filter(Boolean).join(" · ")}
-                            </Typography>
-                        </Box>
-                    )}
-
                     <Box sx={{ minWidth: 64, textAlign: "right" }}>
                         {denominationLabel && (
                             <>
@@ -432,19 +418,19 @@ export default function SlotMachine({
                                 ...(roundResult?.won
                                     ? roundResult.jackpot
                                         ? {
-                                              animation: "reelGlowPulse 500ms ease-in-out infinite",
-                                              "@keyframes reelGlowPulse": {
-                                                  "0%, 100%": { boxShadow: "0 0 0 4px rgba(255,215,0,0.95), 0 0 30px 10px rgba(255,215,0,0.7)" },
-                                                  "50%": { boxShadow: "0 0 0 8px rgba(255,215,0,1), 0 0 50px 18px rgba(255,215,0,0.95)" },
-                                              },
-                                          }
+                                            animation: "reelGlowPulse 500ms ease-in-out infinite",
+                                            "@keyframes reelGlowPulse": {
+                                                "0%, 100%": { boxShadow: "0 0 0 4px rgba(255,215,0,0.95), 0 0 30px 10px rgba(255,215,0,0.7)" },
+                                                "50%": { boxShadow: "0 0 0 8px rgba(255,215,0,1), 0 0 50px 18px rgba(255,215,0,0.95)" },
+                                            },
+                                        }
                                         : {
-                                              animation: "reelGlowPulse 700ms ease-in-out infinite",
-                                              "@keyframes reelGlowPulse": {
-                                                  "0%, 100%": { boxShadow: "0 0 0 3px rgba(255,215,0,0.85), 0 0 16px 4px rgba(255,215,0,0.5)" },
-                                                  "50%": { boxShadow: "0 0 0 5px rgba(255,215,0,1), 0 0 28px 10px rgba(255,215,0,0.85)" },
-                                              },
-                                          }
+                                            animation: "reelGlowPulse 700ms ease-in-out infinite",
+                                            "@keyframes reelGlowPulse": {
+                                                "0%, 100%": { boxShadow: "0 0 0 3px rgba(255,215,0,0.85), 0 0 16px 4px rgba(255,215,0,0.5)" },
+                                                "50%": { boxShadow: "0 0 0 5px rgba(255,215,0,1), 0 0 28px 10px rgba(255,215,0,0.85)" },
+                                            },
+                                        }
                                     : {}),
                             }}
                         >
@@ -522,20 +508,20 @@ export default function SlotMachine({
                                 borderRadius: 1,
                                 ...(roundResult.jackpot
                                     ? {
-                                          animation: "jackpotBannerIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                                          "@keyframes jackpotBannerIn": {
-                                              "0%": { opacity: 0, transform: "scale(0.5)" },
-                                              "60%": { opacity: 1, transform: "scale(1.12)" },
-                                              "100%": { opacity: 1, transform: "scale(1)" },
-                                          },
-                                      }
+                                        animation: "jackpotBannerIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                                        "@keyframes jackpotBannerIn": {
+                                            "0%": { opacity: 0, transform: "scale(0.5)" },
+                                            "60%": { opacity: 1, transform: "scale(1.12)" },
+                                            "100%": { opacity: 1, transform: "scale(1)" },
+                                        },
+                                    }
                                     : {
-                                          animation: "winBannerIn 0.3s ease-out",
-                                          "@keyframes winBannerIn": {
-                                              "0%": { opacity: 0, transform: "scale(0.8)" },
-                                              "100%": { opacity: 1, transform: "scale(1)" },
-                                          },
-                                      }),
+                                        animation: "winBannerIn 0.3s ease-out",
+                                        "@keyframes winBannerIn": {
+                                            "0%": { opacity: 0, transform: "scale(0.8)" },
+                                            "100%": { opacity: 1, transform: "scale(1)" },
+                                        },
+                                    }),
                             }}
                         >
                             {roundResult.won ? (
