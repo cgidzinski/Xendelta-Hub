@@ -38,6 +38,7 @@ const { XenCasino, XenCasinoRound } = require("../../models/xenCasino");
 const mongoose = require("mongoose");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
+import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
 import {
     CANVAS_WIDTH,
     CANVAS_HEIGHT,
@@ -101,7 +102,7 @@ interface PachinkoConditions {
     // Set atomically the instant a cash-out claims the round's balls (before the real-money
     // transfer even starts), cleared once that transfer confirms. If the process dies in
     // between, the round's balls are already zeroed but the player hasn't been paid yet -
-    // recoverStaleRounds finishes that transfer using the same idempotent key a live request
+    // the stale-round sweep finishes that transfer using the same idempotent key a live request
     // would have used, so a crash mid-cashout can't strand the player's cheddar.
     cashOutPending: CashOutPending | null;
 }
@@ -112,87 +113,66 @@ const nailField = generateNailField(); // static geometry, computed once and reu
 // sweepStale keys off lastActivityAt (see xenCasino.js), so an actively-playing session is
 // never mistaken for an abandoned one.
 const ROUND_TTL_MS = 5 * 60 * 1000;
-// A round that fails this many consecutive sweep attempts is treated as genuinely stuck
-// (not just transient) and gets a louder log line - see recoverStaleRounds below.
-const SWEEP_FAILURE_ALERT_THRESHOLD = 5;
-setInterval(() => {
-    recoverStaleRounds().catch((err: Error) => {
-        console.error(`${SLUG}: stale round recovery failed`, err);
+scheduleStaleRoundSweep(SLUG, ROUND_TTL_MS, async (round) => {
+    const conditions = round.conditions as PachinkoConditions;
+    const xenCasinoAccountId = await getXenCasinoAccountId();
+
+    // Replaying the batch debit is safe even if it already went through - the key makes
+    // it a no-op on the ledger, not a double charge. Every reup debit gets the same
+    // treatment via its own key.
+    await transfer({
+        fromAccountId: round.playerAccountId,
+        toAccountId: xenCasinoAccountId,
+        amount: round.wager.toFixed(10),
+        key: round.debitKey,
+        note: `${SLUG}_wager`,
     });
-}, 60 * 1000).unref();
+    for (const topup of conditions.topups ?? []) {
+        await transfer({
+            fromAccountId: round.playerAccountId,
+            toAccountId: xenCasinoAccountId,
+            amount: (topup.balls * conditions.pricePerBall).toFixed(10),
+            key: topup.debitKey,
+            note: `${SLUG}_wager`,
+        });
+    }
 
-async function recoverStaleRounds(): Promise<void> {
-    const stale = await XenCasinoRound.sweepStale(SLUG, ROUND_TTL_MS);
-    for (const round of stale) {
-        try {
-            const conditions = round.conditions as PachinkoConditions;
-            const xenCasinoAccountId = await getXenCasinoAccountId();
+    // Finish an interrupted cash-out first - the balls it claimed are already zeroed,
+    // so this is the only place that money still owes the player.
+    if (conditions.cashOutPending) {
+        const transferResult = await transfer({
+            fromAccountId: xenCasinoAccountId,
+            toAccountId: round.playerAccountId,
+            amount: conditions.cashOutPending.amount.toFixed(10),
+            key: `xendelta-${SLUG}-cashout-${round._id}`,
+            note: `${SLUG}_cashout`,
+        });
+        void transferResult;
+    }
 
-            // Replaying the batch debit is safe even if it already went through - the key makes
-            // it a no-op on the ledger, not a double charge. Every reup debit gets the same
-            // treatment via its own key.
+    // Any balls never fired have no decided outcome to pay out - refund their
+    // pro-rated cost instead of either forfeiting it or leaving the round stuck open.
+    if (conditions.ballsRemaining > 0) {
+        const refund = conditions.ballsRemaining * conditions.pricePerBall;
+        if (refund > 0) {
             await transfer({
-                fromAccountId: round.playerAccountId,
-                toAccountId: xenCasinoAccountId,
-                amount: round.wager.toFixed(10),
-                key: round.debitKey,
-                note: `${SLUG}_wager`,
+                fromAccountId: xenCasinoAccountId,
+                toAccountId: round.playerAccountId,
+                amount: refund.toFixed(10),
+                key: `xendelta-${SLUG}-refund-${round._id}`,
+                note: `${SLUG}_refund`,
             });
-            for (const topup of conditions.topups ?? []) {
-                await transfer({
-                    fromAccountId: round.playerAccountId,
-                    toAccountId: xenCasinoAccountId,
-                    amount: (topup.balls * conditions.pricePerBall).toFixed(10),
-                    key: topup.debitKey,
-                    note: `${SLUG}_wager`,
-                });
-            }
-
-            // Finish an interrupted cash-out first - the balls it claimed are already zeroed,
-            // so this is the only place that money still owes the player.
-            if (conditions.cashOutPending) {
-                const transferResult = await transfer({
-                    fromAccountId: xenCasinoAccountId,
-                    toAccountId: round.playerAccountId,
-                    amount: conditions.cashOutPending.amount.toFixed(10),
-                    key: `xendelta-${SLUG}-cashout-${round._id}`,
-                    note: `${SLUG}_cashout`,
-                });
-                void transferResult;
-            }
-
-            // Any balls never fired have no decided outcome to pay out - refund their
-            // pro-rated cost instead of either forfeiting it or leaving the round stuck open.
-            if (conditions.ballsRemaining > 0) {
-                const refund = conditions.ballsRemaining * conditions.pricePerBall;
-                if (refund > 0) {
-                    await transfer({
-                        fromAccountId: xenCasinoAccountId,
-                        toAccountId: round.playerAccountId,
-                        amount: refund.toFixed(10),
-                        key: `xendelta-${SLUG}-refund-${round._id}`,
-                        note: `${SLUG}_refund`,
-                    });
-                }
-            }
-
-            await XenCasinoRound.resolve(round._id);
-            // Only counts as "played" if at least one ball was actually launched or cashed out
-            // - otherwise a buy-then-abandon cycle (fully refunded above) would let a player
-            // farm daily quest progress for free with no risk.
-            if (conditions.results.length > 0 || conditions.cashOutPending) {
-                await recordCasinoRoundPlayed(round.userId);
-            }
-        } catch (err) {
-            const failureCount = await XenCasinoRound.recordSweepFailure(round._id);
-            if (failureCount !== null && failureCount >= SWEEP_FAILURE_ALERT_THRESHOLD) {
-                console.error(`${SLUG}: round ${round._id} has failed sweep recovery ${failureCount} times in a row - needs investigation`, err);
-            } else {
-                console.error(`${SLUG}: failed to recover stale round ${round._id}`, err);
-            }
         }
     }
-}
+
+    await XenCasinoRound.resolve(round._id);
+    // Only counts as "played" if at least one ball was actually launched or cashed out
+    // - otherwise a buy-then-abandon cycle (fully refunded above) would let a player
+    // farm daily quest progress for free with no risk.
+    if (conditions.results.length > 0 || conditions.cashOutPending) {
+        await recordCasinoRoundPlayed(round.userId);
+    }
+});
 
 module.exports = function (app: express.Application) {
     app.get(`/api/casino/games/${SLUG}/odds`, authenticateToken, async function (_req: express.Request, res: express.Response) {
@@ -561,7 +541,7 @@ module.exports = function (app: express.Application) {
     // atomically first (an optimistic match on the exact count just read, so a launch racing
     // this request loses cleanly with a 409 rather than either request clobbering the other),
     // then transfers - if the transfer itself fails ambiguously, the claim (conditions.
-    // cashOutPending) is left in place for recoverStaleRounds to finish, same "reserve before
+    // cashOutPending) is left in place for the stale-round sweep to finish, same "reserve before
     // money moves, replay on ambiguous failure" shape every other transfer in this file uses.
     app.post(`/api/casino/games/${SLUG}/cashout`, authenticateToken, async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
@@ -605,7 +585,7 @@ module.exports = function (app: express.Application) {
             });
         } catch (err) {
             // The claim (cashOutPending) is already durable even if we got here - leave the
-            // round in place rather than trying to unwind it; recoverStaleRounds replays the
+            // round in place rather than trying to unwind it; the stale-round sweep replays the
             // same idempotently-keyed transfer once the round goes stale.
             const status = err instanceof WeeabetsUnavailable ? 503 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });

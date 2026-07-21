@@ -18,6 +18,7 @@ const { XenCasinoRound } = require("../../models/xenCasino");
 const mongoose = require("mongoose");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
+import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
 import { PrizeWeight, drawPrize, prizeDistribution } from "./prizeWeights";
 
 const SLUG = "kitty-scratch";
@@ -87,14 +88,6 @@ function generateRound(): TicketConditions {
 // A round's outcome (and thus its payout) is fully decided before it's even persisted, so
 // "stale" only ever means "the process died mid-settlement" - the sweep below finishes it.
 const ROUND_TTL_MS = 30 * 1000;
-// A round that fails this many consecutive sweep attempts is treated as genuinely stuck
-// (not just transient) and gets a louder log line - see recoverStaleRounds below.
-const SWEEP_FAILURE_ALERT_THRESHOLD = 5;
-setInterval(() => {
-    recoverStaleRounds().catch((err: Error) => {
-        console.error(`${SLUG}: stale round recovery failed`, err);
-    });
-}, 60 * 1000).unref();
 
 // Pays out the round's already-decided prize (if any). Shared by the live play handler and
 // the recovery sweep so both settle a round exactly the same way.
@@ -114,33 +107,21 @@ async function settleRound(round: { _id: string; playerAccountId: number; condit
     return { balance: result.toNewBalance };
 }
 
-async function recoverStaleRounds(): Promise<void> {
-    const stale = await XenCasinoRound.sweepStale(SLUG, ROUND_TTL_MS);
-    for (const round of stale) {
-        try {
-            const xenCasinoAccountId = await getXenCasinoAccountId();
-            // Replaying the debit is safe even if it already went through - the key makes
-            // it a no-op on the ledger, not a double charge.
-            await transfer({
-                fromAccountId: round.playerAccountId,
-                toAccountId: xenCasinoAccountId,
-                amount: round.wager.toFixed(10),
-                key: round.debitKey,
-                note: `${SLUG}_wager`,
-            });
-            await settleRound(round);
-            await XenCasinoRound.resolve(round._id);
-            await recordCasinoRoundPlayed(round.userId);
-        } catch (err) {
-            const failureCount = await XenCasinoRound.recordSweepFailure(round._id);
-            if (failureCount !== null && failureCount >= SWEEP_FAILURE_ALERT_THRESHOLD) {
-                console.error(`${SLUG}: round ${round._id} has failed sweep recovery ${failureCount} times in a row - needs investigation`, err);
-            } else {
-                console.error(`${SLUG}: failed to recover stale round ${round._id}`, err);
-            }
-        }
-    }
-}
+scheduleStaleRoundSweep(SLUG, ROUND_TTL_MS, async (round) => {
+    const xenCasinoAccountId = await getXenCasinoAccountId();
+    // Replaying the debit is safe even if it already went through - the key makes
+    // it a no-op on the ledger, not a double charge.
+    await transfer({
+        fromAccountId: round.playerAccountId,
+        toAccountId: xenCasinoAccountId,
+        amount: round.wager.toFixed(10),
+        key: round.debitKey,
+        note: `${SLUG}_wager`,
+    });
+    await settleRound(round);
+    await XenCasinoRound.resolve(round._id);
+    await recordCasinoRoundPlayed(round.userId);
+});
 
 module.exports = function (app: express.Application) {
 

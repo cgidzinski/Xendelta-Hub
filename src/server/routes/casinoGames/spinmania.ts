@@ -38,6 +38,7 @@ import { resolveUserAccount, getXenCasinoAccountId, transfer, WeeabetsUnavailabl
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
 import { settleSlotsRound } from "./slotsSettlement";
 import { GRID_COLS, GRID_ROWS, JACKPOT_ITEM, SpinmaniaConfig, SpinResult, weightOf, resolveSpin } from "./spinmaniaGrid";
+import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
 
 const MACHINE_SLUG = "spinmania";
 
@@ -81,12 +82,6 @@ export const SPINMANIA_CONFIG: SpinmaniaConfig = {
 // See slots.ts's identical constants for the reasoning - a round's outcome is fully decided
 // before it's persisted, so "stale" only ever means "the process died mid-settlement."
 const ROUND_TTL_MS = 30 * 1000;
-const SWEEP_FAILURE_ALERT_THRESHOLD = 5;
-setInterval(() => {
-    recoverStaleRounds().catch((err: Error) => {
-        console.error(`spinmania: stale round recovery failed`, err);
-    });
-}, 60 * 1000).unref();
 
 interface SpinConditions {
     initialGrid: SpinResult["initialGrid"];
@@ -123,33 +118,21 @@ function binomialTailProbability(n: number, p: number, kMin: number): number {
     return total;
 }
 
-async function recoverStaleRounds(): Promise<void> {
-    const stale = await XenCasinoRound.sweepStale(MACHINE_SLUG, ROUND_TTL_MS);
-    for (const round of stale) {
-        try {
-            const xenCasinoAccountId = await getXenCasinoAccountId();
-            // Replaying the debit is safe even if it already went through - the key makes
-            // it a no-op on the ledger, not a double charge.
-            await transfer({
-                fromAccountId: round.playerAccountId,
-                toAccountId: xenCasinoAccountId,
-                amount: round.wager.toFixed(10),
-                key: round.debitKey,
-                note: `${MACHINE_SLUG}_wager`,
-            });
-            await settleRound(round);
-            await XenCasinoRound.resolve(round._id);
-            await recordCasinoRoundPlayed(round.userId);
-        } catch (err) {
-            const failureCount = await XenCasinoRound.recordSweepFailure(round._id);
-            if (failureCount !== null && failureCount >= SWEEP_FAILURE_ALERT_THRESHOLD) {
-                console.error(`spinmania: round ${round._id} has failed sweep recovery ${failureCount} times in a row - needs investigation`, err);
-            } else {
-                console.error(`spinmania: failed to recover stale round ${round._id}`, err);
-            }
-        }
-    }
-}
+scheduleStaleRoundSweep(MACHINE_SLUG, ROUND_TTL_MS, async (round) => {
+    const xenCasinoAccountId = await getXenCasinoAccountId();
+    // Replaying the debit is safe even if it already went through - the key makes
+    // it a no-op on the ledger, not a double charge.
+    await transfer({
+        fromAccountId: round.playerAccountId,
+        toAccountId: xenCasinoAccountId,
+        amount: round.wager.toFixed(10),
+        key: round.debitKey,
+        note: `${MACHINE_SLUG}_wager`,
+    });
+    await settleRound(round);
+    await XenCasinoRound.resolve(round._id);
+    await recordCasinoRoundPlayed(round.userId);
+});
 
 module.exports = function (app: express.Application) {
     app.get("/api/casino/games/spinmania/odds", authenticateToken, async function (_req: express.Request, res: express.Response) {

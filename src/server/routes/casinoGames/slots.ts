@@ -50,6 +50,7 @@ import { resolveUserAccount, getXenCasinoAccountId, transfer, WeeabetsUnavailabl
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
 import { settleSlotsRound } from "./slotsSettlement";
 import { drawWeighted } from "../../utils/weightedDraw";
+import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
 
 type SlotSymbol = string;
 
@@ -106,16 +107,6 @@ const MACHINES: Record<string, MachineConfig> = {
 // A round's outcome (and thus its payout) is fully decided before it's even persisted, so
 // "stale" only ever means "the process died mid-settlement" - the sweep below finishes it.
 const ROUND_TTL_MS = 30 * 1000;
-// A round that fails this many consecutive sweep attempts is treated as genuinely stuck
-// (not just transient) and gets a louder log line - see recoverStaleRounds below.
-const SWEEP_FAILURE_ALERT_THRESHOLD = 5;
-for (const machine of Object.keys(MACHINES)) {
-    setInterval(() => {
-        recoverStaleRounds(machine).catch((err: Error) => {
-            console.error(`slots(${machine}): stale round recovery failed`, err);
-        });
-    }, 60 * 1000).unref();
-}
 
 function totalWeight(machine: MachineConfig): number {
     return machine.symbolWeights.reduce((sum, s) => sum + s.weight, 0);
@@ -157,11 +148,12 @@ async function settleRound(
     return settleSlotsRound(machine.slug, machine.jackpotContributionRate, machine.jackpotSeed, round, round.conditions);
 }
 
-async function recoverStaleRounds(machineSlug: string): Promise<void> {
+for (const machineSlug of Object.keys(MACHINES)) {
     const machine = MACHINES[machineSlug];
-    const stale = await XenCasinoRound.sweepStale(machineSlug, ROUND_TTL_MS);
-    for (const round of stale) {
-        try {
+    scheduleStaleRoundSweep(
+        machineSlug,
+        ROUND_TTL_MS,
+        async (round) => {
             const xenCasinoAccountId = await getXenCasinoAccountId();
             // Replaying the debit is safe even if it already went through - the key makes
             // it a no-op on the ledger, not a double charge.
@@ -175,15 +167,9 @@ async function recoverStaleRounds(machineSlug: string): Promise<void> {
             await settleRound(machine, round);
             await XenCasinoRound.resolve(round._id);
             await recordCasinoRoundPlayed(round.userId);
-        } catch (err) {
-            const failureCount = await XenCasinoRound.recordSweepFailure(round._id);
-            if (failureCount !== null && failureCount >= SWEEP_FAILURE_ALERT_THRESHOLD) {
-                console.error(`slots(${machineSlug}): round ${round._id} has failed sweep recovery ${failureCount} times in a row - needs investigation`, err);
-            } else {
-                console.error(`slots(${machineSlug}): failed to recover stale round ${round._id}`, err);
-            }
-        }
-    }
+        },
+        `slots(${machineSlug})`
+    );
 }
 
 module.exports = function (app: express.Application) {
