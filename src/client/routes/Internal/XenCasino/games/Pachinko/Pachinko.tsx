@@ -187,7 +187,7 @@ export default function Pachinko() {
                     { label: "Jackpot, primed", payout: "Pool → balls" },
                 ],
                 footnote:
-                    "Every catch pays out in balls, never cheddar directly - closing the game cashes out your tray automatically. Most balls miss, like a real pachinko board. Side tulips toggle open/closed each time they catch a ball; the jackpot pocket is nearly impossible to catch until both side tulips are open at once, then it pays the whole jackpot pool, converted to balls. The chucker doesn't pay anything itself directly, but opens the attacker gate for a few seconds and spins the board's central reel - a real modern machine's own start-chucker-triggers-the-LCD-reel gimmick. Two or three matching symbols add a modest ball bonus on top, and three of a kind also extends the attacker's open window.",
+                    "Every catch pays out in balls, never cheddar directly - closing the game cashes out your tray automatically. Most balls miss, like a real pachinko board. Side tulips toggle open/closed each time they catch a ball; the jackpot pocket is nearly impossible to catch until both side tulips are open at once, then it pays the whole jackpot pool, converted to balls. The chucker doesn't pay anything itself directly, but spins the board's central reel - a real modern machine's own start-chucker-triggers-the-LCD-reel gimmick. Two matching symbols add a modest ball bonus; three matching symbols add a bigger bonus AND opens the attacker gate for a few seconds - the attacker only opens on a 3x reel match, not on every chucker catch.",
             },
         ]
         : [];

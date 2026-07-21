@@ -61,6 +61,7 @@ import {
     ROADS,
     generateNailField,
     isJackpotPrimed,
+    shouldCloseLapsedTulips,
     MIN_LAUNCH_POWER,
     MAX_LAUNCH_POWER,
 } from "./pachinkoLayout";
@@ -477,12 +478,9 @@ module.exports = function (app: express.Application) {
 
             // If a jackpot window WAS actually primed and has since expired, close any open
             // tulips - they exist only to prime the jackpot, so there's no reason to leave them
-            // open once the window ends. Gated on conditions.jackpotOpenUntil > 0 (a window
-            // actually existed before this shot) - without that guard, an ordinary single-tulip
-            // catch (nextJackpotOpenUntil still its default 0, since only a simultaneous
-            // both-open catch ever sets it) would satisfy 0 <= now on every shot and immediately
-            // stomp the toggle this same shot just computed above, before it's ever persisted.
-            if (conditions.jackpotOpenUntil > 0 && nextJackpotOpenUntil <= now && !isJackpotPrimed(nextLeftOpen, nextRightOpen)) {
+            // open once the window ends (see shouldCloseLapsedTulips's own comment for why this
+            // can't just be "there's currently no open window").
+            if (shouldCloseLapsedTulips(conditions.jackpotOpenUntil, nextJackpotOpenUntil, nextLeftOpen, nextRightOpen, now)) {
                 nextLeftOpen = false;
                 nextRightOpen = false;
             }

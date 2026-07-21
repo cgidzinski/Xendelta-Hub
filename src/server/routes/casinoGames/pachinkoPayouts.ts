@@ -20,16 +20,16 @@ export const SIDE_TULIP_BALLS = 8;
 
 // The chucker itself never pays balls directly - it only fires the board's central reel gimmick
 // (see pachinkoReels.ts), a real modern machine's own "heso" -> LCD reel -> bonus round flow.
-// Any match (two or three of a kind) opens the attacker gate for this long; a miss opens nothing
-// - the chucker's own catch no longer unconditionally opens the attacker the way it used to.
+// Only a three-of-a-kind match opens the attacker gate for this long; a miss or a two-of-a-kind
+// opens nothing - the chucker's own catch does not unconditionally open the attacker.
 // Queued matches (multiple chucker catches landing close together under hold-to-fire) each ADD
 // this much time on top of whatever's currently left rather than resetting it - see pachinko.ts's
 // own chucker branch for the Math.max(now, ...) + ATTACKER_OPEN_MS stacking.
 export const ATTACKER_OPEN_MS = 15000;
 
-// Two-of-a-kind is a small top-up; three-of-a-kind is bigger. Both open the attacker (see
-// ATTACKER_OPEN_MS above) for the same flat duration - only the ball bonus differs by tier, not
-// the attacker window. Modest starting values, same caveat as every other payout in this file.
+// Two-of-a-kind is a small top-up and opens nothing; three-of-a-kind is bigger AND opens the
+// attacker (see ATTACKER_OPEN_MS above) - only the "three" tier touches the attacker at all.
+// Modest starting values, same caveat as every other payout in this file.
 export const REEL_TWO_MATCH_BALLS = 5;
 export const REEL_THREE_MATCH_BALLS = 15;
 

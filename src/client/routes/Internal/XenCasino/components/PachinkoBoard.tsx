@@ -755,8 +755,8 @@ export default function PachinkoBoard({
 
                         // Misses don't get a popup - they're the most common outcome by far, so
                         // surfacing them would mostly just be clutter; only an actual catch
-                        // (even a 0-ball one like the chucker, which still opened the attacker)
-                        // is worth calling out.
+                        // (even a 0-ball one like a non-matching chucker spin) is worth calling
+                        // out.
                         if (result.outcome !== "gutter") {
                             const calloutId = nextCalloutId++;
                             setCallouts((prev) => [...prev, { id: calloutId, outcome: result.outcome, ballsAwarded: result.ballsAwarded, won: result.ballsAwarded > 0 }]);

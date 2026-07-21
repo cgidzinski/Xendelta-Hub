@@ -252,11 +252,11 @@ export const TULIPS: FixedPocket[] = [
 ];
 
 // Jackpot pocket - a real "just fits one ball" target, barely wider than the ball itself
-// (BALL_RADIUS*2 = 5px across; this pocket is 6px), always this same tiny width.
+// (BALL_RADIUS*2 = 5px across; this pocket is 8px), always this same tiny width.
 // Physically catchable at any time, but only actually PAYS (and visually lights up, vs. sitting
 // grey) while primed - see pachinko.ts's own "jackpot" branch and JACKPOT_OPEN_MS in
 // pachinkoPayouts.ts for that timed window.
-export const JACKPOT: FixedPocket = { id: "jackpot", position: { x: 230, y: 372 }, halfWidth: 6 };
+export const JACKPOT: FixedPocket = { id: "jackpot", position: { x: 230, y: 372 }, halfWidth: 4 };
 
 // True the instant both tulips are simultaneously open - pachinko.ts uses this to detect the
 // priming *moment* (which starts the jackpot's timed window and immediately resets both tulips,
@@ -265,6 +265,17 @@ export const JACKPOT: FixedPocket = { id: "jackpot", position: { x: 230, y: 372 
 // timestamp.
 export function isJackpotPrimed(leftOpen: boolean, rightOpen: boolean): boolean {
     return leftOpen && rightOpen;
+}
+
+// Whether a lapsed jackpot window should force any still-open tulips closed. Only true when a
+// window actually existed before this shot (previousJackpotOpenUntil > 0) and has since expired
+// without re-priming - NOT simply "there's currently no open window", which is also true on an
+// ordinary single-tulip catch where no window was ever primed at all (previousJackpotOpenUntil
+// still its default 0). Conflating those two cases was a real bug: it stomped a tulip's toggle
+// back closed on effectively every catch, before the toggle was ever persisted - see
+// pachinko.ts's own chucker/tulip branch, the only caller.
+export function shouldCloseLapsedTulips(previousJackpotOpenUntil: number, nextJackpotOpenUntil: number, leftOpen: boolean, rightOpen: boolean, now: number): boolean {
+    return previousJackpotOpenUntil > 0 && nextJackpotOpenUntil <= now && !isJackpotPrimed(leftOpen, rightOpen);
 }
 
 // Bonus pockets - frequent, small top-ups. Sized bigger than the tulips (22px wide vs 20px)
@@ -401,6 +412,14 @@ function funnelRowPoints(row: { y: number; halfWidth: number }): Point[] {
 }
 function generateFunnelRows(): Point[] { return FUNNEL_ROWS.flatMap(funnelRowPoints); }
 
+// Top nails ("tenkugi") - a few extra fixed pins right at the very top of the glass, above the
+// release deflector, so the ball gets an extra scatter point immediately after it becomes a free
+// body (RELEASE_POINT sits around y~89) rather than the deflector row being the first thing it
+// can hit.
+export const TOP_NAILS: Point[] = [
+    { x: 190, y: 78 }, { x: 215, y: 70 }, { x: 245, y: 70 }, { x: 270, y: 78 }, { x: 200, y: 92 }, { x: 260, y: 92 },
+];
+
 // --- Release deflector & second road --------------------------------
 export const RELEASE_DEFLECTOR: Point[] = [
     { x: 322, y: 100 }, { x: 308, y: 112 }, { x: 288, y: 121 }, { x: 264, y: 128 },
@@ -429,7 +448,7 @@ function conflictsWithAny(p: Point): boolean {
 
 export function generateNailField(): PinPosition[] {
     const pins: PinPosition[] = [];
-    for (const fixedPin of [...RELEASE_DEFLECTOR, ...SECOND_ROAD, ...LIFE_NAILS]) pins.push({ x: fixedPin.x, y: fixedPin.y });
+    for (const fixedPin of [...TOP_NAILS, ...RELEASE_DEFLECTOR, ...SECOND_ROAD, ...LIFE_NAILS]) pins.push({ x: fixedPin.x, y: fixedPin.y });
     for (const candidate of [...generateRoadNails(), ...generateFunnelRows(), ...generateJackpotGuideNails()]) {
         if (conflictsWithAny(candidate)) continue;
         pins.push({ x: candidate.x, y: candidate.y });
