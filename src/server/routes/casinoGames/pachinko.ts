@@ -38,7 +38,7 @@ const { XenCasino, XenCasinoRound } = require("../../models/xenCasino");
 const mongoose = require("mongoose");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
-import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
+import { requireGameEnabled } from "../../utils/casinoStatus";
 import {
     CANVAS_WIDTH,
     CANVAS_HEIGHT,
@@ -244,7 +244,7 @@ module.exports = function (app: express.Application) {
 
     // Buys balls - creates a fresh batch if the player has no active round, or reups (tops up)
     // their existing one if they do.
-    app.post(`/api/casino/games/${SLUG}/buy`, authenticateToken, async function (req: express.Request, res: express.Response) {
+    app.post(`/api/casino/games/${SLUG}/buy`, authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const { balls } = req.body as { balls?: number };
         if (typeof balls !== "number" || !REUP_SIZES.includes(balls)) {
             return res.status(400).json({ status: false, message: `balls must be one of ${REUP_SIZES.join(", ")}` });
@@ -475,9 +475,14 @@ module.exports = function (app: express.Application) {
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
             }
 
-            // If the jackpot window has expired, close any open tulips - they exist only to
-            // prime the jackpot, so there's no reason to leave them open once the window ends.
-            if (nextJackpotOpenUntil <= now) {
+            // If a jackpot window WAS actually primed and has since expired, close any open
+            // tulips - they exist only to prime the jackpot, so there's no reason to leave them
+            // open once the window ends. Gated on conditions.jackpotOpenUntil > 0 (a window
+            // actually existed before this shot) - without that guard, an ordinary single-tulip
+            // catch (nextJackpotOpenUntil still its default 0, since only a simultaneous
+            // both-open catch ever sets it) would satisfy 0 <= now on every shot and immediately
+            // stomp the toggle this same shot just computed above, before it's ever persisted.
+            if (conditions.jackpotOpenUntil > 0 && nextJackpotOpenUntil <= now && !isJackpotPrimed(nextLeftOpen, nextRightOpen)) {
                 nextLeftOpen = false;
                 nextRightOpen = false;
             }

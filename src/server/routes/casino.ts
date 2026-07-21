@@ -13,6 +13,7 @@ import {
     WeeabetsTransferError,
 } from "../utils/weeabetsClient";
 import { XENCASINO_DISCORD_ID } from "../config/weeabets";
+import { getCasinoStatus } from "../utils/casinoStatus";
 
 // Flat cheddar (display-unit) reward for completing the daily quest - tunable.
 const DAILY_QUEST_REWARD = 10000;
@@ -28,6 +29,19 @@ module.exports = function (app: express.Application) {
                 return res.status(503).json({ status: false, message: "XenCasino account not found on Weeabets" });
             }
             return res.json({ status: true, data: { balance: account.balance } });
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    // Whether the casino as a whole (and which individual games) are open right now - combines
+    // the admin's manual toggle with the live bank-balance auto-close check. Polled by the
+    // client to show the "closed" overlay / gray out disabled games.
+    app.get("/api/casino/status", authenticateToken, async function (_req: express.Request, res: express.Response) {
+        try {
+            const status = await getCasinoStatus();
+            return res.json({ status: true, data: status });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });
@@ -131,128 +145,4 @@ module.exports = function (app: express.Application) {
         }
     });
 
-    // -------- Stats --------
-
-    // Maps a game slug to its human-readable label. Mirrors the client-side
-    // CASINO_GAMES_REGISTRY so the stats response is self-contained.
-    var GAME_LABELS: Record<string, string> = {
-        "easy-spin": "Easy Spin",
-        "spinmania": "Spinmania",
-        "kitty-scratch": "Kitty Scratch",
-        "crossword": "Crossword",
-        "plinko": "Plinko",
-        "pachinko": "Pachinko",
-    };
-
-    // Notes ending in one of these suffixes are game-round entries; everything else
-    // (daily_quest_reward, etc.) is excluded from stats aggregation.
-    var GAME_NOTE_SUFFIXES = ["_wager", "_win", "_jackpot"];
-
-    // Notes on ledger entries whose slug matches our known game list — "the house took
-    // money from a player" is a credit (loss from the player's perspective); "the house
-    // paid a player" is a debit (win). The parenthetical note field suffix tells us
-    // which kind of round it was.
-    function parseGameNote(note: string): { slug: string; isWin: boolean } | null {
-        for (var i = 0; i < GAME_NOTE_SUFFIXES.length; i++) {
-            var suffix = GAME_NOTE_SUFFIXES[i];
-            if (note.endsWith(suffix)) {
-                var slug = note.slice(0, note.length - suffix.length);
-                if (GAME_LABELS[slug]) {
-                    return { slug: slug, isWin: suffix !== "_wager" };
-                }
-            }
-        }
-        return null;
-    }
-
-    // Global (house-level) win/loss stats per game, derived from the Weeabets ledger.
-    // Accepts ?range=today|week|all (default: all).  Paginates through ledger entries
-    // up to a safety cap so "all" doesn't grow unbounded.
-    app.get("/api/casino/stats", authenticateToken, async function (req: express.Request, res: express.Response) {
-        try {
-            var range = (req.query.range as string) || "all";
-            var MAX_PAGES = range === "all" ? 10 : 2; // 500 / 100 entries per page
-            var PAGE_SIZE = 500;
-
-            var now = new Date();
-            var cutoff: Date | null = null;
-            if (range === "today") {
-                cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-            } else if (range === "week") {
-                cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - 7 * 24 * 60 * 60 * 1000);
-            }
-
-            // Per-game aggregates keyed by slug.
-            var games = new Map<string, { winAmount: number; lossAmount: number; roundsPlayed: number }>();
-            var beforeId: number | undefined;
-            var page = 0;
-            var done = false;
-
-            while (page < MAX_PAGES && !done) {
-                var entries = await getLedger({ limit: PAGE_SIZE, beforeId: beforeId });
-                if (entries.length === 0) break;
-
-                for (var i = 0; i < entries.length; i++) {
-                    var entry = entries[i];
-
-                    // Stop early when we've passed the cutoff date (ledger is
-                    // reverse-chronological so entries only get older as we page).
-                    if (cutoff) {
-                        var entryDate = new Date(entry.createdAt);
-                        if (entryDate < cutoff) {
-                            done = true;
-                            break;
-                        }
-                    }
-
-                    var parsed = parseGameNote(entry.note);
-                    if (!parsed) continue;
-
-                    var amount = parseFloat(entry.amount);
-                    if (isNaN(amount)) continue;
-
-                    var agg = games.get(parsed.slug);
-                    if (!agg) {
-                        agg = { winAmount: 0, lossAmount: 0, roundsPlayed: 0 };
-                        games.set(parsed.slug, agg);
-                    }
-
-                    if (parsed.isWin) {
-                        agg.winAmount += amount;
-                    } else {
-                        agg.lossAmount += amount;
-                        agg.roundsPlayed += 1;
-                    }
-                }
-
-                if (!done && entries.length === PAGE_SIZE) {
-                    beforeId = entries[entries.length - 1].id;
-                } else {
-                    done = true;
-                }
-                page++;
-            }
-
-            // Serialize to the shape the client expects, sorted by the registry order.
-            var result = Array.from(games.entries())
-                .map(function (kv) {
-                    return {
-                        slug: kv[0],
-                        label: GAME_LABELS[kv[0]] || kv[0],
-                        winAmount: kv[1].winAmount.toFixed(2),
-                        lossAmount: kv[1].lossAmount.toFixed(2),
-                        roundsPlayed: kv[1].roundsPlayed,
-                    };
-                })
-                .sort(function (a, b) {
-                    var order = Object.keys(GAME_LABELS);
-                    return order.indexOf(a.slug) - order.indexOf(b.slug);
-                });
-
-            return res.json({ status: true, data: { range: range, games: result } });
-        } catch (err) {
-            var status = err instanceof WeeabetsUnavailable ? 503 : 500;
-            return res.status(status).json({ status: false, message: (err as Error).message });
-        }
-    });
 };

@@ -32,6 +32,7 @@ const crypto = require("crypto");
 const mongoose = require("mongoose");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
+import { requireGameEnabled } from "../../utils/casinoStatus";
 
 const SLUG = "memory";
 const BASE_PRICE = 10000; // the 1x denomination shown on the lobby card / odds route
@@ -228,7 +229,7 @@ module.exports = function (app: express.Application) {
         });
     });
 
-    app.post(`/api/casino/games/${SLUG}/start`, authenticateToken, async function (req: express.Request, res: express.Response) {
+    app.post(`/api/casino/games/${SLUG}/start`, authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const { wager } = req.body as { wager?: number };
         if (typeof wager !== "number" || !Number.isFinite(wager) || wager <= 0) {
             return res.status(400).json({ status: false, message: "wager must be a positive number" });

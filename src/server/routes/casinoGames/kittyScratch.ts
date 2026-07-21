@@ -18,7 +18,7 @@ const { XenCasinoRound } = require("../../models/xenCasino");
 const mongoose = require("mongoose");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
-import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
+import { requireGameEnabled } from "../../utils/casinoStatus";
 import { PrizeWeight, drawPrize, prizeDistribution } from "./prizeWeights";
 
 const SLUG = "kitty-scratch";
@@ -31,7 +31,7 @@ const ROW_COUNT = 4; // matches the background art's 4 boxes
 // weight re-solved) to land back on the same ~89.9% RTP this table was tuned to before.
 // Per-row loss probability ~=81.7% (was 80% pre-rebalance - close enough that multi-row-win
 // frequency stays in the same ballpark as the already-approved fix).
-const ROW_PRIZE_WEIGHTS: PrizeWeight[] = [
+export const ROW_PRIZE_WEIGHTS: PrizeWeight[] = [
     { value: 0, weight: 4626 },
     { value: 1500, weight: 500 },
     { value: 3000, weight: 300 },
@@ -43,7 +43,7 @@ const ROW_PRIZE_WEIGHTS: PrizeWeight[] = [
 ];
 
 // Applied once to the sum of the 4 rows - independent of which rows won. Mostly 1x, a rare 5x.
-const MULTIPLIER_WEIGHTS: PrizeWeight[] = [
+export const MULTIPLIER_WEIGHTS: PrizeWeight[] = [
     { value: 1, weight: 800 },
     { value: 2, weight: 180 },
     { value: 5, weight: 20 },
@@ -59,7 +59,7 @@ function multiplierExpectedValue(): number {
     const total = MULTIPLIER_WEIGHTS.reduce((sum, w) => sum + w.weight, 0);
     return MULTIPLIER_WEIGHTS.reduce((sum, w) => sum + w.value * w.weight, 0) / total;
 }
-function kittyScratchRtp(): number {
+export function kittyScratchRtp(): number {
     return (ROW_COUNT * rowExpectedValue() * multiplierExpectedValue()) / PRICE;
 }
 
@@ -75,7 +75,7 @@ interface TicketConditions {
     totalPayout: number;
 }
 
-function generateRound(): TicketConditions {
+export function generateRound(): TicketConditions {
     const rows: RowResult[] = Array.from({ length: ROW_COUNT }, () => {
         const amount = drawPrize(ROW_PRIZE_WEIGHTS);
         return { amount, won: amount > 0 };
@@ -138,7 +138,7 @@ module.exports = function (app: express.Application) {
         });
     });
 
-    app.post(`/api/casino/games/${SLUG}/play`, authenticateToken, async function (req: express.Request, res: express.Response) {
+    app.post(`/api/casino/games/${SLUG}/play`, authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const wager = PRICE;
 
         const userId = String((req as AuthenticatedRequest).user!._id);

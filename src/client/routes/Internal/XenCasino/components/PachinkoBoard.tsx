@@ -125,11 +125,12 @@ const REUP_AMOUNTS = [100, 1000];
 
 // The board's central digital reel - a real modern machine's own "heso" (start chucker) -> LCD
 // reel -> bonus round gimmick (see pachinko.ts's chucker branch and pachinkoReels.ts on the
-// server for how the result is decided). Sits in the one stretch of the upper-mid field that's
-// naturally clear of the release deflector, the windmills, and the chucker's own mouth - no
-// board changes needed to make room for it. The server only ever deals in generic symbol keys
-// (matching slots.ts's own ITEM_A/ITEM_B/.../JACKPOT_ITEM vocabulary); this board owns what each
-// one looks like, same as every slots machine page owns its own symbol map.
+// server for how the result is decided). Centered over the board's own "stage" (see
+// pachinkoLayout.ts's STAGE_BOX), the genuinely nail-free ledge directly above the chucker - the
+// server excludes this same box from its generated nail field, so it's a true bare gap the ball
+// rolls through, not just a pin drawn over on the client. The server only ever deals in generic
+// symbol keys (matching slots.ts's own ITEM_A/ITEM_B/.../JACKPOT_ITEM vocabulary); this board owns
+// what each one looks like, same as every slots machine page owns its own symbol map.
 const REEL_SYMBOLS: Record<string, string> = {
     ITEM_A: "🍒",
     ITEM_B: "🔔",
@@ -138,7 +139,7 @@ const REEL_SYMBOLS: Record<string, string> = {
     JACKPOT_ITEM: "7️⃣",
 };
 const REEL_FLICKER_POOL = Object.values(REEL_SYMBOLS);
-const REEL_BOX = { x: 230, y: 142, width: 120, height: 26 };
+const REEL_BOX = { x: 230, y: 195, width: 120, height: 26 };
 const REEL_SPIN_MS = 900; // base spin duration before the first reel starts landing
 const REEL_STOP_STAGGER_MS = [0, 220, 440]; // per-reel landing stagger, added to REEL_SPIN_MS
 const REEL_FLICKER_INTERVAL_MS = 70;
@@ -935,10 +936,27 @@ export default function PachinkoBoard({
                     boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
                 }}
             >
-                <Box sx={{ textAlign: "center", mb: 1 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
-                        {ballsRemaining} balls · Pool {formatCheddar(jackpotPool)}
-                    </Typography>
+                {/* Same Jackpot/readout header style as SlotMachine.tsx - overline label + bold
+                    tabular-nums value, jackpot on the left, this board's own per-round number
+                    (balls remaining) on the right in place of Slots' "Per Spin". */}
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 2 }}>
+                    <Box sx={{ minWidth: 64, textAlign: "left" }}>
+                        <Typography variant="overline" sx={{ letterSpacing: 1.5, color: "warning.main", fontWeight: 700, display: "block", lineHeight: 1.2, fontSize: "0.65rem" }}>
+                            Jackpot
+                        </Typography>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "warning.light", fontVariantNumeric: "tabular-nums" }}>
+                            🧀{formatCheddar(jackpotPool)}
+                        </Typography>
+                    </Box>
+
+                    <Box sx={{ minWidth: 64, textAlign: "right" }}>
+                        <Typography variant="overline" sx={{ letterSpacing: 1.5, color: "text.secondary", fontWeight: 700, display: "block", lineHeight: 1.2, fontSize: "0.65rem" }}>
+                            Balls
+                        </Typography>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+                            🔴{ballsRemaining}
+                        </Typography>
+                    </Box>
                 </Box>
 
                 <Box
@@ -991,7 +1009,7 @@ export default function PachinkoBoard({
                         disabled={isReuping || isResuming}
                         sx={{ borderRadius: 999, px: 3, fontWeight: 700, textTransform: "none" }}
                     >
-                        +{amount} ({formatCheddar(amount * pricePerBall)})
+                        +{amount}🔴 (🧀{formatCheddar(amount * pricePerBall)})
                     </Button>
                 ))}
             </Box>

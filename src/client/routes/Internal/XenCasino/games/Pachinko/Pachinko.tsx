@@ -88,17 +88,26 @@ export default function Pachinko() {
         queryClient.invalidateQueries({ queryKey: ["pachinkoOdds"] }); // jackpot pool moved
     };
 
+    // A reup response's gate fields (leftTulipOpen/rightTulipOpen/attackerOpenUntil/
+    // jackpotOpenUntil) are just whatever the DB happened to hold at that read - reup doesn't
+    // change any of them - and this request has no seq/staleness guard the way launch responses
+    // do (see PachinkoBoard.tsx's latestAppliedSeqRef). If a reup fired while balls were still
+    // resolving from hold-to-fire, applying it wholesale could clobber fresher gate state a
+    // just-landed launch response already applied. So: only overwrite the fields a buy/reup
+    // response actually owns, and carry forward the existing session's gate state when there
+    // already is one - a fresh buy (no prior session) still gets correct initial values from the
+    // response itself, since those start false/0 for a brand new round anyway.
     const applyBuyResponse = (data: BuyResponse) => {
-        setSession({
+        setSession((prev) => ({
             roundId: data.roundId,
             ballsTotal: data.ballsTotal,
             ballsRemaining: data.ballsRemaining,
             pricePerBall: data.pricePerBall,
-            leftTulipOpen: data.leftTulipOpen,
-            rightTulipOpen: data.rightTulipOpen,
-            attackerOpenUntil: data.attackerOpenUntil,
-            jackpotOpenUntil: data.jackpotOpenUntil,
-        });
+            leftTulipOpen: prev?.leftTulipOpen ?? data.leftTulipOpen,
+            rightTulipOpen: prev?.rightTulipOpen ?? data.rightTulipOpen,
+            attackerOpenUntil: prev?.attackerOpenUntil ?? data.attackerOpenUntil,
+            jackpotOpenUntil: prev?.jackpotOpenUntil ?? data.jackpotOpenUntil,
+        }));
         invalidateShared();
     };
 
@@ -171,9 +180,9 @@ export default function Pachinko() {
                     { label: "Miss (most balls)", payout: "—" },
                     { label: "Bonus pocket", payout: `+${odds.bonusPocketBalls} balls` },
                     { label: "Side tulip (left or right)", payout: `+${odds.sideTulipBalls} balls` },
-                    { label: "Chucker", payout: `Opens attacker (${Math.round(odds.attackerOpenMs / 1000)}s) + spins the reel` },
+                    { label: "Chucker", payout: "Spins the reel" },
                     { label: "Reel, 2 of a kind", payout: "Small ball bonus" },
-                    { label: "Reel, 3 of a kind", payout: "Bigger bonus + longer attacker" },
+                    { label: "Reel, 3 of a kind", payout: `Bigger bonus + opens attacker (${Math.round(odds.attackerOpenMs / 1000)}s)` },
                     { label: "Attacker (while open)", payout: `+${odds.attackerBalls} balls` },
                     { label: "Jackpot, primed", payout: "Pool → balls" },
                 ],

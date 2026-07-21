@@ -14,6 +14,13 @@ import { formatCheddar } from "../../utils/currency";
 import { formatOddsRatio } from "../../utils/odds";
 import kittyBackground from "./kitty-background.png";
 import kittyTop from "./kitty-top.png";
+import archie from "../../icons/Archie.png";
+import b1 from "../../icons/B1.png";
+import b2 from "../../icons/B2.png";
+import bean from "../../icons/Bean.png";
+import crunch from "../../icons/Crunch.png";
+import penelope2 from "../../icons/Penelope2.png";
+import picci from "../../icons/Picci.jpg";
 
 // Kitty Scratch: 4 rows, each an independent real win/lose draw (a row "wins" its own drawn
 // amount, which can be $0), plus a real multiplier applied to the total. No symbol pools, no
@@ -61,18 +68,18 @@ for (const yPct of ROW_Y_PCT) {
 }
 const BONUS_POSITION: SlotPosition = { xPct: 44.1, yPct: 81.3, sizePct: 48 };
 
-const CAT_EMOJI = ["🐱", "🐟", "🧶", "🐾", "🥛"];
+const CAT_PHOTOS = [archie, b1, b2, bean, crunch, penelope2, picci];
 const pick = <T,>(items: T[]): T => items[Math.floor(Math.random() * items.length)];
 
 // A row's symbols are pure decoration for its already-decided `won` flag, never the other way
 // around: won -> always 3 identical; lost -> never all 3 identical, but sometimes a "near
 // miss" (2-of-3 matching) to tease, sometimes all 3 different - neither carries any meaning.
 function buildLosingRowSymbols(): string[] {
-    const a = pick(CAT_EMOJI);
+    const a = pick(CAT_PHOTOS);
     if (Math.random() < 0.5) {
-        let b = pick(CAT_EMOJI);
+        let b = pick(CAT_PHOTOS);
         while (b === a) {
-            b = pick(CAT_EMOJI);
+            b = pick(CAT_PHOTOS);
         }
         const oddIndex = Math.floor(Math.random() * 3);
         const symbols = [a, a, a];
@@ -81,7 +88,7 @@ function buildLosingRowSymbols(): string[] {
     }
     let symbols: string[];
     do {
-        symbols = [pick(CAT_EMOJI), pick(CAT_EMOJI), pick(CAT_EMOJI)];
+        symbols = [pick(CAT_PHOTOS), pick(CAT_PHOTOS), pick(CAT_PHOTOS)];
     } while (symbols[0] === symbols[1] && symbols[1] === symbols[2]);
     return symbols;
 }
@@ -98,7 +105,7 @@ interface RowDecoration {
 // made-up number - it just isn't *this* row's real (zero) result.
 function buildRowDecorations(rows: KittyScratchRow[], winnableAmounts: number[]): RowDecoration[] {
     return rows.map((row) => ({
-        symbols: row.won ? (() => { const s = pick(CAT_EMOJI); return [s, s, s]; })() : buildLosingRowSymbols(),
+        symbols: row.won ? (() => { const s = pick(CAT_PHOTOS); return [s, s, s]; })() : buildLosingRowSymbols(),
         lossDisplayAmount: winnableAmounts.length > 0 ? pick(winnableAmounts) : 0,
     }));
 }
@@ -114,7 +121,7 @@ function buildDynamicContent(result: KittyScratchResult, decorations: RowDecorat
     result.rows.forEach((row, i) => {
         const { symbols, lossDisplayAmount } = decorations[i];
         for (const s of symbols) {
-            nodes.push(<Typography sx={{ fontSize: 24 }}>{s}</Typography>);
+            nodes.push(<Box component="img" src={s} sx={{ width: 60, height: 60, borderRadius: 1, objectFit: "cover" }} />);
         }
         nodes.push(
             <Typography sx={{ fontSize: 15, fontWeight: 700, color: row.won && checked ? "success.light" : "common.white" }}>

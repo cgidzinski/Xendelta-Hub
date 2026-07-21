@@ -13,10 +13,17 @@ var mongoose = require("mongoose");
 // pachinkoJackpotPool is a plain scalar, not folded into slotsJackpotPools - there's exactly
 // one Pachinko board, so a per-slug Map buys nothing here. If a second jackpot-using board
 // ever ships, that's the point to generalize both fields into one shared Map, not before.
+// manuallyClosed and disabledGames are the two admin-facing knobs from the XenCasino admin
+// panel: manuallyClosed is a whole-casino kill switch (independent of the live bank-balance
+// auto-close check the server computes alongside it - see casinoStatus.ts), disabledGames is
+// per-game (e.g. "this one's broken, turn it off without a deploy"). Absent/false in the
+// disabledGames map means enabled, same "absent means default" convention as slotsJackpotPools.
 var xenCasinoSchema = new mongoose.Schema({
   _id: { type: String, default: "singleton" },
   slotsJackpotPools: { type: Map, of: Number, default: {} },
   pachinkoJackpotPool: { type: Number, default: 0 },
+  manuallyClosed: { type: Boolean, default: false },
+  disabledGames: { type: Map, of: Boolean, default: {} },
 });
 
 xenCasinoSchema.statics.getSingleton = async function () {
@@ -66,6 +73,24 @@ xenCasinoSchema.statics.incrementPachinkoJackpotPool = async function (amount) {
 xenCasinoSchema.statics.resetPachinkoJackpotPool = async function (seed) {
   var doc = await this.findByIdAndUpdate("singleton", { $set: { pachinkoJackpotPool: seed } }, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
   return doc.pachinkoJackpotPool;
+};
+
+xenCasinoSchema.statics.setManuallyClosed = async function (closed) {
+  var doc = await this.findByIdAndUpdate(
+    "singleton",
+    { $set: { manuallyClosed: closed } },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  ).exec();
+  return doc.manuallyClosed;
+};
+
+xenCasinoSchema.statics.setGameDisabled = async function (slug, disabled) {
+  var doc = await this.findByIdAndUpdate(
+    "singleton",
+    { $set: { ["disabledGames." + slug]: disabled } },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  ).exec();
+  return !!doc.disabledGames.get(slug);
 };
 
 var XenCasino = mongoose.model("XenCasino", xenCasinoSchema);

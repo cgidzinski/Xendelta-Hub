@@ -536,16 +536,37 @@ export default function ScratchCard<TResult extends ScratchPlayResultBase>({
 
                 {/* Buy Ticket: shown before any ticket exists, and also while a new one (first
                     or "another") is in flight, since the verdict banner that normally hosts
-                    the buy button is hidden during that window (see layer 2/3 above). */}
+                    the buy button is hidden during that window (see layer 2/3 above). A dark
+                    radial backdrop sits behind the button so it stays readable against busy,
+                    brightly-colored foil art (e.g. Kitty Scratch's grid of colored squares)
+                    instead of blending into whatever's directly behind it. */}
                 {(!result || isPending) && (
-                    <Box sx={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Box
+                        sx={{
+                            position: "absolute",
+                            inset: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            background: "radial-gradient(circle, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 55%, rgba(0,0,0,0) 75%)",
+                        }}
+                    >
                         <Button
                             variant="contained"
                             color="error"
                             size="large"
                             onClick={onBuy}
                             disabled={isPending}
-                            sx={{ borderRadius: 999, px: 6, py: 1.25, fontWeight: 800, fontSize: "1.05rem" }}
+                            sx={{
+                                borderRadius: 999,
+                                px: 6,
+                                py: 1.25,
+                                fontWeight: 800,
+                                fontSize: "1.05rem",
+                                border: "2px solid",
+                                borderColor: "common.white",
+                                boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
+                            }}
                         >
                             {isPending ? "Buying…" : `Buy Ticket (${formatCheddar(price)})`}
                         </Button>

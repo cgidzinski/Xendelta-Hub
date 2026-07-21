@@ -11,7 +11,17 @@ import {
     Typography,
     ToggleButtonGroup,
     ToggleButton,
+    Button,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Switch,
+    FormControlLabel,
+    Chip,
+    Divider,
 } from "@mui/material";
+import { useSnackbar } from "notistack";
 import {
     ComposedChart,
     Bar,
@@ -24,7 +34,7 @@ import {
     ResponsiveContainer,
 } from "recharts";
 import { format, parseISO } from "date-fns";
-import { useAdminCasino, useAdminCasinoDailyStats, type StatsRange } from "../../hooks/admin/useAdminCasino";
+import { useAdminCasino, useAdminCasinoDailyStats, useAdminCasinoGames, type StatsRange } from "../../hooks/admin/useAdminCasino";
 import { useTitle } from "../../hooks/useTitle";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import ErrorDisplay from "../../components/ErrorDisplay";
@@ -80,9 +90,61 @@ function CustomTooltip({ active, payload, label }: any) {
 
 export default function Casino() {
     useTitle("Casino");
+    const { enqueueSnackbar } = useSnackbar();
     const [range, setRange] = useState<StatsRange>("all");
-    const { games, isLoading, isError, error } = useAdminCasino(range);
+    const [clearJackpotsOpen, setClearJackpotsOpen] = useState(false);
+    const [closeCasinoOpen, setCloseCasinoOpen] = useState(false);
+    const { games, isLoading, isError, error, clearJackpots, isClearingJackpots } = useAdminCasino(range);
     const { dailyStats, isLoading: chartLoading } = useAdminCasinoDailyStats(5);
+    const {
+        games: gameToggles,
+        casino: casinoControlStatus,
+        isLoading: gamesLoading,
+        toggleGame,
+        isTogglingGame,
+        toggleCasinoOpen,
+        isTogglingCasinoOpen,
+    } = useAdminCasinoGames();
+
+    const handleClearJackpots = async () => {
+        try {
+            await clearJackpots();
+            enqueueSnackbar("All jackpots cleared", { variant: "success" });
+        } catch (err) {
+            enqueueSnackbar(err instanceof Error ? err.message : "Failed to clear jackpots", { variant: "error" });
+        } finally {
+            setClearJackpotsOpen(false);
+        }
+    };
+
+    const handleToggleGame = async (slug: string, disabled: boolean) => {
+        try {
+            await toggleGame({ slug, disabled });
+            enqueueSnackbar(disabled ? "Game disabled" : "Game enabled", { variant: "success" });
+        } catch (err) {
+            enqueueSnackbar(err instanceof Error ? err.message : "Failed to update game", { variant: "error" });
+        }
+    };
+
+    const handleCloseCasino = async () => {
+        try {
+            await toggleCasinoOpen(false);
+            enqueueSnackbar("Casino closed", { variant: "success" });
+        } catch (err) {
+            enqueueSnackbar(err instanceof Error ? err.message : "Failed to close casino", { variant: "error" });
+        } finally {
+            setCloseCasinoOpen(false);
+        }
+    };
+
+    const handleReopenCasino = async () => {
+        try {
+            await toggleCasinoOpen(true);
+            enqueueSnackbar("Casino reopened", { variant: "success" });
+        } catch (err) {
+            enqueueSnackbar(err instanceof Error ? err.message : "Failed to reopen casino", { variant: "error" });
+        }
+    };
 
     const totals = useMemo(() => {
         return games.reduce(
@@ -108,20 +170,122 @@ export default function Casino() {
                 <Typography variant="h6" sx={{ fontWeight: 700 }}>
                     Casino Stats
                 </Typography>
-                <ToggleButtonGroup
-                    value={range}
-                    exclusive
-                    onChange={(_, v) => v && setRange(v)}
-                    size="small"
-                    color="primary"
-                >
-                    {RANGE_OPTIONS.map((opt) => (
-                        <ToggleButton key={opt.value} value={opt.value} sx={{ px: 2 }}>
-                            {opt.label}
-                        </ToggleButton>
-                    ))}
-                </ToggleButtonGroup>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <Button color="error" variant="outlined" size="small" onClick={() => setClearJackpotsOpen(true)}>
+                        Clear Jackpots
+                    </Button>
+                    <ToggleButtonGroup
+                        value={range}
+                        exclusive
+                        onChange={(_, v) => v && setRange(v)}
+                        size="small"
+                        color="primary"
+                    >
+                        {RANGE_OPTIONS.map((opt) => (
+                            <ToggleButton key={opt.value} value={opt.value} sx={{ px: 2 }}>
+                                {opt.label}
+                            </ToggleButton>
+                        ))}
+                    </ToggleButtonGroup>
+                </Box>
             </Box>
+
+            <Dialog open={clearJackpotsOpen} onClose={() => setClearJackpotsOpen(false)}>
+                <DialogTitle>Clear All Jackpots?</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2">
+                        This resets every progressive jackpot pool (Easy Spin, Spinmania, and Pachinko) back to zero. This cannot be undone.
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setClearJackpotsOpen(false)} disabled={isClearingJackpots}>
+                        Cancel
+                    </Button>
+                    <Button color="error" variant="contained" onClick={handleClearJackpots} disabled={isClearingJackpots}>
+                        Clear Jackpots
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={closeCasinoOpen} onClose={() => setCloseCasinoOpen(false)}>
+                <DialogTitle>Close the Casino?</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2">
+                        Every player will immediately see a "closed" takeover and won't be able to place any new
+                        wagers, on any game, until you reopen it.
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setCloseCasinoOpen(false)} disabled={isTogglingCasinoOpen}>
+                        Cancel
+                    </Button>
+                    <Button color="error" variant="contained" onClick={handleCloseCasino} disabled={isTogglingCasinoOpen}>
+                        Close Casino
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Casino Controls */}
+            <Paper variant="outlined" sx={{ p: 2.5, mb: 3 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 2, mb: 2 }}>
+                    <Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                            Casino Status
+                        </Typography>
+                        {casinoControlStatus && (
+                            <Typography variant="body2" color="text.secondary">
+                                Bank balance: {formatCheddar(casinoControlStatus.bankBalance)} cheddar (needs 1,000,000 to stay open)
+                            </Typography>
+                        )}
+                    </Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                        {casinoControlStatus && !casinoControlStatus.open && (
+                            <Chip
+                                label={casinoControlStatus.reason === "broke" ? "Auto-closed: bank too low" : "Manually closed"}
+                                color="error"
+                                size="small"
+                            />
+                        )}
+                        {casinoControlStatus?.open ? (
+                            <Button color="error" variant="outlined" size="small" onClick={() => setCloseCasinoOpen(true)}>
+                                Close Casino
+                            </Button>
+                        ) : (
+                            <Button
+                                color="success"
+                                variant="outlined"
+                                size="small"
+                                onClick={handleReopenCasino}
+                                disabled={isTogglingCasinoOpen}
+                            >
+                                Reopen Casino
+                            </Button>
+                        )}
+                    </Box>
+                </Box>
+
+                <Divider sx={{ mb: 2 }} />
+
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                    Games
+                </Typography>
+                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 1 }}>
+                    {!gamesLoading &&
+                        gameToggles.map((game) => (
+                            <FormControlLabel
+                                key={game.slug}
+                                control={
+                                    <Switch
+                                        checked={!game.disabled}
+                                        onChange={(e) => handleToggleGame(game.slug, !e.target.checked)}
+                                        disabled={isTogglingGame}
+                                    />
+                                }
+                                label={game.label}
+                            />
+                        ))}
+                </Box>
+            </Paper>
 
             {/* Daily chart */}
             {!chartLoading && chartData.length > 0 && (

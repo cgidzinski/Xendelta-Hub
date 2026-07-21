@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 
@@ -27,10 +27,29 @@ interface AdminCasinoResponse {
     games: AdminCasinoGameStats[];
 }
 
+export interface AdminCasinoGame {
+    slug: string;
+    label: string;
+    disabled: boolean;
+}
+
+export interface AdminCasinoStatus {
+    open: boolean;
+    reason: "manual" | "broke" | null;
+    bankBalance: number;
+    disabledGames: string[];
+}
+
+interface AdminCasinoGamesResponse {
+    games: AdminCasinoGame[];
+    casino: AdminCasinoStatus;
+}
+
 export const adminCasinoKeys = {
     all: ["adminCasino"] as const,
     byRange: (range: StatsRange) => ["adminCasino", range] as const,
     dailyStats: (days: number) => ["adminCasino", "dailyStats", days] as const,
+    games: ["adminCasino", "games"] as const,
 };
 
 const fetchAdminCasinoStats = async (range: StatsRange): Promise<AdminCasinoResponse> => {
@@ -47,11 +66,36 @@ const fetchDailyStats = async (days: number): Promise<DailyStatsRow[]> => {
     return response.data.data!.days;
 };
 
+const clearJackpots = async (): Promise<void> => {
+    await apiClient.post("/api/admin/casino/jackpots/clear");
+};
+
+const fetchAdminCasinoGames = async (): Promise<AdminCasinoGamesResponse> => {
+    const response = await apiClient.get<ApiResponse<AdminCasinoGamesResponse>>("/api/admin/casino/games");
+    return response.data.data!;
+};
+
+const toggleGame = async ({ slug, disabled }: { slug: string; disabled: boolean }): Promise<void> => {
+    await apiClient.post(`/api/admin/casino/games/${slug}/toggle`, { disabled });
+};
+
+const toggleCasinoOpen = async (open: boolean): Promise<void> => {
+    await apiClient.post("/api/admin/casino/toggle-open", { open });
+};
+
 export const useAdminCasino = (range: StatsRange) => {
+    const queryClient = useQueryClient();
     const { data, isLoading, isError, error, refetch } = useQuery({
         queryKey: adminCasinoKeys.byRange(range),
         queryFn: () => fetchAdminCasinoStats(range),
         staleTime: 30 * 1000,
+    });
+
+    const { mutateAsync: clearJackpotsMutation, isPending: isClearingJackpots } = useMutation({
+        mutationFn: clearJackpots,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: adminCasinoKeys.all });
+        },
     });
 
     return {
@@ -60,6 +104,43 @@ export const useAdminCasino = (range: StatsRange) => {
         isError,
         error: error as Error | null,
         refetch,
+        clearJackpots: clearJackpotsMutation,
+        isClearingJackpots,
+    };
+};
+
+export const useAdminCasinoGames = () => {
+    const queryClient = useQueryClient();
+    const { data, isLoading, isError, error } = useQuery({
+        queryKey: adminCasinoKeys.games,
+        queryFn: fetchAdminCasinoGames,
+        staleTime: 15 * 1000,
+    });
+
+    const { mutateAsync: toggleGameMutation, isPending: isTogglingGame } = useMutation({
+        mutationFn: toggleGame,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: adminCasinoKeys.games });
+        },
+    });
+
+    const { mutateAsync: toggleCasinoOpenMutation, isPending: isTogglingCasinoOpen } = useMutation({
+        mutationFn: toggleCasinoOpen,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: adminCasinoKeys.games });
+        },
+    });
+
+    return {
+        games: data?.games ?? [],
+        casino: data?.casino,
+        isLoading,
+        isError,
+        error: error as Error | null,
+        toggleGame: toggleGameMutation,
+        isTogglingGame,
+        toggleCasinoOpen: toggleCasinoOpenMutation,
+        isTogglingCasinoOpen,
     };
 };
 

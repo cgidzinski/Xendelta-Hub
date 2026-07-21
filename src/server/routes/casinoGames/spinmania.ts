@@ -36,6 +36,7 @@ const { XenCasino, XenCasinoRound } = require("../../models/xenCasino");
 const mongoose = require("mongoose");
 import { resolveUserAccount, getXenCasinoAccountId, transfer, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
+import { requireGameEnabled } from "../../utils/casinoStatus";
 import { settleSlotsRound } from "./slotsSettlement";
 import { GRID_COLS, GRID_ROWS, JACKPOT_ITEM, SpinmaniaConfig, SpinResult, weightOf, resolveSpin } from "./spinmaniaGrid";
 import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
@@ -181,7 +182,7 @@ module.exports = function (app: express.Application) {
         });
     });
 
-    app.post("/api/casino/games/spinmania/spin", authenticateToken, async function (req: express.Request, res: express.Response) {
+    app.post("/api/casino/games/spinmania/spin", authenticateToken, requireGameEnabled(MACHINE_SLUG), async function (req: express.Request, res: express.Response) {
         const { wager } = req.body as { wager?: number };
         if (typeof wager !== "number" || !Number.isFinite(wager) || wager <= 0) {
             return res.status(400).json({ status: false, message: "wager must be a positive number" });

@@ -1,12 +1,13 @@
 /**
  * Crossword — a real intersecting crossword grid, procedurally generated fresh per play (a
  * 10x10 grid, 8 words placed via randomized greedy intersection search - not read off one
- * fixed template). "Your letters" (the upper circles) are compared independently against
- * each grid word; a word is "found" if the circles contain enough of each of its letters. The
- * prize is by *count* of words found, not which ones (a `TIERS` table keyed by count, same
- * "one weighted draw decides the whole outcome" shape as Kitty Scratch's `prizeWeights.ts`,
- * just returning a tier object instead of a bare value since grid generation needs the target
- * *count*, not just its dollar amount).
+ * fixed template). Which words count as "found" is decided first via a `TIERS` table keyed by
+ * word count, same "one weighted draw decides the whole outcome" shape as Kitty Scratch's
+ * `prizeWeights.ts` (just returning a tier object instead of a bare value, since grid
+ * generation needs the target *count*, not just its dollar amount) - "your letters" (the upper
+ * circles) are built from the found words' letters plus random decoy filler purely for display,
+ * never re-derived from or capable of changing which words are found or the payout, even if a
+ * decoy happens to coincidentally spell out a word that wasn't drawn as found.
  *
  * Same debit-at-start pattern as every other game here: the whole outcome (grid, which words
  * are found, the letters shown, the total payout) is fully decided and persisted into a
@@ -22,6 +23,7 @@ const crypto = require("crypto");
 const mongoose = require("mongoose");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
+import { requireGameEnabled } from "../../utils/casinoStatus";
 import { drawPrizeWeight, prizeRtp } from "./prizeWeights";
 import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
 
@@ -59,7 +61,7 @@ const WORD_BANK: Record<number, string[]> = {
 // which should never happen. Re-solved keeping weight(0)=43313 and the overall any-win
 // probability (~35%) exactly as before, just fixing the ordering: RTP ~81.1%, jackpot (all 8
 // found) ~1-in-823.
-const TIERS: { count: number; value: number; weight: number }[] = [
+export const TIERS: { count: number; value: number; weight: number }[] = [
     { count: 0, value: 0, weight: 43313 },
     { count: 2, value: 5000, weight: 13432 },
     { count: 3, value: 15000, weight: 5726 },
@@ -69,16 +71,6 @@ const TIERS: { count: number; value: number; weight: number }[] = [
     { count: 7, value: 1000000, weight: 189 },
     { count: 8, value: 5000000, weight: 81 },
 ];
-
-function payoutForCount(n: number): number {
-    let payout = TIERS[0].value;
-    for (const tier of TIERS) {
-        if (tier.count <= n) {
-            payout = tier.value;
-        }
-    }
-    return payout;
-}
 
 function shuffled<T>(items: T[]): T[] {
     const arr = [...items];
@@ -238,16 +230,6 @@ function letterFrequency(word: string): Record<string, number> {
     return freq;
 }
 
-function bagCovers(bagFreq: Record<string, number>, word: string): boolean {
-    const need = letterFrequency(word);
-    for (const ch of Object.keys(need)) {
-        if ((bagFreq[ch] ?? 0) < need[ch]) {
-            return false;
-        }
-    }
-    return true;
-}
-
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 interface CrosswordConditions {
@@ -260,11 +242,14 @@ interface CrosswordConditions {
     totalPayout: number;
 }
 
-function generateRound(): CrosswordConditions {
+export function generateRound(): CrosswordConditions {
     const { cellLetters, words } = generateGrid();
     const tier = drawPrizeWeight(TIERS);
 
-    // Which `tier.count` of the 8 placed words are the "found" ones.
+    // Which `tier.count` of the 8 placed words are the "found" ones - decided first and final,
+    // same "outcome fixed before any display is built" shape as every other game here (Kitty
+    // Scratch's row wins, Memory's match count). `tier.count`/`tier.value` are the payout, full
+    // stop; nothing below this line is allowed to change them, even by coincidence.
     const foundIds = new Set(shuffled(words.map((w) => w.id)).slice(0, tier.count));
 
     const bagFreq: Record<string, number> = {};
@@ -284,20 +269,14 @@ function generateRound(): CrosswordConditions {
             letters.push(ch);
         }
     }
-    // Pad with random decoy letters up to the fixed circle count - purely cosmetic, but each
-    // decoy also has to update bagFreq so the validation pass below sees the true final bag.
+    // Pad with random decoy letters up to the fixed circle count - purely cosmetic filler, same
+    // as Kitty Scratch's non-winning row symbols: even if a decoy happens to spell out a word
+    // that wasn't drawn as found, it never changes `found`, `wordsFoundCount`, or the payout.
     while (letters.length < CIRCLE_COUNT) {
-        const decoy = ALPHABET[crypto.randomInt(0, ALPHABET.length)];
-        letters.push(decoy);
-        bagFreq[decoy] = (bagFreq[decoy] ?? 0) + 1;
+        letters.push(ALPHABET[crypto.randomInt(0, ALPHABET.length)]);
     }
 
-    // Re-validate against the *padded* bag - a decoy can accidentally complete a word that
-    // wasn't chosen to win. Rather than regenerate (which could loop), just count it as found
-    // too and pay whatever the resulting (larger) count's prize is - safe, terminates
-    // immediately, a rare/negligible player-favorable nudge.
-    const finalWords = words.map((w) => ({ ...w, found: bagCovers(bagFreq, w.word) }));
-    const wordsFoundCount = finalWords.filter((w) => w.found).length;
+    const finalWords = words.map((w) => ({ ...w, found: foundIds.has(w.id) }));
 
     return {
         rows: ROWS,
@@ -308,8 +287,8 @@ function generateRound(): CrosswordConditions {
         }),
         words: finalWords.map((w) => ({ id: w.id, direction: w.direction, cells: w.cells, word: w.word, found: w.found })),
         letters: shuffled(letters),
-        wordsFoundCount,
-        totalPayout: payoutForCount(wordsFoundCount),
+        wordsFoundCount: tier.count,
+        totalPayout: tier.value,
     };
 }
 
@@ -362,7 +341,7 @@ module.exports = function (app: express.Application) {
         });
     });
 
-    app.post(`/api/casino/games/${SLUG}/play`, authenticateToken, async function (req: express.Request, res: express.Response) {
+    app.post(`/api/casino/games/${SLUG}/play`, authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const wager = PRICE;
 
         const userId = String((req as AuthenticatedRequest).user!._id);
