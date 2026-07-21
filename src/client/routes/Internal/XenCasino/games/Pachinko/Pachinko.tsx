@@ -9,6 +9,7 @@ import { casinoDailyQuestKeys } from "../../../../../hooks/casino/useCasinoDaily
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import PlayLauncher from "../../components/PlayLauncher";
 import PachinkoBoard, { PachinkoLaunchResult, PachinkoLayoutData, PachinkoSession } from "../../components/PachinkoBoard";
+import { formatCheddar } from "../../utils/currency";
 
 // Everything Pachinko needs lives in this one file, same shape as Plinko.tsx - it only imports
 // shared infrastructure (GameWrapper, the board). There's no separate "buy panel" screen gating
@@ -42,6 +43,7 @@ interface ActiveBatchResponse {
     leftTulipOpen?: boolean;
     rightTulipOpen?: boolean;
     attackerOpenUntil?: number;
+    jackpotOpenUntil?: number;
 }
 
 interface BuyResponse {
@@ -52,6 +54,7 @@ interface BuyResponse {
     leftTulipOpen: boolean;
     rightTulipOpen: boolean;
     attackerOpenUntil: number;
+    jackpotOpenUntil: number;
     balance: string;
 }
 
@@ -94,6 +97,7 @@ export default function Pachinko() {
             leftTulipOpen: data.leftTulipOpen,
             rightTulipOpen: data.rightTulipOpen,
             attackerOpenUntil: data.attackerOpenUntil,
+            jackpotOpenUntil: data.jackpotOpenUntil,
         });
         invalidateShared();
     };
@@ -147,6 +151,7 @@ export default function Pachinko() {
                     leftTulipOpen: active.leftTulipOpen ?? false,
                     rightTulipOpen: active.rightTulipOpen ?? false,
                     attackerOpenUntil: active.attackerOpenUntil ?? 0,
+                    jackpotOpenUntil: active.jackpotOpenUntil ?? 0,
                 });
             } else {
                 setSession(null);
@@ -166,12 +171,14 @@ export default function Pachinko() {
                     { label: "Miss (most balls)", payout: "—" },
                     { label: "Bonus pocket", payout: `+${odds.bonusPocketBalls} balls` },
                     { label: "Side tulip (left or right)", payout: `+${odds.sideTulipBalls} balls` },
-                    { label: "Chucker", payout: `Opens attacker (${Math.round(odds.attackerOpenMs / 1000)}s)` },
+                    { label: "Chucker", payout: `Opens attacker (${Math.round(odds.attackerOpenMs / 1000)}s) + spins the reel` },
+                    { label: "Reel, 2 of a kind", payout: "Small ball bonus" },
+                    { label: "Reel, 3 of a kind", payout: "Bigger bonus + longer attacker" },
                     { label: "Attacker (while open)", payout: `+${odds.attackerBalls} balls` },
                     { label: "Jackpot, primed", payout: "Pool → balls" },
                 ],
                 footnote:
-                    "Every catch pays out in balls, never cheddar directly - closing the game cashes out your tray automatically. Most balls miss, like a real pachinko board. Side tulips toggle open/closed each time they catch a ball; the jackpot pocket is nearly impossible to catch until both side tulips are open at once, then it pays the whole jackpot pool, converted to balls. The chucker doesn't pay anything itself, but opens the attacker gate for a few seconds - and stops blocking balls itself while that gate is open.",
+                    "Every catch pays out in balls, never cheddar directly - closing the game cashes out your tray automatically. Most balls miss, like a real pachinko board. Side tulips toggle open/closed each time they catch a ball; the jackpot pocket is nearly impossible to catch until both side tulips are open at once, then it pays the whole jackpot pool, converted to balls. The chucker doesn't pay anything itself directly, but opens the attacker gate for a few seconds and spins the board's central reel - a real modern machine's own start-chucker-triggers-the-LCD-reel gimmick. Two or three matching symbols add a modest ball bonus on top, and three of a kind also extends the attacker's open window.",
             },
         ]
         : [];
@@ -182,7 +189,14 @@ export default function Pachinko() {
             howToPlay="Buy balls with the +100/+1000 buttons, then hold Launch to fire them at your own power - balls fly one every 600ms while held. Most balls miss - catches add more balls to your tray instead of paying cash. Closing the game cashes out your tray automatically."
             oddsSections={oddsSections}
         >
-            <PlayLauncher title="Pachinko" onOpen={handleOpen} onClose={handleClose}>
+            <PlayLauncher
+                title="Pachinko"
+                description="Buy balls and fire them at your own power - catches add balls to your tray."
+                jackpotLabel={odds?.jackpotPool ? `🎰 ${formatCheddar(odds.jackpotPool)}` : undefined}
+                price={odds?.pricePerBall}
+                onOpen={handleOpen}
+                onClose={handleClose}
+            >
                 <PachinkoBoard
                     session={session}
                     layout={odds?.layout ?? null}

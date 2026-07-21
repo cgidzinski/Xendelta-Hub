@@ -59,6 +59,7 @@ import KittyScratch from "./routes/Internal/XenCasino/games/KittyScratch/KittySc
 import Crossword from "./routes/Internal/XenCasino/games/Crossword/Crossword";
 import Plinko from "./routes/Internal/XenCasino/games/Plinko/Plinko";
 import Pachinko from "./routes/Internal/XenCasino/games/Pachinko/Pachinko";
+import Memory from "./routes/Internal/XenCasino/games/Memory/Memory";
 // Routes - Xensplit
 import XensplitGroupsList from "./routes/Internal/Xensplit/GroupsList";
 import XensplitGroupDetail from "./routes/Internal/Xensplit/GroupDetail";
@@ -74,6 +75,7 @@ import Admin from "./routes/Admin/Admin";
 import Users from "./routes/Admin/Users";
 import AdminBlog from "./routes/Admin/Blog";
 import BlogPostForm from "./routes/Admin/BlogPostForm";
+import Casino from "./routes/Admin/Casino";
 import RecipaintPublic from "./routes/External/RecipaintPublic/RecipaintPublic";
 
 const router = createBrowserRouter(
@@ -182,6 +184,7 @@ const router = createBrowserRouter(
           <Route path="games/crossword" element={<Crossword />} />
           <Route path="games/plinko" element={<Plinko />} />
           <Route path="games/pachinko" element={<Pachinko />} />
+          <Route path="games/memory" element={<Memory />} />
         </Route>
         <Route path="xensplit" index element={<Navigate to="groups" replace />} />
         <Route path="xensplit/groups" element={<XensplitGroupsList />} />
@@ -211,6 +214,7 @@ const router = createBrowserRouter(
         <Route path="blog" element={<AdminBlog />} />
         <Route path="blog/new" element={<BlogPostForm />} />
         <Route path="blog/:id/edit" element={<BlogPostForm />} />
+        <Route path="casino" element={<Casino />} />
       </Route>
     </>,
   ),

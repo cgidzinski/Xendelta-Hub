@@ -40,10 +40,10 @@ const DEG = Math.PI / 180;
 // ellipse (FIELD_RY=190, "just slightly longer than round"), bottom half a true circle of
 // radius FIELD_RX. Angle convention throughout this file: 0 = the rightmost point, +90deg =
 // straight down (matching canvas y-down), -90deg = straight up.
-const FIELD_CX = 230;
-const FIELD_CY = 230;
-const FIELD_RX = 170;
-const FIELD_RY = 190;
+export const FIELD_CX = 230;
+export const FIELD_CY = 230;
+export const FIELD_RX = 170;
+export const FIELD_RY = 190;
 
 function ellipsePoint(theta: number, rx: number, ry: number): Point {
     return { x: FIELD_CX + rx * Math.cos(theta), y: FIELD_CY + ry * Math.sin(theta) };
@@ -118,8 +118,8 @@ export const BOUNDARY_LEFT_ARC: BezierSegment[] = [
 export const BOUNDARY_RIGHT_POINTS = sampleArc(BOUNDARY_RIGHT_ARC);
 export const BOUNDARY_LEFT_POINTS = sampleArc(BOUNDARY_LEFT_ARC);
 
-export const BALL_RADIUS = 3.5;
-export const PIN_RADIUS = 1.6; // down from 2.2 - smaller, more delicate pins, matched here and in the client's own rendering so what you see is what you collide with
+export const BALL_RADIUS = 2.5;
+export const PIN_RADIUS = 1.1; // down from 1.6 (originally 2.2) - smaller, more delicate pins to match a real modern board's dense nail field; matched here and in the client's own rendering so what you see is what you collide with
 
 // Gutter: a real gap in the boundary itself, with a pocket hanging below it that narrows down
 // to a drain - same construction the original board used, just recomputed for the new circular
@@ -243,37 +243,51 @@ export interface FixedPocket {
 // when "closed" - a real pachinko pocket's opening doesn't change size, only whether it's lit.
 
 // Side tulips - catching one toggles it open/closed and awards SIDE_TULIP_BALLS unconditionally
-// (see pachinkoPayouts.ts). Both open at once is what primes the jackpot pocket below.
+// (see pachinkoPayouts.ts). Both open at once opens the jackpot pocket below for a timed window
+// (JACKPOT_OPEN_MS) and immediately resets both back to closed - see pachinko.ts's own
+// tulipLeft/tulipRight branches.
 export const TULIPS: FixedPocket[] = [
-    { id: "left", position: { x: 144, y: 315 }, halfWidth: 12 },
-    { id: "right", position: { x: 316, y: 315 }, halfWidth: 12 },
+    { id: "left", position: { x: 144, y: 315 }, halfWidth: 10 },
+    { id: "right", position: { x: 316, y: 315 }, halfWidth: 10 },
 ];
 
-// Jackpot pocket - a real "just fits one ball" target, always this same tiny width. Physically
-// catchable at any time, but only actually PAYS (and visually lights up, vs. sitting grey) once
-// both side tulips are open - see pachinko.ts's own "jackpot" branch for that gating.
-export const JACKPOT: FixedPocket = { id: "jackpot", position: { x: 230, y: 360 }, halfWidth: 7 };
+// Jackpot pocket - a real "just fits one ball" target, barely wider than the ball itself
+// (BALL_RADIUS*2 = 5px across; this pocket is 6px), always this same tiny width.
+// Physically catchable at any time, but only actually PAYS (and visually lights up, vs. sitting
+// grey) while primed - see pachinko.ts's own "jackpot" branch and JACKPOT_OPEN_MS in
+// pachinkoPayouts.ts for that timed window.
+export const JACKPOT: FixedPocket = { id: "jackpot", position: { x: 230, y: 360 }, halfWidth: 3 };
 
+// True the instant both tulips are simultaneously open - pachinko.ts uses this to detect the
+// priming *moment* (which starts the jackpot's timed window and immediately resets both tulips,
+// see its own "tulipLeft"/"tulipRight" branches), not as an ongoing state to poll - unlike the
+// attacker/chucker, there's no persistent "primed" flag, only the resulting jackpotOpenUntil
+// timestamp.
 export function isJackpotPrimed(leftOpen: boolean, rightOpen: boolean): boolean {
     return leftOpen && rightOpen;
 }
 
-// Bonus pockets - frequent, small top-ups. Sized bigger than the tulips (30px wide vs 24px)
+// Bonus pockets - frequent, small top-ups. Sized bigger than the tulips (22px wide vs 20px)
 // since they pay less - pocket width scales inversely with payout throughout this board, the
 // same logic the jackpot's own tiny pocket follows at the other end.
 export const BONUS_POCKETS: FixedPocket[] = [
-    { id: "left", position: { x: 130, y: 258 }, halfWidth: 15 },
-    { id: "right", position: { x: 330, y: 258 }, halfWidth: 15 },
+    { id: "left", position: { x: 130, y: 258 }, halfWidth: 11 },
+    { id: "right", position: { x: 330, y: 258 }, halfWidth: 11 },
 ];
 
 // Chucker - small, always-open trigger. Catching it doesn't pay anything on its own; it's what
 // opens the attacker gate below for ATTACKER_OPEN_MS (see pachinkoPayouts.ts).
-export const CHUCKER: FixedPocket = { id: "chucker", position: { x: 230, y: 185 }, halfWidth: 8 };
+export const CHUCKER: FixedPocket = { id: "chucker", position: { x: 230, y: 185 }, halfWidth: 6 };
 
 // Attacker - a wide gate, always this same width. Whether a catch here pays ATTACKER_BALLS or
 // nothing is entirely a route-level decision (conditions.attackerOpenUntil vs. the clock, see
 // pachinko.ts) - this module doesn't need to know the timer state at all.
-export const ATTACKER: FixedPocket = { id: "attacker", position: { x: 230, y: 225 }, halfWidth: 32 };
+//
+// Moved from y=185's immediate neighbor (225) down to 250 - it used to sit on what was, under
+// an earlier hand-placed nail field, a totally pin-free vertical lane just below the chucker.
+// Same size, same payout, just deeper into the field - now backed by the generated nail lattice
+// (see generateNailField below) and its own dedicated ATTACKER_WALL gate.
+export const ATTACKER: FixedPocket = { id: "attacker", position: { x: 230, y: 250 }, halfWidth: 32 };
 
 // Every pocket's physical depth (and the y-tolerance the hit test uses) - the "cup" a ball has
 // to actually drop into, top open, walls on the other three sides. Shared by pachinkoPhysics.ts
@@ -292,78 +306,87 @@ export const WINDMILLS: WindmillConfig[] = [
     { position: { x: 350, y: 150 }, radius: 12 },
 ];
 
-// --- Nail field -----------------------------------------------------------------------------
-// Built from distinct clusters (not a uniform lattice), each placed at a functional point, plus
-// a handful of sparse stray nails and a diagonal release-deflector chain that redirects the
-// ball leftward right after it leaves the rail. Deterministic (no randomness) so the client and
-// physics agree without shipping coordinates over the wire.
+// --- Nail field: Branching Roads ------------------------------------------------------------
+// Instead of rings or grids, the nail field is 5 sweeping curved "roads" that branch from the
+// release area. Each road is a chain of closely-spaced nails — balls thread through the gaps
+// between them, and power determines which road a ball enters. Roads are visual guides, not
+// solid walls — balls can cross between them.
 
 export interface PinPosition {
     x: number;
     y: number;
 }
 
-const CLUSTER_LOCAL_OFFSETS: Point[] = [
-    { x: -13, y: -4 },
-    { x: -5, y: -13 },
-    { x: 6, y: -10 },
-    { x: 13, y: 0 },
-    { x: 8, y: 11 },
-    { x: -3, y: 12 },
-    { x: -13, y: 5 },
-    { x: 0, y: -1 },
+// Five branching roads. The chucker sits on Road 3 — that's the skill-shot lane.
+const ROAD_PATHS: Point[][] = [
+    [{ x: 195, y: 148 }, { x: 180, y: 168 }, { x: 168, y: 192 }, { x: 156, y: 218 }, { x: 148, y: 245 }, { x: 143, y: 275 }, { x: 143, y: 300 }, { x: 144, y: 315 }],
+    [{ x: 212, y: 142 }, { x: 200, y: 165 }, { x: 188, y: 192 }, { x: 175, y: 218 }, { x: 163, y: 242 }, { x: 153, y: 258 }, { x: 146, y: 280 }, { x: 142, y: 305 }],
+    [{ x: 232, y: 130 }, { x: 232, y: 150 }, { x: 232, y: 170 }, { x: 230, y: 208 }, { x: 230, y: 230 }, { x: 230, y: 275 }, { x: 230, y: 300 }, { x: 230, y: 328 }, { x: 230, y: 355 }],
+    [{ x: 252, y: 142 }, { x: 265, y: 165 }, { x: 278, y: 192 }, { x: 290, y: 218 }, { x: 302, y: 242 }, { x: 312, y: 258 }, { x: 320, y: 280 }, { x: 324, y: 305 }],
+    [{ x: 275, y: 148 }, { x: 292, y: 168 }, { x: 306, y: 192 }, { x: 318, y: 218 }, { x: 326, y: 245 }, { x: 332, y: 275 }, { x: 334, y: 300 }, { x: 330, y: 320 }],
 ];
 
-// Kept out of the central column entirely - the chucker/attacker/bonus/tulip/jackpot pockets
-// already occupy that vertical band, so these sit in the flanking gaps between rows instead,
-// each individually clear of every pocket, the rail, and its neighbors.
-const CLUSTER_CENTERS: Point[] = [
-    { x: 330, y: 165 },
-    { x: 150, y: 175 },
-    { x: 108, y: 218 },
-    { x: 352, y: 218 },
-    { x: 222, y: 300 },
-    { x: 105, y: 345 },
-    { x: 305, y: 345 },
-];
+const ROAD_NAIL_SPACING = 10;
 
-const STRAY_NAILS: Point[] = [
-    { x: 230, y: 60 },
-    { x: 265, y: 78 },
-    { x: 296, y: 96 },
-    { x: 230, y: 315 },
-    { x: 185, y: 335 },
-    { x: 275, y: 335 },
-];
+function sampleRoadNails(road: Point[]): Point[] {
+    const nails: Point[] = [];
+    for (let i = 0; i < road.length - 1; i++) {
+        const a = road[i], b = road[i + 1];
+        const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+        const steps = Math.max(1, Math.round(segLen / ROAD_NAIL_SPACING));
+        for (let s = 0; s <= steps; s++) {
+            const t = s / steps;
+            nails.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+        }
+    }
+    return nails;
+}
 
-// A short diagonal line of nails right where the ball first lands after release, redirecting it
-// leftward toward the tulip field - without something directly in that initial path, the ball
-// would just ride the boundary curve (or drop) with no meaningful deflection. Exported (unlike
-// the other nail groups) so pachinkoPhysics.ts can give just this cluster a lower restitution
-// than the rest of the field.
+function generateRoadNails(): Point[] { return ROAD_PATHS.flatMap(sampleRoadNails); }
+export const ROADS = ROAD_PATHS;
+
+// --- Funnel rows (lower field density) -------------------------------
+const FUNNEL_ROWS: { y: number; halfWidth: number }[] = [
+    { y: 275, halfWidth: 108 }, { y: 305, halfWidth: 82 }, { y: 335, halfWidth: 58 },
+];
+const FUNNEL_COL_SPACING = 22;
+
+function funnelRowPoints(row: { y: number; halfWidth: number }, rowIndex: number): Point[] {
+    const offset = rowIndex % 2 === 0 ? 0 : FUNNEL_COL_SPACING / 2;
+    const pts: Point[] = [];
+    for (let x = FIELD_CX + offset; x <= FIELD_CX + row.halfWidth; x += FUNNEL_COL_SPACING) pts.push({ x, y: row.y });
+    for (let x = FIELD_CX + offset - FUNNEL_COL_SPACING; x >= FIELD_CX - row.halfWidth; x -= FUNNEL_COL_SPACING) pts.push({ x, y: row.y });
+    return pts;
+}
+function generateFunnelRows(): Point[] { const p: Point[] = []; FUNNEL_ROWS.forEach((r, i) => p.push(...funnelRowPoints(r, i))); return p; }
+
+// --- Release deflector & second road --------------------------------
 export const RELEASE_DEFLECTOR: Point[] = [
-    { x: 322, y: 100 },
-    { x: 308, y: 112 },
-    { x: 288, y: 121 },
-    { x: 264, y: 128 },
-    { x: 238, y: 132 },
-    { x: 210, y: 135 },
-    { x: 182, y: 137 },
-    { x: 156, y: 140 },
+    { x: 322, y: 100 }, { x: 308, y: 112 }, { x: 288, y: 121 }, { x: 264, y: 128 },
+    { x: 238, y: 132 }, { x: 210, y: 135 }, { x: 182, y: 137 }, { x: 156, y: 140 },
 ];
+export const SECOND_ROAD: Point[] = [
+    { x: 130, y: 160 }, { x: 142, y: 172 }, { x: 152, y: 186 }, { x: 160, y: 202 }, { x: 166, y: 220 },
+];
+
+// --- Pin conflicts & assembly ---------------------------------------
+const ALL_POCKETS_FOR_CLEARANCE: FixedPocket[] = [...TULIPS, JACKPOT, ATTACKER, ...BONUS_POCKETS, CHUCKER];
+const POCKET_PIN_CLEARANCE = PIN_RADIUS + BALL_RADIUS;
+
+function conflictsWithPocket(p: Point): boolean {
+    return ALL_POCKETS_FOR_CLEARANCE.some(pkt => Math.abs(p.x - pkt.position.x) <= pkt.halfWidth + POCKET_PIN_CLEARANCE && Math.abs(p.y - pkt.position.y) <= POCKET_DEPTH / 2 + POCKET_PIN_CLEARANCE);
+}
+function conflictsWithWindmill(p: Point): boolean { return WINDMILLS.some(w => Math.hypot(p.x - w.position.x, p.y - w.position.y) < w.radius + PIN_RADIUS + BALL_RADIUS + 2); }
+function conflictsWithLauncher(p: Point): boolean { return Math.hypot(p.x - LAUNCHER_POSITION.x, p.y - LAUNCHER_POSITION.y) < RAIL_WIDTH + PIN_RADIUS + BALL_RADIUS + 2; }
+function conflictsWithRoads(p: Point): boolean { return [...RELEASE_DEFLECTOR, ...SECOND_ROAD].some(r => Math.hypot(p.x - r.x, p.y - r.y) < FUNNEL_COL_SPACING * 0.6); }
+function conflictsWithAny(p: Point): boolean { return conflictsWithPocket(p) || conflictsWithWindmill(p) || conflictsWithLauncher(p) || conflictsWithRoads(p); }
 
 export function generateNailField(): PinPosition[] {
     const pins: PinPosition[] = [];
-    for (const deflector of RELEASE_DEFLECTOR) {
-        pins.push({ x: deflector.x, y: deflector.y });
-    }
-    for (const center of CLUSTER_CENTERS) {
-        for (const offset of CLUSTER_LOCAL_OFFSETS) {
-            pins.push({ x: center.x + offset.x, y: center.y + offset.y });
-        }
-    }
-    for (const stray of STRAY_NAILS) {
-        pins.push({ x: stray.x, y: stray.y });
+    for (const road of [...RELEASE_DEFLECTOR, ...SECOND_ROAD]) pins.push({ x: road.x, y: road.y });
+    for (const candidate of [...generateRoadNails(), ...generateFunnelRows()]) {
+        if (conflictsWithAny(candidate)) continue;
+        pins.push({ x: candidate.x, y: candidate.y });
     }
     return pins;
 }

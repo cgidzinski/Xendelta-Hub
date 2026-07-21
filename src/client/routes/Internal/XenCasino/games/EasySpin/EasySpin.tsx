@@ -8,6 +8,7 @@ import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import PlayLauncher from "../../components/PlayLauncher";
 import SlotMachine, { SlotSpinResult } from "../../components/SlotMachine";
 import { formatOddsRatio } from "../../utils/odds";
+import { formatCheddar } from "../../utils/currency";
 
 // Everything Easy Spin needs lives in this one file - it only imports shared
 // infrastructure (GameWrapper, SlotMachine, the odds/currency utils). A second
@@ -78,16 +79,16 @@ export default function EasySpin() {
 
     const oddsSections: OddsSection[] = odds
         ? [
-              {
-                  title: "Paytable",
-                  rows: odds.paytable.map((row) => ({
-                      label: formatCombo(row),
-                      probability: row.probability,
-                      payout: row.multiplier ? `${row.multiplier}x` : "Jackpot pool",
-                  })),
-                  footnote: `${(odds.jackpotContributionRate * 100).toFixed(1)}% of every wager feeds the jackpot.`,
-              },
-          ]
+            {
+                title: "Paytable",
+                rows: odds.paytable.map((row) => ({
+                    label: formatCombo(row),
+                    probability: row.probability,
+                    payout: row.multiplier ? `${row.multiplier}x` : "Jackpot pool",
+                })),
+                footnote: `${(odds.jackpotContributionRate * 100).toFixed(1)}% of every wager feeds the jackpot.`,
+            },
+        ]
         : [];
 
     return (
@@ -96,15 +97,20 @@ export default function EasySpin() {
             howToPlay="A 5,000-credit machine. Spin the reels for a shot at the growing jackpot - match 3 symbols to win."
             oddsSections={oddsSections}
         >
-            <PlayLauncher title="Easy Spin" oddsLabel={oddsLabel} rtpLabel={rtpLabel}>
+            <PlayLauncher
+                title="Easy Spin"
+                description="5,000-credit machine - spin the reels for a shot at the growing jackpot."
+                jackpotLabel={odds?.jackpotPool ? `🎰 ${formatCheddar(odds.jackpotPool)}` : undefined}
+                price={5000}
+                oddsLabel={oddsLabel}
+                rtpLabel={rtpLabel}
+            >
                 <SlotMachine
                     symbols={SYMBOL_EMOJI}
                     betOptions={BET_OPTIONS}
                     betLabels={BET_LABELS}
                     jackpotPool={odds?.jackpotPool}
                     denominationLabel="5000"
-                    oddsLabel={oddsLabel}
-                    rtpLabel={rtpLabel}
                     isPending={isPending}
                     spin={spinAsync}
                 />

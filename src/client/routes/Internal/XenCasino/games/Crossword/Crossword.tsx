@@ -206,6 +206,8 @@ export default function Crossword() {
         >
             <PlayLauncher
                 title="Crossword"
+                description="20,000-cheddar high-roller ticket - spell hidden words with your letters for big prizes."
+                price={odds?.price ?? 20000}
                 oddsLabel={oddsLabel}
                 rtpLabel={rtpLabel}
                 fullBleed

@@ -45,11 +45,11 @@ import { authenticateToken } from "../../middleware/auth";
 import { AuthenticatedRequest } from "../../types/AuthenticatedRequest";
 const { User } = require("../../models/user");
 const { XenCasino, XenCasinoRound } = require("../../models/xenCasino");
-const crypto = require("crypto");
 const mongoose = require("mongoose");
 import { resolveUserAccount, getXenCasinoAccountId, transfer, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
 import { settleSlotsRound } from "./slotsSettlement";
+import { drawWeighted } from "../../utils/weightedDraw";
 
 type SlotSymbol = string;
 
@@ -126,16 +126,7 @@ function weightOf(machine: MachineConfig, symbol: SlotSymbol): number {
 }
 
 function drawSymbol(machine: MachineConfig): SlotSymbol {
-    const total = totalWeight(machine);
-    const roll = crypto.randomInt(0, total);
-    let cumulative = 0;
-    for (const { symbol, weight } of machine.symbolWeights) {
-        cumulative += weight;
-        if (roll < cumulative) {
-            return symbol;
-        }
-    }
-    return machine.symbolWeights[machine.symbolWeights.length - 1].symbol;
+    return drawWeighted(machine.symbolWeights.map((s) => ({ value: s.symbol, weight: s.weight })));
 }
 
 function spinReels(machine: MachineConfig): [SlotSymbol, SlotSymbol, SlotSymbol] {

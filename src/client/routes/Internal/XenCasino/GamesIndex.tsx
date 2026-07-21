@@ -5,6 +5,7 @@ import CasinoIcon from "@mui/icons-material/Casino";
 import ConfirmationNumberIcon from "@mui/icons-material/ConfirmationNumber";
 import ScatterPlotIcon from "@mui/icons-material/ScatterPlot";
 import AdjustIcon from "@mui/icons-material/Adjust";
+import GridViewIcon from "@mui/icons-material/GridView";
 import AddIcon from "@mui/icons-material/Add";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../../config/api";
@@ -41,6 +42,10 @@ interface PlinkoOddsSummary {
 interface PachinkoOddsSummary {
     jackpotPool: number;
 }
+interface MemoryOddsSummary {
+    distribution: { multiplier: number; probability: number }[];
+    rtp: number;
+}
 
 // Same GET requests (and query keys) each game's own page uses to fetch its odds, so the
 // cache is shared and warm either way - just enough of the response shape to compute one
@@ -56,15 +61,20 @@ const fetchPlinkoOdds = async (): Promise<PlinkoOddsSummary> =>
     (await apiClient.get<ApiResponse<PlinkoOddsSummary>>(`/api/casino/games/plinko/odds`)).data.data!;
 const fetchPachinkoOdds = async (): Promise<PachinkoOddsSummary> =>
     (await apiClient.get<ApiResponse<PachinkoOddsSummary>>(`/api/casino/games/pachinko/odds`)).data.data!;
+const fetchSpinmaniaOdds = async (): Promise<SlotsOddsSummary> =>
+    (await apiClient.get<ApiResponse<SlotsOddsSummary>>(`/api/casino/games/spinmania/odds`)).data.data!;
+const fetchMemoryOdds = async (): Promise<MemoryOddsSummary> =>
+    (await apiClient.get<ApiResponse<MemoryOddsSummary>>(`/api/casino/games/memory/odds`)).data.data!;
 
 const TYPE_ICON: Record<CasinoGameType, ComponentType<SvgIconProps>> = {
     slots: CasinoIcon,
     scratch: ConfirmationNumberIcon,
     plinko: ScatterPlotIcon,
     pachinko: AdjustIcon,
+    memory: GridViewIcon,
 };
 
-const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko"];
+const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko", "memory"];
 
 const GHOST_COPY: Partial<Record<CasinoGameType, string>> = {
     slots: "New reel sets and jackpots land here as they ship.",
@@ -73,9 +83,17 @@ const GHOST_COPY: Partial<Record<CasinoGameType, string>> = {
 
 const ODDS_CHIP_SX = {
     alignSelf: "flex-start",
-    color: "warning.main",
-    bgcolor: "rgba(255, 167, 38, 0.12)",
-    border: "1px solid rgba(255, 167, 38, 0.3)",
+    color: "info.main",
+    bgcolor: "rgba(25, 118, 210, 0.12)",
+    border: "1px solid rgba(25, 118, 210, 0.3)",
+    fontWeight: 700,
+} as const;
+
+const RTP_CHIP_SX = {
+    alignSelf: "flex-start",
+    color: "secondary.main",
+    bgcolor: "rgba(156, 39, 176, 0.12)",
+    border: "1px solid rgba(156, 39, 176, 0.3)",
     fontWeight: 700,
 } as const;
 
@@ -99,8 +117,8 @@ export default function GamesIndex() {
         refetchInterval: 15 * 1000, // keeps the jackpot chip below ticking up while browsing
     });
     const { data: spinmaniaOdds } = useQuery({
-        queryKey: ["slotsOdds", "spinmania"],
-        queryFn: () => fetchSlotsOdds("spinmania"),
+        queryKey: ["spinmaniaOdds"],
+        queryFn: fetchSpinmaniaOdds,
         staleTime: 15 * 1000,
         refetchInterval: 15 * 1000,
     });
@@ -125,6 +143,11 @@ export default function GamesIndex() {
         staleTime: 15 * 1000,
         refetchInterval: 15 * 1000, // keeps the jackpot chip ticking up while browsing, same as the slot machines
     });
+    const { data: memoryOdds } = useQuery({
+        queryKey: ["memoryOdds"],
+        queryFn: fetchMemoryOdds,
+        staleTime: 5 * 60 * 1000,
+    });
 
     const oddsLabelByKey: Record<string, string | undefined> = {
         "easy-spin": formatOddsRatio(easySpinOdds?.paytable.reduce((sum, row) => sum + row.probability, 0)),
@@ -135,6 +158,7 @@ export default function GamesIndex() {
                 : undefined
         ),
         crossword: formatOddsRatio(crosswordOdds?.distribution.filter((d) => d.payout > 0).reduce((sum, d) => sum + d.probability, 0)),
+        memory: formatOddsRatio(memoryOdds?.distribution.filter((d) => d.multiplier > 0).reduce((sum, d) => sum + d.probability, 0)),
         // plinko has an RTP (below) but no per-slot probability table to turn into a "1 in N"
         // odds ratio the way the weighted-draw games do; pachinko still has neither.
     };
@@ -145,6 +169,7 @@ export default function GamesIndex() {
         "kitty-scratch": kittyScratchOdds?.rtp,
         crossword: crosswordOdds?.rtp,
         plinko: plinkoOdds?.rtp,
+        memory: memoryOdds?.rtp,
         // pachinko intentionally omitted - RTP tuning is still a deliberate later pass for it.
     };
     const rtpLabelByKey: Record<string, string | undefined> = Object.fromEntries(
@@ -190,7 +215,7 @@ export default function GamesIndex() {
                             </Typography>
                         </Box>
 
-                        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 2.5 }}>
+                        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 2.5 }}>
                             {group.games.map((game) => {
                                 const oddsLabel = oddsLabelByKey[game.key];
                                 const rtpLabel = rtpLabelByKey[game.key];
@@ -205,25 +230,48 @@ export default function GamesIndex() {
                                         }}
                                     >
                                         <CardActionArea onClick={() => navigate(game.path)} sx={{ height: "100%" }}>
-                                            <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", gap: 1.25 }}>
-                                                <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-                                                    <Avatar sx={{ bgcolor: "action.hover", color: "primary.light", width: 40, height: 40 }}>
+                                            <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", p: 2.5, "&:last-child": { pb: 2.5 } }}>
+                                                {/* Header: icon + label, jackpot top-right */}
+                                                <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, mb: 1.5 }}>
+                                                    <Avatar sx={{ bgcolor: "action.hover", color: "primary.light", width: 40, height: 40, flexShrink: 0 }}>
                                                         <Icon fontSize="small" />
                                                     </Avatar>
-                                                    <Typography variant="body2" sx={{ fontWeight: 700, color: "text.secondary" }}>
-                                                        {formatCheddar(game.price)}
-                                                    </Typography>
+                                                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                                                        <Typography variant="h6" component="h2" sx={{ fontWeight: 600, fontSize: "1.05rem", lineHeight: 1.3 }}>
+                                                            {game.label}
+                                                        </Typography>
+                                                        <Typography variant="body2" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                                                            <Typography component="span" variant="body2" color="error.main" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                                                                {formatCheddar(game.price)}
+                                                            </Typography>
+                                                            {" / play"}
+                                                        </Typography>
+                                                    </Box>
+                                                    {jackpotLabel && (
+                                                        <Chip label={jackpotLabel} size="small" sx={{ ...JACKPOT_CHIP_SX, flexShrink: 0 }} />
+                                                    )}
                                                 </Box>
-                                                <Typography variant="h6" component="h2" sx={{ fontWeight: 600, fontSize: "1.05rem" }}>
-                                                    {game.label}
-                                                </Typography>
-                                                <Typography variant="body2" color="text.secondary">
+
+                                                {/* Description */}
+                                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                                                     {game.description}
                                                 </Typography>
-                                                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                                                    {jackpotLabel && <Chip label={jackpotLabel} size="small" sx={JACKPOT_CHIP_SX} />}
-                                                    {oddsLabel && <Chip label={oddsLabel} size="small" sx={ODDS_CHIP_SX} />}
-                                                    {rtpLabel && <Chip label={rtpLabel} size="small" sx={ODDS_CHIP_SX} />}
+
+                                                {/* Stats footer: odds + RTP, pushed to bottom */}
+                                                <Box
+                                                    sx={{
+                                                        display: "flex",
+                                                        flexWrap: "wrap",
+                                                        justifyContent: "space-between",
+                                                        gap: 0.75,
+                                                        mt: "auto",
+                                                        pt: 1.5,
+                                                        borderTop: "1px solid",
+                                                        borderColor: "divider",
+                                                    }}
+                                                >
+                                                    <Chip label={oddsLabel ?? "???"} size="small" sx={ODDS_CHIP_SX} />
+                                                    <Chip label={rtpLabel ?? "???"} size="small" sx={RTP_CHIP_SX} />
                                                 </Box>
                                             </CardContent>
                                         </CardActionArea>

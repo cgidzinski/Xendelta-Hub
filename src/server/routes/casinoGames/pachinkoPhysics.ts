@@ -51,6 +51,9 @@ export interface TrajectorySample {
     x: number;
     y: number;
     r: number; // ball rotation, radians - purely cosmetic on the client
+    // Spinner angles per windmill, snapped each sample for client-side replay.
+    // Index matches WINDMILLS order. Only present when there's at least one spinner.
+    spinnerAngles?: number[];
 }
 
 export type PachinkoOutcome = "gutter" | "tulipLeft" | "tulipRight" | "jackpot" | "bonusLeft" | "bonusRight" | "chucker" | "attacker";
@@ -83,8 +86,8 @@ const ALL_POCKETS: FixedPocket[] = [...BONUS_POCKETS, CHUCKER, ATTACKER, ...TULI
 // first point. Thickness is 3 - thin enough that a fast free body can cross it within a single
 // collision check and tunnel straight through undetected without the SUBSTEPS splitting below,
 // but thick enough to clear the nail field's own collision geometry without burying any pin
-// inside solid wall (every nail cluster keeps a real gap from the boundary on both halves of
-// this board - see pachinkoLayout.ts's clearance comments on RELEASE_DEFLECTOR/CLUSTER_CENTERS).
+// inside solid wall (the generated grid keeps a real, derived-from-the-boundary-formula gap from
+// the glass on both halves of this board - see pachinkoLayout.ts's generateNailField).
 function buildWallSegments(points: Point[]): Matter.Body[] {
     const segments: Matter.Body[] = [];
     for (let i = 0; i < points.length - 1; i++) {
@@ -108,7 +111,7 @@ function buildPocketWalls(pocket: FixedPocket): Matter.Body[] {
     const bottom = pocket.position.y + POCKET_DEPTH / 2;
     const left = pocket.position.x - pocket.halfWidth;
     const right = pocket.position.x + pocket.halfWidth;
-    const wallOptions = { isStatic: true, restitution: 0.4, friction: 0.05, label: "pocket-wall" };
+    const wallOptions = { isStatic: true, restitution: 0.55, friction: 0.05, label: "pocket-wall" };
     return [
         Matter.Bodies.rectangle(left, (top + bottom) / 2, 2, POCKET_DEPTH, wallOptions),
         Matter.Bodies.rectangle(right, (top + bottom) / 2, 2, POCKET_DEPTH, wallOptions),
@@ -130,7 +133,7 @@ function pocketsInPlay(chuckerActive: boolean, attackerActive: boolean, jackpotA
     });
 }
 
-function buildAttemptWorld(chuckerActive: boolean, attackerActive: boolean, jackpotActive: boolean): { engine: Matter.Engine; ball: Matter.Body } {
+function buildAttemptWorld(chuckerActive: boolean, attackerActive: boolean, jackpotActive: boolean): { engine: Matter.Engine; ball: Matter.Body; spinnerBodies: Matter.Body[] } {
     const engine = Matter.Engine.create({ gravity: { x: 0, y: 1, scale: 0.001 }, positionIterations: 12, velocityIterations: 10 });
 
     const bodies: Matter.Body[] = [
@@ -156,24 +159,39 @@ function buildAttemptWorld(chuckerActive: boolean, attackerActive: boolean, jack
         );
     }
 
+    // Spinners: dynamic rotating bodies pinned at center. Each spinner is a circle that
+    // rotates freely, deflecting balls unpredictably - a real machine's roulette wheels.
+    const spinnerBodies: Matter.Body[] = [];
     for (const windmill of WINDMILLS) {
-        bodies.push(
-            Matter.Bodies.circle(windmill.position.x, windmill.position.y, windmill.radius, {
-                isStatic: true,
-                restitution: 0.6,
-                friction: 0.02,
-                label: "windmill",
-            })
-        );
+        const spinner = Matter.Bodies.circle(windmill.position.x, windmill.position.y, windmill.radius, {
+            restitution: 0.5,
+            friction: 0.02,
+            frictionAir: 0,
+            inertia: Infinity, // never slows down
+            label: "spinner",
+        });
+        // Pin at center so it rotates in place without drifting
+        const constraint = Matter.Constraint.create({
+            pointA: { x: windmill.position.x, y: windmill.position.y },
+            bodyB: spinner,
+            pointB: { x: 0, y: 0 },
+            length: 0,
+            stiffness: 1,
+        });
+        // Give it an initial spin - random direction so each shot feels different
+        Matter.Body.setAngularVelocity(spinner, (Math.random() > 0.5 ? 1 : -1) * (0.03 + Math.random() * 0.04));
+        bodies.push(spinner);
+        spinnerBodies.push(spinner);
+        Matter.Composite.add(engine.world, constraint);
     }
 
-    // 0.18, not a higher value - matter-js resolves a collision's restitution as
+    // 0.25, not a higher value - matter-js resolves a collision's restitution as
     // max(bodyA.restitution, bodyB.restitution), so the ball's own value is a floor under every
     // collision in the field regardless of what it hits. Kept under the deflector's own low
     // restitution above (0.02-0.06) so that nail's dampening actually takes effect, while every
     // other nail in the field (0.3-0.6) still wins that max() comparison exactly as before.
     const ball = Matter.Bodies.circle(RELEASE_POINT.x, RELEASE_POINT.y, BALL_RADIUS, {
-        restitution: 0.18,
+        restitution: 0.25,
         friction: 0.02,
         frictionAir: 0.001,
         label: "ball",
@@ -181,7 +199,7 @@ function buildAttemptWorld(chuckerActive: boolean, attackerActive: boolean, jack
     bodies.push(ball);
 
     Matter.Composite.add(engine.world, bodies);
-    return { engine, ball };
+    return { engine, ball, spinnerBodies };
 }
 
 // The rail phase is scripted, not simulated - see the file header. Walks RAIL_CLIMB_PATH (a
@@ -280,7 +298,7 @@ export function simulateShot(launchPower: number, chuckerActive = true, attacker
     const { samples: railSamples } = railTrajectory(launchPower);
     const exitVelocity = launchPowerToExitVelocity(launchPower);
 
-    const { engine, ball } = buildAttemptWorld(chuckerActive, attackerActive, jackpotActive);
+    const { engine, ball, spinnerBodies } = buildAttemptWorld(chuckerActive, attackerActive, jackpotActive);
     // Velocity direction is RELEASE_TANGENT - tangent to the boundary curve at the release
     // point - not a fixed straight-up vector, so the ball leaves the rail already riding the
     // same arc as the glass (see launchPowerToExitVelocity's own comment for the magnitude
@@ -299,6 +317,13 @@ export function simulateShot(launchPower: number, chuckerActive = true, attacker
     let stallCheckpoint = { x: ball.position.x, y: ball.position.y };
     let stepsSinceCheckpoint = 0;
 
+    const sampleSpinnerAngles = (): number[] | undefined =>
+        spinnerBodies.length > 0 ? spinnerBodies.map((s) => s.angle) : undefined;
+
+    const pushSample = () => {
+        freeBodySamples.push({ x: ball.position.x, y: ball.position.y, r: ball.angle, spinnerAngles: sampleSpinnerAngles() });
+    };
+
     for (let step = 0; step < MAX_STEPS; step++) {
         // Several smaller updates instead of one big one - matter-js does discrete (not
         // continuous) collision detection, so a fast-moving ball can cross a thin wall segment
@@ -312,12 +337,12 @@ export function simulateShot(launchPower: number, chuckerActive = true, attacker
         const hit = checkPocketHit(ball, chuckerActive, attackerActive, jackpotActive);
         if (hit) {
             outcome = hit;
-            freeBodySamples.push({ x: ball.position.x, y: ball.position.y, r: ball.angle });
+            pushSample();
             break;
         }
         if (ball.position.y > GUTTER_CUTOUT_Y + 10) {
             outcome = "gutter";
-            freeBodySamples.push({ x: ball.position.x, y: ball.position.y, r: ball.angle });
+            pushSample();
             break;
         }
 
@@ -334,7 +359,7 @@ export function simulateShot(launchPower: number, chuckerActive = true, attacker
             const moved = Math.hypot(ball.position.x - stallCheckpoint.x, ball.position.y - stallCheckpoint.y);
             if (ball.position.y > STALL_MIN_Y && moved < STALL_DISTANCE) {
                 outcome = "gutter";
-                freeBodySamples.push({ x: ball.position.x, y: ball.position.y, r: ball.angle });
+                pushSample();
                 break;
             }
             stallCheckpoint = { x: ball.position.x, y: ball.position.y };
@@ -342,7 +367,7 @@ export function simulateShot(launchPower: number, chuckerActive = true, attacker
         }
 
         if (step % SAMPLE_EVERY_N_STEPS === 0) {
-            freeBodySamples.push({ x: ball.position.x, y: ball.position.y, r: ball.angle });
+            pushSample();
         }
     }
 

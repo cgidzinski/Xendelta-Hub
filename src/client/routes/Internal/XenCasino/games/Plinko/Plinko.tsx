@@ -8,6 +8,7 @@ import { casinoDailyQuestKeys } from "../../../../../hooks/casino/useCasinoDaily
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import PlayLauncher from "../../components/PlayLauncher";
 import PlinkoBoard, { PlinkoDropResult, PlinkoLayoutData } from "../../components/PlinkoBoard";
+import { formatCheddar } from "../../utils/currency";
 
 // Everything Plinko needs lives in this one file, same shape as every slots/scratch page -
 // it only imports shared infrastructure (GameWrapper, PlinkoBoard). A second board (different
@@ -57,15 +58,15 @@ export default function Plinko() {
 
     const oddsSections: OddsSection[] = odds
         ? [
-              {
-                  title: "Payout by slot",
-                  rows: odds.multipliers.map((multiplier, slot) => ({
-                      label: `Slot ${slot}`,
-                      payout: `${multiplier}x`,
-                  })),
-                  footnote: `RTP ${(odds.rtp * 100).toFixed(1)}% (worst case, across every drop position) - aim toward the edges for a shot at the rare big multipliers; the crowded middle mostly breaks even or less.`,
-              },
-          ]
+            {
+                title: "Payout by slot",
+                rows: odds.multipliers.map((multiplier, slot) => ({
+                    label: `Slot ${slot}`,
+                    payout: `${multiplier}x`,
+                })),
+                footnote: `RTP ${(odds.rtp * 100).toFixed(1)}% (worst case, across every drop position) - aim toward the edges for a shot at the rare big multipliers; the crowded middle mostly breaks even or less.`,
+            },
+        ]
         : [];
 
     return (
@@ -74,7 +75,12 @@ export default function Plinko() {
             howToPlay="A marker glides back and forth above the board - click Drop Ball when it's where you want to aim. A real ball falls from there through 12 rows of pegs; where it lands decides your multiplier."
             oddsSections={oddsSections}
         >
-            <PlayLauncher title="Plinko">
+            <PlayLauncher
+                title="Plinko"
+                description="500-cheddar base bet - drop a ball through 12 rows of pegs."
+                price={500}
+                rtpLabel={odds ? `RTP ${(odds.rtp * 100).toFixed(1)}%` : undefined}
+            >
                 <PlinkoBoard
                     betOptions={BET_OPTIONS}
                     betLabels={BET_LABELS}

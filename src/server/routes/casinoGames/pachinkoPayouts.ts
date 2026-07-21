@@ -18,12 +18,29 @@ export const BONUS_POCKET_BALLS = 3;
 // Catching a side tulip also toggles it open/closed - both open at once primes the jackpot.
 export const SIDE_TULIP_BALLS = 8;
 
-// The chucker itself never pays - it only opens the attacker gate for this long.
-export const ATTACKER_OPEN_MS = 6000;
+// The chucker itself never pays balls directly - it only fires the board's central reel gimmick
+// (see pachinkoReels.ts), a real modern machine's own "heso" -> LCD reel -> bonus round flow.
+// Any match (two or three of a kind) opens the attacker gate for this long; a miss opens nothing
+// - the chucker's own catch no longer unconditionally opens the attacker the way it used to.
+// Queued matches (multiple chucker catches landing close together under hold-to-fire) each ADD
+// this much time on top of whatever's currently left rather than resetting it - see pachinko.ts's
+// own chucker branch for the Math.max(now, ...) + ATTACKER_OPEN_MS stacking.
+export const ATTACKER_OPEN_MS = 15000;
+
+// Two-of-a-kind is a small top-up; three-of-a-kind is bigger. Both open the attacker (see
+// ATTACKER_OPEN_MS above) for the same flat duration - only the ball bonus differs by tier, not
+// the attacker window. Modest starting values, same caveat as every other payout in this file.
+export const REEL_TWO_MATCH_BALLS = 5;
+export const REEL_THREE_MATCH_BALLS = 15;
 
 // A big, rare payout - the attacker is a wide target, but only reachable during its short open
-// window, and only reachable AT ALL via the chucker (a small, always-open target of its own).
+// window, and only reachable AT ALL via a chucker catch that also lands a reel match.
 export const ATTACKER_BALLS = 25;
+
+// How long the jackpot pocket actually pays once both tulips are simultaneously open - same
+// timed-window shape as the attacker (see pachinko.ts's own jackpot-priming branch), not a
+// standing "primed" state that sits open indefinitely until caught.
+export const JACKPOT_OPEN_MS = 10000;
 
 // Fraction of every ball's price that feeds the shared jackpot pool (fed by every ball fired,
 // not just misses - the pool is jackpot-only money, unrelated to what any individual shot pays
