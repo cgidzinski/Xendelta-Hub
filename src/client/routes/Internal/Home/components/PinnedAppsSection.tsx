@@ -23,6 +23,7 @@ export default function PinnedAppsSection({ pinnedApps, appDetails }: PinnedApps
                             <AppCard
                                 app={app}
                                 fullWidth
+                                bodyClickable={app.key !== "xensplit"}
                             >
                                 {appDetails?.[app.key]}
                             </AppCard>
