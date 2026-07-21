@@ -6,9 +6,7 @@ import { XENCASINO_DISCORD_ID } from "../../config/weeabets";
 const { XenCasino } = require("../../models/xenCasino");
 
 // Mirrors the client-side CASINO_GAMES_REGISTRY order - stats are returned in this
-// order so the admin table is deterministic. Keep this in sync with
-// CASINO_GAMES_REGISTRY (src/client/routes/Internal/XenCasino/gamesRegistry.ts)
-// whenever a game is added or removed.
+// order so the admin table is deterministic.
 var GAME_LABELS: Record<string, string> = {
     "easy-spin": "Easy Spin",
     "spinmania": "Spinmania",
@@ -16,7 +14,6 @@ var GAME_LABELS: Record<string, string> = {
     "crossword": "Crossword",
     "plinko": "Plinko",
     "pachinko": "Pachinko",
-    "memory": "Memory",
 };
 
 // Which games have progressive jackpots. Scratch tickets and Plinko do not - they
@@ -44,7 +41,7 @@ function parseGameNote(note: string): { slug: string; isWin: boolean } | null {
 module.exports = function (app: express.Application) {
 
     // Per-game win/loss/round counts from the Weeabets ledger, plus current jackpot
-    // pool values from the XenCasino singleton. Always returns all registered games
+    // pool values from the XenCasino singleton. Always returns all 6 registered games
     // (zero-filled when there's no ledger activity for a game).
     app.get("/api/admin/casino/stats", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
         try {

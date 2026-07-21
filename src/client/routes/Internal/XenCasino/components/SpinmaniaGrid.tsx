@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Typography, ToggleButtonGroup, ToggleButton } from "@mui/material";
 import { formatCheddar } from "../utils/currency";
 import { generateConfetti, ConfettiOverlay, RoundResultBanner, type RoundResult } from "./slotEffects";
@@ -53,9 +53,7 @@ const CLEAR_MS = 300;
 const DROP_MS = 450;
 const DROP_ANIM_MS = 320; // drop-in keyframe duration for refilled cells; stays inside DROP_MS's pause
 const POST_SEQUENCE_PAUSE_MS = 300;
-// Reel-scroll animation constants — mirrors SlotMachine's continuous reel model. The same
-// strips carry the grid through spin, landing, and cascade reveal - there's no separate
-// "resting grid" element to hand off to, so no shape/size jump between phases.
+// Reel-scroll animation constants — mirrors SlotMachine's continuous reel model.
 const CELL_HEIGHT = 96;
 const FILLER_COUNT = 300;
 const LANDING_COUNT = 6;
@@ -100,15 +98,15 @@ export default function SpinmaniaGrid({ symbols, betOptions, betLabels, defaultB
     const [wager, setWager] = useState(defaultBet ?? betOptions[0]);
     const [spinning, setSpinning] = useState(false);
     const [stopping, setStopping] = useState(false);
-    const [reelsLanded, setReelsLanded] = useState(true); // false only while reels are actively scrolling/landing
+    const [displayGrid, setDisplayGrid] = useState<string[][]>(() => Array.from({ length: GRID_COLS }, () => Array.from({ length: GRID_ROWS }, () => symbolKeys[0])));
     const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
     const [clearing, setClearing] = useState<Set<string>>(new Set());
     const [entering, setEntering] = useState<Set<string>>(new Set());
     const [cascadeMultiplier, setCascadeMultiplier] = useState<number | null>(null);
     const [roundResult, setRoundResult] = useState<RoundResult | null>(null);
     const [stats, setStats] = useState<SessionStats>({ rounds: 0, wagered: 0, won: 0 });
-    const [strips, setStrips] = useState<string[][]>(() => Array.from({ length: GRID_COLS }, () => Array.from({ length: GRID_ROWS }, () => symbolKeys[0])));
-    const [reelBlurred, setReelBlurred] = useState<boolean[]>(Array.from({ length: GRID_COLS }, () => false));
+    const [strips, setStrips] = useState<string[][]>(Array.from({ length: GRID_COLS }, () => [symbolKeys[0]]));
+    const [columnStopped, setColumnStopped] = useState<boolean[]>(Array.from({ length: GRID_COLS }, () => true));
 
     const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
     const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -120,13 +118,6 @@ export default function SpinmaniaGrid({ symbols, betOptions, betLabels, defaultB
     const stopTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
     const pendingResultRef = useRef<SpinmaniaSpinResult | null>(null);
     const stopRequestedRef = useRef(false);
-    // Mirrors the logical (GRID_ROWS-tall) grid across cascade steps so each step can diff
-    // against the one before it - a "tumble" refill (see spinmaniaGrid.ts) shifts surviving
-    // cells down a column, not just the exact matched cells, so plenty of cells change value
-    // between steps that aren't in that step's `wins`. Only animating the win cells left every
-    // other changed cell popping to its new symbol instantly - this diff makes every cell that
-    // actually changed play the same drop-in.
-    const gridRef = useRef<string[][]>(strips.map((column) => [...column]));
 
     const clearAllTimers = () => {
         timeoutsRef.current.forEach(clearTimeout); timeoutsRef.current = [];
@@ -163,13 +154,13 @@ export default function SpinmaniaGrid({ symbols, betOptions, betLabels, defaultB
             for (let k = GRID_ROWS; k < GRID_ROWS + LANDING_COUNT; k++) strip[k] = randomSymbol();
             next[col] = strip; return next;
         });
-        setReelBlurred((prev) => { const n = [...prev]; n[col] = false; return n; });
         const el = stripRefs.current[col];
         if (el) {
             el.style.transition = `transform ${LANDING_DURATION_MS}ms cubic-bezier(0.12, 0.85, 0.28, 1)`;
             requestAnimationFrame(() => { el.style.transform = "translateY(0px)"; });
         }
         const t = setTimeout(() => {
+            setColumnStopped((prev) => { const n = [...prev]; n[col] = true; return n; });
             if (el) el.style.transition = "";
         }, LANDING_DURATION_MS);
         stopTimeoutsRef.current.push(t);
@@ -186,7 +177,6 @@ export default function SpinmaniaGrid({ symbols, betOptions, betLabels, defaultB
         const totalWait = lastStagger + LANDING_DURATION_MS + POST_STOP_PAUSE_MS;
         const t = setTimeout(() => {
             if (watchdogRef.current !== null) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
-            setReelsLanded(true);
             playSequence(result);
         }, totalWait);
         stopTimeoutsRef.current.push(t);
@@ -195,25 +185,23 @@ export default function SpinmaniaGrid({ symbols, betOptions, betLabels, defaultB
     const resetAfterError = () => {
         clearAllTimers();
         stoppingRef.current = Array.from({ length: GRID_COLS }, () => true);
-        scrollRef.current = Array.from({ length: GRID_COLS }, () => 0);
-        setReelBlurred(Array.from({ length: GRID_COLS }, () => false));
-        setStrips((prev) => prev.map((s) => s.slice(0, GRID_ROWS)));
-        for (const el of stripRefs.current) { if (el) { el.style.transition = ""; el.style.transform = "translateY(0px)"; } }
+        setColumnStopped(Array.from({ length: GRID_COLS }, () => true));
+        for (const el of stripRefs.current) { if (el) el.style.transition = ""; }
         pendingResultRef.current = null; stopRequestedRef.current = false;
-        setHighlighted(new Set()); setClearing(new Set()); setEntering(new Set()); setCascadeMultiplier(null);
-        setSpinning(false); setStopping(false); setReelsLanded(true);
+        setHighlighted(new Set()); setClearing(new Set()); setCascadeMultiplier(null);
+        setSpinning(false); setStopping(false);
     };
 
     const finishRound = (payout: number, jackpot: boolean) => {
         clearAllTimers();
-        setHighlighted(new Set()); setClearing(new Set()); setEntering(new Set()); setCascadeMultiplier(null);
+        setHighlighted(new Set()); setClearing(new Set()); setCascadeMultiplier(null);
         setStats((prev) => ({ ...prev, won: prev.won + payout }));
         setRoundResult({ payout, jackpot, won: payout > 0 });
         pendingResultRef.current = null; stopRequestedRef.current = false;
         setSpinning(false); setStopping(false);
     };
 
-    // ---- Cascade reveal - mutates the same strips the reel-scroll uses, top GRID_ROWS cells only ----
+    // ---- Cascade reveal (unchanged from original) ----
     const playStep = (result: SpinmaniaSpinResult, stepIndex: number) => {
         const step = result.steps[stepIndex];
         const cells = new Set(step.wins.flatMap((win) => win.cells.map((c) => cellKey(c.col, c.row))));
@@ -224,16 +212,8 @@ export default function SpinmaniaGrid({ symbols, betOptions, betLabels, defaultB
             setClearing(cells); setHighlighted(new Set());
             schedule(() => {
                 const nextGrid = stepIndex + 1 < result.steps.length ? result.steps[stepIndex + 1].grid : result.finalGrid;
-                const changed = new Set<string>();
-                for (let col = 0; col < GRID_COLS; col++) {
-                    for (let row = 0; row < GRID_ROWS; row++) {
-                        if (gridRef.current[col]?.[row] !== nextGrid[col][row]) changed.add(cellKey(col, row));
-                    }
-                }
-                gridRef.current = nextGrid.map((column) => [...column]);
-                setStrips(gridRef.current); setClearing(new Set()); setEntering(changed);
+                setDisplayGrid(nextGrid); setHighlighted(new Set()); setClearing(new Set());
                 schedule(() => {
-                    setEntering(new Set());
                     if (stepIndex + 1 < result.steps.length) { playStep(result, stepIndex + 1); }
                     else schedule(() => { onResult?.(result); finishRound(result.payout, !!result.jackpot); }, POST_SEQUENCE_PAUSE_MS);
                 }, DROP_MS);
@@ -249,8 +229,7 @@ export default function SpinmaniaGrid({ symbols, betOptions, betLabels, defaultB
     };
 
     const playSequence = (result: SpinmaniaSpinResult) => {
-        gridRef.current = result.initialGrid.map((column) => [...column]);
-        setStrips(gridRef.current);
+        setDisplayGrid(result.initialGrid);
         if (result.jackpot) playJackpot(result);
         else if (result.steps.length > 0) playStep(result, 0);
         else { onResult?.(result); finishRound(result.payout, false); }
@@ -262,11 +241,11 @@ export default function SpinmaniaGrid({ symbols, betOptions, betLabels, defaultB
 
     const handleSpin = async () => {
         if (!canSpin) return;
-        clearAllTimers(); setRoundResult(null); setSpinning(true); setStopping(false); setReelsLanded(false);
+        clearAllTimers(); setRoundResult(null); setSpinning(true); setStopping(false);
         pendingResultRef.current = null; stopRequestedRef.current = false;
         setStats((prev) => ({ ...prev, rounds: prev.rounds + 1, wagered: prev.wagered + wager }));
         stoppingRef.current = Array.from({ length: GRID_COLS }, () => false);
-        setReelBlurred(Array.from({ length: GRID_COLS }, () => true));
+        setColumnStopped(Array.from({ length: GRID_COLS }, () => false));
         scrollRef.current = Array.from({ length: GRID_COLS }, () => 0);
         setStrips(Array.from({ length: GRID_COLS }, () => Array.from({ length: TOTAL_COUNT }, () => randomSymbol())));
         lastFrameRef.current = null;
@@ -285,6 +264,8 @@ export default function SpinmaniaGrid({ symbols, betOptions, betLabels, defaultB
     const confettiPieces = useMemo(() => (roundResult?.won ? generateConfetti(roundResult.jackpot) : []), [roundResult]);
     const netResult = stats.won - stats.wagered;
     const ratio = stats.wagered > 0 ? stats.won / stats.wagered : 0;
+
+    const isSpinningReels = spinning && !stopping;
 
     return (
         <Box sx={{ maxWidth: 560, mx: "auto" }}>
@@ -309,7 +290,7 @@ export default function SpinmaniaGrid({ symbols, betOptions, betLabels, defaultB
                                 Odds
                             </Typography>
                             <Typography variant="subtitle2" sx={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
-                                {[oddsLabel, rtpLabel].filter(Boolean).join(" · ")}
+                                {[oddsLabel, rtpLabel].filter(Boolean).join(" ┬╖ ")}
                             </Typography>
                         </Box>
                     )}
@@ -328,86 +309,61 @@ export default function SpinmaniaGrid({ symbols, betOptions, betLabels, defaultB
                     </Box>
                 </Box>
 
-                <Box
-                    sx={{
-                        position: "relative",
-                        display: "flex",
-                        gap: 1,
-                        p: 1.5,
-                        borderRadius: 2,
-                        bgcolor: "#000",
-                        border: "3px solid",
-                        borderColor: "grey.800",
-                        boxShadow: "inset 0 6px 18px rgba(0,0,0,0.75)",
-                    }}
-                >
-                    {strips.map((strip, col) => (
-                        <Box
-                            key={col}
-                            sx={{
-                                position: "relative",
-                                flex: 1,
-                                height: GRID_ROWS * CELL_HEIGHT,
-                                overflow: "hidden",
-                            }}
-                        >
-                            <Box
-                                ref={(el: HTMLDivElement | null) => { stripRefs.current[col] = el; }}
-                                sx={{ display: "flex", flexDirection: "column", willChange: "transform", filter: reelBlurred[col] ? "blur(3px)" : "blur(0px)", transition: "filter 0.3s" }}
-                            >
-                                {strip.map((symbolKey, idx) => {
-                                    const key = cellKey(col, idx);
-                                    const isCascadeCell = reelsLanded && idx < GRID_ROWS;
-                                    const isHighlighted = isCascadeCell && highlighted.has(key);
-                                    const isClearing = isCascadeCell && clearing.has(key);
-                                    const isEntering = isCascadeCell && entering.has(key);
-                                    return (
-                                        <Box key={idx} sx={{ height: CELL_HEIGHT, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                            <Box
-                                                sx={{
-                                                    width: "calc(100% - 6px)",
-                                                    height: "calc(100% - 6px)",
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    justifyContent: "center",
-                                                    fontSize: { xs: 28, sm: 36 },
-                                                    lineHeight: 1,
-                                                    borderRadius: 1,
-                                                    bgcolor: "#0d0d0d",
-                                                    border: "1px solid",
-                                                    borderColor: isHighlighted ? "warning.main" : "grey.900",
-                                                    transition: isEntering ? "border-color 0.2s" : "border-color 0.2s, opacity 0.25s, transform 0.25s",
-                                                    opacity: isClearing ? 0 : 1,
-                                                    transform: isClearing ? "scale(0.4)" : "scale(1)",
-                                                    ...(isEntering
-                                                        ? {
-                                                              animation: `spinmaniaCellIn ${DROP_ANIM_MS}ms ease-out`,
-                                                              animationDelay: `${idx * 40}ms`,
-                                                              "@keyframes spinmaniaCellIn": {
-                                                                  "0%": { opacity: 0, transform: "translateY(-14px) scale(0.85)" },
-                                                                  "100%": { opacity: 1, transform: "translateY(0) scale(1)" },
-                                                              },
-                                                          }
-                                                        : {}),
-                                                    ...(isHighlighted
-                                                        ? {
-                                                              animation: "spinmaniaCellGlow 500ms ease-in-out infinite",
-                                                              "@keyframes spinmaniaCellGlow": {
-                                                                  "0%, 100%": { boxShadow: "0 0 0 2px rgba(255,215,0,0.9), 0 0 14px 3px rgba(255,215,0,0.6)" },
-                                                                  "50%": { boxShadow: "0 0 0 4px rgba(255,215,0,1), 0 0 22px 8px rgba(255,215,0,0.9)" },
-                                                              },
-                                                          }
-                                                        : {}),
-                                                }}
-                                            >
-                                                {symbols[symbolKey] ?? "❔"}
-                                            </Box>
-                                        </Box>
-                                    );
-                                })}
-                            </Box>
-                        </Box>
-                    ))}
+                <Box sx={{ position: "relative" }}>
+                    <Box
+                        sx={{
+                            display: "grid",
+                            gridTemplateColumns: `repeat(${GRID_COLS}, 1fr)`,
+                            gridTemplateRows: `repeat(${GRID_ROWS}, 1fr)`,
+                            gap: 1,
+                            p: 1.5,
+                            borderRadius: 2,
+                            bgcolor: "#000",
+                            border: "3px solid",
+                            borderColor: "grey.800",
+                            boxShadow: "inset 0 6px 18px rgba(0,0,0,0.75)",
+                        }}
+                    >
+                    {displayGrid.map((column, col) =>
+                        column.map((symbolKey, row) => {
+                            const key = cellKey(col, row);
+                            const isHighlighted = highlighted.has(key);
+                            const isClearing = clearing.has(key);
+                            return (
+                                <Box
+                                    key={key}
+                                    sx={{
+                                        gridColumn: col + 1,
+                                        gridRow: row + 1,
+                                        aspectRatio: "1 / 1",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        fontSize: { xs: 28, sm: 36 },
+                                        lineHeight: 1,
+                                        borderRadius: 1,
+                                        bgcolor: "#0d0d0d",
+                                        border: "1px solid",
+                                        borderColor: isHighlighted ? "warning.main" : "grey.900",
+                                        transition: "border-color 0.2s, opacity 0.25s, transform 0.25s",
+                                        opacity: isClearing ? 0 : 1,
+                                        transform: isClearing ? "scale(0.4)" : "scale(1)",
+                                        ...(isHighlighted
+                                            ? {
+                                                  animation: "spinmaniaCellGlow 500ms ease-in-out infinite",
+                                                  "@keyframes spinmaniaCellGlow": {
+                                                      "0%, 100%": { boxShadow: "0 0 0 2px rgba(255,215,0,0.9), 0 0 14px 3px rgba(255,215,0,0.6)" },
+                                                      "50%": { boxShadow: "0 0 0 4px rgba(255,215,0,1), 0 0 22px 8px rgba(255,215,0,0.9)" },
+                                                  },
+                                              }
+                                            : {}),
+                                    }}
+                                >
+                                    {symbols[symbolKey] ?? "Γ¥ö"}
+                                </Box>
+                            );
+                        })
+                    )}
 
                     {cascadeMultiplier !== null && cascadeMultiplier > 1 && (
                         <Box
@@ -430,15 +386,85 @@ export default function SpinmaniaGrid({ symbols, betOptions, betLabels, defaultB
                                 },
                             }}
                         >
-                            ×{cascadeMultiplier}
+                            ├ù{cascadeMultiplier}
                         </Box>
                     )}
 
                     {roundResult?.won && <ConfettiOverlay pieces={confettiPieces} />}
 
-                    {roundResult && <RoundResultBanner roundResult={roundResult} />}
+                    {roundResult && (
+                        <Box
+                            sx={{
+                                position: "absolute",
+                                inset: 0,
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 0.25,
+                                zIndex: 1,
+                                bgcolor: roundResult.jackpot ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.55)",
+                                borderRadius: 1,
+                                ...(roundResult.jackpot
+                                    ? {
+                                          animation: "spinmaniaJackpotBannerIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                                          "@keyframes spinmaniaJackpotBannerIn": {
+                                              "0%": { opacity: 0, transform: "scale(0.5)" },
+                                              "60%": { opacity: 1, transform: "scale(1.12)" },
+                                              "100%": { opacity: 1, transform: "scale(1)" },
+                                          },
+                                      }
+                                    : {
+                                          animation: "spinmaniaWinBannerIn 0.3s ease-out",
+                                          "@keyframes spinmaniaWinBannerIn": {
+                                              "0%": { opacity: 0, transform: "scale(0.8)" },
+                                              "100%": { opacity: 1, transform: "scale(1)" },
+                                          },
+                                      }),
+                            }}
+                        >
+                            {roundResult.won ? (
+                                <>
+                                    <Typography variant={roundResult.jackpot ? "h2" : "h4"} sx={{ lineHeight: 1 }}>
+                                        {roundResult.jackpot ? "≡ƒÄ░" : "≡ƒÄë"}
+                                    </Typography>
+                                    <Typography
+                                        variant={roundResult.jackpot ? "h3" : "h6"}
+                                        sx={{
+                                            fontWeight: 800,
+                                            color: roundResult.jackpot ? "warning.light" : "success.light",
+                                            textShadow: roundResult.jackpot ? "0 0 18px rgba(255,193,7,0.8)" : "none",
+                                        }}
+                                    >
+                                        {roundResult.jackpot ? "JACKPOT!" : "You won!"}
+                                    </Typography>
+                                    <Typography variant={roundResult.jackpot ? "h5" : "body1"} sx={{ fontWeight: 800, color: "warning.light" }}>
+                                        +{formatCheddar(roundResult.payout)} cheddar
+                                    </Typography>
+                                </>
+                            ) : (
+                                <Typography variant="h6" sx={{ fontWeight: 700, color: "grey.400" }}>
+                                    Lose
+                                </Typography>
+                            )}
+                        </Box>
+                    )}
                 </Box>
 
+                {spinning && (
+                    <Box sx={{ position: "absolute", inset: 0, display: "grid", gridTemplateColumns: `repeat(${GRID_COLS}, 1fr)`, gridTemplateRows: `repeat(${GRID_ROWS}, 1fr)`, gap: 1, p: 1.5, borderRadius: 2, bgcolor: "#000", border: "3px solid", borderColor: "grey.800", boxShadow: "inset 0 6px 18px rgba(0,0,0,0.75)", filter: isSpinningReels ? "blur(1px)" : "blur(0px)", transition: "filter 0.25s", zIndex: 1 }}>
+                        {Array.from({ length: GRID_COLS }, (_, col) => (
+                            <Box key={`reel-${col}`} sx={{ gridColumn: col + 1, gridRow: "1 / 4", overflow: "hidden", borderRadius: 1, bgcolor: "#0d0d0d", border: "1px solid", borderColor: columnStopped[col] ? "warning.main" : "grey.900", transition: "border-color 0.3s" }}>
+                                <Box ref={(el: HTMLDivElement | null) => { stripRefs.current[col] = el; }} sx={{ display: "flex", flexDirection: "column", willChange: "transform" }}>
+                                    {strips[col].map((symbolKey, idx) => (
+                                        <Box key={idx} sx={{ height: CELL_HEIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: { xs: 28, sm: 36 }, lineHeight: 1, flexShrink: 0 }}>{symbols[symbolKey] ?? "❔"}</Box>
+                                    ))}
+                                </Box>
+                            </Box>
+                        ))}
+                    </Box>
+                )}
+            </Box>
                 <Box sx={{ height: 3, bgcolor: "error.main", opacity: 0.5, borderRadius: 1, mt: 1.5 }} />
             </Box>
 

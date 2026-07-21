@@ -436,7 +436,63 @@ export default function SlotMachine({
 
                     {roundResult?.won && <ConfettiOverlay pieces={confettiPieces} />}
 
-                    {roundResult && <RoundResultBanner roundResult={roundResult} />}
+                    {roundResult && (
+                        <Box
+                            sx={{
+                                position: "absolute",
+                                inset: 0,
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 0.25,
+                                zIndex: 1,
+                                bgcolor: roundResult.jackpot ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.55)",
+                                borderRadius: 1,
+                                ...(roundResult.jackpot
+                                    ? {
+                                        animation: "jackpotBannerIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                                        "@keyframes jackpotBannerIn": {
+                                            "0%": { opacity: 0, transform: "scale(0.5)" },
+                                            "60%": { opacity: 1, transform: "scale(1.12)" },
+                                            "100%": { opacity: 1, transform: "scale(1)" },
+                                        },
+                                    }
+                                    : {
+                                        animation: "winBannerIn 0.3s ease-out",
+                                        "@keyframes winBannerIn": {
+                                            "0%": { opacity: 0, transform: "scale(0.8)" },
+                                            "100%": { opacity: 1, transform: "scale(1)" },
+                                        },
+                                    }),
+                            }}
+                        >
+                            {roundResult.won ? (
+                                <>
+                                    <Typography variant={roundResult.jackpot ? "h2" : "h4"} sx={{ lineHeight: 1 }}>
+                                        {roundResult.jackpot ? "🎰" : "🎉"}
+                                    </Typography>
+                                    <Typography
+                                        variant={roundResult.jackpot ? "h3" : "h6"}
+                                        sx={{
+                                            fontWeight: 800,
+                                            color: roundResult.jackpot ? "warning.light" : "success.light",
+                                            textShadow: roundResult.jackpot ? "0 0 18px rgba(255,193,7,0.8)" : "none",
+                                        }}
+                                    >
+                                        {roundResult.jackpot ? "JACKPOT!" : "You won!"}
+                                    </Typography>
+                                    <Typography variant={roundResult.jackpot ? "h5" : "body1"} sx={{ fontWeight: 800, color: "warning.light" }}>
+                                        +{formatCheddar(roundResult.payout)} cheddar
+                                    </Typography>
+                                </>
+                            ) : (
+                                <Typography variant="h6" sx={{ fontWeight: 700, color: "grey.400" }}>
+                                    Lose
+                                </Typography>
+                            )}
+                        </Box>
+                    )}
                 </Box>
                 <Box sx={{ height: 3, bgcolor: "error.main", opacity: 0.5, borderRadius: 1, mt: 1.5 }} />
             </Box>

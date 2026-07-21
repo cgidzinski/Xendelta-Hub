@@ -63,8 +63,6 @@ const fetchPachinkoOdds = async (): Promise<PachinkoOddsSummary> =>
     (await apiClient.get<ApiResponse<PachinkoOddsSummary>>(`/api/casino/games/pachinko/odds`)).data.data!;
 const fetchSpinmaniaOdds = async (): Promise<SlotsOddsSummary> =>
     (await apiClient.get<ApiResponse<SlotsOddsSummary>>(`/api/casino/games/spinmania/odds`)).data.data!;
-const fetchMemoryOdds = async (): Promise<MemoryOddsSummary> =>
-    (await apiClient.get<ApiResponse<MemoryOddsSummary>>(`/api/casino/games/memory/odds`)).data.data!;
 
 const TYPE_ICON: Record<CasinoGameType, ComponentType<SvgIconProps>> = {
     slots: CasinoIcon,

@@ -118,7 +118,7 @@ export const BOUNDARY_LEFT_ARC: BezierSegment[] = [
 export const BOUNDARY_RIGHT_POINTS = sampleArc(BOUNDARY_RIGHT_ARC);
 export const BOUNDARY_LEFT_POINTS = sampleArc(BOUNDARY_LEFT_ARC);
 
-export const BALL_RADIUS = 3.5;
+export const BALL_RADIUS = 2.5;
 export const PIN_RADIUS = 1.1; // down from 1.6 (originally 2.2) - smaller, more delicate pins to match a real modern board's dense nail field; matched here and in the client's own rendering so what you see is what you collide with
 
 // Gutter: a real gap in the boundary itself, with a pocket hanging below it that narrows down
@@ -306,141 +306,61 @@ export const WINDMILLS: WindmillConfig[] = [
     { position: { x: 350, y: 150 }, radius: 12 },
 ];
 
-// --- Nail field -----------------------------------------------------------------------------
-// Built from the three shapes real modern machine nail fields actually use - confirmed against
-// downloaded photos of real CR machines (Lupin III and Evangelion tie-ins), not text summaries:
-//   1. Concentric rings tracing the boundary's own curve (a real board's nails follow the glass,
-//      they don't fill a rectangular grid stamped onto an oval).
-//   2. Funnel rows in the lower field, narrowing as they descend - the "stepped panels" a real
-//      board uses to shape ball flow down toward its scoring cluster, not constant-width rows.
-//   3. Diagonal "road" chains cutting across open gaps (RELEASE_DEFLECTOR already was one of
-//      these, correctly, even before this rebuild).
-// This replaced two earlier designs:
-//   1. Hand-placed 8-pin blob clusters. Left the centerline entirely empty (a ball drifting to
-//      center had a clear lane through the chucker and the wide attacker pocket), and one
-//      cluster's offsets pushed several pins physically outside the boundary curve.
-//   2. A uniform rectangular lattice (either full-field or capped to a center band). Genuinely
-//      bug-free (every pin generated from the boundary formula, never hand-placed) but nothing
-//      like a real board's actual shape, and it measurably backfired on difficulty too: filling
-//      a rectangular grid onto a field where every scoring pocket already shares the same center
-//      traffic column just means more chances to be knocked into a nearby pocket instead of past
-//      it. Rings/funnels are naturally edge- and flank-biased instead, which should also help
-//      that - verify empirically rather than assume, same as every pass before this one.
-// PIN_RADIUS (1.1) and ATTACKER_WALL (the attacker's dedicated gate) are unchanged from the
-// previous pass.
+// --- Nail field: Branching Roads ------------------------------------------------------------
+// Instead of rings or grids, the nail field is 5 sweeping curved "roads" that branch from the
+// release area. Each road is a chain of closely-spaced nails — balls thread through the gaps
+// between them, and power determines which road a ball enters. Roads are visual guides, not
+// solid walls — balls can cross between them.
 
 export interface PinPosition {
     x: number;
     y: number;
 }
 
-// Baseline clearance every pin source in this file keeps off the true boundary curve.
-const PIN_GLASS_CLEARANCE = PIN_RADIUS + BALL_RADIUS + 3;
-// The rail hugs the *inside* of the glass on the right side over almost this board's whole
-// vertical range (see RAIL_WIDTH/RELEASE_THETA/LAUNCH_THETA above) - pins there need a bigger
-// clearance so nothing lands inside the rail channel itself.
-const RAIL_PIN_CLEARANCE = RAIL_WIDTH + PIN_RADIUS + BALL_RADIUS + 5;
+// Five branching roads. The chucker sits on Road 3 — that's the skill-shot lane.
+const ROAD_PATHS: Point[][] = [
+    [{ x: 195, y: 148 }, { x: 180, y: 168 }, { x: 168, y: 192 }, { x: 156, y: 218 }, { x: 148, y: 245 }, { x: 143, y: 275 }, { x: 143, y: 300 }, { x: 144, y: 315 }],
+    [{ x: 212, y: 142 }, { x: 200, y: 165 }, { x: 188, y: 192 }, { x: 175, y: 218 }, { x: 163, y: 242 }, { x: 153, y: 258 }, { x: 146, y: 280 }, { x: 142, y: 305 }],
+    [{ x: 232, y: 130 }, { x: 232, y: 150 }, { x: 232, y: 170 }, { x: 230, y: 208 }, { x: 230, y: 230 }, { x: 230, y: 275 }, { x: 230, y: 300 }, { x: 230, y: 328 }, { x: 230, y: 355 }],
+    [{ x: 252, y: 142 }, { x: 265, y: 165 }, { x: 278, y: 192 }, { x: 290, y: 218 }, { x: 302, y: 242 }, { x: 312, y: 258 }, { x: 320, y: 280 }, { x: 324, y: 305 }],
+    [{ x: 275, y: 148 }, { x: 292, y: 168 }, { x: 306, y: 192 }, { x: 318, y: 218 }, { x: 326, y: 245 }, { x: 332, y: 275 }, { x: 334, y: 300 }, { x: 330, y: 320 }],
+];
 
-// The half-width, at a given y, of the boundary shrunk inward by `inset` on every side (a
-// properly inset ellipse/circle - same hybrid the boundary curve itself uses, see the file
-// header - not the boundary's own half-width minus a flat x-offset, which under-delivers real
-// clearance away from the very widest point, since the boundary's inward normal isn't purely
-// horizontal there). Used below to keep the funnel rows from ever poking through the glass.
-function insetHalfWidthAtY(y: number, inset: number): number {
-    const rx = FIELD_RX - inset;
-    if (y <= FIELD_CY) {
-        const ry = FIELD_RY - inset;
-        if (ry <= 0) return 0;
-        const t = (y - FIELD_CY) / ry;
-        if (Math.abs(t) > 1) return 0;
-        return rx * Math.sqrt(Math.max(0, 1 - t * t));
-    }
-    const dy = y - FIELD_CY;
-    return Math.sqrt(Math.max(0, rx * rx - dy * dy));
-}
+const ROAD_NAIL_SPACING = 10;
 
-// Whether the rail channel occupies the right edge of the boundary at this y - inverts the same
-// theta-from-y relationship the boundary curve itself uses, since y is monotonic in theta along
-// the right half of the boundary over this board's whole vertical range.
-function railActiveAtY(y: number): boolean {
-    const ratio = y <= FIELD_CY ? (y - FIELD_CY) / FIELD_RY : (y - FIELD_CY) / FIELD_RX;
-    const theta = Math.asin(Math.max(-1, Math.min(1, ratio)));
-    return theta >= RELEASE_THETA && theta <= LAUNCH_THETA;
-}
-
-// --- 1. Boundary rings ----------------------------------------------------------------------
-// A point on the boundary's own curve, shrunk inward by `inset`, at angle `theta` - the same
-// hybrid ellipse-above/circle-below construction the boundary itself uses (see the file header),
-// evaluated directly (this is point sampling for pin placement, not a drawn curve, so it doesn't
-// need the bezier machinery BOUNDARY_RIGHT_ARC/BOUNDARY_LEFT_ARC use).
-function ringPointRight(theta: number, inset: number): Point {
-    const rx = FIELD_RX - inset;
-    const ry = theta <= 0 ? FIELD_RY - inset : rx;
-    return { x: FIELD_CX + rx * Math.cos(theta), y: FIELD_CY + ry * Math.sin(theta) };
-}
-
-// Three concentric rings, ~22px apart, each a dense run of small pins tracing the glass - the
-// pattern the Evangelion machine's left-border close-up showed clearly: several parallel curved
-// rows of evenly-spaced pins following the boundary, not a straight lattice.
-const RING_INSETS = [10, 32, 54];
-const RING_ANGLE_STEP = 9 * DEG;
-
-function generateBoundaryRings(): Point[] {
-    const pins: Point[] = [];
-    for (const inset of RING_INSETS) {
-        for (let theta = -90 * DEG; theta <= GUTTER_THETA; theta += RING_ANGLE_STEP) {
-            const right = ringPointRight(theta, inset);
-            // The innermost ring would otherwise land inside the rail channel over the span
-            // where the rail hugs this same side of the glass - skip just that side's point
-            // there rather than widen the whole ring (the mirrored left point is unaffected).
-            if (!(railActiveAtY(right.y) && inset < RAIL_PIN_CLEARANCE)) {
-                pins.push(right);
-            }
-            // At the crown (theta=-90deg exactly) the mirrored point is the same point, not a
-            // second one - cos(theta)=0 puts both right and "left" at x=FIELD_CX. Skip the
-            // duplicate rather than pushing two identical pins.
-            if (Math.abs(right.x - FIELD_CX) > 0.01) {
-                pins.push({ x: 2 * FIELD_CX - right.x, y: right.y });
-            }
+function sampleRoadNails(road: Point[]): Point[] {
+    const nails: Point[] = [];
+    for (let i = 0; i < road.length - 1; i++) {
+        const a = road[i], b = road[i + 1];
+        const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+        const steps = Math.max(1, Math.round(segLen / ROAD_NAIL_SPACING));
+        for (let s = 0; s <= steps; s++) {
+            const t = s / steps;
+            nails.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
         }
     }
-    return pins;
+    return nails;
 }
 
-// --- 2. Funnel rows ---------------------------------------------------------------------------
-// Straight rows in the lower field, each narrower than the last - the "stepped panel" shape the
-// Lupin III machine's stage close-up showed: nails funneling ball flow down toward the scoring
-// cluster, not a constant-width row. Half-width is clamped to the true (glass-clearance-inset)
-// boundary so a wide row can never poke through the glass even though these widths are hand-
-// chosen (an artificial funnel, not the boundary's own shape).
+function generateRoadNails(): Point[] { return ROAD_PATHS.flatMap(sampleRoadNails); }
+export const ROADS = ROAD_PATHS;
+
+// --- Funnel rows (lower field density) -------------------------------
 const FUNNEL_ROWS: { y: number; halfWidth: number }[] = [
-    { y: 275, halfWidth: 108 },
-    { y: 305, halfWidth: 82 },
-    { y: 335, halfWidth: 58 },
+    { y: 275, halfWidth: 108 }, { y: 305, halfWidth: 82 }, { y: 335, halfWidth: 58 },
 ];
 const FUNNEL_COL_SPACING = 22;
 
 function funnelRowPoints(row: { y: number; halfWidth: number }, rowIndex: number): Point[] {
-    const halfWidth = Math.min(row.halfWidth, insetHalfWidthAtY(row.y, PIN_GLASS_CLEARANCE));
     const offset = rowIndex % 2 === 0 ? 0 : FUNNEL_COL_SPACING / 2;
     const pts: Point[] = [];
-    for (let x = FIELD_CX + offset; x <= FIELD_CX + halfWidth; x += FUNNEL_COL_SPACING) pts.push({ x, y: row.y });
-    for (let x = FIELD_CX + offset - FUNNEL_COL_SPACING; x >= FIELD_CX - halfWidth; x -= FUNNEL_COL_SPACING) pts.push({ x, y: row.y });
+    for (let x = FIELD_CX + offset; x <= FIELD_CX + row.halfWidth; x += FUNNEL_COL_SPACING) pts.push({ x, y: row.y });
+    for (let x = FIELD_CX + offset - FUNNEL_COL_SPACING; x >= FIELD_CX - row.halfWidth; x -= FUNNEL_COL_SPACING) pts.push({ x, y: row.y });
     return pts;
 }
+function generateFunnelRows(): Point[] { const p: Point[] = []; FUNNEL_ROWS.forEach((r, i) => p.push(...funnelRowPoints(r, i))); return p; }
 
-function generateFunnelRows(): Point[] {
-    const pins: Point[] = [];
-    FUNNEL_ROWS.forEach((row, i) => pins.push(...funnelRowPoints(row, i)));
-    return pins;
-}
-
-// --- 3. Road chains ---------------------------------------------------------------------------
-// A short diagonal line of nails right where the ball first lands after release, redirecting it
-// leftward toward the tulip field - without something directly in that initial path, the ball
-// would just ride the boundary curve (or drop) with no meaningful deflection. Exported so
-// pachinkoPhysics.ts can give just this chain a lower restitution than the rest of the field (a
-// deflector guides, it doesn't bounce).
+// --- Release deflector & second road --------------------------------
 export const RELEASE_DEFLECTOR: Point[] = [
     { x: 322, y: 100 }, { x: 308, y: 112 }, { x: 288, y: 121 }, { x: 264, y: 128 },
     { x: 238, y: 132 }, { x: 210, y: 135 }, { x: 182, y: 137 }, { x: 156, y: 140 },
@@ -461,72 +381,10 @@ function conflictsWithLauncher(p: Point): boolean { return Math.hypot(p.x - LAUN
 function conflictsWithRoads(p: Point): boolean { return [...RELEASE_DEFLECTOR, ...SECOND_ROAD].some(r => Math.hypot(p.x - r.x, p.y - r.y) < FUNNEL_COL_SPACING * 0.6); }
 function conflictsWithAny(p: Point): boolean { return conflictsWithPocket(p) || conflictsWithWindmill(p) || conflictsWithLauncher(p) || conflictsWithRoads(p); }
 
-// A second road, opposite corner - guides stray traffic down past the left windmill instead of
-// leaving that whole quadrant open. A normal-bounce chain (not a low-restitution deflector like
-// the one above), same as any other nail on the board.
-export const SECOND_ROAD: Point[] = [
-    { x: 130, y: 160 },
-    { x: 142, y: 172 },
-    { x: 152, y: 186 },
-    { x: 160, y: 202 },
-    { x: 166, y: 220 },
-];
-
-// A real gate wall over the attacker's mouth, not a floating pair of flanking dots - a tightly
-// spaced run of nails with one deliberate center gap, the same idiom a real machine's attacker
-// (yakumono) gate uses: the pocket underneath is wide, but the way in is a narrow door.
-const ATTACKER_WALL_Y = 230; // well clear of the pocket's own +-9px depth window at y=250
-const ATTACKER_WALL_SPACING = 5;
-const ATTACKER_WALL_HALF_SPAN = 30;
-const ATTACKER_WALL_GAP_HALF = 9; // ~18px door - wider than the ball, narrow next to the mouth's 64px
-function generateAttackerWall(): Point[] {
-    const wall: Point[] = [];
-    for (let dx = -ATTACKER_WALL_HALF_SPAN; dx <= ATTACKER_WALL_HALF_SPAN; dx += ATTACKER_WALL_SPACING) {
-        if (Math.abs(dx) < ATTACKER_WALL_GAP_HALF) continue;
-        wall.push({ x: ATTACKER.position.x + dx, y: ATTACKER_WALL_Y });
-    }
-    return wall;
-}
-export const ATTACKER_WALL: Point[] = generateAttackerWall();
-
-const ALL_POCKETS_FOR_CLEARANCE: FixedPocket[] = [...TULIPS, JACKPOT, ATTACKER, ...BONUS_POCKETS, CHUCKER];
-const POCKET_PIN_CLEARANCE = PIN_RADIUS + BALL_RADIUS; // beyond the pocket's own halfWidth/depth, so a pin never sits flush against a pocket wall
-
-function conflictsWithPocket(p: Point): boolean {
-    return ALL_POCKETS_FOR_CLEARANCE.some(
-        (pocket) => Math.abs(p.x - pocket.position.x) <= pocket.halfWidth + POCKET_PIN_CLEARANCE && Math.abs(p.y - pocket.position.y) <= POCKET_DEPTH / 2 + POCKET_PIN_CLEARANCE
-    );
-}
-
-function conflictsWithWindmill(p: Point): boolean {
-    return WINDMILLS.some((w) => Math.hypot(p.x - w.position.x, p.y - w.position.y) < w.radius + PIN_RADIUS + BALL_RADIUS + 2);
-}
-
-function conflictsWithLauncher(p: Point): boolean {
-    return Math.hypot(p.x - LAUNCHER_POSITION.x, p.y - LAUNCHER_POSITION.y) < RAIL_WIDTH + PIN_RADIUS + BALL_RADIUS + 2;
-}
-
-function conflictsWithAttackerWall(p: Point): boolean {
-    return ATTACKER_WALL.some((w) => Math.hypot(p.x - w.x, p.y - w.y) < FUNNEL_COL_SPACING * 0.6);
-}
-
-function conflictsWithRoads(p: Point): boolean {
-    return [...RELEASE_DEFLECTOR, ...SECOND_ROAD].some((r) => Math.hypot(p.x - r.x, p.y - r.y) < FUNNEL_COL_SPACING * 0.6);
-}
-
-function conflictsWithAny(p: Point): boolean {
-    return conflictsWithPocket(p) || conflictsWithWindmill(p) || conflictsWithLauncher(p) || conflictsWithAttackerWall(p) || conflictsWithRoads(p);
-}
-
 export function generateNailField(): PinPosition[] {
     const pins: PinPosition[] = [];
-    for (const road of [...RELEASE_DEFLECTOR, ...SECOND_ROAD]) {
-        pins.push({ x: road.x, y: road.y });
-    }
-    for (const wall of ATTACKER_WALL) {
-        pins.push({ x: wall.x, y: wall.y });
-    }
-    for (const candidate of [...generateBoundaryRings(), ...generateFunnelRows()]) {
+    for (const road of [...RELEASE_DEFLECTOR, ...SECOND_ROAD]) pins.push({ x: road.x, y: road.y });
+    for (const candidate of [...generateRoadNails(), ...generateFunnelRows()]) {
         if (conflictsWithAny(candidate)) continue;
         pins.push({ x: candidate.x, y: candidate.y });
     }
