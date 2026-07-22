@@ -150,11 +150,15 @@ interface ReelAnimState {
     symbols: [string, string, string];
     matchTier: ReelMatchTier;
     startTime: number;
+    // Only set on a three-of-a-kind - applied to the session once THIS spin has visually
+    // finished landing (see the tick loop below), not the instant the catch's response arrives.
+    attackerOpenUntil?: number;
 }
 
 interface ReelQueueItem {
     symbols: [string, string, string];
     matchTier: ReelMatchTier;
+    attackerOpenUntil?: number;
 }
 
 const OUTCOME_LABEL: Record<PachinkoOutcome, string> = {
@@ -770,10 +774,21 @@ export default function PachinkoBoard({
                         // so rapid chucker hits stack visually instead of clobbering each other.
                         // Capped at MAX_QUEUED_SPINS total (current + queued) - once full, the
                         // chucker greys out and further catches are silently dropped.
+                        let deferAttackerUpdate = false;
                         if (result.outcome === "chucker" && result.reelSpin) {
                             const totalQueued = (currentReelAnimRef.current ? 1 : 0) + reelQueueRef.current.length;
                             if (totalQueued < MAX_QUEUED_SPINS) {
-                                reelQueueRef.current.push({ symbols: result.reelSpin.symbols, matchTier: result.reelSpin.matchTier });
+                                const isThreeMatch = result.reelSpin.matchTier === "three";
+                                reelQueueRef.current.push({
+                                    symbols: result.reelSpin.symbols,
+                                    matchTier: result.reelSpin.matchTier,
+                                    // The attacker only actually opens once this spin has visually
+                                    // landed on the three-of-a-kind that earned it (applied by the
+                                    // tick loop below) - not the instant this response arrives,
+                                    // which could be well before the reel even starts spinning.
+                                    attackerOpenUntil: isThreeMatch ? result.attackerOpenUntil : undefined,
+                                });
+                                deferAttackerUpdate = isThreeMatch;
                             }
                         }
 
@@ -788,7 +803,7 @@ export default function PachinkoBoard({
                                 ballsRemaining: result.ballsRemaining,
                                 leftTulipOpen: result.leftTulipOpen,
                                 rightTulipOpen: result.rightTulipOpen,
-                                attackerOpenUntil: result.attackerOpenUntil,
+                                attackerOpenUntil: deferAttackerUpdate ? sessionRef.current.attackerOpenUntil : result.attackerOpenUntil,
                                 jackpotOpenUntil: result.jackpotOpenUntil,
                             });
                         }
@@ -822,15 +837,24 @@ export default function PachinkoBoard({
             if (currentReelAnimRef.current) {
                 const lastStopAt = REEL_SPIN_MS + (REEL_STOP_STAGGER_MS[REEL_STOP_STAGGER_MS.length - 1] ?? 0);
                 const finishedAt = currentReelAnimRef.current.startTime + lastStopAt + REEL_RESULT_GLOW_MS;
-                if (now >= finishedAt && reelQueueRef.current.length > 0) {
-                    const next = reelQueueRef.current.shift()!;
-                    currentReelAnimRef.current = { symbols: next.symbols, matchTier: next.matchTier, startTime: now };
-                } else if (now >= finishedAt && reelQueueRef.current.length === 0) {
-                    currentReelAnimRef.current = null;
+                if (now >= finishedAt) {
+                    // The attacker only actually opens once ITS OWN spin has visually landed on
+                    // the three-of-a-kind that earned it - apply the deferred update right as
+                    // that spin's animation concludes, not the instant the catch's response
+                    // arrived (see where this is queued, above).
+                    if (currentReelAnimRef.current.attackerOpenUntil !== undefined && sessionRef.current) {
+                        onSessionUpdate({ ...sessionRef.current, attackerOpenUntil: currentReelAnimRef.current.attackerOpenUntil });
+                    }
+                    if (reelQueueRef.current.length > 0) {
+                        const next = reelQueueRef.current.shift()!;
+                        currentReelAnimRef.current = { symbols: next.symbols, matchTier: next.matchTier, startTime: now, attackerOpenUntil: next.attackerOpenUntil };
+                    } else {
+                        currentReelAnimRef.current = null;
+                    }
                 }
             } else if (reelQueueRef.current.length > 0) {
                 const next = reelQueueRef.current.shift()!;
-                currentReelAnimRef.current = { symbols: next.symbols, matchTier: next.matchTier, startTime: now };
+                currentReelAnimRef.current = { symbols: next.symbols, matchTier: next.matchTier, startTime: now, attackerOpenUntil: next.attackerOpenUntil };
             }
 
             draw(now, hotPockets);
