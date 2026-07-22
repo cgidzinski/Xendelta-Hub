@@ -396,7 +396,7 @@ module.exports = function (app: express.Application) {
       response_type: "code",
       scope: discordOptions.scope.join(" "),
     });
-    res.json({ url: `https://discord.com/oauth2/authorize?${params.toString()}` });
+    res.json({ url: `https://discord.com/api/oauth2/authorize?${params.toString()}` });
   });
 
   // Discord OAuth Routes
