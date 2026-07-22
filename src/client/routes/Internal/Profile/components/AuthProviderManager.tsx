@@ -23,8 +23,17 @@ import AuthButton, { PROVIDER_CONFIG } from "./AuthButton";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 
 export default function AuthProviderManager() {
-  const { authProviders, loading, error, linkGoogleAccount, linkGitHubAccount, discordLinkHref, unlinkProvider, addPassword } =
-    useAuthProviders();
+  const {
+    authProviders,
+    loading,
+    error,
+    linkGoogleAccount,
+    linkGitHubAccount,
+    discordLinkHref,
+    discordLinkFallbackHref,
+    unlinkProvider,
+    addPassword,
+  } = useAuthProviders();
 
   const [unlinkDialog, setUnlinkDialog] = useState<{
     open: boolean;
@@ -165,8 +174,12 @@ export default function AuthProviderManager() {
             <AuthButton provider="github" onClick={linkGitHubAccount} disabled={actionLoading} />
           )}
 
-          {!hasProvider("discord") && discordLinkHref && (
-            <AuthButton provider="discord" href={discordLinkHref} disabled={actionLoading} />
+          {!hasProvider("discord") && (
+            <AuthButton
+              provider="discord"
+              href={discordLinkHref ?? discordLinkFallbackHref}
+              disabled={actionLoading}
+            />
           )}
 
           {!hasProvider("local") && (

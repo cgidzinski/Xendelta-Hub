@@ -27,13 +27,13 @@ function CasinoGate({
     // actionHref renders a bare native <a> instead of an MUI Button - on iOS, a
     // standalone PWA only hands a tap off to real Safari (needed for Discord's
     // Face ID/passkey prompt to work) when it's a plain anchor click straight to a
-    // cross-origin href, not a JS-mediated navigation.
+    // cross-origin href, not a JS-mediated navigation. No target="_blank": opening a
+    // separate window from inside the PWA still hangs on Face ID, so this navigates
+    // in place instead, which iOS's origin-based handoff should still route to Safari.
     const action = actionHref ? (
         <Box
             component="a"
             href={actionHref}
-            target="_blank"
-            rel="noopener noreferrer"
             sx={{ color: "inherit", fontSize: "0.8125rem", fontWeight: 500, textDecoration: "underline", mr: 1 }}
         >
             {actionLabel}
@@ -55,7 +55,7 @@ function CasinoGate({
 
 export default function XenCasinoLayout() {
     useTitle("XenCasino");
-    const { authProviders, loading: providersLoading, discordLinkHref } = useAuthProviders();
+    const { authProviders, loading: providersLoading, discordLinkHref, discordLinkFallbackHref } = useAuthProviders();
     const { linked, balance, isLoading: balanceLoading, isError, error, refetch } = useCasinoBalance();
     const { open: casinoOpen, reason: casinoClosedReason, bankBalance, disabledGames, isLoading: statusLoading } = useCasinoStatus();
     const location = useLocation();
@@ -78,7 +78,7 @@ export default function XenCasinoLayout() {
             severity="warning"
             message="Link your Discord account to play XenCasino — your cheddar balance comes straight from your Weeabets account."
             actionLabel="Link Discord"
-            actionHref={discordLinkHref}
+            actionHref={discordLinkHref ?? discordLinkFallbackHref}
         />
     );
 

@@ -190,6 +190,9 @@ export const useAuthProviders = () => {
     linkGoogleAccount,
     linkGitHubAccount,
     discordLinkHref,
+    // Always available immediately (no fetch) so the Discord control never has to
+    // disappear while discordLinkHref is loading or if that fetch fails.
+    discordLinkFallbackHref: "/api/auth/discord",
     unlinkProvider,
     addPassword,
   };

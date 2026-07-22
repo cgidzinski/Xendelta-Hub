@@ -71,14 +71,14 @@ export default function AuthButton(props: AuthButtonProps) {
   // When linking out to an OAuth provider, render a bare native <a> instead of MUI's
   // ButtonBase - on iOS, a standalone PWA decides whether a tap stays in the app or
   // hands off to real Safari (needed for Face ID/passkey prompts to work at all) based
-  // on that tap being a plain, unintercepted anchor click to a cross-origin href.
+  // on that tap being a plain, unintercepted anchor click to a cross-origin href. No
+  // target="_blank": opening a separate window from inside the PWA still hangs on Face
+  // ID, so this navigates in place instead of explicitly spawning a new window.
   if (href) {
     return (
       <Box
         component="a"
         href={disabled ? undefined : href}
-        target="_blank"
-        rel="noopener noreferrer"
         sx={{
           ...COMMON_BUTTON_STYLES,
           display: "inline-flex",
