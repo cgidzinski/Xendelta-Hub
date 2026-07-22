@@ -516,32 +516,44 @@ module.exports = function (app: express.Application) {
                 let nextAttackerOpenUntil = liveConditions.attackerOpenUntil;
                 let nextJackpotOpenUntil = liveConditions.jackpotOpenUntil;
 
-                if (outcome === "tulipLeft") {
-                    nextLeftOpen = !liveConditions.leftTulipOpen;
-                } else if (outcome === "tulipRight") {
-                    nextRightOpen = !liveConditions.rightTulipOpen;
-                }
+                const jackpotWindowActive = liveConditions.jackpotOpenUntil > now;
                 if (outcome === "tulipLeft" || outcome === "tulipRight") {
-                    // The instant both are simultaneously open is the priming moment itself -
-                    // starts the jackpot's own timed window (see JACKPOT_OPEN_MS) and immediately
-                    // resets both tulips, so there's no standing "primed" state to sit open
-                    // indefinitely; catching both again from scratch earns another shot at it.
-                    if (isJackpotPrimed(nextLeftOpen, nextRightOpen)) {
-                        nextJackpotOpenUntil = now + JACKPOT_OPEN_MS;
-                        nextLeftOpen = false;
-                        nextRightOpen = false;
+                    if (jackpotWindowActive) {
+                        // Both tulips are held open for the rest of an already-active jackpot
+                        // window - a catch on either side still pays SIDE_TULIP_BALLS (handled
+                        // above) but doesn't toggle the gate itself until the window resolves.
+                    } else {
+                        if (outcome === "tulipLeft") {
+                            nextLeftOpen = !liveConditions.leftTulipOpen;
+                        } else {
+                            nextRightOpen = !liveConditions.rightTulipOpen;
+                        }
+                        // The instant both are simultaneously open is the priming moment - starts
+                        // the jackpot's own timed window (see JACKPOT_OPEN_MS). Both tulips then
+                        // stay open for the whole window (see jackpotWindowActive above and the
+                        // "jackpot" outcome branch below), not reset immediately - catching the
+                        // jackpot, or letting the window lapse, is what closes them again.
+                        if (isJackpotPrimed(nextLeftOpen, nextRightOpen)) {
+                            nextJackpotOpenUntil = now + JACKPOT_OPEN_MS;
+                        }
                     }
                 } else if (outcome === "chucker" && reelSpin && reelSpin.attackerOpenMs > 0) {
                     nextAttackerOpenUntil = Math.max(now, liveConditions.attackerOpenUntil) + reelSpin.attackerOpenMs;
                 } else if (outcome === "jackpot") {
+                    // Catching the jackpot pocket resolves the window right now, same as letting
+                    // it lapse - close both tulips immediately rather than waiting for the next
+                    // shot's shouldCloseLapsedTulips check to notice.
                     nextJackpotOpenUntil = 0;
+                    nextLeftOpen = false;
+                    nextRightOpen = false;
                 }
 
-                // If a jackpot window WAS actually primed and has since expired, close any open
-                // tulips - they exist only to prime the jackpot, so there's no reason to leave
-                // them open once the window ends (see shouldCloseLapsedTulips's own comment for
-                // why this can't just be "there's currently no open window").
-                if (shouldCloseLapsedTulips(liveConditions.jackpotOpenUntil, nextJackpotOpenUntil, nextLeftOpen, nextRightOpen, now)) {
+                // If a jackpot window WAS actually primed and has since expired without being
+                // caught, close any open tulips - they exist only to prime the jackpot, so
+                // there's no reason to leave them open once the window ends (see
+                // shouldCloseLapsedTulips's own comment for why this can't just be "there's
+                // currently no open window").
+                if (shouldCloseLapsedTulips(liveConditions.jackpotOpenUntil, nextJackpotOpenUntil, now)) {
                     nextLeftOpen = false;
                     nextRightOpen = false;
                 }
