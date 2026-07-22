@@ -40,7 +40,7 @@ function CasinoGate({
 
 export default function XenCasinoLayout() {
     useTitle("XenCasino");
-    const { authProviders, loading: providersLoading, linkDiscordAccount } = useAuthProviders();
+    const { authProviders, loading: providersLoading } = useAuthProviders();
     const { linked, balance, isLoading: balanceLoading, isError, error, refetch } = useCasinoBalance();
     const { open: casinoOpen, reason: casinoClosedReason, bankBalance, disabledGames, isLoading: statusLoading } = useCasinoStatus();
     const location = useLocation();
@@ -61,9 +61,9 @@ export default function XenCasinoLayout() {
     const discordGate = (
         <CasinoGate
             severity="warning"
-            message="Link your Discord account to play XenCasino — your cheddar balance comes straight from your Weeabets account."
-            actionLabel="Link Discord"
-            onAction={() => linkDiscordAccount()}
+            message="Link your Discord account in Settings to play XenCasino — your cheddar balance comes straight from your Weeabets account. (Settings also has a note on avoiding a Safari freeze some iPhones hit when linking.)"
+            actionLabel="Go to Settings"
+            onAction={() => navigate("/internal/profile")}
         />
     );
 

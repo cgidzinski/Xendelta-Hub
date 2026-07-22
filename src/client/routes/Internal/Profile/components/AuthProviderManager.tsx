@@ -178,6 +178,13 @@ export default function AuthProviderManager() {
             />
           )}
         </Box>
+
+        {!hasProvider("discord") && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
+            On iPhone with Xendelta installed as an app: if the Discord page freezes when Face ID/AutoFill pops up,
+            type your password manually instead. If it's already frozen, force-quit Safari and reopen it to clear it.
+          </Typography>
+        )}
       </Box>
 
       {/* Unlink Confirmation Dialog */}
