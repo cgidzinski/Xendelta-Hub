@@ -552,10 +552,13 @@ module.exports = function (app: express.Application) {
                 // caught, close any open tulips - they exist only to prime the jackpot, so
                 // there's no reason to leave them open once the window ends (see
                 // shouldCloseLapsedTulips's own comment for why this can't just be "there's
-                // currently no open window").
+                // currently no open window"). Also clears jackpotOpenUntil back to 0 - leaving it
+                // at its lapsed (past) timestamp would make this same check true forever after,
+                // permanently re-closing every future tulip toggle on the very shot that made it.
                 if (shouldCloseLapsedTulips(liveConditions.jackpotOpenUntil, nextJackpotOpenUntil, now)) {
                     nextLeftOpen = false;
                     nextRightOpen = false;
+                    nextJackpotOpenUntil = 0;
                 }
 
                 updated = await XenCasinoRound.applyConditionsUpdate(
