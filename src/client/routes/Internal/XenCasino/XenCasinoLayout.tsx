@@ -24,18 +24,29 @@ function CasinoGate({
     onAction?: () => void;
     actionHref?: string;
 }) {
-    const actionLinkProps = actionHref ? { href: actionHref, target: "_blank", rel: "noopener noreferrer" } : {};
+    // actionHref renders a bare native <a> instead of an MUI Button - on iOS, a
+    // standalone PWA only hands a tap off to real Safari (needed for Discord's
+    // Face ID/passkey prompt to work) when it's a plain anchor click straight to a
+    // cross-origin href, not a JS-mediated navigation.
+    const action = actionHref ? (
+        <Box
+            component="a"
+            href={actionHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            sx={{ color: "inherit", fontSize: "0.8125rem", fontWeight: 500, textDecoration: "underline", mr: 1 }}
+        >
+            {actionLabel}
+        </Box>
+    ) : (
+        <Button color="inherit" size="small" onClick={onAction}>
+            {actionLabel}
+        </Button>
+    );
 
     return (
         <Box sx={{ px: { xs: 2, sm: 3, md: 5 }, py: 4 }}>
-            <Alert
-                severity={severity}
-                action={
-                    <Button color="inherit" size="small" onClick={onAction} {...actionLinkProps}>
-                        {actionLabel}
-                    </Button>
-                }
-            >
+            <Alert severity={severity} action={action}>
                 {message}
             </Alert>
         </Box>

@@ -151,7 +151,7 @@ passport.use(new GitHubStrategy(githubOptions, async (accessToken: string, refre
 }));
 
 // Discord OAuth Strategy Configuration
-const discordOptions = {
+export const discordOptions = {
   clientID: process.env.DISCORD_CLIENT_ID || 'dummy-client-id',
   clientSecret: process.env.DISCORD_CLIENT_SECRET || 'dummy-client-secret',
   callbackURL: process.env.DISCORD_CALLBACK_URL || '/api/auth/discord/callback',

@@ -23,7 +23,7 @@ import AuthButton, { PROVIDER_CONFIG } from "./AuthButton";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 
 export default function AuthProviderManager() {
-  const { authProviders, loading, error, googleLinkHref, githubLinkHref, discordLinkHref, unlinkProvider, addPassword } =
+  const { authProviders, loading, error, linkGoogleAccount, linkGitHubAccount, discordLinkHref, unlinkProvider, addPassword } =
     useAuthProviders();
 
   const [unlinkDialog, setUnlinkDialog] = useState<{
@@ -157,34 +157,16 @@ export default function AuthProviderManager() {
         </Typography>
 
         <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
-          {!hasProvider("google") && googleLinkHref && (
-            <AuthButton
-              provider="google"
-              href={googleLinkHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              disabled={actionLoading}
-            />
+          {!hasProvider("google") && (
+            <AuthButton provider="google" onClick={linkGoogleAccount} disabled={actionLoading} />
           )}
 
-          {!hasProvider("github") && githubLinkHref && (
-            <AuthButton
-              provider="github"
-              href={githubLinkHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              disabled={actionLoading}
-            />
+          {!hasProvider("github") && (
+            <AuthButton provider="github" onClick={linkGitHubAccount} disabled={actionLoading} />
           )}
 
           {!hasProvider("discord") && discordLinkHref && (
-            <AuthButton
-              provider="discord"
-              href={discordLinkHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              disabled={actionLoading}
-            />
+            <AuthButton provider="discord" href={discordLinkHref} disabled={actionLoading} />
           )}
 
           {!hasProvider("local") && (

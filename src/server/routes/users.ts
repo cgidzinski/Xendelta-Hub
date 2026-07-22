@@ -226,9 +226,89 @@ module.exports = function (app: express.Application) {
     }
   });
 
-  // Note: account-linking (Google/GitHub/Discord) now navigates the client straight to
-  // /api/auth/<provider>?state=link&userId=<id> (deterministic, built client-side) instead
-  // of round-tripping through a POST here first - see useAuthProviders.ts.
+  // Link Google account to existing account
+  app.post("/api/user/link-google", authenticateToken, async function (req: express.Request, res: express.Response) {
+    try {
+      const user = (req as AuthenticatedRequest).user!;
+
+      // Check if Google is already linked
+      const fullUser = await User.findById(user._id).exec();
+      if (fullUser.hasAuthProvider("google")) {
+        return res.json({
+          success: false,
+          message: "Google account is already linked",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Redirect to Google OAuth for account linking",
+        redirectUrl: `/api/auth/google?state=link&userId=${user._id}`,
+      });
+    } catch (error) {
+      console.error("Link Google account error:", error);
+      return res.json({
+        success: false,
+        message: "Failed to initiate Google account linking",
+      });
+    }
+  });
+
+  // Link GitHub account to existing account
+  app.post("/api/user/link-github", authenticateToken, async function (req: express.Request, res: express.Response) {
+    try {
+      const user = (req as AuthenticatedRequest).user!;
+
+      // Check if GitHub is already linked
+      const fullUser = await User.findById(user._id).exec();
+      if (fullUser.hasAuthProvider("github")) {
+        return res.json({
+          success: false,
+          message: "GitHub account is already linked",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Redirect to GitHub OAuth for account linking",
+        redirectUrl: `/api/auth/github?state=link&userId=${user._id}`,
+      });
+    } catch (error) {
+      console.error("Link GitHub account error:", error);
+      return res.json({
+        success: false,
+        message: "Failed to initiate GitHub account linking",
+      });
+    }
+  });
+
+  // Link Discord account to existing account
+  app.post("/api/user/link-discord", authenticateToken, async function (req: express.Request, res: express.Response) {
+    try {
+      const user = (req as AuthenticatedRequest).user!;
+
+      // Check if Discord is already linked
+      const fullUser = await User.findById(user._id).exec();
+      if (fullUser.hasAuthProvider("discord")) {
+        return res.json({
+          success: false,
+          message: "Discord account is already linked",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Redirect to Discord OAuth for account linking",
+        redirectUrl: `/api/auth/discord?state=link&userId=${user._id}`,
+      });
+    } catch (error) {
+      console.error("Link Discord account error:", error);
+      return res.json({
+        success: false,
+        message: "Failed to initiate Discord account linking",
+      });
+    }
+  });
 
   // Unlink authentication provider
   app.post(

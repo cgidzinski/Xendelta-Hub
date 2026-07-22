@@ -11,16 +11,8 @@ export default function AuthCallback() {
   const queryClient = useQueryClient();
   const token = searchParams.get('token');
   const error = searchParams.get('error');
-  const linked = searchParams.get('linked') === 'true';
 
   useEffect(() => {
-    // Account-linking (state=link) always opens in a separate tab from the app's
-    // own tab now, so it can't leave the PWA's tab stuck mid-navigation. This tab
-    // is disposable - just confirm success, don't sign it in or navigate it away.
-    if (linked) {
-      return;
-    }
-
     const handleCallback = async () => {
       if (error) {
         // Handle OAuth error
@@ -32,7 +24,7 @@ export default function AuthCallback() {
       if (token) {
         // Clear all queries first to remove any previous user's data
         queryClient.clear();
-
+        
         // Store the token and verify authentication
         localStorage.setItem('token', token);
         await checkAuth();
@@ -44,17 +36,7 @@ export default function AuthCallback() {
     };
 
     handleCallback();
-  }, [token, error, linked, navigate, checkAuth, queryClient]);
-
-  if (linked) {
-    return (
-      <Container component="main" maxWidth="sm" sx={{ mt: 8, textAlign: 'center' }}>
-        <Alert severity="success" sx={{ mb: 2 }}>
-          Account linked! You can close this tab and return to Xendelta Hub.
-        </Alert>
-      </Container>
-    );
-  }
+  }, [token, error, navigate, checkAuth, queryClient]);
 
   if (error) {
     return (

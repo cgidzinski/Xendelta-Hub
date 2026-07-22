@@ -5,7 +5,7 @@ const crypto = require("crypto");
 import { authenticateToken } from "../middleware/auth";
 import { generateToken } from "../utils/tokenUtils";
 import { sendPasswordResetEmail } from "../utils/emailUtils";
-import passport from "../config/passport";
+import passport, { discordOptions } from "../config/passport";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { validate, signupSchema, loginSchema } from "../utils/validation";
 import { AuthenticatedRequest } from "../types";
@@ -378,6 +378,26 @@ module.exports = function (app: express.Application) {
       }
     }
   );
+
+  // Returns the real discord.com authorize URL so the client can link to it directly.
+  // iOS decides whether a tapped link stays inside a standalone PWA or hands off to
+  // real Safari based on the *tapped* URL's origin - a same-origin URL that itself
+  // 302s to discord.com (like /api/auth/discord below) gets kept inside the PWA's
+  // embedded webview, where Discord's Face ID/passkey prompt can't complete and the
+  // page hangs. Handing the client a genuinely cross-origin href up front lets iOS
+  // route it to real Safari from the first tap.
+  app.get("/api/auth/discord/authorize-url", (req: express.Request, res: express.Response) => {
+    const redirectUri = discordOptions.callbackURL.startsWith("http")
+      ? discordOptions.callbackURL
+      : `${req.protocol}://${req.get("host")}${discordOptions.callbackURL}`;
+    const params = new URLSearchParams({
+      client_id: discordOptions.clientID,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: discordOptions.scope.join(" "),
+    });
+    res.json({ url: `https://discord.com/oauth2/authorize?${params.toString()}` });
+  });
 
   // Discord OAuth Routes
   app.get("/api/auth/discord",
