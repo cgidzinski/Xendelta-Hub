@@ -67,12 +67,30 @@ import {
     MAX_LAUNCH_POWER,
 } from "./pachinkoLayout";
 import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, ATTACKER_OPEN_MS, ATTACKER_BALLS, JACKPOT_OPEN_MS, CONTRIBUTION_RATE, JACKPOT_SEED, CASH_OUT_RATE, jackpotBalls, cashOutAmount } from "./pachinkoPayouts";
-import { simulateShot, PachinkoOutcome, TrajectorySample } from "./pachinkoPhysics";
+import { PachinkoOutcome, ShotResult, TrajectorySample } from "./pachinkoPhysics";
 import { spinReel, ReelSpinResult } from "./pachinkoReels";
+import Piscina from "piscina";
+import path from "path";
+import { PachinkoPhysicsTask } from "./pachinkoPhysicsWorker";
 
 const SLUG = "pachinko";
 const PRICE_PER_BALL = 100;
 const REUP_SIZES = [100, 1000];
+
+// simulateShot (up to 2000 matter-js Engine.update() calls per shot) runs on a worker thread
+// pool instead of inline, so a burst of hold-to-fire launches can't block the main event loop -
+// see pachinkoPhysicsWorker.ts's own header for the full story. Piscina is pointed at the small
+// .cjs entry (not the .ts worker file directly) - see that file's own comment for why: tsx's
+// auto-registration used by `npm run dev`/`npm start` (no separate build step for the server)
+// skips itself outside the main thread, so the worker has to register tsx's require-hook itself.
+const physicsPool = new Piscina<PachinkoPhysicsTask, ShotResult>({
+    filename: path.resolve(__dirname, "pachinkoPhysicsWorkerEntry.cjs"),
+});
+
+// Backstop only - a saturated pool means the physics queue is deep enough that a new job would
+// likely take long enough to risk the client's own request timeout (see the investigation this
+// whole change is fixing). Generous on purpose: under normal load this should never trigger.
+const MAX_QUEUED_PHYSICS_JOBS = 40;
 
 interface PachinkoBallResult {
     outcome: PachinkoOutcome;
@@ -411,6 +429,9 @@ module.exports = function (app: express.Application) {
             if (conditions.ballsRemaining <= 0) {
                 return res.status(400).json({ status: false, message: "No balls remaining in this batch" });
             }
+            if (physicsPool.queueSize >= MAX_QUEUED_PHYSICS_JOBS) {
+                return res.status(400).json({ status: false, message: "Pachinko is under heavy load right now - try again in a moment" });
+            }
 
             const now = Date.now();
             // The chucker, the attacker, and the jackpot are each only ever physically present
@@ -421,8 +442,14 @@ module.exports = function (app: express.Application) {
             const attackerOpen = conditions.attackerOpenUntil > now;
             const jackpotOpen = conditions.jackpotOpenUntil > now;
 
-            // Fully decided before anything is persisted - see the file header.
-            const { trajectory, outcome } = simulateShot(launchPower, !attackerOpen, attackerOpen, jackpotOpen);
+            // Fully decided before anything is persisted - see the file header. Runs on the
+            // physics worker pool (see physicsPool above), not inline on the main thread.
+            const { trajectory, outcome } = await physicsPool.run({
+                launchPower,
+                chuckerActive: !attackerOpen,
+                attackerActive: attackerOpen,
+                jackpotActive: jackpotOpen,
+            });
 
             let ballsAwarded = 0;
             let nextLeftOpen = conditions.leftTulipOpen;
