@@ -11,6 +11,7 @@ import {
     getXenCasinoAccountId,
     WeeabetsUnavailable,
     WeeabetsTransferError,
+    MAX_LEDGER_LIMIT,
 } from "../utils/weeabetsClient";
 import { XENCASINO_DISCORD_ID } from "../config/weeabets";
 import { getCasinoStatus } from "../utils/casinoStatus";
@@ -74,7 +75,7 @@ module.exports = function (app: express.Application) {
     // Every movement in/out of the XenCasino account, enriched with local display names
     // where the counterparty is a known Xendelta-Hub user (matched via weeabetsAccountId).
     app.get("/api/casino/ledger", authenticateToken, async function (req: express.Request, res: express.Response) {
-        const limit = req.query.limit ? Number(req.query.limit) : undefined;
+        const limit = req.query.limit ? Math.min(Number(req.query.limit), MAX_LEDGER_LIMIT) : undefined;
         const beforeId = req.query.before_id ? Number(req.query.before_id) : undefined;
 
         try {

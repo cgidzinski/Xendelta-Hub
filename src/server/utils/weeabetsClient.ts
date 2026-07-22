@@ -9,6 +9,9 @@ import { WEEABETS_API_URL, WEEABETS_XENCASINO_SERVICE_TOKEN, XENCASINO_DISCORD_I
 
 export class WeeabetsUnavailable extends Error {}
 
+// Weeabets /api/xencasino/ledger hard-caps `limit` at 200 (422 above that).
+export const MAX_LEDGER_LIMIT = 200;
+
 export class WeeabetsTransferError extends Error {
   status: number;
   constructor(status: number, message: string) {

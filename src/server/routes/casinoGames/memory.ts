@@ -197,7 +197,11 @@ async function recoverStaleRounds(): Promise<void> {
             // Only counts as "played" if the round actually reached a reveal - a paid-then-
             // abandoned round shouldn't let a player farm daily quest progress for free.
             if (conditions.revealPending) {
-                await recordCasinoRoundPlayed(round.userId);
+                await recordCasinoRoundPlayed(round.userId, {
+                    game: SLUG,
+                    wager: round.wager,
+                    payout: conditions.revealPending.payout,
+                });
             }
         } catch (err) {
             const failureCount = await XenCasinoRound.recordSweepFailure(round._id);
@@ -352,7 +356,7 @@ module.exports = function (app: express.Application) {
             }
 
             await XenCasinoRound.resolve(round._id);
-            await recordCasinoRoundPlayed(userId);
+            await recordCasinoRoundPlayed(userId, { game: SLUG, wager: round.wager, payout: decision.payout });
 
             return res.json({
                 status: true,

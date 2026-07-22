@@ -170,9 +170,15 @@ scheduleStaleRoundSweep(SLUG, ROUND_TTL_MS, async (round) => {
     await XenCasinoRound.resolve(round._id);
     // Only counts as "played" if at least one ball was actually launched or cashed out
     // - otherwise a buy-then-abandon cycle (fully refunded above) would let a player
-    // farm daily quest progress for free with no risk.
+    // farm daily quest progress for free with no risk. Stats-wise, "wager" is the cost of
+    // balls actually fired (never-fired balls were just refunded above, so they were never
+    // genuinely at risk); "payout" is whatever cash a cash-out converted remaining balls into.
     if (conditions.results.length > 0 || conditions.cashOutPending) {
-        await recordCasinoRoundPlayed(round.userId);
+        await recordCasinoRoundPlayed(round.userId, {
+            game: SLUG,
+            wager: conditions.results.length * conditions.pricePerBall,
+            payout: conditions.cashOutPending ? conditions.cashOutPending.amount : 0,
+        });
     }
 });
 
@@ -581,7 +587,11 @@ module.exports = function (app: express.Application) {
             });
 
             await XenCasinoRound.resolve(round._id);
-            await recordCasinoRoundPlayed(userId);
+            await recordCasinoRoundPlayed(userId, {
+                game: SLUG,
+                wager: conditions.results.length * conditions.pricePerBall,
+                payout: amount,
+            });
 
             return res.json({
                 status: true,

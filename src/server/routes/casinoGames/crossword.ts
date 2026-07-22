@@ -323,7 +323,7 @@ scheduleStaleRoundSweep(SLUG, ROUND_TTL_MS, async (round) => {
     });
     await settleRound(round);
     await XenCasinoRound.resolve(round._id);
-    await recordCasinoRoundPlayed(round.userId);
+    await recordCasinoRoundPlayed(round.userId, { game: SLUG, wager: round.wager, payout: round.conditions.totalPayout });
 });
 
 module.exports = function (app: express.Application) {
@@ -402,7 +402,7 @@ module.exports = function (app: express.Application) {
 
             const settled = await settleRound(round);
             await XenCasinoRound.resolve(round._id);
-            await recordCasinoRoundPlayed(userId);
+            await recordCasinoRoundPlayed(userId, { game: SLUG, wager, payout: conditions.totalPayout });
 
             return res.json({
                 status: true,

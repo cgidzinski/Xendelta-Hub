@@ -105,7 +105,7 @@ scheduleStaleRoundSweep(SLUG, ROUND_TTL_MS, async (round) => {
     });
     await settleRound(round);
     await XenCasinoRound.resolve(round._id);
-    await recordCasinoRoundPlayed(round.userId);
+    await recordCasinoRoundPlayed(round.userId, { game: SLUG, wager: round.wager, payout: round.conditions.payout });
 });
 
 module.exports = function (app: express.Application) {
@@ -214,7 +214,7 @@ module.exports = function (app: express.Application) {
                 try {
                     await settleRound(round);
                     await XenCasinoRound.resolve(round._id);
-                    await recordCasinoRoundPlayed(userId);
+                    await recordCasinoRoundPlayed(userId, { game: SLUG, wager, payout: conditions.payout });
                 } catch (err) {
                     const failureCount = await XenCasinoRound.recordSweepFailure(round._id);
                     if (failureCount !== null && failureCount >= SWEEP_FAILURE_ALERT_THRESHOLD) {

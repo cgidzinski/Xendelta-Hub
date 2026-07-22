@@ -286,10 +286,43 @@ xenCasinoUserStateSchema.statics.markDailyQuestClaimed = async function (userId,
 
 var XenCasinoUserState = mongoose.model("XenCasinoUserState", xenCasinoUserStateSchema);
 
+// Durable, permanent record of one settled round's money movement - written once per round
+// right after XenCasinoRound.resolve(), by recordCasinoRoundPlayed() (see dailyQuest.ts).
+// This is what admin stats (src/server/routes/admin/casino.ts) aggregate over instead of
+// re-parsing the external Weeabets ledger on every request. `wager`/`payout` are plain
+// numbers rather than a note-string convention, so aggregation needs no parsing.
+var xenCasinoActivitySchema = new mongoose.Schema({
+  game: { type: String, required: true }, // machine/game slug, e.g. "easy-spin"
+  userId: { type: String, required: true },
+  wager: { type: Number, required: true },
+  payout: { type: Number, required: true, default: 0 },
+  jackpot: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now },
+});
+xenCasinoActivitySchema.index({ createdAt: 1 });
+xenCasinoActivitySchema.index({ game: 1, createdAt: 1 });
+
+xenCasinoActivitySchema.statics.clearAll = async function () {
+  await this.deleteMany({}).exec();
+};
+
+xenCasinoActivitySchema.statics.record = async function (params) {
+  await this.create({
+    game: params.game,
+    userId: params.userId,
+    wager: params.wager,
+    payout: params.payout || 0,
+    jackpot: !!params.jackpot,
+  });
+};
+
+var XenCasinoActivity = mongoose.model("XenCasinoActivity", xenCasinoActivitySchema);
+
 module.exports = {
   XenCasino,
   XenCasinoRound,
   XenCasinoUserState,
+  XenCasinoActivity,
   dailyQuestDateKey: todayKey,
   // Exported for unit testing the lazy-reset-on-date-change logic without a live Mongo
   // connection - pure functions over plain objects, no I/O.

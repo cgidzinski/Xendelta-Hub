@@ -167,7 +167,12 @@ for (const machineSlug of Object.keys(MACHINES)) {
             });
             await settleRound(machine, round);
             await XenCasinoRound.resolve(round._id);
-            await recordCasinoRoundPlayed(round.userId);
+            await recordCasinoRoundPlayed(round.userId, {
+                game: machineSlug,
+                wager: round.wager,
+                payout: round.conditions.payout,
+                jackpot: round.conditions.jackpot,
+            });
         },
         `slots(${machineSlug})`
     );
@@ -297,7 +302,7 @@ module.exports = function (app: express.Application) {
             // here also leaves the round in place rather than answering with a guess.
             const settled = await settleRound(machine, round);
             await XenCasinoRound.resolve(round._id);
-            await recordCasinoRoundPlayed(userId);
+            await recordCasinoRoundPlayed(userId, { game: machine.slug, wager, payout, jackpot });
 
             return res.json({ status: true, data: { reels, multiplier, jackpot, payout, balance: settled.balance ?? debitBalance } });
         } catch (err) {

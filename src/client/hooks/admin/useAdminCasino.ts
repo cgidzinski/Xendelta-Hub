@@ -70,6 +70,10 @@ const clearJackpots = async (): Promise<void> => {
     await apiClient.post("/api/admin/casino/jackpots/clear");
 };
 
+const clearStats = async (): Promise<void> => {
+    await apiClient.post("/api/admin/casino/stats/clear");
+};
+
 const fetchAdminCasinoGames = async (): Promise<AdminCasinoGamesResponse> => {
     const response = await apiClient.get<ApiResponse<AdminCasinoGamesResponse>>("/api/admin/casino/games");
     return response.data.data!;
@@ -98,6 +102,13 @@ export const useAdminCasino = (range: StatsRange) => {
         },
     });
 
+    const { mutateAsync: clearStatsMutation, isPending: isClearingStats } = useMutation({
+        mutationFn: clearStats,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: adminCasinoKeys.all });
+        },
+    });
+
     return {
         games: data?.games ?? [],
         isLoading,
@@ -106,6 +117,8 @@ export const useAdminCasino = (range: StatsRange) => {
         refetch,
         clearJackpots: clearJackpotsMutation,
         isClearingJackpots,
+        clearStats: clearStatsMutation,
+        isClearingStats,
     };
 };
 

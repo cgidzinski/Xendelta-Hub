@@ -1,10 +1,10 @@
 import express = require("express");
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
-import { getLedger, getAccount, WeeabetsUnavailable } from "../../utils/weeabetsClient";
+import { getAccount, WeeabetsUnavailable } from "../../utils/weeabetsClient";
 import { XENCASINO_DISCORD_ID } from "../../config/weeabets";
 import { getCasinoStatus } from "../../utils/casinoStatus";
-const { XenCasino } = require("../../models/xenCasino");
+const { XenCasino, XenCasinoActivity } = require("../../models/xenCasino");
 
 // Mirrors the client-side CASINO_GAMES_REGISTRY order - stats are returned in this
 // order so the admin table is deterministic.
@@ -23,33 +23,15 @@ var GAME_LABELS: Record<string, string> = {
 var JACKPOT_MACHINES = ["easy-spin", "spinmania"];
 var PACHINKO_SLUG = "pachinko";
 
-// Notes ending in one of these suffixes are game-round entries; everything else
-// (daily_quest_reward, etc.) is excluded from stats aggregation.
-var GAME_NOTE_SUFFIXES = ["_wager", "_win", "_jackpot"];
-
-function parseGameNote(note: string): { slug: string; isWin: boolean } | null {
-    for (var i = 0; i < GAME_NOTE_SUFFIXES.length; i++) {
-        var suffix = GAME_NOTE_SUFFIXES[i];
-        if (note.endsWith(suffix)) {
-            var slug = note.slice(0, note.length - suffix.length);
-            if (GAME_LABELS[slug]) {
-                return { slug: slug, isWin: suffix !== "_wager" };
-            }
-        }
-    }
-    return null;
-}
-
 module.exports = function (app: express.Application) {
 
-    // Per-game win/loss/round counts from the Weeabets ledger, plus current jackpot
-    // pool values from the XenCasino singleton. Always returns all 6 registered games
-    // (zero-filled when there's no ledger activity for a game).
+    // Per-game win/loss/round counts aggregated from the local XenCasinoActivity collection
+    // (one row per settled round, written by recordCasinoRoundPlayed - see dailyQuest.ts),
+    // plus current jackpot pool values from the XenCasino singleton. Always returns all 6
+    // registered games (zero-filled when there's no recorded activity for a game).
     app.get("/api/admin/casino/stats", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
         try {
             var range = (req.query.range as string) || "all";
-            var MAX_PAGES = range === "all" ? 10 : 2;
-            var PAGE_SIZE = 500;
 
             var now = new Date();
             var cutoff: Date | null = null;
@@ -59,52 +41,19 @@ module.exports = function (app: express.Application) {
                 cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - 7 * 24 * 60 * 60 * 1000);
             }
 
+            var match: Record<string, unknown> = {};
+            if (cutoff) {
+                match.createdAt = { $gte: cutoff };
+            }
+
+            var rows = await XenCasinoActivity.aggregate([
+                { $match: match },
+                { $group: { _id: "$game", winAmount: { $sum: "$payout" }, lossAmount: { $sum: "$wager" }, roundsPlayed: { $sum: 1 } } },
+            ]).exec();
+
             var games = new Map<string, { winAmount: number; lossAmount: number; roundsPlayed: number }>();
-            var beforeId: number | undefined;
-            var page = 0;
-            var done = false;
-
-            while (page < MAX_PAGES && !done) {
-                var entries = await getLedger({ limit: PAGE_SIZE, beforeId: beforeId });
-                if (entries.length === 0) break;
-
-                for (var i = 0; i < entries.length; i++) {
-                    var entry = entries[i];
-
-                    if (cutoff) {
-                        var entryDate = new Date(entry.createdAt);
-                        if (entryDate < cutoff) {
-                            done = true;
-                            break;
-                        }
-                    }
-
-                    var parsed = parseGameNote(entry.note);
-                    if (!parsed) continue;
-
-                    var amount = parseFloat(entry.amount);
-                    if (isNaN(amount)) continue;
-
-                    var agg = games.get(parsed.slug);
-                    if (!agg) {
-                        agg = { winAmount: 0, lossAmount: 0, roundsPlayed: 0 };
-                        games.set(parsed.slug, agg);
-                    }
-
-                    if (parsed.isWin) {
-                        agg.winAmount += amount;
-                    } else {
-                        agg.lossAmount += amount;
-                        agg.roundsPlayed += 1;
-                    }
-                }
-
-                if (!done && entries.length === PAGE_SIZE) {
-                    beforeId = entries[entries.length - 1].id;
-                } else {
-                    done = true;
-                }
-                page++;
+            for (var i = 0; i < rows.length; i++) {
+                games.set(rows[i]._id, { winAmount: rows[i].winAmount, lossAmount: rows[i].lossAmount, roundsPlayed: rows[i].roundsPlayed });
             }
 
             // Fetch jackpot pools from the singleton.
@@ -134,8 +83,7 @@ module.exports = function (app: express.Application) {
 
             return res.json({ status: true, data: { range: range, games: result, jackpots: jackpots } });
         } catch (err) {
-            var status = err instanceof WeeabetsUnavailable ? 503 : 500;
-            return res.status(status).json({ status: false, message: (err as Error).message });
+            return res.status(500).json({ status: false, message: (err as Error).message });
         }
     });
 
@@ -156,76 +104,57 @@ module.exports = function (app: express.Application) {
         }
     });
 
+    // Wipes every recorded round from XenCasinoActivity - the local collection admin
+    // stats/daily-stats aggregate over (see the two GET routes above). Purely a reporting
+    // reset: it never touches jackpot pools, the live Weeabets balance, or any in-flight
+    // XenCasinoRound, so it can't affect real money or an active game.
+    app.post("/api/admin/casino/stats/clear", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+        try {
+            await XenCasinoActivity.clearAll();
+            return res.json({ status: true });
+        } catch (err) {
+            return res.status(500).json({ status: false, message: (err as Error).message });
+        }
+    });
+
     // Daily breakdown for charts: per-day amount in, amount out, net, rounds played,
     // and end-of-day house balance (derived backwards from the current live balance).
+    // amountIn/amountOut/roundsPlayed come from the local XenCasinoActivity collection - only
+    // actual game rounds are recorded there (not daily-quest reward claims), so the per-day
+    // net/balance here reflects wager/payout activity only, not quest-reward money movement.
     app.get("/api/admin/casino/daily-stats", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
         try {
             var days = Math.min(Math.max(parseInt(req.query.days as string) || 5, 1), 30);
-            var PAGE_SIZE = 500;
-            var MAX_PAGES = Math.ceil((days * 2) / (PAGE_SIZE / 500)) + 2;
 
             var now = new Date();
             var cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - (days - 1) * 24 * 60 * 60 * 1000);
 
-            var dayMap = new Map<string, { amountIn: number; amountOut: number; otherNet: number; roundsPlayed: number }>();
+            var dayMap = new Map<string, { amountIn: number; amountOut: number; roundsPlayed: number }>();
 
             // Seed all days so zero-activity days still appear.
             for (var d = 0; d < days; d++) {
                 var date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - d * 24 * 60 * 60 * 1000);
                 var key = date.toISOString().slice(0, 10);
-                dayMap.set(key, { amountIn: 0, amountOut: 0, otherNet: 0, roundsPlayed: 0 });
+                dayMap.set(key, { amountIn: 0, amountOut: 0, roundsPlayed: 0 });
             }
 
-            var beforeId: number | undefined;
-            var page = 0;
-            var done = false;
+            var rows = await XenCasinoActivity.aggregate([
+                { $match: { createdAt: { $gte: cutoff } } },
+                {
+                    $group: {
+                        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "UTC" } },
+                        amountIn: { $sum: "$wager" },
+                        amountOut: { $sum: "$payout" },
+                        roundsPlayed: { $sum: 1 },
+                    },
+                },
+            ]).exec();
 
-            while (page < MAX_PAGES && !done) {
-                var entries = await getLedger({ limit: PAGE_SIZE, beforeId: beforeId });
-                if (entries.length === 0) break;
-
-                for (var i = 0; i < entries.length; i++) {
-                    var entry = entries[i];
-                    var entryDate = new Date(entry.createdAt);
-
-                    if (entryDate < cutoff) {
-                        done = true;
-                        break;
-                    }
-
-                    var dateKey = entryDate.toISOString().slice(0, 10);
-                    var dayAgg = dayMap.get(dateKey);
-                    if (!dayAgg) continue;
-
-                    var amount = parseFloat(entry.amount);
-                    if (isNaN(amount)) continue;
-
-                    var parsed = parseGameNote(entry.note);
-                    if (parsed) {
-                        if (parsed.isWin) {
-                            dayAgg.amountOut += amount;
-                            dayAgg.otherNet -= amount;
-                        } else {
-                            dayAgg.amountIn += amount;
-                            dayAgg.roundsPlayed += 1;
-                            dayAgg.otherNet += amount;
-                        }
-                    } else {
-                        // Non-game entry (daily quest reward, etc.) — still affects balance.
-                        if (entry.entryType === "credit") {
-                            dayAgg.otherNet += amount;
-                        } else {
-                            dayAgg.otherNet -= amount;
-                        }
-                    }
+            for (var i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                if (dayMap.has(row._id)) {
+                    dayMap.set(row._id, { amountIn: row.amountIn, amountOut: row.amountOut, roundsPlayed: row.roundsPlayed });
                 }
-
-                if (!done && entries.length === PAGE_SIZE) {
-                    beforeId = entries[entries.length - 1].id;
-                } else {
-                    done = true;
-                }
-                page++;
             }
 
             // Current live house balance.
@@ -244,7 +173,7 @@ module.exports = function (app: express.Application) {
                     balance: 0,
                     amountIn: agg.amountIn,
                     amountOut: agg.amountOut,
-                    net: agg.otherNet,
+                    net: agg.amountIn - agg.amountOut,
                     roundsPlayed: agg.roundsPlayed,
                 });
             }

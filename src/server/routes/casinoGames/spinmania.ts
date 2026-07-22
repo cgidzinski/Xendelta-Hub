@@ -132,7 +132,12 @@ scheduleStaleRoundSweep(MACHINE_SLUG, ROUND_TTL_MS, async (round) => {
     });
     await settleRound(round);
     await XenCasinoRound.resolve(round._id);
-    await recordCasinoRoundPlayed(round.userId);
+    await recordCasinoRoundPlayed(round.userId, {
+        game: MACHINE_SLUG,
+        wager: round.wager,
+        payout: round.conditions.payout,
+        jackpot: round.conditions.jackpot,
+    });
 });
 
 module.exports = function (app: express.Application) {
@@ -257,7 +262,7 @@ module.exports = function (app: express.Application) {
             // here also leaves the round in place rather than answering with a guess.
             const settled = await settleRound(round);
             await XenCasinoRound.resolve(round._id);
-            await recordCasinoRoundPlayed(userId);
+            await recordCasinoRoundPlayed(userId, { game: MACHINE_SLUG, wager, payout, jackpot: spin.jackpot });
 
             return res.json({
                 status: true,

@@ -93,8 +93,9 @@ export default function Casino() {
     const { enqueueSnackbar } = useSnackbar();
     const [range, setRange] = useState<StatsRange>("all");
     const [clearJackpotsOpen, setClearJackpotsOpen] = useState(false);
+    const [clearStatsOpen, setClearStatsOpen] = useState(false);
     const [closeCasinoOpen, setCloseCasinoOpen] = useState(false);
-    const { games, isLoading, isError, error, clearJackpots, isClearingJackpots } = useAdminCasino(range);
+    const { games, isLoading, isError, error, clearJackpots, isClearingJackpots, clearStats, isClearingStats } = useAdminCasino(range);
     const { dailyStats, isLoading: chartLoading } = useAdminCasinoDailyStats(5);
     const {
         games: gameToggles,
@@ -114,6 +115,17 @@ export default function Casino() {
             enqueueSnackbar(err instanceof Error ? err.message : "Failed to clear jackpots", { variant: "error" });
         } finally {
             setClearJackpotsOpen(false);
+        }
+    };
+
+    const handleClearStats = async () => {
+        try {
+            await clearStats();
+            enqueueSnackbar("Casino stats cleared", { variant: "success" });
+        } catch (err) {
+            enqueueSnackbar(err instanceof Error ? err.message : "Failed to clear stats", { variant: "error" });
+        } finally {
+            setClearStatsOpen(false);
         }
     };
 
@@ -174,6 +186,9 @@ export default function Casino() {
                     <Button color="error" variant="outlined" size="small" onClick={() => setClearJackpotsOpen(true)}>
                         Clear Jackpots
                     </Button>
+                    <Button color="error" variant="outlined" size="small" onClick={() => setClearStatsOpen(true)}>
+                        Clear Stats
+                    </Button>
                     <ToggleButtonGroup
                         value={range}
                         exclusive
@@ -203,6 +218,25 @@ export default function Casino() {
                     </Button>
                     <Button color="error" variant="contained" onClick={handleClearJackpots} disabled={isClearingJackpots}>
                         Clear Jackpots
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={clearStatsOpen} onClose={() => setClearStatsOpen(false)}>
+                <DialogTitle>Clear All Stats?</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2">
+                        This permanently deletes every recorded round (wagered/won amounts, rounds played, and the
+                        daily chart history) for every game. Jackpot pools, the live house balance, and any
+                        in-progress rounds are not affected. This cannot be undone.
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setClearStatsOpen(false)} disabled={isClearingStats}>
+                        Cancel
+                    </Button>
+                    <Button color="error" variant="contained" onClick={handleClearStats} disabled={isClearingStats}>
+                        Clear Stats
                     </Button>
                 </DialogActions>
             </Dialog>
