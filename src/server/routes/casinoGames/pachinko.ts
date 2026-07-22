@@ -92,6 +92,12 @@ const physicsPool = new Piscina<PachinkoPhysicsTask, ShotResult>({
 // whole change is fixing). Generous on purpose: under normal load this should never trigger.
 const MAX_QUEUED_PHYSICS_JOBS = 40;
 
+// /launch's gate-state write (tulip/attacker/jackpot) is guarded on the exact values it was
+// computed from and retried on conflict - see that handler's own comment. Bounded well above
+// MAX_CONCURRENT_BALLS (20, PachinkoBoard.tsx) worth of plausible pile-up so a retry storm still
+// resolves within one request rather than 409ing a legitimate catch.
+const MAX_LAUNCH_WRITE_ATTEMPTS = 25;
+
 interface PachinkoBallResult {
     outcome: PachinkoOutcome;
     ballsAwarded: number;
@@ -451,11 +457,10 @@ module.exports = function (app: express.Application) {
                 jackpotActive: jackpotOpen,
             });
 
+            // ballsAwarded/reelSpin/poolContribution/resetPool depend only on `outcome` (already
+            // decided) plus one-shot randomness (spinReel, the jackpot pool read) - never on the
+            // board's own tulip/attacker/jackpot gate state, so these are safe to decide once.
             let ballsAwarded = 0;
-            let nextLeftOpen = conditions.leftTulipOpen;
-            let nextRightOpen = conditions.rightTulipOpen;
-            let nextAttackerOpenUntil = conditions.attackerOpenUntil;
-            let nextJackpotOpenUntil = conditions.jackpotOpenUntil;
             let poolContribution = 0;
             let resetPool = false;
             let reelSpin: ReelSpinResult | undefined;
@@ -465,20 +470,6 @@ module.exports = function (app: express.Application) {
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
             } else if (outcome === "tulipLeft" || outcome === "tulipRight") {
                 ballsAwarded = SIDE_TULIP_BALLS;
-                if (outcome === "tulipLeft") {
-                    nextLeftOpen = !conditions.leftTulipOpen;
-                } else {
-                    nextRightOpen = !conditions.rightTulipOpen;
-                }
-                // The instant both are simultaneously open is the priming moment itself - starts
-                // the jackpot's own timed window (see JACKPOT_OPEN_MS) and immediately resets
-                // both tulips, so there's no standing "primed" state to sit open indefinitely;
-                // catching both again from scratch is what earns another shot at the window.
-                if (isJackpotPrimed(nextLeftOpen, nextRightOpen)) {
-                    nextJackpotOpenUntil = now + JACKPOT_OPEN_MS;
-                    nextLeftOpen = false;
-                    nextRightOpen = false;
-                }
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
             } else if (outcome === "chucker") {
                 // Fires the board's own central reel gimmick - a real machine's "heso" -> LCD
@@ -489,9 +480,6 @@ module.exports = function (app: express.Application) {
                 // hold-to-fire stack their time instead of one clobbering another's.
                 reelSpin = spinReel();
                 ballsAwarded = reelSpin.ballsAwarded;
-                if (reelSpin.attackerOpenMs > 0) {
-                    nextAttackerOpenUntil = Math.max(now, conditions.attackerOpenUntil) + reelSpin.attackerOpenMs;
-                }
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
             } else if (outcome === "attacker") {
                 // Physics only ever returns "attacker" while attackerActive was true, i.e. it
@@ -504,43 +492,95 @@ module.exports = function (app: express.Application) {
                 // the window immediately rather than letting it run out naturally.
                 const pool = await XenCasino.getPachinkoJackpotPool();
                 ballsAwarded = jackpotBalls(pool, conditions.pricePerBall);
-                nextJackpotOpenUntil = 0;
                 resetPool = true;
             } else {
                 poolContribution = conditions.pricePerBall * CONTRIBUTION_RATE;
             }
 
-            // If a jackpot window WAS actually primed and has since expired, close any open
-            // tulips - they exist only to prime the jackpot, so there's no reason to leave them
-            // open once the window ends (see shouldCloseLapsedTulips's own comment for why this
-            // can't just be "there's currently no open window").
-            if (shouldCloseLapsedTulips(conditions.jackpotOpenUntil, nextJackpotOpenUntil, nextLeftOpen, nextRightOpen, now)) {
-                nextLeftOpen = false;
-                nextRightOpen = false;
-            }
-
             const result: PachinkoBallResult = { outcome, ballsAwarded, trajectory, reelSpin };
 
-            const updated = await XenCasinoRound.applyConditionsUpdate(
-                round._id,
-                { "conditions.ballsRemaining": { $gt: 0 } },
-                {
-                    $inc: { "conditions.ballsRemaining": ballsAwarded - 1 },
-                    $push: { "conditions.results": result },
-                    $set: {
-                        "conditions.leftTulipOpen": nextLeftOpen,
-                        "conditions.rightTulipOpen": nextRightOpen,
-                        "conditions.attackerOpenUntil": nextAttackerOpenUntil,
-                        "conditions.jackpotOpenUntil": nextJackpotOpenUntil,
-                    },
+            // Everything below - tulip toggle, jackpot priming, attacker stacking, the lapsed-
+            // tulip closeout - depends on the board's CURRENT gate state, which by the time we
+            // get here (an async physics round-trip later, up to MAX_CONCURRENT_BALLS=20 other
+            // launches for this same round possibly in flight - see PachinkoBoard.tsx's
+            // hold-to-fire loop) may no longer match the `conditions` read at the top of this
+            // handler. Guard the write on the exact gate fields this transition was computed
+            // from, and recompute against fresh state on conflict instead of blindly overwriting
+            // whatever another concurrent launch already decided (that was silently dropping
+            // tulip catches under hold-to-fire).
+            let liveConditions = conditions;
+            let updated: Awaited<ReturnType<typeof XenCasinoRound.applyConditionsUpdate>> = null;
+            for (let attempt = 0; attempt < MAX_LAUNCH_WRITE_ATTEMPTS && !updated; attempt++) {
+                let nextLeftOpen = liveConditions.leftTulipOpen;
+                let nextRightOpen = liveConditions.rightTulipOpen;
+                let nextAttackerOpenUntil = liveConditions.attackerOpenUntil;
+                let nextJackpotOpenUntil = liveConditions.jackpotOpenUntil;
+
+                if (outcome === "tulipLeft") {
+                    nextLeftOpen = !liveConditions.leftTulipOpen;
+                } else if (outcome === "tulipRight") {
+                    nextRightOpen = !liveConditions.rightTulipOpen;
                 }
-            );
+                if (outcome === "tulipLeft" || outcome === "tulipRight") {
+                    // The instant both are simultaneously open is the priming moment itself -
+                    // starts the jackpot's own timed window (see JACKPOT_OPEN_MS) and immediately
+                    // resets both tulips, so there's no standing "primed" state to sit open
+                    // indefinitely; catching both again from scratch earns another shot at it.
+                    if (isJackpotPrimed(nextLeftOpen, nextRightOpen)) {
+                        nextJackpotOpenUntil = now + JACKPOT_OPEN_MS;
+                        nextLeftOpen = false;
+                        nextRightOpen = false;
+                    }
+                } else if (outcome === "chucker" && reelSpin && reelSpin.attackerOpenMs > 0) {
+                    nextAttackerOpenUntil = Math.max(now, liveConditions.attackerOpenUntil) + reelSpin.attackerOpenMs;
+                } else if (outcome === "jackpot") {
+                    nextJackpotOpenUntil = 0;
+                }
+
+                // If a jackpot window WAS actually primed and has since expired, close any open
+                // tulips - they exist only to prime the jackpot, so there's no reason to leave
+                // them open once the window ends (see shouldCloseLapsedTulips's own comment for
+                // why this can't just be "there's currently no open window").
+                if (shouldCloseLapsedTulips(liveConditions.jackpotOpenUntil, nextJackpotOpenUntil, nextLeftOpen, nextRightOpen, now)) {
+                    nextLeftOpen = false;
+                    nextRightOpen = false;
+                }
+
+                updated = await XenCasinoRound.applyConditionsUpdate(
+                    round._id,
+                    {
+                        "conditions.ballsRemaining": { $gt: 0 },
+                        "conditions.leftTulipOpen": liveConditions.leftTulipOpen,
+                        "conditions.rightTulipOpen": liveConditions.rightTulipOpen,
+                        "conditions.attackerOpenUntil": liveConditions.attackerOpenUntil,
+                        "conditions.jackpotOpenUntil": liveConditions.jackpotOpenUntil,
+                    },
+                    {
+                        $inc: { "conditions.ballsRemaining": ballsAwarded - 1 },
+                        $push: { "conditions.results": result },
+                        $set: {
+                            "conditions.leftTulipOpen": nextLeftOpen,
+                            "conditions.rightTulipOpen": nextRightOpen,
+                            "conditions.attackerOpenUntil": nextAttackerOpenUntil,
+                            "conditions.jackpotOpenUntil": nextJackpotOpenUntil,
+                        },
+                    }
+                );
+                if (!updated) {
+                    const fresh = await XenCasinoRound.findActive(SLUG, userId);
+                    const freshConditions = fresh?.conditions as PachinkoConditions | undefined;
+                    if (!freshConditions || freshConditions.ballsRemaining <= 0) {
+                        // A concurrent request (double-click, duplicate tab, hold-to-fire)
+                        // already claimed the last ball - nothing was decided for *this* request
+                        // that needs unwinding (no money moved on a launch at all, unlike the old
+                        // cash-payout version of this game).
+                        return res.status(409).json({ status: false, message: "No balls remaining" });
+                    }
+                    liveConditions = freshConditions; // gate state moved under us - retry against it
+                }
+            }
             if (!updated) {
-                // A concurrent request (double-click, duplicate tab, hold-to-fire) already
-                // claimed the last ball - nothing was decided for *this* request that needs
-                // unwinding (no money moved on a launch at all, unlike the old cash-payout
-                // version of this game).
-                return res.status(409).json({ status: false, message: "No balls remaining" });
+                return res.status(409).json({ status: false, message: "Pachinko board is busy right now - try again" });
             }
 
             // Jackpot pool bookkeeping happens after the ball count is durably persisted, same
