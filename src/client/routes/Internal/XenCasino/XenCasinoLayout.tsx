@@ -16,18 +16,22 @@ function CasinoGate({
     message,
     actionLabel,
     onAction,
+    actionHref,
 }: {
     severity: "warning" | "error";
     message: string;
     actionLabel: string;
-    onAction: () => void;
+    onAction?: () => void;
+    actionHref?: string;
 }) {
+    const actionLinkProps = actionHref ? { href: actionHref, target: "_blank", rel: "noopener noreferrer" } : {};
+
     return (
         <Box sx={{ px: { xs: 2, sm: 3, md: 5 }, py: 4 }}>
             <Alert
                 severity={severity}
                 action={
-                    <Button color="inherit" size="small" onClick={onAction}>
+                    <Button color="inherit" size="small" onClick={onAction} {...actionLinkProps}>
                         {actionLabel}
                     </Button>
                 }
@@ -40,7 +44,7 @@ function CasinoGate({
 
 export default function XenCasinoLayout() {
     useTitle("XenCasino");
-    const { authProviders, loading: providersLoading, linkDiscordAccount } = useAuthProviders();
+    const { authProviders, loading: providersLoading, discordLinkHref } = useAuthProviders();
     const { linked, balance, isLoading: balanceLoading, isError, error, refetch } = useCasinoBalance();
     const { open: casinoOpen, reason: casinoClosedReason, bankBalance, disabledGames, isLoading: statusLoading } = useCasinoStatus();
     const location = useLocation();
@@ -63,7 +67,7 @@ export default function XenCasinoLayout() {
             severity="warning"
             message="Link your Discord account to play XenCasino — your cheddar balance comes straight from your Weeabets account."
             actionLabel="Link Discord"
-            onAction={() => linkDiscordAccount()}
+            actionHref={discordLinkHref}
         />
     );
 

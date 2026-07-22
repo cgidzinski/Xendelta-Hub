@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
+import { useAuth } from "../../contexts/AuthContext";
 
 // Types
 export interface AuthProvider {
@@ -16,11 +17,7 @@ export interface AuthProvidersData {
   canUnlinkLocal: boolean;
 }
 
-interface LinkProviderResponse {
-  success: boolean;
-  message?: string;
-  redirectUrl?: string;
-}
+export type LinkableProvider = "google" | "github" | "discord";
 
 interface UnlinkProviderResponse {
   success: boolean;
@@ -46,47 +43,14 @@ const fetchAuthProvidersData = async (): Promise<AuthProvidersData> => {
   return response.data;
 };
 
-const linkGoogleAccountRequest = async (): Promise<LinkProviderResponse> => {
-  const response = await apiClient.post<LinkProviderResponse>("/api/user/link-google");
-  const data = response.data;
-
-  if (data.success && data.redirectUrl) {
-    // Redirect to Google OAuth
-    window.location.href = data.redirectUrl;
-  } else {
-    throw new Error(data.message || "Failed to initiate Google account linking");
-  }
-
-  return data;
-};
-
-const linkGitHubAccountRequest = async (): Promise<LinkProviderResponse> => {
-  const response = await apiClient.post<LinkProviderResponse>("/api/user/link-github");
-  const data = response.data;
-
-  if (data.success && data.redirectUrl) {
-    // Redirect to GitHub OAuth
-    window.location.href = data.redirectUrl;
-  } else {
-    throw new Error(data.message || "Failed to initiate GitHub account linking");
-  }
-
-  return data;
-};
-
-const linkDiscordAccountRequest = async (): Promise<LinkProviderResponse> => {
-  const response = await apiClient.post<LinkProviderResponse>("/api/user/link-discord");
-  const data = response.data;
-
-  if (data.success && data.redirectUrl) {
-    // Redirect to Discord OAuth
-    window.location.href = data.redirectUrl;
-  } else {
-    throw new Error(data.message || "Failed to initiate Discord account linking");
-  }
-
-  return data;
-};
+// Link hrefs are fully deterministic from the current user id, so they're built
+// client-side (see getProviderLinkHref below) instead of round-tripping through the
+// server first. Opening them as a real anchor (target="_blank") rather than a JS
+// window.location.href navigation keeps the app's own tab alive the whole time -
+// on iOS PWAs, navigating the standalone tab itself out to an OAuth provider and
+// back is what causes the app to freeze/stop responding to touches afterward.
+export const getProviderLinkHref = (provider: LinkableProvider, userId: string): string =>
+  `/api/auth/${provider}?state=link&userId=${userId}`;
 
 const unlinkProviderRequest = async (provider: string): Promise<UnlinkProviderResponse> => {
   const response = await apiClient.post<ApiResponse<UnlinkProviderResponse>>("/api/user/unlink-provider", {
@@ -105,6 +69,7 @@ const addPasswordRequest = async (password: string): Promise<AddPasswordResponse
 // Hooks
 export const useAuthProviders = () => {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   // Query for fetching auth providers
   const {
@@ -123,30 +88,6 @@ export const useAuthProviders = () => {
       return failureCount < 3;
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
-  });
-
-  // Mutation for linking Google account
-  const { mutate: linkGoogleAccount } = useMutation({
-    mutationFn: linkGoogleAccountRequest,
-    onError: () => {
-      // Error handled by mutation error state
-    },
-  });
-
-  // Mutation for linking GitHub account
-  const { mutate: linkGitHubAccount } = useMutation({
-    mutationFn: linkGitHubAccountRequest,
-    onError: () => {
-      // Error handled by mutation error state
-    },
-  });
-
-  // Mutation for linking Discord account
-  const { mutate: linkDiscordAccount } = useMutation({
-    mutationFn: linkDiscordAccountRequest,
-    onError: () => {
-      // Error handled by mutation error state
-    },
   });
 
   // Mutation for unlinking provider
@@ -194,9 +135,9 @@ export const useAuthProviders = () => {
     loading,
     error: error ? (error as Error).message : null,
     fetchAuthProviders,
-    linkGoogleAccount,
-    linkGitHubAccount,
-    linkDiscordAccount,
+    googleLinkHref: user ? getProviderLinkHref("google", user.id) : undefined,
+    githubLinkHref: user ? getProviderLinkHref("github", user.id) : undefined,
+    discordLinkHref: user ? getProviderLinkHref("discord", user.id) : undefined,
     unlinkProvider,
     addPassword,
   };

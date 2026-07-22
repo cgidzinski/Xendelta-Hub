@@ -57,15 +57,19 @@ const COMMON_BUTTON_STYLES = {
 
 interface AuthButtonProps {
   provider: keyof typeof PROVIDER_CONFIG;
-  onClick: () => void;
+  onClick?: () => void;
+  href?: string;
+  target?: string;
+  rel?: string;
   disabled?: boolean;
   variant?: "contained" | "outlined";
 }
 
 export default function AuthButton(props: AuthButtonProps) {
-  const { provider, onClick, disabled, variant = "contained" } = props;
+  const { provider, onClick, href, target, rel, disabled, variant = "contained" } = props;
   const config = PROVIDER_CONFIG[provider];
   const IconComponent = config.icon;
+  const linkProps = href ? { href, target, rel } : {};
 
   return (
     <Button
@@ -74,6 +78,7 @@ export default function AuthButton(props: AuthButtonProps) {
       onClick={onClick}
       disabled={disabled}
       sx={COMMON_BUTTON_STYLES}
+      {...linkProps}
     >
       {config.buttonText}
     </Button>
