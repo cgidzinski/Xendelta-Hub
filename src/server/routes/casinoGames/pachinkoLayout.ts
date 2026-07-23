@@ -259,23 +259,21 @@ export const TULIPS: FixedPocket[] = [
 export const JACKPOT: FixedPocket = { id: "jackpot", position: { x: 230, y: 372 }, halfWidth: 4 };
 
 // True the instant both tulips are simultaneously open - pachinko.ts uses this to detect the
-// priming *moment* (which starts the jackpot's timed window and immediately resets both tulips,
-// see its own "tulipLeft"/"tulipRight" branches), not as an ongoing state to poll - unlike the
-// attacker/chucker, there's no persistent "primed" flag, only the resulting jackpotOpenUntil
-// timestamp.
+// priming *moment*, which starts the jackpot's timed window. Both tulips are then HELD open for
+// the rest of that window (a catch on either side pays out but no longer toggles the gate) -
+// see pachinko.ts's own "tulipLeft"/"tulipRight" branch, the only caller.
 export function isJackpotPrimed(leftOpen: boolean, rightOpen: boolean): boolean {
     return leftOpen && rightOpen;
 }
 
 // Whether a lapsed jackpot window should force any still-open tulips closed. Only true when a
 // window actually existed before this shot (previousJackpotOpenUntil > 0) and has since expired
-// without re-priming - NOT simply "there's currently no open window", which is also true on an
-// ordinary single-tulip catch where no window was ever primed at all (previousJackpotOpenUntil
-// still its default 0). Conflating those two cases was a real bug: it stomped a tulip's toggle
-// back closed on effectively every catch, before the toggle was ever persisted - see
-// pachinko.ts's own chucker/tulip branch, the only caller.
-export function shouldCloseLapsedTulips(previousJackpotOpenUntil: number, nextJackpotOpenUntil: number, leftOpen: boolean, rightOpen: boolean, now: number): boolean {
-    return previousJackpotOpenUntil > 0 && nextJackpotOpenUntil <= now && !isJackpotPrimed(leftOpen, rightOpen);
+// (nextJackpotOpenUntil <= now) - NOT simply "there's currently no open window", which is also
+// true on an ordinary single-tulip catch where no window was ever primed at all
+// (previousJackpotOpenUntil still its default 0). See pachinko.ts's own chucker/tulip branch,
+// the only caller.
+export function shouldCloseLapsedTulips(previousJackpotOpenUntil: number, nextJackpotOpenUntil: number, now: number): boolean {
+    return previousJackpotOpenUntil > 0 && nextJackpotOpenUntil <= now;
 }
 
 // Bonus pockets - frequent, small top-ups. Sized bigger than the tulips (22px wide vs 20px)
