@@ -1,8 +1,9 @@
 name: Deploy production
 
-# Manual-only: pushing to a branch does NOT deploy by itself. Run this on
-# purpose (Actions tab -> Run workflow, or `gh workflow run deploy-prod.yml`),
-# picking the branch to deploy via the "Use workflow from" selector.
+# Manual-only, main only: pushing to a branch does NOT deploy by itself, and
+# dispatching this workflow against anything other than main is a no-op (see
+# the job-level `if` below) — the "Use workflow from" dropdown doesn't stop
+# you from picking another branch, so we guard against it explicitly.
 on:
   workflow_dispatch:
 
@@ -12,19 +13,17 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, xendelta]
+    if: github.ref == 'refs/heads/main'
     steps:
-      - name: SSH deploy
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
-        with:
-          host: ${{ vars.VM_HOST }}
-          username: ${{ vars.VM_SSH_USER }}
-          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
-          known_hosts: ${{ secrets.VM_SSH_KNOWN_HOSTS }}
-          script: |
-            set -euo pipefail
-            cd ~/Xendelta-Hub
-            git pull origin ${{ github.ref_name }}
-            npm i
-            pm2 restart xendelta-hub
-            echo "Deployed $(git rev-parse HEAD) to production"
+      - name: Build and restart
+        run: |
+          set -euo pipefail
+          cd ~/Xendelta-Hub
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
+          npm ci
+          npm run build
+          pm2 restart xendelta-hub
+          echo "Deployed $(git rev-parse HEAD) to production"

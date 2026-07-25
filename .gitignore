@@ -28,3 +28,6 @@ src/server/public/avatars/**
 !src/server/public/avatars/default-avatar.png
 gcs-service-account.json
 backups/**
+
+# Built by `npm run build` on the server as part of deploy — no longer committed
+dist/
