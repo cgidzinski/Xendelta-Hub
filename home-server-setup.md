@@ -355,3 +355,59 @@ http:
 - Just needs to be reachable at `IP:port` from the Traefik CT — every LXC/VM is on the same `192.168.4.0/24` subnet by default, so this works with no extra networking setup
 - Check the dashboard after adding the config file to confirm the router actually registered (`@file` suffix) before testing externally
 - Use the real domain in the `Host()` rule, not a placeholder
+
+## CI/CD — GitHub Actions self-hosted runner
+
+The WebServer VLAN has no open inbound ports and no LAN exceptions (see "Network" above) — GitHub's hosted runners can't reach anything on `192.168.4.0/24`, so the old approach of SSHing in from a hosted runner doesn't work here. Instead, install a **self-hosted runner directly on the project's CT** — it polls GitHub over outbound HTTPS, so nothing needs to be opened.
+
+1. On GitHub: repo → Settings → Actions → Runners → New self-hosted runner. Follow the generated `config.sh` command on the CT, giving it a label that identifies the box/project (e.g. `xendelta`).
+2. Install it as a systemd service so it survives reboots (same durability pattern used for `cloudflared`, Traefik, and PM2 elsewhere in this doc):
+   ```bash
+   sudo ./svc.sh install
+   sudo ./svc.sh start
+   ```
+3. In workflow files, target it with `runs-on: [self-hosted, <label>]`.
+
+**Security note:** a self-hosted runner executes whatever a workflow file tells it to, on real hardware with no sandboxing. Only safe to do this for `workflow_dispatch`-triggered workflows (requires repo write access to trigger) — never wire a self-hosted runner to a `pull_request`-triggered workflow, since that lets anyone who can open a PR run arbitrary code on the box.
+
+### Xendelta Hub: staging + prod convention
+
+Two clones on the same CT, same runner, different folder/port/PM2 process each:
+
+| | Prod | Staging |
+|---|---|---|
+| Folder | `~/XenHub-Prod` | `~/XenHub-Staging` |
+| Port | `3000` | `3001` |
+| PM2 process | `xenhub-prod` | `xenhub-staging` |
+| Deploys | `.github/workflows/deploy-prod.yml`, manual, hard-restricted to `main` | `.github/workflows/deploy-staging.yml`, manual, deploys whichever branch is picked in the dropdown |
+| Hostname | `xendelta.com` (or whatever the prod domain is) | `staging.evg31337.com` |
+
+Each folder has its **own** `.env` — staging points at its own Mongo DB / GCS buckets / secrets so test data never touches prod (`PORT` and `PUBLIC_URL` also differ per the table above).
+
+One-time setup per folder (the deploy workflow only ever `pm2 restart`s — it doesn't create the process):
+```bash
+git clone https://github.com/cgidzinski/Xendelta-Hub ~/XenHub-Staging
+cd ~/XenHub-Staging
+nano .env   # own PORT, MONGODB_URI, GCS buckets, PUBLIC_URL, etc.
+npm ci
+npm run build
+pm2 start npm --name xenhub-staging -- run start
+pm2 save
+```
+
+Traefik routing file for staging, `/opt/traefik/dynamic/xenhub-staging.yml` (same CT IP as prod, different port; `staging.evg31337.com` is already covered by the existing `*.evg31337.com` wildcard ingress, so no new Cloudflare DNS work is needed):
+```yaml
+http:
+  routers:
+    xenhub-staging:
+      rule: "Host(`staging.evg31337.com`)"
+      service: xenhub-staging
+      entryPoints:
+        - web
+
+  services:
+    xenhub-staging:
+      loadBalancer:
+        servers:
+          - url: "http://<app-CT-IP>:3001"
+```

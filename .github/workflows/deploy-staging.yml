@@ -1,0 +1,27 @@
+name: Deploy staging
+
+# Manual-only: pushing to a branch does NOT deploy by itself. Run this on
+# purpose (Actions tab -> Run workflow, or `gh workflow run deploy-staging.yml`),
+# picking the branch to deploy via the "Use workflow from" selector.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, xendelta]
+    steps:
+      - name: Build and restart
+        run: |
+          set -euo pipefail
+          cd ~/XenHub-Staging
+          git fetch origin ${{ github.ref_name }}
+          git checkout ${{ github.ref_name }}
+          git reset --hard origin/${{ github.ref_name }}
+          npm ci
+          npm run build
+          pm2 restart xenhub-staging
+          echo "Deployed $(git rev-parse HEAD) (branch ${{ github.ref_name }}) to staging"
