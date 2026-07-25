@@ -376,9 +376,9 @@ Two clones on the same CT, same runner, different folder/port/PM2 process each:
 
 | | Prod | Staging |
 |---|---|---|
-| Folder | `~/Xendelta-Hub` | `~/Xendelta-Hub-staging` |
+| Folder | `~/XenHub-Prod` | `~/XenHub-Staging` |
 | Port | `3000` | `3001` |
-| PM2 process | `xendelta-hub` | `xendelta-hub-staging` |
+| PM2 process | `xenhub-prod` | `xenhub-staging` |
 | Deploys | `.github/workflows/deploy-prod.yml`, manual, hard-restricted to `main` | `.github/workflows/deploy-staging.yml`, manual, deploys whichever branch is picked in the dropdown |
 | Hostname | `xendelta.com` (or whatever the prod domain is) | `staging.evg31337.com` |
 
@@ -386,27 +386,27 @@ Each folder has its **own** `.env` — staging points at its own Mongo DB / GCS 
 
 One-time setup per folder (the deploy workflow only ever `pm2 restart`s — it doesn't create the process):
 ```bash
-git clone https://github.com/cgidzinski/Xendelta-Hub ~/Xendelta-Hub-staging
-cd ~/Xendelta-Hub-staging
+git clone https://github.com/cgidzinski/Xendelta-Hub ~/XenHub-Staging
+cd ~/XenHub-Staging
 nano .env   # own PORT, MONGODB_URI, GCS buckets, PUBLIC_URL, etc.
 npm ci
 npm run build
-pm2 start npm --name xendelta-hub-staging -- run start
+pm2 start npm --name xenhub-staging -- run start
 pm2 save
 ```
 
-Traefik routing file for staging, `/opt/traefik/dynamic/xendelta-hub-staging.yml` (same CT IP as prod, different port; `staging.evg31337.com` is already covered by the existing `*.evg31337.com` wildcard ingress, so no new Cloudflare DNS work is needed):
+Traefik routing file for staging, `/opt/traefik/dynamic/xenhub-staging.yml` (same CT IP as prod, different port; `staging.evg31337.com` is already covered by the existing `*.evg31337.com` wildcard ingress, so no new Cloudflare DNS work is needed):
 ```yaml
 http:
   routers:
-    xendelta-hub-staging:
+    xenhub-staging:
       rule: "Host(`staging.evg31337.com`)"
-      service: xendelta-hub-staging
+      service: xenhub-staging
       entryPoints:
         - web
 
   services:
-    xendelta-hub-staging:
+    xenhub-staging:
       loadBalancer:
         servers:
           - url: "http://<app-CT-IP>:3001"

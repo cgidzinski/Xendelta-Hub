@@ -19,11 +19,11 @@ jobs:
       - name: Build and restart
         run: |
           set -euo pipefail
-          cd ~/Xendelta-Hub
+          cd ~/XenHub-Prod
           git fetch origin main
           git checkout main
           git reset --hard origin/main
           npm ci
           npm run build
-          pm2 restart xendelta-hub
+          pm2 restart xenhub-prod
           echo "Deployed $(git rev-parse HEAD) to production"

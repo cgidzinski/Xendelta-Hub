@@ -17,11 +17,11 @@ jobs:
       - name: Build and restart
         run: |
           set -euo pipefail
-          cd ~/Xendelta-Hub-staging
+          cd ~/XenHub-Staging
           git fetch origin ${{ github.ref_name }}
           git checkout ${{ github.ref_name }}
           git reset --hard origin/${{ github.ref_name }}
           npm ci
           npm run build
-          pm2 restart xendelta-hub-staging
+          pm2 restart xenhub-staging
           echo "Deployed $(git rev-parse HEAD) (branch ${{ github.ref_name }}) to staging"
