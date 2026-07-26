@@ -44,6 +44,7 @@ interface SpinmaniaOddsResponse {
     jackpotContributionRate: number;
     jackpotPool: number;
     rtp: number;
+    maxPayout: number;
 }
 
 const fetchOdds = async (): Promise<SpinmaniaOddsResponse> => (await apiClient.get<ApiResponse<SpinmaniaOddsResponse>>("/api/casino/games/spinmania/odds")).data.data!;
@@ -98,6 +99,7 @@ export default function Spinmania() {
             title="Spinmania"
             howToPlay={`A 20,000-credit high-roller machine with a 5x3 grid that pays all ways, not fixed lines: land 3, 4, or 5 matching symbols in a row of consecutive columns starting from the left (any row, any position within the column) and it pays - more matches per column means more "ways" and a bigger payout. Click Spin to get the grid rolling, then Stop whenever you're ready to reveal the result. Every winning symbol clears and new ones cascade down to refill the gaps, and if that refill creates another win it pays too - each consecutive cascade within the same spin is worth more than the last, so a single spin can chain into a much bigger payout than the base hit. Land ${odds?.jackpotScatterCount ?? 6} or more crowns anywhere on the grid before any cascade for a shot at the growing jackpot instead.`}
             oddsSections={oddsSections}
+            maxWin={odds?.maxPayout}
         >
             <PlayLauncher
                 title="Spinmania"

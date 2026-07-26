@@ -50,6 +50,7 @@ import { resolveUserAccount, getXenCasinoAccountId, transfer, WeeabetsUnavailabl
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
 import { requireGameEnabled } from "../../utils/casinoStatus";
 import { settleSlotsRound } from "./slotsSettlement";
+import { capPayout } from "./payoutCap";
 import { drawWeighted } from "../../utils/weightedDraw";
 import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
 
@@ -75,6 +76,9 @@ interface MachineConfig {
     jackpotContributionRate: number;
     jackpotSeed: number;
     targetRtp: number;
+    // Hard ceiling on a single round's cash payout (base game and jackpot alike) - see
+    // payoutCap.ts. Per-machine, so future machines can carry a different cap.
+    maxPayout: number;
 }
 
 const MACHINES: Record<string, MachineConfig> = {
@@ -102,6 +106,7 @@ const MACHINES: Record<string, MachineConfig> = {
         jackpotContributionRate: 0.035,
         jackpotSeed: 0,
         targetRtp: 0.952,
+        maxPayout: 20_000_000,
     },
 };
 
@@ -221,6 +226,7 @@ module.exports = function (app: express.Application) {
                 jackpotContributionRate: machine.jackpotContributionRate,
                 jackpotPool,
                 rtp: machine.targetRtp,
+                maxPayout: machine.maxPayout,
             },
         });
     });
@@ -257,7 +263,8 @@ module.exports = function (app: express.Application) {
 
             const reels = spinReels(machine);
             const { multiplier, jackpot } = resultFor(machine, reels);
-            const payout = jackpot ? await XenCasino.getJackpotPool(machine.slug, machine.jackpotSeed) : wager * multiplier;
+            const rawPayout = jackpot ? await XenCasino.getJackpotPool(machine.slug, machine.jackpotSeed) : wager * multiplier;
+            const payout = capPayout(rawPayout, machine.maxPayout);
 
             const roundId = new mongoose.Types.ObjectId();
             const debitKey = `xendelta-slots-${machine.slug}-start-${roundId}`;

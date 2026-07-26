@@ -41,6 +41,9 @@ export interface SpinmaniaConfig {
     jackpotContributionRate: number;
     jackpotSeed: number;
     targetRtp: number;
+    // Hard ceiling on a single round's cash payout (base game and jackpot alike) - see
+    // payoutCap.ts.
+    maxPayout: number;
 }
 
 export interface Win {

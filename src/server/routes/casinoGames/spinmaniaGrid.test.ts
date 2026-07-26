@@ -15,6 +15,7 @@ const twoSymbolConfig: SpinmaniaConfig = {
     jackpotContributionRate: 0.05,
     jackpotSeed: 0,
     targetRtp: 0.9,
+    maxPayout: 20_000_000,
 };
 
 function fixedSequence(values: number[]): () => number {

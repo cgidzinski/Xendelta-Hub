@@ -33,6 +33,7 @@ interface PlinkoOddsResponse {
     multipliers: number[];
     rtp: number;
     layout: PlinkoLayoutData;
+    maxPayout: number;
 }
 
 const fetchOdds = async (): Promise<PlinkoOddsResponse> => (await apiClient.get<ApiResponse<PlinkoOddsResponse>>("/api/casino/games/plinko/odds")).data.data!;
@@ -74,6 +75,7 @@ export default function Plinko() {
             title="Plinko"
             howToPlay="A marker glides back and forth above the board - click Drop Ball when it's where you want to aim. A real ball falls from there through 12 rows of pegs; where it lands decides your multiplier."
             oddsSections={oddsSections}
+            maxWin={odds?.maxPayout}
         >
             <PlayLauncher
                 title="Plinko"

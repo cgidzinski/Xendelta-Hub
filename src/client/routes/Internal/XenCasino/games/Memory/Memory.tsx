@@ -46,6 +46,7 @@ interface MemoryOddsResponse {
     symbolGroups: { symbol: string; count: number }[];
     distribution: { matchCount: number; multiplier: number; probability: number }[];
     rtp: number;
+    maxPayout: number;
 }
 
 const fetchOdds = async (): Promise<MemoryOddsResponse> =>
@@ -102,6 +103,7 @@ export default function Memory() {
             title="Memory"
             howToPlay="A 10,000-cheddar round (with the usual bet multiplier). Start to see all 25 cards face up, then they flip and shuffle. Pick 4 cards to flip: one pair pays a small prize, two separate pairs pay bigger, and finding a full triple among your 4 is the top prize."
             oddsSections={oddsSections}
+            maxWin={odds?.maxPayout}
         >
             <PlayLauncher
                 title="Memory"

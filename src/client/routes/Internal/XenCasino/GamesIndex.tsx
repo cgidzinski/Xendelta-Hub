@@ -20,15 +20,18 @@ interface SlotsOddsSummary {
     paytable: { probability: number }[];
     jackpotPool: number;
     rtp: number;
+    maxPayout: number;
 }
 interface KittyScratchOddsSummary {
     rowCount: number;
     rowDistribution: { value: number; probability: number }[];
     rtp: number;
+    maxPayout: number;
 }
 interface CrosswordOddsSummary {
     distribution: { payout: number; probability: number }[];
     rtp: number;
+    maxPayout: number;
 }
 // No paytable on either of these (unlike Slots/Kitty Scratch/Crossword) - the outcome comes
 // from a real physics simulation driven by the player's own aim (drop position for Plinko,
@@ -39,13 +42,16 @@ interface CrosswordOddsSummary {
 // for both of them.
 interface PlinkoOddsSummary {
     rtp: number;
+    maxPayout: number;
 }
 interface PachinkoOddsSummary {
     jackpotPool: number;
+    maxPayout: number;
 }
 interface MemoryOddsSummary {
     distribution: { multiplier: number; probability: number }[];
     rtp: number;
+    maxPayout: number;
 }
 
 // Same GET requests (and query keys) each game's own page uses to fetch its odds, so the
@@ -95,6 +101,14 @@ const RTP_CHIP_SX = {
     color: "secondary.main",
     bgcolor: "rgba(156, 39, 176, 0.12)",
     border: "1px solid rgba(156, 39, 176, 0.3)",
+    fontWeight: 700,
+} as const;
+
+const MAX_WIN_CHIP_SX = {
+    alignSelf: "flex-start",
+    color: "success.main",
+    bgcolor: "rgba(46, 125, 50, 0.12)",
+    border: "1px solid rgba(46, 125, 50, 0.3)",
     fontWeight: 700,
 } as const;
 
@@ -184,6 +198,19 @@ export default function GamesIndex() {
         pachinko: pachinkoOdds ? `🎰 ${formatCheddar(pachinkoOdds.jackpotPool)}` : undefined,
     };
 
+    const maxWinByKey: Record<string, number | undefined> = {
+        "easy-spin": easySpinOdds?.maxPayout,
+        spinmania: spinmaniaOdds?.maxPayout,
+        "kitty-scratch": kittyScratchOdds?.maxPayout,
+        crossword: crosswordOdds?.maxPayout,
+        plinko: plinkoOdds?.maxPayout,
+        pachinko: pachinkoOdds?.maxPayout,
+        memory: memoryOdds?.maxPayout,
+    };
+    const maxWinLabelByKey: Record<string, string | undefined> = Object.fromEntries(
+        Object.entries(maxWinByKey).map(([key, maxPayout]) => [key, maxPayout !== undefined ? `Max win ${formatCheddar(maxPayout)}` : undefined])
+    );
+
     const groups = TYPE_ORDER.map((type) => ({
         type,
         games: CASINO_GAMES_REGISTRY.filter((g) => g.type === type),
@@ -222,6 +249,7 @@ export default function GamesIndex() {
                                 const oddsLabel = oddsLabelByKey[game.key];
                                 const rtpLabel = rtpLabelByKey[game.key];
                                 const jackpotLabel = jackpotLabelByKey[game.key];
+                                const maxWinLabel = maxWinLabelByKey[game.key];
                                 const disabled = disabledGames.includes(game.key);
                                 return (
                                     <Card
@@ -285,6 +313,7 @@ export default function GamesIndex() {
                                                 >
                                                     <Chip label={oddsLabel ?? "???"} size="small" sx={ODDS_CHIP_SX} />
                                                     <Chip label={rtpLabel ?? "???"} size="small" sx={RTP_CHIP_SX} />
+                                                    <Chip label={maxWinLabel ?? "???"} size="small" sx={MAX_WIN_CHIP_SX} />
                                                 </Box>
                                             </CardContent>
                                         </CardActionArea>

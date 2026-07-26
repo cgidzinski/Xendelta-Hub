@@ -26,9 +26,14 @@ import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
 import { requireGameEnabled } from "../../utils/casinoStatus";
 import { drawPrizeWeight, prizeRtp } from "./prizeWeights";
 import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
+import { capPayout } from "./payoutCap";
 
 const SLUG = "crossword";
 const PRICE = 20000;
+// Hard ceiling on a single round's payout - see payoutCap.ts. Already well above the fixed
+// TIERS table's real max (5,000,000); this is a defense-in-depth guard against a future
+// tier-table rebalance, not a fix for a reachable gap today.
+const MAX_PAYOUT = 20_000_000;
 // Padding target for "your letters" - typical found-counts (2-4 words) comfortably fit; the
 // background art has 30 baked-in circle positions, so this leaves headroom. In the rare case
 // a big found-count (7-8 words) needs more letters than this, the bag simply grows past it
@@ -288,7 +293,7 @@ export function generateRound(): CrosswordConditions {
         words: finalWords.map((w) => ({ id: w.id, direction: w.direction, cells: w.cells, word: w.word, found: w.found })),
         letters: shuffled(letters),
         wordsFoundCount: tier.count,
-        totalPayout: tier.value,
+        totalPayout: capPayout(tier.value, MAX_PAYOUT),
     };
 }
 
@@ -337,6 +342,7 @@ module.exports = function (app: express.Application) {
                 slotCount: TARGET_WORD_COUNT,
                 distribution: TIERS.map((t) => ({ wordsFound: t.count, payout: t.value, probability: t.weight / totalWeight })),
                 rtp: prizeRtp(PRICE, TIERS),
+                maxPayout: MAX_PAYOUT,
             },
         });
     });
