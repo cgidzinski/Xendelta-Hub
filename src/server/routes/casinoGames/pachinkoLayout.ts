@@ -252,11 +252,11 @@ export const TULIPS: FixedPocket[] = [
 ];
 
 // Jackpot pocket - a real "just fits one ball" target, barely wider than the ball itself
-// (BALL_RADIUS*2 = 5px across; this pocket is 8px), always this same tiny width.
+// (BALL_RADIUS*2 = 5px across; this pocket is 7px), always this same tiny width.
 // Physically catchable at any time, but only actually PAYS (and visually lights up, vs. sitting
 // grey) while primed - see pachinko.ts's own "jackpot" branch and JACKPOT_OPEN_MS in
 // pachinkoPayouts.ts for that timed window.
-export const JACKPOT: FixedPocket = { id: "jackpot", position: { x: 230, y: 372 }, halfWidth: 4 };
+export const JACKPOT: FixedPocket = { id: "jackpot", position: { x: 230, y: 372 }, halfWidth: 3.5 };
 
 // True the instant both tulips are simultaneously open - pachinko.ts uses this to detect the
 // priming *moment*, which starts the jackpot's timed window. Both tulips are then HELD open for
