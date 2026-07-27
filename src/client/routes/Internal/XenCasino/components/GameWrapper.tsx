@@ -4,6 +4,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate } from "react-router-dom";
 import OddsDisplay, { OddsRow } from "./OddsDisplay";
 import { useXenCasinoTitlebar } from "../context/XenCasinoTitlebarContext";
+import { formatCheddar } from "../utils/currency";
 
 export interface OddsSection {
     title?: string;
@@ -15,6 +16,7 @@ interface GameWrapperProps {
     title: string;
     howToPlay: ReactNode;
     oddsSections: OddsSection[];
+    maxWin?: number;
     children: ReactNode;
 }
 
@@ -28,7 +30,7 @@ interface GameWrapperProps {
  * body. Every new game variant (more scratch tickets, more slots) should be built as
  * `children` inside this wrapper rather than reinventing any of this chrome.
  */
-export default function GameWrapper({ title, howToPlay, oddsSections, children }: GameWrapperProps) {
+export default function GameWrapper({ title, howToPlay, oddsSections, maxWin, children }: GameWrapperProps) {
     const navigate = useNavigate();
     const { setTitlebar } = useXenCasinoTitlebar();
 
@@ -57,6 +59,11 @@ export default function GameWrapper({ title, howToPlay, oddsSections, children }
                 <Typography variant="body2" color="text.secondary">
                     {howToPlay}
                 </Typography>
+                {maxWin !== undefined && (
+                    <Typography variant="body2" sx={{ fontWeight: 700, mt: 1, color: "success.main" }}>
+                        Max win: {formatCheddar(maxWin)}
+                    </Typography>
+                )}
                 {oddsSections.map((section, i) => (
                     <OddsDisplay key={i} title={section.title} rows={section.rows} footnote={section.footnote} />
                 ))}

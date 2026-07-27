@@ -62,6 +62,7 @@ interface CrosswordOddsResponse {
     slotCount: number;
     distribution: { wordsFound: number; payout: number; probability: number }[];
     rtp: number;
+    maxPayout: number;
 }
 
 const fetchOdds = async (): Promise<CrosswordOddsResponse> =>
@@ -203,6 +204,7 @@ export default function Crossword() {
             title="Crossword"
             howToPlay="A 20,000-cheddar high-roller ticket. Buy it, then scratch to reveal your letters and the crossword grid - spell as many hidden words as you can using only your letters. The more words you find, the bigger the prize."
             oddsSections={oddsSections}
+            maxWin={odds?.maxPayout}
         >
             <PlayLauncher
                 title="Crossword"

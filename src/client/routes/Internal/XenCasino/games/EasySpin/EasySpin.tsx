@@ -42,6 +42,7 @@ interface SlotsOddsResponse {
     jackpotContributionRate: number;
     jackpotPool: number;
     rtp: number;
+    maxPayout: number;
 }
 
 const fetchOdds = async (): Promise<SlotsOddsResponse> =>
@@ -96,6 +97,7 @@ export default function EasySpin() {
             title="Easy Spin"
             howToPlay="A 5,000-credit machine. Spin the reels for a shot at the growing jackpot - match 3 symbols to win."
             oddsSections={oddsSections}
+            maxWin={odds?.maxPayout}
         >
             <PlayLauncher
                 title="Easy Spin"

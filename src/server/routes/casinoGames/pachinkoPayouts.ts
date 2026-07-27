@@ -10,6 +10,7 @@
  * from a real physics simulation, not a pre-selected probability, so there's no closed-form RTP
  * to derive. These are starting values, not tuned against real play data yet.
  */
+import { capPayout } from "./payoutCap";
 
 // Frequent, small top-ups - the easiest pocket to catch on the board (see pachinkoLayout.ts's
 // BONUS_POCKETS, the widest non-jackpot target).
@@ -57,10 +58,13 @@ export const JACKPOT_SEED = 0;
 // rate at the counter.
 export const CASH_OUT_RATE = 1;
 
+// Hard ceiling on a single cash-out's payout - see payoutCap.ts.
+export const MAX_PAYOUT = 10_000_000;
+
 export function jackpotBalls(poolValue: number, pricePerBall: number): number {
     return Math.max(0, Math.round(poolValue / pricePerBall));
 }
 
 export function cashOutAmount(balls: number, pricePerBall: number): number {
-    return balls * pricePerBall * CASH_OUT_RATE;
+    return capPayout(balls * pricePerBall * CASH_OUT_RATE, MAX_PAYOUT);
 }

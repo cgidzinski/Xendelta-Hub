@@ -45,6 +45,7 @@ interface KittyOddsResponse {
     rowDistribution: { value: number; probability: number }[];
     multiplierDistribution: { value: number; probability: number }[];
     rtp: number;
+    maxPayout: number;
 }
 
 const fetchOdds = async (): Promise<KittyOddsResponse> =>
@@ -225,6 +226,7 @@ export default function KittyScratch() {
             title="Kitty Scratch"
             howToPlay="A 5,000-cheddar ticket. Scratch to reveal 4 rows - each row independently wins its own shown amount (3 matching symbols means that row won), and a bonus multiplier at the bottom applies to your total. Check Ticket instantly finishes the reveal."
             oddsSections={oddsSections}
+            maxWin={odds?.maxPayout}
         >
             <PlayLauncher
                 title="Kitty Scratch"

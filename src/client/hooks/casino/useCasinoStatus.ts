@@ -8,6 +8,7 @@ export interface CasinoStatus {
   reason: "manual" | "broke" | null;
   bankBalance: number;
   disabledGames: string[];
+  minBankBalance: number;
 }
 
 export const casinoStatusKeys = {
@@ -35,6 +36,7 @@ export const useCasinoStatus = () => {
     reason: data?.reason ?? null,
     bankBalance: data?.bankBalance ?? null,
     disabledGames: data?.disabledGames ?? [],
+    minBankBalance: data?.minBankBalance ?? null,
     isLoading,
     isError,
     error: error as Error | null,

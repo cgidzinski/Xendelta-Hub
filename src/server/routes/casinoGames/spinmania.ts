@@ -38,6 +38,7 @@ import { resolveUserAccount, getXenCasinoAccountId, transfer, WeeabetsUnavailabl
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
 import { requireGameEnabled } from "../../utils/casinoStatus";
 import { settleSlotsRound } from "./slotsSettlement";
+import { capPayout } from "./payoutCap";
 import { GRID_COLS, GRID_ROWS, JACKPOT_ITEM, SpinmaniaConfig, SpinResult, weightOf, resolveSpin } from "./spinmaniaGrid";
 import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
 
@@ -78,6 +79,7 @@ export const SPINMANIA_CONFIG: SpinmaniaConfig = {
     jackpotContributionRate: 0.05,
     jackpotSeed: 0,
     targetRtp: 0.905,
+    maxPayout: 10_000_000,
 };
 
 // See slots.ts's identical constants for the reasoning - a round's outcome is fully decided
@@ -183,6 +185,7 @@ module.exports = function (app: express.Application) {
                 jackpotContributionRate: SPINMANIA_CONFIG.jackpotContributionRate,
                 jackpotPool,
                 rtp: SPINMANIA_CONFIG.targetRtp,
+                maxPayout: SPINMANIA_CONFIG.maxPayout,
             },
         });
     });
@@ -209,7 +212,8 @@ module.exports = function (app: express.Application) {
             }
 
             const spin = resolveSpin(SPINMANIA_CONFIG);
-            const payout = spin.jackpot ? await XenCasino.getJackpotPool(MACHINE_SLUG, SPINMANIA_CONFIG.jackpotSeed) : wager * spin.totalPayout;
+            const rawPayout = spin.jackpot ? await XenCasino.getJackpotPool(MACHINE_SLUG, SPINMANIA_CONFIG.jackpotSeed) : wager * spin.totalPayout;
+            const payout = capPayout(rawPayout, SPINMANIA_CONFIG.maxPayout);
 
             const roundId = new mongoose.Types.ObjectId();
             const debitKey = `xendelta-slots-${MACHINE_SLUG}-start-${roundId}`;

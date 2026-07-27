@@ -66,7 +66,7 @@ import {
     MIN_LAUNCH_POWER,
     MAX_LAUNCH_POWER,
 } from "./pachinkoLayout";
-import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, ATTACKER_OPEN_MS, ATTACKER_BALLS, JACKPOT_OPEN_MS, CONTRIBUTION_RATE, JACKPOT_SEED, CASH_OUT_RATE, jackpotBalls, cashOutAmount } from "./pachinkoPayouts";
+import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, ATTACKER_OPEN_MS, ATTACKER_BALLS, JACKPOT_OPEN_MS, CONTRIBUTION_RATE, JACKPOT_SEED, CASH_OUT_RATE, MAX_PAYOUT, jackpotBalls, cashOutAmount } from "./pachinkoPayouts";
 import { simulateShot, PachinkoOutcome, TrajectorySample } from "./pachinkoPhysics";
 import { spinReel, ReelSpinResult } from "./pachinkoReels";
 
@@ -220,6 +220,7 @@ module.exports = function (app: express.Application) {
                 jackpotOpenMs: JACKPOT_OPEN_MS,
                 cashOutRate: CASH_OUT_RATE,
                 jackpotPool,
+                maxPayout: MAX_PAYOUT,
             },
         });
     });

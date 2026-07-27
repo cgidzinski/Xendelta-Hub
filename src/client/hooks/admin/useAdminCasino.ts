@@ -38,6 +38,7 @@ export interface AdminCasinoStatus {
     reason: "manual" | "broke" | null;
     bankBalance: number;
     disabledGames: string[];
+    minBankBalance: number;
 }
 
 interface AdminCasinoGamesResponse {

@@ -32,6 +32,7 @@ interface PachinkoOddsResponse {
     attackerOpenMs: number;
     cashOutRate: number;
     jackpotPool: number;
+    maxPayout: number;
 }
 
 interface ActiveBatchResponse {
@@ -197,6 +198,7 @@ export default function Pachinko() {
             title="Pachinko"
             howToPlay="Buy balls with the +100/+1000 buttons, then hold Launch to fire them at your own power - balls fly one every 600ms while held. Most balls miss - catches add more balls to your tray instead of paying cash. Closing the game cashes out your tray automatically."
             oddsSections={oddsSections}
+            maxWin={odds?.maxPayout}
         >
             <PlayLauncher
                 title="Pachinko"

@@ -47,8 +47,12 @@ import {
 } from "./plinkoLayout";
 import { simulateDrop, TrajectorySample } from "./plinkoPhysics";
 import { scheduleStaleRoundSweep, SWEEP_FAILURE_ALERT_THRESHOLD } from "./staleRoundRecovery";
+import { capPayout } from "./payoutCap";
 
 const SLUG = "plinko";
+
+// Hard ceiling on a single drop's payout - see payoutCap.ts.
+const MAX_PAYOUT = 10_000_000;
 
 // Plinko is the one game exempted from the "one active round" DB constraint (see the partial
 // index in xenCasino.js) - multiple balls can be in flight at once. This is the actual limit
@@ -67,7 +71,7 @@ interface PlinkoConditions {
 function decideDrop(wager: number, dropX: number): { conditions: PlinkoConditions; trajectory: TrajectorySample[] } {
     const { trajectory, slot } = simulateDrop(dropX);
     const multiplier = MULTIPLIERS[slot];
-    return { conditions: { dropX, slot, multiplier, payout: wager * multiplier }, trajectory };
+    return { conditions: { dropX, slot, multiplier, payout: capPayout(wager * multiplier, MAX_PAYOUT) }, trajectory };
 }
 
 // A round's outcome (and thus its payout) is fully decided before it's even persisted, so
@@ -118,6 +122,7 @@ module.exports = function (app: express.Application) {
                 slotCount: SLOT_COUNT,
                 multipliers: MULTIPLIERS,
                 rtp: PLINKO_WORST_CASE_RTP,
+                maxPayout: MAX_PAYOUT,
                 layout: {
                     canvasWidth: CANVAS_WIDTH,
                     canvasHeight: CANVAS_HEIGHT,

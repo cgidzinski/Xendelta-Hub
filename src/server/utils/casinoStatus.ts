@@ -6,13 +6,14 @@ const { XenCasino } = require("../models/xenCasino");
 // Below this live house balance, the casino auto-closes regardless of the manual toggle -
 // a losing streak (or an exploit) draining an already-broke house shouldn't be able to keep
 // going just because nobody flipped the switch.
-export const CASINO_MIN_BANK_BALANCE = 1_000_000;
+export const CASINO_MIN_BANK_BALANCE = 2_500_000;
 
 export interface CasinoStatus {
     open: boolean;
     reason: "manual" | "broke" | null;
     bankBalance: number;
     disabledGames: string[];
+    minBankBalance: number;
 }
 
 // Single source of truth for "is the casino open" / "is this game enabled" - both the public
@@ -35,6 +36,7 @@ export async function getCasinoStatus(): Promise<CasinoStatus> {
         reason: manuallyClosed ? "manual" : broke ? "broke" : null,
         bankBalance,
         disabledGames,
+        minBankBalance: CASINO_MIN_BANK_BALANCE,
     };
 }
 

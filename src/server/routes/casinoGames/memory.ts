@@ -33,9 +33,12 @@ const mongoose = require("mongoose");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
 import { requireGameEnabled } from "../../utils/casinoStatus";
+import { capPayout } from "./payoutCap";
 
 const SLUG = "memory";
 const BASE_PRICE = 10000; // the 1x denomination shown on the lobby card / odds route
+// Hard ceiling on a single reveal's payout - see payoutCap.ts.
+const MAX_PAYOUT = 10_000_000;
 export const GRID_SIZE = 5;
 export const CELL_COUNT = GRID_SIZE * GRID_SIZE; // 25
 export const PICK_COUNT = 4;
@@ -229,6 +232,7 @@ module.exports = function (app: express.Application) {
                     probability: MATCH_SHAPE_COUNTS[k] / TOTAL_HANDS,
                 })),
                 rtp: memoryRtp(),
+                maxPayout: MAX_PAYOUT,
             },
         });
     });
@@ -329,7 +333,7 @@ module.exports = function (app: express.Application) {
             if (!decision) {
                 const symbols = (picks as number[]).map((p) => conditions.grid[p]);
                 const matchCount = matchCountForSymbols(symbols);
-                const payout = round.wager * (MATCH_MULTIPLIERS[matchCount] ?? 0);
+                const payout = capPayout(round.wager * (MATCH_MULTIPLIERS[matchCount] ?? 0), MAX_PAYOUT);
                 decision = { picks: picks as number[], matchCount, payout };
 
                 const claimed = await XenCasinoRound.applyConditionsUpdate(

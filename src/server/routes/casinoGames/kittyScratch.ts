@@ -21,10 +21,15 @@ import { recordCasinoRoundPlayed } from "../../utils/dailyQuest";
 import { requireGameEnabled } from "../../utils/casinoStatus";
 import { PrizeWeight, drawPrize, prizeDistribution } from "./prizeWeights";
 import { scheduleStaleRoundSweep } from "./staleRoundRecovery";
+import { capPayout } from "./payoutCap";
 
 const SLUG = "kitty-scratch";
 const PRICE = 5000;
 const ROW_COUNT = 4; // matches the background art's 4 boxes
+// Hard ceiling on a single ticket's payout - see payoutCap.ts. Already well above the fixed
+// prize table's real max (300000 * 4 rows * 5x multiplier = 6,000,000); this is a defense-in-
+// depth guard against a future prize-table rebalance, not a fix for a reachable gap today.
+const MAX_PAYOUT = 10_000_000;
 
 // Each of the 4 rows independently draws one of these amounts (0 = that row doesn't win).
 // Nicer round-number tier values (x10 pass over the previous 140/280/700/1400/2800/7000/28000
@@ -83,7 +88,7 @@ export function generateRound(): TicketConditions {
     });
     const basePayout = rows.reduce((sum, r) => sum + r.amount, 0);
     const multiplier = drawPrize(MULTIPLIER_WEIGHTS);
-    return { rows, multiplier, basePayout, totalPayout: basePayout * multiplier };
+    return { rows, multiplier, basePayout, totalPayout: capPayout(basePayout * multiplier, MAX_PAYOUT) };
 }
 
 // A round's outcome (and thus its payout) is fully decided before it's even persisted, so
@@ -135,6 +140,7 @@ module.exports = function (app: express.Application) {
                 rowDistribution: prizeDistribution(ROW_PRIZE_WEIGHTS),
                 multiplierDistribution: prizeDistribution(MULTIPLIER_WEIGHTS),
                 rtp: kittyScratchRtp(),
+                maxPayout: MAX_PAYOUT,
             },
         });
     });
