@@ -268,7 +268,7 @@ export default function Casino() {
                         </Typography>
                         {casinoControlStatus && (
                             <Typography variant="body2" color="text.secondary">
-                                Bank balance: {formatCheddar(casinoControlStatus.bankBalance)} cheddar (needs 1,000,000 to stay open)
+                                Bank balance: {formatCheddar(casinoControlStatus.bankBalance)} cheddar (needs {formatCheddar(casinoControlStatus.minBankBalance)} to stay open)
                             </Typography>
                         )}
                     </Box>

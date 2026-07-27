@@ -19,9 +19,10 @@ const BROKE_MESSAGES = [
 interface CasinoClosedOverlayProps {
     reason: "manual" | "broke" | null;
     bankBalance: number | null;
+    minBankBalance: number | null;
 }
 
-export default function CasinoClosedOverlay({ reason, bankBalance }: CasinoClosedOverlayProps) {
+export default function CasinoClosedOverlay({ reason, bankBalance, minBankBalance }: CasinoClosedOverlayProps) {
     const message = useMemo(() => BROKE_MESSAGES[Math.floor(Math.random() * BROKE_MESSAGES.length)], []);
 
     // Positioned absolute within the routed content area (its parent in XenCasinoLayout is
@@ -69,8 +70,8 @@ export default function CasinoClosedOverlay({ reason, bankBalance }: CasinoClose
                 </Typography>
                 {reason === "broke" && bankBalance !== null && (
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        Current bank balance: {formatCheddar(bankBalance)} cheddar. We need at least 1,000,000 to
-                        reopen.
+                        Current bank balance: {formatCheddar(bankBalance)} cheddar. We need at least{" "}
+                        {minBankBalance !== null ? formatCheddar(minBankBalance) : "more"} to reopen.
                     </Typography>
                 )}
                 <Typography variant="body2" color="text.secondary">

@@ -106,7 +106,7 @@ const MACHINES: Record<string, MachineConfig> = {
         jackpotContributionRate: 0.035,
         jackpotSeed: 0,
         targetRtp: 0.952,
-        maxPayout: 20_000_000,
+        maxPayout: 10_000_000,
     },
 };
 

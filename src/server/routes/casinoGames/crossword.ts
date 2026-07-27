@@ -33,7 +33,7 @@ const PRICE = 20000;
 // Hard ceiling on a single round's payout - see payoutCap.ts. Already well above the fixed
 // TIERS table's real max (5,000,000); this is a defense-in-depth guard against a future
 // tier-table rebalance, not a fix for a reachable gap today.
-const MAX_PAYOUT = 20_000_000;
+const MAX_PAYOUT = 10_000_000;
 // Padding target for "your letters" - typical found-counts (2-4 words) comfortably fit; the
 // background art has 30 baked-in circle positions, so this leaves headroom. In the rare case
 // a big found-count (7-8 words) needs more letters than this, the bag simply grows past it

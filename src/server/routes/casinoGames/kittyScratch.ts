@@ -29,7 +29,7 @@ const ROW_COUNT = 4; // matches the background art's 4 boxes
 // Hard ceiling on a single ticket's payout - see payoutCap.ts. Already well above the fixed
 // prize table's real max (300000 * 4 rows * 5x multiplier = 6,000,000); this is a defense-in-
 // depth guard against a future prize-table rebalance, not a fix for a reachable gap today.
-const MAX_PAYOUT = 20_000_000;
+const MAX_PAYOUT = 10_000_000;
 
 // Each of the 4 rows independently draws one of these amounts (0 = that row doesn't win).
 // Nicer round-number tier values (x10 pass over the previous 140/280/700/1400/2800/7000/28000

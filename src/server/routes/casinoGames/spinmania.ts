@@ -79,7 +79,7 @@ export const SPINMANIA_CONFIG: SpinmaniaConfig = {
     jackpotContributionRate: 0.05,
     jackpotSeed: 0,
     targetRtp: 0.905,
-    maxPayout: 20_000_000,
+    maxPayout: 10_000_000,
 };
 
 // See slots.ts's identical constants for the reasoning - a round's outcome is fully decided

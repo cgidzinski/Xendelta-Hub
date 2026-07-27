@@ -59,7 +59,7 @@ export const JACKPOT_SEED = 0;
 export const CASH_OUT_RATE = 1;
 
 // Hard ceiling on a single cash-out's payout - see payoutCap.ts.
-export const MAX_PAYOUT = 20_000_000;
+export const MAX_PAYOUT = 10_000_000;
 
 export function jackpotBalls(poolValue: number, pricePerBall: number): number {
     return Math.max(0, Math.round(poolValue / pricePerBall));

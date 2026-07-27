@@ -52,7 +52,7 @@ import { capPayout } from "./payoutCap";
 const SLUG = "plinko";
 
 // Hard ceiling on a single drop's payout - see payoutCap.ts.
-const MAX_PAYOUT = 20_000_000;
+const MAX_PAYOUT = 10_000_000;
 
 // Plinko is the one game exempted from the "one active round" DB constraint (see the partial
 // index in xenCasino.js) - multiple balls can be in flight at once. This is the actual limit

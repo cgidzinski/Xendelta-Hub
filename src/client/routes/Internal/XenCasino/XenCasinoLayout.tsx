@@ -42,7 +42,7 @@ export default function XenCasinoLayout() {
     useTitle("XenCasino");
     const { authProviders, loading: providersLoading } = useAuthProviders();
     const { linked, balance, isLoading: balanceLoading, isError, error, refetch } = useCasinoBalance();
-    const { open: casinoOpen, reason: casinoClosedReason, bankBalance, disabledGames, isLoading: statusLoading } = useCasinoStatus();
+    const { open: casinoOpen, reason: casinoClosedReason, bankBalance, minBankBalance, disabledGames, isLoading: statusLoading } = useCasinoStatus();
     const location = useLocation();
     const navigate = useNavigate();
 
@@ -130,7 +130,7 @@ export default function XenCasinoLayout() {
                                 than replacing it - the point is a takeover banner you can see through to
                                 the games behind, not a blank page. */}
                             {!casinoOpen && (
-                                <CasinoClosedOverlay reason={casinoClosedReason} bankBalance={bankBalance} />
+                                <CasinoClosedOverlay reason={casinoClosedReason} bankBalance={bankBalance} minBankBalance={minBankBalance} />
                             )}
                         </>
                     )}

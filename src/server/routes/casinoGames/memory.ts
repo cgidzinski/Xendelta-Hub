@@ -38,7 +38,7 @@ import { capPayout } from "./payoutCap";
 const SLUG = "memory";
 const BASE_PRICE = 10000; // the 1x denomination shown on the lobby card / odds route
 // Hard ceiling on a single reveal's payout - see payoutCap.ts.
-const MAX_PAYOUT = 20_000_000;
+const MAX_PAYOUT = 10_000_000;
 export const GRID_SIZE = 5;
 export const CELL_COUNT = GRID_SIZE * GRID_SIZE; // 25
 export const PICK_COUNT = 4;
