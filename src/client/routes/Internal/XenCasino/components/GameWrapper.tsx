@@ -60,7 +60,7 @@ export default function GameWrapper({ title, howToPlay, oddsSections, maxWin, ch
                     {howToPlay}
                 </Typography>
                 {maxWin !== undefined && (
-                    <Typography variant="body2" sx={{ fontWeight: 700, mt: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, mt: 1, color: "success.main" }}>
                         Max win: {formatCheddar(maxWin)}
                     </Typography>
                 )}
