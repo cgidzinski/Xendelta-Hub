@@ -379,7 +379,7 @@ Two clones on the same CT, same runner, different folder/port/PM2 process each:
 | Folder | `~/XenHub-Prod` | `~/XenHub-Staging` |
 | Port | `3000` | `3001` |
 | PM2 process | `xenhub-prod` | `xenhub-staging` |
-| Deploys | `.github/workflows/deploy-prod.yml`, manual, hard-restricted to `main` | `.github/workflows/deploy-staging.yml`, manual, deploys whichever branch is picked in the dropdown |
+| Deploys | `.github/workflows/deploy-prod.yml`, manual, hard-restricted to `main` | `.github/workflows/deploy-staging.yml`, manual, deploys whichever branch is picked in the dropdown (or comment `/deploy-staging` on a PR — see `.github/workflows/deploy-staging-comment.yml`) |
 | Hostname | `xendelta.com` (or whatever the prod domain is) | `staging.evg31337.com` |
 
 Each folder has its **own** `.env` — staging points at its own Mongo DB / GCS buckets / secrets so test data never touches prod (`PORT` and `PUBLIC_URL` also differ per the table above).

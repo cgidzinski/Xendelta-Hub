@@ -1,0 +1,45 @@
+name: Deploy staging (comment trigger)
+
+# Lets anyone with write access deploy a PR's branch to staging by commenting
+# "/deploy-staging" on the PR. This just resolves the PR's head branch and
+# dispatches the existing deploy-staging.yml workflow against it — it does
+# not touch the self-hosted runner itself.
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  pull-requests: write
+  actions: write
+
+jobs:
+  trigger-deploy:
+    if: >
+      github.event.issue.pull_request != null &&
+      contains(github.event.comment.body, '/deploy-staging') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve PR head branch
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          branch=$(gh pr view "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --json headRefName -q .headRefName)
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger deploy-staging.yml
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh workflow run deploy-staging.yml --repo "${{ github.repository }}" --ref "${{ steps.pr.outputs.branch }}"
+
+      - name: Confirm on the PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh pr comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body \
+            "🚀 Deploying \`${{ steps.pr.outputs.branch }}\` to staging. Watch progress in the [Deploy staging runs](${{ github.server_url }}/${{ github.repository }}/actions/workflows/deploy-staging.yml)."
