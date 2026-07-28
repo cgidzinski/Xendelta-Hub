@@ -320,19 +320,14 @@ var XenCasinoActivity = mongoose.model("XenCasinoActivity", xenCasinoActivitySch
 
 // ---------------------------------------------------------------------------------------
 // Casino Garden - a 3x3 grid of squares, one seed per square, growing in parallel. Seed
-// tiers/prices and harvest payout math are owned by the route (casinoGarden.ts); this
-// model only owns square lifecycle (empty -> growing -> ready/dead) and the daily
-// watering + vermin/disease rolls, since those don't depend on any seed-tier economics.
+// economics (cost, grow time, watering frequency, vermin/disease chance, payout
+// multiplier) are owned by the route (casinoGarden.ts) and snapshotted onto the square at
+// plant time - so a later seed-tier rebalance never retroactively changes a crop already
+// growing. This model only owns square lifecycle (empty -> growing -> ready/dead) and the
+// watering-deadline + vermin/disease tick loop over whatever values got snapshotted.
 // ---------------------------------------------------------------------------------------
 
 var GARDEN_GRID_SIZE = 9;
-var GARDEN_VERMIN_DELAY_MS = 12 * 60 * 60 * 1000; // vermin push readyAt back, they don't kill
-var GARDEN_VERMIN_CHANCE = 0.12; // per unprotected growing square, per UTC day
-var GARDEN_DISEASE_CHANCE = 0.06; // per unprotected growing square, per UTC day - kills outright
-
-function dayIndex(date) {
-  return Math.floor(date.getTime() / 86400000); // epoch-day index, UTC by construction (getTime() is UTC-based)
-}
 
 function emptyGardenSquares() {
   var squares = [];
@@ -349,7 +344,16 @@ var gardenSquareSchema = new mongoose.Schema(
     plantedAt: { type: Date, default: null },
     readyAt: { type: Date, default: null },
     lastWateredAt: { type: Date, default: null },
-    lastHazardCheckDay: { type: Number, default: null }, // epoch-day index a vermin/disease roll last ran, so a square is never rolled twice in the same UTC day
+    lastCareCheckAt: { type: Date, default: null }, // last vermin/disease tick processed, so a gap of any length catches up correctly rather than re-rolling
+    // Snapshotted from the seed tier at plant time (see casinoGarden.ts SEED_TIERS) -
+    // this square's own copy, immune to later tier rebalances.
+    cost: { type: Number, default: 0 },
+    waterIntervalMs: { type: Number, default: null }, // must be watered at least this often or the square dies
+    verminChance: { type: Number, default: 0 }, // per tick, while unprotected
+    diseaseChance: { type: Number, default: 0 }, // per tick, while unprotected - kills outright
+    verminDelayMs: { type: Number, default: 0 }, // how much a vermin hit pushes readyAt back
+    baseMultiplier: { type: Number, default: 0 }, // harvest payout = cost * baseMultiplier * (1 +/- variance)
+    variance: { type: Number, default: 0 },
     protection: {
       pesticide: { type: Boolean, default: false }, // blocks vermin for the rest of this square's grow cycle
       fungicide: { type: Boolean, default: false }, // blocks disease for the rest of this square's grow cycle
@@ -364,32 +368,38 @@ var xenCasinoGardenStateSchema = new mongoose.Schema({
   squares: { type: [gardenSquareSchema], default: emptyGardenSquares },
 });
 
-// Advances one growing square against `now`: kills it if a full UTC day passed with no
-// watering, rolls vermin/disease at most once per UTC day (vermin delays `readyAt`,
-// disease kills), then flips growing -> ready once `readyAt` passes. No-op for any
-// square not currently growing. Mutates in place; returns whether anything changed.
+// Advances one growing square against `now`: kills it if a full watering interval was
+// missed, then rolls vermin/disease once per completed `waterIntervalMs` tick since
+// planting (or the last roll) - catching up correctly across any gap, same pattern as
+// resolveStillBatch below. Vermin delays `readyAt`; disease kills. Flips growing -> ready
+// once `readyAt` passes. No-op for any square not currently growing. Mutates in place;
+// returns whether anything changed.
 function resolveGardenSquare(square, now) {
   if (square.status !== "growing") {
     return false;
   }
   var changed = false;
-  var today = dayIndex(now);
 
-  if (square.lastWateredAt && today - dayIndex(square.lastWateredAt) >= 2) {
+  if (now.getTime() - square.lastWateredAt.getTime() >= square.waterIntervalMs * 2) {
     square.status = "dead";
     return true;
   }
 
-  if (square.lastHazardCheckDay === null || today > square.lastHazardCheckDay) {
-    square.lastHazardCheckDay = today;
+  var tick = new Date((square.lastCareCheckAt || square.plantedAt).getTime());
+  while (now.getTime() - tick.getTime() >= square.waterIntervalMs) {
+    tick = new Date(tick.getTime() + square.waterIntervalMs);
     changed = true;
-    if (!square.protection.fungicide && Math.random() < GARDEN_DISEASE_CHANCE) {
+    if (!square.protection.fungicide && Math.random() < square.diseaseChance) {
       square.status = "dead";
+      square.lastCareCheckAt = tick;
       return true;
     }
-    if (!square.protection.pesticide && Math.random() < GARDEN_VERMIN_CHANCE) {
-      square.readyAt = new Date(square.readyAt.getTime() + GARDEN_VERMIN_DELAY_MS);
+    if (!square.protection.pesticide && Math.random() < square.verminChance) {
+      square.readyAt = new Date(square.readyAt.getTime() + square.verminDelayMs);
     }
+  }
+  if (changed) {
+    square.lastCareCheckAt = tick;
   }
 
   if (square.readyAt && now >= square.readyAt) {
@@ -405,7 +415,14 @@ function clearGardenSquare(square) {
   square.plantedAt = null;
   square.readyAt = null;
   square.lastWateredAt = null;
-  square.lastHazardCheckDay = null;
+  square.lastCareCheckAt = null;
+  square.cost = 0;
+  square.waterIntervalMs = null;
+  square.verminChance = 0;
+  square.diseaseChance = 0;
+  square.verminDelayMs = 0;
+  square.baseMultiplier = 0;
+  square.variance = 0;
   square.protection = { pesticide: false, fungicide: false };
   square.status = "empty";
 }
@@ -425,7 +442,11 @@ xenCasinoGardenStateSchema.statics.getState = async function (userId) {
   return doc;
 };
 
-xenCasinoGardenStateSchema.statics.plant = async function (userId, squareId, seedType, growDurationMs) {
+// `tier` is the seed's full economics snapshot from SEED_TIERS - { cost, growDurationMs,
+// waterIntervalMs, verminChance, diseaseChance, verminDelayMs, baseMultiplier, variance } -
+// copied onto the square so later SEED_TIERS rebalances never retroactively affect an
+// already-growing crop (including its eventual harvest payout).
+xenCasinoGardenStateSchema.statics.plant = async function (userId, squareId, seedType, tier) {
   var doc = await this.getState(userId);
   var square = doc.squares.find(function (s) { return s.squareId === squareId; });
   if (!square || square.status !== "empty") {
@@ -434,9 +455,16 @@ xenCasinoGardenStateSchema.statics.plant = async function (userId, squareId, see
   var now = new Date();
   square.seedType = seedType;
   square.plantedAt = now;
-  square.readyAt = new Date(now.getTime() + growDurationMs);
+  square.readyAt = new Date(now.getTime() + tier.growDurationMs);
   square.lastWateredAt = now;
-  square.lastHazardCheckDay = dayIndex(now);
+  square.lastCareCheckAt = now;
+  square.cost = tier.cost;
+  square.waterIntervalMs = tier.waterIntervalMs;
+  square.verminChance = tier.verminChance;
+  square.diseaseChance = tier.diseaseChance;
+  square.verminDelayMs = tier.verminDelayMs;
+  square.baseMultiplier = tier.baseMultiplier;
+  square.variance = tier.variance;
   square.protection = { pesticide: false, fungicide: false };
   square.status = "growing";
   await doc.save();

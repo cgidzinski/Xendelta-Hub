@@ -12,6 +12,10 @@ export interface GardenSquare {
     plantedAt: string | null;
     readyAt: string | null;
     lastWateredAt: string | null;
+    waterIntervalMs: number | null;
+    cost: number;
+    baseMultiplier: number;
+    variance: number;
     protection: { pesticide: boolean; fungicide: boolean };
     status: "empty" | "growing" | "ready" | "dead";
 }
@@ -21,7 +25,12 @@ export interface SeedTier {
     label: string;
     cost: number;
     growDurationMs: number;
-    payoutMultiplierRange: [number, number];
+    waterIntervalMs: number;
+    verminChance: number;
+    diseaseChance: number;
+    verminDelayMs: number;
+    baseMultiplier: number;
+    variance: number;
 }
 
 export interface GardenState {

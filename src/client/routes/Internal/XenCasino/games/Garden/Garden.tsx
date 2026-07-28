@@ -42,6 +42,22 @@ function formatCountdown(msRemaining: number): string {
     return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
+function formatDuration(ms: number): string {
+    const totalMinutes = Math.round(ms / 60000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours > 0 && minutes > 0) {
+        return `${hours}h ${minutes}m`;
+    }
+    return hours > 0 ? `${hours}h` : `${minutes}m`;
+}
+
+function multiplierRange(baseMultiplier: number, variance: number): string {
+    const low = (baseMultiplier * (1 - variance)).toFixed(2);
+    const high = (baseMultiplier * (1 + variance)).toFixed(2);
+    return `${low}x - ${high}x`;
+}
+
 const STATUS_COLOR: Record<GardenSquare["status"], "default" | "success" | "warning" | "error"> = {
     empty: "default",
     growing: "warning",
@@ -56,19 +72,19 @@ interface SquareCardProps {
 }
 
 function SquareCard({ square, now, onPlantClick }: SquareCardProps) {
-    const { water, isWatering, protect, isProtecting, harvest, isHarvesting, clear, isClearing, seedTiers } = useCasinoGarden();
+    const { water, isWatering, protect, isProtecting, harvest, isHarvesting, clear, isClearing } = useCasinoGarden();
     const { enqueueSnackbar } = useSnackbar();
 
-    const tier = seedTiers.find((t) => t.key === square.seedType);
     const readyAt = square.readyAt ? new Date(square.readyAt).getTime() : null;
     const plantedAt = square.plantedAt ? new Date(square.plantedAt).getTime() : null;
     const totalDuration = readyAt && plantedAt ? readyAt - plantedAt : null;
     const remaining = readyAt ? readyAt - now : null;
     const progress = totalDuration && remaining !== null ? Math.min(100, 100 * (1 - Math.max(0, remaining) / totalDuration)) : 0;
 
-    const wateredToday = square.lastWateredAt
-        ? Math.floor(now / 86400000) === Math.floor(new Date(square.lastWateredAt).getTime() / 86400000)
-        : false;
+    // Needs a fresh watering once a full waterIntervalMs has elapsed since the last one -
+    // missing a second full interval on top of that kills the square (see resolveGardenSquare).
+    const msSinceWatered = square.lastWateredAt ? now - new Date(square.lastWateredAt).getTime() : 0;
+    const needsWater = !!square.waterIntervalMs && msSinceWatered >= square.waterIntervalMs;
 
     const handleWater = () => water({ squareId: square.squareId }).catch((e) => enqueueSnackbar(e.message || "Failed to water", { variant: "error" }));
     const handleProtect = (item: "pesticide" | "fungicide") =>
@@ -116,16 +132,16 @@ function SquareCard({ square, now, onPlantClick }: SquareCardProps) {
                             <Chip
                                 size="small"
                                 icon={<WaterDropIcon />}
-                                label={wateredToday ? "Watered" : "Needs water"}
-                                color={wateredToday ? "info" : "error"}
-                                variant={wateredToday ? "filled" : "outlined"}
+                                label={needsWater ? "Needs water" : "Watered"}
+                                color={needsWater ? "error" : "info"}
+                                variant={needsWater ? "outlined" : "filled"}
                             />
                             {square.protection.pesticide && <Chip size="small" icon={<BugReportIcon />} label="Pesticide" color="success" />}
                             {square.protection.fungicide && <Chip size="small" icon={<ScienceIcon />} label="Fungicide" color="success" />}
                         </Box>
 
                         <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: "auto" }}>
-                            {!wateredToday && (
+                            {needsWater && (
                                 <Button size="small" variant="contained" disabled={isWatering} onClick={handleWater}>
                                     Water
                                 </Button>
@@ -160,9 +176,10 @@ function SquareCard({ square, now, onPlantClick }: SquareCardProps) {
                     </>
                 )}
 
-                {tier && square.status !== "empty" && (
+                {square.status !== "empty" && square.waterIntervalMs && (
                     <Typography variant="caption" color="text.secondary">
-                        Cost {formatCheddar(tier.cost)} - pays {tier.payoutMultiplierRange[0]}x-{tier.payoutMultiplierRange[1]}x
+                        Cost {formatCheddar(square.cost)} - pays {multiplierRange(square.baseMultiplier, square.variance)} - water every{" "}
+                        {formatDuration(square.waterIntervalMs)}
                     </Typography>
                 )}
             </CardContent>
@@ -198,10 +215,12 @@ export default function Garden() {
         {
             title: "Seeds",
             rows: seedTiers.map((t) => ({
-                label: `${t.label} (${formatCheddar(t.cost)})`,
-                payout: `${t.payoutMultiplierRange[0]}x - ${t.payoutMultiplierRange[1]}x cost`,
+                label: `${t.label} (${formatCheddar(t.cost)}, water every ${formatDuration(t.waterIntervalMs)})`,
+                payout: `${multiplierRange(t.baseMultiplier, t.variance)} - vermin ${(t.verminChance * 100).toFixed(0)}% / disease ${(
+                    t.diseaseChance * 100
+                ).toFixed(0)}% per check`,
             })),
-            footnote: "Harvest payout is a random multiplier of the seed's cost within its range.",
+            footnote: "Harvest payout is cost x base multiplier, swung +/- the seed's variance by casino luck. Riskier/higher-maintenance seeds pay a bigger base multiplier.",
         },
         {
             title: "Protection",
@@ -209,14 +228,14 @@ export default function Garden() {
                 { label: "Pesticide", payout: `${formatCheddar(protectionCost.pesticide)} - blocks vermin` },
                 { label: "Fungicide", payout: `${formatCheddar(protectionCost.fungicide)} - blocks disease` },
             ],
-            footnote: "Unprotected growing plots roll a small daily chance of vermin (delays harvest) or disease (kills the crop).",
+            footnote: "Unprotected growing plots roll a vermin/disease chance once per watering interval.",
         },
     ];
 
     return (
         <GameWrapper
             title="Casino Garden"
-            howToPlay="Plant a seed in any of the 9 plots. Water it every day or it dies. Unprotected plots can be struck by vermin (delaying harvest) or disease (killing the crop) - buy pesticide/fungicide to guard against them. Harvest a ready plot for a random payout based on the seed."
+            howToPlay="Plant a seed in any of the 9 plots. Each seed has its own cost, grow time, watering frequency, and risk - miss a full watering interval and the plot dies. Unprotected plots can also be struck by vermin (delaying harvest) or disease (killing the crop) - buy pesticide/fungicide to guard against them. Harvest a ready plot for a payout based on the seed's cost, base multiplier, and a little casino luck."
             oddsSections={oddsSections}
         >
             {isLoading ? (
@@ -231,8 +250,14 @@ export default function Garden() {
 
             <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={closeSeedMenu}>
                 {seedTiers.map((tier) => (
-                    <MenuItem key={tier.key} disabled={isPlanting} onClick={() => handlePlant(tier.key)}>
-                        {tier.label} - {formatCheddar(tier.cost)} cheddar
+                    <MenuItem key={tier.key} disabled={isPlanting} onClick={() => handlePlant(tier.key)} sx={{ display: "block", py: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            {tier.label} - {formatCheddar(tier.cost)} cheddar
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" component="div">
+                            Pays {multiplierRange(tier.baseMultiplier, tier.variance)} - water every {formatDuration(tier.waterIntervalMs)} - vermin{" "}
+                            {(tier.verminChance * 100).toFixed(0)}% / disease {(tier.diseaseChance * 100).toFixed(0)}% per check
+                        </Typography>
                     </MenuItem>
                 ))}
             </Menu>
