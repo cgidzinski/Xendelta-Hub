@@ -18,6 +18,9 @@ import { formatOddsRatio } from "./utils/odds";
 import { formatCheddar } from "./utils/currency";
 import DailyQuestCard from "./components/DailyQuestCard";
 import { useCasinoStatus } from "../../../hooks/casino/useCasinoStatus";
+import { useCasinoGarden } from "../../../hooks/casino/useCasinoGarden";
+import { useCasinoStill } from "../../../hooks/casino/useCasinoStill";
+import { useCasinoMine } from "../../../hooks/casino/useCasinoMine";
 
 interface SlotsOddsSummary {
     paytable: { probability: number }[];
@@ -114,9 +117,18 @@ const JACKPOT_CHIP_SX = {
     fontWeight: 800,
 } as const;
 
+type ChipColor = "default" | "success" | "warning" | "error" | "primary";
+interface StatusChip {
+    label: string;
+    color: ChipColor;
+}
+
 export default function GamesIndex() {
     const navigate = useNavigate();
     const { disabledGames } = useCasinoStatus();
+    const { squares: gardenSquares } = useCasinoGarden();
+    const { batch: stillBatch } = useCasinoStill();
+    const { state: mineState } = useCasinoMine();
 
     const { data: easySpinOdds } = useQuery({
         queryKey: ["slotsOdds", "easy-spin"],
@@ -190,6 +202,38 @@ export default function GamesIndex() {
         pachinko: pachinkoOdds ? `🎰 ${formatCheddar(pachinkoOdds.jackpotPool)}` : undefined,
     };
 
+    // The persistent games (Garden/Still/Mine) have no odds/RTP table to summarize the way
+    // the instant-resolution games do - instead their cards show a live glance at the
+    // player's own state, so there's a reason to check the games list rather than always
+    // clicking straight in. Keyed by game.key, same as oddsLabelByKey/rtpLabelByKey above.
+    const gardenReady = gardenSquares.filter((s) => s.status === "ready").length;
+    const gardenGrowing = gardenSquares.filter((s) => s.status === "growing").length;
+    const gardenDead = gardenSquares.filter((s) => s.status === "dead").length;
+    const mineDigsLeft = mineState ? Math.max(0, mineState.dailyDigCap - mineState.digsToday) : null;
+
+    const statusChipsByKey: Record<string, StatusChip[]> = {
+        garden: [
+            ...(gardenReady > 0 ? [{ label: `${gardenReady} Ready to Harvest`, color: "success" as ChipColor }] : []),
+            ...(gardenGrowing > 0 ? [{ label: `${gardenGrowing} Growing`, color: "default" as ChipColor }] : []),
+            ...(gardenDead > 0 ? [{ label: `${gardenDead} Dead`, color: "error" as ChipColor }] : []),
+            ...(gardenReady === 0 && gardenGrowing === 0 && gardenDead === 0 ? [{ label: "All Plots Empty", color: "default" as ChipColor }] : []),
+        ],
+        still: stillBatch
+            ? [
+                  stillBatch.raided
+                      ? { label: "Batch Raided", color: "error" as ChipColor }
+                      : { label: `Batch ${stillBatch.currentMultiplier.toFixed(2)}x`, color: "warning" as ChipColor },
+                  ...(stillBatch.raided ? [] : [{ label: `${stillBatch.raidRiskPercent}% Raid Risk`, color: "error" as ChipColor }]),
+              ]
+            : [{ label: "No Batch Running", color: "default" as ChipColor }],
+        mine: mineState
+            ? [
+                  { label: `Depth ${mineState.position.y}`, color: "default" as ChipColor },
+                  { label: `${mineDigsLeft}/${mineState.dailyDigCap} Digs Left`, color: mineDigsLeft ? "primary" as ChipColor : "error" as ChipColor },
+              ]
+            : [],
+    };
+
     const groups = TYPE_ORDER.map((type) => ({
         type,
         games: CASINO_GAMES_REGISTRY.filter((g) => g.type === type),
@@ -228,6 +272,7 @@ export default function GamesIndex() {
                                 const oddsLabel = oddsLabelByKey[game.key];
                                 const rtpLabel = rtpLabelByKey[game.key];
                                 const jackpotLabel = jackpotLabelByKey[game.key];
+                                const statusChips = statusChipsByKey[game.key];
                                 const disabled = disabledGames.includes(game.key);
                                 return (
                                     <Card
@@ -276,12 +321,13 @@ export default function GamesIndex() {
                                                     {game.description}
                                                 </Typography>
 
-                                                {/* Stats footer: odds + RTP, pushed to bottom */}
+                                                {/* Stats footer: odds + RTP for instant games, or a live status
+                                                    glance (own state, not a fixed table) for the persistent ones */}
                                                 <Box
                                                     sx={{
                                                         display: "flex",
                                                         flexWrap: "wrap",
-                                                        justifyContent: "space-between",
+                                                        justifyContent: statusChips ? "flex-start" : "space-between",
                                                         gap: 0.75,
                                                         mt: "auto",
                                                         pt: 1.5,
@@ -289,8 +335,16 @@ export default function GamesIndex() {
                                                         borderColor: "divider",
                                                     }}
                                                 >
-                                                    <Chip label={oddsLabel ?? "???"} size="small" sx={ODDS_CHIP_SX} />
-                                                    <Chip label={rtpLabel ?? "???"} size="small" sx={RTP_CHIP_SX} />
+                                                    {statusChips ? (
+                                                        statusChips.map((chip, idx) => (
+                                                            <Chip key={idx} label={chip.label} size="small" color={chip.color} sx={{ fontWeight: 700 }} />
+                                                        ))
+                                                    ) : (
+                                                        <>
+                                                            <Chip label={oddsLabel ?? "???"} size="small" sx={ODDS_CHIP_SX} />
+                                                            <Chip label={rtpLabel ?? "???"} size="small" sx={RTP_CHIP_SX} />
+                                                        </>
+                                                    )}
                                                 </Box>
                                             </CardContent>
                                         </CardActionArea>
