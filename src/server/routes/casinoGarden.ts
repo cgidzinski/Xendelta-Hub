@@ -2,22 +2,24 @@
  * Casino Garden - a 3x3 grid, one seed per square, growing in parallel. Each seed tier has
  * its own cost, watering amount, vermin/disease risk, and payout curve - so "different
  * plant, different game" rather than one economy with cosmetic reskins. Watering a square
- * is on a uniform 1-hour-per-square cooldown (GARDEN_WATER_COOLDOWN_MS); a square dies if
- * it misses two full cooldown periods with no watering. Unprotected squares also roll a
- * vermin (adds one more required watering) or disease (kills) chance once per cooldown
- * tick, countered by purchasable pesticide/fungicide. A square is ready once it's received
- * its required number of waterings. Harvest pays cost * baseMultiplier * a random swing of
- * +/- variance - the guaranteed baseline is the tier's baseMultiplier, the variance is how
- * much casino luck can move it either direction.
- * Square lifecycle (cooldown, hazard tick loop, ready/dead transitions) lives in
- * XenCasinoGardenState (src/server/models/xenCasino.js); this route owns the seed/item
- * economics (snapshotted onto each square at plant time) and every money movement.
+ * is on a uniform 1-hour-per-square cooldown (GARDEN_WATER_COOLDOWN_MS). There's no
+ * penalty at all for the first 24h a square goes unwatered; past that, it loses one
+ * delivered watering every hour until it's rewatered or runs out and dies. Unprotected
+ * squares also roll a vermin (adds one more required watering) or disease (kills)
+ * chance once per cooldown tick, countered by purchasable pesticide/fungicide. A square
+ * is ready once it's received its required number of waterings. Harvest pays cost *
+ * baseMultiplier * a random swing of +/- variance - the guaranteed baseline is the
+ * tier's baseMultiplier, the variance is how much casino luck can move it either
+ * direction. A dead square (from decay or disease) needs a paid cleanup before replanting.
+ * Square lifecycle (cooldown, hazard tick loop, neglect decay, ready/dead transitions)
+ * lives in XenCasinoGardenState (src/server/models/xenCasino.js); this route owns the
+ * seed/item economics (snapshotted onto each square at plant time) and every money movement.
  */
 import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 const { User } = require("../models/user");
-const { XenCasinoGardenState, GARDEN_WATER_COOLDOWN_MS } = require("../models/xenCasino");
+const { XenCasinoGardenState, GARDEN_WATER_COOLDOWN_MS, GARDEN_NEGLECT_GRACE_MS } = require("../models/xenCasino");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../utils/weeabetsClient";
 import { requireGameEnabled } from "../utils/casinoStatus";
 
@@ -58,6 +60,9 @@ const PROTECTION_COST: Record<"pesticide" | "fungicide", number> = {
     fungicide: 400,
 };
 
+// Charged to clear out a dead plot (from decay or disease) before it can be replanted.
+const GARDEN_CLEANUP_FEE = 250;
+
 function squareView(square: any) {
     return {
         squareId: square.squareId,
@@ -88,6 +93,8 @@ module.exports = function (app: express.Application) {
                 seedTiers: Object.values(SEED_TIERS),
                 protectionCost: PROTECTION_COST,
                 waterCooldownMs: GARDEN_WATER_COOLDOWN_MS,
+                neglectGraceMs: GARDEN_NEGLECT_GRACE_MS,
+                cleanupFee: GARDEN_CLEANUP_FEE,
             },
         });
     });
@@ -256,14 +263,47 @@ module.exports = function (app: express.Application) {
         }
     });
 
-    app.post("/api/casino/garden/clear", authenticateToken, async function (req: express.Request, res: express.Response) {
+    app.post("/api/casino/garden/clear", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const { squareId } = req.body as { squareId: number };
-        const square = await XenCasinoGardenState.clearDeadSquare(userId, squareId);
-        if (!square) {
-            return res.status(400).json({ status: false, message: "Nothing dead to clear here" });
+
+        const user = await User.findById(userId).exec();
+        if (!user) {
+            return res.status(404).json({ status: false, message: "User not found" });
         }
-        return res.json({ status: true, data: { square: squareView(square) } });
+
+        try {
+            const resolved = await resolveUserAccount(user);
+            if (!resolved.linked || !resolved.account) {
+                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
+            }
+
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+            const result = await transfer({
+                fromAccountId: resolved.account.accountId,
+                toAccountId: xenCasinoAccountId,
+                amount: GARDEN_CLEANUP_FEE.toFixed(10),
+                key: `garden-clear-${userId}-${squareId}-${Date.now()}`,
+                note: "garden_clear_dead",
+            });
+
+            const square = await XenCasinoGardenState.clearDeadSquare(userId, squareId);
+            if (!square) {
+                await transfer({
+                    fromAccountId: xenCasinoAccountId,
+                    toAccountId: resolved.account.accountId,
+                    amount: GARDEN_CLEANUP_FEE.toFixed(10),
+                    key: `garden-clear-refund-${userId}-${squareId}-${Date.now()}`,
+                    note: "garden_clear_refund",
+                });
+                return res.status(400).json({ status: false, message: "Nothing dead to clear here" });
+            }
+
+            return res.json({ status: true, data: { square: squareView(square), balance: result.fromNewBalance } });
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
     });
 
 };

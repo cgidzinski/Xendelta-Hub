@@ -157,6 +157,7 @@ function SquareDetails({ square, now }: SquareDetailsProps) {
         seedTiers,
         protectionCost,
         waterCooldownMs,
+        cleanupFee,
         plant,
         isPlanting,
         water,
@@ -206,10 +207,10 @@ function SquareDetails({ square, now }: SquareDetailsProps) {
         return (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start" }}>
                 <Typography variant="body2" color="text.secondary">
-                    This plot's crop died. Clear it to replant.
+                    This plot's crop died. Clean it up before you can replant.
                 </Typography>
                 <Button variant="outlined" color="error" disabled={isClearing} onClick={handleClear}>
-                    Clear Plot
+                    Clear Plot (Fee: {formatCheddar(cleanupFee)})
                 </Button>
             </Box>
         );
@@ -280,7 +281,7 @@ function SquareDetails({ square, now }: SquareDetailsProps) {
 }
 
 export default function Garden() {
-    const { squares, seedTiers, waterCooldownMs, isLoading } = useCasinoGarden();
+    const { squares, seedTiers, waterCooldownMs, neglectGraceMs, cleanupFee, isLoading } = useCasinoGarden();
     const now = useNow(15 * 1000);
     const [selectedSquareId, setSelectedSquareId] = useState<number | null>(null);
 
@@ -297,7 +298,11 @@ export default function Garden() {
             })),
             footnote: `Harvest payout is cost x base multiplier, swung +/- the seed's variance by casino luck. Watering is on a ${formatDuration(
                 waterCooldownMs
-            )} cooldown per plot; a vermin hit adds one more required watering instead of killing the crop outright.`,
+            )} cooldown per plot; a vermin hit adds one more required watering instead of hurting the crop outright. A plot left completely unwatered for ${formatDuration(
+                neglectGraceMs
+            )} starts losing one delivered watering per hour until it's rewatered or dies - a dead plot costs ${formatCheddar(
+                cleanupFee
+            )} to clean up before replanting.`,
         },
     ];
 
@@ -306,7 +311,11 @@ export default function Garden() {
             title="Casino Garden"
             howToPlay={`Tap a plot to plant a seed, water it, or harvest it. Each seed needs a set number of waterings to mature - water each plot at most once every ${formatDuration(
                 waterCooldownMs
-            )}, and go two cooldowns without watering at all and the plot dies. Unprotected plots can also be struck by vermin (adds one more required watering) or disease (kills the crop) - buy pesticide/fungicide to guard against them.`}
+            )}. There's no rush: a plot only starts losing progress if it goes a full ${formatDuration(
+                neglectGraceMs
+            )} with zero watering, after which it loses one delivered watering every hour until it's rewatered or runs out and dies. Unprotected plots can also be struck by vermin (adds one more required watering) or disease (kills the crop) - buy pesticide/fungicide to guard against them. A dead plot costs ${formatCheddar(
+                cleanupFee
+            )} to clean up before you can replant it.`}
             oddsSections={oddsSections}
         >
             {isLoading ? (

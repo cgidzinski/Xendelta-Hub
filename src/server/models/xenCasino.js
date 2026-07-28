@@ -323,16 +323,21 @@ var XenCasinoActivity = mongoose.model("XenCasinoActivity", xenCasinoActivitySch
 // economics (cost, grow time, watering frequency, vermin/disease chance, payout
 // multiplier) are owned by the route (casinoGarden.ts) and snapshotted onto the square at
 // plant time - so a later seed-tier rebalance never retroactively changes a crop already
-// growing. This model only owns square lifecycle (empty -> growing -> ready/dead) and the
-// watering-deadline + vermin/disease tick loop over whatever values got snapshotted.
+// growing. This model only owns square lifecycle (empty -> growing -> ready/dead) and
+// the vermin/disease + neglect-decay tick loops over whatever values got snapshotted.
 // ---------------------------------------------------------------------------------------
 
 var GARDEN_GRID_SIZE = 9;
 // Uniform across every seed - minimum time between two waterings of the *same* square.
-// Also doubles as the hazard-tick period (vermin/disease chance still varies by seed;
-// only the cadence they're rolled at is now fixed) and the neglect-death threshold
-// (2 missed cooldowns in a row kills the square).
+// Also doubles as the vermin/disease hazard-tick period (the chance still varies by
+// seed; only the cadence they're rolled at is fixed).
 var GARDEN_WATER_COOLDOWN_MS = 60 * 60 * 1000;
+// No neglect penalty at all until a plot has gone a full day with zero watering - well
+// outside any normal sleep schedule.
+var GARDEN_NEGLECT_GRACE_MS = 24 * 60 * 60 * 1000;
+// Once past the grace period, one decay tick fires every hour: -1 waterCount, or death
+// if waterCount is already 0. Watering at any point resets the neglect clock.
+var GARDEN_DECAY_TICK_MS = 60 * 60 * 1000;
 
 function emptyGardenSquares() {
   var squares = [];
@@ -350,6 +355,7 @@ var gardenSquareSchema = new mongoose.Schema(
     readyAt: { type: Date, default: null },
     lastWateredAt: { type: Date, default: null },
     lastCareCheckAt: { type: Date, default: null }, // last vermin/disease tick processed, so a gap of any length catches up correctly rather than re-rolling
+    decayTicksApplied: { type: Number, default: 0 }, // decay ticks already applied since the current neglect period started (see resolveGardenSquare) - reset whenever lastWateredAt moves
     // Snapshotted from the seed tier at plant time (see casinoGarden.ts SEED_TIERS) -
     // this square's own copy, immune to later tier rebalances.
     cost: { type: Number, default: 0 },
@@ -373,11 +379,13 @@ var xenCasinoGardenStateSchema = new mongoose.Schema({
   squares: { type: [gardenSquareSchema], default: emptyGardenSquares },
 });
 
-// Advances one growing square against `now`: kills it if 2 full GARDEN_WATER_COOLDOWN_MS
-// periods passed with no watering, then rolls vermin/disease once per completed
+// Advances one growing square against `now`: rolls vermin/disease once per completed
 // GARDEN_WATER_COOLDOWN_MS tick since planting (or the last roll) - catching up
-// correctly across any gap, same pattern as resolveStillBatch below. A vermin hit raises
-// `waterAmount` by 1 (needs one more watering to mature); disease kills. Flips growing ->
+// correctly across any gap, same pattern as resolveStillBatch below - then, once a full
+// GARDEN_NEGLECT_GRACE_MS has passed with zero watering, applies one decay tick per
+// completed GARDEN_DECAY_TICK_MS since the grace period ended: -1 waterCount, or death
+// if waterCount is already 0. A vermin hit raises `waterAmount` by 1 (needs one more
+// watering to mature); disease kills outright, independent of decay. Flips growing ->
 // ready once `waterCount` reaches `waterAmount`. No-op for any square not currently
 // growing. Mutates in place; returns whether anything changed.
 function resolveGardenSquare(square, now) {
@@ -385,12 +393,6 @@ function resolveGardenSquare(square, now) {
     return false;
   }
   var changed = false;
-
-  var lastCareAnchor = square.lastWateredAt || square.plantedAt;
-  if (now.getTime() - lastCareAnchor.getTime() >= GARDEN_WATER_COOLDOWN_MS * 2) {
-    square.status = "dead";
-    return true;
-  }
 
   var tick = new Date((square.lastCareCheckAt || square.plantedAt).getTime());
   while (now.getTime() - tick.getTime() >= GARDEN_WATER_COOLDOWN_MS) {
@@ -409,6 +411,26 @@ function resolveGardenSquare(square, now) {
     square.lastCareCheckAt = tick;
   }
 
+  var neglectAnchor = square.lastWateredAt || square.plantedAt;
+  var elapsedSinceWatered = now.getTime() - neglectAnchor.getTime();
+  if (elapsedSinceWatered >= GARDEN_NEGLECT_GRACE_MS) {
+    var ticksDue = Math.floor((elapsedSinceWatered - GARDEN_NEGLECT_GRACE_MS) / GARDEN_DECAY_TICK_MS) + 1;
+    var newTicks = ticksDue - square.decayTicksApplied;
+    for (var i = 0; i < newTicks; i++) {
+      changed = true;
+      if (square.waterCount > 0) {
+        square.waterCount -= 1;
+      } else {
+        square.status = "dead";
+        break;
+      }
+    }
+    square.decayTicksApplied = ticksDue;
+    if (square.status === "dead") {
+      return true;
+    }
+  }
+
   if (square.waterCount >= square.waterAmount) {
     square.status = "ready";
     changed = true;
@@ -423,6 +445,7 @@ function clearGardenSquare(square) {
   square.readyAt = null;
   square.lastWateredAt = null;
   square.lastCareCheckAt = null;
+  square.decayTicksApplied = 0;
   square.cost = 0;
   square.waterAmount = 0;
   square.waterCount = 0;
@@ -467,6 +490,7 @@ xenCasinoGardenStateSchema.statics.plant = async function (userId, squareId, see
   square.readyAt = new Date(now.getTime() + tier.growDurationMs);
   square.lastWateredAt = null; // unwatered until the player actually waters it - see statics.water
   square.lastCareCheckAt = now;
+  square.decayTicksApplied = 0;
   square.cost = tier.cost;
   square.waterAmount = tier.waterAmount;
   square.waterCount = 0; // planting does NOT count as a watering - the player must water it themselves
@@ -496,6 +520,7 @@ xenCasinoGardenStateSchema.statics.water = async function (userId, squareId) {
     return null;
   }
   square.lastWateredAt = now;
+  square.decayTicksApplied = 0; // watering restarts the 24h neglect clock
   square.waterCount += 1;
   if (square.waterCount >= square.waterAmount) {
     square.status = "ready";
@@ -776,6 +801,7 @@ module.exports = {
   // Exported so casinoGarden.ts can build SEED_TIERS' growDurationMs from waterAmount
   // and render the same cooldown it's actually enforcing, rather than a second copy.
   GARDEN_WATER_COOLDOWN_MS: GARDEN_WATER_COOLDOWN_MS,
+  GARDEN_NEGLECT_GRACE_MS: GARDEN_NEGLECT_GRACE_MS,
   XenCasinoStillState,
   XenCasinoMineState,
   MINE_OUTCOME: MINE_OUTCOME,

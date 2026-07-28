@@ -38,6 +38,8 @@ export interface GardenState {
     seedTiers: SeedTier[];
     protectionCost: { pesticide: number; fungicide: number };
     waterCooldownMs: number;
+    neglectGraceMs: number;
+    cleanupFee: number;
 }
 
 export const casinoGardenKeys = {
@@ -91,8 +93,8 @@ export const useCasinoGarden = () => {
 
     const { mutateAsync: clear, isPending: isClearing } = useMutation({
         mutationFn: async (params: { squareId: number }) =>
-            (await apiClient.post<ApiResponse<{ square: GardenSquare }>>("/api/casino/garden/clear", params)).data.data!,
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: casinoGardenKeys.all }),
+            (await apiClient.post<ApiResponse<{ square: GardenSquare; balance: string }>>("/api/casino/garden/clear", params)).data.data!,
+        onSuccess: invalidate,
     });
 
     return {
@@ -100,6 +102,8 @@ export const useCasinoGarden = () => {
         seedTiers: data?.seedTiers ?? [],
         protectionCost: data?.protectionCost ?? { pesticide: 0, fungicide: 0 },
         waterCooldownMs: data?.waterCooldownMs ?? 60 * 60 * 1000,
+        neglectGraceMs: data?.neglectGraceMs ?? 24 * 60 * 60 * 1000,
+        cleanupFee: data?.cleanupFee ?? 0,
         isLoading,
         refetch,
         plant,
