@@ -59,6 +59,9 @@ import Crossword from "./routes/Internal/XenCasino/games/Crossword/Crossword";
 import Plinko from "./routes/Internal/XenCasino/games/Plinko/Plinko";
 import Pachinko from "./routes/Internal/XenCasino/games/Pachinko/Pachinko";
 import Memory from "./routes/Internal/XenCasino/games/Memory/Memory";
+import Garden from "./routes/Internal/XenCasino/games/Garden/Garden";
+import Still from "./routes/Internal/XenCasino/games/Still/Still";
+import Mine from "./routes/Internal/XenCasino/games/Mine/Mine";
 // Routes - Xensplit
 import XensplitGroupsList from "./routes/Internal/Xensplit/GroupsList";
 import XensplitGroupDetail from "./routes/Internal/Xensplit/GroupDetail";
@@ -183,6 +186,9 @@ const router = createBrowserRouter(
           <Route path="games/plinko" element={<Plinko />} />
           <Route path="games/pachinko" element={<Pachinko />} />
           <Route path="games/memory" element={<Memory />} />
+          <Route path="games/garden" element={<Garden />} />
+          <Route path="games/still" element={<Still />} />
+          <Route path="games/mine" element={<Mine />} />
         </Route>
         <Route path="xensplit" index element={<Navigate to="groups" replace />} />
         <Route path="xensplit/groups" element={<XensplitGroupsList />} />

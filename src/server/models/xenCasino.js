@@ -318,11 +318,418 @@ xenCasinoActivitySchema.statics.record = async function (params) {
 
 var XenCasinoActivity = mongoose.model("XenCasinoActivity", xenCasinoActivitySchema);
 
+// ---------------------------------------------------------------------------------------
+// Casino Garden - a 3x3 grid of squares, one seed per square, growing in parallel. Seed
+// tiers/prices and harvest payout math are owned by the route (casinoGarden.ts); this
+// model only owns square lifecycle (empty -> growing -> ready/dead) and the daily
+// watering + vermin/disease rolls, since those don't depend on any seed-tier economics.
+// ---------------------------------------------------------------------------------------
+
+var GARDEN_GRID_SIZE = 9;
+var GARDEN_VERMIN_DELAY_MS = 12 * 60 * 60 * 1000; // vermin push readyAt back, they don't kill
+var GARDEN_VERMIN_CHANCE = 0.12; // per unprotected growing square, per UTC day
+var GARDEN_DISEASE_CHANCE = 0.06; // per unprotected growing square, per UTC day - kills outright
+
+function dayIndex(date) {
+  return Math.floor(date.getTime() / 86400000); // epoch-day index, UTC by construction (getTime() is UTC-based)
+}
+
+function emptyGardenSquares() {
+  var squares = [];
+  for (var i = 0; i < GARDEN_GRID_SIZE; i++) {
+    squares.push({ squareId: i, status: "empty" });
+  }
+  return squares;
+}
+
+var gardenSquareSchema = new mongoose.Schema(
+  {
+    squareId: { type: Number, required: true },
+    seedType: { type: String, default: null },
+    plantedAt: { type: Date, default: null },
+    readyAt: { type: Date, default: null },
+    lastWateredAt: { type: Date, default: null },
+    lastHazardCheckDay: { type: Number, default: null }, // epoch-day index a vermin/disease roll last ran, so a square is never rolled twice in the same UTC day
+    protection: {
+      pesticide: { type: Boolean, default: false }, // blocks vermin for the rest of this square's grow cycle
+      fungicide: { type: Boolean, default: false }, // blocks disease for the rest of this square's grow cycle
+    },
+    status: { type: String, enum: ["empty", "growing", "ready", "dead"], default: "empty" },
+  },
+  { _id: false }
+);
+
+var xenCasinoGardenStateSchema = new mongoose.Schema({
+  userId: { type: String, required: true, unique: true },
+  squares: { type: [gardenSquareSchema], default: emptyGardenSquares },
+});
+
+// Advances one growing square against `now`: kills it if a full UTC day passed with no
+// watering, rolls vermin/disease at most once per UTC day (vermin delays `readyAt`,
+// disease kills), then flips growing -> ready once `readyAt` passes. No-op for any
+// square not currently growing. Mutates in place; returns whether anything changed.
+function resolveGardenSquare(square, now) {
+  if (square.status !== "growing") {
+    return false;
+  }
+  var changed = false;
+  var today = dayIndex(now);
+
+  if (square.lastWateredAt && today - dayIndex(square.lastWateredAt) >= 2) {
+    square.status = "dead";
+    return true;
+  }
+
+  if (square.lastHazardCheckDay === null || today > square.lastHazardCheckDay) {
+    square.lastHazardCheckDay = today;
+    changed = true;
+    if (!square.protection.fungicide && Math.random() < GARDEN_DISEASE_CHANCE) {
+      square.status = "dead";
+      return true;
+    }
+    if (!square.protection.pesticide && Math.random() < GARDEN_VERMIN_CHANCE) {
+      square.readyAt = new Date(square.readyAt.getTime() + GARDEN_VERMIN_DELAY_MS);
+    }
+  }
+
+  if (square.readyAt && now >= square.readyAt) {
+    square.status = "ready";
+    changed = true;
+  }
+
+  return changed;
+}
+
+function clearGardenSquare(square) {
+  square.seedType = null;
+  square.plantedAt = null;
+  square.readyAt = null;
+  square.lastWateredAt = null;
+  square.lastHazardCheckDay = null;
+  square.protection = { pesticide: false, fungicide: false };
+  square.status = "empty";
+}
+
+xenCasinoGardenStateSchema.statics.getState = async function (userId) {
+  var doc = await this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
+  var now = new Date();
+  var changed = false;
+  doc.squares.forEach(function (square) {
+    if (resolveGardenSquare(square, now)) {
+      changed = true;
+    }
+  });
+  if (changed) {
+    await doc.save();
+  }
+  return doc;
+};
+
+xenCasinoGardenStateSchema.statics.plant = async function (userId, squareId, seedType, growDurationMs) {
+  var doc = await this.getState(userId);
+  var square = doc.squares.find(function (s) { return s.squareId === squareId; });
+  if (!square || square.status !== "empty") {
+    return null;
+  }
+  var now = new Date();
+  square.seedType = seedType;
+  square.plantedAt = now;
+  square.readyAt = new Date(now.getTime() + growDurationMs);
+  square.lastWateredAt = now;
+  square.lastHazardCheckDay = dayIndex(now);
+  square.protection = { pesticide: false, fungicide: false };
+  square.status = "growing";
+  await doc.save();
+  return square;
+};
+
+xenCasinoGardenStateSchema.statics.water = async function (userId, squareId) {
+  var doc = await this.getState(userId);
+  var square = doc.squares.find(function (s) { return s.squareId === squareId; });
+  if (!square || (square.status !== "growing" && square.status !== "ready")) {
+    return null;
+  }
+  square.lastWateredAt = new Date();
+  await doc.save();
+  return square;
+};
+
+xenCasinoGardenStateSchema.statics.protect = async function (userId, squareId, item) {
+  var doc = await this.getState(userId);
+  var square = doc.squares.find(function (s) { return s.squareId === squareId; });
+  if (!square || square.status !== "growing") {
+    return null;
+  }
+  square.protection[item] = true;
+  await doc.save();
+  return square;
+};
+
+// Called only after the harvest payout transfer has already succeeded (mirrors
+// markDailyQuestClaimed below) - re-validates status === "ready" itself rather than
+// trusting the caller's earlier read, so a square can't be double-cleared/double-paid.
+xenCasinoGardenStateSchema.statics.clearHarvestedSquare = async function (userId, squareId) {
+  var doc = await this.findOne({ userId: userId }).exec();
+  if (!doc) {
+    return null;
+  }
+  var square = doc.squares.find(function (s) { return s.squareId === squareId; });
+  if (!square || square.status !== "ready") {
+    return null;
+  }
+  clearGardenSquare(square);
+  await doc.save();
+  return square;
+};
+
+// No money involved (a dead square's inputs are just lost), so this clears immediately
+// rather than needing the pre/post-transfer split clearHarvestedSquare uses.
+xenCasinoGardenStateSchema.statics.clearDeadSquare = async function (userId, squareId) {
+  var doc = await this.getState(userId);
+  var square = doc.squares.find(function (s) { return s.squareId === squareId; });
+  if (!square || square.status !== "dead") {
+    return null;
+  }
+  clearGardenSquare(square);
+  await doc.save();
+  return square;
+};
+
+var XenCasinoGardenState = mongoose.model("XenCasinoGardenState", xenCasinoGardenStateSchema);
+
+// ---------------------------------------------------------------------------------------
+// Bootleg Still - one batch at a time. Payout multiplier and raid risk are both derived
+// from elapsed time (computed on read), never stored as a "current value" - only the
+// timestamps needed to derive them are persisted. Ingredient price / peak duration /
+// bribe cost / payout multiplier ceiling are all route-owned economics, passed in.
+// ---------------------------------------------------------------------------------------
+
+var STILL_ROLL_INTERVAL_MS = 5 * 60 * 1000; // how often a raid chance is rolled while a batch runs
+var STILL_RISK_RAMP_MS = 2 * 60 * 60 * 1000; // time since last bribe for the per-roll raid chance to reach its ceiling
+var STILL_MAX_RAID_CHANCE = 0.35; // per-roll ceiling - rising risk, never a certainty
+
+function stillRaidChance(now, batch) {
+  var since = now.getTime() - new Date(batch.lastBribeAt || batch.startedAt).getTime();
+  return Math.min(STILL_MAX_RAID_CHANCE, (since / STILL_RISK_RAMP_MS) * STILL_MAX_RAID_CHANCE);
+}
+
+// Rolls one raid check per completed STILL_ROLL_INTERVAL_MS tick since the batch started
+// (or was last rolled) - catches up correctly across gaps of any length between reads, no
+// cron needed. Stops at the first hit. Mutates `batch` in place; returns whether it changed.
+function resolveStillBatch(batch, now) {
+  if (!batch || batch.raidedAt) {
+    return false;
+  }
+  var lastRoll = new Date(batch.lastRiskRollAt || batch.startedAt);
+  var initial = lastRoll.getTime();
+  while (now.getTime() - lastRoll.getTime() >= STILL_ROLL_INTERVAL_MS) {
+    lastRoll = new Date(lastRoll.getTime() + STILL_ROLL_INTERVAL_MS);
+    if (Math.random() < stillRaidChance(lastRoll, batch)) {
+      batch.raidedAt = lastRoll;
+      break;
+    }
+  }
+  var changed = batch.raidedAt || lastRoll.getTime() !== initial;
+  if (changed) {
+    batch.lastRiskRollAt = lastRoll;
+  }
+  return !!changed;
+}
+
+var xenCasinoStillStateSchema = new mongoose.Schema({
+  userId: { type: String, required: true, unique: true },
+  stillLevel: { type: Number, default: 1 },
+  // { startedAt, ingredientCost, peakAt, lastBribeAt, lastRiskRollAt, raidedAt } | null -
+  // Mixed/Object rather than a fixed sub-schema since it's null whenever no batch is running.
+  batch: { type: Object, default: null },
+});
+
+xenCasinoStillStateSchema.statics.getState = async function (userId) {
+  var doc = await this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
+  if (doc.batch && resolveStillBatch(doc.batch, new Date())) {
+    doc.markModified("batch");
+    await doc.save();
+  }
+  return doc;
+};
+
+xenCasinoStillStateSchema.statics.startBatch = async function (userId, ingredientCost, peakDurationMs) {
+  var doc = await this.getState(userId);
+  if (doc.batch) {
+    return null;
+  }
+  var now = new Date();
+  doc.batch = {
+    startedAt: now,
+    ingredientCost: ingredientCost,
+    peakAt: new Date(now.getTime() + peakDurationMs),
+    lastBribeAt: now,
+    lastRiskRollAt: now,
+    raidedAt: null,
+  };
+  doc.markModified("batch");
+  await doc.save();
+  return doc.batch;
+};
+
+xenCasinoStillStateSchema.statics.bribe = async function (userId) {
+  var doc = await this.getState(userId);
+  if (!doc.batch || doc.batch.raidedAt) {
+    return null;
+  }
+  doc.batch.lastBribeAt = new Date();
+  doc.markModified("batch");
+  await doc.save();
+  return doc.batch;
+};
+
+// Called after a successful collect payout (or to dismiss a raided batch, which pays
+// nothing) - clears unconditionally since by this point the caller has already decided
+// the batch is done being acted on.
+xenCasinoStillStateSchema.statics.clearBatch = async function (userId) {
+  var doc = await this.findOne({ userId: userId }).exec();
+  if (!doc) {
+    return null;
+  }
+  doc.batch = null;
+  await doc.save();
+  return doc;
+};
+
+xenCasinoStillStateSchema.statics.upgrade = async function (userId, maxLevel) {
+  var doc = await this.getState(userId);
+  if (doc.stillLevel >= maxLevel) {
+    return null;
+  }
+  doc.stillLevel += 1;
+  await doc.save();
+  return doc.stillLevel;
+};
+
+var XenCasinoStillState = mongoose.model("XenCasinoStillState", xenCasinoStillStateSchema);
+
+// ---------------------------------------------------------------------------------------
+// Chip Mine - a dark, side-view shaft the player actively digs into. Down digs consume a
+// ladder and enter a higher risk band; sideways digs don't. Ore value / cave-in odds by
+// depth, and equipment prices, are route-owned economics passed into applyDig.
+// ---------------------------------------------------------------------------------------
+
+var MINE_OUTCOME = { ORE: "ore", EMPTY: "empty", CAVE_IN: "cave_in" };
+
+var mineTileSchema = new mongoose.Schema(
+  { x: { type: Number, required: true }, y: { type: Number, required: true }, hasOre: Boolean, mined: Boolean },
+  { _id: false }
+);
+
+var xenCasinoMineStateSchema = new mongoose.Schema({
+  userId: { type: String, required: true, unique: true },
+  positionX: { type: Number, default: 0 },
+  positionY: { type: Number, default: 0 }, // depth - increases downward from the shaft entrance at 0
+  dugTiles: { type: [mineTileSchema], default: [] },
+  digsToday: { type: Number, default: 0 },
+  digsDate: { type: String, default: null }, // "YYYY-MM-DD" (UTC) digsToday applies to, lazy-reset like the daily quest
+  ladderCount: { type: Number, default: 3 }, // a few free starter ladders
+  torchFuel: { type: Number, default: 20 },
+  pickaxeLevel: { type: Number, default: 1 }, // raises the daily dig cap
+  torchLevel: { type: Number, default: 1 }, // raises base visibility radius
+});
+
+xenCasinoMineStateSchema.statics.getState = async function (userId) {
+  var doc = await this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
+  var today = todayKey();
+  if (doc.digsDate !== today) {
+    doc.digsDate = today;
+    doc.digsToday = 0;
+    await doc.save();
+  }
+  return doc;
+};
+
+// Re-validates quota/ladder availability itself against a fresh read (rather than
+// trusting an earlier GET), rolls the outcome, and persists the result - all in one call
+// so a dig is never left half-applied. `dailyDigCap`, `oreChance`, and `caveInChance` are
+// computed by the route from the target tile's depth/direction before calling this.
+xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
+  var doc = await this.getState(userId);
+  if (doc.digsToday >= params.dailyDigCap) {
+    return { error: "no_digs_remaining" };
+  }
+  if (params.direction === "down" && doc.ladderCount <= 0) {
+    return { error: "no_ladders" };
+  }
+
+  var targetX = doc.positionX + (params.direction === "left" ? -1 : params.direction === "right" ? 1 : 0);
+  var targetY = doc.positionY + (params.direction === "down" ? 1 : 0);
+
+  doc.digsToday += 1;
+  if (params.direction === "down") {
+    doc.ladderCount -= 1;
+  }
+  if (doc.torchFuel > 0) {
+    doc.torchFuel -= 1;
+  }
+
+  var roll = Math.random();
+  var outcome;
+  if (roll < params.caveInChance) {
+    outcome = MINE_OUTCOME.CAVE_IN;
+    doc.digsToday = params.dailyDigCap; // a collapse locks out the rest of today's digs
+  } else {
+    if (roll < params.caveInChance + params.oreChance) {
+      outcome = MINE_OUTCOME.ORE;
+    } else {
+      outcome = MINE_OUTCOME.EMPTY;
+    }
+    doc.positionX = targetX;
+    doc.positionY = targetY;
+  }
+
+  var existing = doc.dugTiles.find(function (t) { return t.x === targetX && t.y === targetY; });
+  if (!existing) {
+    doc.dugTiles.push({ x: targetX, y: targetY, hasOre: outcome === MINE_OUTCOME.ORE, mined: outcome !== MINE_OUTCOME.CAVE_IN });
+  }
+
+  await doc.save();
+  return { outcome: outcome, position: { x: doc.positionX, y: doc.positionY }, digsToday: doc.digsToday, targetY: targetY };
+};
+
+xenCasinoMineStateSchema.statics.addEquipment = async function (userId, item, amount) {
+  var doc = await this.getState(userId);
+  if (item === "ladder") {
+    doc.ladderCount += amount;
+  } else if (item === "torch") {
+    doc.torchFuel += amount;
+  }
+  await doc.save();
+  return doc;
+};
+
+xenCasinoMineStateSchema.statics.upgrade = async function (userId, upgrade, maxLevel) {
+  var doc = await this.getState(userId);
+  var field = upgrade === "pickaxe" ? "pickaxeLevel" : "torchLevel";
+  if (doc[field] >= maxLevel) {
+    return null;
+  }
+  doc[field] += 1;
+  await doc.save();
+  return doc[field];
+};
+
+var XenCasinoMineState = mongoose.model("XenCasinoMineState", xenCasinoMineStateSchema);
+
 module.exports = {
   XenCasino,
   XenCasinoRound,
   XenCasinoUserState,
   XenCasinoActivity,
+  XenCasinoGardenState,
+  XenCasinoStillState,
+  XenCasinoMineState,
+  MINE_OUTCOME: MINE_OUTCOME,
+  // Exported so casinoStill.ts can render the same raid-risk percentage it's actually
+  // being rolled against, rather than approximating it with a second copy of the formula.
+  STILL_RISK_RAMP_MS: STILL_RISK_RAMP_MS,
+  STILL_MAX_RAID_CHANCE: STILL_MAX_RAID_CHANCE,
   dailyQuestDateKey: todayKey,
   // Exported for unit testing the lazy-reset-on-date-change logic without a live Mongo
   // connection - pure functions over plain objects, no I/O.

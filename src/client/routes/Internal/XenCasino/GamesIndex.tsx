@@ -7,6 +7,9 @@ import ScatterPlotIcon from "@mui/icons-material/ScatterPlot";
 import AdjustIcon from "@mui/icons-material/Adjust";
 import GridViewIcon from "@mui/icons-material/GridView";
 import AddIcon from "@mui/icons-material/Add";
+import LocalFloristIcon from "@mui/icons-material/LocalFlorist";
+import LocalBarIcon from "@mui/icons-material/LocalBar";
+import TerrainIcon from "@mui/icons-material/Terrain";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../../config/api";
 import { ApiResponse } from "../../../types/api";
@@ -73,9 +76,12 @@ const TYPE_ICON: Record<CasinoGameType, ComponentType<SvgIconProps>> = {
     plinko: ScatterPlotIcon,
     pachinko: AdjustIcon,
     memory: GridViewIcon,
+    garden: LocalFloristIcon,
+    still: LocalBarIcon,
+    mine: TerrainIcon,
 };
 
-const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko", "memory"];
+const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko", "memory", "garden", "still", "mine"];
 
 const GHOST_COPY: Partial<Record<CasinoGameType, string>> = {
     slots: "New reel sets and jackpots land here as they ship.",

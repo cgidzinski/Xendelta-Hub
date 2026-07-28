@@ -1,4 +1,4 @@
-export type CasinoGameType = "slots" | "scratch" | "plinko" | "pachinko" | "memory";
+export type CasinoGameType = "slots" | "scratch" | "plinko" | "pachinko" | "memory" | "garden" | "still" | "mine";
 
 export interface CasinoGameRegistryItem {
   key: string;
@@ -15,6 +15,9 @@ export const CASINO_GAME_TYPE_LABELS: Record<CasinoGameType, string> = {
   plinko: "Plinko",
   pachinko: "Pachinko",
   memory: "Memory",
+  garden: "Garden",
+  still: "Distillery",
+  mine: "Mining",
 };
 
 // Add a new game by adding an entry here plus its own folder under games/ - nothing else
@@ -77,5 +80,29 @@ export const CASINO_GAMES_REGISTRY: CasinoGameRegistryItem[] = [
     description: "10,000-cheddar round - shuffle the grid and find matching pairs in 3 tries for a prize.",
     type: "memory",
     price: 10000,
+  },
+  {
+    key: "garden",
+    label: "Casino Garden",
+    path: "/internal/xencasino/games/garden",
+    description: "Plant seeds across a 3x3 grid - water daily, guard against vermin and disease, and harvest for a payout.",
+    type: "garden",
+    price: 500,
+  },
+  {
+    key: "still",
+    label: "Bootleg Still",
+    path: "/internal/xencasino/games/still",
+    description: "Run one batch at a time - let it age for a bigger payout, or cash out before rising raid risk seizes it.",
+    type: "still",
+    price: 5000,
+  },
+  {
+    key: "mine",
+    label: "Chip Mine",
+    path: "/internal/xencasino/games/mine",
+    description: "Dig a dark shaft for ore - down is riskier, sideways stays safe. Limited digs per day, buy ladders and torches.",
+    type: "mine",
+    price: 200,
   },
 ];
