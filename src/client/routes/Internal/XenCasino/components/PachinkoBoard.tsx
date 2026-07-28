@@ -656,11 +656,12 @@ export default function PachinkoBoard({
             ctx.fillText(`${secondsLeft.toFixed(2)}s`, layout.attacker.position.x, attackerLabelY + 28);
         }
 
-        // Jackpot - the tightest pocket on the board, fixed width even when primed. Lights up
-        // when either the jackpot's timed window is open OR both tulips are simultaneously open
-        // (the priming moment before the server resets them).
+        // Jackpot - the tightest pocket on the board, fixed width even when primed. Driven
+        // purely by the timed window, not the tulip booleans - those only close lazily on the
+        // server (the next launch's shouldCloseLapsedTulips check), so falling back to them here
+        // would keep showing "OPEN" long after the window actually lapsed.
         const jackpotOpenUntil = sessionRef.current?.jackpotOpenUntil ?? 0;
-        const jackpotOpen = jackpotOpenUntil > Date.now() || (leftOpen && rightOpen);
+        const jackpotOpen = jackpotOpenUntil > Date.now();
         const jackpotHot = hotPockets.has("jackpot");
         const jackpotHeight = layout.jackpot.halfWidth * 2.4;
         const jackpotStroke = jackpotHot ? "#FFD700" : jackpotOpen ? "#ffd0dd" : "rgba(170,170,170,0.7)";
@@ -1008,7 +1009,7 @@ export default function PachinkoBoard({
                 </Box>
             </Box>
 
-            <Box sx={{ px: 2, mt: 2.5 }}>
+            <Box sx={{ px: 4, mt: 2.5 }}>
                 <Slider
                     value={launchPower}
                     onChange={(_, value) => typeof value === "number" && setLaunchPower(value)}

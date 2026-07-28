@@ -247,8 +247,8 @@ export interface FixedPocket {
 // (JACKPOT_OPEN_MS) and immediately resets both back to closed - see pachinko.ts's own
 // tulipLeft/tulipRight branches.
 export const TULIPS: FixedPocket[] = [
-    { id: "left", position: { x: 172, y: 250 }, halfWidth: 10 },
-    { id: "right", position: { x: 288, y: 250 }, halfWidth: 10 },
+    { id: "left", position: { x: 172, y: 250 }, halfWidth: 8 },
+    { id: "right", position: { x: 288, y: 250 }, halfWidth: 8 },
 ];
 
 // Jackpot pocket - a real "just fits one ball" target, barely wider than the ball itself
@@ -276,19 +276,19 @@ export function shouldCloseLapsedTulips(previousJackpotOpenUntil: number, nextJa
     return previousJackpotOpenUntil > 0 && nextJackpotOpenUntil <= now;
 }
 
-// Bonus pockets - frequent, small top-ups. Sized bigger than the tulips (22px wide vs 20px)
+// Bonus pockets - frequent, small top-ups. Sized bigger than the tulips (18px wide vs 16px)
 // since they pay less - pocket width scales inversely with payout throughout this board, the
 // same logic the jackpot's own tiny pocket follows at the other end.
 export const BONUS_POCKETS: FixedPocket[] = [
-    { id: "left", position: { x: 105, y: 285 }, halfWidth: 11 },
-    { id: "right", position: { x: 355, y: 285 }, halfWidth: 11 },
+    { id: "left", position: { x: 105, y: 285 }, halfWidth: 9 },
+    { id: "right", position: { x: 355, y: 285 }, halfWidth: 9 },
 ];
 
 // Chucker (heso) - small, always-open trigger, sitting directly below the stage/life-nails (see
 // STAGE_BOX/LIFE_NAILS below) - the real anatomy this board now follows. Catching it doesn't pay
 // anything on its own; it's what opens the attacker gate below for ATTACKER_OPEN_MS (see
 // pachinkoPayouts.ts).
-export const CHUCKER: FixedPocket = { id: "chucker", position: { x: 230, y: 248 }, halfWidth: 6 };
+export const CHUCKER: FixedPocket = { id: "chucker", position: { x: 230, y: 248 }, halfWidth: 5 };
 
 // Attacker - a wide gate, always this same width, directly below the chucker in the classic
 // column real machines use. Whether a catch here pays ATTACKER_BALLS or nothing is entirely a
