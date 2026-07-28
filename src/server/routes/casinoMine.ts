@@ -14,7 +14,7 @@ import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 const { User } = require("../models/user");
-const { XenCasinoMineState, MINE_OUTCOME, mineTorchRadiusFor } = require("../models/xenCasino");
+const { XenCasinoMineState, XenCasinoActivity, MINE_OUTCOME, mineTorchRadiusFor } = require("../models/xenCasino");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../utils/weeabetsClient";
 import { requireGameEnabled } from "../utils/casinoStatus";
 
@@ -125,6 +125,7 @@ module.exports = function (app: express.Application) {
                 key: `mine-ore-${userId}-${result.position.x}-${result.position.y}-${Date.now()}`,
                 note: "mine_ore_strike",
             });
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: 0, payout });
             const freshDoc = await XenCasinoMineState.getState(userId);
             return res.json({
                 status: true,
@@ -166,6 +167,7 @@ module.exports = function (app: express.Application) {
 
             const amount = item === "ladder" ? LADDER_BATCH : TORCH_BATCH_FUEL;
             const doc = await XenCasinoMineState.addEquipment(userId, item, amount);
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: cost, payout: 0 });
 
             return res.json({ status: true, data: { state: stateView(doc), balance: result.fromNewBalance } });
         } catch (err) {
@@ -220,6 +222,8 @@ module.exports = function (app: express.Application) {
                 });
                 return res.status(400).json({ status: false, message: "Already at max level" });
             }
+
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: cost, payout: 0 });
 
             return res.json({ status: true, data: { level: newLevel, balance: result.fromNewBalance } });
         } catch (err) {

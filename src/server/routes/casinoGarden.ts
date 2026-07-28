@@ -19,7 +19,7 @@ import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 const { User } = require("../models/user");
-const { XenCasinoGardenState, GARDEN_WATER_COOLDOWN_MS, GARDEN_NEGLECT_GRACE_MS } = require("../models/xenCasino");
+const { XenCasinoGardenState, XenCasinoActivity, GARDEN_WATER_COOLDOWN_MS, GARDEN_NEGLECT_GRACE_MS } = require("../models/xenCasino");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../utils/weeabetsClient";
 import { requireGameEnabled } from "../utils/casinoStatus";
 
@@ -142,6 +142,8 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "Square is not available" });
             }
 
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: tier.cost, payout: 0 });
+
             return res.json({ status: true, data: { square: squareView(square), balance: result.fromNewBalance } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
@@ -212,6 +214,8 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "Nothing growing here to protect" });
             }
 
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: cost, payout: 0 });
+
             return res.json({ status: true, data: { square: squareView(square), balance: result.fromNewBalance } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
@@ -255,6 +259,7 @@ module.exports = function (app: express.Application) {
             });
 
             await XenCasinoGardenState.clearHarvestedSquare(userId, squareId);
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: 0, payout });
 
             return res.json({ status: true, data: { payout, balance: result.toNewBalance } });
         } catch (err) {
@@ -298,6 +303,8 @@ module.exports = function (app: express.Application) {
                 });
                 return res.status(400).json({ status: false, message: "Nothing dead to clear here" });
             }
+
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: GARDEN_CLEANUP_FEE, payout: 0 });
 
             return res.json({ status: true, data: { square: squareView(square), balance: result.fromNewBalance } });
         } catch (err) {

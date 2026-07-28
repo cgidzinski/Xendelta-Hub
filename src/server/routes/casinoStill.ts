@@ -13,7 +13,7 @@ import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 const { User } = require("../models/user");
-const { XenCasinoStillState, STILL_RISK_RAMP_MS, STILL_BASE_RAID_CHANCE, STILL_MAX_RAID_CHANCE } = require("../models/xenCasino");
+const { XenCasinoStillState, XenCasinoActivity, STILL_RISK_RAMP_MS, STILL_BASE_RAID_CHANCE, STILL_MAX_RAID_CHANCE } = require("../models/xenCasino");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../utils/weeabetsClient";
 import { requireGameEnabled } from "../utils/casinoStatus";
 
@@ -145,6 +145,8 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "A batch is already running" });
             }
 
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: INGREDIENT_COST, payout: 0 });
+
             return res.json({ status: true, data: { batch: batchView(batch), balance: result.fromNewBalance } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
@@ -192,6 +194,8 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "No batch to bribe for" });
             }
 
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: cost, payout: 0 });
+
             return res.json({ status: true, data: { batch: batchView(batch), balance: result.fromNewBalance } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
@@ -234,6 +238,7 @@ module.exports = function (app: express.Application) {
             });
 
             await XenCasinoStillState.clearBatch(userId);
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: 0, payout });
 
             return res.json({ status: true, data: { raided: false, payout, balance: result.toNewBalance } });
         } catch (err) {
@@ -281,6 +286,8 @@ module.exports = function (app: express.Application) {
                 });
                 return res.status(400).json({ status: false, message: "Still is already at max level" });
             }
+
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: cost, payout: 0 });
 
             return res.json({ status: true, data: { stillLevel: newLevel, balance: result.fromNewBalance } });
         } catch (err) {
