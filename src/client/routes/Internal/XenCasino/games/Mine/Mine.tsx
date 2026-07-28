@@ -69,7 +69,7 @@ export default function Mine() {
     return (
         <GameWrapper
             title="Chip Mine"
-            howToPlay="Dig down (consumes a ladder, riskier the deeper you go) or sideways (no ladder needed, risk stays at your current depth) for a chance at ore. A limited number of digs reset daily. Torches reveal nearby tiles - buy fuel to keep seeing, and upgrade your pickaxe or torch for more digs or more visibility."
+            howToPlay="Dig down (consumes a ladder, riskier the deeper you go) or sideways (no ladder needed, risk stays at your current depth) for a chance at ore. A limited number of digs reset daily. Every tile you've dug stays visible forever. As you move, your torch also scouts nearby undug tiles and shows whether they glint with ore - one unit of fuel per newly scouted tile - so you can see what's coming before you commit to a direction. Cave-in risk is never shown in advance. Buy more fuel or upgrade your torch to scout further."
             oddsSections={oddsSections}
         >
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mt: 2, mb: 1 }}>
@@ -100,6 +100,19 @@ export default function Mine() {
                                 const isShaftEntrance = x === 0 && y === 0;
                                 const known = !!tile || isShaftEntrance || isPlayer;
 
+                                // "collapsed" = cave-in marker. "scouted" = torch preview, not yet
+                                // dug (dashed border, dim ore glint if hasOre - never a hazard icon,
+                                // cave-ins aren't previewable). "mined" = actually dug and resolved,
+                                // plain background regardless of whether it had ore.
+                                let bgcolor = "#050507";
+                                if (tile?.status === "collapsed") {
+                                    bgcolor = "error.dark";
+                                } else if (tile?.status === "scouted") {
+                                    bgcolor = "info.dark";
+                                } else if (tile?.status === "mined" || (known && !tile)) {
+                                    bgcolor = "grey.900";
+                                }
+
                                 return (
                                     <Box
                                         key={`${x}-${y}`}
@@ -110,15 +123,17 @@ export default function Mine() {
                                             alignItems: "center",
                                             justifyContent: "center",
                                             borderRadius: 0.5,
-                                            bgcolor: known ? (tile?.hasOre ? "warning.dark" : "grey.900") : "#050507",
-                                            border: "1px solid",
-                                            borderColor: known ? "grey.800" : "#050507",
+                                            bgcolor,
+                                            border: tile?.status === "scouted" ? "1px dashed" : "1px solid",
+                                            borderColor: known ? "grey.700" : "#050507",
                                             position: "relative",
                                         }}
                                     >
                                         {isPlayer && <PersonPinIcon sx={{ color: "info.light", fontSize: 26, position: "absolute" }} />}
-                                        {!isPlayer && tile?.hasOre && <DiamondIcon sx={{ color: "warning.light", fontSize: 20 }} />}
-                                        {!isPlayer && tile && !tile.hasOre && !tile.mined && <WhatshotIcon sx={{ color: "error.main", fontSize: 20 }} />}
+                                        {!isPlayer && tile?.status === "collapsed" && <WhatshotIcon sx={{ color: "error.main", fontSize: 20 }} />}
+                                        {!isPlayer && tile?.status === "scouted" && tile.hasOre && (
+                                            <DiamondIcon sx={{ color: "warning.light", fontSize: 18, opacity: 0.6 }} />
+                                        )}
                                     </Box>
                                 );
                             })

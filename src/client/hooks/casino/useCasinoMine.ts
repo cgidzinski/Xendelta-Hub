@@ -9,7 +9,9 @@ export interface MineTile {
     x: number;
     y: number;
     hasOre: boolean;
-    mined: boolean;
+    // "scouted": a torch preview, not yet dug. "mined": actually dug (resolved for
+    // good). "collapsed": a cave-in marker.
+    status: "scouted" | "mined" | "collapsed";
 }
 
 export interface MineState {

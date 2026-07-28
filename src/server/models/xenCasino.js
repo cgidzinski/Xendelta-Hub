@@ -685,14 +685,49 @@ var XenCasinoStillState = mongoose.model("XenCasinoStillState", xenCasinoStillSt
 
 // ---------------------------------------------------------------------------------------
 // Chip Mine - a dark, side-view shaft the player actively digs into. Down digs consume a
-// ladder and enter a higher risk band; sideways digs don't. Ore value / cave-in odds by
-// depth, and equipment prices, are route-owned economics passed into applyDig.
+// ladder and enter a higher risk band; sideways digs don't. Every tile the player has
+// ever dug stays visible permanently (no re-hiding your own history behind fog); torches
+// instead scout a preview of not-yet-dug neighboring tiles as you move - showing whether
+// they hold ore before you commit to digging them. Cave-in risk is never previewable,
+// only ore presence is. Ore/cave-in chance by depth and torch radius by level are
+// structural, depth/position-derived math that lives here (like the Still's raid-risk
+// formula); item prices and payout $ amounts stay route-owned economics.
 // ---------------------------------------------------------------------------------------
 
 var MINE_OUTCOME = { ORE: "ore", EMPTY: "empty", CAVE_IN: "cave_in" };
 
+var MINE_BASE_ORE_CHANCE = 0.3;
+var MINE_ORE_CHANCE_PER_DEPTH = 0.01;
+var MINE_MAX_ORE_CHANCE = 0.6;
+var MINE_BASE_CAVE_IN_CHANCE = 0.03;
+var MINE_CAVE_IN_CHANCE_PER_DEPTH = 0.015;
+var MINE_MAX_CAVE_IN_CHANCE = 0.4;
+var MINE_BASE_TORCH_RADIUS = 1;
+var MINE_TORCH_RADIUS_PER_LEVEL = 1;
+
+// A sideways dig uses the *current* depth's cave-in chance; a down dig uses the
+// *target* (deeper) depth's - this is what makes "down" the risk-escalating direction
+// and "side" the flat-risk one (see casinoMine.ts for how depth is picked per direction).
+function mineOreChanceForDepth(depth) {
+  return Math.min(MINE_MAX_ORE_CHANCE, MINE_BASE_ORE_CHANCE + depth * MINE_ORE_CHANCE_PER_DEPTH);
+}
+function mineCaveInChanceForDepth(depth) {
+  return Math.min(MINE_MAX_CAVE_IN_CHANCE, MINE_BASE_CAVE_IN_CHANCE + depth * MINE_CAVE_IN_CHANCE_PER_DEPTH);
+}
+function mineTorchRadiusFor(doc) {
+  return doc.torchFuel > 0 ? MINE_BASE_TORCH_RADIUS + (doc.torchLevel - 1) * MINE_TORCH_RADIUS_PER_LEVEL : 0;
+}
+
+// "scouted": ground truth (hasOre) rolled and cached, not yet dug - a torch preview.
+// "mined": actually dug (ore collected if present, or was empty) - resolved for good.
+// "collapsed": a cave-in happened here - a hazard marker, unrelated to ore/scouting.
 var mineTileSchema = new mongoose.Schema(
-  { x: { type: Number, required: true }, y: { type: Number, required: true }, hasOre: Boolean, mined: Boolean },
+  {
+    x: { type: Number, required: true },
+    y: { type: Number, required: true },
+    hasOre: Boolean,
+    status: { type: String, enum: ["scouted", "mined", "collapsed"], required: true },
+  },
   { _id: false }
 );
 
@@ -700,7 +735,7 @@ var xenCasinoMineStateSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
   positionX: { type: Number, default: 0 },
   positionY: { type: Number, default: 0 }, // depth - increases downward from the shaft entrance at 0
-  dugTiles: { type: [mineTileSchema], default: [] },
+  dugTiles: { type: [mineTileSchema], default: [] }, // both scouted-but-undug and actually-dug tiles
   digsToday: { type: Number, default: 0 },
   digsDate: { type: String, default: null }, // "YYYY-MM-DD" (UTC) digsToday applies to, lazy-reset like the daily quest
   ladderCount: { type: Number, default: 3 }, // a few free starter ladders
@@ -709,12 +744,53 @@ var xenCasinoMineStateSchema = new mongoose.Schema({
   torchLevel: { type: Number, default: 1 }, // raises base visibility radius
 });
 
+// Reveals not-yet-known tiles within the current torch radius of `doc`'s position,
+// rolling and caching each one's ground-truth `hasOre` (using the same depth-based
+// chance a dig would use) as a "scouted" tile - one unit of torchFuel per newly
+// revealed tile, stopping once fuel runs out. Already-known tiles (scouted, mined, or
+// collapsed) are never touched or re-charged. Mutates `doc.dugTiles`/`doc.torchFuel` in
+// place; returns whether anything changed.
+function scoutAroundPosition(doc) {
+  var radius = mineTorchRadiusFor(doc);
+  if (radius <= 0) {
+    return false;
+  }
+  var changed = false;
+  for (var dx = -radius; dx <= radius && doc.torchFuel > 0; dx++) {
+    for (var dy = -radius; dy <= radius && doc.torchFuel > 0; dy++) {
+      if (dx === 0 && dy === 0) {
+        continue;
+      }
+      var x = doc.positionX + dx;
+      var y = doc.positionY + dy;
+      if (y < 0) {
+        continue; // nothing above the shaft entrance
+      }
+      var known = doc.dugTiles.some(function (t) { return t.x === x && t.y === y; });
+      if (known) {
+        continue;
+      }
+      doc.dugTiles.push({ x: x, y: y, hasOre: Math.random() < mineOreChanceForDepth(y), status: "scouted" });
+      doc.torchFuel -= 1;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 xenCasinoMineStateSchema.statics.getState = async function (userId) {
   var doc = await this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
+  var changed = false;
   var today = todayKey();
   if (doc.digsDate !== today) {
     doc.digsDate = today;
     doc.digsToday = 0;
+    changed = true;
+  }
+  if (scoutAroundPosition(doc)) {
+    changed = true;
+  }
+  if (changed) {
     await doc.save();
   }
   return doc;
@@ -722,8 +798,13 @@ xenCasinoMineStateSchema.statics.getState = async function (userId) {
 
 // Re-validates quota/ladder availability itself against a fresh read (rather than
 // trusting an earlier GET), rolls the outcome, and persists the result - all in one call
-// so a dig is never left half-applied. `dailyDigCap`, `oreChance`, and `caveInChance` are
-// computed by the route from the target tile's depth/direction before calling this.
+// so a dig is never left half-applied. `dailyDigCap` is route-owned (depends on
+// pickaxeLevel pricing) and passed in; ore/cave-in chance are computed here from depth.
+// If the target tile was already `scouted`, its cached `hasOre` is reused instead of
+// rolling again - a torch preview is a real answer, not just flavor. The route calls
+// getState again right after this to build its response, which is what actually runs
+// the next scouting pass around the (possibly new) position - this static only resolves
+// the one tile being dug.
 xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
   var doc = await this.getState(userId);
   if (doc.digsToday >= params.dailyDigCap) {
@@ -735,33 +816,33 @@ xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
 
   var targetX = doc.positionX + (params.direction === "left" ? -1 : params.direction === "right" ? 1 : 0);
   var targetY = doc.positionY + (params.direction === "down" ? 1 : 0);
+  var existing = doc.dugTiles.find(function (t) { return t.x === targetX && t.y === targetY; });
 
   doc.digsToday += 1;
   if (params.direction === "down") {
     doc.ladderCount -= 1;
   }
-  if (doc.torchFuel > 0) {
-    doc.torchFuel -= 1;
-  }
 
-  var roll = Math.random();
   var outcome;
-  if (roll < params.caveInChance) {
+  if (Math.random() < mineCaveInChanceForDepth(targetY)) {
     outcome = MINE_OUTCOME.CAVE_IN;
     doc.digsToday = params.dailyDigCap; // a collapse locks out the rest of today's digs
-  } else {
-    if (roll < params.caveInChance + params.oreChance) {
-      outcome = MINE_OUTCOME.ORE;
+    if (existing) {
+      existing.status = "collapsed";
     } else {
-      outcome = MINE_OUTCOME.EMPTY;
+      doc.dugTiles.push({ x: targetX, y: targetY, hasOre: false, status: "collapsed" });
+    }
+  } else {
+    var hasOre = existing && existing.status === "scouted" ? existing.hasOre : Math.random() < mineOreChanceForDepth(targetY);
+    outcome = hasOre ? MINE_OUTCOME.ORE : MINE_OUTCOME.EMPTY;
+    if (existing) {
+      existing.status = "mined";
+      existing.hasOre = hasOre;
+    } else {
+      doc.dugTiles.push({ x: targetX, y: targetY, hasOre: hasOre, status: "mined" });
     }
     doc.positionX = targetX;
     doc.positionY = targetY;
-  }
-
-  var existing = doc.dugTiles.find(function (t) { return t.x === targetX && t.y === targetY; });
-  if (!existing) {
-    doc.dugTiles.push({ x: targetX, y: targetY, hasOre: outcome === MINE_OUTCOME.ORE, mined: outcome !== MINE_OUTCOME.CAVE_IN });
   }
 
   await doc.save();
@@ -805,6 +886,9 @@ module.exports = {
   XenCasinoStillState,
   XenCasinoMineState,
   MINE_OUTCOME: MINE_OUTCOME,
+  // Exported so casinoMine.ts can render the same visibility radius applyDig/getState
+  // actually scout against, rather than a second copy of the formula.
+  mineTorchRadiusFor: mineTorchRadiusFor,
   // Exported so casinoStill.ts can render the same raid-risk percentage it's actually
   // being rolled against, rather than approximating it with a second copy of the formula.
   STILL_RISK_RAMP_MS: STILL_RISK_RAMP_MS,

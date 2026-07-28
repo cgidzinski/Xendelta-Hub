@@ -2,16 +2,19 @@
  * Chip Mine - a dark, side-view shaft the player actively digs into, one direction at a
  * time, off a daily dig allowance. Digging down consumes a ladder and enters a higher
  * risk band (cave-in chance keyed to the new depth); digging sideways needs no ladder and
- * stays at the current depth's risk band. Torches reveal surrounding tiles (visibility
- * only, not safety) and deplete with use. Position/quota/equipment bookkeeping and the
- * dig roll itself live in XenCasinoMineState (src/server/models/xenCasino.js); this route
- * owns depth-based ore/cave-in odds, equipment/upgrade economics, and every money movement.
+ * stays at the current depth's risk band. Every tile ever dug stays visible permanently -
+ * no fog ever re-covers your own history. Torches instead scout a preview (ore or not) of
+ * not-yet-dug neighboring tiles as you move, one unit of fuel per newly revealed tile;
+ * cave-in risk is never previewable. Position/quota/equipment bookkeeping, the dig roll,
+ * and the ore/cave-in/torch-radius formulas all live in XenCasinoMineState
+ * (src/server/models/xenCasino.js); this route owns equipment/upgrade prices, the ore
+ * payout $ amount, and every money movement.
  */
 import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 const { User } = require("../models/user");
-const { XenCasinoMineState, MINE_OUTCOME } = require("../models/xenCasino");
+const { XenCasinoMineState, MINE_OUTCOME, mineTorchRadiusFor } = require("../models/xenCasino");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../utils/weeabetsClient";
 import { requireGameEnabled } from "../utils/casinoStatus";
 
@@ -20,8 +23,6 @@ const MAX_PICKAXE_LEVEL = 5;
 const MAX_TORCH_LEVEL = 5;
 const BASE_DAILY_DIG_CAP = 15;
 const DIG_CAP_PER_PICKAXE_LEVEL = 5;
-const BASE_TORCH_RADIUS = 1;
-const TORCH_RADIUS_PER_LEVEL = 1;
 
 const LADDER_COST = 200;
 const LADDER_BATCH = 5;
@@ -30,15 +31,8 @@ const TORCH_BATCH_FUEL = 15;
 const PICKAXE_UPGRADE_COST = 6000;
 const TORCH_UPGRADE_COST = 4000;
 
-// Deeper tiles hold more valuable (but riskier) ore. A sideways dig uses the *current*
-// depth's cave-in chance; a down dig uses the *target* (deeper) depth's - this is what
-// makes "down" the risk-escalating direction and "side" the flat-risk one.
-function oreChanceForDepth(depth: number): number {
-    return Math.min(0.6, 0.3 + depth * 0.01);
-}
-function caveInChanceForDepth(depth: number): number {
-    return Math.min(0.4, 0.03 + depth * 0.015);
-}
+// The actual $ payout for a struck-ore tile - pure pricing, unlike whether the tile has
+// ore at all (a structural/depth question the model already resolves).
 function oreValueForDepth(depth: number): number {
     const base = 200 + depth * 60;
     return Math.round(base * (0.7 + Math.random() * 1.1));
@@ -47,15 +41,12 @@ function oreValueForDepth(depth: number): number {
 function dailyDigCapFor(doc: any): number {
     return BASE_DAILY_DIG_CAP + (doc.pickaxeLevel - 1) * DIG_CAP_PER_PICKAXE_LEVEL;
 }
-function torchRadiusFor(doc: any): number {
-    return doc.torchFuel > 0 ? BASE_TORCH_RADIUS + (doc.torchLevel - 1) * TORCH_RADIUS_PER_LEVEL : 0;
-}
 
 function stateView(doc: any) {
-    const radius = torchRadiusFor(doc);
-    const revealed = doc.dugTiles.filter(
-        (t: any) => Math.abs(t.x - doc.positionX) <= radius && Math.abs(t.y - doc.positionY) <= radius
-    );
+    // Every tile the player has ever dug or scouted stays visible permanently, regardless
+    // of current position or torch fuel - you already know what's there, no fog should
+    // ever re-cover it. `status` tells the client whether a tile is just a torch preview
+    // ("scouted"), actually dug ("mined"), or a cave-in marker ("collapsed").
     return {
         position: { x: doc.positionX, y: doc.positionY },
         digsToday: doc.digsToday,
@@ -66,8 +57,8 @@ function stateView(doc: any) {
         torchLevel: doc.torchLevel,
         maxPickaxeLevel: MAX_PICKAXE_LEVEL,
         maxTorchLevel: MAX_TORCH_LEVEL,
-        visibilityRadius: radius,
-        revealedTiles: revealed.map((t: any) => ({ x: t.x, y: t.y, hasOre: t.hasOre, mined: t.mined })),
+        visibilityRadius: mineTorchRadiusFor(doc),
+        revealedTiles: doc.dugTiles.map((t: any) => ({ x: t.x, y: t.y, hasOre: t.hasOre, status: t.status })),
         prices: {
             ladder: { cost: LADDER_COST, amount: LADDER_BATCH },
             torch: { cost: TORCH_COST, amount: TORCH_BATCH_FUEL },
@@ -98,15 +89,9 @@ module.exports = function (app: express.Application) {
         }
 
         const doc = await XenCasinoMineState.getState(userId);
-        const targetDepth = direction === "down" ? doc.positionY + 1 : doc.positionY;
-        const oreChance = oreChanceForDepth(targetDepth);
-        const caveInChance = caveInChanceForDepth(targetDepth);
-
         const result = await XenCasinoMineState.applyDig(userId, {
             direction,
             dailyDigCap: dailyDigCapFor(doc),
-            oreChance,
-            caveInChance,
         });
 
         if (result.error === "no_digs_remaining") {
