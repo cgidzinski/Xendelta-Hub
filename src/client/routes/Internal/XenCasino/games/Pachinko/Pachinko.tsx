@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSnackbar } from "notistack";
 import { apiClient } from "../../../../../config/api";
@@ -144,6 +144,20 @@ export default function Pachinko() {
             cashOutAsync();
         }
     };
+
+    // Closing via X/Escape isn't the only way to leave an active round - the "Back to Games"
+    // button, a browser/mobile back gesture, or any other route change away from this page all
+    // just unmount this component instead of going through PlayLauncher's onClose. Settle up the
+    // same way handleClose does whenever that happens, so real cheddar isn't left stranded in an
+    // abandoned round until the server's stale-round sweep eventually refunds it. Kept in a ref
+    // so the unmount cleanup (which must only fire once, on the actual unmount) always calls the
+    // latest handleClose rather than one closed over a stale session.
+    const handleCloseRef = useRef(handleClose);
+    handleCloseRef.current = handleClose;
+
+    useEffect(() => {
+        return () => handleCloseRef.current();
+    }, []);
 
     // Fires every time the modal opens (not just the first time) - a batch bought in a previous
     // visit may still be open, so this decides whether to resume it or start with no session

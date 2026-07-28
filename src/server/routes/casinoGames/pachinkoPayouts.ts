@@ -41,7 +41,7 @@ export const ATTACKER_BALLS = 25;
 // How long the jackpot pocket actually pays once both tulips are simultaneously open - same
 // timed-window shape as the attacker (see pachinko.ts's own jackpot-priming branch), not a
 // standing "primed" state that sits open indefinitely until caught.
-export const JACKPOT_OPEN_MS = 10000;
+export const JACKPOT_OPEN_MS = 5000;
 
 // Fraction of every ball's price that feeds the shared jackpot pool (fed by every ball fired,
 // not just misses - the pool is jackpot-only money, unrelated to what any individual shot pays
