@@ -52,7 +52,7 @@ export const useCasinoMine = () => {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
 
-    const { data, isLoading, refetch } = useQuery({
+    const { data, isLoading, isError, error, refetch } = useQuery({
         queryKey: casinoMineKeys.all,
         queryFn: fetchMine,
         enabled: isAuthenticated,
@@ -86,6 +86,8 @@ export const useCasinoMine = () => {
     return {
         state: data ?? null,
         isLoading,
+        isError,
+        error: error as Error | null,
         refetch,
         dig,
         isDigging,

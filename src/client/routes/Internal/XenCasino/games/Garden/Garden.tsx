@@ -90,7 +90,9 @@ function tileStatusLabel(square: GardenSquare): string {
         case "ready":
             return "Ready to harvest";
         default:
-            return `Watered ${square.waterCount}/${square.waterAmount}`;
+            // Fully watered but still waiting out the final cooldown before it's ready -
+            // see resolveGardenSquare in xenCasino.js.
+            return square.waterCount >= square.waterAmount ? "Maturing..." : `Watered ${square.waterCount}/${square.waterAmount}`;
     }
 }
 
@@ -148,11 +150,12 @@ function GardenTile({ square, onOpen }: GardenTileProps) {
 interface SquareDetailsProps {
     square: GardenSquare;
     now: number;
+    onHarvested: () => void;
 }
 
 // Full stats + every action for the selected square - rendered inside the modal, adapting
 // to status exactly like the old inline SquareCard body did.
-function SquareDetails({ square, now }: SquareDetailsProps) {
+function SquareDetails({ square, now, onHarvested }: SquareDetailsProps) {
     const {
         seedTiers,
         protectionCost,
@@ -174,6 +177,9 @@ function SquareDetails({ square, now }: SquareDetailsProps) {
     const msSinceWatered = square.lastWateredAt ? now - new Date(square.lastWateredAt).getTime() : Infinity;
     const onCooldown = msSinceWatered < waterCooldownMs;
     const cooldownRemaining = waterCooldownMs - msSinceWatered;
+    // Fully watered but still waiting out the final cooldown before it flips to "ready" -
+    // see resolveGardenSquare in xenCasino.js. Nothing left to water at this point.
+    const fullyWatered = square.waterCount >= square.waterAmount;
 
     const handlePlant = (seedType: string) =>
         plant({ squareId: square.squareId, seedType }).catch((e) => enqueueSnackbar(e.message || "Failed to plant", { variant: "error" }));
@@ -182,7 +188,10 @@ function SquareDetails({ square, now }: SquareDetailsProps) {
         protect({ squareId: square.squareId, item }).catch((e) => enqueueSnackbar(e.message || "Failed to protect", { variant: "error" }));
     const handleHarvest = () =>
         harvest({ squareId: square.squareId })
-            .then((r) => enqueueSnackbar(`Harvested ${formatCheddar(r.payout)} cheddar!`, { variant: "success" }))
+            .then((r) => {
+                enqueueSnackbar(`Harvested ${formatCheddar(r.payout)} cheddar!`, { variant: "success" });
+                onHarvested();
+            })
             .catch((e) => enqueueSnackbar(e.message || "Failed to harvest", { variant: "error" }));
     const handleClear = () => clear({ squareId: square.squareId }).catch((e) => enqueueSnackbar(e.message || "Failed to clear", { variant: "error" }));
 
@@ -237,11 +246,15 @@ function SquareDetails({ square, now }: SquareDetailsProps) {
                 sx={{ height: 6, borderRadius: 999 }}
             />
             <Typography variant="caption" color="text.secondary">
-                {square.status === "ready" ? "Ready to harvest" : `Watered ${square.waterCount}/${square.waterAmount}`}
+                {square.status === "ready"
+                    ? "Ready to harvest"
+                    : fullyWatered
+                      ? `Fully watered - ready in ${formatCountdown(cooldownRemaining)}`
+                      : `Watered ${square.waterCount}/${square.waterAmount}`}
             </Typography>
 
             <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-                {square.status === "growing" && (
+                {square.status === "growing" && !fullyWatered && (
                     <Chip
                         size="small"
                         icon={<WaterDropIcon />}
@@ -255,7 +268,7 @@ function SquareDetails({ square, now }: SquareDetailsProps) {
             </Box>
 
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                {square.status === "growing" && (
+                {square.status === "growing" && !fullyWatered && (
                     <Button variant="contained" disabled={isWatering || onCooldown} onClick={handleWater}>
                         Water
                     </Button>
@@ -335,7 +348,9 @@ export default function Garden() {
                         <CloseIcon />
                     </IconButton>
                 </DialogTitle>
-                <DialogContent>{selectedSquare && <SquareDetails square={selectedSquare} now={now} />}</DialogContent>
+                <DialogContent>
+                    {selectedSquare && <SquareDetails square={selectedSquare} now={now} onHarvested={() => setSelectedSquareId(null)} />}
+                </DialogContent>
             </Dialog>
         </GameWrapper>
     );

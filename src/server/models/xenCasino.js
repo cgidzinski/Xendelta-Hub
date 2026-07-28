@@ -431,7 +431,10 @@ function resolveGardenSquare(square, now) {
     }
   }
 
-  if (square.waterCount >= square.waterAmount) {
+  // Even once fully watered, the plot still needs the same cooldown to pass since that
+  // final watering before it's actually ready - matches the wait between every other
+  // watering rather than finishing the instant the last one lands (see statics.water).
+  if (square.waterCount >= square.waterAmount && now.getTime() - neglectAnchor.getTime() >= GARDEN_WATER_COOLDOWN_MS) {
     square.status = "ready";
     changed = true;
   }
@@ -522,9 +525,9 @@ xenCasinoGardenStateSchema.statics.water = async function (userId, squareId) {
   square.lastWateredAt = now;
   square.decayTicksApplied = 0; // watering restarts the 24h neglect clock
   square.waterCount += 1;
-  if (square.waterCount >= square.waterAmount) {
-    square.status = "ready";
-  }
+  // Deliberately does NOT flip status to "ready" here even if this was the final
+  // required watering - resolveGardenSquare only does that once GARDEN_WATER_COOLDOWN_MS
+  // has passed since this watering too, same wait as between any two waterings.
   await doc.save();
   return square;
 };
@@ -730,7 +733,12 @@ var mineTileSchema = new mongoose.Schema(
     x: { type: Number, required: true },
     y: { type: Number, required: true },
     hasOre: Boolean,
-    status: { type: String, enum: ["scouted", "mined", "collapsed"], required: true },
+    // Defaulted rather than required: existing tiles saved before this field existed
+    // (back when a tile only had `mined: Boolean`) would otherwise fail schema
+    // validation on the very next save and crash every read through getState() for any
+    // player who'd already dug in the mine. "mined" is the right fallback for that old
+    // data anyway - the "scouted" preview concept didn't exist yet.
+    status: { type: String, enum: ["scouted", "mined", "collapsed"], default: "mined" },
   },
   { _id: false }
 );

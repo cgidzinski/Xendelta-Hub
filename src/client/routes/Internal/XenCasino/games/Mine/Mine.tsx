@@ -1,4 +1,4 @@
-import { Box, Button, Card, CardContent, Chip, LinearProgress, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Chip, LinearProgress, Typography } from "@mui/material";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
@@ -15,7 +15,7 @@ const GRID_ROWS_BELOW_PLAYER = 4;
 const CELL_SIZE = 40;
 
 export default function Mine() {
-    const { state, isLoading, dig, isDigging, buyEquipment, isBuying, upgrade, isUpgrading } = useCasinoMine();
+    const { state, isLoading, isError, error, refetch, dig, isDigging, buyEquipment, isBuying, upgrade, isUpgrading } = useCasinoMine();
     const { enqueueSnackbar } = useSnackbar();
 
     const handleDig = (direction: "down" | "left" | "right") =>
@@ -48,6 +48,24 @@ export default function Mine() {
               },
           ]
         : [];
+
+    if (isError) {
+        return (
+            <GameWrapper title="Chip Mine" howToPlay="Loading..." oddsSections={[]}>
+                <Alert
+                    severity="error"
+                    sx={{ mt: 4 }}
+                    action={
+                        <Button color="inherit" size="small" onClick={() => refetch()}>
+                            Retry
+                        </Button>
+                    }
+                >
+                    {error?.message || "Failed to load the mine"}
+                </Alert>
+            </GameWrapper>
+        );
+    }
 
     if (isLoading || !state) {
         return (
