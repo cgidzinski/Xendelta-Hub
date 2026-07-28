@@ -22,7 +22,7 @@ const MAX_STILL_LEVEL = 5;
 const INGREDIENT_COST = 5000;
 const BRIBE_COST = 1500; // cost of the first bribe on a batch - each subsequent one costs more, see nextBribeCost
 const BRIBE_COST_STEP = 0.75; // +75% of the base cost per prior bribe on this batch
-const UPGRADE_COST = 10000;
+const UPGRADE_BASE_COST = 10000; // cost of the first upgrade (level 1 -> 2) - each further level doubles it, see stillUpgradeCost
 const START_MULTIPLIER = 0; // collecting the instant a batch starts pays out nothing - not free money
 const PEAK_MULTIPLIER = 4; // batch payout plateaus at ingredientCost * this, once peakAt passes
 // Higher still levels reach peak sooner and give raid rolls more grace after a bribe -
@@ -32,6 +32,11 @@ const PEAK_DURATION_STEP_MS = 20 * 60 * 1000; // shaved off per still level abov
 
 function peakDurationForLevel(level: number): number {
     return Math.max(45 * 60 * 1000, BASE_PEAK_DURATION_MS - (level - 1) * PEAK_DURATION_STEP_MS);
+}
+
+// Doubles per level: 10000 -> 20000 -> 40000 -> 80000 for levels 1->2 through 4->5.
+function stillUpgradeCost(currentLevel: number): number {
+    return Math.round(UPGRADE_BASE_COST * Math.pow(2, currentLevel - 1));
 }
 
 // Each bribe on the same batch costs more than the last, so babysitting a batch to peak
@@ -96,7 +101,7 @@ module.exports = function (app: express.Application) {
                 // The batch's own escalated cost while one is running (see batchView.nextBribeCost)
                 // - this base cost otherwise, for display before a batch has even started.
                 bribeCost: doc.batch ? nextBribeCost(doc.batch) : BRIBE_COST,
-                upgradeCost: UPGRADE_COST,
+                upgradeCost: stillUpgradeCost(doc.stillLevel),
             },
         });
     });
@@ -250,11 +255,17 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "Link your Discord account to play" });
             }
 
+            const state = await XenCasinoStillState.getState(userId);
+            if (state.stillLevel >= MAX_STILL_LEVEL) {
+                return res.status(400).json({ status: false, message: "Still is already at max level" });
+            }
+            const cost = stillUpgradeCost(state.stillLevel);
+
             const xenCasinoAccountId = await getXenCasinoAccountId();
             const result = await transfer({
                 fromAccountId: resolved.account.accountId,
                 toAccountId: xenCasinoAccountId,
-                amount: UPGRADE_COST.toFixed(10),
+                amount: cost.toFixed(10),
                 key: `still-upgrade-${userId}-${Date.now()}`,
                 note: "still_upgrade",
             });
@@ -264,7 +275,7 @@ module.exports = function (app: express.Application) {
                 await transfer({
                     fromAccountId: xenCasinoAccountId,
                     toAccountId: resolved.account.accountId,
-                    amount: UPGRADE_COST.toFixed(10),
+                    amount: cost.toFixed(10),
                     key: `still-upgrade-refund-${userId}-${Date.now()}`,
                     note: "still_upgrade_refund",
                 });

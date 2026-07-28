@@ -28,8 +28,8 @@ const LADDER_COST = 200;
 const LADDER_BATCH = 5;
 const TORCH_COST = 150;
 const TORCH_BATCH_FUEL = 15;
-const PICKAXE_UPGRADE_COST = 6000;
-const TORCH_UPGRADE_COST = 4000;
+const PICKAXE_UPGRADE_BASE_COST = 6000; // cost of the first pickaxe upgrade - each further level doubles it
+const TORCH_UPGRADE_BASE_COST = 4000; // cost of the first torch upgrade - each further level doubles it
 
 // The actual $ payout for a struck-ore tile - pure pricing, unlike whether the tile has
 // ore at all (a structural/depth question the model already resolves).
@@ -40,6 +40,11 @@ function oreValueForDepth(depth: number): number {
 
 function dailyDigCapFor(doc: any): number {
     return BASE_DAILY_DIG_CAP + (doc.pickaxeLevel - 1) * DIG_CAP_PER_PICKAXE_LEVEL;
+}
+
+// Doubles per level, same curve for both upgrade tracks.
+function mineUpgradeCost(baseCost: number, currentLevel: number): number {
+    return Math.round(baseCost * Math.pow(2, currentLevel - 1));
 }
 
 function stateView(doc: any) {
@@ -62,8 +67,8 @@ function stateView(doc: any) {
         prices: {
             ladder: { cost: LADDER_COST, amount: LADDER_BATCH },
             torch: { cost: TORCH_COST, amount: TORCH_BATCH_FUEL },
-            pickaxeUpgrade: PICKAXE_UPGRADE_COST,
-            torchUpgrade: TORCH_UPGRADE_COST,
+            pickaxeUpgrade: mineUpgradeCost(PICKAXE_UPGRADE_BASE_COST, doc.pickaxeLevel),
+            torchUpgrade: mineUpgradeCost(TORCH_UPGRADE_BASE_COST, doc.torchLevel),
         },
     };
 }
@@ -175,7 +180,6 @@ module.exports = function (app: express.Application) {
         if (upgrade !== "pickaxe" && upgrade !== "torch") {
             return res.status(400).json({ status: false, message: "Invalid upgrade" });
         }
-        const cost = upgrade === "pickaxe" ? PICKAXE_UPGRADE_COST : TORCH_UPGRADE_COST;
         const maxLevel = upgrade === "pickaxe" ? MAX_PICKAXE_LEVEL : MAX_TORCH_LEVEL;
 
         const user = await User.findById(userId).exec();
@@ -188,6 +192,13 @@ module.exports = function (app: express.Application) {
             if (!resolved.linked || !resolved.account) {
                 return res.status(400).json({ status: false, message: "Link your Discord account to play" });
             }
+
+            const doc = await XenCasinoMineState.getState(userId);
+            const currentLevel = upgrade === "pickaxe" ? doc.pickaxeLevel : doc.torchLevel;
+            if (currentLevel >= maxLevel) {
+                return res.status(400).json({ status: false, message: "Already at max level" });
+            }
+            const cost = mineUpgradeCost(upgrade === "pickaxe" ? PICKAXE_UPGRADE_BASE_COST : TORCH_UPGRADE_BASE_COST, currentLevel);
 
             const xenCasinoAccountId = await getXenCasinoAccountId();
             const result = await transfer({
