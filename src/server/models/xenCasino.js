@@ -587,10 +587,14 @@ var STILL_RISK_RAMP_MS = 2 * 60 * 60 * 1000; // time since last bribe for the pe
 var STILL_BASE_RAID_CHANCE = 0.05; // real risk from the very first roll - no truly safe "collect immediately" window
 var STILL_MAX_RAID_CHANCE = 0.4; // per-roll ceiling - rising risk, never a certainty
 
+// `batch.raidMultiplier` (set at start time from the sum of the batch's 3 ingredients'
+// raidBonus - see casinoStill.ts) scales the whole ramped curve; a reckless ingredient
+// pick reaches the STILL_MAX_RAID_CHANCE ceiling sooner, but the ceiling itself never
+// moves regardless of ingredients.
 function stillRaidChance(now, batch) {
   var since = now.getTime() - new Date(batch.lastBribeAt || batch.startedAt).getTime();
   var ramped = STILL_BASE_RAID_CHANCE + (since / STILL_RISK_RAMP_MS) * (STILL_MAX_RAID_CHANCE - STILL_BASE_RAID_CHANCE);
-  return Math.min(STILL_MAX_RAID_CHANCE, ramped);
+  return Math.min(STILL_MAX_RAID_CHANCE, ramped * (batch.raidMultiplier || 1));
 }
 
 // Rolls one raid check per completed STILL_ROLL_INTERVAL_MS tick since the batch started
@@ -633,7 +637,11 @@ xenCasinoStillStateSchema.statics.getState = async function (userId) {
   return doc;
 };
 
-xenCasinoStillStateSchema.statics.startBatch = async function (userId, ingredientCost, peakDurationMs) {
+// `peakMultiplier`/`raidMultiplier` are the batch's own effective curve, already
+// computed (and clamped) by casinoStill.ts from the sum of its 3 chosen ingredients'
+// rateBonus/raidBonus - stored here so every later read (currentMultiplier,
+// stillRaidChance) uses this specific batch's curve, not the global constants.
+xenCasinoStillStateSchema.statics.startBatch = async function (userId, ingredientCost, peakDurationMs, peakMultiplier, raidMultiplier, ingredientKeys) {
   var doc = await this.getState(userId);
   if (doc.batch) {
     return null;
@@ -643,6 +651,9 @@ xenCasinoStillStateSchema.statics.startBatch = async function (userId, ingredien
     startedAt: now,
     ingredientCost: ingredientCost,
     peakAt: new Date(now.getTime() + peakDurationMs),
+    peakMultiplier: peakMultiplier,
+    raidMultiplier: raidMultiplier,
+    ingredientKeys: ingredientKeys,
     lastBribeAt: now,
     lastRiskRollAt: now,
     raidedAt: null,

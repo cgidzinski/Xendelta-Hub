@@ -5,10 +5,21 @@ import { ApiResponse } from "../../types/api";
 import { casinoBalanceKeys } from "./useCasinoBalance";
 import { casinoLedgerKeys } from "./useCasinoLedger";
 
+export interface StillIngredient {
+    key: string;
+    label: string;
+    cost: number;
+    rateBonus: number;
+    raidBonus: number;
+    description: string;
+}
+
 export interface StillBatch {
     startedAt: string;
     ingredientCost: number;
     peakAt: string;
+    peakMultiplier: number;
+    ingredients: string[]; // labels of the 3 ingredients this batch was started with
     lastBribeAt: string;
     bribeCount: number;
     nextBribeCost: number;
@@ -21,7 +32,7 @@ export interface StillState {
     stillLevel: number;
     maxStillLevel: number;
     batch: StillBatch | null;
-    ingredientCost: number;
+    ingredients: StillIngredient[];
     bribeCost: number;
     upgradeCost: number;
 }
@@ -52,7 +63,8 @@ export const useCasinoStill = () => {
     };
 
     const { mutateAsync: start, isPending: isStarting } = useMutation({
-        mutationFn: async () => (await apiClient.post<ApiResponse<{ batch: StillBatch; balance: string }>>("/api/casino/still/start")).data.data!,
+        mutationFn: async (params: { ingredientKeys: string[] }) =>
+            (await apiClient.post<ApiResponse<{ batch: StillBatch; balance: string }>>("/api/casino/still/start", params)).data.data!,
         onSuccess: invalidate,
     });
 
@@ -77,7 +89,7 @@ export const useCasinoStill = () => {
         stillLevel: data?.stillLevel ?? 1,
         maxStillLevel: data?.maxStillLevel ?? 1,
         batch: data?.batch ?? null,
-        ingredientCost: data?.ingredientCost ?? 0,
+        ingredients: data?.ingredients ?? [],
         bribeCost: data?.bribeCost ?? 0,
         upgradeCost: data?.upgradeCost ?? 0,
         isLoading,
