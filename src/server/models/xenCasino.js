@@ -581,11 +581,13 @@ var XenCasinoGardenState = mongoose.model("XenCasinoGardenState", xenCasinoGarde
 
 var STILL_ROLL_INTERVAL_MS = 5 * 60 * 1000; // how often a raid chance is rolled while a batch runs
 var STILL_RISK_RAMP_MS = 2 * 60 * 60 * 1000; // time since last bribe for the per-roll raid chance to reach its ceiling
-var STILL_MAX_RAID_CHANCE = 0.35; // per-roll ceiling - rising risk, never a certainty
+var STILL_BASE_RAID_CHANCE = 0.05; // real risk from the very first roll - no truly safe "collect immediately" window
+var STILL_MAX_RAID_CHANCE = 0.4; // per-roll ceiling - rising risk, never a certainty
 
 function stillRaidChance(now, batch) {
   var since = now.getTime() - new Date(batch.lastBribeAt || batch.startedAt).getTime();
-  return Math.min(STILL_MAX_RAID_CHANCE, (since / STILL_RISK_RAMP_MS) * STILL_MAX_RAID_CHANCE);
+  var ramped = STILL_BASE_RAID_CHANCE + (since / STILL_RISK_RAMP_MS) * (STILL_MAX_RAID_CHANCE - STILL_BASE_RAID_CHANCE);
+  return Math.min(STILL_MAX_RAID_CHANCE, ramped);
 }
 
 // Rolls one raid check per completed STILL_ROLL_INTERVAL_MS tick since the batch started
@@ -641,6 +643,7 @@ xenCasinoStillStateSchema.statics.startBatch = async function (userId, ingredien
     lastBribeAt: now,
     lastRiskRollAt: now,
     raidedAt: null,
+    bribeCount: 0, // how many times this batch has been bribed - each one costs more (see casinoStill.ts nextBribeCost)
   };
   doc.markModified("batch");
   await doc.save();
@@ -653,6 +656,7 @@ xenCasinoStillStateSchema.statics.bribe = async function (userId) {
     return null;
   }
   doc.batch.lastBribeAt = new Date();
+  doc.batch.bribeCount = (doc.batch.bribeCount || 0) + 1;
   doc.markModified("batch");
   await doc.save();
   return doc.batch;
@@ -892,6 +896,7 @@ module.exports = {
   // Exported so casinoStill.ts can render the same raid-risk percentage it's actually
   // being rolled against, rather than approximating it with a second copy of the formula.
   STILL_RISK_RAMP_MS: STILL_RISK_RAMP_MS,
+  STILL_BASE_RAID_CHANCE: STILL_BASE_RAID_CHANCE,
   STILL_MAX_RAID_CHANCE: STILL_MAX_RAID_CHANCE,
   dailyQuestDateKey: todayKey,
   // Exported for unit testing the lazy-reset-on-date-change logic without a live Mongo

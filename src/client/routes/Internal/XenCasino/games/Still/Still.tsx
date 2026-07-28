@@ -61,14 +61,14 @@ export default function Still() {
                 { label: "Bribe", payout: `${formatCheddar(bribeCost)} - resets raid risk` },
                 { label: "Upgrade Still", payout: `${formatCheddar(upgradeCost)} - reaches peak faster (max level ${maxStillLevel})` },
             ],
-            footnote: "Payout multiplier rises from 1x toward a peak the longer the batch runs, then plateaus. Raid risk rises the longer it's been since your last bribe and is checked periodically - if it hits, the batch is seized with no payout.",
+            footnote: "Payout multiplier starts below breakeven and rises toward a peak the longer the batch runs, then plateaus - collecting immediately is a guaranteed loss. Raid risk starts real from the first check and rises further the longer it's been since your last bribe - each bribe on the same batch costs more than the last.",
         },
     ];
 
     return (
         <GameWrapper
             title="Bootleg Still"
-            howToPlay="Buy ingredients to start one batch. The longer you let it run, the bigger the payout multiplier gets - up to a peak. But raid risk also climbs the longer it's been since your last bribe. Bribe to knock risk back down, or cash out before it gets seized."
+            howToPlay="Buy ingredients to start one batch. Collecting right away is a loss - the payout multiplier starts below breakeven and climbs toward a peak the longer you let it run. Raid risk is real from the start too and keeps climbing the longer it's been since your last bribe. Bribe to knock risk back down (each bribe on the same batch costs more than the last), or cash out before it gets seized."
             oddsSections={oddsSections}
         >
             {isLoading ? (
@@ -121,7 +121,7 @@ export default function Still() {
 
                                 <Box sx={{ display: "flex", gap: 1.5, justifyContent: "center", mt: 1 }}>
                                     <Button variant="outlined" color="error" startIcon={<GavelIcon />} disabled={isBribing} onClick={handleBribe}>
-                                        Bribe ({formatCheddar(bribeCost)})
+                                        Bribe ({formatCheddar(batch.nextBribeCost)}){batch.bribeCount > 0 ? ` - #${batch.bribeCount + 1}` : ""}
                                     </Button>
                                     <Button variant="contained" color="success" disabled={isCollecting} onClick={handleCollect}>
                                         Collect Now

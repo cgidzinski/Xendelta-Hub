@@ -1,24 +1,29 @@
 /**
- * Bootleg Still - one batch at a time. Payout multiplier rises from 1x toward a peak the
- * longer the batch runs, then plateaus; a separate raid-risk meter also rises the longer
- * it's been since the last bribe, and can seize the batch (ingredient cost lost, no
- * payout) at any of its periodic rolls. Raid-roll bookkeeping lives in XenCasinoStillState
- * (src/server/models/xenCasino.js); this route owns ingredient/bribe/upgrade economics,
- * the payout-multiplier curve, and every money movement.
+ * Bootleg Still - one batch at a time. Payout multiplier rises from *below* breakeven
+ * toward a peak the longer the batch runs, then plateaus - collecting immediately is a
+ * guaranteed loss, not free money. A separate raid-risk meter carries real risk from the
+ * very first roll (never starts at 0%) and rises further the longer it's been since the
+ * last bribe, seizing the batch (ingredient cost lost, no payout) at any periodic roll.
+ * Bribing resets that risk but costs more each time on the same batch, so stalling near
+ * peak by bribing indefinitely stops being profitable. Raid-roll bookkeeping lives in
+ * XenCasinoStillState (src/server/models/xenCasino.js); this route owns
+ * ingredient/bribe/upgrade economics, the payout-multiplier curve, and every money movement.
  */
 import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 const { User } = require("../models/user");
-const { XenCasinoStillState, STILL_RISK_RAMP_MS, STILL_MAX_RAID_CHANCE } = require("../models/xenCasino");
+const { XenCasinoStillState, STILL_RISK_RAMP_MS, STILL_BASE_RAID_CHANCE, STILL_MAX_RAID_CHANCE } = require("../models/xenCasino");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../utils/weeabetsClient";
 import { requireGameEnabled } from "../utils/casinoStatus";
 
 const SLUG = "still";
 const MAX_STILL_LEVEL = 5;
 const INGREDIENT_COST = 5000;
-const BRIBE_COST = 1500;
+const BRIBE_COST = 1500; // cost of the first bribe on a batch - each subsequent one costs more, see nextBribeCost
+const BRIBE_COST_STEP = 0.75; // +75% of the base cost per prior bribe on this batch
 const UPGRADE_COST = 10000;
+const START_MULTIPLIER = 0.5; // collecting the instant a batch starts is a guaranteed loss, not free money
 const PEAK_MULTIPLIER = 4; // batch payout plateaus at ingredientCost * this, once peakAt passes
 // Higher still levels reach peak sooner and give raid rolls more grace after a bribe -
 // "go deep on one still" progression instead of running parallel batches.
@@ -29,8 +34,15 @@ function peakDurationForLevel(level: number): number {
     return Math.max(45 * 60 * 1000, BASE_PEAK_DURATION_MS - (level - 1) * PEAK_DURATION_STEP_MS);
 }
 
-// Rises linearly from 1x at start to PEAK_MULTIPLIER at peakAt, then plateaus - pure
-// function of stored timestamps, never itself stored.
+// Each bribe on the same batch costs more than the last, so babysitting a batch to peak
+// by bribing indefinitely eventually costs more than the extra payout is worth.
+function nextBribeCost(batch: any): number {
+    return Math.round(BRIBE_COST * (1 + (batch.bribeCount || 0) * BRIBE_COST_STEP));
+}
+
+// Rises linearly from START_MULTIPLIER (a real loss if collected instantly) to
+// PEAK_MULTIPLIER at peakAt, then plateaus - pure function of stored timestamps, never
+// itself stored.
 function currentMultiplier(batch: any, now: Date): number {
     const started = new Date(batch.startedAt).getTime();
     const peak = new Date(batch.peakAt).getTime();
@@ -39,7 +51,7 @@ function currentMultiplier(batch: any, now: Date): number {
         return PEAK_MULTIPLIER;
     }
     const t = Math.min(1, Math.max(0, (now.getTime() - started) / total));
-    return 1 + (PEAK_MULTIPLIER - 1) * t;
+    return START_MULTIPLIER + (PEAK_MULTIPLIER - START_MULTIPLIER) * t;
 }
 
 // Mirrors stillRaidChance() in the model exactly (same constants, imported rather than
@@ -47,7 +59,8 @@ function currentMultiplier(batch: any, now: Date): number {
 // approximation of it.
 function raidRiskPercent(batch: any, now: Date): number {
     const since = now.getTime() - new Date(batch.lastBribeAt || batch.startedAt).getTime();
-    return Math.min(STILL_MAX_RAID_CHANCE, (since / STILL_RISK_RAMP_MS) * STILL_MAX_RAID_CHANCE);
+    const ramped = STILL_BASE_RAID_CHANCE + (since / STILL_RISK_RAMP_MS) * (STILL_MAX_RAID_CHANCE - STILL_BASE_RAID_CHANCE);
+    return Math.min(STILL_MAX_RAID_CHANCE, ramped);
 }
 
 function batchView(batch: any) {
@@ -60,6 +73,8 @@ function batchView(batch: any) {
         ingredientCost: batch.ingredientCost,
         peakAt: batch.peakAt,
         lastBribeAt: batch.lastBribeAt,
+        bribeCount: batch.bribeCount || 0,
+        nextBribeCost: nextBribeCost(batch),
         raided: !!batch.raidedAt,
         currentMultiplier: batch.raidedAt ? 0 : Number(currentMultiplier(batch, now).toFixed(3)),
         raidRiskPercent: batch.raidedAt ? 0 : Number((raidRiskPercent(batch, now) * 100).toFixed(1)),
@@ -78,7 +93,9 @@ module.exports = function (app: express.Application) {
                 maxStillLevel: MAX_STILL_LEVEL,
                 batch: batchView(doc.batch),
                 ingredientCost: INGREDIENT_COST,
-                bribeCost: BRIBE_COST,
+                // The batch's own escalated cost while one is running (see batchView.nextBribeCost)
+                // - this base cost otherwise, for display before a batch has even started.
+                bribeCost: doc.batch ? nextBribeCost(doc.batch) : BRIBE_COST,
                 upgradeCost: UPGRADE_COST,
             },
         });
@@ -147,12 +164,13 @@ module.exports = function (app: express.Application) {
             if (!state.batch || state.batch.raidedAt) {
                 return res.status(400).json({ status: false, message: "No batch to bribe for" });
             }
+            const cost = nextBribeCost(state.batch);
 
             const xenCasinoAccountId = await getXenCasinoAccountId();
             const result = await transfer({
                 fromAccountId: resolved.account.accountId,
                 toAccountId: xenCasinoAccountId,
-                amount: BRIBE_COST.toFixed(10),
+                amount: cost.toFixed(10),
                 key: `still-bribe-${userId}-${Date.now()}`,
                 note: "still_bribe",
             });
@@ -162,7 +180,7 @@ module.exports = function (app: express.Application) {
                 await transfer({
                     fromAccountId: xenCasinoAccountId,
                     toAccountId: resolved.account.accountId,
-                    amount: BRIBE_COST.toFixed(10),
+                    amount: cost.toFixed(10),
                     key: `still-bribe-refund-${userId}-${Date.now()}`,
                     note: "still_bribe_refund",
                 });

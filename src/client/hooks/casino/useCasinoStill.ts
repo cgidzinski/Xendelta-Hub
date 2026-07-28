@@ -10,6 +10,8 @@ export interface StillBatch {
     ingredientCost: number;
     peakAt: string;
     lastBribeAt: string;
+    bribeCount: number;
+    nextBribeCost: number;
     raided: boolean;
     currentMultiplier: number;
     raidRiskPercent: number;
