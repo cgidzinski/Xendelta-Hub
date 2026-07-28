@@ -18,6 +18,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import WaterDropIcon from "@mui/icons-material/WaterDrop";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import ScienceIcon from "@mui/icons-material/Science";
+import SpaIcon from "@mui/icons-material/Spa";
 import { useSnackbar } from "notistack";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import { formatCheddar } from "../../utils/currency";
@@ -184,7 +185,7 @@ function SquareDetails({ square, now, onHarvested }: SquareDetailsProps) {
     const handlePlant = (seedType: string) =>
         plant({ squareId: square.squareId, seedType }).catch((e) => enqueueSnackbar(e.message || "Failed to plant", { variant: "error" }));
     const handleWater = () => water({ squareId: square.squareId }).catch((e) => enqueueSnackbar(e.message || "Failed to water", { variant: "error" }));
-    const handleProtect = (item: "pesticide" | "fungicide") =>
+    const handleProtect = (item: "pesticide" | "fungicide" | "fertilizer") =>
         protect({ squareId: square.squareId, item }).catch((e) => enqueueSnackbar(e.message || "Failed to protect", { variant: "error" }));
     const handleHarvest = () =>
         harvest({ squareId: square.squareId })
@@ -265,6 +266,7 @@ function SquareDetails({ square, now, onHarvested }: SquareDetailsProps) {
                 )}
                 {square.protection.pesticide && <Chip size="small" icon={<BugReportIcon />} label="Pesticide" color="success" />}
                 {square.protection.fungicide && <Chip size="small" icon={<ScienceIcon />} label="Fungicide" color="success" />}
+                {square.protection.fertilized && <Chip size="small" icon={<SpaIcon />} label="Fertilized" color="success" />}
             </Box>
 
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
@@ -281,6 +283,11 @@ function SquareDetails({ square, now, onHarvested }: SquareDetailsProps) {
                 {square.status === "growing" && !square.protection.fungicide && (
                     <Button variant="outlined" disabled={isProtecting} onClick={() => handleProtect("fungicide")}>
                         Fungicide ({formatCheddar(protectionCost.fungicide)})
+                    </Button>
+                )}
+                {square.status === "growing" && !fullyWatered && !square.protection.fertilized && (
+                    <Button variant="outlined" disabled={isProtecting} onClick={() => handleProtect("fertilizer")}>
+                        Fertilizer ({formatCheddar(protectionCost.fertilizer)})
                     </Button>
                 )}
                 {square.status === "ready" && (
@@ -315,7 +322,7 @@ export default function Garden() {
                 neglectGraceMs
             )} starts losing one delivered watering per hour until it's rewatered or dies - a dead plot costs ${formatCheddar(
                 cleanupFee
-            )} to clean up before replanting.`,
+            )} to clean up before replanting. Fertilizer is single-use per crop and instantly counts as one less watering needed - buy it fresh on each new plant, it doesn't carry over.`,
         },
     ];
 
@@ -326,7 +333,7 @@ export default function Garden() {
                 waterCooldownMs
             )}. There's no rush: a plot only starts losing progress if it goes a full ${formatDuration(
                 neglectGraceMs
-            )} with zero watering, after which it loses one delivered watering every hour until it's rewatered or runs out and dies. Unprotected plots can also be struck by vermin (adds one more required watering) or disease (kills the crop) - buy pesticide/fungicide to guard against them. A dead plot costs ${formatCheddar(
+            )} with zero watering, after which it loses one delivered watering every hour until it's rewatered or runs out and dies. Unprotected plots can also be struck by vermin (adds one more required watering) or disease (kills the crop) - buy pesticide/fungicide to guard against them, or buy fertilizer to instantly knock one watering off what's still needed. All three are single-use per crop and must be rebought on your next plant. A dead plot costs ${formatCheddar(
                 cleanupFee
             )} to clean up before you can replant it.`}
             oddsSections={oddsSections}

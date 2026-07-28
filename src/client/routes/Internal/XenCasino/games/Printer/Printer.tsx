@@ -4,11 +4,13 @@ import {
     Button,
     Card,
     CardContent,
+    Checkbox,
     Chip,
     Dialog,
     DialogActions,
     DialogContent,
     DialogTitle,
+    FormControlLabel,
     IconButton,
     LinearProgress,
     List,
@@ -46,17 +48,21 @@ function signed(value: number): string {
 interface PartPickerProps {
     open: boolean;
     parts: PrinterPart[];
+    machineUpgradeCost: number;
     isStarting: boolean;
     onClose: () => void;
-    onStart: (partKeys: string[]) => void;
+    onStart: (partKeys: string[], useMachineUpgrade: boolean) => void;
 }
 
 // Pick exactly 3 parts (repeats allowed - tapping the same one again installs another
 // copy) - their cost/rateBonus/raidBonus all sum together into this run's own curve
-// (see the /start route handler). This preview sums the same way the server will, so
-// what's shown here is what actually gets installed.
-function PartPicker({ open, parts, isStarting, onClose, onStart }: PartPickerProps) {
+// (see the /start route handler). Machine Upgrade is a 4th, optional, single-use
+// purchase - a pure rate boost with no raid cost, bought fresh each run same as the
+// parts (no persistent "rig level" to grind toward). This preview sums the same way
+// the server will, so what's shown here is what actually gets installed.
+function PartPicker({ open, parts, machineUpgradeCost, isStarting, onClose, onStart }: PartPickerProps) {
     const [picks, setPicks] = useState<string[]>([]);
+    const [machineUpgrade, setMachineUpgrade] = useState(false);
 
     const addPick = (key: string) => {
         if (picks.length < MAX_PICKS) {
@@ -66,12 +72,14 @@ function PartPicker({ open, parts, isStarting, onClose, onStart }: PartPickerPro
     const removePick = (index: number) => setPicks((p) => p.filter((_, i) => i !== index));
     const handleClose = () => {
         setPicks([]);
+        setMachineUpgrade(false);
         onClose();
     };
-    const handleStart = () => onStart(picks);
+    const handleStart = () => onStart(picks, machineUpgrade);
 
-    const totalCost = picks.reduce((sum, key) => sum + (parts.find((p) => p.key === key)?.cost ?? 0), 0);
-    const totalRate = picks.reduce((sum, key) => sum + (parts.find((p) => p.key === key)?.rateBonus ?? 0), 0);
+    const totalCost =
+        picks.reduce((sum, key) => sum + (parts.find((p) => p.key === key)?.cost ?? 0), 0) + (machineUpgrade ? machineUpgradeCost : 0);
+    const totalRate = picks.reduce((sum, key) => sum + (parts.find((p) => p.key === key)?.rateBonus ?? 0), 0) + (machineUpgrade ? 0.5 : 0);
     const totalRaid = picks.reduce((sum, key) => sum + (parts.find((p) => p.key === key)?.raidBonus ?? 0), 0);
 
     return (
@@ -99,7 +107,7 @@ function PartPicker({ open, parts, isStarting, onClose, onStart }: PartPickerPro
                     ))}
                 </Box>
 
-                {picks.length > 0 && (
+                {(picks.length > 0 || machineUpgrade) && (
                     <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
                         <Chip size="small" label={`Cost ${formatCheddar(totalCost)}`} />
                         <Chip size="small" label={`Rate ${signed(totalRate)}`} color={totalRate >= 0 ? "success" : "default"} />
@@ -122,6 +130,21 @@ function PartPicker({ open, parts, isStarting, onClose, onStart }: PartPickerPro
                         </ListItemButton>
                     ))}
                 </List>
+
+                <FormControlLabel
+                    sx={{ mt: 1, ml: 0 }}
+                    control={<Checkbox checked={machineUpgrade} onChange={(e) => setMachineUpgrade(e.target.checked)} />}
+                    label={
+                        <Box>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                Machine Upgrade - {formatCheddar(machineUpgradeCost)}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Optional, single-use for this run only. Pure Rate {signed(0.5)}, no extra raid risk.
+                            </Typography>
+                        </Box>
+                    }
+                />
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>
                 <Button
@@ -139,29 +162,14 @@ function PartPicker({ open, parts, isStarting, onClose, onStart }: PartPickerPro
 }
 
 export default function Printer() {
-    const {
-        rigLevel,
-        maxRigLevel,
-        run,
-        parts,
-        bribeCost,
-        upgradeCost,
-        isLoading,
-        start,
-        isStarting,
-        bribe,
-        isBribing,
-        collect,
-        isCollecting,
-        upgrade,
-        isUpgrading,
-    } = useCasinoPrinter();
+    const { run, parts, bribeCost, machineUpgradeCost, isLoading, start, isStarting, bribe, isBribing, collect, isCollecting } =
+        useCasinoPrinter();
     const { enqueueSnackbar } = useSnackbar();
     const [pickerOpen, setPickerOpen] = useState(false);
     useNow(2 * 1000);
 
-    const handleStart = (partKeys: string[]) =>
-        start({ partKeys })
+    const handleStart = (partKeys: string[], useMachineUpgrade: boolean) =>
+        start({ partKeys, useMachineUpgrade })
             .then(() => setPickerOpen(false))
             .catch((e) => enqueueSnackbar(e.message || "Failed to start print run", { variant: "error" }));
     const handleBribe = () => bribe().catch((e) => enqueueSnackbar(e.message || "Failed to bribe", { variant: "error" }));
@@ -174,7 +182,6 @@ export default function Printer() {
                 )
             )
             .catch((e) => enqueueSnackbar(e.message || "Failed to collect", { variant: "error" }));
-    const handleUpgrade = () => upgrade().catch((e) => enqueueSnackbar(e.message || "Failed to upgrade", { variant: "error" }));
 
     const oddsSections: OddsSection[] = [
         {
@@ -183,14 +190,11 @@ export default function Printer() {
                 label: `${p.label} (${formatCheddar(p.cost)})`,
                 payout: `Rate ${signed(p.rateBonus)}, Raid ${signed(p.raidBonus)}`,
             })),
-            footnote: "Pick 3 (repeats allowed) when starting a print run - their cost/rate/raid bonuses all sum together into that run's own curve.",
+            footnote: "Pick 3 (repeats allowed) when starting a print run - their cost/rate/raid bonuses all sum together into that run's own curve. An optional Machine Upgrade adds pure rate with no raid cost - both are single-use, bought fresh for that one run only.",
         },
         {
             title: "Economics",
-            rows: [
-                { label: "Bribe", payout: `${formatCheddar(bribeCost)} - resets raid risk` },
-                { label: "Upgrade Rig", payout: `${formatCheddar(upgradeCost)} - reaches peak faster (max level ${maxRigLevel})` },
-            ],
+            rows: [{ label: "Bribe", payout: `${formatCheddar(bribeCost)} - resets raid risk` }],
             footnote: "Payout multiplier starts below breakeven and rises toward a peak the longer the run goes, then plateaus - collecting immediately is a guaranteed loss. Raid risk starts real from the first check and rises further the longer it's been since your last bribe - each bribe on the same run costs more than the last.",
         },
     ];
@@ -198,7 +202,7 @@ export default function Printer() {
     return (
         <GameWrapper
             title="Money Printer"
-            howToPlay="Pick 3 parts to install and start a print run - their cost, rate, and raid-risk bonuses all add together into that run's own curve. Collecting right away is a loss - the payout multiplier starts below breakeven and climbs toward a peak the longer you let it run. Raid risk is real from the start too and keeps climbing the longer it's been since your last bribe. Bribe the right people to knock risk back down (each bribe on the same run costs more than the last), or cash out before your rig gets seized."
+            howToPlay="Pick 3 parts to install and start a print run - their cost, rate, and raid-risk bonuses all add together into that run's own curve. An optional Machine Upgrade adds pure rate with no raid cost. Everything is bought fresh each run - there's no permanent upgrade to grind toward. Collecting right away is a loss - the payout multiplier starts below breakeven and climbs toward a peak the longer you let it run. Raid risk is real from the start too and keeps climbing the longer it's been since your last bribe. Bribe the right people to knock risk back down (each bribe on the same run costs more than the last), or cash out before your rig gets seized."
             oddsSections={oddsSections}
         >
             {isLoading ? (
@@ -207,9 +211,6 @@ export default function Printer() {
                 <Card variant="outlined" sx={{ mt: 3 }}>
                     <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "center", py: 4 }}>
                         <PrintIcon sx={{ fontSize: 56, color: "warning.main" }} />
-                        <Typography variant="subtitle1" color="text.secondary">
-                            Rig Level {rigLevel} / {maxRigLevel}
-                        </Typography>
 
                         {!run && (
                             <Button
@@ -274,17 +275,18 @@ export default function Printer() {
                                 </Box>
                             </Box>
                         )}
-
-                        {!run && rigLevel < maxRigLevel && (
-                            <Button variant="text" disabled={isUpgrading} onClick={handleUpgrade} sx={{ mt: 1 }}>
-                                Upgrade Rig ({formatCheddar(upgradeCost)})
-                            </Button>
-                        )}
                     </CardContent>
                 </Card>
             )}
 
-            <PartPicker open={pickerOpen} parts={parts} isStarting={isStarting} onClose={() => setPickerOpen(false)} onStart={handleStart} />
+            <PartPicker
+                open={pickerOpen}
+                parts={parts}
+                machineUpgradeCost={machineUpgradeCost}
+                isStarting={isStarting}
+                onClose={() => setPickerOpen(false)}
+                onStart={handleStart}
+            />
         </GameWrapper>
     );
 }

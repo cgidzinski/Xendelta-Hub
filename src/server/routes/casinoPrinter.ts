@@ -5,9 +5,11 @@
  * carries real risk from the very first roll (never starts at 0%) and rises further the
  * longer it's been since the last bribe, seizing the run (parts cost lost, no payout) at
  * any periodic roll. Bribing resets that risk but costs more each time on the same run, so
- * stalling near peak by bribing indefinitely stops being profitable. Raid-roll bookkeeping
- * lives in XenCasinoPrinterState (src/server/models/xenCasino.js); this route owns
- * parts/bribe/upgrade economics, the payout-multiplier curve, and every money movement.
+ * stalling near peak by bribing indefinitely stops being profitable. There's no persistent
+ * "level" to grind - every boost (the 3 required parts, plus an optional Machine Upgrade)
+ * is bought fresh for that one run and gone once it ends. Raid-roll bookkeeping lives in
+ * XenCasinoPrinterState (src/server/models/xenCasino.js); this route owns parts/bribe
+ * economics, the payout-multiplier curve, and every money movement.
  */
 import express = require("express");
 import { authenticateToken } from "../middleware/auth";
@@ -18,24 +20,21 @@ import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailabl
 import { requireGameEnabled } from "../utils/casinoStatus";
 
 const SLUG = "printer";
-const MAX_RIG_LEVEL = 5;
 const BRIBE_COST = 1500; // cost of the first bribe on a run - each subsequent one costs more, see nextBribeCost
 const BRIBE_COST_STEP = 0.75; // +75% of the base cost per prior bribe on this run
-const UPGRADE_BASE_COST = 10000; // cost of the first upgrade (level 1 -> 2) - each further level doubles it, see rigUpgradeCost
 const START_MULTIPLIER = 0; // collecting the instant a run starts pays out nothing - not free money
 const PEAK_MULTIPLIER = 4; // a run's baseline payout ceiling before parts scale it (see effectivePeakMultiplier)
-// Higher rig levels reach peak sooner and give raid rolls more grace after a bribe -
-// "go deep on one rig" progression instead of running parallel print runs.
 const BASE_PEAK_DURATION_MS = 3 * 60 * 60 * 1000;
-const PEAK_DURATION_STEP_MS = 20 * 60 * 1000; // shaved off per rig level above 1
 // Parts-driven caps so no combo (e.g. 3x the most reckless part) breaks the house edge
 // outright or pays out near-instantly.
 const MIN_PEAK_DURATION_MS = 20 * 60 * 1000;
 const MAX_EFFECTIVE_PEAK_MULTIPLIER = 15;
-
-function peakDurationForLevel(level: number): number {
-    return Math.max(45 * 60 * 1000, BASE_PEAK_DURATION_MS - (level - 1) * PEAK_DURATION_STEP_MS);
-}
+// A single-use, optional 4th purchase alongside the 3 required parts - a pure rate boost
+// with no raid cost, unlike parts which always trade some of one for the other. Bought
+// fresh for that one run only, same as everything else here - there's no persistent
+// "rig level" to grind toward.
+const MACHINE_UPGRADE_COST = 4000;
+const MACHINE_UPGRADE_RATE_BONUS = 0.5;
 
 interface PrinterPart {
     key: string;
@@ -59,11 +58,6 @@ const PRINTER_PARTS: Record<string, PrinterPart> = {
     "silent-case": { key: "silent-case", label: "Silent Case", cost: 1000, rateBonus: -0.15, raidBonus: -0.3, description: "Slower and smaller, but much quieter." },
     "faraday-cage": { key: "faraday-cage", label: "Faraday Cage", cost: 1600, rateBonus: 0.05, raidBonus: -0.45, description: "Nearly pure stealth, barely touches rate." },
 };
-
-// Doubles per level: 10000 -> 20000 -> 40000 -> 80000 for levels 1->2 through 4->5.
-function rigUpgradeCost(currentLevel: number): number {
-    return Math.round(UPGRADE_BASE_COST * Math.pow(2, currentLevel - 1));
-}
 
 // Each bribe on the same run costs more than the last, so babysitting a run to peak by
 // bribing indefinitely eventually costs more than the extra payout is worth.
@@ -125,21 +119,19 @@ module.exports = function (app: express.Application) {
         return res.json({
             status: true,
             data: {
-                rigLevel: doc.rigLevel,
-                maxRigLevel: MAX_RIG_LEVEL,
                 run: runView(doc.run),
                 parts: Object.values(PRINTER_PARTS),
                 // The run's own escalated cost while one is going (see runView.nextBribeCost)
                 // - this base cost otherwise, for display before a run has even started.
                 bribeCost: doc.run ? nextBribeCost(doc.run) : BRIBE_COST,
-                upgradeCost: rigUpgradeCost(doc.rigLevel),
+                machineUpgradeCost: MACHINE_UPGRADE_COST,
             },
         });
     });
 
     app.post("/api/casino/printer/start", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
-        const { partKeys } = req.body as { partKeys: string[] };
+        const { partKeys, useMachineUpgrade } = req.body as { partKeys: string[]; useMachineUpgrade?: boolean };
         if (!Array.isArray(partKeys) || partKeys.length !== 3 || partKeys.some((k) => !PRINTER_PARTS[k])) {
             return res.status(400).json({ status: false, message: "Pick exactly 3 parts" });
         }
@@ -161,15 +153,16 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "A print run is already going" });
             }
 
-            // Sum the 3 picks' cost/rateBonus/raidBonus, then derive this run's own
-            // effective curve - same rateScale both shortens time-to-peak and raises the
-            // peak multiplier, both clamped so no combo breaks the house edge outright.
-            const totalCost = parts.reduce((sum, p) => sum + p.cost, 0);
-            const sumRate = parts.reduce((sum, p) => sum + p.rateBonus, 0);
+            // Sum the 3 picks' cost/rateBonus/raidBonus (plus the optional Machine Upgrade,
+            // a pure rate boost with no raid cost), then derive this run's own effective
+            // curve - same rateScale both shortens time-to-peak and raises the peak
+            // multiplier, both clamped so no combo breaks the house edge outright.
+            const totalCost = parts.reduce((sum, p) => sum + p.cost, 0) + (useMachineUpgrade ? MACHINE_UPGRADE_COST : 0);
+            const sumRate = parts.reduce((sum, p) => sum + p.rateBonus, 0) + (useMachineUpgrade ? MACHINE_UPGRADE_RATE_BONUS : 0);
             const sumRaid = parts.reduce((sum, p) => sum + p.raidBonus, 0);
             const rateScale = Math.max(0.1, 1 + sumRate);
             const raidScale = Math.max(0, 1 + sumRaid);
-            const effectivePeakDurationMs = Math.max(MIN_PEAK_DURATION_MS, peakDurationForLevel(state.rigLevel) / rateScale);
+            const effectivePeakDurationMs = Math.max(MIN_PEAK_DURATION_MS, BASE_PEAK_DURATION_MS / rateScale);
             const effectivePeakMultiplier = Math.min(MAX_EFFECTIVE_PEAK_MULTIPLIER, PEAK_MULTIPLIER * rateScale);
 
             const xenCasinoAccountId = await getXenCasinoAccountId();
@@ -296,55 +289,6 @@ module.exports = function (app: express.Application) {
             await XenCasinoActivity.record({ game: SLUG, userId, wager: 0, payout });
 
             return res.json({ status: true, data: { raided: false, payout, balance: result.toNewBalance } });
-        } catch (err) {
-            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
-            return res.status(status).json({ status: false, message: (err as Error).message });
-        }
-    });
-
-    app.post("/api/casino/printer/upgrade", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
-        const userId = String((req as AuthenticatedRequest).user!._id);
-        const user = await User.findById(userId).exec();
-        if (!user) {
-            return res.status(404).json({ status: false, message: "User not found" });
-        }
-
-        try {
-            const resolved = await resolveUserAccount(user);
-            if (!resolved.linked || !resolved.account) {
-                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
-            }
-
-            const state = await XenCasinoPrinterState.getState(userId);
-            if (state.rigLevel >= MAX_RIG_LEVEL) {
-                return res.status(400).json({ status: false, message: "Rig is already at max level" });
-            }
-            const cost = rigUpgradeCost(state.rigLevel);
-
-            const xenCasinoAccountId = await getXenCasinoAccountId();
-            const result = await transfer({
-                fromAccountId: resolved.account.accountId,
-                toAccountId: xenCasinoAccountId,
-                amount: cost.toFixed(10),
-                key: `printer-upgrade-${userId}-${Date.now()}`,
-                note: "printer_upgrade",
-            });
-
-            const newLevel = await XenCasinoPrinterState.upgrade(userId, MAX_RIG_LEVEL);
-            if (newLevel === null) {
-                await transfer({
-                    fromAccountId: xenCasinoAccountId,
-                    toAccountId: resolved.account.accountId,
-                    amount: cost.toFixed(10),
-                    key: `printer-upgrade-refund-${userId}-${Date.now()}`,
-                    note: "printer_upgrade_refund",
-                });
-                return res.status(400).json({ status: false, message: "Rig is already at max level" });
-            }
-
-            await XenCasinoActivity.record({ game: SLUG, userId, wager: cost, payout: 0 });
-
-            return res.json({ status: true, data: { rigLevel: newLevel, balance: result.fromNewBalance } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });

@@ -5,6 +5,7 @@ import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import DiamondIcon from "@mui/icons-material/Diamond";
 import WhatshotIcon from "@mui/icons-material/Whatshot";
 import PersonPinIcon from "@mui/icons-material/PersonPin";
+import FlareIcon from "@mui/icons-material/Flare";
 import { useSnackbar } from "notistack";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import { formatCheddar } from "../../utils/currency";
@@ -15,24 +16,28 @@ const GRID_ROWS_BELOW_PLAYER = 4;
 const CELL_SIZE = 40;
 
 export default function Mine() {
-    const { state, isLoading, isError, error, refetch, dig, isDigging, buyEquipment, isBuying, upgrade, isUpgrading } = useCasinoMine();
+    const { state, isLoading, isError, error, refetch, dig, isDigging, buyEquipment, isBuying, useFlare, isFlaring } = useCasinoMine();
     const { enqueueSnackbar } = useSnackbar();
 
     const handleDig = (direction: "down" | "left" | "right") =>
         dig(direction)
             .then((r) => {
                 if (r.outcome === "ore") {
-                    enqueueSnackbar(`Struck ore! +${formatCheddar(r.payout)} cheddar`, { variant: "success" });
+                    enqueueSnackbar(
+                        `${r.usedExplosive ? "Blasted through and struck" : "Struck"} ore! +${formatCheddar(r.payout)} cheddar`,
+                        { variant: "success" }
+                    );
                 } else if (r.outcome === "cave_in") {
                     enqueueSnackbar("Cave-in! You lost your remaining digs for today.", { variant: "error" });
+                } else if (r.usedExplosive) {
+                    enqueueSnackbar("Blasted through with an explosive - no ore this time.", { variant: "info" });
                 }
             })
             .catch((e) => enqueueSnackbar(e.message || "Failed to dig", { variant: "error" }));
 
-    const handleBuy = (item: "ladder" | "torch") =>
+    const handleBuy = (item: "ladder" | "torch" | "explosive") =>
         buyEquipment(item).catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
-    const handleUpgrade = (which: "pickaxe" | "torch") =>
-        upgrade(which).catch((e) => enqueueSnackbar(e.message || "Failed to upgrade", { variant: "error" }));
+    const handleFlare = () => useFlare().catch((e) => enqueueSnackbar(e.message || "Failed to use flare", { variant: "error" }));
 
     const oddsSections: OddsSection[] = state
         ? [
@@ -41,10 +46,10 @@ export default function Mine() {
                   rows: [
                       { label: "Ladders", payout: `${formatCheddar(state.prices.ladder.cost)} for ${state.prices.ladder.amount}` },
                       { label: "Torch Fuel", payout: `${formatCheddar(state.prices.torch.cost)} for ${state.prices.torch.amount}` },
-                      { label: "Pickaxe Upgrade", payout: `${formatCheddar(state.prices.pickaxeUpgrade)} - more digs/day` },
-                      { label: "Torch Upgrade", payout: `${formatCheddar(state.prices.torchUpgrade)} - see further` },
+                      { label: "Explosive", payout: `${formatCheddar(state.prices.explosive.cost)} - one extra dig past today's cap, single-use` },
+                      { label: "Flare", payout: `${formatCheddar(state.prices.flare.cost)} - one wider scouting pass (radius ${state.prices.flare.radius}), single-use` },
                   ],
-                  footnote: "Digging down consumes a ladder and enters a riskier depth band. Digging sideways needs no ladder and stays at the current depth's risk level.",
+                  footnote: "Digging down consumes a ladder and enters a riskier depth band. Digging sideways needs no ladder and stays at the current depth's risk level. There's no permanent pickaxe or torch level to grind - Explosives and Flares are single-use boosts bought fresh each time.",
               },
           ]
         : [];
@@ -75,7 +80,7 @@ export default function Mine() {
         );
     }
 
-    const { position, revealedTiles, digsToday, dailyDigCap, ladderCount, torchFuel, pickaxeLevel, torchLevel, maxPickaxeLevel, maxTorchLevel } = state;
+    const { position, revealedTiles, digsToday, dailyDigCap, ladderCount, torchFuel, explosiveCount } = state;
 
     const minX = position.x - Math.floor(GRID_COLS / 2);
     const maxDepthRow = Math.max(position.y + GRID_ROWS_BELOW_PLAYER, 6);
@@ -83,17 +88,19 @@ export default function Mine() {
     const tileAt = (x: number, y: number) => revealedTiles.find((t) => t.x === x && t.y === y);
 
     const digsRemaining = Math.max(0, dailyDigCap - digsToday);
+    const canDig = digsRemaining > 0 || explosiveCount > 0;
 
     return (
         <GameWrapper
             title="Chip Mine"
-            howToPlay="Dig down (consumes a ladder, riskier the deeper you go) or sideways (no ladder needed, risk stays at your current depth) for a chance at ore. A limited number of digs reset daily. Every tile you've dug stays visible forever. As you move, your torch also scouts nearby undug tiles and shows whether they glint with ore - one unit of fuel per newly scouted tile - so you can see what's coming before you commit to a direction. Cave-in risk is never shown in advance. Buy more fuel or upgrade your torch to scout further."
+            howToPlay="Dig down (consumes a ladder, riskier the deeper you go) or sideways (no ladder needed, risk stays at your current depth) for a chance at ore. A limited number of digs reset daily. Every tile you've dug stays visible forever. As you move, your torch also scouts nearby undug tiles and shows whether they glint with ore - one unit of fuel per newly scouted tile - so you can see what's coming before you commit to a direction. Cave-in risk is never shown in advance. There's no permanent pickaxe or torch level to grind - once you're out of digs for the day, a single-use Explosive blasts through for one more; a single-use Flare buys one wider scouting pass around where you're standing. Both are bought fresh each time."
             oddsSections={oddsSections}
         >
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mt: 2, mb: 1 }}>
                 <Chip label={`Digs today: ${digsRemaining}/${dailyDigCap}`} color={digsRemaining > 0 ? "primary" : "error"} />
                 <Chip label={`Ladders: ${ladderCount}`} variant="outlined" />
                 <Chip label={`Torch fuel: ${torchFuel}`} variant="outlined" color={torchFuel > 0 ? "default" : "warning"} />
+                <Chip label={`Explosives: ${explosiveCount}`} variant="outlined" color={explosiveCount > 0 ? "warning" : "default"} />
                 <Chip label={`Depth: ${position.y}`} variant="outlined" />
             </Box>
 
@@ -164,7 +171,7 @@ export default function Mine() {
                 <Button
                     variant="contained"
                     startIcon={<ArrowBackIcon />}
-                    disabled={isDigging || digsRemaining === 0}
+                    disabled={isDigging || !canDig}
                     onClick={() => handleDig("left")}
                 >
                     Left
@@ -173,7 +180,7 @@ export default function Mine() {
                     variant="contained"
                     color="warning"
                     startIcon={<ArrowDownwardIcon />}
-                    disabled={isDigging || digsRemaining === 0 || ladderCount === 0}
+                    disabled={isDigging || !canDig || ladderCount === 0}
                     onClick={() => handleDig("down")}
                 >
                     Down
@@ -181,7 +188,7 @@ export default function Mine() {
                 <Button
                     variant="contained"
                     endIcon={<ArrowForwardIcon />}
-                    disabled={isDigging || digsRemaining === 0}
+                    disabled={isDigging || !canDig}
                     onClick={() => handleDig("right")}
                 >
                     Right
@@ -195,11 +202,11 @@ export default function Mine() {
                 <Button variant="outlined" disabled={isBuying} onClick={() => handleBuy("torch")}>
                     Buy Torch Fuel ({formatCheddar(state.prices.torch.cost)})
                 </Button>
-                <Button variant="outlined" disabled={isUpgrading || pickaxeLevel >= maxPickaxeLevel} onClick={() => handleUpgrade("pickaxe")}>
-                    Upgrade Pickaxe ({formatCheddar(state.prices.pickaxeUpgrade)}) - Lv.{pickaxeLevel}
+                <Button variant="outlined" color="warning" disabled={isBuying} onClick={() => handleBuy("explosive")}>
+                    Buy Explosive ({formatCheddar(state.prices.explosive.cost)})
                 </Button>
-                <Button variant="outlined" disabled={isUpgrading || torchLevel >= maxTorchLevel} onClick={() => handleUpgrade("torch")}>
-                    Upgrade Torch ({formatCheddar(state.prices.torchUpgrade)}) - Lv.{torchLevel}
+                <Button variant="outlined" startIcon={<FlareIcon />} disabled={isFlaring} onClick={handleFlare}>
+                    Use Flare ({formatCheddar(state.prices.flare.cost)})
                 </Button>
             </Box>
         </GameWrapper>

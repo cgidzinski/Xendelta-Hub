@@ -7,8 +7,11 @@
  * not-yet-dug neighboring tiles as you move, one unit of fuel per newly revealed tile;
  * cave-in risk is never previewable. Position/quota/equipment bookkeeping, the dig roll,
  * and the ore/cave-in/torch-radius formulas all live in XenCasinoMineState
- * (src/server/models/xenCasino.js); this route owns equipment/upgrade prices, the ore
- * payout $ amount, and every money movement.
+ * (src/server/models/xenCasino.js); this route owns equipment prices, the ore payout $
+ * amount, and every money movement. There's no persistent pickaxe/torch "level" to grind -
+ * the daily dig cap and torch radius are both flat, and the only boosts are single-use,
+ * bought fresh each time: Explosives blast through once today's digs are used up, and a
+ * Flare buys one wider one-off scouting pass around your current position.
  */
 import express = require("express");
 import { authenticateToken } from "../middleware/auth";
@@ -19,32 +22,21 @@ import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailabl
 import { requireGameEnabled } from "../utils/casinoStatus";
 
 const SLUG = "mine";
-const MAX_PICKAXE_LEVEL = 5;
-const MAX_TORCH_LEVEL = 5;
 const BASE_DAILY_DIG_CAP = 15;
-const DIG_CAP_PER_PICKAXE_LEVEL = 5;
 
 const LADDER_COST = 200;
 const LADDER_BATCH = 5;
 const TORCH_COST = 150;
 const TORCH_BATCH_FUEL = 15;
-const PICKAXE_UPGRADE_BASE_COST = 6000; // cost of the first pickaxe upgrade - each further level doubles it
-const TORCH_UPGRADE_BASE_COST = 4000; // cost of the first torch upgrade - each further level doubles it
+const EXPLOSIVE_COST = 750; // single-use - blasts through once digsToday is at the daily cap
+const FLARE_COST = 600; // single-use - one wider scouting pass around the current position, bought fresh each time
+const MINE_FLARE_RADIUS = 3; // vs the base torch radius of 1
 
 // The actual $ payout for a struck-ore tile - pure pricing, unlike whether the tile has
 // ore at all (a structural/depth question the model already resolves).
 function oreValueForDepth(depth: number): number {
     const base = 200 + depth * 60;
     return Math.round(base * (0.7 + Math.random() * 1.1));
-}
-
-function dailyDigCapFor(doc: any): number {
-    return BASE_DAILY_DIG_CAP + (doc.pickaxeLevel - 1) * DIG_CAP_PER_PICKAXE_LEVEL;
-}
-
-// Doubles per level, same curve for both upgrade tracks.
-function mineUpgradeCost(baseCost: number, currentLevel: number): number {
-    return Math.round(baseCost * Math.pow(2, currentLevel - 1));
 }
 
 function stateView(doc: any) {
@@ -55,20 +47,17 @@ function stateView(doc: any) {
     return {
         position: { x: doc.positionX, y: doc.positionY },
         digsToday: doc.digsToday,
-        dailyDigCap: dailyDigCapFor(doc),
+        dailyDigCap: BASE_DAILY_DIG_CAP,
         ladderCount: doc.ladderCount,
         torchFuel: doc.torchFuel,
-        pickaxeLevel: doc.pickaxeLevel,
-        torchLevel: doc.torchLevel,
-        maxPickaxeLevel: MAX_PICKAXE_LEVEL,
-        maxTorchLevel: MAX_TORCH_LEVEL,
+        explosiveCount: doc.explosiveCount,
         visibilityRadius: mineTorchRadiusFor(doc),
         revealedTiles: doc.dugTiles.map((t: any) => ({ x: t.x, y: t.y, hasOre: t.hasOre, status: t.status })),
         prices: {
             ladder: { cost: LADDER_COST, amount: LADDER_BATCH },
             torch: { cost: TORCH_COST, amount: TORCH_BATCH_FUEL },
-            pickaxeUpgrade: mineUpgradeCost(PICKAXE_UPGRADE_BASE_COST, doc.pickaxeLevel),
-            torchUpgrade: mineUpgradeCost(TORCH_UPGRADE_BASE_COST, doc.torchLevel),
+            explosive: { cost: EXPLOSIVE_COST, amount: 1 },
+            flare: { cost: FLARE_COST, radius: MINE_FLARE_RADIUS },
         },
     };
 }
@@ -93,10 +82,9 @@ module.exports = function (app: express.Application) {
             return res.status(404).json({ status: false, message: "User not found" });
         }
 
-        const doc = await XenCasinoMineState.getState(userId);
         const result = await XenCasinoMineState.applyDig(userId, {
             direction,
-            dailyDigCap: dailyDigCapFor(doc),
+            dailyDigCap: BASE_DAILY_DIG_CAP,
         });
 
         if (result.error === "no_digs_remaining") {
@@ -108,7 +96,10 @@ module.exports = function (app: express.Application) {
 
         if (result.outcome !== MINE_OUTCOME.ORE) {
             const freshDoc = await XenCasinoMineState.getState(userId);
-            return res.json({ status: true, data: { outcome: result.outcome, payout: 0, state: stateView(freshDoc) } });
+            return res.json({
+                status: true,
+                data: { outcome: result.outcome, payout: 0, usedExplosive: result.usedExplosive, state: stateView(freshDoc) },
+            });
         }
 
         const payout = oreValueForDepth(result.targetY);
@@ -129,7 +120,13 @@ module.exports = function (app: express.Application) {
             const freshDoc = await XenCasinoMineState.getState(userId);
             return res.json({
                 status: true,
-                data: { outcome: result.outcome, payout, balance: transferResult.toNewBalance, state: stateView(freshDoc) },
+                data: {
+                    outcome: result.outcome,
+                    payout,
+                    usedExplosive: result.usedExplosive,
+                    balance: transferResult.toNewBalance,
+                    state: stateView(freshDoc),
+                },
             });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
@@ -139,8 +136,8 @@ module.exports = function (app: express.Application) {
 
     app.post("/api/casino/mine/buy-equipment", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
-        const { item } = req.body as { item: "ladder" | "torch" };
-        const cost = item === "ladder" ? LADDER_COST : item === "torch" ? TORCH_COST : null;
+        const { item } = req.body as { item: "ladder" | "torch" | "explosive" };
+        const cost = item === "ladder" ? LADDER_COST : item === "torch" ? TORCH_COST : item === "explosive" ? EXPLOSIVE_COST : null;
         if (!cost) {
             return res.status(400).json({ status: false, message: "Invalid equipment item" });
         }
@@ -165,7 +162,7 @@ module.exports = function (app: express.Application) {
                 note: `mine_buy_${item}`,
             });
 
-            const amount = item === "ladder" ? LADDER_BATCH : TORCH_BATCH_FUEL;
+            const amount = item === "ladder" ? LADDER_BATCH : item === "torch" ? TORCH_BATCH_FUEL : 1;
             const doc = await XenCasinoMineState.addEquipment(userId, item, amount);
             await XenCasinoActivity.record({ game: SLUG, userId, wager: cost, payout: 0 });
 
@@ -176,13 +173,10 @@ module.exports = function (app: express.Application) {
         }
     });
 
-    app.post("/api/casino/mine/upgrade", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
+    // Buy = immediately use: a Flare isn't stored in inventory, it's a one-off wider
+    // scouting pass around the current position, bought fresh each time.
+    app.post("/api/casino/mine/flare", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
-        const { upgrade } = req.body as { upgrade: "pickaxe" | "torch" };
-        if (upgrade !== "pickaxe" && upgrade !== "torch") {
-            return res.status(400).json({ status: false, message: "Invalid upgrade" });
-        }
-        const maxLevel = upgrade === "pickaxe" ? MAX_PICKAXE_LEVEL : MAX_TORCH_LEVEL;
 
         const user = await User.findById(userId).exec();
         if (!user) {
@@ -195,37 +189,19 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "Link your Discord account to play" });
             }
 
-            const doc = await XenCasinoMineState.getState(userId);
-            const currentLevel = upgrade === "pickaxe" ? doc.pickaxeLevel : doc.torchLevel;
-            if (currentLevel >= maxLevel) {
-                return res.status(400).json({ status: false, message: "Already at max level" });
-            }
-            const cost = mineUpgradeCost(upgrade === "pickaxe" ? PICKAXE_UPGRADE_BASE_COST : TORCH_UPGRADE_BASE_COST, currentLevel);
-
             const xenCasinoAccountId = await getXenCasinoAccountId();
             const result = await transfer({
                 fromAccountId: resolved.account.accountId,
                 toAccountId: xenCasinoAccountId,
-                amount: cost.toFixed(10),
-                key: `mine-upgrade-${upgrade}-${userId}-${Date.now()}`,
-                note: `mine_upgrade_${upgrade}`,
+                amount: FLARE_COST.toFixed(10),
+                key: `mine-flare-${userId}-${Date.now()}`,
+                note: "mine_flare",
             });
 
-            const newLevel = await XenCasinoMineState.upgrade(userId, upgrade, maxLevel);
-            if (newLevel === null) {
-                await transfer({
-                    fromAccountId: xenCasinoAccountId,
-                    toAccountId: resolved.account.accountId,
-                    amount: cost.toFixed(10),
-                    key: `mine-upgrade-refund-${upgrade}-${userId}-${Date.now()}`,
-                    note: `mine_upgrade_${upgrade}_refund`,
-                });
-                return res.status(400).json({ status: false, message: "Already at max level" });
-            }
+            const doc = await XenCasinoMineState.useFlare(userId, MINE_FLARE_RADIUS);
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: FLARE_COST, payout: 0 });
 
-            await XenCasinoActivity.record({ game: SLUG, userId, wager: cost, payout: 0 });
-
-            return res.json({ status: true, data: { level: newLevel, balance: result.fromNewBalance } });
+            return res.json({ status: true, data: { state: stateView(doc), balance: result.fromNewBalance } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });

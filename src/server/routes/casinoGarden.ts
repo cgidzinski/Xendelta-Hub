@@ -6,8 +6,9 @@
  * penalty at all for the first 24h a square goes unwatered; past that, it loses one
  * delivered watering every hour until it's rewatered or runs out and dies. Unprotected
  * squares also roll a vermin (adds one more required watering) or disease (kills)
- * chance once per cooldown tick, countered by purchasable pesticide/fungicide. A square
- * is ready once it's received its required number of waterings. Harvest pays cost *
+ * chance once per cooldown tick, countered by purchasable pesticide/fungicide.
+ * Fertilizer is a third single-use item that instead shortens the remaining waterings
+ * needed. A square is ready once it's received its required number of waterings. Harvest pays cost *
  * baseMultiplier * a random swing of +/- variance - the guaranteed baseline is the
  * tier's baseMultiplier, the variance is how much casino luck can move it either
  * direction. A dead square (from decay or disease) needs a paid cleanup before replanting.
@@ -55,9 +56,12 @@ export const SEED_TIERS: Record<string, SeedTier> = {
     "golden-vine": seedTier({ key: "golden-vine", label: "Golden Vine", cost: 8000, waterAmount: 10, verminChance: 0.1, diseaseChance: 0.05, baseMultiplier: 3.0, variance: 0.9 }),
 };
 
-const PROTECTION_COST: Record<"pesticide" | "fungicide", number> = {
+// "fertilizer" is handled specially by XenCasinoGardenState.protect (reduces waterAmount
+// by 1, floored at 1) rather than blocking a hazard like pesticide/fungicide do.
+const PROTECTION_COST: Record<"pesticide" | "fungicide" | "fertilizer", number> = {
     pesticide: 300,
     fungicide: 400,
+    fertilizer: 350,
 };
 
 // Charged to clear out a dead plot (from decay or disease) before it can be replanted.
@@ -176,7 +180,7 @@ module.exports = function (app: express.Application) {
 
     app.post("/api/casino/garden/protect", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
-        const { squareId, item } = req.body as { squareId: number; item: "pesticide" | "fungicide" };
+        const { squareId, item } = req.body as { squareId: number; item: "pesticide" | "fungicide" | "fertilizer" };
         const cost = PROTECTION_COST[item];
         if (!cost) {
             return res.status(400).json({ status: false, message: "Invalid protection item" });

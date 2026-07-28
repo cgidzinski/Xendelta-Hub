@@ -20,23 +20,21 @@ export interface MineState {
     dailyDigCap: number;
     ladderCount: number;
     torchFuel: number;
-    pickaxeLevel: number;
-    torchLevel: number;
-    maxPickaxeLevel: number;
-    maxTorchLevel: number;
+    explosiveCount: number;
     visibilityRadius: number;
     revealedTiles: MineTile[];
     prices: {
         ladder: { cost: number; amount: number };
         torch: { cost: number; amount: number };
-        pickaxeUpgrade: number;
-        torchUpgrade: number;
+        explosive: { cost: number; amount: number };
+        flare: { cost: number; radius: number };
     };
 }
 
 export interface DigResult {
     outcome: "ore" | "empty" | "cave_in";
     payout: number;
+    usedExplosive: boolean;
     balance?: string;
     state: MineState;
 }
@@ -72,14 +70,13 @@ export const useCasinoMine = () => {
     });
 
     const { mutateAsync: buyEquipment, isPending: isBuying } = useMutation({
-        mutationFn: async (item: "ladder" | "torch") =>
+        mutationFn: async (item: "ladder" | "torch" | "explosive") =>
             (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/mine/buy-equipment", { item })).data.data!,
         onSuccess: invalidate,
     });
 
-    const { mutateAsync: upgrade, isPending: isUpgrading } = useMutation({
-        mutationFn: async (which: "pickaxe" | "torch") =>
-            (await apiClient.post<ApiResponse<{ level: number; balance: string }>>("/api/casino/mine/upgrade", { upgrade: which })).data.data!,
+    const { mutateAsync: useFlare, isPending: isFlaring } = useMutation({
+        mutationFn: async () => (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/mine/flare")).data.data!,
         onSuccess: invalidate,
     });
 
@@ -93,7 +90,7 @@ export const useCasinoMine = () => {
         isDigging,
         buyEquipment,
         isBuying,
-        upgrade,
-        isUpgrading,
+        useFlare,
+        isFlaring,
     };
 };

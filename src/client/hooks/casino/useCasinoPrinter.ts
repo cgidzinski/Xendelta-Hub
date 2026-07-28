@@ -29,12 +29,10 @@ export interface PrinterRun {
 }
 
 export interface PrinterState {
-    rigLevel: number;
-    maxRigLevel: number;
     run: PrinterRun | null;
     parts: PrinterPart[];
     bribeCost: number;
-    upgradeCost: number;
+    machineUpgradeCost: number;
 }
 
 export const casinoPrinterKeys = {
@@ -63,7 +61,7 @@ export const useCasinoPrinter = () => {
     };
 
     const { mutateAsync: start, isPending: isStarting } = useMutation({
-        mutationFn: async (params: { partKeys: string[] }) =>
+        mutationFn: async (params: { partKeys: string[]; useMachineUpgrade?: boolean }) =>
             (await apiClient.post<ApiResponse<{ run: PrinterRun; balance: string }>>("/api/casino/printer/start", params)).data.data!,
         onSuccess: invalidate,
     });
@@ -79,19 +77,11 @@ export const useCasinoPrinter = () => {
         onSuccess: invalidate,
     });
 
-    const { mutateAsync: upgrade, isPending: isUpgrading } = useMutation({
-        mutationFn: async () =>
-            (await apiClient.post<ApiResponse<{ rigLevel: number; balance: string }>>("/api/casino/printer/upgrade")).data.data!,
-        onSuccess: invalidate,
-    });
-
     return {
-        rigLevel: data?.rigLevel ?? 1,
-        maxRigLevel: data?.maxRigLevel ?? 1,
         run: data?.run ?? null,
         parts: data?.parts ?? [],
         bribeCost: data?.bribeCost ?? 0,
-        upgradeCost: data?.upgradeCost ?? 0,
+        machineUpgradeCost: data?.machineUpgradeCost ?? 0,
         isLoading,
         refetch,
         start,
@@ -100,7 +90,5 @@ export const useCasinoPrinter = () => {
         isBribing,
         collect,
         isCollecting,
-        upgrade,
-        isUpgrading,
     };
 };

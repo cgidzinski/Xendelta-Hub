@@ -368,6 +368,7 @@ var gardenSquareSchema = new mongoose.Schema(
     protection: {
       pesticide: { type: Boolean, default: false }, // blocks vermin for the rest of this square's grow cycle
       fungicide: { type: Boolean, default: false }, // blocks disease for the rest of this square's grow cycle
+      fertilized: { type: Boolean, default: false }, // single-use - already applied, can't be bought again on this crop
     },
     status: { type: String, enum: ["empty", "growing", "ready", "dead"], default: "empty" },
   },
@@ -456,7 +457,7 @@ function clearGardenSquare(square) {
   square.diseaseChance = 0;
   square.baseMultiplier = 0;
   square.variance = 0;
-  square.protection = { pesticide: false, fungicide: false };
+  square.protection = { pesticide: false, fungicide: false, fertilized: false };
   square.status = "empty";
 }
 
@@ -501,7 +502,7 @@ xenCasinoGardenStateSchema.statics.plant = async function (userId, squareId, see
   square.diseaseChance = tier.diseaseChance;
   square.baseMultiplier = tier.baseMultiplier;
   square.variance = tier.variance;
-  square.protection = { pesticide: false, fungicide: false };
+  square.protection = { pesticide: false, fungicide: false, fertilized: false };
   square.status = "growing";
   await doc.save();
   return square;
@@ -532,13 +533,20 @@ xenCasinoGardenStateSchema.statics.water = async function (userId, squareId) {
   return square;
 };
 
+// `item` is "pesticide" (blocks vermin), "fungicide" (blocks disease), or "fertilizer"
+// (single-use, immediately reduces the remaining waterAmount by 1, floored at 1 - it
+// doesn't skip watering, just shortens how many are needed). Each is single-use per
+// crop - already-true guards against paying twice for the same effect on one plant.
 xenCasinoGardenStateSchema.statics.protect = async function (userId, squareId, item) {
   var doc = await this.getState(userId);
   var square = doc.squares.find(function (s) { return s.squareId === squareId; });
-  if (!square || square.status !== "growing") {
+  if (!square || square.status !== "growing" || square.protection[item]) {
     return null;
   }
   square.protection[item] = true;
+  if (item === "fertilizer") {
+    square.waterAmount = Math.max(1, square.waterAmount - 1);
+  }
   await doc.save();
   return square;
 };
@@ -623,7 +631,6 @@ function resolvePrinterRun(run, now) {
 
 var xenCasinoPrinterStateSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
-  rigLevel: { type: Number, default: 1 },
   // { startedAt, partsCost, peakAt, lastBribeAt, lastRiskRollAt, raidedAt } | null -
   // Mixed/Object rather than a fixed sub-schema since it's null whenever no run is going.
   run: { type: Object, default: null },
@@ -690,16 +697,6 @@ xenCasinoPrinterStateSchema.statics.clearRun = async function (userId) {
   return doc;
 };
 
-xenCasinoPrinterStateSchema.statics.upgrade = async function (userId, maxLevel) {
-  var doc = await this.getState(userId);
-  if (doc.rigLevel >= maxLevel) {
-    return null;
-  }
-  doc.rigLevel += 1;
-  await doc.save();
-  return doc.rigLevel;
-};
-
 var XenCasinoPrinterState = mongoose.model("XenCasinoPrinterState", xenCasinoPrinterStateSchema);
 
 // ---------------------------------------------------------------------------------------
@@ -722,7 +719,6 @@ var MINE_BASE_CAVE_IN_CHANCE = 0.03;
 var MINE_CAVE_IN_CHANCE_PER_DEPTH = 0.015;
 var MINE_MAX_CAVE_IN_CHANCE = 0.4;
 var MINE_BASE_TORCH_RADIUS = 1;
-var MINE_TORCH_RADIUS_PER_LEVEL = 1;
 
 // A sideways dig uses the *current* depth's cave-in chance; a down dig uses the
 // *target* (deeper) depth's - this is what makes "down" the risk-escalating direction
@@ -733,8 +729,10 @@ function mineOreChanceForDepth(depth) {
 function mineCaveInChanceForDepth(depth) {
   return Math.min(MINE_MAX_CAVE_IN_CHANCE, MINE_BASE_CAVE_IN_CHANCE + depth * MINE_CAVE_IN_CHANCE_PER_DEPTH);
 }
+// No more torch "level" to grind - radius is flat as long as there's fuel left. A Flare
+// (see useFlare below) is the one-off way to see further, bought fresh each time.
 function mineTorchRadiusFor(doc) {
-  return doc.torchFuel > 0 ? MINE_BASE_TORCH_RADIUS + (doc.torchLevel - 1) * MINE_TORCH_RADIUS_PER_LEVEL : 0;
+  return doc.torchFuel > 0 ? MINE_BASE_TORCH_RADIUS : 0;
 }
 
 // "scouted": ground truth (hasOre) rolled and cached, not yet dug - a torch preview.
@@ -764,24 +762,24 @@ var xenCasinoMineStateSchema = new mongoose.Schema({
   digsDate: { type: String, default: null }, // "YYYY-MM-DD" (UTC) digsToday applies to, lazy-reset like the daily quest
   ladderCount: { type: Number, default: 3 }, // a few free starter ladders
   torchFuel: { type: Number, default: 20 },
-  pickaxeLevel: { type: Number, default: 1 }, // raises the daily dig cap
-  torchLevel: { type: Number, default: 1 }, // raises base visibility radius
+  explosiveCount: { type: Number, default: 0 }, // single-use: blasts through once digsToday is at the daily cap
 });
 
-// Reveals not-yet-known tiles within the current torch radius of `doc`'s position,
-// rolling and caching each one's ground-truth `hasOre` (using the same depth-based
-// chance a dig would use) as a "scouted" tile - one unit of torchFuel per newly
-// revealed tile, stopping once fuel runs out. Already-known tiles (scouted, mined, or
-// collapsed) are never touched or re-charged. Mutates `doc.dugTiles`/`doc.torchFuel` in
-// place; returns whether anything changed.
-function scoutAroundPosition(doc) {
-  var radius = mineTorchRadiusFor(doc);
+// Reveals not-yet-known tiles within `radius` of `doc`'s position, rolling and caching
+// each one's ground-truth `hasOre` (using the same depth-based chance a dig would use) as
+// a "scouted" tile. When `consumeFuel` is true (normal torch scouting), one unit of
+// torchFuel is spent per newly revealed tile and the pass stops once fuel runs out; a
+// Flare pass (see useFlare below) reveals everything in its wider radius for free since
+// it was already paid for up front. Already-known tiles (scouted, mined, or collapsed)
+// are never touched or re-charged. Mutates `doc.dugTiles`/`doc.torchFuel` in place;
+// returns whether anything changed.
+function scoutTilesInRadius(doc, radius, consumeFuel) {
   if (radius <= 0) {
     return false;
   }
   var changed = false;
-  for (var dx = -radius; dx <= radius && doc.torchFuel > 0; dx++) {
-    for (var dy = -radius; dy <= radius && doc.torchFuel > 0; dy++) {
+  for (var dx = -radius; dx <= radius && (!consumeFuel || doc.torchFuel > 0); dx++) {
+    for (var dy = -radius; dy <= radius && (!consumeFuel || doc.torchFuel > 0); dy++) {
       if (dx === 0 && dy === 0) {
         continue;
       }
@@ -795,11 +793,17 @@ function scoutAroundPosition(doc) {
         continue;
       }
       doc.dugTiles.push({ x: x, y: y, hasOre: Math.random() < mineOreChanceForDepth(y), status: "scouted" });
-      doc.torchFuel -= 1;
+      if (consumeFuel) {
+        doc.torchFuel -= 1;
+      }
       changed = true;
     }
   }
   return changed;
+}
+
+function scoutAroundPosition(doc) {
+  return scoutTilesInRadius(doc, mineTorchRadiusFor(doc), true);
 }
 
 xenCasinoMineStateSchema.statics.getState = async function (userId) {
@@ -822,17 +826,22 @@ xenCasinoMineStateSchema.statics.getState = async function (userId) {
 
 // Re-validates quota/ladder availability itself against a fresh read (rather than
 // trusting an earlier GET), rolls the outcome, and persists the result - all in one call
-// so a dig is never left half-applied. `dailyDigCap` is route-owned (depends on
-// pickaxeLevel pricing) and passed in; ore/cave-in chance are computed here from depth.
-// If the target tile was already `scouted`, its cached `hasOre` is reused instead of
-// rolling again - a torch preview is a real answer, not just flavor. The route calls
-// getState again right after this to build its response, which is what actually runs
-// the next scouting pass around the (possibly new) position - this static only resolves
-// the one tile being dug.
+// so a dig is never left half-applied. `dailyDigCap` is route-owned economics and passed
+// in; ore/cave-in chance are computed here from depth. Once digsToday is already at the
+// cap, a single-use explosive (bought fresh, doesn't carry over) blasts through for one
+// more dig instead of blocking outright. If the target tile was already `scouted`, its
+// cached `hasOre` is reused instead of rolling again - a torch preview is a real answer,
+// not just flavor. The route calls getState again right after this to build its
+// response, which is what actually runs the next scouting pass around the (possibly new)
+// position - this static only resolves the one tile being dug.
 xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
   var doc = await this.getState(userId);
+  var usedExplosive = false;
   if (doc.digsToday >= params.dailyDigCap) {
-    return { error: "no_digs_remaining" };
+    if (doc.explosiveCount <= 0) {
+      return { error: "no_digs_remaining" };
+    }
+    usedExplosive = true;
   }
   if (params.direction === "down" && doc.ladderCount <= 0) {
     return { error: "no_ladders" };
@@ -843,6 +852,9 @@ xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
   var existing = doc.dugTiles.find(function (t) { return t.x === targetX && t.y === targetY; });
 
   doc.digsToday += 1;
+  if (usedExplosive) {
+    doc.explosiveCount -= 1;
+  }
   if (params.direction === "down") {
     doc.ladderCount -= 1;
   }
@@ -870,7 +882,13 @@ xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
   }
 
   await doc.save();
-  return { outcome: outcome, position: { x: doc.positionX, y: doc.positionY }, digsToday: doc.digsToday, targetY: targetY };
+  return {
+    outcome: outcome,
+    position: { x: doc.positionX, y: doc.positionY },
+    digsToday: doc.digsToday,
+    targetY: targetY,
+    usedExplosive: usedExplosive,
+  };
 };
 
 xenCasinoMineStateSchema.statics.addEquipment = async function (userId, item, amount) {
@@ -879,20 +897,22 @@ xenCasinoMineStateSchema.statics.addEquipment = async function (userId, item, am
     doc.ladderCount += amount;
   } else if (item === "torch") {
     doc.torchFuel += amount;
+  } else if (item === "explosive") {
+    doc.explosiveCount += amount;
   }
   await doc.save();
   return doc;
 };
 
-xenCasinoMineStateSchema.statics.upgrade = async function (userId, upgrade, maxLevel) {
+// A Flare is bought and burned in the same action - a one-off wider scouting pass
+// (radius is route-owned economics, passed in) around the current position, free of
+// torchFuel cost since it's already paid for. Nothing persists afterward; buy another to
+// do it again.
+xenCasinoMineStateSchema.statics.useFlare = async function (userId, flareRadius) {
   var doc = await this.getState(userId);
-  var field = upgrade === "pickaxe" ? "pickaxeLevel" : "torchLevel";
-  if (doc[field] >= maxLevel) {
-    return null;
-  }
-  doc[field] += 1;
+  scoutTilesInRadius(doc, flareRadius, false);
   await doc.save();
-  return doc[field];
+  return doc;
 };
 
 var XenCasinoMineState = mongoose.model("XenCasinoMineState", xenCasinoMineStateSchema);
