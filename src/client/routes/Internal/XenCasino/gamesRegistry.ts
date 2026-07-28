@@ -1,4 +1,4 @@
-export type CasinoGameType = "slots" | "scratch" | "plinko" | "pachinko" | "memory" | "garden" | "still" | "mine";
+export type CasinoGameType = "slots" | "scratch" | "plinko" | "pachinko" | "memory" | "garden" | "printer" | "mine";
 
 export interface CasinoGameRegistryItem {
   key: string;
@@ -16,7 +16,7 @@ export const CASINO_GAME_TYPE_LABELS: Record<CasinoGameType, string> = {
   pachinko: "Pachinko",
   memory: "Memory",
   garden: "Garden",
-  still: "Distillery",
+  printer: "Printing",
   mine: "Mining",
 };
 
@@ -90,11 +90,11 @@ export const CASINO_GAMES_REGISTRY: CasinoGameRegistryItem[] = [
     price: 500,
   },
   {
-    key: "still",
-    label: "Bootleg Still",
-    path: "/internal/xencasino/games/still",
-    description: "Run one batch at a time - let it age for a bigger payout, or cash out before rising raid risk seizes it.",
-    type: "still",
+    key: "printer",
+    label: "Money Printer",
+    path: "/internal/xencasino/games/printer",
+    description: "Install 3 parts and start a print run - let it age for a bigger payout, or cash out before rising raid risk seizes your rig.",
+    type: "printer",
     price: 5000,
   },
   {

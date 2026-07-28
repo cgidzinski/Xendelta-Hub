@@ -381,7 +381,7 @@ var xenCasinoGardenStateSchema = new mongoose.Schema({
 
 // Advances one growing square against `now`: rolls vermin/disease once per completed
 // GARDEN_WATER_COOLDOWN_MS tick since planting (or the last roll) - catching up
-// correctly across any gap, same pattern as resolveStillBatch below - then, once a full
+// correctly across any gap, same pattern as resolvePrinterRun below - then, once a full
 // GARDEN_NEGLECT_GRACE_MS has passed with zero watering, applies one decay tick per
 // completed GARDEN_DECAY_TICK_MS since the grace period ended: -1 waterCount, or death
 // if waterCount is already 0. A vermin hit raises `waterAmount` by 1 (needs one more
@@ -576,130 +576,131 @@ xenCasinoGardenStateSchema.statics.clearDeadSquare = async function (userId, squ
 var XenCasinoGardenState = mongoose.model("XenCasinoGardenState", xenCasinoGardenStateSchema);
 
 // ---------------------------------------------------------------------------------------
-// Bootleg Still - one batch at a time. Payout multiplier and raid risk are both derived
-// from elapsed time (computed on read), never stored as a "current value" - only the
-// timestamps needed to derive them are persisted. Ingredient price / peak duration /
-// bribe cost / payout multiplier ceiling are all route-owned economics, passed in.
+// Money Printer - one print run at a time, off an illicit computer rig. Payout multiplier
+// and raid risk are both derived from elapsed time (computed on read), never stored as a
+// "current value" - only the timestamps needed to derive them are persisted. Parts price /
+// peak duration / bribe cost / payout multiplier ceiling are all route-owned economics,
+// passed in.
 // ---------------------------------------------------------------------------------------
 
-var STILL_ROLL_INTERVAL_MS = 5 * 60 * 1000; // how often a raid chance is rolled while a batch runs
-var STILL_RISK_RAMP_MS = 2 * 60 * 60 * 1000; // time since last bribe for the per-roll raid chance to reach its ceiling
-var STILL_BASE_RAID_CHANCE = 0.05; // real risk from the very first roll - no truly safe "collect immediately" window
-var STILL_MAX_RAID_CHANCE = 0.4; // per-roll ceiling - rising risk, never a certainty
+var PRINTER_ROLL_INTERVAL_MS = 5 * 60 * 1000; // how often a raid chance is rolled while a run is going
+var PRINTER_RISK_RAMP_MS = 2 * 60 * 60 * 1000; // time since last bribe for the per-roll raid chance to reach its ceiling
+var PRINTER_BASE_RAID_CHANCE = 0.05; // real risk from the very first roll - no truly safe "collect immediately" window
+var PRINTER_MAX_RAID_CHANCE = 0.4; // per-roll ceiling - rising risk, never a certainty
 
-// `batch.raidMultiplier` (set at start time from the sum of the batch's 3 ingredients'
-// raidBonus - see casinoStill.ts) scales the whole ramped curve; a reckless ingredient
-// pick reaches the STILL_MAX_RAID_CHANCE ceiling sooner, but the ceiling itself never
-// moves regardless of ingredients.
-function stillRaidChance(now, batch) {
-  var since = now.getTime() - new Date(batch.lastBribeAt || batch.startedAt).getTime();
-  var ramped = STILL_BASE_RAID_CHANCE + (since / STILL_RISK_RAMP_MS) * (STILL_MAX_RAID_CHANCE - STILL_BASE_RAID_CHANCE);
-  return Math.min(STILL_MAX_RAID_CHANCE, ramped * (batch.raidMultiplier || 1));
+// `run.raidMultiplier` (set at start time from the sum of the run's 3 chosen parts'
+// raidBonus - see casinoPrinter.ts) scales the whole ramped curve; a loud/reckless parts
+// pick reaches the PRINTER_MAX_RAID_CHANCE ceiling sooner, but the ceiling itself never
+// moves regardless of parts.
+function printerRaidChance(now, run) {
+  var since = now.getTime() - new Date(run.lastBribeAt || run.startedAt).getTime();
+  var ramped = PRINTER_BASE_RAID_CHANCE + (since / PRINTER_RISK_RAMP_MS) * (PRINTER_MAX_RAID_CHANCE - PRINTER_BASE_RAID_CHANCE);
+  return Math.min(PRINTER_MAX_RAID_CHANCE, ramped * (run.raidMultiplier || 1));
 }
 
-// Rolls one raid check per completed STILL_ROLL_INTERVAL_MS tick since the batch started
+// Rolls one raid check per completed PRINTER_ROLL_INTERVAL_MS tick since the run started
 // (or was last rolled) - catches up correctly across gaps of any length between reads, no
-// cron needed. Stops at the first hit. Mutates `batch` in place; returns whether it changed.
-function resolveStillBatch(batch, now) {
-  if (!batch || batch.raidedAt) {
+// cron needed. Stops at the first hit. Mutates `run` in place; returns whether it changed.
+function resolvePrinterRun(run, now) {
+  if (!run || run.raidedAt) {
     return false;
   }
-  var lastRoll = new Date(batch.lastRiskRollAt || batch.startedAt);
+  var lastRoll = new Date(run.lastRiskRollAt || run.startedAt);
   var initial = lastRoll.getTime();
-  while (now.getTime() - lastRoll.getTime() >= STILL_ROLL_INTERVAL_MS) {
-    lastRoll = new Date(lastRoll.getTime() + STILL_ROLL_INTERVAL_MS);
-    if (Math.random() < stillRaidChance(lastRoll, batch)) {
-      batch.raidedAt = lastRoll;
+  while (now.getTime() - lastRoll.getTime() >= PRINTER_ROLL_INTERVAL_MS) {
+    lastRoll = new Date(lastRoll.getTime() + PRINTER_ROLL_INTERVAL_MS);
+    if (Math.random() < printerRaidChance(lastRoll, run)) {
+      run.raidedAt = lastRoll;
       break;
     }
   }
-  var changed = batch.raidedAt || lastRoll.getTime() !== initial;
+  var changed = run.raidedAt || lastRoll.getTime() !== initial;
   if (changed) {
-    batch.lastRiskRollAt = lastRoll;
+    run.lastRiskRollAt = lastRoll;
   }
   return !!changed;
 }
 
-var xenCasinoStillStateSchema = new mongoose.Schema({
+var xenCasinoPrinterStateSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
-  stillLevel: { type: Number, default: 1 },
-  // { startedAt, ingredientCost, peakAt, lastBribeAt, lastRiskRollAt, raidedAt } | null -
-  // Mixed/Object rather than a fixed sub-schema since it's null whenever no batch is running.
-  batch: { type: Object, default: null },
+  rigLevel: { type: Number, default: 1 },
+  // { startedAt, partsCost, peakAt, lastBribeAt, lastRiskRollAt, raidedAt } | null -
+  // Mixed/Object rather than a fixed sub-schema since it's null whenever no run is going.
+  run: { type: Object, default: null },
 });
 
-xenCasinoStillStateSchema.statics.getState = async function (userId) {
+xenCasinoPrinterStateSchema.statics.getState = async function (userId) {
   var doc = await this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
-  if (doc.batch && resolveStillBatch(doc.batch, new Date())) {
-    doc.markModified("batch");
+  if (doc.run && resolvePrinterRun(doc.run, new Date())) {
+    doc.markModified("run");
     await doc.save();
   }
   return doc;
 };
 
-// `peakMultiplier`/`raidMultiplier` are the batch's own effective curve, already
-// computed (and clamped) by casinoStill.ts from the sum of its 3 chosen ingredients'
-// rateBonus/raidBonus - stored here so every later read (currentMultiplier,
-// stillRaidChance) uses this specific batch's curve, not the global constants.
-xenCasinoStillStateSchema.statics.startBatch = async function (userId, ingredientCost, peakDurationMs, peakMultiplier, raidMultiplier, ingredientKeys) {
+// `peakMultiplier`/`raidMultiplier` are the run's own effective curve, already computed
+// (and clamped) by casinoPrinter.ts from the sum of its 3 chosen parts' rateBonus/
+// raidBonus - stored here so every later read (currentMultiplier, printerRaidChance)
+// uses this specific run's curve, not the global constants.
+xenCasinoPrinterStateSchema.statics.startRun = async function (userId, partsCost, peakDurationMs, peakMultiplier, raidMultiplier, partKeys) {
   var doc = await this.getState(userId);
-  if (doc.batch) {
+  if (doc.run) {
     return null;
   }
   var now = new Date();
-  doc.batch = {
+  doc.run = {
     startedAt: now,
-    ingredientCost: ingredientCost,
+    partsCost: partsCost,
     peakAt: new Date(now.getTime() + peakDurationMs),
     peakMultiplier: peakMultiplier,
     raidMultiplier: raidMultiplier,
-    ingredientKeys: ingredientKeys,
+    partKeys: partKeys,
     lastBribeAt: now,
     lastRiskRollAt: now,
     raidedAt: null,
-    bribeCount: 0, // how many times this batch has been bribed - each one costs more (see casinoStill.ts nextBribeCost)
+    bribeCount: 0, // how many times this run has been bribed - each one costs more (see casinoPrinter.ts nextBribeCost)
   };
-  doc.markModified("batch");
+  doc.markModified("run");
   await doc.save();
-  return doc.batch;
+  return doc.run;
 };
 
-xenCasinoStillStateSchema.statics.bribe = async function (userId) {
+xenCasinoPrinterStateSchema.statics.bribe = async function (userId) {
   var doc = await this.getState(userId);
-  if (!doc.batch || doc.batch.raidedAt) {
+  if (!doc.run || doc.run.raidedAt) {
     return null;
   }
-  doc.batch.lastBribeAt = new Date();
-  doc.batch.bribeCount = (doc.batch.bribeCount || 0) + 1;
-  doc.markModified("batch");
+  doc.run.lastBribeAt = new Date();
+  doc.run.bribeCount = (doc.run.bribeCount || 0) + 1;
+  doc.markModified("run");
   await doc.save();
-  return doc.batch;
+  return doc.run;
 };
 
-// Called after a successful collect payout (or to dismiss a raided batch, which pays
+// Called after a successful collect payout (or to dismiss a raided run, which pays
 // nothing) - clears unconditionally since by this point the caller has already decided
-// the batch is done being acted on.
-xenCasinoStillStateSchema.statics.clearBatch = async function (userId) {
+// the run is done being acted on.
+xenCasinoPrinterStateSchema.statics.clearRun = async function (userId) {
   var doc = await this.findOne({ userId: userId }).exec();
   if (!doc) {
     return null;
   }
-  doc.batch = null;
+  doc.run = null;
   await doc.save();
   return doc;
 };
 
-xenCasinoStillStateSchema.statics.upgrade = async function (userId, maxLevel) {
+xenCasinoPrinterStateSchema.statics.upgrade = async function (userId, maxLevel) {
   var doc = await this.getState(userId);
-  if (doc.stillLevel >= maxLevel) {
+  if (doc.rigLevel >= maxLevel) {
     return null;
   }
-  doc.stillLevel += 1;
+  doc.rigLevel += 1;
   await doc.save();
-  return doc.stillLevel;
+  return doc.rigLevel;
 };
 
-var XenCasinoStillState = mongoose.model("XenCasinoStillState", xenCasinoStillStateSchema);
+var XenCasinoPrinterState = mongoose.model("XenCasinoPrinterState", xenCasinoPrinterStateSchema);
 
 // ---------------------------------------------------------------------------------------
 // Chip Mine - a dark, side-view shaft the player actively digs into. Down digs consume a
@@ -708,8 +709,8 @@ var XenCasinoStillState = mongoose.model("XenCasinoStillState", xenCasinoStillSt
 // instead scout a preview of not-yet-dug neighboring tiles as you move - showing whether
 // they hold ore before you commit to digging them. Cave-in risk is never previewable,
 // only ore presence is. Ore/cave-in chance by depth and torch radius by level are
-// structural, depth/position-derived math that lives here (like the Still's raid-risk
-// formula); item prices and payout $ amounts stay route-owned economics.
+// structural, depth/position-derived math that lives here (like the Money Printer's
+// raid-risk formula); item prices and payout $ amounts stay route-owned economics.
 // ---------------------------------------------------------------------------------------
 
 var MINE_OUTCOME = { ORE: "ore", EMPTY: "empty", CAVE_IN: "cave_in" };
@@ -906,17 +907,17 @@ module.exports = {
   // and render the same cooldown it's actually enforcing, rather than a second copy.
   GARDEN_WATER_COOLDOWN_MS: GARDEN_WATER_COOLDOWN_MS,
   GARDEN_NEGLECT_GRACE_MS: GARDEN_NEGLECT_GRACE_MS,
-  XenCasinoStillState,
+  XenCasinoPrinterState,
   XenCasinoMineState,
   MINE_OUTCOME: MINE_OUTCOME,
   // Exported so casinoMine.ts can render the same visibility radius applyDig/getState
   // actually scout against, rather than a second copy of the formula.
   mineTorchRadiusFor: mineTorchRadiusFor,
-  // Exported so casinoStill.ts can render the same raid-risk percentage it's actually
+  // Exported so casinoPrinter.ts can render the same raid-risk percentage it's actually
   // being rolled against, rather than approximating it with a second copy of the formula.
-  STILL_RISK_RAMP_MS: STILL_RISK_RAMP_MS,
-  STILL_BASE_RAID_CHANCE: STILL_BASE_RAID_CHANCE,
-  STILL_MAX_RAID_CHANCE: STILL_MAX_RAID_CHANCE,
+  PRINTER_RISK_RAMP_MS: PRINTER_RISK_RAMP_MS,
+  PRINTER_BASE_RAID_CHANCE: PRINTER_BASE_RAID_CHANCE,
+  PRINTER_MAX_RAID_CHANCE: PRINTER_MAX_RAID_CHANCE,
   dailyQuestDateKey: todayKey,
   // Exported for unit testing the lazy-reset-on-date-change logic without a live Mongo
   // connection - pure functions over plain objects, no I/O.

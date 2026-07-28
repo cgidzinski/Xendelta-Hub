@@ -109,5 +109,5 @@ require("./routes/casinoGames/memory.ts")(app);
 require("./routes/casinoGames/plinko.ts")(app);
 require("./routes/casinoGames/pachinko.ts")(app);
 require("./routes/casinoGarden.ts")(app);
-require("./routes/casinoStill.ts")(app);
+require("./routes/casinoPrinter.ts")(app);
 require("./routes/casinoMine.ts")(app);

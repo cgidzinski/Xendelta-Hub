@@ -16,17 +16,17 @@ import {
     ListItemText,
     Typography,
 } from "@mui/material";
-import LocalBarIcon from "@mui/icons-material/LocalBar";
+import PrintIcon from "@mui/icons-material/Print";
 import GavelIcon from "@mui/icons-material/Gavel";
 import CloseIcon from "@mui/icons-material/Close";
 import { useSnackbar } from "notistack";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import { formatCheddar } from "../../utils/currency";
-import { StillIngredient, useCasinoStill } from "../../../../../hooks/casino/useCasinoStill";
+import { PrinterPart, useCasinoPrinter } from "../../../../../hooks/casino/useCasinoPrinter";
 
 const MAX_PICKS = 3;
 
-// Same "force a redraw between fetches" trick as Garden - the batch's real state (its
+// Same "force a redraw between fetches" trick as Garden - the run's real state (its
 // multiplier/risk) is server-computed and refetched on the hook's own interval; this just
 // keeps the two gauges visibly animating in between those refetches.
 function useNow(intervalMs: number) {
@@ -43,19 +43,19 @@ function signed(value: number): string {
     return `${pct >= 0 ? "+" : ""}${pct}%`;
 }
 
-interface IngredientPickerProps {
+interface PartPickerProps {
     open: boolean;
-    ingredients: StillIngredient[];
+    parts: PrinterPart[];
     isStarting: boolean;
     onClose: () => void;
-    onBrew: (ingredientKeys: string[]) => void;
+    onStart: (partKeys: string[]) => void;
 }
 
-// Pick exactly 3 ingredients (repeats allowed - tapping the same one again adds another
-// copy) - their cost/rateBonus/raidBonus all sum together into this batch's own curve
+// Pick exactly 3 parts (repeats allowed - tapping the same one again installs another
+// copy) - their cost/rateBonus/raidBonus all sum together into this run's own curve
 // (see the /start route handler). This preview sums the same way the server will, so
-// what's shown here is what actually gets brewed.
-function IngredientPicker({ open, ingredients, isStarting, onClose, onBrew }: IngredientPickerProps) {
+// what's shown here is what actually gets installed.
+function PartPicker({ open, parts, isStarting, onClose, onStart }: PartPickerProps) {
     const [picks, setPicks] = useState<string[]>([]);
 
     const addPick = (key: string) => {
@@ -68,16 +68,16 @@ function IngredientPicker({ open, ingredients, isStarting, onClose, onBrew }: In
         setPicks([]);
         onClose();
     };
-    const handleBrew = () => onBrew(picks);
+    const handleStart = () => onStart(picks);
 
-    const totalCost = picks.reduce((sum, key) => sum + (ingredients.find((i) => i.key === key)?.cost ?? 0), 0);
-    const totalRate = picks.reduce((sum, key) => sum + (ingredients.find((i) => i.key === key)?.rateBonus ?? 0), 0);
-    const totalRaid = picks.reduce((sum, key) => sum + (ingredients.find((i) => i.key === key)?.raidBonus ?? 0), 0);
+    const totalCost = picks.reduce((sum, key) => sum + (parts.find((p) => p.key === key)?.cost ?? 0), 0);
+    const totalRate = picks.reduce((sum, key) => sum + (parts.find((p) => p.key === key)?.rateBonus ?? 0), 0);
+    const totalRaid = picks.reduce((sum, key) => sum + (parts.find((p) => p.key === key)?.raidBonus ?? 0), 0);
 
     return (
         <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
             <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                Pick 3 Ingredients
+                Pick 3 Parts
                 <IconButton onClick={handleClose} aria-label="Close">
                     <CloseIcon />
                 </IconButton>
@@ -92,7 +92,7 @@ function IngredientPicker({ open, ingredients, isStarting, onClose, onBrew }: In
                     {picks.map((key, i) => (
                         <Chip
                             key={`${key}-${i}`}
-                            label={ingredients.find((ing) => ing.key === key)?.label ?? key}
+                            label={parts.find((p) => p.key === key)?.label ?? key}
                             onDelete={() => removePick(i)}
                             color="warning"
                         />
@@ -108,16 +108,16 @@ function IngredientPicker({ open, ingredients, isStarting, onClose, onBrew }: In
                 )}
 
                 <List disablePadding>
-                    {ingredients.map((ingredient) => (
+                    {parts.map((part) => (
                         <ListItemButton
-                            key={ingredient.key}
+                            key={part.key}
                             disabled={picks.length >= MAX_PICKS}
-                            onClick={() => addPick(ingredient.key)}
+                            onClick={() => addPick(part.key)}
                             sx={{ borderRadius: 1, mb: 0.5 }}
                         >
                             <ListItemText
-                                primary={`${ingredient.label} - ${formatCheddar(ingredient.cost)}`}
-                                secondary={`${ingredient.description} (Rate ${signed(ingredient.rateBonus)}, Raid ${signed(ingredient.raidBonus)})`}
+                                primary={`${part.label} - ${formatCheddar(part.cost)}`}
+                                secondary={`${part.description} (Rate ${signed(part.rateBonus)}, Raid ${signed(part.raidBonus)})`}
                             />
                         </ListItemButton>
                     ))}
@@ -129,21 +129,21 @@ function IngredientPicker({ open, ingredients, isStarting, onClose, onBrew }: In
                     color="warning"
                     fullWidth
                     disabled={picks.length !== MAX_PICKS || isStarting}
-                    onClick={handleBrew}
+                    onClick={handleStart}
                 >
-                    Brew ({formatCheddar(totalCost)})
+                    Install &amp; Run ({formatCheddar(totalCost)})
                 </Button>
             </DialogActions>
         </Dialog>
     );
 }
 
-export default function Still() {
+export default function Printer() {
     const {
-        stillLevel,
-        maxStillLevel,
-        batch,
-        ingredients,
+        rigLevel,
+        maxRigLevel,
+        run,
+        parts,
         bribeCost,
         upgradeCost,
         isLoading,
@@ -155,21 +155,21 @@ export default function Still() {
         isCollecting,
         upgrade,
         isUpgrading,
-    } = useCasinoStill();
+    } = useCasinoPrinter();
     const { enqueueSnackbar } = useSnackbar();
     const [pickerOpen, setPickerOpen] = useState(false);
     useNow(2 * 1000);
 
-    const handleBrew = (ingredientKeys: string[]) =>
-        start({ ingredientKeys })
+    const handleStart = (partKeys: string[]) =>
+        start({ partKeys })
             .then(() => setPickerOpen(false))
-            .catch((e) => enqueueSnackbar(e.message || "Failed to start batch", { variant: "error" }));
+            .catch((e) => enqueueSnackbar(e.message || "Failed to start print run", { variant: "error" }));
     const handleBribe = () => bribe().catch((e) => enqueueSnackbar(e.message || "Failed to bribe", { variant: "error" }));
     const handleCollect = () =>
         collect()
             .then((r) =>
                 enqueueSnackbar(
-                    r.raided ? "Raided! The batch was seized - nothing collected." : `Collected ${formatCheddar(r.payout)} cheddar!`,
+                    r.raided ? "Raided! The rig was seized - nothing collected." : `Collected ${formatCheddar(r.payout)} cheddar!`,
                     { variant: r.raided ? "error" : "success" }
                 )
             )
@@ -178,27 +178,27 @@ export default function Still() {
 
     const oddsSections: OddsSection[] = [
         {
-            title: "Ingredients",
-            rows: ingredients.map((i) => ({
-                label: `${i.label} (${formatCheddar(i.cost)})`,
-                payout: `Rate ${signed(i.rateBonus)}, Raid ${signed(i.raidBonus)}`,
+            title: "Parts",
+            rows: parts.map((p) => ({
+                label: `${p.label} (${formatCheddar(p.cost)})`,
+                payout: `Rate ${signed(p.rateBonus)}, Raid ${signed(p.raidBonus)}`,
             })),
-            footnote: "Pick 3 (repeats allowed) when starting a batch - their cost/rate/raid bonuses all sum together into that batch's own curve.",
+            footnote: "Pick 3 (repeats allowed) when starting a print run - their cost/rate/raid bonuses all sum together into that run's own curve.",
         },
         {
             title: "Economics",
             rows: [
                 { label: "Bribe", payout: `${formatCheddar(bribeCost)} - resets raid risk` },
-                { label: "Upgrade Still", payout: `${formatCheddar(upgradeCost)} - reaches peak faster (max level ${maxStillLevel})` },
+                { label: "Upgrade Rig", payout: `${formatCheddar(upgradeCost)} - reaches peak faster (max level ${maxRigLevel})` },
             ],
-            footnote: "Payout multiplier starts below breakeven and rises toward a peak the longer the batch runs, then plateaus - collecting immediately is a guaranteed loss. Raid risk starts real from the first check and rises further the longer it's been since your last bribe - each bribe on the same batch costs more than the last.",
+            footnote: "Payout multiplier starts below breakeven and rises toward a peak the longer the run goes, then plateaus - collecting immediately is a guaranteed loss. Raid risk starts real from the first check and rises further the longer it's been since your last bribe - each bribe on the same run costs more than the last.",
         },
     ];
 
     return (
         <GameWrapper
-            title="Bootleg Still"
-            howToPlay="Pick 3 ingredients to start a batch - their cost, rate, and raid-risk bonuses all add together into that batch's own curve. Collecting right away is a loss - the payout multiplier starts below breakeven and climbs toward a peak the longer you let it run. Raid risk is real from the start too and keeps climbing the longer it's been since your last bribe. Bribe to knock risk back down (each bribe on the same batch costs more than the last), or cash out before it gets seized."
+            title="Money Printer"
+            howToPlay="Pick 3 parts to install and start a print run - their cost, rate, and raid-risk bonuses all add together into that run's own curve. Collecting right away is a loss - the payout multiplier starts below breakeven and climbs toward a peak the longer you let it run. Raid risk is real from the start too and keeps climbing the longer it's been since your last bribe. Bribe the right people to knock risk back down (each bribe on the same run costs more than the last), or cash out before your rig gets seized."
             oddsSections={oddsSections}
         >
             {isLoading ? (
@@ -206,12 +206,12 @@ export default function Still() {
             ) : (
                 <Card variant="outlined" sx={{ mt: 3 }}>
                     <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "center", py: 4 }}>
-                        <LocalBarIcon sx={{ fontSize: 56, color: "warning.main" }} />
+                        <PrintIcon sx={{ fontSize: 56, color: "warning.main" }} />
                         <Typography variant="subtitle1" color="text.secondary">
-                            Still Level {stillLevel} / {maxStillLevel}
+                            Rig Level {rigLevel} / {maxRigLevel}
                         </Typography>
 
-                        {!batch && (
+                        {!run && (
                             <Button
                                 variant="contained"
                                 color="warning"
@@ -220,15 +220,15 @@ export default function Still() {
                                 onClick={() => setPickerOpen(true)}
                                 sx={{ fontWeight: 800, px: 4 }}
                             >
-                                Start Batch
+                                Start Print Run
                             </Button>
                         )}
 
-                        {batch && (
+                        {run && (
                             <Box sx={{ width: "100%", maxWidth: 420, display: "flex", flexDirection: "column", gap: 2 }}>
-                                {batch.ingredients.length > 0 && (
+                                {run.parts.length > 0 && (
                                     <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", justifyContent: "center" }}>
-                                        {batch.ingredients.map((label, i) => (
+                                        {run.parts.map((label, i) => (
                                             <Chip key={i} size="small" label={label} variant="outlined" />
                                         ))}
                                     </Box>
@@ -238,12 +238,12 @@ export default function Still() {
                                     <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
                                         <Typography variant="body2">Payout</Typography>
                                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                            {batch.currentMultiplier.toFixed(2)}x ({formatCheddar(Math.round(batch.ingredientCost * batch.currentMultiplier))})
+                                            {run.currentMultiplier.toFixed(2)}x ({formatCheddar(Math.round(run.partsCost * run.currentMultiplier))})
                                         </Typography>
                                     </Box>
                                     <LinearProgress
                                         variant="determinate"
-                                        value={Math.min(100, (batch.currentMultiplier / batch.peakMultiplier) * 100)}
+                                        value={Math.min(100, (run.currentMultiplier / run.peakMultiplier) * 100)}
                                         color="success"
                                         sx={{ height: 10, borderRadius: 999 }}
                                     />
@@ -253,12 +253,12 @@ export default function Still() {
                                     <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
                                         <Typography variant="body2">Raid Risk</Typography>
                                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                            {batch.raidRiskPercent}%
+                                            {run.raidRiskPercent}%
                                         </Typography>
                                     </Box>
                                     <LinearProgress
                                         variant="determinate"
-                                        value={batch.raidRiskPercent}
+                                        value={run.raidRiskPercent}
                                         color="error"
                                         sx={{ height: 10, borderRadius: 999 }}
                                     />
@@ -266,7 +266,7 @@ export default function Still() {
 
                                 <Box sx={{ display: "flex", gap: 1.5, justifyContent: "center", mt: 1 }}>
                                     <Button variant="outlined" color="error" startIcon={<GavelIcon />} disabled={isBribing} onClick={handleBribe}>
-                                        Bribe ({formatCheddar(batch.nextBribeCost)}){batch.bribeCount > 0 ? ` - #${batch.bribeCount + 1}` : ""}
+                                        Bribe ({formatCheddar(run.nextBribeCost)}){run.bribeCount > 0 ? ` - #${run.bribeCount + 1}` : ""}
                                     </Button>
                                     <Button variant="contained" color="success" disabled={isCollecting} onClick={handleCollect}>
                                         Collect Now
@@ -275,22 +275,16 @@ export default function Still() {
                             </Box>
                         )}
 
-                        {!batch && stillLevel < maxStillLevel && (
+                        {!run && rigLevel < maxRigLevel && (
                             <Button variant="text" disabled={isUpgrading} onClick={handleUpgrade} sx={{ mt: 1 }}>
-                                Upgrade Still ({formatCheddar(upgradeCost)})
+                                Upgrade Rig ({formatCheddar(upgradeCost)})
                             </Button>
                         )}
                     </CardContent>
                 </Card>
             )}
 
-            <IngredientPicker
-                open={pickerOpen}
-                ingredients={ingredients}
-                isStarting={isStarting}
-                onClose={() => setPickerOpen(false)}
-                onBrew={handleBrew}
-            />
+            <PartPicker open={pickerOpen} parts={parts} isStarting={isStarting} onClose={() => setPickerOpen(false)} onStart={handleStart} />
         </GameWrapper>
     );
 }

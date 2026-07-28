@@ -5,7 +5,7 @@ import { ApiResponse } from "../../types/api";
 import { casinoBalanceKeys } from "./useCasinoBalance";
 import { casinoLedgerKeys } from "./useCasinoLedger";
 
-export interface StillIngredient {
+export interface PrinterPart {
     key: string;
     label: string;
     cost: number;
@@ -14,12 +14,12 @@ export interface StillIngredient {
     description: string;
 }
 
-export interface StillBatch {
+export interface PrinterRun {
     startedAt: string;
-    ingredientCost: number;
+    partsCost: number;
     peakAt: string;
     peakMultiplier: number;
-    ingredients: string[]; // labels of the 3 ingredients this batch was started with
+    parts: string[]; // labels of the 3 parts this run was started with
     lastBribeAt: string;
     bribeCount: number;
     nextBribeCost: number;
@@ -28,68 +28,68 @@ export interface StillBatch {
     raidRiskPercent: number;
 }
 
-export interface StillState {
-    stillLevel: number;
-    maxStillLevel: number;
-    batch: StillBatch | null;
-    ingredients: StillIngredient[];
+export interface PrinterState {
+    rigLevel: number;
+    maxRigLevel: number;
+    run: PrinterRun | null;
+    parts: PrinterPart[];
     bribeCost: number;
     upgradeCost: number;
 }
 
-export const casinoStillKeys = {
-    all: ["casinoStill"] as const,
+export const casinoPrinterKeys = {
+    all: ["casinoPrinter"] as const,
 };
 
-const fetchStill = async (): Promise<StillState> =>
-    (await apiClient.get<ApiResponse<StillState>>("/api/casino/still")).data.data!;
+const fetchPrinter = async (): Promise<PrinterState> =>
+    (await apiClient.get<ApiResponse<PrinterState>>("/api/casino/printer")).data.data!;
 
-export const useCasinoStill = () => {
+export const useCasinoPrinter = () => {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
 
     const { data, isLoading, refetch } = useQuery({
-        queryKey: casinoStillKeys.all,
-        queryFn: fetchStill,
+        queryKey: casinoPrinterKeys.all,
+        queryFn: fetchPrinter,
         enabled: isAuthenticated,
         staleTime: 2 * 1000,
         refetchInterval: 5 * 1000,
     });
 
     const invalidate = () => {
-        queryClient.invalidateQueries({ queryKey: casinoStillKeys.all });
+        queryClient.invalidateQueries({ queryKey: casinoPrinterKeys.all });
         queryClient.invalidateQueries({ queryKey: casinoBalanceKeys.all });
         queryClient.invalidateQueries({ queryKey: casinoLedgerKeys.all });
     };
 
     const { mutateAsync: start, isPending: isStarting } = useMutation({
-        mutationFn: async (params: { ingredientKeys: string[] }) =>
-            (await apiClient.post<ApiResponse<{ batch: StillBatch; balance: string }>>("/api/casino/still/start", params)).data.data!,
+        mutationFn: async (params: { partKeys: string[] }) =>
+            (await apiClient.post<ApiResponse<{ run: PrinterRun; balance: string }>>("/api/casino/printer/start", params)).data.data!,
         onSuccess: invalidate,
     });
 
     const { mutateAsync: bribe, isPending: isBribing } = useMutation({
-        mutationFn: async () => (await apiClient.post<ApiResponse<{ batch: StillBatch; balance: string }>>("/api/casino/still/bribe")).data.data!,
+        mutationFn: async () => (await apiClient.post<ApiResponse<{ run: PrinterRun; balance: string }>>("/api/casino/printer/bribe")).data.data!,
         onSuccess: invalidate,
     });
 
     const { mutateAsync: collect, isPending: isCollecting } = useMutation({
         mutationFn: async () =>
-            (await apiClient.post<ApiResponse<{ raided: boolean; payout: number; balance?: string }>>("/api/casino/still/collect")).data.data!,
+            (await apiClient.post<ApiResponse<{ raided: boolean; payout: number; balance?: string }>>("/api/casino/printer/collect")).data.data!,
         onSuccess: invalidate,
     });
 
     const { mutateAsync: upgrade, isPending: isUpgrading } = useMutation({
         mutationFn: async () =>
-            (await apiClient.post<ApiResponse<{ stillLevel: number; balance: string }>>("/api/casino/still/upgrade")).data.data!,
+            (await apiClient.post<ApiResponse<{ rigLevel: number; balance: string }>>("/api/casino/printer/upgrade")).data.data!,
         onSuccess: invalidate,
     });
 
     return {
-        stillLevel: data?.stillLevel ?? 1,
-        maxStillLevel: data?.maxStillLevel ?? 1,
-        batch: data?.batch ?? null,
-        ingredients: data?.ingredients ?? [],
+        rigLevel: data?.rigLevel ?? 1,
+        maxRigLevel: data?.maxRigLevel ?? 1,
+        run: data?.run ?? null,
+        parts: data?.parts ?? [],
         bribeCost: data?.bribeCost ?? 0,
         upgradeCost: data?.upgradeCost ?? 0,
         isLoading,

@@ -20,7 +20,7 @@ var GAME_LABELS: Record<string, string> = {
     "pachinko": "Pachinko",
     "memory": "Memory",
     "garden": "Casino Garden",
-    "still": "Bootleg Still",
+    "printer": "Money Printer",
     "mine": "Chip Mine",
 };
 

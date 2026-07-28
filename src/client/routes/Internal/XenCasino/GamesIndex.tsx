@@ -8,7 +8,7 @@ import AdjustIcon from "@mui/icons-material/Adjust";
 import GridViewIcon from "@mui/icons-material/GridView";
 import AddIcon from "@mui/icons-material/Add";
 import LocalFloristIcon from "@mui/icons-material/LocalFlorist";
-import LocalBarIcon from "@mui/icons-material/LocalBar";
+import PrintIcon from "@mui/icons-material/Print";
 import TerrainIcon from "@mui/icons-material/Terrain";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../../config/api";
@@ -19,7 +19,7 @@ import { formatCheddar } from "./utils/currency";
 import DailyQuestCard from "./components/DailyQuestCard";
 import { useCasinoStatus } from "../../../hooks/casino/useCasinoStatus";
 import { useCasinoGarden } from "../../../hooks/casino/useCasinoGarden";
-import { useCasinoStill } from "../../../hooks/casino/useCasinoStill";
+import { useCasinoPrinter } from "../../../hooks/casino/useCasinoPrinter";
 import { useCasinoMine } from "../../../hooks/casino/useCasinoMine";
 
 interface SlotsOddsSummary {
@@ -80,11 +80,11 @@ const TYPE_ICON: Record<CasinoGameType, ComponentType<SvgIconProps>> = {
     pachinko: AdjustIcon,
     memory: GridViewIcon,
     garden: LocalFloristIcon,
-    still: LocalBarIcon,
+    printer: PrintIcon,
     mine: TerrainIcon,
 };
 
-const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko", "memory", "garden", "still", "mine"];
+const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko", "memory", "garden", "printer", "mine"];
 
 const GHOST_COPY: Partial<Record<CasinoGameType, string>> = {
     slots: "New reel sets and jackpots land here as they ship.",
@@ -127,7 +127,7 @@ export default function GamesIndex() {
     const navigate = useNavigate();
     const { disabledGames } = useCasinoStatus();
     const { squares: gardenSquares } = useCasinoGarden();
-    const { batch: stillBatch } = useCasinoStill();
+    const { run: printerRun } = useCasinoPrinter();
     const { state: mineState } = useCasinoMine();
 
     const { data: easySpinOdds } = useQuery({
@@ -202,7 +202,7 @@ export default function GamesIndex() {
         pachinko: pachinkoOdds ? `🎰 ${formatCheddar(pachinkoOdds.jackpotPool)}` : undefined,
     };
 
-    // The persistent games (Garden/Still/Mine) have no odds/RTP table to summarize the way
+    // The persistent games (Garden/Printer/Mine) have no odds/RTP table to summarize the way
     // the instant-resolution games do - instead their cards show a live glance at the
     // player's own state, so there's a reason to check the games list rather than always
     // clicking straight in. Keyed by game.key, same as oddsLabelByKey/rtpLabelByKey above.
@@ -218,14 +218,14 @@ export default function GamesIndex() {
             ...(gardenDead > 0 ? [{ label: `${gardenDead} Dead`, color: "error" as ChipColor }] : []),
             ...(gardenReady === 0 && gardenGrowing === 0 && gardenDead === 0 ? [{ label: "All Plots Empty", color: "default" as ChipColor }] : []),
         ],
-        still: stillBatch
+        printer: printerRun
             ? [
-                  stillBatch.raided
-                      ? { label: "Batch Raided", color: "error" as ChipColor }
-                      : { label: `Batch ${stillBatch.currentMultiplier.toFixed(2)}x`, color: "warning" as ChipColor },
-                  ...(stillBatch.raided ? [] : [{ label: `${stillBatch.raidRiskPercent}% Raid Risk`, color: "error" as ChipColor }]),
+                  printerRun.raided
+                      ? { label: "Rig Raided", color: "error" as ChipColor }
+                      : { label: `Print Run ${printerRun.currentMultiplier.toFixed(2)}x`, color: "warning" as ChipColor },
+                  ...(printerRun.raided ? [] : [{ label: `${printerRun.raidRiskPercent}% Raid Risk`, color: "error" as ChipColor }]),
               ]
-            : [{ label: "No Batch Running", color: "default" as ChipColor }],
+            : [{ label: "No Print Run Active", color: "default" as ChipColor }],
         mine: mineState
             ? [
                   { label: `Depth ${mineState.position.y}`, color: "default" as ChipColor },
