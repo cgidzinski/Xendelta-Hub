@@ -328,6 +328,11 @@ var XenCasinoActivity = mongoose.model("XenCasinoActivity", xenCasinoActivitySch
 // ---------------------------------------------------------------------------------------
 
 var GARDEN_GRID_SIZE = 9;
+// Uniform across every seed - minimum time between two waterings of the *same* square.
+// Also doubles as the hazard-tick period (vermin/disease chance still varies by seed;
+// only the cadence they're rolled at is now fixed) and the neglect-death threshold
+// (2 missed cooldowns in a row kills the square).
+var GARDEN_WATER_COOLDOWN_MS = 60 * 60 * 1000;
 
 function emptyGardenSquares() {
   var squares = [];
@@ -348,10 +353,10 @@ var gardenSquareSchema = new mongoose.Schema(
     // Snapshotted from the seed tier at plant time (see casinoGarden.ts SEED_TIERS) -
     // this square's own copy, immune to later tier rebalances.
     cost: { type: Number, default: 0 },
-    waterIntervalMs: { type: Number, default: null }, // must be watered at least this often or the square dies
-    verminChance: { type: Number, default: 0 }, // per tick, while unprotected
+    waterAmount: { type: Number, default: 0 }, // total waterings required to mature - a vermin hit raises this
+    waterCount: { type: Number, default: 0 }, // waterings delivered so far
+    verminChance: { type: Number, default: 0 }, // per tick, while unprotected - adds +1 to waterAmount
     diseaseChance: { type: Number, default: 0 }, // per tick, while unprotected - kills outright
-    verminDelayMs: { type: Number, default: 0 }, // how much a vermin hit pushes readyAt back
     baseMultiplier: { type: Number, default: 0 }, // harvest payout = cost * baseMultiplier * (1 +/- variance)
     variance: { type: Number, default: 0 },
     protection: {
@@ -368,26 +373,27 @@ var xenCasinoGardenStateSchema = new mongoose.Schema({
   squares: { type: [gardenSquareSchema], default: emptyGardenSquares },
 });
 
-// Advances one growing square against `now`: kills it if a full watering interval was
-// missed, then rolls vermin/disease once per completed `waterIntervalMs` tick since
-// planting (or the last roll) - catching up correctly across any gap, same pattern as
-// resolveStillBatch below. Vermin delays `readyAt`; disease kills. Flips growing -> ready
-// once `readyAt` passes. No-op for any square not currently growing. Mutates in place;
-// returns whether anything changed.
+// Advances one growing square against `now`: kills it if 2 full GARDEN_WATER_COOLDOWN_MS
+// periods passed with no watering, then rolls vermin/disease once per completed
+// GARDEN_WATER_COOLDOWN_MS tick since planting (or the last roll) - catching up
+// correctly across any gap, same pattern as resolveStillBatch below. A vermin hit raises
+// `waterAmount` by 1 (needs one more watering to mature); disease kills. Flips growing ->
+// ready once `waterCount` reaches `waterAmount`. No-op for any square not currently
+// growing. Mutates in place; returns whether anything changed.
 function resolveGardenSquare(square, now) {
   if (square.status !== "growing") {
     return false;
   }
   var changed = false;
 
-  if (now.getTime() - square.lastWateredAt.getTime() >= square.waterIntervalMs * 2) {
+  if (now.getTime() - square.lastWateredAt.getTime() >= GARDEN_WATER_COOLDOWN_MS * 2) {
     square.status = "dead";
     return true;
   }
 
   var tick = new Date((square.lastCareCheckAt || square.plantedAt).getTime());
-  while (now.getTime() - tick.getTime() >= square.waterIntervalMs) {
-    tick = new Date(tick.getTime() + square.waterIntervalMs);
+  while (now.getTime() - tick.getTime() >= GARDEN_WATER_COOLDOWN_MS) {
+    tick = new Date(tick.getTime() + GARDEN_WATER_COOLDOWN_MS);
     changed = true;
     if (!square.protection.fungicide && Math.random() < square.diseaseChance) {
       square.status = "dead";
@@ -395,14 +401,14 @@ function resolveGardenSquare(square, now) {
       return true;
     }
     if (!square.protection.pesticide && Math.random() < square.verminChance) {
-      square.readyAt = new Date(square.readyAt.getTime() + square.verminDelayMs);
+      square.waterAmount += 1;
     }
   }
   if (changed) {
     square.lastCareCheckAt = tick;
   }
 
-  if (square.readyAt && now >= square.readyAt) {
+  if (square.waterCount >= square.waterAmount) {
     square.status = "ready";
     changed = true;
   }
@@ -417,10 +423,10 @@ function clearGardenSquare(square) {
   square.lastWateredAt = null;
   square.lastCareCheckAt = null;
   square.cost = 0;
-  square.waterIntervalMs = null;
+  square.waterAmount = 0;
+  square.waterCount = 0;
   square.verminChance = 0;
   square.diseaseChance = 0;
-  square.verminDelayMs = 0;
   square.baseMultiplier = 0;
   square.variance = 0;
   square.protection = { pesticide: false, fungicide: false };
@@ -443,9 +449,11 @@ xenCasinoGardenStateSchema.statics.getState = async function (userId) {
 };
 
 // `tier` is the seed's full economics snapshot from SEED_TIERS - { cost, growDurationMs,
-// waterIntervalMs, verminChance, diseaseChance, verminDelayMs, baseMultiplier, variance } -
-// copied onto the square so later SEED_TIERS rebalances never retroactively affect an
-// already-growing crop (including its eventual harvest payout).
+// waterAmount, verminChance, diseaseChance, baseMultiplier, variance } - copied onto the
+// square so later SEED_TIERS rebalances never retroactively affect an already-growing
+// crop (including its eventual harvest payout). `readyAt` is kept only as an
+// informational "earliest possible" display value - `waterCount >= waterAmount` is the
+// real gate (see resolveGardenSquare).
 xenCasinoGardenStateSchema.statics.plant = async function (userId, squareId, seedType, tier) {
   var doc = await this.getState(userId);
   var square = doc.squares.find(function (s) { return s.squareId === squareId; });
@@ -459,25 +467,36 @@ xenCasinoGardenStateSchema.statics.plant = async function (userId, squareId, see
   square.lastWateredAt = now;
   square.lastCareCheckAt = now;
   square.cost = tier.cost;
-  square.waterIntervalMs = tier.waterIntervalMs;
+  square.waterAmount = tier.waterAmount;
+  square.waterCount = 1; // planting counts as the first watering
   square.verminChance = tier.verminChance;
   square.diseaseChance = tier.diseaseChance;
-  square.verminDelayMs = tier.verminDelayMs;
   square.baseMultiplier = tier.baseMultiplier;
   square.variance = tier.variance;
   square.protection = { pesticide: false, fungicide: false };
-  square.status = "growing";
+  square.status = square.waterCount >= square.waterAmount ? "ready" : "growing";
   await doc.save();
   return square;
 };
 
+// The one place the 1h-per-square cooldown is enforced - rejects (returns null) if this
+// square was already watered within the last GARDEN_WATER_COOLDOWN_MS, so the route can
+// respond with a clear "still on cooldown" 400 rather than silently no-op'ing.
 xenCasinoGardenStateSchema.statics.water = async function (userId, squareId) {
   var doc = await this.getState(userId);
   var square = doc.squares.find(function (s) { return s.squareId === squareId; });
-  if (!square || (square.status !== "growing" && square.status !== "ready")) {
+  if (!square || square.status !== "growing") {
     return null;
   }
-  square.lastWateredAt = new Date();
+  var now = new Date();
+  if (now.getTime() - square.lastWateredAt.getTime() < GARDEN_WATER_COOLDOWN_MS) {
+    return null;
+  }
+  square.lastWateredAt = now;
+  square.waterCount += 1;
+  if (square.waterCount >= square.waterAmount) {
+    square.status = "ready";
+  }
   await doc.save();
   return square;
 };
@@ -751,6 +770,9 @@ module.exports = {
   XenCasinoUserState,
   XenCasinoActivity,
   XenCasinoGardenState,
+  // Exported so casinoGarden.ts can build SEED_TIERS' growDurationMs from waterAmount
+  // and render the same cooldown it's actually enforcing, rather than a second copy.
+  GARDEN_WATER_COOLDOWN_MS: GARDEN_WATER_COOLDOWN_MS,
   XenCasinoStillState,
   XenCasinoMineState,
   MINE_OUTCOME: MINE_OUTCOME,

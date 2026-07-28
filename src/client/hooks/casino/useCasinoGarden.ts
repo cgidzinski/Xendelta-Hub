@@ -12,7 +12,8 @@ export interface GardenSquare {
     plantedAt: string | null;
     readyAt: string | null;
     lastWateredAt: string | null;
-    waterIntervalMs: number | null;
+    waterAmount: number;
+    waterCount: number;
     cost: number;
     baseMultiplier: number;
     variance: number;
@@ -25,10 +26,9 @@ export interface SeedTier {
     label: string;
     cost: number;
     growDurationMs: number;
-    waterIntervalMs: number;
+    waterAmount: number;
     verminChance: number;
     diseaseChance: number;
-    verminDelayMs: number;
     baseMultiplier: number;
     variance: number;
 }
@@ -37,6 +37,7 @@ export interface GardenState {
     squares: GardenSquare[];
     seedTiers: SeedTier[];
     protectionCost: { pesticide: number; fungicide: number };
+    waterCooldownMs: number;
 }
 
 export const casinoGardenKeys = {
@@ -98,6 +99,7 @@ export const useCasinoGarden = () => {
         squares: data?.squares ?? [],
         seedTiers: data?.seedTiers ?? [],
         protectionCost: data?.protectionCost ?? { pesticide: 0, fungicide: 0 },
+        waterCooldownMs: data?.waterCooldownMs ?? 60 * 60 * 1000,
         isLoading,
         refetch,
         plant,

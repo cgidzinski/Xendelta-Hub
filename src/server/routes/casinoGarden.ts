@@ -1,13 +1,15 @@
 /**
  * Casino Garden - a 3x3 grid, one seed per square, growing in parallel. Each seed tier has
- * its own cost, grow time, watering frequency, vermin/disease risk, and payout curve - so
- * "different plant, different game" rather than one economy with cosmetic reskins. A
- * square dies if it misses a full watering interval; unprotected squares also roll a
- * vermin (delays harvest) or disease (kills) chance once per watering interval, countered
- * by purchasable pesticide/fungicide. Harvest pays cost * baseMultiplier * a random swing
- * of +/- variance - the guaranteed baseline is the tier's baseMultiplier, the variance is
- * how much casino luck can move it either direction.
- * Square lifecycle (watering deadline, hazard tick loop, ready/dead transitions) lives in
+ * its own cost, watering amount, vermin/disease risk, and payout curve - so "different
+ * plant, different game" rather than one economy with cosmetic reskins. Watering a square
+ * is on a uniform 1-hour-per-square cooldown (GARDEN_WATER_COOLDOWN_MS); a square dies if
+ * it misses two full cooldown periods with no watering. Unprotected squares also roll a
+ * vermin (adds one more required watering) or disease (kills) chance once per cooldown
+ * tick, countered by purchasable pesticide/fungicide. A square is ready once it's received
+ * its required number of waterings. Harvest pays cost * baseMultiplier * a random swing of
+ * +/- variance - the guaranteed baseline is the tier's baseMultiplier, the variance is how
+ * much casino luck can move it either direction.
+ * Square lifecycle (cooldown, hazard tick loop, ready/dead transitions) lives in
  * XenCasinoGardenState (src/server/models/xenCasino.js); this route owns the seed/item
  * economics (snapshotted onto each square at plant time) and every money movement.
  */
@@ -15,7 +17,7 @@ import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 const { User } = require("../models/user");
-const { XenCasinoGardenState } = require("../models/xenCasino");
+const { XenCasinoGardenState, GARDEN_WATER_COOLDOWN_MS } = require("../models/xenCasino");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../utils/weeabetsClient";
 import { requireGameEnabled } from "../utils/casinoStatus";
 
@@ -25,71 +27,30 @@ interface SeedTier {
     key: string;
     label: string;
     cost: number;
-    growDurationMs: number;
-    waterIntervalMs: number; // must be watered at least this often (a missed full interval kills it)
-    verminChance: number; // per watering-interval tick, while unprotected - delays harvest
-    diseaseChance: number; // per watering-interval tick, while unprotected - kills outright
-    verminDelayMs: number; // how much a vermin hit pushes readyAt back
+    growDurationMs: number; // waterAmount * GARDEN_WATER_COOLDOWN_MS - "earliest possible" display only, waterCount is the real gate
+    waterAmount: number; // total waterings required to mature (a vermin hit adds +1)
+    verminChance: number; // per cooldown tick, while unprotected - adds +1 to the required waterings
+    diseaseChance: number; // per cooldown tick, while unprotected - kills outright
     baseMultiplier: number; // guaranteed baseline of harvest payout = cost * baseMultiplier
     variance: number; // harvest payout swings +/- this fraction around the baseline
 }
 
+function seedTier(params: Omit<SeedTier, "growDurationMs">): SeedTier {
+    return { ...params, growDurationMs: params.waterAmount * GARDEN_WATER_COOLDOWN_MS };
+}
+
 // Four genuinely different plants, not one economy reskinned four times:
-//  - Sprout: cheap, low risk, low-maintenance, modest guaranteed-ish payout.
+//  - Sprout: cheap, low risk, few waterings needed, modest guaranteed-ish payout.
 //  - Lucky Clover: mid cost/risk, the "luck" plant - widest variance of the bunch.
-//  - Nightshade: cheap-ish but high-maintenance and high-risk (short watering window,
-//    the highest vermin/disease chance) - a strong base multiplier is the compensation.
-//  - Golden Vine: the expensive slow-grower, moderate risk, biggest base multiplier and
-//    widest variance - the true high-roller plant.
+//  - Nightshade: cheap-ish but high-maintenance and high-risk (the highest vermin/disease
+//    chance per check) - a strong base multiplier is the compensation.
+//  - Golden Vine: the expensive slow-grower (most waterings needed), moderate risk,
+//    biggest base multiplier and widest variance - the true high-roller plant.
 export const SEED_TIERS: Record<string, SeedTier> = {
-    sprout: {
-        key: "sprout",
-        label: "Sprout",
-        cost: 500,
-        growDurationMs: 2 * 60 * 60 * 1000,
-        waterIntervalMs: 60 * 60 * 1000,
-        verminChance: 0.05,
-        diseaseChance: 0.02,
-        verminDelayMs: 20 * 60 * 1000,
-        baseMultiplier: 1.3,
-        variance: 0.3,
-    },
-    clover: {
-        key: "clover",
-        label: "Lucky Clover",
-        cost: 2000,
-        growDurationMs: 6 * 60 * 60 * 1000,
-        waterIntervalMs: 2 * 60 * 60 * 1000,
-        verminChance: 0.08,
-        diseaseChance: 0.03,
-        verminDelayMs: 45 * 60 * 1000,
-        baseMultiplier: 1.6,
-        variance: 0.6,
-    },
-    nightshade: {
-        key: "nightshade",
-        label: "Nightshade",
-        cost: 3500,
-        growDurationMs: 8 * 60 * 60 * 1000,
-        waterIntervalMs: 90 * 60 * 1000,
-        verminChance: 0.15,
-        diseaseChance: 0.08,
-        verminDelayMs: 60 * 60 * 1000,
-        baseMultiplier: 2.2,
-        variance: 0.4,
-    },
-    "golden-vine": {
-        key: "golden-vine",
-        label: "Golden Vine",
-        cost: 8000,
-        growDurationMs: 18 * 60 * 60 * 1000,
-        waterIntervalMs: 3 * 60 * 60 * 1000,
-        verminChance: 0.1,
-        diseaseChance: 0.05,
-        verminDelayMs: 2 * 60 * 60 * 1000,
-        baseMultiplier: 3.0,
-        variance: 0.9,
-    },
+    sprout: seedTier({ key: "sprout", label: "Sprout", cost: 500, waterAmount: 2, verminChance: 0.05, diseaseChance: 0.02, baseMultiplier: 1.3, variance: 0.3 }),
+    clover: seedTier({ key: "clover", label: "Lucky Clover", cost: 2000, waterAmount: 4, verminChance: 0.08, diseaseChance: 0.03, baseMultiplier: 1.6, variance: 0.6 }),
+    nightshade: seedTier({ key: "nightshade", label: "Nightshade", cost: 3500, waterAmount: 5, verminChance: 0.15, diseaseChance: 0.08, baseMultiplier: 2.2, variance: 0.4 }),
+    "golden-vine": seedTier({ key: "golden-vine", label: "Golden Vine", cost: 8000, waterAmount: 10, verminChance: 0.1, diseaseChance: 0.05, baseMultiplier: 3.0, variance: 0.9 }),
 };
 
 const PROTECTION_COST: Record<"pesticide" | "fungicide", number> = {
@@ -105,7 +66,8 @@ function squareView(square: any) {
         plantedAt: square.plantedAt,
         readyAt: square.readyAt,
         lastWateredAt: square.lastWateredAt,
-        waterIntervalMs: square.waterIntervalMs,
+        waterAmount: square.waterAmount,
+        waterCount: square.waterCount,
         cost: square.cost,
         baseMultiplier: square.baseMultiplier,
         variance: square.variance,
@@ -121,7 +83,12 @@ module.exports = function (app: express.Application) {
         const doc = await XenCasinoGardenState.getState(userId);
         return res.json({
             status: true,
-            data: { squares: doc.squares.map(squareView), seedTiers: Object.values(SEED_TIERS), protectionCost: PROTECTION_COST },
+            data: {
+                squares: doc.squares.map(squareView),
+                seedTiers: Object.values(SEED_TIERS),
+                protectionCost: PROTECTION_COST,
+                waterCooldownMs: GARDEN_WATER_COOLDOWN_MS,
+            },
         });
     });
 
@@ -178,6 +145,19 @@ module.exports = function (app: express.Application) {
     app.post("/api/casino/garden/water", authenticateToken, async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const { squareId } = req.body as { squareId: number };
+
+        const state = await XenCasinoGardenState.getState(userId);
+        const before = state.squares.find((s: any) => s.squareId === squareId);
+        if (before && before.status === "growing") {
+            const msSinceWatered = Date.now() - new Date(before.lastWateredAt).getTime();
+            if (msSinceWatered < GARDEN_WATER_COOLDOWN_MS) {
+                return res.status(400).json({
+                    status: false,
+                    message: `Still on cooldown - wait ${Math.ceil((GARDEN_WATER_COOLDOWN_MS - msSinceWatered) / 60000)}m before watering again`,
+                });
+            }
+        }
+
         const square = await XenCasinoGardenState.water(userId, squareId);
         if (!square) {
             return res.status(400).json({ status: false, message: "Nothing to water here" });

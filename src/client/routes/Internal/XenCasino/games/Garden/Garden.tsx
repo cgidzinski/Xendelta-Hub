@@ -72,19 +72,18 @@ interface SquareCardProps {
 }
 
 function SquareCard({ square, now, onPlantClick }: SquareCardProps) {
-    const { water, isWatering, protect, isProtecting, harvest, isHarvesting, clear, isClearing } = useCasinoGarden();
+    const { water, isWatering, protect, isProtecting, harvest, isHarvesting, clear, isClearing, waterCooldownMs } = useCasinoGarden();
     const { enqueueSnackbar } = useSnackbar();
 
-    const readyAt = square.readyAt ? new Date(square.readyAt).getTime() : null;
-    const plantedAt = square.plantedAt ? new Date(square.plantedAt).getTime() : null;
-    const totalDuration = readyAt && plantedAt ? readyAt - plantedAt : null;
-    const remaining = readyAt ? readyAt - now : null;
-    const progress = totalDuration && remaining !== null ? Math.min(100, 100 * (1 - Math.max(0, remaining) / totalDuration)) : 0;
+    // Real readiness gate is waterCount >= waterAmount (see resolveGardenSquare) - this
+    // progress bar tracks waterings delivered, not elapsed time.
+    const progress = square.waterAmount > 0 ? Math.min(100, (square.waterCount / square.waterAmount) * 100) : 0;
 
-    // Needs a fresh watering once a full waterIntervalMs has elapsed since the last one -
-    // missing a second full interval on top of that kills the square (see resolveGardenSquare).
+    // 1h-per-square cooldown on the watering action itself; missing 2 full cooldowns in a
+    // row (no watering at all) kills the square (see resolveGardenSquare).
     const msSinceWatered = square.lastWateredAt ? now - new Date(square.lastWateredAt).getTime() : 0;
-    const needsWater = !!square.waterIntervalMs && msSinceWatered >= square.waterIntervalMs;
+    const onCooldown = msSinceWatered < waterCooldownMs;
+    const cooldownRemaining = waterCooldownMs - msSinceWatered;
 
     const handleWater = () => water({ squareId: square.squareId }).catch((e) => enqueueSnackbar(e.message || "Failed to water", { variant: "error" }));
     const handleProtect = (item: "pesticide" | "fungicide") =>
@@ -125,24 +124,26 @@ function SquareCard({ square, now, onPlantClick }: SquareCardProps) {
                             sx={{ height: 6, borderRadius: 999 }}
                         />
                         <Typography variant="caption" color="text.secondary">
-                            {square.status === "ready" ? "Ready to harvest" : formatCountdown(remaining ?? 0)}
+                            {square.status === "ready" ? "Ready to harvest" : `Watered ${square.waterCount}/${square.waterAmount}`}
                         </Typography>
 
                         <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-                            <Chip
-                                size="small"
-                                icon={<WaterDropIcon />}
-                                label={needsWater ? "Needs water" : "Watered"}
-                                color={needsWater ? "error" : "info"}
-                                variant={needsWater ? "outlined" : "filled"}
-                            />
+                            {square.status === "growing" && (
+                                <Chip
+                                    size="small"
+                                    icon={<WaterDropIcon />}
+                                    label={onCooldown ? `Cooldown ${formatCountdown(cooldownRemaining)}` : "Ready to water"}
+                                    color={onCooldown ? "default" : "info"}
+                                    variant={onCooldown ? "outlined" : "filled"}
+                                />
+                            )}
                             {square.protection.pesticide && <Chip size="small" icon={<BugReportIcon />} label="Pesticide" color="success" />}
                             {square.protection.fungicide && <Chip size="small" icon={<ScienceIcon />} label="Fungicide" color="success" />}
                         </Box>
 
                         <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: "auto" }}>
-                            {needsWater && (
-                                <Button size="small" variant="contained" disabled={isWatering} onClick={handleWater}>
+                            {square.status === "growing" && (
+                                <Button size="small" variant="contained" disabled={isWatering || onCooldown} onClick={handleWater}>
                                     Water
                                 </Button>
                             )}
@@ -176,10 +177,10 @@ function SquareCard({ square, now, onPlantClick }: SquareCardProps) {
                     </>
                 )}
 
-                {square.status !== "empty" && square.waterIntervalMs && (
+                {square.status !== "empty" && square.waterAmount > 0 && (
                     <Typography variant="caption" color="text.secondary">
-                        Cost {formatCheddar(square.cost)} - pays {multiplierRange(square.baseMultiplier, square.variance)} - water every{" "}
-                        {formatDuration(square.waterIntervalMs)}
+                        Cost {formatCheddar(square.cost)} - pays {multiplierRange(square.baseMultiplier, square.variance)} - {square.waterAmount}{" "}
+                        waterings needed
                     </Typography>
                 )}
             </CardContent>
@@ -188,7 +189,7 @@ function SquareCard({ square, now, onPlantClick }: SquareCardProps) {
 }
 
 export default function Garden() {
-    const { squares, seedTiers, protectionCost, isLoading, plant, isPlanting } = useCasinoGarden();
+    const { squares, seedTiers, protectionCost, waterCooldownMs, isLoading, plant, isPlanting } = useCasinoGarden();
     const { enqueueSnackbar } = useSnackbar();
     const now = useNow(15 * 1000);
     const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
@@ -215,12 +216,14 @@ export default function Garden() {
         {
             title: "Seeds",
             rows: seedTiers.map((t) => ({
-                label: `${t.label} (${formatCheddar(t.cost)}, water every ${formatDuration(t.waterIntervalMs)})`,
+                label: `${t.label} (${formatCheddar(t.cost)}, ${t.waterAmount} waterings)`,
                 payout: `${multiplierRange(t.baseMultiplier, t.variance)} - vermin ${(t.verminChance * 100).toFixed(0)}% / disease ${(
                     t.diseaseChance * 100
                 ).toFixed(0)}% per check`,
             })),
-            footnote: "Harvest payout is cost x base multiplier, swung +/- the seed's variance by casino luck. Riskier/higher-maintenance seeds pay a bigger base multiplier.",
+            footnote: `Harvest payout is cost x base multiplier, swung +/- the seed's variance by casino luck. Watering is on a ${formatDuration(
+                waterCooldownMs
+            )} cooldown per plot; a vermin hit adds one more required watering instead of killing the crop outright.`,
         },
         {
             title: "Protection",
@@ -228,14 +231,16 @@ export default function Garden() {
                 { label: "Pesticide", payout: `${formatCheddar(protectionCost.pesticide)} - blocks vermin` },
                 { label: "Fungicide", payout: `${formatCheddar(protectionCost.fungicide)} - blocks disease` },
             ],
-            footnote: "Unprotected growing plots roll a vermin/disease chance once per watering interval.",
+            footnote: `Unprotected growing plots roll a vermin/disease chance once per ${formatDuration(waterCooldownMs)} tick.`,
         },
     ];
 
     return (
         <GameWrapper
             title="Casino Garden"
-            howToPlay="Plant a seed in any of the 9 plots. Each seed has its own cost, grow time, watering frequency, and risk - miss a full watering interval and the plot dies. Unprotected plots can also be struck by vermin (delaying harvest) or disease (killing the crop) - buy pesticide/fungicide to guard against them. Harvest a ready plot for a payout based on the seed's cost, base multiplier, and a little casino luck."
+            howToPlay={`Plant a seed in any of the 9 plots. Each seed needs a set number of waterings to mature - water each plot at most once every ${formatDuration(
+                waterCooldownMs
+            )}, and go two cooldowns without watering at all and the plot dies. Unprotected plots can also be struck by vermin (adds one more required watering) or disease (kills the crop) - buy pesticide/fungicide to guard against them. Harvest a fully-watered plot for a payout based on the seed's cost, base multiplier, and a little casino luck.`}
             oddsSections={oddsSections}
         >
             {isLoading ? (
@@ -255,7 +260,7 @@ export default function Garden() {
                             {tier.label} - {formatCheddar(tier.cost)} cheddar
                         </Typography>
                         <Typography variant="caption" color="text.secondary" component="div">
-                            Pays {multiplierRange(tier.baseMultiplier, tier.variance)} - water every {formatDuration(tier.waterIntervalMs)} - vermin{" "}
+                            Pays {multiplierRange(tier.baseMultiplier, tier.variance)} - {tier.waterAmount} waterings needed - vermin{" "}
                             {(tier.verminChance * 100).toFixed(0)}% / disease {(tier.diseaseChance * 100).toFixed(0)}% per check
                         </Typography>
                     </MenuItem>
