@@ -23,7 +23,7 @@ const INGREDIENT_COST = 5000;
 const BRIBE_COST = 1500; // cost of the first bribe on a batch - each subsequent one costs more, see nextBribeCost
 const BRIBE_COST_STEP = 0.75; // +75% of the base cost per prior bribe on this batch
 const UPGRADE_COST = 10000;
-const START_MULTIPLIER = 0.5; // collecting the instant a batch starts is a guaranteed loss, not free money
+const START_MULTIPLIER = 0; // collecting the instant a batch starts pays out nothing - not free money
 const PEAK_MULTIPLIER = 4; // batch payout plateaus at ingredientCost * this, once peakAt passes
 // Higher still levels reach peak sooner and give raid rolls more grace after a bribe -
 // "go deep on one still" progression instead of running parallel batches.
