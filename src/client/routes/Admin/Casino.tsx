@@ -20,6 +20,10 @@ import {
     FormControlLabel,
     Chip,
     Divider,
+    Autocomplete,
+    TextField,
+    Avatar,
+    CircularProgress,
 } from "@mui/material";
 import { useSnackbar } from "notistack";
 import {
@@ -34,7 +38,16 @@ import {
     ResponsiveContainer,
 } from "recharts";
 import { format, parseISO } from "date-fns";
-import { useAdminCasino, useAdminCasinoDailyStats, useAdminCasinoGames, type StatsRange } from "../../hooks/admin/useAdminCasino";
+import {
+    useAdminCasino,
+    useAdminCasinoDailyStats,
+    useAdminCasinoGames,
+    useAdminCasinoDiscordUsers,
+    useAdminUserWallet,
+    useAdminSendMoney,
+    type StatsRange,
+    type DiscordLinkedUser,
+} from "../../hooks/admin/useAdminCasino";
 import { useTitle } from "../../hooks/useTitle";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import ErrorDisplay from "../../components/ErrorDisplay";
@@ -107,6 +120,15 @@ export default function Casino() {
         isTogglingCasinoOpen,
     } = useAdminCasinoGames();
 
+    // Send Cheddar panel state
+    const [selectedRecipient, setSelectedRecipient] = useState<DiscordLinkedUser | null>(null);
+    const [sendAmount, setSendAmount] = useState("");
+    const [sendNote, setSendNote] = useState("");
+    const [sendRequestId, setSendRequestId] = useState<string | null>(null);
+    const { users: discordUsers, isLoading: discordUsersLoading } = useAdminCasinoDiscordUsers();
+    const { wallet, isLoading: walletLoading } = useAdminUserWallet(selectedRecipient?._id ?? null);
+    const { sendMoney, isSendingMoney } = useAdminSendMoney();
+
     const handleClearJackpots = async () => {
         try {
             await clearJackpots();
@@ -155,6 +177,51 @@ export default function Casino() {
             enqueueSnackbar("Casino reopened", { variant: "success" });
         } catch (err) {
             enqueueSnackbar(err instanceof Error ? err.message : "Failed to reopen casino", { variant: "error" });
+        }
+    };
+
+    const ensureSendRequestId = () => {
+        if (sendRequestId) return sendRequestId;
+        const id = crypto.randomUUID();
+        setSendRequestId(id);
+        return id;
+    };
+
+    const handleSendAmountChange = (value: string) => {
+        setSendAmount(value);
+        setSendRequestId(null);
+    };
+
+    const handleSendNoteChange = (value: string) => {
+        setSendNote(value);
+        setSendRequestId(null);
+    };
+
+    const handleRecipientChange = (recipient: DiscordLinkedUser | null) => {
+        setSelectedRecipient(recipient);
+        setSendAmount("");
+        setSendNote("");
+        setSendRequestId(null);
+    };
+
+    const handleSendMoney = async () => {
+        if (!selectedRecipient) return;
+        const amountNum = Number(sendAmount);
+        if (!Number.isFinite(amountNum) || amountNum <= 0) return;
+
+        try {
+            const result = await sendMoney({
+                userId: selectedRecipient._id,
+                amount: amountNum,
+                note: sendNote,
+                requestId: ensureSendRequestId(),
+            });
+            enqueueSnackbar(`Sent ${amountNum.toLocaleString()} cheddar to ${selectedRecipient.username}. New balance: ${formatCheddar(result.balance)}`, { variant: "success" });
+            setSendAmount("");
+            setSendNote("");
+            setSendRequestId(null);
+        } catch (err) {
+            enqueueSnackbar(err instanceof Error ? err.message : "Failed to send cheddar", { variant: "error" });
         }
     };
 
@@ -319,6 +386,92 @@ export default function Casino() {
                             />
                         ))}
                 </Box>
+            </Paper>
+
+            {/* Send Cheddar */}
+            <Paper variant="outlined" sx={{ p: 2.5, mb: 3 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>
+                    Send Cheddar
+                </Typography>
+                <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "flex-start" }}>
+                    <Autocomplete<DiscordLinkedUser>
+                        options={discordUsers}
+                        loading={discordUsersLoading}
+                        value={selectedRecipient}
+                        onChange={(_, newValue) => handleRecipientChange(newValue)}
+                        getOptionLabel={(option) => option.username}
+                        isOptionEqualToValue={(option, val) => option._id === val._id}
+                        sx={{ minWidth: 260 }}
+                        renderOption={(props, option) => (
+                            <Box component="li" {...props} key={option._id} sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1 }}>
+                                <Avatar src={option.avatar || undefined} sx={{ width: 28, height: 28 }}>
+                                    {option.username[0]?.toUpperCase()}
+                                </Avatar>
+                                <Box>
+                                    <Typography variant="body2">{option.username}</Typography>
+                                    <Typography variant="caption" color="text.secondary">{option.discordId}</Typography>
+                                </Box>
+                            </Box>
+                        )}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                size="small"
+                                label="Recipient"
+                                placeholder="Search Discord-linked users..."
+                                InputProps={{
+                                    ...params.InputProps,
+                                    endAdornment: (
+                                        <>
+                                            {discordUsersLoading ? <CircularProgress color="inherit" size={16} /> : null}
+                                            {params.InputProps.endAdornment}
+                                        </>
+                                    ),
+                                }}
+                            />
+                        )}
+                    />
+                    <TextField
+                        size="small"
+                        label="Amount"
+                        type="number"
+                        value={sendAmount}
+                        onChange={(e) => handleSendAmountChange(e.target.value)}
+                        disabled={!selectedRecipient}
+                        sx={{ width: 160 }}
+                    />
+                    <TextField
+                        size="small"
+                        label="Note (optional)"
+                        value={sendNote}
+                        onChange={(e) => handleSendNoteChange(e.target.value)}
+                        disabled={!selectedRecipient}
+                        sx={{ width: 240 }}
+                    />
+                    <Button
+                        variant="contained"
+                        onClick={handleSendMoney}
+                        disabled={isSendingMoney || !selectedRecipient || !sendAmount || Number(sendAmount) <= 0 || wallet?.linked === false}
+                        sx={{ height: 40 }}
+                    >
+                        {isSendingMoney ? "Sending..." : "Send"}
+                    </Button>
+                </Box>
+                {selectedRecipient && (
+                    <Box sx={{ mt: 1.5 }}>
+                        {walletLoading ? (
+                            <CircularProgress size={16} />
+                        ) : wallet?.linked === false ? (
+                            <Typography variant="body2" color="error">
+                                This user has no linked Discord account - cannot send cheddar.
+                            </Typography>
+                        ) : (
+                            <Typography variant="body2" color="text.secondary">
+                                Current balance: {formatCheddar(wallet?.balance ?? null)} cheddar
+                            </Typography>
+                        )}
+                    </Box>
+                )}
             </Paper>
 
             {/* Daily chart */}

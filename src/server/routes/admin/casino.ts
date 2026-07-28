@@ -1,10 +1,13 @@
 import express = require("express");
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
-import { getAccount, WeeabetsUnavailable } from "../../utils/weeabetsClient";
+import { getAccount, resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../../utils/weeabetsClient";
 import { XENCASINO_DISCORD_ID } from "../../config/weeabets";
 import { getCasinoStatus } from "../../utils/casinoStatus";
+import { AuthenticatedRequest } from "../../types/AuthenticatedRequest";
+import { randomUUID } from "crypto";
 const { XenCasino, XenCasinoActivity } = require("../../models/xenCasino");
+const { User } = require("../../models/user");
 
 // Mirrors the client-side CASINO_GAMES_REGISTRY order - stats are returned in this
 // order so the admin table is deterministic.
@@ -242,6 +245,96 @@ module.exports = function (app: express.Application) {
             return res.json({ status: true, data: casinoStatus });
         } catch (err) {
             return res.status(500).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    // Recipient picker data source for "Send Cheddar" - every user with an active Discord
+    // link (the only ones a Weeabets account can be resolved for). Pure Mongo projection,
+    // no external calls, so it's cheap to load on every visit to this page.
+    app.get("/api/admin/casino/discord-users", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+        try {
+            const users = await User.find(
+                { "authProviders.provider": "discord", "authProviders.isActive": true },
+                "username avatar authProviders"
+            ).exec();
+            const result = users
+                .map((u: any) => {
+                    const discordProvider = (u.authProviders || []).find((p: any) => p.provider === "discord" && p.isActive);
+                    return { _id: u._id, username: u.username, avatar: u.avatar, discordId: discordProvider?.providerId ?? null };
+                })
+                .filter((u: any) => u.discordId);
+            return res.json({ status: true, data: { users: result } });
+        } catch (err) {
+            return res.status(500).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    // Live cheddar balance for a single recipient, fetched only once an admin has
+    // selected them (not folded into the list above - balance changes constantly, so
+    // batching it there would mean one Weeabets call per Discord-linked user per load).
+    app.get("/api/admin/casino/users/:userId/wallet", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+        const user = await User.findOne({ _id: req.params.userId }).exec();
+        if (!user) {
+            return res.status(404).json({ status: false, message: "User not found" });
+        }
+        try {
+            const resolved = await resolveUserAccount(user);
+            if (!resolved.linked || !resolved.account) {
+                return res.json({ status: true, data: { linked: false, balance: null } });
+            }
+            return res.json({ status: true, data: { linked: true, balance: resolved.account.balance } });
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    // Admin-initiated cheddar grant, sourced from the house account - same transfer()
+    // primitive every other payout (e.g. daily quest reward) goes through.
+    app.post("/api/admin/casino/users/:userId/send-money", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+        const { userId } = req.params;
+        const { amount, note, requestId } = req.body;
+        const admin = (req as AuthenticatedRequest).user!;
+
+        const amountNum = Number(amount);
+        if (!Number.isFinite(amountNum) || amountNum <= 0) {
+            return res.status(400).json({ status: false, message: "Amount must be a positive number" });
+        }
+
+        const user = await User.findOne({ _id: userId }).exec();
+        if (!user) {
+            return res.status(404).json({ status: false, message: "User not found" });
+        }
+
+        try {
+            const resolved = await resolveUserAccount(user);
+            if (!resolved.linked || !resolved.account) {
+                return res.status(400).json({ status: false, message: "User has no linked Discord account" });
+            }
+
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+            // requestId is client-generated and reused across retries of the same unsubmitted
+            // amount, so a client-side retry replays this same key rather than paying out twice.
+            // Weeabets caps transfer keys at 64 chars, so this can't also embed the admin/target
+            // ids - the UUID alone is already globally unique, which is all idempotency needs.
+            const key = `xendelta-admin-grant-${requestId || randomUUID()}`;
+            const trimmedNote = typeof note === "string" ? note.trim().slice(0, 200) : "";
+            const result = await transfer({
+                fromAccountId: xenCasinoAccountId,
+                toAccountId: resolved.account.accountId,
+                amount: amountNum.toFixed(10),
+                key,
+                note: `admin_grant:${admin.username}${trimmedNote ? ":" + trimmedNote : ""}`,
+            });
+
+            return res.json({
+                status: true,
+                message: `Sent ${amountNum.toLocaleString()} cheddar to ${user.username}`,
+                data: { balance: result.toNewBalance },
+            });
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
         }
     });
 };

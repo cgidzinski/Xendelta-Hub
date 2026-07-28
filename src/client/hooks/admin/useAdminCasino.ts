@@ -46,11 +46,25 @@ interface AdminCasinoGamesResponse {
     casino: AdminCasinoStatus;
 }
 
+export interface DiscordLinkedUser {
+    _id: string;
+    username: string;
+    avatar: string | null;
+    discordId: string;
+}
+
+export interface AdminUserWallet {
+    linked: boolean;
+    balance: string | null;
+}
+
 export const adminCasinoKeys = {
     all: ["adminCasino"] as const,
     byRange: (range: StatsRange) => ["adminCasino", range] as const,
     dailyStats: (days: number) => ["adminCasino", "dailyStats", days] as const,
     games: ["adminCasino", "games"] as const,
+    discordUsers: ["adminCasino", "discordUsers"] as const,
+    wallet: (userId: string) => ["adminCasino", "wallet", userId] as const,
 };
 
 const fetchAdminCasinoStats = async (range: StatsRange): Promise<AdminCasinoResponse> => {
@@ -86,6 +100,25 @@ const toggleGame = async ({ slug, disabled }: { slug: string; disabled: boolean 
 
 const toggleCasinoOpen = async (open: boolean): Promise<void> => {
     await apiClient.post("/api/admin/casino/toggle-open", { open });
+};
+
+const fetchDiscordUsers = async (): Promise<DiscordLinkedUser[]> => {
+    const response = await apiClient.get<ApiResponse<{ users: DiscordLinkedUser[] }>>("/api/admin/casino/discord-users");
+    return response.data.data!.users;
+};
+
+const fetchUserWallet = async (userId: string): Promise<AdminUserWallet> => {
+    const response = await apiClient.get<ApiResponse<AdminUserWallet>>(`/api/admin/casino/users/${userId}/wallet`);
+    return response.data.data!;
+};
+
+const sendMoney = async (params: { userId: string; amount: number; note: string; requestId: string }): Promise<{ balance: string }> => {
+    const response = await apiClient.post<ApiResponse<{ balance: string }>>(`/api/admin/casino/users/${params.userId}/send-money`, {
+        amount: params.amount,
+        note: params.note,
+        requestId: params.requestId,
+    });
+    return response.data.data!;
 };
 
 export const useAdminCasino = (range: StatsRange) => {
@@ -170,5 +203,50 @@ export const useAdminCasinoDailyStats = (days: number = 5) => {
         isLoading,
         isError,
         error: error as Error | null,
+    };
+};
+
+export const useAdminCasinoDiscordUsers = () => {
+    const { data, isLoading, isError, error } = useQuery({
+        queryKey: adminCasinoKeys.discordUsers,
+        queryFn: fetchDiscordUsers,
+        staleTime: 60 * 1000,
+    });
+
+    return {
+        users: data ?? [],
+        isLoading,
+        isError,
+        error: error as Error | null,
+    };
+};
+
+export const useAdminUserWallet = (userId: string | null) => {
+    const { data, isLoading, isError, error } = useQuery({
+        queryKey: adminCasinoKeys.wallet(userId ?? ""),
+        queryFn: () => fetchUserWallet(userId as string),
+        enabled: !!userId,
+    });
+
+    return {
+        wallet: data,
+        isLoading,
+        isError,
+        error: error as Error | null,
+    };
+};
+
+export const useAdminSendMoney = () => {
+    const queryClient = useQueryClient();
+    const { mutateAsync: sendMoneyMutation, isPending: isSendingMoney } = useMutation({
+        mutationFn: sendMoney,
+        onSuccess: (_data, variables) => {
+            queryClient.invalidateQueries({ queryKey: adminCasinoKeys.wallet(variables.userId) });
+        },
+    });
+
+    return {
+        sendMoney: sendMoneyMutation,
+        isSendingMoney,
     };
 };
