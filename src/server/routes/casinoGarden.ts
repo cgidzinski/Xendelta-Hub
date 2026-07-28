@@ -148,7 +148,7 @@ module.exports = function (app: express.Application) {
 
         const state = await XenCasinoGardenState.getState(userId);
         const before = state.squares.find((s: any) => s.squareId === squareId);
-        if (before && before.status === "growing") {
+        if (before && before.status === "growing" && before.lastWateredAt) {
             const msSinceWatered = Date.now() - new Date(before.lastWateredAt).getTime();
             if (msSinceWatered < GARDEN_WATER_COOLDOWN_MS) {
                 return res.status(400).json({

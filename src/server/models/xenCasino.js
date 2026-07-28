@@ -386,7 +386,8 @@ function resolveGardenSquare(square, now) {
   }
   var changed = false;
 
-  if (now.getTime() - square.lastWateredAt.getTime() >= GARDEN_WATER_COOLDOWN_MS * 2) {
+  var lastCareAnchor = square.lastWateredAt || square.plantedAt;
+  if (now.getTime() - lastCareAnchor.getTime() >= GARDEN_WATER_COOLDOWN_MS * 2) {
     square.status = "dead";
     return true;
   }
@@ -464,24 +465,26 @@ xenCasinoGardenStateSchema.statics.plant = async function (userId, squareId, see
   square.seedType = seedType;
   square.plantedAt = now;
   square.readyAt = new Date(now.getTime() + tier.growDurationMs);
-  square.lastWateredAt = now;
+  square.lastWateredAt = null; // unwatered until the player actually waters it - see statics.water
   square.lastCareCheckAt = now;
   square.cost = tier.cost;
   square.waterAmount = tier.waterAmount;
-  square.waterCount = 1; // planting counts as the first watering
+  square.waterCount = 0; // planting does NOT count as a watering - the player must water it themselves
   square.verminChance = tier.verminChance;
   square.diseaseChance = tier.diseaseChance;
   square.baseMultiplier = tier.baseMultiplier;
   square.variance = tier.variance;
   square.protection = { pesticide: false, fungicide: false };
-  square.status = square.waterCount >= square.waterAmount ? "ready" : "growing";
+  square.status = "growing";
   await doc.save();
   return square;
 };
 
 // The one place the 1h-per-square cooldown is enforced - rejects (returns null) if this
 // square was already watered within the last GARDEN_WATER_COOLDOWN_MS, so the route can
-// respond with a clear "still on cooldown" 400 rather than silently no-op'ing.
+// respond with a clear "still on cooldown" 400 rather than silently no-op'ing. The very
+// first watering (lastWateredAt still null - planting no longer auto-waters) is always
+// allowed immediately; the cooldown only applies between waterings.
 xenCasinoGardenStateSchema.statics.water = async function (userId, squareId) {
   var doc = await this.getState(userId);
   var square = doc.squares.find(function (s) { return s.squareId === squareId; });
@@ -489,7 +492,7 @@ xenCasinoGardenStateSchema.statics.water = async function (userId, squareId) {
     return null;
   }
   var now = new Date();
-  if (now.getTime() - square.lastWateredAt.getTime() < GARDEN_WATER_COOLDOWN_MS) {
+  if (square.lastWateredAt && now.getTime() - square.lastWateredAt.getTime() < GARDEN_WATER_COOLDOWN_MS) {
     return null;
   }
   square.lastWateredAt = now;
