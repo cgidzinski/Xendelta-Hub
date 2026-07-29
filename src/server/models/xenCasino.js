@@ -1090,8 +1090,7 @@ var XenCasinoMineState = mongoose.model("XenCasinoMineState", xenCasinoMineState
 var xenCasinoRanchCreatureSchema = new mongoose.Schema({
     userId: { type: String, required: true, index: true },
     species: { type: String, required: true }, // cosmetic flavor + the key into route-owned SPECIES_TYPE/SPECIES_ITEM_KEY
-    name: { type: String, required: true }, // rolled from CREATURE_NAMES at hatch time
-    nickname: { type: String, required: true }, // rolled from CREATURE_NICKNAMES at hatch time, shown alongside name
+    name: { type: String, required: true }, // a single silly nickname, rolled from CREATURE_NAMES at hatch time
     rarityTier: { type: String, required: true }, // key into RANCH_RARITY_TIERS (route-owned)
     stats: {
         speed: { type: Number, required: true },
@@ -1123,7 +1122,6 @@ xenCasinoRanchCreatureSchema.statics.createForUser = async function (userId, par
         userId: userId,
         species: params.species,
         name: params.name,
-        nickname: params.nickname,
         rarityTier: params.rarityTier,
         stats: params.stats,
     });

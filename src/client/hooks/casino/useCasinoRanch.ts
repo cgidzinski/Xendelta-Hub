@@ -20,7 +20,6 @@ export interface RanchCreature {
     id: string;
     species: string;
     name: string;
-    nickname: string;
     type: RanchType;
     rarityTier: string;
     stats: RanchStats;
@@ -69,7 +68,6 @@ export interface RanchRacer {
     isPlayer: boolean;
     species: string;
     name: string;
-    nickname: string;
     type: RanchType;
     level: number;
     stats: RanchStats;

@@ -53,10 +53,6 @@ function feedUnitsRequired(level: number): number {
     return Math.floor((level - 1) / 10) + 1;
 }
 
-function displayName(c: { name: string; nickname: string }): string {
-    return `${c.name} "${c.nickname}"`;
-}
-
 const TYPE_EMOJI: Record<RanchType, string> = { land: "🌾", sea: "🌊", air: "🪽" };
 const TYPE_LABEL: Record<RanchType, string> = { land: "Land", sea: "Sea", air: "Air" };
 
@@ -259,9 +255,6 @@ function RanchCard({ creature, feedCooldownMs, selected, onClick }: RanchCardPro
             <Typography variant="body2" sx={{ fontWeight: 700, textAlign: "center" }}>
                 {creature.name}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic", textAlign: "center", mt: -0.5 }}>
-                "{creature.nickname}"
-            </Typography>
             <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", justifyContent: "center" }}>
                 <Chip
                     size="small"
@@ -323,7 +316,7 @@ function HatchConfirm({ onDone }: { onDone: () => void }) {
     const handleHatch = () =>
         hatch()
             .then((r) => {
-                enqueueSnackbar(`Hatched a ${r.creature.rarityTier} ${displayName(r.creature)}!`, { variant: "success" });
+                enqueueSnackbar(`Hatched a ${r.creature.rarityTier} ${r.creature.name}!`, { variant: "success" });
                 onDone();
             })
             .catch((e) => enqueueSnackbar(e.message || "Failed to hatch", { variant: "error" }));
@@ -373,7 +366,7 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCo
         feed(creature.id)
             .then((r) =>
                 enqueueSnackbar(
-                    `${displayName(creature)} gained +${r.gains.speed} speed, +${r.gains.stamina} stamina, +${r.gains.power} power, +${r.gains.intelligence} intelligence, +${r.gains.luck} luck, +${r.gains.charm} charm!`,
+                    `${creature.name} gained +${r.gains.speed} speed, +${r.gains.stamina} stamina, +${r.gains.power} power, +${r.gains.intelligence} intelligence, +${r.gains.luck} luck, +${r.gains.charm} charm!`,
                     { variant: "success" }
                 )
             )
@@ -387,7 +380,7 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCo
     const handleRelease = () =>
         release(creature.id)
             .then((r) => {
-                enqueueSnackbar(`Released ${displayName(creature)} for ${formatCheddar(r.sellValue)} cheddar.`, { variant: "success" });
+                enqueueSnackbar(`Released ${creature.name} for ${formatCheddar(r.sellValue)} cheddar.`, { variant: "success" });
                 onReleased();
             })
             .catch((e) => enqueueSnackbar(e.message || "Failed to release", { variant: "error" }));
@@ -400,9 +393,6 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCo
                 </Avatar>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, textAlign: "center" }}>
                     {creature.name}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
-                    "{creature.nickname}"
                 </Typography>
                 <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: "center" }}>
                     <Chip
@@ -455,7 +445,7 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCo
                 ) : (
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "error.main", borderRadius: 1 }}>
                         <Typography variant="body2" color="text.secondary">
-                            Release {displayName(creature)} for {formatCheddar(sellValue)}? This can't be undone.
+                            Release {creature.name} for {formatCheddar(sellValue)}? This can't be undone.
                         </Typography>
                         <Box sx={{ display: "flex", gap: 1 }}>
                             <Button variant="outlined" fullWidth disabled={isReleasing} onClick={() => setConfirmingRelease(false)}>
@@ -607,7 +597,7 @@ function RacerRow({ racer, odds }: { racer: RanchRacer; odds?: RanchOdds }) {
                 <Typography sx={{ fontSize: 28 }}>{TYPE_EMOJI[racer.type]}</Typography>
                 <Box sx={{ minWidth: 0 }}>
                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        {racer.name} "{racer.nickname}"
+                        {racer.name}
                         {racer.isPlayer ? " (You)" : ""}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>

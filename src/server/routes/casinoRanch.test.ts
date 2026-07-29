@@ -11,7 +11,6 @@ import {
     rollFeedGains,
     rollRival,
     rollCreatureName,
-    rollCreatureNickname,
     pickCourse,
     effectiveRaceTotal,
     simulateRace,
@@ -111,31 +110,26 @@ describe("rollRival", () => {
         }
     });
 
-    it("assigns a valid land/sea/air type and a name/nickname", () => {
+    it("assigns a valid land/sea/air type and a name", () => {
         const rival = rollRival("common");
         expect(["land", "sea", "air"]).toContain(rival.type);
         expect(rival.name.length).toBeGreaterThan(0);
-        expect(rival.nickname.length).toBeGreaterThan(0);
     });
 });
 
-describe("rollCreatureName / rollCreatureNickname", () => {
+describe("rollCreatureName", () => {
     it("always returns a non-empty string", () => {
         for (let i = 0; i < 500; i++) {
             expect(rollCreatureName().length).toBeGreaterThan(0);
-            expect(rollCreatureNickname().length).toBeGreaterThan(0);
         }
     });
 
-    it("draws from a reasonably varied pool (not always the same value)", () => {
+    it("draws from a large, varied pool (not always the same value)", () => {
         const names = new Set<string>();
-        const nicknames = new Set<string>();
         for (let i = 0; i < 500; i++) {
             names.add(rollCreatureName());
-            nicknames.add(rollCreatureNickname());
         }
-        expect(names.size).toBeGreaterThan(5);
-        expect(nicknames.size).toBeGreaterThan(5);
+        expect(names.size).toBeGreaterThan(20);
     });
 });
 
@@ -180,7 +174,7 @@ describe("effectiveRaceTotal", () => {
 });
 
 function makeRacer(id: string, stats: RanchStats): Racer {
-    return { id, isPlayer: id === "player", species: "Test", name: "Test", nickname: "The Tester", type: "land", level: 1, stats };
+    return { id, isPlayer: id === "player", species: "Test", name: "Test", type: "land", level: 1, stats };
 }
 
 const EVEN_STATS: RanchStats = { speed: 50, stamina: 50, power: 50, intelligence: 50, luck: 50, charm: 50 };

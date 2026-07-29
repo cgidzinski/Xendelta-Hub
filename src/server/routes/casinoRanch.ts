@@ -3,8 +3,8 @@
  * weighted rarity tiers (Common -> Legendary); a rarer tier means a higher starting stat
  * range across all 6 stats (Speed/Stamina/Power/Intelligence/Luck/Charm), snapshotted onto
  * the creature at hatch time so a later RANCH_RARITY_TIERS rebalance never retroactively
- * changes a creature already in the roster. Each creature also gets a rolled name and a
- * separate funny nickname, and a Land/Sea/Air type derived from its species (see
+ * changes a creature already in the roster. Each creature also gets a single rolled silly
+ * nickname (see CREATURE_NAMES), and a Land/Sea/Air type derived from its species (see
  * SPECIES_TYPE) - not stored, since it's fully determined by species. There is no stat
  * ceiling - feeding always raises every stat - but a creature left unfed too long slowly
  * decays (see resolveRanchDecay) until fed again. Level is never stored; it's always
@@ -243,28 +243,29 @@ const SPECIES_ITEM_KEY: Record<string, string> = {
     "Void Kraken": "void-ink",
 };
 
-// Curated so hatching feels a little personal - a real name plus a separate, sillier
-// nickname, e.g. `Bartholomew "The Big Cheese"`. Rolled independently at hatch time; no
-// gameplay effect, pure flavor.
+// Curated so hatching feels a little personal - one silly nickname per creature (no
+// separate formal name), e.g. `The Big Cheese`. Rolled at hatch time; no gameplay effect,
+// pure flavor. A large pool so repeats are rare even with a big roster.
 const CREATURE_NAMES = [
-    "Bartholomew", "Clementine", "Gideon", "Marigold", "Percival", "Winnifred", "Baxter", "Delphine",
-    "Ferdinand", "Hazel", "Ignatius", "Josephine", "Kingsley", "Lavender", "Montgomery", "Nutmeg",
-    "Ozzy", "Petunia", "Quincy", "Rosalind", "Sherwood", "Tabitha", "Ulysses", "Violet",
-    "Waldo", "Ximena", "Yorick", "Zinnia",
-];
-const CREATURE_NICKNAMES = [
     "The Big Cheese", "Sir Nibbles-a-Lot", "The Wobble King", "Lady Chomp", "The Curdlord", "Mister Mischief",
     "The Fuzzy Menace", "Duchess Drama", "The Snack Attack", "Captain Chaos", "The Gouda Gambler", "Baron von Fluff",
     "The Cheddar Bandit", "Princess Pouncealot", "The Rowdy Rascal", "Sir Snoozington", "The Sneaky Snacker", "Madame Mayhem",
     "The Whisker Warrior", "Lord Loudmouth", "The Sly Nibbler", "Countess Crumbs", "The Turbo Trotter", "Big Bad Buttercup",
-    "The Grumpy Gourmet", "Sir Stumbles", "The Feisty Feaster", "Queen of Naps",
+    "The Grumpy Gourmet", "Sir Stumbles", "The Feisty Feaster", "Queen of Naps", "The Dizzy Dasher", "Professor Pouncer",
+    "The Cheese Thief", "Duke of Drool", "The Wandering Weasel", "Miss Fancy Pants", "The Reckless Rambler", "Sir Chompsalot",
+    "The Midnight Muncher", "Baroness Bumblefoot", "The Galloping Goofball", "Count Fuzzybottom", "The Cheddar Champion",
+    "Lady Sniffs-a-Lot", "The Clumsy Clover", "Mister Zoomies", "The Whiskered Wonder", "Duchess Dillydally",
+    "The Bold Buffoon", "Sir Trots-a-Bunch", "The Grubby Gourmand", "Madame Wiggletail", "The Roaming Rogue",
+    "Captain Cuddlepuff", "The Nutty Nibbler", "Baron Bristlecoat", "The Speedy Slouch", "Lady Munchkin",
+    "The Wobbling Wonder", "Sir Fluffington", "The Bumbling Bandit", "Countess Crunch", "The Prancing Pest",
+    "Duke Snugglesworth", "The Cheeky Chomper", "Miss Puddlejump", "The Grazing Ghost", "Lord Puddinghead",
+    "The Frisky Forager", "Sir Grumblesnout", "The Wily Wobbler", "Baroness Snacksalot", "The Charging Cheeseball",
+    "Captain Clumsyhoof", "The Nibbling Ninja", "Duchess Doodlebug", "The Prowling Prankster", "Sir Chucklefur",
+    "The Mudlark Marauder", "Lady Twinkletoe", "The Blustering Blur", "Count Snickerdoodle",
 ];
 
 export function rollCreatureName(): string {
     return CREATURE_NAMES[Math.floor(Math.random() * CREATURE_NAMES.length)];
-}
-export function rollCreatureNickname(): string {
-    return CREATURE_NICKNAMES[Math.floor(Math.random() * CREATURE_NICKNAMES.length)];
 }
 
 // Neglect decay - a creature left unfed too long slowly loses stats until fed again.
@@ -352,17 +353,16 @@ export function rollFeedGains(): RanchStats {
     };
 }
 
-// A rival's stats/species/name/nickname are rolled the same way a hatch would be, from the
-// SAME rarity tier as the player's own creature (reusing RANCH_RARITY_TIERS/
-// SPECIES_BY_TIER directly, not a second stat generation system) so the field stays
-// naturally competitive without a separate opponent-scaling formula.
-export function rollRival(tierKey: string): { species: string; name: string; nickname: string; type: RanchType; stats: RanchStats } {
+// A rival's stats/species/name are rolled the same way a hatch would be, from the SAME
+// rarity tier as the player's own creature (reusing RANCH_RARITY_TIERS/SPECIES_BY_TIER
+// directly, not a second stat generation system) so the field stays naturally competitive
+// without a separate opponent-scaling formula.
+export function rollRival(tierKey: string): { species: string; name: string; type: RanchType; stats: RanchStats } {
     const tier = RANCH_RARITY_TIERS.find((t) => t.key === tierKey) ?? RANCH_RARITY_TIERS[0];
     const species = randomSpecies(tier.key);
     return {
         species,
         name: rollCreatureName(),
-        nickname: rollCreatureNickname(),
         type: typeForSpecies(species),
         stats: rollStatsInRange(tier.statRange),
     };
@@ -373,7 +373,6 @@ export interface Racer {
     isPlayer: boolean;
     species: string;
     name: string;
-    nickname: string;
     type: RanchType;
     level: number;
     stats: RanchStats;
@@ -442,7 +441,6 @@ function creatureView(doc: any) {
         id: String(doc._id),
         species: doc.species,
         name: doc.name,
-        nickname: doc.nickname,
         type: typeForSpecies(doc.species),
         rarityTier: doc.rarityTier,
         stats: doc.stats,
@@ -458,10 +456,10 @@ function creatureView(doc: any) {
     };
 }
 
-// Lazy one-time heal for any creature read: backfills stat keys/nickname/a real name added
-// after this creature was hatched (this repo has no migration-script convention, so
-// heal-on-read is the established pattern here), and resolves neglect decay. findByIdAndUpdate
-// does not run full-document validators, so this is safe even though the schema paths are
+// Lazy one-time heal for any creature read: backfills stat keys/a real name added after
+// this creature was hatched (this repo has no migration-script convention, so heal-on-read
+// is the established pattern here), and resolves neglect decay. findByIdAndUpdate does not
+// run full-document validators, so this is safe even though the schema paths are
 // `required`.
 async function ensureCreatureFresh(creature: any) {
     if (!creature) {
@@ -475,11 +473,9 @@ async function ensureCreatureFresh(creature: any) {
             setFields["stats." + key] = Math.round(randomInRange(tier.statRange));
         }
     }
-    if (!creature.nickname) {
-        setFields.nickname = rollCreatureNickname();
-    }
-    if (creature.name === creature.species) {
-        // Legacy tell from before real names existed - name was just set equal to species.
+    if (!creature.name || creature.name === creature.species) {
+        // Legacy tell from before real names existed - name was missing or just set equal
+        // to species.
         setFields.name = rollCreatureName();
     }
 
@@ -602,7 +598,6 @@ module.exports = function (app: express.Application) {
                 creature = await XenCasinoRanchCreature.createForUser(userId, {
                     species,
                     name: rollCreatureName(),
-                    nickname: rollCreatureNickname(),
                     rarityTier: tier.key,
                     stats,
                 });
@@ -898,7 +893,6 @@ module.exports = function (app: express.Application) {
                         isPlayer: false,
                         species: rival.species,
                         name: rival.name,
-                        nickname: rival.nickname,
                         type: rival.type,
                         level: levelForStats(rival.stats),
                         stats: rival.stats,
@@ -910,7 +904,6 @@ module.exports = function (app: express.Application) {
                         isPlayer: true,
                         species: creature.species,
                         name: creature.name,
-                        nickname: creature.nickname,
                         type: typeForSpecies(creature.species),
                         level: levelForStats(creature.stats),
                         stats: creature.stats,
