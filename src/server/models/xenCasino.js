@@ -1253,11 +1253,11 @@ var XenCasinoRanchInventory = mongoose.model("XenCasinoRanchInventory", xenCasin
 // casinoRanch.ts). So unlike a truly free "nothing's at stake yet" prepare step, starting a
 // second attempt while one is already in flight must be refused, not silently discarded -
 // same "refuse a second start" semantics as Printer's startRun, via statics.startIfClear.
-// `pending` holds { creatureId, racers, stage, course, odds, createdAt, expiresAt } -
-// `stage` ("awaiting-course" | "awaiting-bet") tracks how far the 3-step start -> spin
-// course -> bet flow has gotten; `course`/`odds` are null until the course-spin step fills
-// them in. The exact field/course/odds the player is shown is always what a later bet
-// resolves against, never anything re-rolled or client-supplied.
+// `pending` holds { creatureId, racers, course, odds, createdAt, expiresAt } - the whole
+// field/course/odds are rolled together in one /race/start call, so there's no in-between
+// stage to track: a pending race is always immediately ready for a bet (or a forfeit) the
+// moment it exists. The exact field/course/odds the player is shown is always what a later
+// bet resolves against, never anything re-rolled or client-supplied.
 var xenCasinoRanchPendingRaceSchema = new mongoose.Schema({
     userId: { type: String, required: true, unique: true },
     pending: { type: Object, default: null },
@@ -1286,32 +1286,9 @@ xenCasinoRanchPendingRaceSchema.statics.startIfClear = async function (userId, p
     return doc.pending;
 };
 
-// Advances an in-flight race from "awaiting-course" to "awaiting-bet" - guarded on the
-// pending race still matching this exact creature and still being at the expected stage,
-// so a stale/duplicate course-spin request can't double-advance or clobber a race that's
-// already moved on. Refreshes expiresAt so the player gets a fresh window for the next step
-// rather than a deadline that started ticking back at step 1.
-xenCasinoRanchPendingRaceSchema.statics.advanceToCourse = async function (userId, creatureId, course, odds, expiresAt) {
-    var doc = await this.getState(userId);
-    if (
-        !doc.pending ||
-        doc.pending.creatureId !== creatureId ||
-        doc.pending.stage !== "awaiting-course" ||
-        !pendingRaceIsLive(doc.pending)
-    ) {
-        return null;
-    }
-    doc.pending.stage = "awaiting-bet";
-    doc.pending.course = course;
-    doc.pending.odds = odds;
-    doc.pending.expiresAt = expiresAt;
-    doc.markModified("pending");
-    await doc.save();
-    return doc.pending;
-};
-
-// Clears unconditionally - called once a bet has resolved (win or lose), same "the caller
-// has already decided this is done" shape as Printer's clearRun.
+// Clears unconditionally - called once a bet has resolved (win or lose) or the player
+// forfeits, same "the caller has already decided this is done" shape as Printer's
+// clearRun.
 xenCasinoRanchPendingRaceSchema.statics.clearPending = async function (userId) {
     var doc = await this.findOne({ userId: userId }).exec();
     if (!doc) {

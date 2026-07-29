@@ -629,11 +629,11 @@ function RacerRow({ racer, odds }: { racer: RanchRacer; odds?: RanchOdds }) {
 }
 
 const STAKE_PRESETS = [100, 250, 500, 1000, 2500, 5000];
+const SPIN_EMOJI = ["🐹", "🐐", "🦌", "🦅", "🐉", "🦦", "🦊", "🐺", "🐏"];
 
 function RaceTab() {
     const {
         creatures,
-        raceCourses,
         feedCooldownMs,
         minRaceStake,
         maxRaceStake,
@@ -641,21 +641,26 @@ function RaceTab() {
         pendingRace,
         startRace,
         isStartingRace,
-        revealCourse,
-        isRevealingCourse,
+        forfeitRace,
+        isForfeitingRace,
         betRace,
         isBettingRace,
     } = useCasinoRanch();
     const { enqueueSnackbar } = useSnackbar();
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [pendingOverride, setPendingOverride] = useState<PendingRace | null>(null);
     const [spinning, setSpinning] = useState(false);
-    const [spinLabel, setSpinLabel] = useState<string | null>(null);
+    const [spinEmojis, setSpinEmojis] = useState<string[]>(["🐾", "🐾", "🐾", "🐾"]);
     const [betRacerId, setBetRacerId] = useState<string | null>(null);
     const [stake, setStake] = useState(minRaceStake || 100);
     const [raceResult, setRaceResult] = useState<BetRaceResult | null>(null);
+    const [confirmingForfeit, setConfirmingForfeit] = useState(false);
 
     const selectedCreature = creatures.find((c) => c.id === selectedId) ?? null;
-    const pending: PendingRace | null = pendingRace && pendingRace.creatureId === selectedId ? pendingRace : null;
+    // The just-started response is used directly (rather than waiting on the roster
+    // refetch pendingRace triggers) so the reveal timing is exact, not racing a network
+    // round-trip - pendingRace still takes over once set, e.g. on a page refresh.
+    const pending: PendingRace | null = pendingOverride ?? (pendingRace && pendingRace.creatureId === selectedId ? pendingRace : null);
 
     // Resume an in-flight race attempt (e.g. after a page refresh) by auto-selecting its
     // creature, so the player isn't forced to re-find it manually.
@@ -667,42 +672,34 @@ function RaceTab() {
 
     const handleSelectCreature = (id: string) => {
         setSelectedId(id);
+        setPendingOverride(null);
         setBetRacerId(null);
         setRaceResult(null);
+        setConfirmingForfeit(false);
     };
 
     const handleStart = () => {
         if (!selectedCreature) {
             return;
         }
-        startRace(selectedCreature.id).catch((e) => enqueueSnackbar(e.message || "Failed to start race", { variant: "error" }));
-    };
-
-    const handleRevealCourse = () => {
-        if (!selectedCreature) {
-            return;
-        }
         setSpinning(true);
-        let i = 0;
         const spinId = setInterval(() => {
-            setSpinLabel(raceCourses[i % Math.max(raceCourses.length, 1)]?.label ?? null);
-            i++;
-        }, 100);
+            setSpinEmojis([0, 1, 2, 3].map(() => SPIN_EMOJI[Math.floor(Math.random() * SPIN_EMOJI.length)]));
+        }, 120);
 
-        revealCourse(selectedCreature.id)
-            .then(() => {
+        startRace(selectedCreature.id)
+            .then((r) => {
                 setTimeout(() => {
                     clearInterval(spinId);
                     setSpinning(false);
-                    setSpinLabel(null);
+                    setPendingOverride(r.pending);
                     setBetRacerId("player");
-                }, 1200);
+                }, 1400);
             })
             .catch((e) => {
                 clearInterval(spinId);
                 setSpinning(false);
-                setSpinLabel(null);
-                enqueueSnackbar(e.message || "Failed to reveal course", { variant: "error" });
+                enqueueSnackbar(e.message || "Failed to start race", { variant: "error" });
             });
     };
 
@@ -715,6 +712,21 @@ function RaceTab() {
             .catch((e) => enqueueSnackbar(e.message || "Failed to place bet", { variant: "error" }));
     };
 
+    const handleForfeit = () => {
+        if (!selectedCreature) {
+            return;
+        }
+        forfeitRace(selectedCreature.id)
+            .then(() => {
+                enqueueSnackbar("Forfeited - the entry fee was not refunded.", { variant: "info" });
+                setPendingOverride(null);
+                setBetRacerId(null);
+                setConfirmingForfeit(false);
+                setSelectedId(null);
+            })
+            .catch((e) => enqueueSnackbar(e.message || "Failed to forfeit", { variant: "error" }));
+    };
+
     const handleAnimationFinished = () => {
         if (raceResult) {
             if (raceResult.won) {
@@ -724,6 +736,7 @@ function RaceTab() {
             }
         }
         setRaceResult(null);
+        setPendingOverride(null);
         setBetRacerId(null);
         setSelectedId(null);
     };
@@ -738,7 +751,7 @@ function RaceTab() {
 
     return (
         <Box>
-            {!pending && (
+            {!pending && !spinning && (
                 <>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                         Pick a creature to enter
@@ -757,12 +770,12 @@ function RaceTab() {
                 </>
             )}
 
-            {selectedCreature && !pending && (
+            {selectedCreature && !pending && !spinning && (
                 <Box sx={{ maxWidth: 480, mx: "auto" }}>
                     <ActionButton
                         icon={<SportsScoreIcon />}
-                        label={`Start Race - Entry Fee ${formatCheddar(entryFee)}`}
-                        description="Reveals 3 rivals for this creature. The fee is non-refundable once paid, even if you don't continue."
+                        label={`Race with ${selectedCreature.name} - Pay ${formatCheddar(entryFee)}`}
+                        description="Randomizes the course and your 3 rivals. The fee is non-refundable once paid, even if you forfeit."
                         color="warning"
                         disabled={isStartingRace}
                         onClick={handleStart}
@@ -770,35 +783,37 @@ function RaceTab() {
                 </Box>
             )}
 
-            {pending && pending.stage === "awaiting-course" && !spinning && (
+            {spinning && (
                 <Box sx={{ maxWidth: 560, mx: "auto" }}>
-                    <Typography variant="subtitle1" sx={{ textAlign: "center", fontWeight: 700, mb: 2 }}>
-                        Your Competition
+                    <Typography variant="h6" sx={{ textAlign: "center", fontWeight: 700, mb: 2 }}>
+                        🎡 Randomizing the course and your competition...
                     </Typography>
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 2 }}>
-                        {pending.racers.map((racer) => (
-                            <Box key={racer.id} sx={{ p: 1.5, borderRadius: 1.5, border: "1px solid", borderColor: "divider" }}>
-                                <RacerRow racer={racer} />
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        {spinEmojis.map((emoji, i) => (
+                            <Box
+                                key={i}
+                                sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 1,
+                                    p: 1.5,
+                                    borderRadius: 1.5,
+                                    border: "1px dashed",
+                                    borderColor: "divider",
+                                    opacity: 0.7,
+                                }}
+                            >
+                                <Typography sx={{ fontSize: 28 }}>{emoji}</Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    ???
+                                </Typography>
                             </Box>
                         ))}
                     </Box>
-                    <ActionButton
-                        icon={<SportsScoreIcon />}
-                        label="Spin for Course"
-                        description="Picks a random course that favors one stat, then reveals betting odds for all 4 racers."
-                        disabled={isRevealingCourse}
-                        onClick={handleRevealCourse}
-                    />
                 </Box>
             )}
 
-            {spinning && (
-                <Typography variant="h6" sx={{ textAlign: "center", fontWeight: 700, mt: 2 }}>
-                    🎡 Spinning... {spinLabel}
-                </Typography>
-            )}
-
-            {pending && pending.stage === "awaiting-bet" && pending.course && pending.odds && !raceResult && (
+            {pending && !raceResult && (
                 <Box sx={{ maxWidth: 560, mx: "auto" }}>
                     <Typography variant="subtitle1" sx={{ textAlign: "center", fontWeight: 700, mb: 2 }}>
                         Course: {pending.course.label}
@@ -806,7 +821,7 @@ function RaceTab() {
 
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 2 }}>
                         {pending.racers.map((racer) => {
-                            const odds = pending.odds!.find((o) => o.racerId === racer.id);
+                            const odds = pending.odds.find((o) => o.racerId === racer.id);
                             return (
                                 <CardActionArea
                                     key={racer.id}
@@ -856,6 +871,33 @@ function RaceTab() {
                         disabled={isBettingRace || !betRacerId}
                         onClick={handleBet}
                     />
+
+                    {!confirmingForfeit ? (
+                        <Button
+                            variant="text"
+                            color="error"
+                            fullWidth
+                            sx={{ mt: 1, textTransform: "none" }}
+                            disabled={isForfeitingRace}
+                            onClick={() => setConfirmingForfeit(true)}
+                        >
+                            Forfeit (lose {formatCheddar(entryFee)})
+                        </Button>
+                    ) : (
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 1, p: 1.5, border: "1px solid", borderColor: "error.main", borderRadius: 1 }}>
+                            <Typography variant="body2" color="text.secondary">
+                                Forfeit without betting? The {formatCheddar(entryFee)} entry fee is already gone either way.
+                            </Typography>
+                            <Box sx={{ display: "flex", gap: 1 }}>
+                                <Button variant="outlined" fullWidth disabled={isForfeitingRace} onClick={() => setConfirmingForfeit(false)}>
+                                    Cancel
+                                </Button>
+                                <Button variant="contained" color="error" fullWidth disabled={isForfeitingRace} onClick={handleForfeit}>
+                                    Confirm Forfeit
+                                </Button>
+                            </Box>
+                        </Box>
+                    )}
                 </Box>
             )}
 
@@ -1058,13 +1100,13 @@ export default function CheddarRanch() {
                 label: c.label,
                 payout: `Weights Spd x${c.weights.speed} / Sta x${c.weights.stamina} / Pwr x${c.weights.power} / Int x${c.weights.intelligence} / Lck x${c.weights.luck} / Chr x${c.weights.charm}`,
             })),
-            footnote: `On the Race tab, starting a race costs a flat ${formatCheddar(
+            footnote: `On the Race tab, paying the flat ${formatCheddar(
                 entryFee
-            )} entry fee (non-refundable once paid) and reveals 3 rival creatures. Spinning for a course is free and picks a random course that weights the 6 stats differently, revealing real bookmaker-style odds for all 4 racers. You then bet ${formatCheddar(
+            )} entry fee (non-refundable once paid, even if you forfeit) randomizes both the course - which weights the 6 stats differently - and your 3 rivals, then reveals real bookmaker-style odds for all 4 racers. You can then bet ${formatCheddar(
                 minRaceStake
             )}-${formatCheddar(
                 maxRaceStake
-            )} on any one of the 4 to win - a favorite pays a lower multiplier, a longshot pays a higher one. Your own creature's win/loss record and level track whether it actually placed first, independent of who you bet on.`,
+            )} on any one of the 4 to win - a favorite pays a lower multiplier, a longshot pays a higher one - or forfeit and walk away (still losing the entry fee). Your own creature's win/loss record and level track whether it actually placed first, independent of who you bet on.`,
         },
     ];
 
@@ -1089,7 +1131,7 @@ export default function CheddarRanch() {
     return (
         <GameWrapper
             title="Cheddar Ranch"
-            howToPlay="Ranch: tap the + tile to hatch a Cheddar Egg (rarity, species, and Land/Sea/Air type are randomized). Feed a creature with the Feed matching its own type to raise every stat by a random amount - higher-level creatures need more Feed per feeding, and a creature left unfed too long slowly loses stats. Collect its item every 24 hours, or release it for a flat cheddar payout. Race: pick a creature and pay the entry fee to reveal 3 rivals, spin for a free random course, then bet on any of the 4 racers (including your own) and watch the race play out. Your own creature's record and level track whether it actually placed first, regardless of who you bet on. Inventory: tap an item for details, then sell the stack for cheddar or use one (no effect yet). Shop: buy Land/Sea/Air Feed."
+            howToPlay="Ranch: tap the + tile to hatch a Cheddar Egg (rarity, species, and Land/Sea/Air type are randomized). Feed a creature with the Feed matching its own type to raise every stat by a random amount - higher-level creatures need more Feed per feeding, and a creature left unfed too long slowly loses stats. Collect its item every 24 hours, or release it for a flat cheddar payout. Race: pick a creature and pay the entry fee to randomize the course and reveal 3 rivals all at once, then bet on any of the 4 racers (including your own) and watch the race play out - or forfeit if you don't like your odds (the entry fee is gone either way). Your own creature's record and level track whether it actually placed first, regardless of who you bet on. Inventory: tap an item for details, then sell the stack for cheddar or use one (no effect yet). Shop: buy Land/Sea/Air Feed."
             oddsSections={oddsSections}
         >
             <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 3 }} variant="fullWidth">

@@ -17,27 +17,29 @@
  * feedUnitsRequired) - a higher-level creature costs more Feed per feeding, not more
  * cheddar per unit.
  *
- * Racing is a three-step flow, because a real, non-refundable-on-abandonment entry fee is
+ * Racing is a two-step flow, because a real, non-refundable-on-abandonment entry fee is
  * charged before anything is revealed:
  *   1. POST /:id/race/start - charges a flat entry fee (RANCH_RACE_ENTRY_FEE), then rolls 3
- *      rival creatures (same rarity tier as the player's own creature) and stores the
- *      4-racer field with stage "awaiting-course". No course/odds yet - the player sees who
- *      they're up against before knowing what course they'll race on.
- *   2. POST /:id/race/course - no money moves. Rolls a random course (weights the 6 stats
- *      differently - see RACE_COURSES) and computes bookmaker-style odds for the field via
- *      an internal Monte Carlo (estimateWinProbabilities), advancing the pending race to
- *      stage "awaiting-bet".
- *   3. POST /:id/race/bet - the player bets a stake on any one of the 4 racers. Debits the
+ *      rival creatures (same rarity tier as the player's own creature), picks a random
+ *      course (weights the 6 stats differently - see RACE_COURSES), and computes
+ *      bookmaker-style odds for the whole 4-racer field via an internal Monte Carlo
+ *      (estimateWinProbabilities) - all in one shot, so the client can play a single
+ *      "randomizing" reveal animation (the field and the course "spinning" together) before
+ *      showing the real result. From here the player either bets or forfeits.
+ *   2. POST /:id/race/bet - the player bets a stake on any one of the 4 racers. Debits the
  *      stake, then runs ONE real call to simulateRace (the exact same scoring function the
  *      odds were estimated from) against the stored field/course to decide the actual
  *      winner and finishing order, pays out stake * multiplier if the bet racer won, and
  *      clears the pending race. The player's own creature's win/loss record is updated
  *      based on whether IT placed first - independent of which racer was bet on.
+ *   Alternatively, POST /:id/race/forfeit clears the pending race without betting - the
+ *   entry fee already paid in step 1 is never refunded, forfeit or not.
  * The client plays a purely cosmetic CSS-transition "race" animation using the finishing
  * order the bet response already decided - it never decides anything itself. Because real
  * money is on the line from step 1, a second race attempt can't be started while one is
  * already in flight (see XenCasinoRanchPendingRace.startIfClear) - unlike a free "nothing's
- * at stake" prepare step, this one can't be silently discarded and restarted.
+ * at stake" prepare step, this one can't be silently discarded and restarted; it has to be
+ * explicitly bet on or forfeited.
  *
  * Each species also produces its own fixed item on a 24h manual-collect cooldown (see
  * XenCasinoRanchCreature.collect); the quantity produced per collection is the creature's
@@ -433,7 +435,7 @@ export function multiplierForProbability(p: number): number {
 const MIN_RACE_STAKE = 100;
 const MAX_RACE_STAKE = 5000;
 const RANCH_RACE_ENTRY_FEE = 5000; // flat, non-refundable once a race attempt is started
-const PENDING_RACE_TTL_MS = 15 * 60 * 1000; // refreshed at every stage transition
+const PENDING_RACE_TTL_MS = 15 * 60 * 1000; // window to bet or forfeit after starting a race
 
 function creatureView(doc: any) {
     return {
@@ -847,9 +849,10 @@ module.exports = function (app: express.Application) {
         }
     });
 
-    // Step 1 of 3 - charges the flat, non-refundable-on-abandonment entry fee and reveals 3
-    // rivals. No course/odds yet (stage "awaiting-course") - the player sees who they're up
-    // against before knowing what course they'll race on.
+    // Step 1 of 2 - charges the flat, non-refundable-on-abandonment entry fee, then rolls
+    // the 3 rivals, the course, and the odds all together in one shot (the client plays a
+    // single cosmetic "randomizing" reveal over this one response rather than waiting on a
+    // second request for the course).
     app.post(
         "/api/casino/ranch/:id/race/start",
         authenticateToken,
@@ -915,13 +918,20 @@ module.exports = function (app: express.Application) {
                     ...rivals,
                 ];
 
+                const course = pickCourse();
+                const probabilities = estimateWinProbabilities(racers, course);
+                const odds = racers.map((r) => ({
+                    racerId: r.id,
+                    winProbability: probabilities[r.id],
+                    multiplier: Number(multiplierForProbability(probabilities[r.id]).toFixed(2)),
+                }));
+
                 const now = new Date();
                 const pending = {
                     creatureId: id,
                     racers,
-                    stage: "awaiting-course",
-                    course: null,
-                    odds: null,
+                    course,
+                    odds,
                     createdAt: now,
                     expiresAt: new Date(now.getTime() + PENDING_RACE_TTL_MS),
                 };
@@ -946,10 +956,11 @@ module.exports = function (app: express.Application) {
         }
     );
 
-    // Step 2 of 3 - no money moves. Spins a random course and computes odds for the
-    // already-revealed field, advancing to stage "awaiting-bet".
+    // Forfeits an in-flight race attempt without betting - the entry fee already paid in
+    // /race/start is never refunded, forfeit or not, so this just clears the pending record
+    // (no Weeabets call at all) so the player can start a fresh attempt.
     app.post(
-        "/api/casino/ranch/:id/race/course",
+        "/api/casino/ranch/:id/race/forfeit",
         authenticateToken,
         requireGameEnabled(SLUG),
         async function (req: express.Request, res: express.Response) {
@@ -958,32 +969,16 @@ module.exports = function (app: express.Application) {
 
             const state = await XenCasinoRanchPendingRace.getState(userId);
             const pending = state.pending;
-            if (!pending || pending.creatureId !== id || pending.stage !== "awaiting-course") {
-                return res.status(400).json({ status: false, message: "No race attempt in progress for this creature - start one first" });
-            }
-            if (new Date(pending.expiresAt).getTime() < Date.now()) {
-                return res.status(400).json({ status: false, message: "Your race attempt expired - the entry fee was not refunded" });
+            if (!pending || pending.creatureId !== id) {
+                return res.status(400).json({ status: false, message: "No race attempt in progress for this creature" });
             }
 
-            const course = pickCourse();
-            const probabilities = estimateWinProbabilities(pending.racers, course);
-            const odds = pending.racers.map((r: Racer) => ({
-                racerId: r.id,
-                winProbability: probabilities[r.id],
-                multiplier: Number(multiplierForProbability(probabilities[r.id]).toFixed(2)),
-            }));
-
-            const expiresAt = new Date(Date.now() + PENDING_RACE_TTL_MS);
-            const updated = await XenCasinoRanchPendingRace.advanceToCourse(userId, id, course, odds, expiresAt);
-            if (!updated) {
-                return res.status(400).json({ status: false, message: "Race attempt no longer available - start again" });
-            }
-
-            return res.json({ status: true, data: { pending: updated } });
+            await XenCasinoRanchPendingRace.clearPending(userId);
+            return res.json({ status: true, data: { message: "Forfeited - the entry fee was not refunded." } });
         }
     );
 
-    // Step 3 of 3 - the player bets on one of the 4 racers; resolves immediately.
+    // Step 2 of 2 - the player bets on one of the 4 racers; resolves immediately.
     app.post(
         "/api/casino/ranch/:id/race/bet",
         authenticateToken,
@@ -999,8 +994,8 @@ module.exports = function (app: express.Application) {
 
             const state = await XenCasinoRanchPendingRace.getState(userId);
             const pending = state.pending;
-            if (!pending || pending.creatureId !== id || pending.stage !== "awaiting-bet") {
-                return res.status(400).json({ status: false, message: "No course set for this race yet - spin for a course first" });
+            if (!pending || pending.creatureId !== id) {
+                return res.status(400).json({ status: false, message: "No race attempt in progress for this creature - start one first" });
             }
             if (new Date(pending.expiresAt).getTime() < Date.now()) {
                 return res.status(400).json({ status: false, message: "Your race attempt expired - the entry fee was not refunded" });

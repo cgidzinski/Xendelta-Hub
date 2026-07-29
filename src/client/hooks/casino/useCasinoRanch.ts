@@ -81,14 +81,11 @@ export interface RanchOdds {
     multiplier: number;
 }
 
-export type PendingRaceStage = "awaiting-course" | "awaiting-bet";
-
 export interface PendingRace {
     creatureId: string;
     racers: RanchRacer[];
-    stage: PendingRaceStage;
-    course: RanchRaceCourse | null;
-    odds: RanchOdds[] | null;
+    course: RanchRaceCourse;
+    odds: RanchOdds[];
     createdAt: string;
     expiresAt: string;
 }
@@ -154,8 +151,8 @@ export interface StartRaceResult {
     pending: PendingRace;
 }
 
-export interface RevealCourseResult {
-    pending: PendingRace;
+export interface ForfeitRaceResult {
+    message: string;
 }
 
 export interface RaceResultEntry {
@@ -247,9 +244,9 @@ export const useCasinoRanch = () => {
         onSuccess: invalidate,
     });
 
-    const { mutateAsync: revealCourse, isPending: isRevealingCourse } = useMutation({
+    const { mutateAsync: forfeitRace, isPending: isForfeitingRace } = useMutation({
         mutationFn: async (creatureId: string) =>
-            (await apiClient.post<ApiResponse<RevealCourseResult>>(`/api/casino/ranch/${creatureId}/race/course`)).data.data!,
+            (await apiClient.post<ApiResponse<ForfeitRaceResult>>(`/api/casino/ranch/${creatureId}/race/forfeit`)).data.data!,
         onSuccess: invalidate,
     });
 
@@ -300,8 +297,8 @@ export const useCasinoRanch = () => {
         isBuyingFeed,
         startRace,
         isStartingRace,
-        revealCourse,
-        isRevealingCourse,
+        forfeitRace,
+        isForfeitingRace,
         betRace,
         isBettingRace,
     };
