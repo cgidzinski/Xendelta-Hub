@@ -66,6 +66,12 @@ export interface ShotResult {
 const FIXED_TIMESTEP_MS = 1000 / 60;
 const SUBSTEPS = 4; // engine updates per "step" below, at 1/4 the timestep each - see the tunneling comment on the update loop in simulateShot
 const SAMPLE_EVERY_N_STEPS = 2; // ~30fps trajectory
+
+// How much real flight time one trajectory sample represents once the client replays it (see
+// PachinkoBoard.tsx's own FRAME_MS, which plays trajectories back at this same ~30fps rate).
+// Exported so pachinko.ts can work out how long a ball's flight will actually take to play out
+// client-side, from nothing but the length of the trajectory this file already returns it.
+export const TRAJECTORY_SAMPLE_MS = FIXED_TIMESTEP_MS * SAMPLE_EVERY_N_STEPS;
 const MAX_STEPS = 500; // generous upper bound for the free-body phase
 const STALL_CHECK_INTERVAL = 20; // steps between displacement checkpoints
 const STALL_DISTANCE = 12; // px - net movement below this since the last checkpoint means "not making progress," regardless of instantaneous speed

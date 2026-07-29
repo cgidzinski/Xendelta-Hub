@@ -67,7 +67,7 @@ import {
     MAX_LAUNCH_POWER,
 } from "./pachinkoLayout";
 import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, ATTACKER_OPEN_MS, ATTACKER_BALLS, JACKPOT_OPEN_MS, CONTRIBUTION_RATE, JACKPOT_SEED, CASH_OUT_RATE, MAX_PAYOUT, jackpotBalls, cashOutAmount } from "./pachinkoPayouts";
-import { PachinkoOutcome, ShotResult, TrajectorySample } from "./pachinkoPhysics";
+import { PachinkoOutcome, ShotResult, TrajectorySample, TRAJECTORY_SAMPLE_MS } from "./pachinkoPhysics";
 import { spinReel, ReelSpinResult } from "./pachinkoReels";
 import Piscina from "piscina";
 import path from "path";
@@ -501,6 +501,15 @@ module.exports = function (app: express.Application) {
 
             const result: PachinkoBallResult = { outcome, ballsAwarded, trajectory, reelSpin };
 
+            // The client never applies a catch's session state (tulip toggles, jackpot window)
+            // the instant this response arrives - it waits for the ball to actually finish
+            // flying to its pocket first (see PachinkoBoard.tsx, so a window can't visibly open
+            // before its own catch is even on screen). A newly-primed jackpot window has to be
+            // anchored to that later moment, not to `now`, or the flight animation alone (easily
+            // a couple of real seconds) would eat a chunk of JACKPOT_OPEN_MS before the player
+            // ever sees the window open at all.
+            const landedAt = now + Math.max(0, trajectory.length - 1) * TRAJECTORY_SAMPLE_MS;
+
             // Everything below - tulip toggle, jackpot priming, attacker stacking, the lapsed-
             // tulip closeout - depends on the board's CURRENT gate state, which by the time we
             // get here (an async physics round-trip later, up to MAX_CONCURRENT_BALLS=20 other
@@ -536,7 +545,7 @@ module.exports = function (app: express.Application) {
                         // "jackpot" outcome branch below), not reset immediately - catching the
                         // jackpot, or letting the window lapse, is what closes them again.
                         if (isJackpotPrimed(nextLeftOpen, nextRightOpen)) {
-                            nextJackpotOpenUntil = now + JACKPOT_OPEN_MS;
+                            nextJackpotOpenUntil = landedAt + JACKPOT_OPEN_MS;
                         }
                     }
                 } else if (outcome === "chucker" && reelSpin && reelSpin.attackerOpenMs > 0) {
