@@ -11,7 +11,6 @@ export interface RanchCreature {
     name: string;
     rarityTier: string;
     stats: { speed: number; stamina: number; power: number };
-    statCap: number;
     lastFedAt: string | null;
     feedCount: number;
     raceWins: number;
@@ -29,7 +28,6 @@ export interface RanchRarityTier {
     label: string;
     probability: number;
     statRange: [number, number];
-    statCap: number;
 }
 
 export interface RanchRaceCategory {
@@ -45,13 +43,21 @@ export interface RanchItem {
     sellValue: number;
 }
 
+export interface RanchFeedItem {
+    key: string;
+    label: string;
+    statKey: "speed" | "stamina" | "power";
+    price: number;
+    quantity: number;
+}
+
 export interface RanchState {
     creatures: RanchCreature[];
     items: RanchItem[];
+    feedItems: RanchFeedItem[];
     rarityTiers: RanchRarityTier[];
     raceCategories: RanchRaceCategory[];
     hatchPrice: number;
-    feedCost: number;
     feedCooldownMs: number;
     raceEntryFee: number;
     raceWinMultiplier: number;
@@ -99,6 +105,11 @@ export interface SellItemResult {
 export interface UseItemResult {
     message: string;
     items: RanchItem[];
+}
+
+export interface BuyFeedItemResult {
+    balance: string;
+    feedItems: RanchFeedItem[];
 }
 
 export const casinoRanchKeys = {
@@ -166,13 +177,19 @@ export const useCasinoRanch = () => {
         onSuccess: invalidate,
     });
 
+    const { mutateAsync: buyFeedItem, isPending: isBuyingFeedItem } = useMutation({
+        mutationFn: async (itemKey: string) =>
+            (await apiClient.post<ApiResponse<BuyFeedItemResult>>(`/api/casino/ranch/feed-items/${itemKey}/buy`)).data.data!,
+        onSuccess: invalidate,
+    });
+
     return {
         creatures: data?.creatures ?? [],
         items: data?.items ?? [],
+        feedItems: data?.feedItems ?? [],
         rarityTiers: data?.rarityTiers ?? [],
         raceCategories: data?.raceCategories ?? [],
         hatchPrice: data?.hatchPrice ?? 0,
-        feedCost: data?.feedCost ?? 0,
         feedCooldownMs: data?.feedCooldownMs ?? 0,
         raceEntryFee: data?.raceEntryFee ?? 0,
         raceWinMultiplier: data?.raceWinMultiplier ?? 1,
@@ -196,5 +213,7 @@ export const useCasinoRanch = () => {
         isSellingItem,
         useItem,
         isUsingItem,
+        buyFeedItem,
+        isBuyingFeedItem,
     };
 };

@@ -1097,10 +1097,6 @@ var xenCasinoRanchCreatureSchema = new mongoose.Schema({
         stamina: { type: Number, required: true },
         power: { type: Number, required: true },
     },
-    // Snapshotted from the rarity tier at hatch time - this creature's own ceiling, immune
-    // to a later RANCH_RARITY_TIERS rebalance (same reasoning as Garden's per-square cost/
-    // waterAmount snapshot).
-    statCap: { type: Number, required: true },
     lastFedAt: { type: Date, default: null },
     feedCount: { type: Number, default: 0 },
     raceWins: { type: Number, default: 0 },
@@ -1123,7 +1119,6 @@ xenCasinoRanchCreatureSchema.statics.createForUser = async function (userId, par
         name: params.name,
         rarityTier: params.rarityTier,
         stats: params.stats,
-        statCap: params.statCap,
     });
 };
 
@@ -1137,8 +1132,8 @@ xenCasinoRanchCreatureSchema.statics.getOwned = async function (userId, creature
 
 // Re-reads fresh and rejects (returns null) if the creature isn't owned by userId or is
 // still on cooldown, rather than trusting an earlier GET - same guard Garden's water() and
-// Mine's applyDig() use. Applies the stat gain atomically via findOneAndUpdate (clamped to
-// this creature's own statCap) so a concurrent feed on the same creature can't double-apply.
+// Mine's applyDig() use. No stat ceiling - the gain is a plain atomic $inc, guarded on the
+// previously-read lastFedAt so a concurrent feed on the same creature can't double-apply.
 xenCasinoRanchCreatureSchema.statics.feed = async function (userId, creatureId, statKey, gain, cooldownMs) {
     var creature = await this.findOne({ _id: creatureId, userId: userId }).exec();
     if (!creature) {
@@ -1148,10 +1143,9 @@ xenCasinoRanchCreatureSchema.statics.feed = async function (userId, creatureId, 
     if (creature.lastFedAt && now.getTime() - creature.lastFedAt.getTime() < cooldownMs) {
         return null;
     }
-    var newValue = Math.min(creature.statCap, creature.stats[statKey] + gain);
     var updated = await this.findOneAndUpdate(
         { _id: creatureId, userId: userId, lastFedAt: creature.lastFedAt },
-        { $set: { ["stats." + statKey]: newValue, lastFedAt: now }, $inc: { feedCount: 1 } },
+        { $inc: { ["stats." + statKey]: gain, feedCount: 1 }, $set: { lastFedAt: now } },
         { new: true }
     ).exec();
     return updated;

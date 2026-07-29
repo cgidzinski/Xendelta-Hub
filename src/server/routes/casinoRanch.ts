@@ -1,28 +1,34 @@
 /**
  * Cheddar Ranch - a creature-collection game. Hatching a Cheddar Egg draws one of five
  * weighted rarity tiers (Common -> Legendary); a rarer tier means a higher starting stat
- * range and a higher training ceiling, both snapshotted onto the creature at hatch time so
- * a later RANCH_RARITY_TIERS rebalance never retroactively changes a creature already in
- * the roster. The roster itself is the game's inventory - each creature is its own document
- * (XenCasinoRanchCreature in src/server/models/xenCasino.js), fed/trained one at a time (a
- * flat fee, a cooldown, a small random stat gain capped at the creature's own ceiling) and
- * raced one at a time (an entry fee, a stat-weighted coin flip against a generated
- * opponent, a cheddar payout on a win). Releasing a creature pays out a flat rarity-based
- * sell value and removes it for good. The rarity draw itself reuses drawPrizeWeight (see
- * casinoGames/prizeWeights.ts) rather than reimplementing weighted random.
+ * range, snapshotted onto the creature at hatch time so a later RANCH_RARITY_TIERS
+ * rebalance never retroactively changes a creature already in the roster. The roster
+ * itself is the game's inventory - each creature is its own document
+ * (XenCasinoRanchCreature in src/server/models/xenCasino.js). There is no stat ceiling -
+ * feeding always raises a stat, for as long as you keep feeding it.
  *
- * Races are entered into one of a few weighted categories (Sprint/Endurance/Brawl) that
- * each weight a creature's stats differently before the same win-probability math runs -
- * so which category suits a given creature depends on how its stats are distributed, not
- * just their sum. Feeding and racing (win or lose) earn XP; level is deliberately never
- * stored, only derived from XP on read (see levelForXp), same "derive from persisted
- * counters" convention as Printer's currentMultiplier. Each species also produces its own
- * fixed item on a 24h manual-collect cooldown (see XenCasinoRanchCreature.collect); the
- * quantity produced per collection scales with the creature's current level. Collected
- * items land in a separate per-user fungible stack (XenCasinoRanchInventory) that can be
- * sold for cheddar or "used" - used is a stub for now (consumes the item, no effect yet).
+ * Feeding requires owning the matching Feed item (Speed/Stamina/Power Feed - bought with
+ * cheddar from the Shop, one flat kind per stat) rather than paying cheddar directly, so
+ * feeding itself moves no money and needs no Weeabets call. Races are entered into one of
+ * a few weighted categories (Sprint/Endurance/Brawl) that each weight a creature's stats
+ * differently before the same win-probability math runs - so which category suits a given
+ * creature depends on how its stats are distributed, not just their sum. Feeding and
+ * racing (win or lose) earn XP; level is deliberately never stored, only derived from XP
+ * on read (see levelForXp), same "derive from persisted counters" convention as Printer's
+ * currentMultiplier. Each species also produces its own fixed item on a 24h manual-collect
+ * cooldown (see XenCasinoRanchCreature.collect); the quantity produced per collection
+ * scales with the creature's current level. Collected items land in a per-user fungible
+ * stack (XenCasinoRanchInventory, shared with bought Feed items under different keys) that
+ * can be sold for cheddar or "used" - used is a stub for now (consumes the item, no effect
+ * yet).
+ *
+ * Every Weeabets transfer key here is a short random token (txnKey), not userId+creatureId
+ * embedded directly - both are 24-char Mongo ObjectIds, and prefix + both + a timestamp
+ * blows past Weeabets' 64-character key limit (this is exactly what broke feeding before
+ * Feed became item-based instead of a direct charge).
  */
 import express = require("express");
+import { randomBytes } from "crypto";
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 const { User } = require("../models/user");
@@ -34,6 +40,10 @@ import { drawPrizeWeight } from "./casinoGames/prizeWeights";
 
 const SLUG = "cheddar-ranch";
 
+function txnKey(prefix: string): string {
+    return `${prefix}-${randomBytes(8).toString("hex")}`;
+}
+
 const HATCH_PRICE = 2000; // one flat "Cheddar Egg" price - rarity is what varies, not price tiers
 
 interface RarityTier {
@@ -41,17 +51,16 @@ interface RarityTier {
     label: string;
     weight: number;
     statRange: [number, number]; // per-stat roll range at hatch time
-    statCap: number; // per-stat training ceiling for this tier
 }
 
 // Weights sum to 1000 -> 50% / 25% / 15% / 7% / 3%. Ordered common-to-rare on purpose, same
 // as Mine's MINE_ORE_TIERS, so a glance at the list reads as a rarity ladder.
 export const RANCH_RARITY_TIERS: RarityTier[] = [
-    { key: "common", label: "Common", weight: 500, statRange: [10, 25], statCap: 60 },
-    { key: "uncommon", label: "Uncommon", weight: 250, statRange: [20, 40], statCap: 90 },
-    { key: "rare", label: "Rare", weight: 150, statRange: [35, 60], statCap: 130 },
-    { key: "epic", label: "Epic", weight: 70, statRange: [55, 85], statCap: 170 },
-    { key: "legendary", label: "Legendary", weight: 30, statRange: [80, 120], statCap: 220 },
+    { key: "common", label: "Common", weight: 500, statRange: [10, 25] },
+    { key: "uncommon", label: "Uncommon", weight: 250, statRange: [20, 40] },
+    { key: "rare", label: "Rare", weight: 150, statRange: [35, 60] },
+    { key: "epic", label: "Epic", weight: 70, statRange: [55, 85] },
+    { key: "legendary", label: "Legendary", weight: 30, statRange: [80, 120] },
 ];
 
 // Cosmetic flavor only - picked at random within the hatched tier, no gameplay effect.
@@ -63,9 +72,28 @@ const SPECIES_BY_TIER: Record<string, string[]> = {
     legendary: ["Cheddar Wyrm", "Solar Stag", "Void Kraken"],
 };
 
-const FEED_COST = 500;
 const FEED_COOLDOWN_MS = 30 * 60 * 1000;
 const FEED_GAIN_RANGE: [number, number] = [1, 4];
+
+// Three feed items, one per stat - bought in the Shop for cheddar, consumed in the Ranch
+// to actually feed a creature. Feeding itself moves no money; the cheddar changes hands at
+// purchase time instead (see the /feed-items/:key/buy route).
+interface FeedItemDef {
+    key: string;
+    label: string;
+    statKey: "speed" | "stamina" | "power";
+    price: number;
+}
+const FEED_ITEM_DEFS: Record<string, FeedItemDef> = {
+    "speed-feed": { key: "speed-feed", label: "Speed Feed", statKey: "speed", price: 500 },
+    "stamina-feed": { key: "stamina-feed", label: "Stamina Feed", statKey: "stamina", price: 500 },
+    "power-feed": { key: "power-feed", label: "Power Feed", statKey: "power", price: 500 },
+};
+const FEED_ITEM_BY_STAT: Record<string, FeedItemDef> = {
+    speed: FEED_ITEM_DEFS["speed-feed"],
+    stamina: FEED_ITEM_DEFS["stamina-feed"],
+    power: FEED_ITEM_DEFS["power-feed"],
+};
 
 const RACE_ENTRY_FEE = 500;
 const RACE_WIN_MULTIPLIER = 1.8;
@@ -207,7 +235,6 @@ function creatureView(doc: any) {
         name: doc.name,
         rarityTier: doc.rarityTier,
         stats: doc.stats,
-        statCap: doc.statCap,
         lastFedAt: doc.lastFedAt,
         feedCount: doc.feedCount,
         raceWins: doc.raceWins,
@@ -221,8 +248,12 @@ function creatureView(doc: any) {
     };
 }
 
+async function inventoryDoc(userId: string) {
+    return XenCasinoRanchInventory.getState(userId);
+}
+
 async function itemsView(userId: string) {
-    const doc = await XenCasinoRanchInventory.getState(userId);
+    const doc = await inventoryDoc(userId);
     const entries: { key: string; label: string; quantity: number; sellValue: number }[] = [];
     for (const key of Object.keys(ITEM_DEFS)) {
         const quantity: number = doc.items.get(key) || 0;
@@ -233,22 +264,33 @@ async function itemsView(userId: string) {
     return entries;
 }
 
+async function feedItemsView(userId: string) {
+    const doc = await inventoryDoc(userId);
+    return Object.keys(FEED_ITEM_DEFS).map((key) => ({
+        key,
+        label: FEED_ITEM_DEFS[key].label,
+        statKey: FEED_ITEM_DEFS[key].statKey,
+        price: FEED_ITEM_DEFS[key].price,
+        quantity: doc.items.get(key) || 0,
+    }));
+}
+
 async function rosterView(userId: string) {
     const creatures = await XenCasinoRanchCreature.listByUser(userId);
     const items = await itemsView(userId);
+    const feedItems = await feedItemsView(userId);
     return {
         creatures: creatures.map(creatureView),
         items,
+        feedItems,
         rarityTiers: RANCH_RARITY_TIERS.map((t) => ({
             key: t.key,
             label: t.label,
             probability: t.weight / RANCH_RARITY_TIERS.reduce((sum, x) => sum + x.weight, 0),
             statRange: t.statRange,
-            statCap: t.statCap,
         })),
         raceCategories: RACE_CATEGORIES.map((c) => ({ key: c.key, label: c.label, weights: c.weights })),
         hatchPrice: HATCH_PRICE,
-        feedCost: FEED_COST,
         feedCooldownMs: FEED_COOLDOWN_MS,
         raceEntryFee: RACE_ENTRY_FEE,
         raceWinMultiplier: RACE_WIN_MULTIPLIER,
@@ -282,7 +324,7 @@ module.exports = function (app: express.Application) {
                 fromAccountId: resolved.account.accountId,
                 toAccountId: xenCasinoAccountId,
                 amount: HATCH_PRICE.toFixed(10),
-                key: `ranch-hatch-${userId}-${Date.now()}`,
+                key: txnKey("ranch-hatch"),
                 note: "ranch_hatch",
             });
 
@@ -295,14 +337,13 @@ module.exports = function (app: express.Application) {
                     name: species,
                     rarityTier: tier.key,
                     stats,
-                    statCap: tier.statCap,
                 });
             } catch (creationErr) {
                 await transfer({
                     fromAccountId: xenCasinoAccountId,
                     toAccountId: resolved.account.accountId,
                     amount: HATCH_PRICE.toFixed(10),
-                    key: `ranch-hatch-refund-${userId}-${Date.now()}`,
+                    key: txnKey("ranch-hatch-refund"),
                     note: "ranch_hatch_refund",
                 });
                 throw creationErr;
@@ -316,6 +357,9 @@ module.exports = function (app: express.Application) {
         }
     });
 
+    // Feeding moves no money - the cheddar was already spent buying the Feed item (see
+    // /feed-items/:key/buy below). This just consumes one matching Feed item and applies
+    // the (uncapped) stat gain.
     app.post("/api/casino/ranch/:id/feed", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const { id } = req.params;
@@ -332,46 +376,25 @@ module.exports = function (app: express.Application) {
             return res.status(400).json({ status: false, message: "This creature is still on cooldown" });
         }
 
-        const user = await User.findById(userId).exec();
-        if (!user) {
-            return res.status(404).json({ status: false, message: "User not found" });
+        const feedItem = FEED_ITEM_BY_STAT[statKey];
+        const consumed = await XenCasinoRanchInventory.subtractItem(userId, feedItem.key, 1);
+        if (!consumed) {
+            return res.status(400).json({ status: false, message: `Buy some ${feedItem.label} from the Shop first` });
         }
 
-        try {
-            const resolved = await resolveUserAccount(user);
-            if (!resolved.linked || !resolved.account) {
-                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
-            }
-            const xenCasinoAccountId = await getXenCasinoAccountId();
-            await transfer({
-                fromAccountId: resolved.account.accountId,
-                toAccountId: xenCasinoAccountId,
-                amount: FEED_COST.toFixed(10),
-                key: `ranch-feed-${userId}-${id}-${Date.now()}`,
-                note: "ranch_feed",
-            });
+        const gain = Math.round(randomInRange(FEED_GAIN_RANGE));
+        const updated = await XenCasinoRanchCreature.feed(userId, id, statKey, gain, FEED_COOLDOWN_MS);
 
-            const gain = Math.round(randomInRange(FEED_GAIN_RANGE));
-            const updated = await XenCasinoRanchCreature.feed(userId, id, statKey, gain, FEED_COOLDOWN_MS);
-
-            if (!updated) {
-                await transfer({
-                    fromAccountId: xenCasinoAccountId,
-                    toAccountId: resolved.account.accountId,
-                    amount: FEED_COST.toFixed(10),
-                    key: `ranch-feed-refund-${userId}-${id}-${Date.now()}`,
-                    note: "ranch_feed_refund",
-                });
-                return res.status(400).json({ status: false, message: "This creature is still on cooldown" });
-            }
-
-            await XenCasinoActivity.record({ game: SLUG, userId, wager: FEED_COST, payout: 0 });
-            const withXp = await XenCasinoRanchCreature.addXp(userId, id, FEED_XP);
-            return res.json({ status: true, data: { creature: creatureView(withXp ?? updated), gain } });
-        } catch (err) {
-            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
-            return res.status(status).json({ status: false, message: (err as Error).message });
+        if (!updated) {
+            // Lost the race against the cooldown between our pre-check and the atomic
+            // update below - give the consumed Feed item back rather than eating it for
+            // nothing.
+            await XenCasinoRanchInventory.addItem(userId, feedItem.key, 1);
+            return res.status(400).json({ status: false, message: "This creature is still on cooldown" });
         }
+
+        const withXp = await XenCasinoRanchCreature.addXp(userId, id, FEED_XP);
+        return res.json({ status: true, data: { creature: creatureView(withXp ?? updated), gain } });
     });
 
     app.post("/api/casino/ranch/:id/race", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
@@ -403,7 +426,7 @@ module.exports = function (app: express.Application) {
                 fromAccountId: resolved.account.accountId,
                 toAccountId: xenCasinoAccountId,
                 amount: RACE_ENTRY_FEE.toFixed(10),
-                key: `ranch-race-${userId}-${id}-${Date.now()}`,
+                key: txnKey("ranch-race"),
                 note: "ranch_race",
             });
 
@@ -420,7 +443,7 @@ module.exports = function (app: express.Application) {
                     fromAccountId: xenCasinoAccountId,
                     toAccountId: resolved.account.accountId,
                     amount: payout.toFixed(10),
-                    key: `ranch-race-win-${userId}-${id}-${Date.now()}`,
+                    key: txnKey("ranch-race-win"),
                     note: "ranch_race_win",
                 });
                 balance = payoutResult.toNewBalance;
@@ -472,7 +495,7 @@ module.exports = function (app: express.Application) {
                 fromAccountId: xenCasinoAccountId,
                 toAccountId: resolved.account.accountId,
                 amount: sellValue.toFixed(10),
-                key: `ranch-release-${userId}-${id}-${Date.now()}`,
+                key: txnKey("ranch-release"),
                 note: "ranch_release",
             });
 
@@ -486,9 +509,9 @@ module.exports = function (app: express.Application) {
         }
     });
 
-    // No cheddar changes hands here - production is free, so unlike hatch/feed/race there's
-    // no Weeabets transfer (and so no refund-on-failure dance needed) - just the cooldown
-    // guard and an inventory credit.
+    // No cheddar changes hands here - production is free, so unlike hatch/race/release/buy
+    // there's no Weeabets transfer (and so no refund-on-failure dance needed) - just the
+    // cooldown guard and an inventory credit.
     app.post("/api/casino/ranch/:id/collect", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const { id } = req.params;
@@ -525,7 +548,7 @@ module.exports = function (app: express.Application) {
             return res.status(400).json({ status: false, message: "Invalid item" });
         }
 
-        const inventory = await XenCasinoRanchInventory.getState(userId);
+        const inventory = await inventoryDoc(userId);
         const quantity: number = inventory.items.get(key) || 0;
         if (quantity <= 0) {
             return res.status(400).json({ status: false, message: "You don't have any of this item" });
@@ -547,7 +570,7 @@ module.exports = function (app: express.Application) {
                 fromAccountId: xenCasinoAccountId,
                 toAccountId: resolved.account.accountId,
                 amount: totalValue.toFixed(10),
-                key: `ranch-sell-${userId}-${key}-${Date.now()}`,
+                key: txnKey("ranch-sell"),
                 note: `ranch_sell_${key}`,
             });
 
@@ -578,5 +601,58 @@ module.exports = function (app: express.Application) {
 
         return res.json({ status: true, data: { message: "Nothing happens... yet.", items: await itemsView(userId) } });
     });
+
+    app.post(
+        "/api/casino/ranch/feed-items/:key/buy",
+        authenticateToken,
+        requireGameEnabled(SLUG),
+        async function (req: express.Request, res: express.Response) {
+            const userId = String((req as AuthenticatedRequest).user!._id);
+            const { key } = req.params;
+            const feedItem = FEED_ITEM_DEFS[key];
+            if (!feedItem) {
+                return res.status(400).json({ status: false, message: "Invalid feed item" });
+            }
+
+            const user = await User.findById(userId).exec();
+            if (!user) {
+                return res.status(404).json({ status: false, message: "User not found" });
+            }
+
+            try {
+                const resolved = await resolveUserAccount(user);
+                if (!resolved.linked || !resolved.account) {
+                    return res.status(400).json({ status: false, message: "Link your Discord account to play" });
+                }
+                const xenCasinoAccountId = await getXenCasinoAccountId();
+                const payoutResult = await transfer({
+                    fromAccountId: resolved.account.accountId,
+                    toAccountId: xenCasinoAccountId,
+                    amount: feedItem.price.toFixed(10),
+                    key: txnKey("ranch-buy-feed"),
+                    note: `ranch_buy_${key}`,
+                });
+
+                try {
+                    await XenCasinoRanchInventory.addItem(userId, key, 1);
+                } catch (creditErr) {
+                    await transfer({
+                        fromAccountId: xenCasinoAccountId,
+                        toAccountId: resolved.account.accountId,
+                        amount: feedItem.price.toFixed(10),
+                        key: txnKey("ranch-buy-feed-refund"),
+                        note: `ranch_buy_${key}_refund`,
+                    });
+                    throw creditErr;
+                }
+
+                await XenCasinoActivity.record({ game: SLUG, userId, wager: feedItem.price, payout: 0 });
+                return res.json({ status: true, data: { balance: payoutResult.fromNewBalance, feedItems: await feedItemsView(userId) } });
+            } catch (err) {
+                const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
+                return res.status(status).json({ status: false, message: (err as Error).message });
+            }
+        }
+    );
 
 };
