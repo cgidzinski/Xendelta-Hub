@@ -318,11 +318,752 @@ xenCasinoActivitySchema.statics.record = async function (params) {
 
 var XenCasinoActivity = mongoose.model("XenCasinoActivity", xenCasinoActivitySchema);
 
+// ---------------------------------------------------------------------------------------
+// Casino Garden - a 3x3 grid of squares, one seed per square, growing in parallel. Seed
+// economics (cost, grow time, watering frequency, vermin/disease chance, payout
+// multiplier) are owned by the route (casinoGarden.ts) and snapshotted onto the square at
+// plant time - so a later seed-tier rebalance never retroactively changes a crop already
+// growing. This model only owns square lifecycle (empty -> growing -> ready/dead) and
+// the vermin/disease + neglect-decay tick loops over whatever values got snapshotted.
+// ---------------------------------------------------------------------------------------
+
+var GARDEN_GRID_SIZE = 9;
+// Uniform across every seed - minimum time between two waterings of the *same* square.
+// Also doubles as the vermin/disease hazard-tick period (the chance still varies by
+// seed; only the cadence they're rolled at is fixed).
+var GARDEN_WATER_COOLDOWN_MS = 60 * 60 * 1000;
+// No neglect penalty at all until a plot has gone a full day with zero watering - well
+// outside any normal sleep schedule.
+var GARDEN_NEGLECT_GRACE_MS = 24 * 60 * 60 * 1000;
+// Once past the grace period, one decay tick fires every hour: -1 waterCount, or death
+// if waterCount is already 0. Watering at any point resets the neglect clock.
+var GARDEN_DECAY_TICK_MS = 60 * 60 * 1000;
+// Bonemeal (see statics.protect) shortens every watering cooldown on that square from
+// then on, applied against the square's *current* effective cooldown so it composes with
+// itself sanely if ever stacked (it can't be today - single-use per crop - but this way
+// the math still holds if that ever changes).
+var GARDEN_BONEMEAL_GROWTH_BOOST = 0.25;
+
+// The cooldown between waterings on this particular square, right now - shorter than the
+// base GARDEN_WATER_COOLDOWN_MS once bonemeal has been applied. This is also the same
+// cooldown the hazard-tick cadence and the final ready-flip wait key off of (see
+// resolveGardenSquare) - one number governs "how fast does this square move" everywhere.
+function effectiveWaterCooldownMs(square) {
+  return square.protection.bonemeal ? Math.round(GARDEN_WATER_COOLDOWN_MS * (1 - GARDEN_BONEMEAL_GROWTH_BOOST)) : GARDEN_WATER_COOLDOWN_MS;
+}
+
+function emptyGardenSquares() {
+  var squares = [];
+  for (var i = 0; i < GARDEN_GRID_SIZE; i++) {
+    squares.push({ squareId: i, status: "empty" });
+  }
+  return squares;
+}
+
+var gardenSquareSchema = new mongoose.Schema(
+  {
+    squareId: { type: Number, required: true },
+    seedType: { type: String, default: null },
+    plantedAt: { type: Date, default: null },
+    readyAt: { type: Date, default: null },
+    lastWateredAt: { type: Date, default: null },
+    lastCareCheckAt: { type: Date, default: null }, // last vermin/disease tick processed, so a gap of any length catches up correctly rather than re-rolling
+    decayTicksApplied: { type: Number, default: 0 }, // decay ticks already applied since the current neglect period started (see resolveGardenSquare) - reset whenever lastWateredAt moves
+    // Snapshotted from the seed tier at plant time (see casinoGarden.ts SEED_TIERS) -
+    // this square's own copy, immune to later tier rebalances.
+    cost: { type: Number, default: 0 },
+    waterAmount: { type: Number, default: 0 }, // total growth stages required to mature - a vermin hit raises this
+    waterCount: { type: Number, default: 0 }, // growth stages reached so far
+    verminHits: { type: Number, default: 0 }, // how many times vermin has set this crop back a growth stage - shown to the player, not just inferred
+    verminChance: { type: Number, default: 0 }, // per tick, while unprotected - adds +1 to waterAmount
+    diseaseChance: { type: Number, default: 0 }, // per tick, while unprotected - kills outright
+    baseMultiplier: { type: Number, default: 0 }, // harvest payout = cost * baseMultiplier * (1 +/- variance)
+    variance: { type: Number, default: 0 },
+    protection: {
+      pesticide: { type: Boolean, default: false }, // single-use shield - persists across misses, consumed only when it actually blocks a hit (see resolveGardenSquare)
+      fungicide: { type: Boolean, default: false }, // single-use shield - persists across misses, consumed only when it actually blocks a hit (see resolveGardenSquare)
+      fertilized: { type: Boolean, default: false }, // single-use - already applied, can't be bought again on this crop
+      bonemeal: { type: Boolean, default: false }, // single-use - speeds up this square's watering cooldown, see effectiveWaterCooldownMs
+    },
+    status: { type: String, enum: ["empty", "growing", "ready", "dead"], default: "empty" },
+  },
+  { _id: false }
+);
+
+var xenCasinoGardenStateSchema = new mongoose.Schema({
+  userId: { type: String, required: true, unique: true },
+  squares: { type: [gardenSquareSchema], default: emptyGardenSquares },
+});
+
+// Advances one growing square against `now`: rolls vermin/disease once per completed
+// cooldown tick since planting (or the last roll) - catching up correctly across any gap,
+// same pattern as resolvePrinterRun below - then, once a full GARDEN_NEGLECT_GRACE_MS has
+// passed with zero watering, applies one decay tick per completed GARDEN_DECAY_TICK_MS
+// since the grace period ended: -1 waterCount, or death if waterCount is already 0. A
+// vermin hit raises `waterAmount` by 1 (needs one more watering to mature); disease kills
+// outright, independent of decay. Pesticide/fungicide are a shield, not a per-check
+// coin flip: the hazard roll happens on every tick same as always, protected or not, and
+// a miss leaves the shield untouched (it holds across as many ticks/phases as it takes) -
+// it's only consumed the moment a roll actually would have hit, absorbing that one hit
+// and then flipping protection.pesticide/fungicide back to false. Flips growing -> ready
+// once `waterCount` reaches `waterAmount`. No-op for any square not currently growing.
+// Mutates in place; returns whether anything changed.
+function resolveGardenSquare(square, now) {
+  if (square.status !== "growing") {
+    return false;
+  }
+  var changed = false;
+  var cooldownMs = effectiveWaterCooldownMs(square);
+
+  var tick = new Date((square.lastCareCheckAt || square.plantedAt).getTime());
+  while (now.getTime() - tick.getTime() >= cooldownMs) {
+    tick = new Date(tick.getTime() + cooldownMs);
+    changed = true;
+    if (Math.random() < square.diseaseChance) {
+      if (square.protection.fungicide) {
+        square.protection.fungicide = false; // consumed - it just blocked an actual hit
+      } else {
+        square.status = "dead";
+        square.lastCareCheckAt = tick;
+        return true;
+      }
+    }
+    if (Math.random() < square.verminChance) {
+      if (square.protection.pesticide) {
+        square.protection.pesticide = false; // consumed - it just blocked an actual hit
+      } else {
+        square.waterAmount += 1;
+        square.verminHits += 1;
+      }
+    }
+  }
+  if (changed) {
+    square.lastCareCheckAt = tick;
+  }
+
+  var neglectAnchor = square.lastWateredAt || square.plantedAt;
+  var elapsedSinceWatered = now.getTime() - neglectAnchor.getTime();
+  if (elapsedSinceWatered >= GARDEN_NEGLECT_GRACE_MS) {
+    var ticksDue = Math.floor((elapsedSinceWatered - GARDEN_NEGLECT_GRACE_MS) / GARDEN_DECAY_TICK_MS) + 1;
+    var newTicks = ticksDue - square.decayTicksApplied;
+    for (var i = 0; i < newTicks; i++) {
+      changed = true;
+      if (square.waterCount > 0) {
+        square.waterCount -= 1;
+      } else {
+        square.status = "dead";
+        break;
+      }
+    }
+    square.decayTicksApplied = ticksDue;
+    if (square.status === "dead") {
+      return true;
+    }
+  }
+
+  // Even once fully watered, the plot still needs the same cooldown to pass since that
+  // final watering before it's actually ready - matches the wait between every other
+  // watering rather than finishing the instant the last one lands (see statics.water).
+  if (square.waterCount >= square.waterAmount && now.getTime() - neglectAnchor.getTime() >= cooldownMs) {
+    square.status = "ready";
+    changed = true;
+  }
+
+  return changed;
+}
+
+function clearGardenSquare(square) {
+  square.seedType = null;
+  square.plantedAt = null;
+  square.readyAt = null;
+  square.lastWateredAt = null;
+  square.lastCareCheckAt = null;
+  square.decayTicksApplied = 0;
+  square.cost = 0;
+  square.waterAmount = 0;
+  square.waterCount = 0;
+  square.verminHits = 0;
+  square.verminChance = 0;
+  square.diseaseChance = 0;
+  square.baseMultiplier = 0;
+  square.variance = 0;
+  square.protection = { pesticide: false, fungicide: false, fertilized: false, bonemeal: false };
+  square.status = "empty";
+}
+
+xenCasinoGardenStateSchema.statics.getState = async function (userId) {
+  var doc = await this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
+  var now = new Date();
+  var changed = false;
+  doc.squares.forEach(function (square) {
+    if (resolveGardenSquare(square, now)) {
+      changed = true;
+    }
+  });
+  if (changed) {
+    await doc.save();
+  }
+  return doc;
+};
+
+// `tier` is the seed's full economics snapshot from SEED_TIERS - { cost, growDurationMs,
+// waterAmount, verminChance, diseaseChance, baseMultiplier, variance } - copied onto the
+// square so later SEED_TIERS rebalances never retroactively affect an already-growing
+// crop (including its eventual harvest payout). `readyAt` is kept only as an
+// informational "earliest possible" display value - `waterCount >= waterAmount` is the
+// real gate (see resolveGardenSquare).
+xenCasinoGardenStateSchema.statics.plant = async function (userId, squareId, seedType, tier) {
+  var doc = await this.getState(userId);
+  var square = doc.squares.find(function (s) { return s.squareId === squareId; });
+  if (!square || square.status !== "empty") {
+    return null;
+  }
+  var now = new Date();
+  square.seedType = seedType;
+  square.plantedAt = now;
+  square.readyAt = new Date(now.getTime() + tier.growDurationMs);
+  square.lastWateredAt = null; // unwatered until the player actually waters it - see statics.water
+  square.lastCareCheckAt = now;
+  square.decayTicksApplied = 0;
+  square.cost = tier.cost;
+  square.waterAmount = tier.waterAmount;
+  square.waterCount = 0; // planting does NOT count as a watering - the player must water it themselves
+  square.verminHits = 0;
+  square.verminChance = tier.verminChance;
+  square.diseaseChance = tier.diseaseChance;
+  square.baseMultiplier = tier.baseMultiplier;
+  square.variance = tier.variance;
+  square.protection = { pesticide: false, fungicide: false, fertilized: false, bonemeal: false };
+  square.status = "growing";
+  await doc.save();
+  return square;
+};
+
+// The one place the per-square cooldown is enforced - rejects (returns null) if this
+// square was already watered within its effectiveWaterCooldownMs (shorter than the base
+// GARDEN_WATER_COOLDOWN_MS once bonemeal has been applied), so the route can respond with
+// a clear "still on cooldown" 400 rather than silently no-op'ing. The very first watering
+// (lastWateredAt still null - planting no longer auto-waters) is always allowed
+// immediately; the cooldown only applies between waterings.
+xenCasinoGardenStateSchema.statics.water = async function (userId, squareId) {
+  var doc = await this.getState(userId);
+  var square = doc.squares.find(function (s) { return s.squareId === squareId; });
+  if (!square || square.status !== "growing") {
+    return null;
+  }
+  var now = new Date();
+  if (square.lastWateredAt && now.getTime() - square.lastWateredAt.getTime() < effectiveWaterCooldownMs(square)) {
+    return null;
+  }
+  square.lastWateredAt = now;
+  square.decayTicksApplied = 0; // watering restarts the 24h neglect clock
+  square.waterCount += 1;
+  // Deliberately does NOT flip status to "ready" here even if this was the final
+  // required watering - resolveGardenSquare only does that once GARDEN_WATER_COOLDOWN_MS
+  // has passed since this watering too, same wait as between any two waterings.
+  await doc.save();
+  return square;
+};
+
+// `item` is "pesticide" (a shield against vermin - stays active through any number of
+// misses and is only consumed the moment it actually blocks a hit, see
+// resolveGardenSquare), "fungicide" (same, but for disease), "fertilizer" (immediately
+// reduces the remaining waterAmount by 1 - it doesn't skip watering, just shortens how
+// many are needed), or "bonemeal" (speeds up this square's watering cooldown from now on,
+// permanently for the rest of this crop - see effectiveWaterCooldownMs, applied via the
+// protection.bonemeal flag set below with no extra state to mutate). Each is single-use
+// per crop - already-true guards against paying twice while one's still active/pending.
+// Fertilizer is additionally refused once only the last growth stage is left, so the
+// final stage always has to be reached by an actual watering rather than bought away
+// entirely.
+xenCasinoGardenStateSchema.statics.protect = async function (userId, squareId, item) {
+  var doc = await this.getState(userId);
+  var square = doc.squares.find(function (s) { return s.squareId === squareId; });
+  if (!square || square.status !== "growing" || square.protection[item]) {
+    return null;
+  }
+  if (item === "fertilizer" && square.waterAmount - square.waterCount <= 1) {
+    return null;
+  }
+  square.protection[item] = true;
+  if (item === "fertilizer") {
+    square.waterAmount -= 1;
+  }
+  await doc.save();
+  return square;
+};
+
+// Called only after the harvest payout transfer has already succeeded (mirrors
+// markDailyQuestClaimed below) - re-validates status === "ready" itself rather than
+// trusting the caller's earlier read, so a square can't be double-cleared/double-paid.
+xenCasinoGardenStateSchema.statics.clearHarvestedSquare = async function (userId, squareId) {
+  var doc = await this.findOne({ userId: userId }).exec();
+  if (!doc) {
+    return null;
+  }
+  var square = doc.squares.find(function (s) { return s.squareId === squareId; });
+  if (!square || square.status !== "ready") {
+    return null;
+  }
+  clearGardenSquare(square);
+  await doc.save();
+  return square;
+};
+
+// No money involved (a dead square's inputs are just lost), so this clears immediately
+// rather than needing the pre/post-transfer split clearHarvestedSquare uses.
+xenCasinoGardenStateSchema.statics.clearDeadSquare = async function (userId, squareId) {
+  var doc = await this.getState(userId);
+  var square = doc.squares.find(function (s) { return s.squareId === squareId; });
+  if (!square || square.status !== "dead") {
+    return null;
+  }
+  clearGardenSquare(square);
+  await doc.save();
+  return square;
+};
+
+var XenCasinoGardenState = mongoose.model("XenCasinoGardenState", xenCasinoGardenStateSchema);
+
+// ---------------------------------------------------------------------------------------
+// Money Printer - one print run at a time, off an illicit computer rig. Payout multiplier
+// and raid risk are both derived from elapsed time (computed on read), never stored as a
+// "current value" - only the timestamps needed to derive them are persisted. Parts price /
+// peak duration / bribe cost / payout multiplier ceiling are all route-owned economics,
+// passed in.
+// ---------------------------------------------------------------------------------------
+
+var PRINTER_ROLL_INTERVAL_MS = 5 * 60 * 1000; // how often a raid chance is rolled while a run is going
+var PRINTER_RISK_RAMP_MS = 2 * 60 * 60 * 1000; // time since last bribe for the per-roll raid chance to reach its ceiling
+var PRINTER_BASE_RAID_CHANCE = 0.05; // real risk from the very first roll - no truly safe "collect immediately" window
+var PRINTER_MAX_RAID_CHANCE = 0.4; // per-roll ceiling - rising risk, never a certainty
+
+// `run.raidMultiplier` (set at start time from the sum of the run's 3 chosen parts'
+// raidBonus - see casinoPrinter.ts) scales the whole ramped curve; a loud/reckless parts
+// pick reaches the PRINTER_MAX_RAID_CHANCE ceiling sooner, but the ceiling itself never
+// moves regardless of parts.
+function printerRaidChance(now, run) {
+  var since = now.getTime() - new Date(run.lastBribeAt || run.startedAt).getTime();
+  var ramped = PRINTER_BASE_RAID_CHANCE + (since / PRINTER_RISK_RAMP_MS) * (PRINTER_MAX_RAID_CHANCE - PRINTER_BASE_RAID_CHANCE);
+  return Math.min(PRINTER_MAX_RAID_CHANCE, ramped * (run.raidMultiplier || 1));
+}
+
+// Rolls one raid check per completed PRINTER_ROLL_INTERVAL_MS tick since the run started
+// (or was last rolled) - catches up correctly across gaps of any length between reads, no
+// cron needed. Stops at the first hit. Mutates `run` in place; returns whether it changed.
+function resolvePrinterRun(run, now) {
+  if (!run || run.raidedAt) {
+    return false;
+  }
+  var lastRoll = new Date(run.lastRiskRollAt || run.startedAt);
+  var initial = lastRoll.getTime();
+  while (now.getTime() - lastRoll.getTime() >= PRINTER_ROLL_INTERVAL_MS) {
+    lastRoll = new Date(lastRoll.getTime() + PRINTER_ROLL_INTERVAL_MS);
+    if (Math.random() < printerRaidChance(lastRoll, run)) {
+      run.raidedAt = lastRoll;
+      break;
+    }
+  }
+  var changed = run.raidedAt || lastRoll.getTime() !== initial;
+  if (changed) {
+    run.lastRiskRollAt = lastRoll;
+  }
+  return !!changed;
+}
+
+var xenCasinoPrinterStateSchema = new mongoose.Schema({
+  userId: { type: String, required: true, unique: true },
+  // { startedAt, partsCost, peakAt, lastBribeAt, lastRiskRollAt, raidedAt } | null -
+  // Mixed/Object rather than a fixed sub-schema since it's null whenever no run is going.
+  run: { type: Object, default: null },
+});
+
+xenCasinoPrinterStateSchema.statics.getState = async function (userId) {
+  var doc = await this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
+  if (doc.run && resolvePrinterRun(doc.run, new Date())) {
+    doc.markModified("run");
+    await doc.save();
+  }
+  return doc;
+};
+
+// `peakMultiplier`/`raidMultiplier` are the run's own effective curve, already computed
+// (and clamped) by casinoPrinter.ts from the sum of its 3 chosen parts' rateBonus/
+// raidBonus - stored here so every later read (currentMultiplier, printerRaidChance)
+// uses this specific run's curve, not the global constants.
+xenCasinoPrinterStateSchema.statics.startRun = async function (userId, partsCost, peakDurationMs, peakMultiplier, raidMultiplier, partKeys, usedMachineUpgrade) {
+  var doc = await this.getState(userId);
+  if (doc.run) {
+    return null;
+  }
+  var now = new Date();
+  doc.run = {
+    startedAt: now,
+    partsCost: partsCost,
+    peakAt: new Date(now.getTime() + peakDurationMs),
+    peakMultiplier: peakMultiplier,
+    raidMultiplier: raidMultiplier,
+    partKeys: partKeys,
+    usedMachineUpgrade: !!usedMachineUpgrade, // just for display (see runView) - already baked into peakMultiplier above
+    lastBribeAt: now,
+    lastRiskRollAt: now,
+    raidedAt: null,
+    bribeCount: 0, // how many times this run has been bribed - each one costs more (see casinoPrinter.ts nextBribeCost)
+  };
+  doc.markModified("run");
+  await doc.save();
+  return doc.run;
+};
+
+xenCasinoPrinterStateSchema.statics.bribe = async function (userId) {
+  var doc = await this.getState(userId);
+  if (!doc.run || doc.run.raidedAt) {
+    return null;
+  }
+  doc.run.lastBribeAt = new Date();
+  doc.run.bribeCount = (doc.run.bribeCount || 0) + 1;
+  doc.markModified("run");
+  await doc.save();
+  return doc.run;
+};
+
+// Called after a successful collect payout (or to dismiss a raided run, which pays
+// nothing) - clears unconditionally since by this point the caller has already decided
+// the run is done being acted on.
+xenCasinoPrinterStateSchema.statics.clearRun = async function (userId) {
+  var doc = await this.findOne({ userId: userId }).exec();
+  if (!doc) {
+    return null;
+  }
+  doc.run = null;
+  await doc.save();
+  return doc;
+};
+
+var XenCasinoPrinterState = mongoose.model("XenCasinoPrinterState", xenCasinoPrinterStateSchema);
+
+// ---------------------------------------------------------------------------------------
+// Chip Mine - a dark, side-view shaft the player actively digs into. Moving through
+// tunnels you've already cleared is always free (no risk, no dig spent, no equipment
+// touched) - only pushing into new, undug territory is a real "dig": it spends one of
+// today's digs, needs a ladder to go down, and resolves whatever's actually there (heavy
+// stone, a cave-in, or a gem). Every tile the player has ever dug stays visible
+// permanently. There's no passive/automatic scouting anymore - a Flare is the only way
+// to preview a tile (its gem tier, or whether it's heavy stone) before committing to dig
+// it; blind digging is the default, same as it's always been for cave-in risk. Ore
+// tier/cave-in/heavy-stone chance by depth are structural, depth-derived math that lives
+// here (like the Money Printer's raid-risk formula); item prices and payout $ amounts
+// stay route-owned economics.
+// ---------------------------------------------------------------------------------------
+
+var MINE_OUTCOME = { ORE: "ore", EMPTY: "empty", CAVE_IN: "cave_in", STONE_CLEARED: "stone_cleared", MOVE: "move" };
+
+var MINE_BASE_ORE_CHANCE = 0.3;
+var MINE_ORE_CHANCE_PER_DEPTH = 0.01;
+var MINE_MAX_ORE_CHANCE = 0.6;
+var MINE_BASE_CAVE_IN_CHANCE = 0.03;
+var MINE_CAVE_IN_CHANCE_PER_DEPTH = 0.015;
+var MINE_MAX_CAVE_IN_CHANCE = 0.4;
+var MINE_BASE_STONE_CHANCE = 0.05;
+var MINE_STONE_CHANCE_PER_DEPTH = 0.008;
+var MINE_MAX_STONE_CHANCE = 0.35;
+
+// A sideways dig uses the *current* depth's cave-in/stone chance; a down dig uses the
+// *target* (deeper) depth's - this is what makes "down" the risk-escalating direction
+// and "side" the flat-risk one (see casinoMine.ts for how depth is picked per direction).
+function mineOreChanceForDepth(depth) {
+  return Math.min(MINE_MAX_ORE_CHANCE, MINE_BASE_ORE_CHANCE + depth * MINE_ORE_CHANCE_PER_DEPTH);
+}
+function mineCaveInChanceForDepth(depth) {
+  return Math.min(MINE_MAX_CAVE_IN_CHANCE, MINE_BASE_CAVE_IN_CHANCE + depth * MINE_CAVE_IN_CHANCE_PER_DEPTH);
+}
+function mineStoneChanceForDepth(depth) {
+  return Math.min(MINE_MAX_STONE_CHANCE, MINE_BASE_STONE_CHANCE + depth * MINE_STONE_CHANCE_PER_DEPTH);
+}
+
+// Ordered shallowest-to-deepest on purpose - pickOreTier below walks this to find the
+// slice unlocked at a given depth. `minDepth`/`weight` are structural (what's findable
+// where), so they live here; each tier's $ value multiplier is economics and stays
+// route-owned (see MINE_ORE_TIER_VALUE in casinoMine.ts).
+var MINE_ORE_TIERS = [
+  { key: "copper", label: "Copper Ore", minDepth: 0, weight: 100 },
+  { key: "silver", label: "Silver Ore", minDepth: 4, weight: 55 },
+  { key: "gold", label: "Gold Nugget", minDepth: 10, weight: 30 },
+  { key: "emerald", label: "Emerald", minDepth: 18, weight: 15 },
+  { key: "ruby", label: "Ruby", minDepth: 26, weight: 8 },
+  { key: "diamond", label: "Diamond", minDepth: 35, weight: 3 },
+];
+
+// Weighted-random among every tier unlocked at `depth` - shallow digs only ever roll
+// Copper (the only tier with minDepth 0), deeper digs add rarer tiers into the pool, so
+// both the chance of a good find and its expected value rise with depth, with no
+// separate formula needed - it falls straight out of the min-depth gate.
+function pickOreTier(depth) {
+  var eligible = MINE_ORE_TIERS.filter(function (t) { return t.minDepth <= depth; });
+  var totalWeight = eligible.reduce(function (sum, t) { return sum + t.weight; }, 0);
+  var roll = Math.random() * totalWeight;
+  for (var i = 0; i < eligible.length; i++) {
+    roll -= eligible[i].weight;
+    if (roll <= 0) {
+      return eligible[i].key;
+    }
+  }
+  return eligible[eligible.length - 1].key;
+}
+
+// "scouted": ground truth (oreTier) rolled and cached via a Flare, not yet dug. "blocked":
+// rolled/discovered as heavy stone (via a Flare or a rejected dig attempt) - needs an
+// Explosive to clear, not diggable normally. "mined": actually dug and resolved for good
+// (a gem collected if oreTier is set, or was empty, or was cleared stone). "collapsed": a
+// cave-in happened here - a hazard marker, unrelated to ore/scouting.
+var mineTileSchema = new mongoose.Schema(
+  {
+    x: { type: Number, required: true },
+    y: { type: Number, required: true },
+    oreTier: { type: String, default: null }, // one of MINE_ORE_TIERS' keys, or null (empty/stone/collapsed)
+    isHeavyStone: { type: Boolean, default: false },
+    status: { type: String, enum: ["scouted", "blocked", "mined", "collapsed"], default: "mined" },
+  },
+  { _id: false }
+);
+
+var xenCasinoMineStateSchema = new mongoose.Schema({
+  userId: { type: String, required: true, unique: true },
+  positionX: { type: Number, default: 0 },
+  positionY: { type: Number, default: 0 }, // depth - increases downward from the shaft entrance at 0
+  dugTiles: { type: [mineTileSchema], default: [] }, // scouted/blocked/mined/collapsed tiles
+  digsToday: { type: Number, default: 0 },
+  digsDate: { type: String, default: null }, // "YYYY-MM-DD" (UTC) digsToday applies to, lazy-reset like the daily quest
+  ladderCount: { type: Number, default: 3 }, // a few free starter ladders
+  explosiveCount: { type: Number, default: 0 }, // single-use: blasts through the daily dig cap, a missing ladder, and/or a heavy-stone tile, any combination at once
+  reinforcementCount: { type: Number, default: 0 }, // single-use shield - stays armed through any number of safe digs, only consumed the moment it actually blocks a cave-in
+});
+
+// Reveals not-yet-known tiles within `radius` of `doc`'s position, rolling and caching
+// each one's ground truth - whether it's heavy stone, and if not, its ore tier if any
+// (using the same depth-based chances a dig would use) - as a "scouted" (has a gem, or
+// empty) or "blocked" (heavy stone) tile. Already-known tiles (scouted, blocked, mined,
+// or collapsed) are never touched or re-rolled. Cave-in risk is deliberately never
+// rolled/revealed here - it isn't knowable until you actually commit to the dig. Mutates
+// `doc.dugTiles` in place; returns whether anything changed.
+function scoutTilesInRadius(doc, radius) {
+  if (radius <= 0) {
+    return false;
+  }
+  var changed = false;
+  for (var dx = -radius; dx <= radius; dx++) {
+    for (var dy = -radius; dy <= radius; dy++) {
+      if (dx === 0 && dy === 0) {
+        continue;
+      }
+      var x = doc.positionX + dx;
+      var y = doc.positionY + dy;
+      if (y < 0) {
+        continue; // nothing above the shaft entrance
+      }
+      var known = doc.dugTiles.some(function (t) { return t.x === x && t.y === y; });
+      if (known) {
+        continue;
+      }
+      if (Math.random() < mineStoneChanceForDepth(y)) {
+        doc.dugTiles.push({ x: x, y: y, oreTier: null, isHeavyStone: true, status: "blocked" });
+      } else {
+        var hasOre = Math.random() < mineOreChanceForDepth(y);
+        doc.dugTiles.push({ x: x, y: y, oreTier: hasOre ? pickOreTier(y) : null, isHeavyStone: false, status: "scouted" });
+      }
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+xenCasinoMineStateSchema.statics.getState = async function (userId) {
+  var doc = await this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
+  var today = todayKey();
+  if (doc.digsDate !== today) {
+    doc.digsDate = today;
+    doc.digsToday = 0;
+    await doc.save();
+  }
+  return doc;
+};
+
+// Re-validates quota/ladder/stone availability itself against a fresh read (rather than
+// trusting an earlier GET), rolls the outcome, and persists the result - all in one call
+// so a dig is never left half-applied. `dailyDigCap` is route-owned economics and passed
+// in; ore/cave-in/stone chance are computed here from depth.
+//
+// Moving into an already-`mined` tile is always free (no dig spent, nothing rolled) -
+// this is the only path "up" ever takes, since you can never dig upward (the tile above
+// was necessarily already mined to get here). Anything else targeting a new/undug tile
+// is a real dig: heavy stone is resolved first (a pure obstacle, no ore/cave-in possible
+// on it), then - if not stone - the cave-in roll (blockable once by a Reinforcement,
+// which stays armed through any number of safe digs and is only consumed on an actual
+// hit, same shield semantics as Garden's pesticide/fungicide), then the gem tier. A
+// single-use Explosive is a universal blocker-buster: if the daily cap, a missing
+// ladder, and/or heavy stone are in the way (any combination), one Explosive clears all
+// of them at once for this one dig. If the target tile was already `scouted` (via a
+// Flare), its cached ground truth is reused instead of rolling again. The route calls
+// getState again right after this to build its response - this static only resolves the
+// one tile being moved into or dug.
+xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
+  var doc = await this.getState(userId);
+  var targetX = doc.positionX + (params.direction === "left" ? -1 : params.direction === "right" ? 1 : 0);
+  var targetY = doc.positionY + (params.direction === "down" ? 1 : params.direction === "up" ? -1 : 0);
+  if (targetY < 0) {
+    return { error: "invalid_direction" };
+  }
+  var existing = doc.dugTiles.find(function (t) { return t.x === targetX && t.y === targetY; });
+
+  if (existing && existing.status === "mined") {
+    doc.positionX = targetX;
+    doc.positionY = targetY;
+    await doc.save();
+    return { outcome: MINE_OUTCOME.MOVE, oreTier: null, position: { x: targetX, y: targetY }, digsToday: doc.digsToday, targetY: targetY, usedExplosive: false };
+  }
+  if (params.direction === "up") {
+    return { error: "no_tunnel" };
+  }
+
+  var isHeavyStone = existing ? existing.isHeavyStone : Math.random() < mineStoneChanceForDepth(targetY);
+  var blockedByCap = doc.digsToday >= params.dailyDigCap;
+  var blockedByLadder = params.direction === "down" && doc.ladderCount <= 0;
+  var usedExplosive = false;
+  if (blockedByCap || blockedByLadder || isHeavyStone) {
+    if (doc.explosiveCount <= 0) {
+      if (!existing) {
+        // Cache the discovery even on a rejected attempt, same as a Flare scout would -
+        // no need to re-discover this tile's stone status next time.
+        doc.dugTiles.push({ x: targetX, y: targetY, oreTier: null, isHeavyStone: true, status: "blocked" });
+        await doc.save();
+      }
+      return { error: isHeavyStone ? "blocked_by_stone" : blockedByCap ? "no_digs_remaining" : "no_ladders" };
+    }
+    usedExplosive = true;
+  }
+
+  doc.digsToday += 1;
+  if (usedExplosive) {
+    doc.explosiveCount -= 1;
+  }
+  if (params.direction === "down" && !usedExplosive) {
+    doc.ladderCount -= 1;
+  }
+
+  var outcome;
+  var resolvedOreTier = null;
+  if (isHeavyStone) {
+    // A pure obstacle - clearing it always just opens the passage through, never rolls
+    // ore or a cave-in.
+    outcome = MINE_OUTCOME.STONE_CLEARED;
+    if (existing) {
+      existing.status = "mined";
+      existing.isHeavyStone = false;
+    } else {
+      doc.dugTiles.push({ x: targetX, y: targetY, oreTier: null, isHeavyStone: false, status: "mined" });
+    }
+    doc.positionX = targetX;
+    doc.positionY = targetY;
+  } else {
+    var caveIn = Math.random() < mineCaveInChanceForDepth(targetY);
+    if (caveIn && doc.reinforcementCount > 0) {
+      doc.reinforcementCount -= 1;
+      caveIn = false;
+    }
+    if (caveIn) {
+      outcome = MINE_OUTCOME.CAVE_IN;
+      doc.digsToday = params.dailyDigCap; // a collapse locks out the rest of today's digs
+      if (existing) {
+        existing.status = "collapsed";
+      } else {
+        doc.dugTiles.push({ x: targetX, y: targetY, oreTier: null, isHeavyStone: false, status: "collapsed" });
+      }
+    } else {
+      resolvedOreTier = existing && existing.status === "scouted" ? existing.oreTier : (Math.random() < mineOreChanceForDepth(targetY) ? pickOreTier(targetY) : null);
+      outcome = resolvedOreTier ? MINE_OUTCOME.ORE : MINE_OUTCOME.EMPTY;
+      if (existing) {
+        existing.status = "mined";
+        existing.oreTier = resolvedOreTier;
+      } else {
+        doc.dugTiles.push({ x: targetX, y: targetY, oreTier: resolvedOreTier, isHeavyStone: false, status: "mined" });
+      }
+      doc.positionX = targetX;
+      doc.positionY = targetY;
+    }
+  }
+
+  await doc.save();
+  return {
+    outcome: outcome,
+    oreTier: resolvedOreTier,
+    position: { x: doc.positionX, y: doc.positionY },
+    digsToday: doc.digsToday,
+    targetY: targetY,
+    usedExplosive: usedExplosive,
+  };
+};
+
+xenCasinoMineStateSchema.statics.addEquipment = async function (userId, item, amount) {
+  var doc = await this.getState(userId);
+  if (item === "ladder") {
+    doc.ladderCount += amount;
+  } else if (item === "explosive") {
+    doc.explosiveCount += amount;
+  } else if (item === "reinforcement") {
+    doc.reinforcementCount += amount;
+  }
+  await doc.save();
+  return doc;
+};
+
+// A Flare is bought and burned in the same action - the only way to preview a tile (its
+// gem tier, or whether it's heavy stone) before committing to dig it, now that there's
+// no passive/automatic scouting. `flareRadius` is route-owned economics, passed in.
+xenCasinoMineStateSchema.statics.useFlare = async function (userId, flareRadius) {
+  var doc = await this.getState(userId);
+  scoutTilesInRadius(doc, flareRadius);
+  await doc.save();
+  return doc;
+};
+
+// Wipes the whole dug map and returns to the shaft entrance - equipment inventory and
+// today's dig count are untouched, only the physical layout/position resets. The route
+// charges a flat cheddar fee for this before calling it.
+xenCasinoMineStateSchema.statics.resetMap = async function (userId) {
+  var doc = await this.getState(userId);
+  doc.dugTiles = [];
+  doc.positionX = 0;
+  doc.positionY = 0;
+  await doc.save();
+  return doc;
+};
+
+var XenCasinoMineState = mongoose.model("XenCasinoMineState", xenCasinoMineStateSchema);
+
 module.exports = {
   XenCasino,
   XenCasinoRound,
   XenCasinoUserState,
   XenCasinoActivity,
+  XenCasinoGardenState,
+  // Exported so casinoGarden.ts can build SEED_TIERS' growDurationMs from waterAmount
+  // and render the same cooldown it's actually enforcing, rather than a second copy.
+  GARDEN_WATER_COOLDOWN_MS: GARDEN_WATER_COOLDOWN_MS,
+  GARDEN_NEGLECT_GRACE_MS: GARDEN_NEGLECT_GRACE_MS,
+  // Exported so casinoGarden.ts can render/pre-check the same per-square cooldown
+  // (shorter once bonemeal is applied) it's actually enforcing, rather than a second copy.
+  effectiveWaterCooldownMs: effectiveWaterCooldownMs,
+  XenCasinoPrinterState,
+  XenCasinoMineState,
+  MINE_OUTCOME: MINE_OUTCOME,
+  // Exported so casinoMine.ts can build its own $-value-per-tier table and render tier
+  // labels/unlock depths, without duplicating the minDepth/weight gating logic here.
+  MINE_ORE_TIERS: MINE_ORE_TIERS,
+  // Exported so casinoPrinter.ts can render the same raid-risk percentage it's actually
+  // being rolled against, rather than approximating it with a second copy of the formula.
+  PRINTER_RISK_RAMP_MS: PRINTER_RISK_RAMP_MS,
+  PRINTER_BASE_RAID_CHANCE: PRINTER_BASE_RAID_CHANCE,
+  PRINTER_MAX_RAID_CHANCE: PRINTER_MAX_RAID_CHANCE,
   dailyQuestDateKey: todayKey,
   // Exported for unit testing the lazy-reset-on-date-change logic without a live Mongo
   // connection - pure functions over plain objects, no I/O.

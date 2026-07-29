@@ -7,6 +7,9 @@ import ScatterPlotIcon from "@mui/icons-material/ScatterPlot";
 import AdjustIcon from "@mui/icons-material/Adjust";
 import GridViewIcon from "@mui/icons-material/GridView";
 import AddIcon from "@mui/icons-material/Add";
+import LocalFloristIcon from "@mui/icons-material/LocalFlorist";
+import PrintIcon from "@mui/icons-material/Print";
+import TerrainIcon from "@mui/icons-material/Terrain";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../../config/api";
 import { ApiResponse } from "../../../types/api";
@@ -15,6 +18,9 @@ import { formatOddsRatio } from "./utils/odds";
 import { formatCheddar } from "./utils/currency";
 import DailyQuestCard from "./components/DailyQuestCard";
 import { useCasinoStatus } from "../../../hooks/casino/useCasinoStatus";
+import { useCasinoGarden } from "../../../hooks/casino/useCasinoGarden";
+import { useCasinoPrinter } from "../../../hooks/casino/useCasinoPrinter";
+import { useCasinoMine } from "../../../hooks/casino/useCasinoMine";
 
 interface SlotsOddsSummary {
     paytable: { probability: number }[];
@@ -73,9 +79,12 @@ const TYPE_ICON: Record<CasinoGameType, ComponentType<SvgIconProps>> = {
     plinko: ScatterPlotIcon,
     pachinko: AdjustIcon,
     memory: GridViewIcon,
+    garden: LocalFloristIcon,
+    printer: PrintIcon,
+    mine: TerrainIcon,
 };
 
-const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko", "memory"];
+const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko", "memory", "garden", "printer", "mine"];
 
 const GHOST_COPY: Partial<Record<CasinoGameType, string>> = {
     slots: "New reel sets and jackpots land here as they ship.",
@@ -108,9 +117,18 @@ const JACKPOT_CHIP_SX = {
     fontWeight: 800,
 } as const;
 
+type ChipColor = "default" | "success" | "warning" | "error" | "primary" | "info";
+interface StatusChip {
+    label: string;
+    color: ChipColor;
+}
+
 export default function GamesIndex() {
     const navigate = useNavigate();
     const { disabledGames } = useCasinoStatus();
+    const { squares: gardenSquares, waterCooldownMs: gardenWaterCooldownMs } = useCasinoGarden();
+    const { run: printerRun } = useCasinoPrinter();
+    const { state: mineState } = useCasinoMine();
 
     const { data: easySpinOdds } = useQuery({
         queryKey: ["slotsOdds", "easy-spin"],
@@ -184,6 +202,50 @@ export default function GamesIndex() {
         pachinko: pachinkoOdds ? `🎰 ${formatCheddar(pachinkoOdds.jackpotPool)}` : undefined,
     };
 
+    // The persistent games (Garden/Printer/Mine) have no odds/RTP table to summarize the way
+    // the instant-resolution games do - instead their cards show a live glance at the
+    // player's own state, so there's a reason to check the games list rather than always
+    // clicking straight in. Keyed by game.key, same as oddsLabelByKey/rtpLabelByKey above.
+    const gardenEmpty = gardenSquares.filter((s) => s.status === "empty").length;
+    const gardenReady = gardenSquares.filter((s) => s.status === "ready").length;
+    const gardenDead = gardenSquares.filter((s) => s.status === "dead").length;
+    // "Growing" here means still waiting on more waterings (i.e. not yet fully watered and
+    // just riding out the final cooldown) - that subset is what "Needs Water" further
+    // narrows down to plots whose cooldown has actually elapsed and are waterable *right now*.
+    const gardenGrowing = gardenSquares.filter((s) => s.status === "growing" && s.waterCount < s.waterAmount).length;
+    const gardenNeedsWater = gardenSquares.filter((s) => {
+        if (s.status !== "growing" || s.waterCount >= s.waterAmount) {
+            return false;
+        }
+        const msSinceWatered = s.lastWateredAt ? Date.now() - new Date(s.lastWateredAt).getTime() : Infinity;
+        return msSinceWatered >= gardenWaterCooldownMs;
+    }).length;
+    const mineDigsLeft = mineState ? Math.max(0, mineState.dailyDigCap - mineState.digsToday) : null;
+
+    const statusChipsByKey: Record<string, StatusChip[]> = {
+        garden: [
+            ...(gardenReady > 0 ? [{ label: `${gardenReady} Ready to Harvest`, color: "success" as ChipColor }] : []),
+            ...(gardenNeedsWater > 0 ? [{ label: `${gardenNeedsWater} Need Water`, color: "info" as ChipColor }] : []),
+            ...(gardenGrowing > 0 ? [{ label: `${gardenGrowing} Growing`, color: "default" as ChipColor }] : []),
+            ...(gardenEmpty > 0 ? [{ label: `${gardenEmpty} Empty`, color: "default" as ChipColor }] : []),
+            ...(gardenDead > 0 ? [{ label: `${gardenDead} Dead`, color: "error" as ChipColor }] : []),
+        ],
+        printer: printerRun
+            ? [
+                  printerRun.raided
+                      ? { label: "Rig Raided", color: "error" as ChipColor }
+                      : { label: `Print Run ${printerRun.currentMultiplier.toFixed(2)}x`, color: "warning" as ChipColor },
+                  ...(printerRun.raided ? [] : [{ label: `${printerRun.raidRiskPercent}% Raid Risk`, color: "error" as ChipColor }]),
+              ]
+            : [{ label: "No Print Run Active", color: "default" as ChipColor }],
+        mine: mineState
+            ? [
+                  { label: `Depth ${mineState.position.y}`, color: "default" as ChipColor },
+                  { label: `${mineDigsLeft}/${mineState.dailyDigCap} Digs Left`, color: mineDigsLeft ? "primary" as ChipColor : "error" as ChipColor },
+              ]
+            : [],
+    };
+
     const groups = TYPE_ORDER.map((type) => ({
         type,
         games: CASINO_GAMES_REGISTRY.filter((g) => g.type === type),
@@ -222,6 +284,7 @@ export default function GamesIndex() {
                                 const oddsLabel = oddsLabelByKey[game.key];
                                 const rtpLabel = rtpLabelByKey[game.key];
                                 const jackpotLabel = jackpotLabelByKey[game.key];
+                                const statusChips = statusChipsByKey[game.key];
                                 const disabled = disabledGames.includes(game.key);
                                 return (
                                     <Card
@@ -252,6 +315,7 @@ export default function GamesIndex() {
                                                         <Typography variant="body2" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
                                                             <Typography component="span" variant="body2" color="error.main" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
                                                                 {formatCheddar(game.price)}
+                                                                {game.priceFrom ? "+" : ""}
                                                             </Typography>
                                                             {" / play"}
                                                         </Typography>
@@ -270,12 +334,13 @@ export default function GamesIndex() {
                                                     {game.description}
                                                 </Typography>
 
-                                                {/* Stats footer: odds + RTP, pushed to bottom */}
+                                                {/* Stats footer: odds + RTP for instant games, or a live status
+                                                    glance (own state, not a fixed table) for the persistent ones */}
                                                 <Box
                                                     sx={{
                                                         display: "flex",
                                                         flexWrap: "wrap",
-                                                        justifyContent: "space-between",
+                                                        justifyContent: statusChips ? "flex-start" : "space-between",
                                                         gap: 0.75,
                                                         mt: "auto",
                                                         pt: 1.5,
@@ -283,8 +348,16 @@ export default function GamesIndex() {
                                                         borderColor: "divider",
                                                     }}
                                                 >
-                                                    <Chip label={oddsLabel ?? "???"} size="small" sx={ODDS_CHIP_SX} />
-                                                    <Chip label={rtpLabel ?? "???"} size="small" sx={RTP_CHIP_SX} />
+                                                    {statusChips ? (
+                                                        statusChips.map((chip, idx) => (
+                                                            <Chip key={idx} label={chip.label} size="small" color={chip.color} sx={{ fontWeight: 700 }} />
+                                                        ))
+                                                    ) : (
+                                                        <>
+                                                            <Chip label={oddsLabel ?? "???"} size="small" sx={ODDS_CHIP_SX} />
+                                                            <Chip label={rtpLabel ?? "???"} size="small" sx={RTP_CHIP_SX} />
+                                                        </>
+                                                    )}
                                                 </Box>
                                             </CardContent>
                                         </CardActionArea>

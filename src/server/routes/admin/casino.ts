@@ -19,6 +19,9 @@ var GAME_LABELS: Record<string, string> = {
     "plinko": "Plinko",
     "pachinko": "Pachinko",
     "memory": "Memory",
+    "garden": "Casino Garden",
+    "printer": "Money Printer",
+    "mine": "Chip Mine",
 };
 
 // Which games have progressive jackpots. Scratch tickets and Plinko do not - they
