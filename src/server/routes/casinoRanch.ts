@@ -1,24 +1,44 @@
 /**
  * Cheddar Ranch - a creature-collection game. Hatching a Cheddar Egg draws one of five
  * weighted rarity tiers (Common -> Legendary); a rarer tier means a higher starting stat
- * range, snapshotted onto the creature at hatch time so a later RANCH_RARITY_TIERS
- * rebalance never retroactively changes a creature already in the roster. The roster
- * itself is the game's inventory - each creature is its own document
- * (XenCasinoRanchCreature in src/server/models/xenCasino.js). There is no stat ceiling -
- * feeding always raises a stat, for as long as you keep feeding it.
+ * range across all 5 stats (Speed/Stamina/Power/Intelligence/Luck), snapshotted onto the
+ * creature at hatch time so a later RANCH_RARITY_TIERS rebalance never retroactively
+ * changes a creature already in the roster. The roster itself is the game's inventory -
+ * each creature is its own document (XenCasinoRanchCreature in
+ * src/server/models/xenCasino.js). There is no stat ceiling - feeding always raises every
+ * stat, for as long as you keep feeding.
  *
- * Feeding requires owning the matching Feed item (Speed/Stamina/Power Feed - bought with
- * cheddar from the Shop, one flat kind per stat) rather than paying cheddar directly, so
- * feeding itself moves no money and needs no Weeabets call. Races are entered into one of
- * a few weighted categories (Sprint/Endurance/Brawl) that each weight a creature's stats
- * differently before the same win-probability math runs - so which category suits a given
- * creature depends on how its stats are distributed, not just their sum. Feeding and
- * racing (win or lose) earn XP; level is deliberately never stored, only derived from XP
- * on read (see levelForXp), same "derive from persisted counters" convention as Printer's
- * currentMultiplier. Each species also produces its own fixed item on a 24h manual-collect
- * cooldown (see XenCasinoRanchCreature.collect); the quantity produced per collection
- * scales with the creature's current level. Collected items land in a per-user fungible
- * stack (XenCasinoRanchInventory, shared with bought Feed items under different keys) that
+ * Feeding requires owning a Feed item (a single kind, bought with cheddar from the Shop)
+ * rather than paying cheddar directly, so feeding itself moves no money and needs no
+ * Weeabets call - using one rolls an independent random gain for every stat at once.
+ *
+ * Racing is a two-step "prepare, then bet" flow, not a single request, because the player
+ * needs to see the field and odds before any money moves:
+ *   1. POST /:id/race/prepare - picks a random course (weights the 5 stats differently,
+ *      same idea as the old player-picked categories but now randomly spun instead - see
+ *      RACE_COURSES), rolls 3 rival creatures from the same rarity tier as the player's
+ *      own creature, and runs a fast internal Monte Carlo (estimateWinProbabilities) to
+ *      compute a bookmaker-style odds table for the 4-racer field (the player's creature +
+ *      3 rivals). No money moves. The exact field/course/odds shown to the player is
+ *      stored server-side (XenCasinoRanchPendingRace) so a later bet can never be resolved
+ *      against anything re-rolled or client-supplied.
+ *   2. POST /:id/race/bet - the player bets a stake on any one of the 4 racers (their own
+ *      creature or any rival). Debits the stake, then runs ONE real call to simulateRace
+ *      (the exact same scoring function the odds were estimated from) against the stored
+ *      field/course to decide the actual winner and finishing order, pays out
+ *      stake * multiplier if the bet racer won, and clears the pending race. The player's
+ *      own creature's win/loss record and XP are updated based on whether IT placed first
+ *      - independent of which racer was bet on.
+ * The client plays a purely cosmetic CSS-transition "race" animation using the finishing
+ * order the bet response already decided - it never decides anything itself.
+ *
+ * Feeding and racing (a creature racing, win or lose - not betting) earn XP; level is
+ * deliberately never stored, only derived from XP on read (see levelForXp), same "derive
+ * from persisted counters" convention as Printer's currentMultiplier. Each species also
+ * produces its own fixed item on a 24h manual-collect cooldown (see
+ * XenCasinoRanchCreature.collect); the quantity produced per collection scales with the
+ * creature's current level. Collected items land in a per-user fungible stack
+ * (XenCasinoRanchInventory, shared with the bought Feed item under a different key) that
  * can be sold for cheddar or "used" - used is a stub for now (consumes the item, no effect
  * yet).
  *
@@ -32,7 +52,7 @@ import { randomBytes } from "crypto";
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 const { User } = require("../models/user");
-const { XenCasinoRanchCreature, XenCasinoRanchInventory, XenCasinoActivity } = require("../models/xenCasino");
+const { XenCasinoRanchCreature, XenCasinoRanchInventory, XenCasinoRanchPendingRace, XenCasinoActivity } = require("../models/xenCasino");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../utils/weeabetsClient";
 import { requireGameEnabled } from "../utils/casinoStatus";
 import { recordCasinoRoundPlayed } from "../utils/dailyQuest";
@@ -43,6 +63,15 @@ const SLUG = "cheddar-ranch";
 function txnKey(prefix: string): string {
     return `${prefix}-${randomBytes(8).toString("hex")}`;
 }
+
+export interface RanchStats {
+    speed: number;
+    stamina: number;
+    power: number;
+    intelligence: number;
+    luck: number;
+}
+const STAT_KEYS: (keyof RanchStats)[] = ["speed", "stamina", "power", "intelligence", "luck"];
 
 const HATCH_PRICE = 2000; // one flat "Cheddar Egg" price - rarity is what varies, not price tiers
 
@@ -75,31 +104,12 @@ const SPECIES_BY_TIER: Record<string, string[]> = {
 const FEED_COOLDOWN_MS = 30 * 60 * 1000;
 const FEED_GAIN_RANGE: [number, number] = [1, 4];
 
-// Three feed items, one per stat - bought in the Shop for cheddar, consumed in the Ranch
-// to actually feed a creature. Feeding itself moves no money; the cheddar changes hands at
-// purchase time instead (see the /feed-items/:key/buy route).
-interface FeedItemDef {
-    key: string;
-    label: string;
-    statKey: "speed" | "stamina" | "power";
-    price: number;
-}
-const FEED_ITEM_DEFS: Record<string, FeedItemDef> = {
-    "speed-feed": { key: "speed-feed", label: "Speed Feed", statKey: "speed", price: 500 },
-    "stamina-feed": { key: "stamina-feed", label: "Stamina Feed", statKey: "stamina", price: 500 },
-    "power-feed": { key: "power-feed", label: "Power Feed", statKey: "power", price: 500 },
-};
-const FEED_ITEM_BY_STAT: Record<string, FeedItemDef> = {
-    speed: FEED_ITEM_DEFS["speed-feed"],
-    stamina: FEED_ITEM_DEFS["stamina-feed"],
-    power: FEED_ITEM_DEFS["power-feed"],
-};
-
-const RACE_ENTRY_FEE = 500;
-const RACE_WIN_MULTIPLIER = 1.8;
-const RACE_OPPONENT_SCALE_RANGE: [number, number] = [0.8, 1.2];
-const MIN_WIN_PROB = 0.1;
-const MAX_WIN_PROB = 0.9;
+// A single Feed item - bought in the Shop, consumed in the Ranch to bump every stat at
+// once by an independently rolled amount. Priced higher than the old per-stat items (which
+// were 500 each and only trained one stat) since one purchase now trains all 5.
+const FEED_ITEM_KEY = "feed";
+const FEED_ITEM_LABEL = "Feed";
+const FEED_PRICE = 1200;
 
 const RELEASE_SELL_VALUE: Record<string, number> = {
     common: 300,
@@ -114,31 +124,41 @@ const RELEASE_SELL_VALUE: Record<string, number> = {
 const XP_PER_LEVEL = 100;
 const FEED_XP = 10;
 const RACE_WIN_XP = 15;
-const RACE_LOSS_XP = 5; // still rewarded for losing - racing (not just winning) is what trains a creature
+const RACE_LOSS_XP = 5; // still rewarded for placing worse than 1st - racing itself, not just winning, is what trains a creature
 
 export function levelForXp(xp: number): number {
     return Math.floor(xp / XP_PER_LEVEL) + 1;
 }
 
-interface RaceCategory {
+interface RaceCourse {
     key: string;
     label: string;
-    // Multiplies each stat before summing into the effective total used for win-probability
-    // math - a category weighted toward one stat rewards a creature built around that stat,
-    // rather than every category just rewarding raw total stats the same way.
-    weights: { speed: number; stamina: number; power: number };
+    // Multiplies each stat before summing into the effective total used for the race
+    // simulation - a course weighted toward one stat rewards a creature built around that
+    // stat, rather than every course rewarding raw total stats the same way. Randomly spun
+    // per race (pickCourse) rather than player-picked.
+    weights: RanchStats;
 }
 
-const RACE_CATEGORIES: RaceCategory[] = [
-    { key: "sprint", label: "Sprint", weights: { speed: 2, stamina: 0.5, power: 0.5 } },
-    { key: "endurance", label: "Endurance", weights: { speed: 0.5, stamina: 2, power: 0.5 } },
-    { key: "brawl", label: "Brawl", weights: { speed: 0.5, stamina: 0.5, power: 2 } },
+// One course per stat, plus one flat "all-rounder" course for variety - covers all 5 stats
+// now that Intelligence/Luck exist. No weight field needed here (unlike
+// RANCH_RARITY_TIERS) since this isn't a gacha table - pickCourse is a plain uniform pick.
+export const RACE_COURSES: RaceCourse[] = [
+    { key: "sprint", label: "Sprint", weights: { speed: 2, stamina: 0.5, power: 0.5, intelligence: 0.5, luck: 0.5 } },
+    { key: "endurance", label: "Endurance", weights: { speed: 0.5, stamina: 2, power: 0.5, intelligence: 0.5, luck: 0.5 } },
+    { key: "brawl", label: "Brawl", weights: { speed: 0.5, stamina: 0.5, power: 2, intelligence: 0.5, luck: 0.5 } },
+    { key: "puzzle-maze", label: "Puzzle Maze", weights: { speed: 0.5, stamina: 0.5, power: 0.5, intelligence: 2, luck: 0.5 } },
+    { key: "lucky-clover", label: "Lucky Clover Run", weights: { speed: 0.5, stamina: 0.5, power: 0.5, intelligence: 0.5, luck: 2 } },
+    { key: "all-rounder", label: "All-Rounder Pasture", weights: { speed: 1, stamina: 1, power: 1, intelligence: 1, luck: 1 } },
 ];
 
-// Pure and exported so casinoRanch.test.ts can check the weighting directly, same as the
-// other race-math functions below.
-export function effectiveRaceTotal(stats: { speed: number; stamina: number; power: number }, category: RaceCategory): number {
-    return stats.speed * category.weights.speed + stats.stamina * category.weights.stamina + stats.power * category.weights.power;
+export function pickCourse(): RaceCourse {
+    return RACE_COURSES[Math.floor(Math.random() * RACE_COURSES.length)];
+}
+
+// Pure and exported so casinoRanch.test.ts can check the weighting directly.
+export function effectiveRaceTotal(stats: RanchStats, course: RaceCourse): number {
+    return STAT_KEYS.reduce((sum, key) => sum + stats[key] * course.weights[key], 0);
 }
 
 const COLLECT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
@@ -188,23 +208,26 @@ function randomInRange([lo, hi]: [number, number]): number {
 }
 
 function randomSpecies(tierKey: string): string {
-    const species = SPECIES_BY_TIER[tierKey];
+    const species = SPECIES_BY_TIER[tierKey] ?? SPECIES_BY_TIER.common;
     return species[Math.floor(Math.random() * species.length)];
 }
 
-// Draws a rarity tier and rolls each stat within that tier's range - pure and exported so
+function rollStatsInRange(range: [number, number]): RanchStats {
+    return {
+        speed: Math.round(randomInRange(range)),
+        stamina: Math.round(randomInRange(range)),
+        power: Math.round(randomInRange(range)),
+        intelligence: Math.round(randomInRange(range)),
+        luck: Math.round(randomInRange(range)),
+    };
+}
+
+// Draws a rarity tier and rolls all 5 stats within that tier's range - pure and exported so
 // casinoRanch.test.ts can Monte Carlo it directly against the theoretical distribution
 // below, same pattern as kittyScratch.ts's generateRound().
-export function rollHatch(): { tier: RarityTier; stats: { speed: number; stamina: number; power: number } } {
+export function rollHatch(): { tier: RarityTier; stats: RanchStats } {
     const tier = drawPrizeWeight(RANCH_RARITY_TIERS);
-    return {
-        tier,
-        stats: {
-            speed: Math.round(randomInRange(tier.statRange)),
-            stamina: Math.round(randomInRange(tier.statRange)),
-            power: Math.round(randomInRange(tier.statRange)),
-        },
-    };
+    return { tier, stats: rollStatsInRange(tier.statRange) };
 }
 
 // Theoretical hatch-tier probabilities implied by RANCH_RARITY_TIERS' weights - what the
@@ -214,19 +237,100 @@ export function rarityDistribution(): { key: string; probability: number }[] {
     return RANCH_RARITY_TIERS.map((t) => ({ key: t.key, probability: t.weight / total }));
 }
 
-// A generated opponent's total stat - scaled off the player creature's own total so the
-// race stays competitive regardless of how strong (or weak) that creature is, same idea as
-// Mine's depth-scaled cave-in chance riding off the player's own position.
-export function generateOpponent(playerTotal: number): number {
-    return Math.round(playerTotal * randomInRange(RACE_OPPONENT_SCALE_RANGE));
+// Rolls one gain per stat for a single Feed item - independent of any particular stat
+// choice, since Feed now trains everything at once.
+export function rollFeedGains(): RanchStats {
+    return {
+        speed: Math.round(randomInRange(FEED_GAIN_RANGE)),
+        stamina: Math.round(randomInRange(FEED_GAIN_RANGE)),
+        power: Math.round(randomInRange(FEED_GAIN_RANGE)),
+        intelligence: Math.round(randomInRange(FEED_GAIN_RANGE)),
+        luck: Math.round(randomInRange(FEED_GAIN_RANGE)),
+    };
 }
 
-// Never a sure thing (or a sure loss) either way - clamped the same way Mine clamps its
-// cave-in chance to a max ceiling.
-export function raceWinProbability(playerTotal: number, opponentTotal: number): number {
-    const raw = playerTotal / (playerTotal + opponentTotal);
-    return Math.min(MAX_WIN_PROB, Math.max(MIN_WIN_PROB, raw));
+// A rival's stats/species are rolled from the SAME rarity tier as the player's own
+// creature (reusing RANCH_RARITY_TIERS/SPECIES_BY_TIER directly, not a second stat
+// generation system) so the field stays naturally competitive without a separate
+// opponent-scaling formula.
+export function rollRival(tierKey: string): { species: string; stats: RanchStats } {
+    const tier = RANCH_RARITY_TIERS.find((t) => t.key === tierKey) ?? RANCH_RARITY_TIERS[0];
+    return { species: randomSpecies(tier.key), stats: rollStatsInRange(tier.statRange) };
 }
+
+// Rivals have no persisted XP (they aren't real roster creatures) - "level" here is a
+// flavor-only display value derived from rarity tier, deliberately not meant to line up
+// with levelForXp's curve.
+const RIVAL_LEVEL_BY_TIER: Record<string, number> = { common: 1, uncommon: 3, rare: 5, epic: 7, legendary: 9 };
+export function rivalLevelForTier(tierKey: string): number {
+    return RIVAL_LEVEL_BY_TIER[tierKey] ?? 1;
+}
+
+export interface Racer {
+    id: string;
+    isPlayer: boolean;
+    species: string;
+    name: string;
+    level: number;
+    stats: RanchStats;
+}
+export interface RaceResultEntry {
+    racerId: string;
+    raceScore: number;
+    place: number;
+}
+
+const RACE_SCORE_NOISE_RANGE: [number, number] = [0.8, 1.2];
+
+function raceScore(stats: RanchStats, course: RaceCourse): number {
+    return effectiveRaceTotal(stats, course) * randomInRange(RACE_SCORE_NOISE_RANGE);
+}
+
+// THE single source of truth for who wins a race - both estimateWinProbabilities below and
+// the real bet-resolution route call this same function. Sorts descending by raceScore and
+// assigns places 1..N - there is no separate "decide the winner" step and "fake an order for
+// the animation" step, it's the same roll used for both.
+export function simulateRace(racers: Racer[], course: RaceCourse): RaceResultEntry[] {
+    return racers
+        .map((r) => ({ racerId: r.id, raceScore: raceScore(r.stats, course) }))
+        .sort((a, b) => b.raceScore - a.raceScore)
+        .map((entry, i) => ({ ...entry, place: i + 1 }));
+}
+
+const PROBABILITY_TRIALS = 4000; // tight enough (roughly +/-1.5%) while staying fast within one request
+
+// No closed form for "probability this racer has the max of N independently-noised scores"
+// without real order-statistics math a ranch game doesn't need - a few thousand internal
+// trials of the exact same simulateRace formula is simpler, matches exactly what the real
+// resolution will do, and is plenty precise for display odds + a payout multiplier.
+export function estimateWinProbabilities(racers: Racer[], course: RaceCourse, trials: number = PROBABILITY_TRIALS): Record<string, number> {
+    const wins: Record<string, number> = {};
+    racers.forEach((r) => (wins[r.id] = 0));
+    for (let i = 0; i < trials; i++) {
+        wins[simulateRace(racers, course)[0].racerId] += 1;
+    }
+    const probs: Record<string, number> = {};
+    racers.forEach((r) => (probs[r.id] = wins[r.id] / trials));
+    return probs;
+}
+
+export const RACE_TARGET_RTP = 0.9;
+export const MIN_RACE_MULTIPLIER = 1.05;
+export const MAX_RACE_MULTIPLIER = 8;
+
+// Fair-odds multiplier scaled to a target RTP: unclamped, multiplierForProbability(p) * p
+// === RACE_TARGET_RTP (a plain bookmaker formula), so a favorite pays a low multiplier and
+// a longshot pays a high one. Clamped so a longshot payout can't run away - the clamp only
+// bites at the extremes, producing an intentional favorite-longshot bias (favorites pay
+// slightly above target RTP, extreme longshots pay below it), which is realistic bookmaker
+// behavior, not a bug.
+export function multiplierForProbability(p: number): number {
+    return Math.min(MAX_RACE_MULTIPLIER, Math.max(MIN_RACE_MULTIPLIER, RACE_TARGET_RTP / p));
+}
+
+const MIN_RACE_STAKE = 100;
+const MAX_RACE_STAKE = 5000;
+const PENDING_RACE_TTL_MS = 10 * 60 * 1000;
 
 function creatureView(doc: any) {
     return {
@@ -248,6 +352,27 @@ function creatureView(doc: any) {
     };
 }
 
+// Lazy one-time backfill for creatures hatched before Intelligence/Luck existed - this repo
+// has no migration-script convention, so heal-on-read is the established pattern here (see
+// e.g. XenCasinoMineState's lazy digsDate reset). findOneAndUpdate does not run
+// full-document validators, so this is safe even though the schema paths are `required`.
+async function ensureFiveStats(creature: any) {
+    if (!creature) {
+        return creature;
+    }
+    const tier = RANCH_RARITY_TIERS.find((t) => t.key === creature.rarityTier) ?? RANCH_RARITY_TIERS[0];
+    const missing: Record<string, number> = {};
+    for (const key of STAT_KEYS) {
+        if (creature.stats[key] === undefined || creature.stats[key] === null) {
+            missing["stats." + key] = Math.round(randomInRange(tier.statRange));
+        }
+    }
+    if (Object.keys(missing).length === 0) {
+        return creature;
+    }
+    return XenCasinoRanchCreature.findByIdAndUpdate(creature._id, { $set: missing }, { new: true }).exec();
+}
+
 async function inventoryDoc(userId: string) {
     return XenCasinoRanchInventory.getState(userId);
 }
@@ -264,36 +389,41 @@ async function itemsView(userId: string) {
     return entries;
 }
 
-async function feedItemsView(userId: string) {
+async function feedItemView(userId: string) {
     const doc = await inventoryDoc(userId);
-    return Object.keys(FEED_ITEM_DEFS).map((key) => ({
-        key,
-        label: FEED_ITEM_DEFS[key].label,
-        statKey: FEED_ITEM_DEFS[key].statKey,
-        price: FEED_ITEM_DEFS[key].price,
-        quantity: doc.items.get(key) || 0,
-    }));
+    return { key: FEED_ITEM_KEY, label: FEED_ITEM_LABEL, price: FEED_PRICE, quantity: doc.items.get(FEED_ITEM_KEY) || 0 };
+}
+
+async function pendingRaceView(userId: string) {
+    const doc = await XenCasinoRanchPendingRace.getState(userId);
+    if (!doc.pending || new Date(doc.pending.expiresAt).getTime() < Date.now()) {
+        return null;
+    }
+    return doc.pending;
 }
 
 async function rosterView(userId: string) {
-    const creatures = await XenCasinoRanchCreature.listByUser(userId);
+    const rawCreatures = await XenCasinoRanchCreature.listByUser(userId);
+    const creatures = await Promise.all(rawCreatures.map((c: any) => ensureFiveStats(c)));
     const items = await itemsView(userId);
-    const feedItems = await feedItemsView(userId);
+    const feedItem = await feedItemView(userId);
+    const pendingRace = await pendingRaceView(userId);
     return {
         creatures: creatures.map(creatureView),
         items,
-        feedItems,
+        feedItem,
+        pendingRace,
         rarityTiers: RANCH_RARITY_TIERS.map((t) => ({
             key: t.key,
             label: t.label,
             probability: t.weight / RANCH_RARITY_TIERS.reduce((sum, x) => sum + x.weight, 0),
             statRange: t.statRange,
         })),
-        raceCategories: RACE_CATEGORIES.map((c) => ({ key: c.key, label: c.label, weights: c.weights })),
+        raceCourses: RACE_COURSES.map((c) => ({ key: c.key, label: c.label, weights: c.weights })),
         hatchPrice: HATCH_PRICE,
         feedCooldownMs: FEED_COOLDOWN_MS,
-        raceEntryFee: RACE_ENTRY_FEE,
-        raceWinMultiplier: RACE_WIN_MULTIPLIER,
+        minRaceStake: MIN_RACE_STAKE,
+        maxRaceStake: MAX_RACE_STAKE,
         releaseSellValue: RELEASE_SELL_VALUE,
         collectCooldownMs: COLLECT_COOLDOWN_MS,
     };
@@ -358,116 +488,39 @@ module.exports = function (app: express.Application) {
     });
 
     // Feeding moves no money - the cheddar was already spent buying the Feed item (see
-    // /feed-items/:key/buy below). This just consumes one matching Feed item and applies
-    // the (uncapped) stat gain.
+    // /feed/buy below). Rolls one independent gain per stat and applies all 5 in a single
+    // atomic update.
     app.post("/api/casino/ranch/:id/feed", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const { id } = req.params;
-        const { statKey } = req.body as { statKey: "speed" | "stamina" | "power" };
-        if (!["speed", "stamina", "power"].includes(statKey)) {
-            return res.status(400).json({ status: false, message: "Invalid stat" });
-        }
 
-        const existing = await XenCasinoRanchCreature.getOwned(userId, id);
+        let existing = await XenCasinoRanchCreature.getOwned(userId, id);
         if (!existing) {
             return res.status(404).json({ status: false, message: "Creature not found" });
         }
+        existing = await ensureFiveStats(existing);
         if (existing.lastFedAt && Date.now() - new Date(existing.lastFedAt).getTime() < FEED_COOLDOWN_MS) {
             return res.status(400).json({ status: false, message: "This creature is still on cooldown" });
         }
 
-        const feedItem = FEED_ITEM_BY_STAT[statKey];
-        const consumed = await XenCasinoRanchInventory.subtractItem(userId, feedItem.key, 1);
+        const consumed = await XenCasinoRanchInventory.subtractItem(userId, FEED_ITEM_KEY, 1);
         if (!consumed) {
-            return res.status(400).json({ status: false, message: `Buy some ${feedItem.label} from the Shop first` });
+            return res.status(400).json({ status: false, message: "Buy some Feed from the Shop first" });
         }
 
-        const gain = Math.round(randomInRange(FEED_GAIN_RANGE));
-        const updated = await XenCasinoRanchCreature.feed(userId, id, statKey, gain, FEED_COOLDOWN_MS);
+        const gains = rollFeedGains();
+        const updated = await XenCasinoRanchCreature.feed(userId, id, gains, FEED_COOLDOWN_MS);
 
         if (!updated) {
             // Lost the race against the cooldown between our pre-check and the atomic
-            // update below - give the consumed Feed item back rather than eating it for
+            // update above - give the consumed Feed item back rather than eating it for
             // nothing.
-            await XenCasinoRanchInventory.addItem(userId, feedItem.key, 1);
+            await XenCasinoRanchInventory.addItem(userId, FEED_ITEM_KEY, 1);
             return res.status(400).json({ status: false, message: "This creature is still on cooldown" });
         }
 
         const withXp = await XenCasinoRanchCreature.addXp(userId, id, FEED_XP);
-        return res.json({ status: true, data: { creature: creatureView(withXp ?? updated), gain } });
-    });
-
-    app.post("/api/casino/ranch/:id/race", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
-        const userId = String((req as AuthenticatedRequest).user!._id);
-        const { id } = req.params;
-        const { category: categoryKey } = req.body as { category: string };
-        const category = RACE_CATEGORIES.find((c) => c.key === categoryKey);
-        if (!category) {
-            return res.status(400).json({ status: false, message: "Invalid race category" });
-        }
-
-        const creature = await XenCasinoRanchCreature.getOwned(userId, id);
-        if (!creature) {
-            return res.status(404).json({ status: false, message: "Creature not found" });
-        }
-
-        const user = await User.findById(userId).exec();
-        if (!user) {
-            return res.status(404).json({ status: false, message: "User not found" });
-        }
-
-        try {
-            const resolved = await resolveUserAccount(user);
-            if (!resolved.linked || !resolved.account) {
-                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
-            }
-            const xenCasinoAccountId = await getXenCasinoAccountId();
-            await transfer({
-                fromAccountId: resolved.account.accountId,
-                toAccountId: xenCasinoAccountId,
-                amount: RACE_ENTRY_FEE.toFixed(10),
-                key: txnKey("ranch-race"),
-                note: "ranch_race",
-            });
-
-            const playerTotal = effectiveRaceTotal(creature.stats, category);
-            const opponentTotal = generateOpponent(playerTotal);
-            const winProb = raceWinProbability(playerTotal, opponentTotal);
-            const won = Math.random() < winProb;
-
-            let payout = 0;
-            let balance: string | undefined;
-            if (won) {
-                payout = Math.round(RACE_ENTRY_FEE * RACE_WIN_MULTIPLIER);
-                const payoutResult = await transfer({
-                    fromAccountId: xenCasinoAccountId,
-                    toAccountId: resolved.account.accountId,
-                    amount: payout.toFixed(10),
-                    key: txnKey("ranch-race-win"),
-                    note: "ranch_race_win",
-                });
-                balance = payoutResult.toNewBalance;
-            }
-
-            await recordCasinoRoundPlayed(userId, { game: SLUG, wager: RACE_ENTRY_FEE, payout });
-            await XenCasinoRanchCreature.addXp(userId, id, won ? RACE_WIN_XP : RACE_LOSS_XP);
-            const updated = await XenCasinoRanchCreature.recordRaceResult(userId, id, won);
-
-            return res.json({
-                status: true,
-                data: {
-                    won,
-                    payout,
-                    playerTotal,
-                    opponentTotal,
-                    balance,
-                    creature: creatureView(updated ?? creature),
-                },
-            });
-        } catch (err) {
-            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
-            return res.status(status).json({ status: false, message: (err as Error).message });
-        }
+        return res.json({ status: true, data: { creature: creatureView(withXp ?? updated), gains } });
     });
 
     app.post("/api/casino/ranch/:id/release", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
@@ -501,6 +554,7 @@ module.exports = function (app: express.Application) {
 
             await XenCasinoRanchCreature.releaseOwned(userId, id);
             await XenCasinoActivity.record({ game: SLUG, userId, wager: 0, payout: sellValue });
+            await XenCasinoRanchPendingRace.clearPending(userId);
 
             return res.json({ status: true, data: { sellValue, balance: payoutResult.toNewBalance } });
         } catch (err) {
@@ -509,7 +563,7 @@ module.exports = function (app: express.Application) {
         }
     });
 
-    // No cheddar changes hands here - production is free, so unlike hatch/race/release/buy
+    // No cheddar changes hands here - production is free, so unlike hatch/release/sell/buy
     // there's no Weeabets transfer (and so no refund-on-failure dance needed) - just the
     // cooldown guard and an inventory credit.
     app.post("/api/casino/ranch/:id/collect", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
@@ -602,17 +656,128 @@ module.exports = function (app: express.Application) {
         return res.json({ status: true, data: { message: "Nothing happens... yet.", items: await itemsView(userId) } });
     });
 
+    app.post("/api/casino/ranch/feed/buy", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+
+        const user = await User.findById(userId).exec();
+        if (!user) {
+            return res.status(404).json({ status: false, message: "User not found" });
+        }
+
+        try {
+            const resolved = await resolveUserAccount(user);
+            if (!resolved.linked || !resolved.account) {
+                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
+            }
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+            const payoutResult = await transfer({
+                fromAccountId: resolved.account.accountId,
+                toAccountId: xenCasinoAccountId,
+                amount: FEED_PRICE.toFixed(10),
+                key: txnKey("ranch-buy-feed"),
+                note: "ranch_buy_feed",
+            });
+
+            try {
+                await XenCasinoRanchInventory.addItem(userId, FEED_ITEM_KEY, 1);
+            } catch (creditErr) {
+                await transfer({
+                    fromAccountId: xenCasinoAccountId,
+                    toAccountId: resolved.account.accountId,
+                    amount: FEED_PRICE.toFixed(10),
+                    key: txnKey("ranch-buy-feed-refund"),
+                    note: "ranch_buy_feed_refund",
+                });
+                throw creditErr;
+            }
+
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: FEED_PRICE, payout: 0 });
+            return res.json({ status: true, data: { balance: payoutResult.fromNewBalance, feedItem: await feedItemView(userId) } });
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    // No money moves here - just rolls the field (course + 3 rivals) and estimates odds,
+    // then stores exactly what's returned so the later bet can only ever resolve against
+    // what the player was actually shown.
     app.post(
-        "/api/casino/ranch/feed-items/:key/buy",
+        "/api/casino/ranch/:id/race/prepare",
         authenticateToken,
         requireGameEnabled(SLUG),
         async function (req: express.Request, res: express.Response) {
             const userId = String((req as AuthenticatedRequest).user!._id);
-            const { key } = req.params;
-            const feedItem = FEED_ITEM_DEFS[key];
-            if (!feedItem) {
-                return res.status(400).json({ status: false, message: "Invalid feed item" });
+            const { id } = req.params;
+
+            let creature = await XenCasinoRanchCreature.getOwned(userId, id);
+            if (!creature) {
+                return res.status(404).json({ status: false, message: "Creature not found" });
             }
+            creature = await ensureFiveStats(creature);
+
+            const course = pickCourse();
+            const rivals: Racer[] = [1, 2, 3].map((n) => {
+                const rival = rollRival(creature.rarityTier);
+                return {
+                    id: `rival-${n}`,
+                    isPlayer: false,
+                    species: rival.species,
+                    name: rival.species,
+                    level: rivalLevelForTier(creature.rarityTier),
+                    stats: rival.stats,
+                };
+            });
+            const racers: Racer[] = [
+                { id: "player", isPlayer: true, species: creature.species, name: creature.name, level: levelForXp(creature.xp), stats: creature.stats },
+                ...rivals,
+            ];
+
+            const probabilities = estimateWinProbabilities(racers, course);
+            const odds = racers.map((r) => ({
+                racerId: r.id,
+                winProbability: probabilities[r.id],
+                multiplier: Number(multiplierForProbability(probabilities[r.id]).toFixed(2)),
+            }));
+
+            const now = new Date();
+            const pending = {
+                creatureId: id,
+                course,
+                racers,
+                odds,
+                createdAt: now,
+                expiresAt: new Date(now.getTime() + PENDING_RACE_TTL_MS),
+            };
+            await XenCasinoRanchPendingRace.startPending(userId, pending);
+
+            return res.json({ status: true, data: { pending } });
+        }
+    );
+
+    app.post(
+        "/api/casino/ranch/:id/race/bet",
+        authenticateToken,
+        requireGameEnabled(SLUG),
+        async function (req: express.Request, res: express.Response) {
+            const userId = String((req as AuthenticatedRequest).user!._id);
+            const { id } = req.params;
+            const { racerId, stake } = req.body as { racerId?: string; stake?: number };
+
+            if (typeof stake !== "number" || !Number.isFinite(stake) || stake < MIN_RACE_STAKE || stake > MAX_RACE_STAKE) {
+                return res.status(400).json({ status: false, message: `Stake must be between ${MIN_RACE_STAKE} and ${MAX_RACE_STAKE}` });
+            }
+
+            const state = await XenCasinoRanchPendingRace.getState(userId);
+            const pending = state.pending;
+            if (!pending || pending.creatureId !== id || new Date(pending.expiresAt).getTime() < Date.now()) {
+                return res.status(400).json({ status: false, message: "No prepared race for this creature - scout the track first" });
+            }
+            const racer = pending.racers.find((r: Racer) => r.id === racerId);
+            if (!racer) {
+                return res.status(400).json({ status: false, message: "Invalid racer" });
+            }
+            const oddsEntry = pending.odds.find((o: any) => o.racerId === racerId);
 
             const user = await User.findById(userId).exec();
             if (!user) {
@@ -624,30 +789,68 @@ module.exports = function (app: express.Application) {
                 if (!resolved.linked || !resolved.account) {
                     return res.status(400).json({ status: false, message: "Link your Discord account to play" });
                 }
+                if (Number(resolved.account.balance) < stake) {
+                    return res.status(400).json({ status: false, message: "Insufficient balance" });
+                }
                 const xenCasinoAccountId = await getXenCasinoAccountId();
-                const payoutResult = await transfer({
+                await transfer({
                     fromAccountId: resolved.account.accountId,
                     toAccountId: xenCasinoAccountId,
-                    amount: feedItem.price.toFixed(10),
-                    key: txnKey("ranch-buy-feed"),
-                    note: `ranch_buy_${key}`,
+                    amount: stake.toFixed(10),
+                    key: txnKey("ranch-race-bet"),
+                    note: "ranch_race_bet",
                 });
 
                 try {
-                    await XenCasinoRanchInventory.addItem(userId, key, 1);
-                } catch (creditErr) {
+                    // ONE real simulation, against the stored field/course - never re-rolled.
+                    const order: RaceResultEntry[] = simulateRace(pending.racers, pending.course);
+                    const winnerId = order[0].racerId;
+                    const won = winnerId === racerId;
+                    const payout = won ? Math.round(stake * oddsEntry.multiplier) : 0;
+
+                    let balance = resolved.account.balance;
+                    if (won) {
+                        const payoutResult = await transfer({
+                            fromAccountId: xenCasinoAccountId,
+                            toAccountId: resolved.account.accountId,
+                            amount: payout.toFixed(10),
+                            key: txnKey("ranch-race-payout"),
+                            note: "ranch_race_payout",
+                        });
+                        balance = payoutResult.toNewBalance;
+                    }
+
+                    const playerEntry = order.find((o) => o.racerId === "player")!;
+                    const playerPlacedFirst = playerEntry.place === 1;
+                    await recordCasinoRoundPlayed(userId, { game: SLUG, wager: stake, payout });
+                    await XenCasinoRanchCreature.addXp(userId, id, playerPlacedFirst ? RACE_WIN_XP : RACE_LOSS_XP);
+                    const updatedCreature = await XenCasinoRanchCreature.recordRaceResult(userId, id, playerPlacedFirst);
+                    await XenCasinoRanchPendingRace.clearPending(userId);
+
+                    return res.json({
+                        status: true,
+                        data: {
+                            won,
+                            payout,
+                            stake,
+                            multiplier: oddsEntry.multiplier,
+                            order,
+                            winnerId,
+                            betRacerId: racerId,
+                            creature: creatureView(updatedCreature ?? racer),
+                            balance,
+                        },
+                    });
+                } catch (resolveErr) {
                     await transfer({
                         fromAccountId: xenCasinoAccountId,
                         toAccountId: resolved.account.accountId,
-                        amount: feedItem.price.toFixed(10),
-                        key: txnKey("ranch-buy-feed-refund"),
-                        note: `ranch_buy_${key}_refund`,
+                        amount: stake.toFixed(10),
+                        key: txnKey("ranch-race-refund"),
+                        note: "ranch_race_refund",
                     });
-                    throw creditErr;
+                    throw resolveErr;
                 }
-
-                await XenCasinoActivity.record({ game: SLUG, userId, wager: feedItem.price, payout: 0 });
-                return res.json({ status: true, data: { balance: payoutResult.fromNewBalance, feedItems: await feedItemsView(userId) } });
             } catch (err) {
                 const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
                 return res.status(status).json({ status: false, message: (err as Error).message });

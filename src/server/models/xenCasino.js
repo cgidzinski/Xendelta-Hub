@@ -1096,6 +1096,8 @@ var xenCasinoRanchCreatureSchema = new mongoose.Schema({
         speed: { type: Number, required: true },
         stamina: { type: Number, required: true },
         power: { type: Number, required: true },
+        intelligence: { type: Number, required: true },
+        luck: { type: Number, required: true },
     },
     lastFedAt: { type: Date, default: null },
     feedCount: { type: Number, default: 0 },
@@ -1132,9 +1134,11 @@ xenCasinoRanchCreatureSchema.statics.getOwned = async function (userId, creature
 
 // Re-reads fresh and rejects (returns null) if the creature isn't owned by userId or is
 // still on cooldown, rather than trusting an earlier GET - same guard Garden's water() and
-// Mine's applyDig() use. No stat ceiling - the gain is a plain atomic $inc, guarded on the
-// previously-read lastFedAt so a concurrent feed on the same creature can't double-apply.
-xenCasinoRanchCreatureSchema.statics.feed = async function (userId, creatureId, statKey, gain, cooldownMs) {
+// Mine's applyDig() use. No stat ceiling - `gains` is an already-rolled { statKey: amount }
+// object (one Feed item now bumps every stat at once, see casinoRanch.ts), applied as a
+// single atomic $inc across every key it contains, guarded on the previously-read
+// lastFedAt so a concurrent feed on the same creature can't double-apply.
+xenCasinoRanchCreatureSchema.statics.feed = async function (userId, creatureId, gains, cooldownMs) {
     var creature = await this.findOne({ _id: creatureId, userId: userId }).exec();
     if (!creature) {
         return null;
@@ -1143,9 +1147,13 @@ xenCasinoRanchCreatureSchema.statics.feed = async function (userId, creatureId, 
     if (creature.lastFedAt && now.getTime() - creature.lastFedAt.getTime() < cooldownMs) {
         return null;
     }
+    var inc = { feedCount: 1 };
+    Object.keys(gains).forEach(function (statKey) {
+        inc["stats." + statKey] = gains[statKey];
+    });
     var updated = await this.findOneAndUpdate(
         { _id: creatureId, userId: userId, lastFedAt: creature.lastFedAt },
-        { $inc: { ["stats." + statKey]: gain, feedCount: 1 }, $set: { lastFedAt: now } },
+        { $inc: inc, $set: { lastFedAt: now } },
         { new: true }
     ).exec();
     return updated;
@@ -1234,6 +1242,48 @@ xenCasinoRanchInventorySchema.statics.subtractItem = async function (userId, ite
 
 var XenCasinoRanchInventory = mongoose.model("XenCasinoRanchInventory", xenCasinoRanchInventorySchema);
 
+// Cheddar Ranch's "prepare a race, then bet on it" primitive - one pending race at a time
+// per user, same one-thing-in-progress shape as XenCasinoPrinterState's `run`, deliberately
+// NOT XenCasinoRound: every XenCasinoRound consumer debits the wager the instant a round is
+// created (that's the whole point of its recovery-sweep machinery), but nothing is owed
+// here while a race is only prepared - the player hasn't chosen a stake, or even whether to
+// bet, yet. `pending` holds { creatureId, course, racers, odds, createdAt, expiresAt } - the
+// exact field/rivals/odds the player is shown, so a later bet resolves against precisely
+// what was displayed rather than anything re-rolled or client-supplied.
+var xenCasinoRanchPendingRaceSchema = new mongoose.Schema({
+    userId: { type: String, required: true, unique: true },
+    pending: { type: Object, default: null },
+});
+
+xenCasinoRanchPendingRaceSchema.statics.getState = async function (userId) {
+    return this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
+};
+
+// Always overwrites any unconsumed prior pending race - unlike Printer's startRun (which
+// refuses a second start), there's no money on the line yet, so silently discarding one on
+// a re-prepare (new creature, re-spun course) is safe.
+xenCasinoRanchPendingRaceSchema.statics.startPending = async function (userId, pending) {
+    var doc = await this.getState(userId);
+    doc.pending = pending;
+    doc.markModified("pending");
+    await doc.save();
+    return doc.pending;
+};
+
+// Clears unconditionally - called once a bet has resolved (win or lose), same "the caller
+// has already decided this is done" shape as Printer's clearRun.
+xenCasinoRanchPendingRaceSchema.statics.clearPending = async function (userId) {
+    var doc = await this.findOne({ userId: userId }).exec();
+    if (!doc) {
+        return null;
+    }
+    doc.pending = null;
+    await doc.save();
+    return doc;
+};
+
+var XenCasinoRanchPendingRace = mongoose.model("XenCasinoRanchPendingRace", xenCasinoRanchPendingRaceSchema);
+
 module.exports = {
   XenCasino,
   XenCasinoRound,
@@ -1260,6 +1310,7 @@ module.exports = {
   PRINTER_MAX_RAID_CHANCE: PRINTER_MAX_RAID_CHANCE,
   XenCasinoRanchCreature,
   XenCasinoRanchInventory,
+  XenCasinoRanchPendingRace,
   dailyQuestDateKey: todayKey,
   // Exported for unit testing the lazy-reset-on-date-change logic without a live Mongo
   // connection - pure functions over plain objects, no I/O.

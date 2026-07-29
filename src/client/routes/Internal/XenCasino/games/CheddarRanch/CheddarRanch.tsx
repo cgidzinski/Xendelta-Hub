@@ -25,6 +25,8 @@ import SellIcon from "@mui/icons-material/Sell";
 import SpeedIcon from "@mui/icons-material/Speed";
 import BatteryChargingFullIcon from "@mui/icons-material/BatteryChargingFull";
 import BoltIcon from "@mui/icons-material/Bolt";
+import PsychologyIcon from "@mui/icons-material/Psychology";
+import CasinoIcon from "@mui/icons-material/Casino";
 import MilitaryTechIcon from "@mui/icons-material/MilitaryTech";
 import GrassIcon from "@mui/icons-material/Grass";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
@@ -32,7 +34,7 @@ import StorefrontIcon from "@mui/icons-material/Storefront";
 import { useSnackbar } from "notistack";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import { formatCheddar } from "../../utils/currency";
-import { RanchCreature, RanchItem, useCasinoRanch } from "../../../../../hooks/casino/useCasinoRanch";
+import { BetRaceResult, PendingRace, RanchCreature, RanchItem, useCasinoRanch } from "../../../../../hooks/casino/useCasinoRanch";
 
 // Ticks once a second for as long as `targetMs` is non-null, same pattern as Garden's
 // watering cooldown badge - reads Date.now() fresh on every tick rather than trusting a
@@ -67,6 +69,10 @@ function formatCountdown(msRemaining: number): string {
     return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
+function totalStats(stats: RanchCreature["stats"]): number {
+    return stats.speed + stats.stamina + stats.power + stats.intelligence + stats.luck;
+}
+
 // Rarity-ordered so a glance at the color tells you roughly how good a creature is, same
 // idea as Mine's TIER_COLOR for gems.
 const TIER_COLOR: Record<string, string> = {
@@ -85,15 +91,30 @@ const SPECIES_EMOJI: Record<string, string> = {
     legendary: "🐉",
 };
 
-function StatTile({ label, value, color }: { label: string; value: ReactNode; color?: string }) {
+function StatTile({ icon, label, value }: { icon: ReactNode; label: string; value: ReactNode }) {
     return (
         <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, p: 1, textAlign: "center" }}>
+            <Box sx={{ display: "flex", justifyContent: "center", color: "text.secondary", "& svg": { fontSize: 16 } }}>{icon}</Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                 {label}
             </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 700, color }}>
+            <Typography variant="body2" sx={{ fontWeight: 700 }}>
                 {value}
             </Typography>
+        </Box>
+    );
+}
+
+// Full 5-stat grid shared by the roster dialog and the race field - keeps every stat
+// display in the game consistent (same order, same icons).
+function StatsGrid({ stats }: { stats: RanchCreature["stats"] }) {
+    return (
+        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))", gap: 1 }}>
+            <StatTile icon={<SpeedIcon />} label="Speed" value={stats.speed} />
+            <StatTile icon={<BatteryChargingFullIcon />} label="Stamina" value={stats.stamina} />
+            <StatTile icon={<BoltIcon />} label="Power" value={stats.power} />
+            <StatTile icon={<PsychologyIcon />} label="Intelligence" value={stats.intelligence} />
+            <StatTile icon={<CasinoIcon />} label="Luck" value={stats.luck} />
         </Box>
     );
 }
@@ -152,7 +173,6 @@ interface RanchCardProps {
 function RanchCard({ creature, feedCooldownMs, selected, onClick }: RanchCardProps) {
     const cooldownRemaining = useCountdown(feedReadyAt(creature, feedCooldownMs));
     const canFeed = cooldownRemaining <= 0;
-    const total = creature.stats.speed + creature.stats.stamina + creature.stats.power;
 
     return (
         <CardActionArea
@@ -186,7 +206,7 @@ function RanchCard({ creature, feedCooldownMs, selected, onClick }: RanchCardPro
                 />
             </Box>
             <Typography variant="caption" color="text.secondary">
-                Total stats: {total}
+                Total stats: {totalStats(creature.stats)}
             </Typography>
             <Chip
                 size="small"
@@ -210,7 +230,7 @@ interface CreatureDetailsProps {
 
 // Ranch-tab dialog - feed/collect/release only. Racing lives entirely on the Race tab now.
 function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCooldownMs, onReleased }: CreatureDetailsProps) {
-    const { feed, isFeeding, release, isReleasing, collect, isCollecting, feedItems } = useCasinoRanch();
+    const { feed, isFeeding, release, isReleasing, collect, isCollecting, feedItem } = useCasinoRanch();
     const { enqueueSnackbar } = useSnackbar();
     const [confirmingRelease, setConfirmingRelease] = useState(false);
 
@@ -220,12 +240,16 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCo
     const canCollect = collectCooldownRemaining <= 0;
     const sellValue = releaseSellValue[creature.rarityTier] ?? 0;
     const xpIntoLevel = creature.xp % 100;
+    const ownedFeed = feedItem?.quantity ?? 0;
 
-    const feedItemFor = (statKey: "speed" | "stamina" | "power") => feedItems.find((f) => f.statKey === statKey);
-
-    const handleFeed = (statKey: "speed" | "stamina" | "power") =>
-        feed({ creatureId: creature.id, statKey })
-            .then((r) => enqueueSnackbar(`${creature.name} gained +${r.gain} ${statKey}!`, { variant: "success" }))
+    const handleFeed = () =>
+        feed(creature.id)
+            .then((r) =>
+                enqueueSnackbar(
+                    `${creature.name} gained +${r.gains.speed} speed, +${r.gains.stamina} stamina, +${r.gains.power} power, +${r.gains.intelligence} intelligence, +${r.gains.luck} luck!`,
+                    { variant: "success" }
+                )
+            )
             .catch((e) => enqueueSnackbar(e.message || "Failed to feed", { variant: "error" }));
 
     const handleCollect = () =>
@@ -260,15 +284,11 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCo
                 </Box>
             </Box>
 
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
-                <StatTile label="Speed" value={creature.stats.speed} />
-                <StatTile label="Stamina" value={creature.stats.stamina} />
-                <StatTile label="Power" value={creature.stats.power} />
-            </Box>
+            <StatsGrid stats={creature.stats} />
 
             <Box sx={{ display: "flex", gap: 1, justifyContent: "center" }}>
-                <Chip size="small" color="success" label={`${creature.raceWins} Wins`} />
-                <Chip size="small" color="error" label={`${creature.raceLosses} Losses`} />
+                <Chip size="small" color="success" label={`${creature.raceWins} 1st-place finishes`} />
+                <Chip size="small" color="default" label={`${creature.raceLosses} Other finishes`} />
             </Box>
 
             <ActionButton
@@ -281,43 +301,19 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCo
             />
 
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                <Typography variant="caption" color="text.secondary">
-                    Feed - uses one matching Feed item from your Inventory (buy more in the Shop). No stat ceiling.
-                </Typography>
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
-                    <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<SpeedIcon />}
-                        disabled={isFeeding || onCooldown || (feedItemFor("speed")?.quantity ?? 0) <= 0}
-                        onClick={() => handleFeed("speed")}
-                    >
-                        Speed ({feedItemFor("speed")?.quantity ?? 0})
-                    </Button>
-                    <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<BatteryChargingFullIcon />}
-                        disabled={isFeeding || onCooldown || (feedItemFor("stamina")?.quantity ?? 0) <= 0}
-                        onClick={() => handleFeed("stamina")}
-                    >
-                        Stamina ({feedItemFor("stamina")?.quantity ?? 0})
-                    </Button>
-                    <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<BoltIcon />}
-                        disabled={isFeeding || onCooldown || (feedItemFor("power")?.quantity ?? 0) <= 0}
-                        onClick={() => handleFeed("power")}
-                    >
-                        Power ({feedItemFor("power")?.quantity ?? 0})
-                    </Button>
-                </Box>
-                {onCooldown && (
-                    <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
-                        Feeding available again in {formatCountdown(cooldownRemaining)}
-                    </Typography>
-                )}
+                <ActionButton
+                    icon={<RestaurantIcon />}
+                    label={onCooldown ? "Feeding on cooldown" : `Feed (${ownedFeed} owned)`}
+                    description={
+                        onCooldown
+                            ? `Available again in ${formatCountdown(cooldownRemaining)}`
+                            : ownedFeed > 0
+                                ? "Uses one Feed item - raises every stat by a random amount, no ceiling"
+                                : "Buy Feed in the Shop first"
+                    }
+                    disabled={isFeeding || onCooldown || ownedFeed <= 0}
+                    onClick={handleFeed}
+                />
 
                 {!confirmingRelease ? (
                     <ActionButton
@@ -418,33 +414,173 @@ function RanchTab() {
     );
 }
 
-function RaceTab() {
-    const { creatures, raceCategories, raceEntryFee, raceWinMultiplier, feedCooldownMs, race, isRacing } = useCasinoRanch();
-    const { enqueueSnackbar } = useSnackbar();
-    const [selectedId, setSelectedId] = useState<string | null>(null);
-    const [category, setCategory] = useState(raceCategories[0]?.key ?? "");
+// How long (seconds) the leader's lane takes to finish, plus a stagger per place further
+// back - a purely cosmetic mapping from the server-decided finishing order (RaceResultEntry
+// .place) onto a CSS transition duration, so lanes visibly cross the line in the exact
+// order the server already computed.
+const BASE_RACE_DURATION_S = 1.8;
+const RACE_STAGGER_S = 0.45;
+function durationForPlace(place: number): number {
+    return BASE_RACE_DURATION_S + (place - 1) * RACE_STAGGER_S;
+}
+
+interface RaceAnimationProps {
+    racers: PendingRace["racers"];
+    result: BetRaceResult;
+    onFinished: () => void;
+}
+
+// Plays out a result the server has already fully decided (result.order) - four CSS
+// width-transition "lanes", one per racer, each animating 0% -> 100% over a duration
+// derived from its place, so they finish in the server's order. No randomness, no new
+// component library - plain Box/Typography, matching Mine/Garden's aesthetic.
+function RaceAnimation({ racers, result, onFinished }: RaceAnimationProps) {
+    const [started, setStarted] = useState(false);
 
     useEffect(() => {
-        if (!category && raceCategories.length > 0) {
-            setCategory(raceCategories[0].key);
-        }
-    }, [raceCategories, category]);
+        const startId = setTimeout(() => setStarted(true), 50);
+        return () => clearTimeout(startId);
+    }, []);
+
+    useEffect(() => {
+        const maxDuration = Math.max(...result.order.map((o) => durationForPlace(o.place)));
+        const finishId = setTimeout(onFinished, maxDuration * 1000 + 400);
+        return () => clearTimeout(finishId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const placeByRacerId = Object.fromEntries(result.order.map((o) => [o.racerId, o.place]));
+
+    return (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, my: 2 }}>
+            {racers.map((racer) => {
+                const place = placeByRacerId[racer.id] ?? racers.length;
+                const isBet = racer.id === result.betRacerId;
+                return (
+                    <Box key={racer.id}>
+                        <Typography variant="caption" sx={{ fontWeight: isBet ? 700 : 400 }}>
+                            {racer.name}
+                            {racer.isPlayer ? " (You)" : ""}
+                            {isBet ? " - your bet" : ""}
+                        </Typography>
+                        <Box sx={{ position: "relative", height: 10, bgcolor: "action.hover", borderRadius: 999, overflow: "hidden" }}>
+                            <Box
+                                sx={{
+                                    height: "100%",
+                                    width: started ? "100%" : "0%",
+                                    transition: `width ${durationForPlace(place)}s linear`,
+                                    bgcolor: isBet ? "warning.main" : "primary.main",
+                                    borderRadius: 999,
+                                }}
+                            />
+                        </Box>
+                    </Box>
+                );
+            })}
+        </Box>
+    );
+}
+
+const STAKE_PRESETS = [100, 250, 500, 1000, 2500, 5000];
+
+function RaceTab() {
+    const {
+        creatures,
+        raceCourses,
+        feedCooldownMs,
+        minRaceStake,
+        maxRaceStake,
+        pendingRace,
+        prepareRace,
+        isPreparingRace,
+        betRace,
+        isBettingRace,
+    } = useCasinoRanch();
+    const { enqueueSnackbar } = useSnackbar();
+    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [localPending, setLocalPending] = useState<PendingRace | null>(null);
+    const [spinning, setSpinning] = useState(false);
+    const [spinLabel, setSpinLabel] = useState<string | null>(null);
+    const [betRacerId, setBetRacerId] = useState<string | null>(null);
+    const [stake, setStake] = useState(minRaceStake || 100);
+    const [raceResult, setRaceResult] = useState<BetRaceResult | null>(null);
 
     const selectedCreature = creatures.find((c) => c.id === selectedId) ?? null;
 
-    const handleRace = () => {
+    // Resume an unexpired pending race for the selected creature (e.g. after a page
+    // refresh) rather than forcing a wasted extra "scout" call.
+    useEffect(() => {
+        if (selectedId && pendingRace && pendingRace.creatureId === selectedId && !localPending) {
+            setLocalPending(pendingRace);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedId, pendingRace]);
+
+    const handleSelectCreature = (id: string) => {
+        setSelectedId(id);
+        setLocalPending(null);
+        setBetRacerId(null);
+        setRaceResult(null);
+    };
+
+    const handleScout = () => {
         if (!selectedCreature) {
             return;
         }
-        race({ creatureId: selectedCreature.id, category })
+        setSpinning(true);
+        setLocalPending(null);
+        setBetRacerId(null);
+        let i = 0;
+        const spinId = setInterval(() => {
+            setSpinLabel(raceCourses[i % Math.max(raceCourses.length, 1)]?.label ?? null);
+            i++;
+        }, 100);
+
+        prepareRace(selectedCreature.id)
             .then((r) => {
-                if (r.won) {
-                    enqueueSnackbar(`${selectedCreature.name} won the race! +${formatCheddar(r.payout)} cheddar`, { variant: "success" });
-                } else {
-                    enqueueSnackbar(`${selectedCreature.name} lost the race (opponent total ${r.opponentTotal}).`, { variant: "error" });
-                }
+                setTimeout(() => {
+                    clearInterval(spinId);
+                    setSpinning(false);
+                    setSpinLabel(null);
+                    setLocalPending(r.pending);
+                    setBetRacerId("player");
+                }, 1200);
             })
-            .catch((e) => enqueueSnackbar(e.message || "Failed to race", { variant: "error" }));
+            .catch((e) => {
+                clearInterval(spinId);
+                setSpinning(false);
+                setSpinLabel(null);
+                enqueueSnackbar(e.message || "Failed to scout the track", { variant: "error" });
+            });
+    };
+
+    const handleBet = () => {
+        if (!selectedCreature || !localPending || !betRacerId) {
+            return;
+        }
+        betRace({ creatureId: selectedCreature.id, racerId: betRacerId, stake })
+            .then((r) => setRaceResult(r))
+            .catch((e) => {
+                enqueueSnackbar(e.message || "Failed to place bet", { variant: "error" });
+                // The pending race may have expired between scouting and betting - clear it
+                // so the player has to scout (and look at a fresh field/odds) again rather
+                // than betting blind against numbers that no longer apply.
+                setLocalPending(null);
+                setBetRacerId(null);
+            });
+    };
+
+    const handleAnimationFinished = () => {
+        if (raceResult) {
+            if (raceResult.won) {
+                enqueueSnackbar(`Your bet won! +${formatCheddar(raceResult.payout)} cheddar (${raceResult.multiplier}x)`, { variant: "success" });
+            } else {
+                enqueueSnackbar(`Your bet lost - ${formatCheddar(raceResult.stake)} cheddar wagered.`, { variant: "error" });
+            }
+        }
+        setRaceResult(null);
+        setLocalPending(null);
+        setBetRacerId(null);
     };
 
     if (creatures.length === 0) {
@@ -467,31 +603,118 @@ function RaceTab() {
                         creature={creature}
                         feedCooldownMs={feedCooldownMs}
                         selected={creature.id === selectedId}
-                        onClick={setSelectedId}
+                        onClick={handleSelectCreature}
                     />
                 ))}
             </Box>
 
-            {selectedCreature && (
-                <Box sx={{ maxWidth: 480, mx: "auto", display: "flex", flexDirection: "column", gap: 1.5 }}>
-                    <Typography variant="caption" color="text.secondary">
-                        Race category - weights {selectedCreature.name}'s stats differently before the matchup
+            {selectedCreature && !localPending && !spinning && (
+                <Box sx={{ maxWidth: 480, mx: "auto" }}>
+                    <ActionButton
+                        icon={<SportsScoreIcon />}
+                        label={`Scout the Track with ${selectedCreature.name}`}
+                        description="Spins for a random course and reveals 3 rivals with odds - free, no money moves until you bet."
+                        disabled={isPreparingRace}
+                        onClick={handleScout}
+                    />
+                </Box>
+            )}
+
+            {spinning && (
+                <Typography variant="h6" sx={{ textAlign: "center", fontWeight: 700, mt: 2 }}>
+                    🎡 Spinning... {spinLabel}
+                </Typography>
+            )}
+
+            {selectedCreature && localPending && !raceResult && (
+                <Box sx={{ maxWidth: 560, mx: "auto" }}>
+                    <Typography variant="subtitle1" sx={{ textAlign: "center", fontWeight: 700, mb: 2 }}>
+                        Course: {localPending.course.label}
                     </Typography>
-                    <ToggleButtonGroup size="small" exclusive value={category} onChange={(_, value) => value && setCategory(value)} fullWidth>
-                        {raceCategories.map((c) => (
-                            <ToggleButton key={c.key} value={c.key} sx={{ textTransform: "none" }}>
-                                {c.label}
+
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 2 }}>
+                        {localPending.racers.map((racer) => {
+                            const odds = localPending.odds.find((o) => o.racerId === racer.id);
+                            return (
+                                <CardActionArea
+                                    key={racer.id}
+                                    onClick={() => setBetRacerId(racer.id)}
+                                    sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        gap: 1,
+                                        p: 1.5,
+                                        borderRadius: 1.5,
+                                        border: betRacerId === racer.id ? "2px solid" : "1px solid",
+                                        borderColor: betRacerId === racer.id ? "primary.main" : "divider",
+                                    }}
+                                >
+                                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+                                        <Typography sx={{ fontSize: 28 }}>{SPECIES_EMOJI[selectedCreature.rarityTier] ?? "🐾"}</Typography>
+                                        <Box sx={{ minWidth: 0 }}>
+                                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                                {racer.name}
+                                                {racer.isPlayer ? " (You)" : ""}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                                                Lv {racer.level} - Spd {racer.stats.speed} / Sta {racer.stats.stamina} / Pwr {racer.stats.power} / Int{" "}
+                                                {racer.stats.intelligence} / Lck {racer.stats.luck}
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                    <Box sx={{ textAlign: "right", flexShrink: 0 }}>
+                                        <Chip size="small" color="warning" label={`x${odds?.multiplier.toFixed(2) ?? "?"}`} sx={{ fontWeight: 700 }} />
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
+                                            {odds ? (odds.winProbability * 100).toFixed(0) : "?"}% win
+                                        </Typography>
+                                    </Box>
+                                </CardActionArea>
+                            );
+                        })}
+                    </Box>
+
+                    <Typography variant="caption" color="text.secondary">
+                        Stake
+                    </Typography>
+                    <ToggleButtonGroup
+                        size="small"
+                        exclusive
+                        value={stake}
+                        onChange={(_, value) => value && setStake(value)}
+                        fullWidth
+                        sx={{ mb: 1.5, mt: 0.5, flexWrap: "wrap" }}
+                    >
+                        {STAKE_PRESETS.filter((s) => s >= minRaceStake && s <= maxRaceStake).map((s) => (
+                            <ToggleButton key={s} value={s} sx={{ textTransform: "none" }}>
+                                {formatCheddar(s)}
                             </ToggleButton>
                         ))}
                     </ToggleButtonGroup>
+
                     <ActionButton
                         icon={<SportsScoreIcon />}
-                        label={`Race (${formatCheddar(raceEntryFee)} entry)`}
-                        description={`Win ${formatCheddar(Math.round(raceEntryFee * raceWinMultiplier))} cheddar against a generated opponent - odds scale with ${selectedCreature.name}'s effective stats for the selected category.`}
+                        label={`Race (${formatCheddar(stake)} bet)`}
+                        description={
+                            betRacerId
+                                ? `Betting on ${localPending.racers.find((r) => r.id === betRacerId)?.name}${
+                                      betRacerId === "player" ? " (your own creature)" : ""
+                                  }`
+                                : "Pick a racer above to bet on"
+                        }
                         color="warning"
-                        disabled={isRacing || !category}
-                        onClick={handleRace}
+                        disabled={isBettingRace || !betRacerId}
+                        onClick={handleBet}
                     />
+                </Box>
+            )}
+
+            {selectedCreature && localPending && raceResult && (
+                <Box sx={{ maxWidth: 560, mx: "auto" }}>
+                    <Typography variant="subtitle1" sx={{ textAlign: "center", fontWeight: 700, mb: 1 }}>
+                        And they're off!
+                    </Typography>
+                    <RaceAnimation racers={localPending.racers} result={raceResult} onFinished={handleAnimationFinished} />
                 </Box>
             )}
         </Box>
@@ -565,49 +788,42 @@ function InventoryTab({ items }: { items: RanchItem[] }) {
 }
 
 function ShopTab() {
-    const { feedItems, buyFeedItem, isBuyingFeedItem } = useCasinoRanch();
+    const { feedItem, buyFeed, isBuyingFeed } = useCasinoRanch();
     const { enqueueSnackbar } = useSnackbar();
 
-    const handleBuy = (key: string, label: string) =>
-        buyFeedItem(key)
-            .then(() => enqueueSnackbar(`Bought 1x ${label}.`, { variant: "success" }))
+    const handleBuy = () =>
+        buyFeed()
+            .then(() => enqueueSnackbar("Bought 1x Feed.", { variant: "success" }))
             .catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
 
+    if (!feedItem) {
+        return <LinearProgress sx={{ mt: 2 }} />;
+    }
+
     return (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            {feedItems.map((item) => (
-                <Box
-                    key={item.key}
-                    sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 1,
-                        p: 1.5,
-                        border: "1px solid",
-                        borderColor: "divider",
-                        borderRadius: 1.5,
-                    }}
-                >
-                    <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                            {item.label}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                            You own {item.quantity} - feeds the matching stat with no ceiling
-                        </Typography>
-                    </Box>
-                    <Button
-                        size="small"
-                        variant="contained"
-                        startIcon={<RestaurantIcon />}
-                        disabled={isBuyingFeedItem}
-                        onClick={() => handleBuy(item.key, item.label)}
-                    >
-                        Buy ({formatCheddar(item.price)})
-                    </Button>
-                </Box>
-            ))}
+        <Box
+            sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 1,
+                p: 1.5,
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: 1.5,
+            }}
+        >
+            <Box>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    {feedItem.label}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                    You own {feedItem.quantity} - raises every stat by a random amount, no ceiling
+                </Typography>
+            </Box>
+            <Button size="small" variant="contained" startIcon={<RestaurantIcon />} disabled={isBuyingFeed} onClick={handleBuy}>
+                Buy ({formatCheddar(feedItem.price)})
+            </Button>
         </Box>
     );
 }
@@ -615,7 +831,7 @@ function ShopTab() {
 type TabKey = "ranch" | "race" | "inventory" | "shop";
 
 export default function CheddarRanch() {
-    const { items, rarityTiers, raceCategories, hatchPrice, raceEntryFee, raceWinMultiplier, isError, error, refetch } = useCasinoRanch();
+    const { items, rarityTiers, raceCourses, hatchPrice, minRaceStake, maxRaceStake, isError, error, refetch } = useCasinoRanch();
     const [tab, setTab] = useState<TabKey>("ranch");
 
     const oddsSections: OddsSection[] = [
@@ -625,17 +841,19 @@ export default function CheddarRanch() {
                 label: `${t.label} (${(t.probability * 100).toFixed(0)}% chance)`,
                 payout: `Stats ${t.statRange[0]}-${t.statRange[1]}`,
             })),
-            footnote: `Hatching a Cheddar Egg costs ${formatCheddar(hatchPrice)} and draws one of these five rarity tiers - a rarer tier means a higher starting stat roll. There's no stat ceiling: feeding always raises a stat, for as long as you keep feeding it.`,
+            footnote: `Hatching a Cheddar Egg costs ${formatCheddar(hatchPrice)} and draws one of these five rarity tiers - a rarer tier means a higher starting roll across all 5 stats (Speed/Stamina/Power/Intelligence/Luck). There's no stat ceiling: feeding always raises every stat, for as long as you keep feeding.`,
         },
         {
-            title: "Race Categories",
-            rows: raceCategories.map((c) => ({
+            title: "Race Courses",
+            rows: raceCourses.map((c) => ({
                 label: c.label,
-                payout: `Weights speed x${c.weights.speed}, stamina x${c.weights.stamina}, power x${c.weights.power}`,
+                payout: `Weights Spd x${c.weights.speed} / Sta x${c.weights.stamina} / Pwr x${c.weights.power} / Int x${c.weights.intelligence} / Lck x${c.weights.luck}`,
             })),
-            footnote: `Racing (on the Race tab) costs ${formatCheddar(
-                raceEntryFee
-            )} to enter and pays ${raceWinMultiplier}x on a win. Each category weights a creature's stats differently before computing odds against a generated opponent, so a fast-but-frail creature does best in Sprint, a tough one in Brawl, and so on. Racing (win or lose) earns XP - every 100 XP is a level, and a creature's level increases how much of its item it produces per collection.`,
+            footnote: `On the Race tab, scouting a track is free - it spins a random course (which weights the 5 stats differently) and reveals 3 rival creatures alongside yours, each with real odds. You then bet ${formatCheddar(
+                minRaceStake
+            )}-${formatCheddar(
+                maxRaceStake
+            )} on any one of the 4 to win - a favorite pays a lower multiplier, a longshot pays a higher one. Your own creature's win/loss record and level track whether it actually placed first, independent of who you bet on.`,
         },
     ];
 
@@ -660,7 +878,7 @@ export default function CheddarRanch() {
     return (
         <GameWrapper
             title="Cheddar Ranch"
-            howToPlay="Ranch: hatch a Cheddar Egg to add a creature to your roster (rarity is randomized - better tiers roll higher stats), feed it to train a stat (no ceiling), collect its item every 24 hours, or release it for a flat cheddar payout. Race: pick a creature and a category (each weights stats differently) to enter it for a shot at a cheddar payout - win or lose earns XP toward its level. Inventory: sell collected items for cheddar, or use one (no effect yet). Shop: buy Feed items - one kind per stat - which Feed consumes to train a creature."
+            howToPlay="Ranch: hatch a Cheddar Egg to add a creature to your roster (rarity is randomized - better tiers roll higher stats), feed it with a Feed item to raise every stat by a random amount (no ceiling), collect its item every 24 hours, or release it for a flat cheddar payout. Race: pick a creature and scout the track for free - a random course is spun and 3 rival creatures are revealed alongside yours, each with real odds. Bet on any one of the 4 to win and watch the race play out. Win or lose the bet, your own creature's record and level track whether it actually placed first. Inventory: sell collected items for cheddar, or use one (no effect yet). Shop: buy Feed."
             oddsSections={oddsSections}
         >
             <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 3 }} variant="fullWidth">

@@ -1,5 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { RANCH_RARITY_TIERS, rollHatch, rarityDistribution, raceWinProbability, generateOpponent, levelForXp, effectiveRaceTotal } from "./casinoRanch";
+import {
+    RANCH_RARITY_TIERS,
+    RACE_COURSES,
+    rollHatch,
+    rarityDistribution,
+    rollFeedGains,
+    rollRival,
+    pickCourse,
+    effectiveRaceTotal,
+    simulateRace,
+    estimateWinProbabilities,
+    multiplierForProbability,
+    RanchStats,
+    Racer,
+} from "./casinoRanch";
+
+const STAT_KEYS: (keyof RanchStats)[] = ["speed", "stamina", "power", "intelligence", "luck"];
 
 // Monte Carlo sanity check that the real rollHatch() (not a reimplementation) actually
 // realizes the distribution implied by RANCH_RARITY_TIERS' weights - a regression guard
@@ -24,17 +40,15 @@ describe("rollHatch: real Monte Carlo matches the theoretical weight table", () 
         }
     }, 60_000);
 
-    it("never rolls a stat outside the hatched tier's declared statRange", () => {
+    it("never rolls a stat outside the hatched tier's declared statRange, for all 5 stats", () => {
         const ROUNDS = 20_000;
         for (let i = 0; i < ROUNDS; i++) {
             const { tier, stats } = rollHatch();
             const [lo, hi] = tier.statRange;
-            expect(stats.speed).toBeGreaterThanOrEqual(lo);
-            expect(stats.speed).toBeLessThanOrEqual(hi);
-            expect(stats.stamina).toBeGreaterThanOrEqual(lo);
-            expect(stats.stamina).toBeLessThanOrEqual(hi);
-            expect(stats.power).toBeGreaterThanOrEqual(lo);
-            expect(stats.power).toBeLessThanOrEqual(hi);
+            for (const key of STAT_KEYS) {
+                expect(stats[key]).toBeGreaterThanOrEqual(lo);
+                expect(stats[key]).toBeLessThanOrEqual(hi);
+            }
         }
     }, 30_000);
 });
@@ -51,90 +65,164 @@ describe("rarityDistribution", () => {
     });
 });
 
-describe("raceWinProbability", () => {
-    it("returns ~0.5 for equal totals", () => {
-        expect(raceWinProbability(100, 100)).toBeCloseTo(0.5, 5);
-    });
-
-    it("clamps to the max ceiling when the player heavily outmatches the opponent", () => {
-        expect(raceWinProbability(10_000, 1)).toBeLessThanOrEqual(0.9);
-        expect(raceWinProbability(10_000, 1)).toBeGreaterThan(0.85);
-    });
-
-    it("clamps to the min floor when the opponent heavily outmatches the player", () => {
-        expect(raceWinProbability(1, 10_000)).toBeGreaterThanOrEqual(0.1);
-        expect(raceWinProbability(1, 10_000)).toBeLessThan(0.15);
-    });
-
-    it("is monotonic in playerTotal for a fixed opponentTotal", () => {
-        const low = raceWinProbability(50, 100);
-        const high = raceWinProbability(150, 100);
-        expect(high).toBeGreaterThan(low);
-    });
+describe("rollFeedGains", () => {
+    it("rolls all 5 stats within FEED_GAIN_RANGE ([1, 4])", () => {
+        const ROUNDS = 20_000;
+        for (let i = 0; i < ROUNDS; i++) {
+            const gains = rollFeedGains();
+            for (const key of STAT_KEYS) {
+                expect(gains[key]).toBeGreaterThanOrEqual(1);
+                expect(gains[key]).toBeLessThanOrEqual(4);
+            }
+        }
+    }, 30_000);
 });
 
-describe("generateOpponent", () => {
-    it("scales around the player's total within the declared range", () => {
-        const ROUNDS = 5_000;
-        const playerTotal = 200;
-        for (let i = 0; i < ROUNDS; i++) {
-            const opponentTotal = generateOpponent(playerTotal);
-            expect(opponentTotal).toBeGreaterThanOrEqual(Math.round(playerTotal * 0.8) - 1);
-            expect(opponentTotal).toBeLessThanOrEqual(Math.round(playerTotal * 1.2) + 1);
+describe("rollRival", () => {
+    it("rolls stats within the given tier's declared statRange", () => {
+        const ROUNDS = 20_000;
+        for (const tier of RANCH_RARITY_TIERS) {
+            for (let i = 0; i < ROUNDS / RANCH_RARITY_TIERS.length; i++) {
+                const { stats } = rollRival(tier.key);
+                const [lo, hi] = tier.statRange;
+                for (const key of STAT_KEYS) {
+                    expect(stats[key]).toBeGreaterThanOrEqual(lo);
+                    expect(stats[key]).toBeLessThanOrEqual(hi);
+                }
+            }
+        }
+    }, 30_000);
+
+    it("falls back to the first tier for an unknown tier key", () => {
+        const { stats } = rollRival("not-a-real-tier");
+        const [lo, hi] = RANCH_RARITY_TIERS[0].statRange;
+        for (const key of STAT_KEYS) {
+            expect(stats[key]).toBeGreaterThanOrEqual(lo);
+            expect(stats[key]).toBeLessThanOrEqual(hi);
         }
     });
 });
 
-describe("levelForXp", () => {
-    it("starts at level 1 with zero xp", () => {
-        expect(levelForXp(0)).toBe(1);
-    });
-
-    it("advances one level per 100 xp", () => {
-        expect(levelForXp(99)).toBe(1);
-        expect(levelForXp(100)).toBe(2);
-        expect(levelForXp(250)).toBe(3);
-        expect(levelForXp(999)).toBe(10);
-    });
+describe("pickCourse", () => {
+    it("picks roughly uniformly across every course over many trials", () => {
+        const ROUNDS = 60_000;
+        const counts: Record<string, number> = {};
+        for (let i = 0; i < ROUNDS; i++) {
+            const course = pickCourse();
+            counts[course.key] = (counts[course.key] ?? 0) + 1;
+        }
+        const expected = 1 / RACE_COURSES.length;
+        for (const course of RACE_COURSES) {
+            const observed = (counts[course.key] ?? 0) / ROUNDS;
+            expect(observed).toBeGreaterThan(expected - 0.02);
+            expect(observed).toBeLessThan(expected + 0.02);
+        }
+    }, 30_000);
 });
 
 describe("effectiveRaceTotal", () => {
-    const stats = { speed: 100, stamina: 50, power: 10 };
-    const sprint = { key: "sprint", label: "Sprint", weights: { speed: 2, stamina: 0.5, power: 0.5 } };
-    const brawl = { key: "brawl", label: "Brawl", weights: { speed: 0.5, stamina: 0.5, power: 2 } };
+    const stats: RanchStats = { speed: 100, stamina: 50, power: 10, intelligence: 20, luck: 5 };
+    const sprint = RACE_COURSES.find((c) => c.key === "sprint")!;
+    const brawl = RACE_COURSES.find((c) => c.key === "brawl")!;
 
-    it("weights stats according to the category", () => {
-        expect(effectiveRaceTotal(stats, sprint)).toBeCloseTo(100 * 2 + 50 * 0.5 + 10 * 0.5, 5);
-        expect(effectiveRaceTotal(stats, brawl)).toBeCloseTo(100 * 0.5 + 50 * 0.5 + 10 * 2, 5);
+    it("weights all 5 stats according to the course", () => {
+        const expectedSprint = STAT_KEYS.reduce((sum, k) => sum + stats[k] * sprint.weights[k], 0);
+        const expectedBrawl = STAT_KEYS.reduce((sum, k) => sum + stats[k] * brawl.weights[k], 0);
+        expect(effectiveRaceTotal(stats, sprint)).toBeCloseTo(expectedSprint, 5);
+        expect(effectiveRaceTotal(stats, brawl)).toBeCloseTo(expectedBrawl, 5);
     });
 
-    it("favors a speed-heavy creature more in Sprint than in Brawl", () => {
+    it("favors a speed-heavy creature more on Sprint than on Brawl", () => {
         expect(effectiveRaceTotal(stats, sprint)).toBeGreaterThan(effectiveRaceTotal(stats, brawl));
     });
 });
 
-// Monte Carlo RTP sanity check for a race entry - realized average payout per cheddar
-// wagered should land in the same ~85-95% band the repo's other games target (see
-// kittyScratch.test.ts's kittyScratchRtp check), given the fixed RACE_WIN_MULTIPLIER of 1.8
-// and win probability centered near 0.5 by generateOpponent's symmetric scaling.
-describe("race RTP", () => {
-    it("lands in the same ~85-95% RTP band as this app's other games", () => {
-        const ROUNDS = 100_000;
-        const ENTRY_FEE = 500;
-        const WIN_MULTIPLIER = 1.8;
-        const playerTotal = 200;
+function makeRacer(id: string, stats: RanchStats): Racer {
+    return { id, isPlayer: id === "player", species: "Test", name: "Test", level: 1, stats };
+}
+
+const EVEN_STATS: RanchStats = { speed: 50, stamina: 50, power: 50, intelligence: 50, luck: 50 };
+const ALL_ROUNDER = RACE_COURSES.find((c) => c.key === "all-rounder")!;
+
+describe("simulateRace", () => {
+    it("returns exactly one entry per racer, with places forming a permutation of 1..N", () => {
+        const racers = [makeRacer("player", EVEN_STATS), makeRacer("rival-1", EVEN_STATS), makeRacer("rival-2", EVEN_STATS), makeRacer("rival-3", EVEN_STATS)];
+        const order = simulateRace(racers, ALL_ROUNDER);
+        expect(order).toHaveLength(4);
+        expect(order.map((o) => o.place).sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+        expect(new Set(order.map((o) => o.racerId)).size).toBe(4);
+    });
+});
+
+describe("estimateWinProbabilities", () => {
+    it("sums to 1 across all racers", () => {
+        const racers = [makeRacer("player", EVEN_STATS), makeRacer("rival-1", EVEN_STATS), makeRacer("rival-2", EVEN_STATS), makeRacer("rival-3", EVEN_STATS)];
+        const probs = estimateWinProbabilities(racers, ALL_ROUNDER);
+        const total = Object.values(probs).reduce((sum, p) => sum + p, 0);
+        expect(total).toBeCloseTo(1, 5);
+    });
+
+    it("is roughly equal for 4 identical racers", () => {
+        const racers = [makeRacer("player", EVEN_STATS), makeRacer("rival-1", EVEN_STATS), makeRacer("rival-2", EVEN_STATS), makeRacer("rival-3", EVEN_STATS)];
+        const probs = estimateWinProbabilities(racers, ALL_ROUNDER, 8000);
+        for (const p of Object.values(probs)) {
+            expect(p).toBeGreaterThan(0.15);
+            expect(p).toBeLessThan(0.35);
+        }
+    });
+
+    it("heavily favors a dominant racer", () => {
+        const dominant: RanchStats = { speed: 500, stamina: 500, power: 500, intelligence: 500, luck: 500 };
+        const weak: RanchStats = { speed: 10, stamina: 10, power: 10, intelligence: 10, luck: 10 };
+        const racers = [makeRacer("player", dominant), makeRacer("rival-1", weak), makeRacer("rival-2", weak), makeRacer("rival-3", weak)];
+        const probs = estimateWinProbabilities(racers, ALL_ROUNDER);
+        expect(probs["player"]).toBeGreaterThan(0.9);
+    });
+});
+
+describe("multiplierForProbability", () => {
+    it("is monotonically decreasing in probability", () => {
+        expect(multiplierForProbability(0.2)).toBeGreaterThan(multiplierForProbability(0.3));
+        expect(multiplierForProbability(0.3)).toBeGreaterThan(multiplierForProbability(0.5));
+        expect(multiplierForProbability(0.5)).toBeGreaterThan(multiplierForProbability(0.7));
+    });
+
+    it("matches targetRtp / p in the unclamped middle band", () => {
+        expect(multiplierForProbability(0.3)).toBeCloseTo(0.9 / 0.3, 5);
+        expect(multiplierForProbability(0.5)).toBeCloseTo(0.9 / 0.5, 5);
+    });
+
+    it("clamps at the extremes", () => {
+        expect(multiplierForProbability(0.99)).toBeGreaterThanOrEqual(1.05);
+        expect(multiplierForProbability(0.001)).toBeLessThanOrEqual(8);
+    });
+});
+
+// Monte Carlo RTP sanity check across random race fields and random bet targets - wider
+// tolerance than the old flat-multiplier race system's 85-95% band, since the
+// favorite/longshot clamp intentionally skews realized RTP away from the exact target.
+describe("race betting RTP", () => {
+    it("lands in a wide sanity band across random fields and random bet targets", () => {
+        const ROUNDS = 20_000;
+        const STAKE = 100;
 
         let totalPayout = 0;
         for (let i = 0; i < ROUNDS; i++) {
-            const opponentTotal = generateOpponent(playerTotal);
-            const winProb = raceWinProbability(playerTotal, opponentTotal);
-            if (Math.random() < winProb) {
-                totalPayout += ENTRY_FEE * WIN_MULTIPLIER;
+            const tier = RANCH_RARITY_TIERS[Math.floor(Math.random() * RANCH_RARITY_TIERS.length)];
+            const course = pickCourse();
+            const racers = ["player", "rival-1", "rival-2", "rival-3"].map((id) => makeRacer(id, rollRival(tier.key).stats));
+            const probs = estimateWinProbabilities(racers, course, 500);
+            const betRacerId = racers[Math.floor(Math.random() * racers.length)].id;
+            const multiplier = multiplierForProbability(probs[betRacerId]);
+
+            const order = simulateRace(racers, course);
+            if (order[0].racerId === betRacerId) {
+                totalPayout += STAKE * multiplier;
             }
         }
-        const realizedRtp = totalPayout / ROUNDS / ENTRY_FEE;
+        const realizedRtp = totalPayout / ROUNDS / STAKE;
 
-        expect(realizedRtp).toBeGreaterThan(0.85);
+        expect(realizedRtp).toBeGreaterThan(0.7);
         expect(realizedRtp).toBeLessThan(0.95);
     }, 60_000);
 });
