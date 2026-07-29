@@ -8,16 +8,28 @@
  *
  * There's no weighted pocket table here (unlike Plinko's plinkoOdds.ts) - the outcome comes
  * from a real physics simulation, not a pre-selected probability, so there's no closed-form RTP
- * to derive. These are starting values, not tuned against real play data yet.
+ * to derive. These WERE untuned starting values, and it showed: a Monte Carlo sweep across the
+ * full launch-power range (see pachinkoPayoutTuning.ts, the repeatable tool that produced these
+ * numbers) found the side tulip has a physics/nail-field sweet spot around launch power ~20-25
+ * where it's caught 30-38% of the time - versus single-digit percent almost everywhere else on
+ * the power range - pushing worst-case RTP as high as ~300% for a player who found that power
+ * and just fired there every time. That's the mechanism behind the house losing money, not a
+ * generally-too-generous board. Re-run pachinkoPayoutTuning.ts and update these constants again
+ * if the board geometry (pachinkoLayout.ts), physics tuning (pachinkoPhysics.ts), or reel
+ * weights (pachinkoReels.ts) ever change - none of this is derivable by hand from the geometry
+ * alone, the same way Plinko's own MULTIPLIERS table isn't (see plinkoLayout.ts).
  */
 import { capPayout } from "./payoutCap";
 
 // Frequent, small top-ups - the easiest pocket to catch on the board (see pachinkoLayout.ts's
 // BONUS_POCKETS, the widest non-jackpot target).
-export const BONUS_POCKET_BALLS = 3;
+export const BONUS_POCKET_BALLS = 2;
 
-// Catching a side tulip also toggles it open/closed - both open at once primes the jackpot.
-export const SIDE_TULIP_BALLS = 8;
+// Catching a side tulip also toggles it open/closed - both open at once primes the jackpot. Cut
+// hardest of every constant in this file (was 8) - this is the pocket with the exploitable
+// power sweet spot described above, so its own worst-case-power EV alone had to come down to
+// target before anything else in the board's economy could be trusted.
+export const SIDE_TULIP_BALLS = 2;
 
 // The chucker itself never pays balls directly - it only fires the board's central reel gimmick
 // (see pachinkoReels.ts), a real modern machine's own "heso" -> LCD reel -> bonus round flow.
@@ -30,13 +42,12 @@ export const ATTACKER_OPEN_MS = 15000;
 
 // Two-of-a-kind is a small top-up and opens nothing; three-of-a-kind is bigger AND opens the
 // attacker (see ATTACKER_OPEN_MS above) - only the "three" tier touches the attacker at all.
-// Modest starting values, same caveat as every other payout in this file.
-export const REEL_TWO_MATCH_BALLS = 5;
-export const REEL_THREE_MATCH_BALLS = 15;
+export const REEL_TWO_MATCH_BALLS = 4;
+export const REEL_THREE_MATCH_BALLS = 14;
 
 // A big, rare payout - the attacker is a wide target, but only reachable during its short open
 // window, and only reachable AT ALL via a chucker catch that also lands a reel match.
-export const ATTACKER_BALLS = 25;
+export const ATTACKER_BALLS = 24;
 
 // How long the jackpot pocket actually pays once both tulips are simultaneously open - same
 // timed-window shape as the attacker (see pachinko.ts's own jackpot-priming branch), not a

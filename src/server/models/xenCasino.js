@@ -301,6 +301,7 @@ var xenCasinoActivitySchema = new mongoose.Schema({
 });
 xenCasinoActivitySchema.index({ createdAt: 1 });
 xenCasinoActivitySchema.index({ game: 1, createdAt: 1 });
+xenCasinoActivitySchema.index({ userId: 1, createdAt: 1 });
 
 xenCasinoActivitySchema.statics.clearAll = async function () {
   await this.deleteMany({}).exec();

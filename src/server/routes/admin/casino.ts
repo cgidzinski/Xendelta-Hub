@@ -10,7 +10,9 @@ const { XenCasino, XenCasinoActivity } = require("../../models/xenCasino");
 const { User } = require("../../models/user");
 
 // Mirrors the client-side CASINO_GAMES_REGISTRY order - stats are returned in this
-// order so the admin table is deterministic.
+// order so the admin table is deterministic. The trailing two entries aren't real games -
+// they're non-game XenCasinoActivity categories (quest rewards, admin grants) appended so
+// those real transfers show up in the reconciliation totals/chart instead of being invisible.
 var GAME_LABELS: Record<string, string> = {
     "easy-spin": "Easy Spin",
     "spinmania": "Spinmania",
@@ -22,12 +24,26 @@ var GAME_LABELS: Record<string, string> = {
     "garden": "Casino Garden",
     "printer": "Money Printer",
     "mine": "Chip Mine",
+    "quest-reward": "Daily Quest Rewards",
+    "admin-grant": "Admin Grants",
 };
 
 // Which games have progressive jackpots. Scratch tickets and Plinko do not - they
 // show "—" in the jackpot column.
 var JACKPOT_MACHINES = ["easy-spin", "spinmania"];
 var PACHINKO_SLUG = "pachinko";
+
+// Shared by /stats and /player-stats - both aggregate the same XenCasinoActivity collection
+// over the same today/week/all window, just grouped by a different field.
+function rangeCutoff(range: string): Date | null {
+    var now = new Date();
+    if (range === "today") {
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    } else if (range === "week") {
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - 7 * 24 * 60 * 60 * 1000);
+    }
+    return null;
+}
 
 module.exports = function (app: express.Application) {
 
@@ -38,14 +54,7 @@ module.exports = function (app: express.Application) {
     app.get("/api/admin/casino/stats", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
         try {
             var range = (req.query.range as string) || "all";
-
-            var now = new Date();
-            var cutoff: Date | null = null;
-            if (range === "today") {
-                cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-            } else if (range === "week") {
-                cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - 7 * 24 * 60 * 60 * 1000);
-            }
+            var cutoff = rangeCutoff(range);
 
             var match: Record<string, unknown> = {};
             if (cutoff) {
@@ -93,6 +102,60 @@ module.exports = function (app: express.Application) {
         }
     });
 
+    // Per-player win/loss/round counts, same source and window as /stats above but grouped by
+    // userId instead of game - every row already carries userId (see xenCasino.js's
+    // XenCasinoActivity schema), so this is a pure read-side addition, no new writes anywhere.
+    // Capped to the 100 largest-magnitude net movers (by |lossAmount - winAmount|) so an
+    // unbounded "all time" range with many distinct players stays cheap to render - sorted by
+    // |net| first so this doesn't only ever surface the house's best days and silently drop big
+    // house-losing outliers (players who beat the casino - as worth an admin's attention as the
+    // reverse), then re-sorted by signed net descending for display once capped.
+    app.get("/api/admin/casino/player-stats", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+        try {
+            var range = (req.query.range as string) || "all";
+            var cutoff = rangeCutoff(range);
+
+            var match: Record<string, unknown> = {};
+            if (cutoff) {
+                match.createdAt = { $gte: cutoff };
+            }
+
+            var rows = await XenCasinoActivity.aggregate([
+                { $match: match },
+                { $group: { _id: "$userId", winAmount: { $sum: "$payout" }, lossAmount: { $sum: "$wager" }, roundsPlayed: { $sum: 1 } } },
+                { $addFields: { net: { $subtract: ["$lossAmount", "$winAmount"] } } },
+                { $addFields: { absNet: { $abs: "$net" } } },
+                { $sort: { absNet: -1 } },
+                { $limit: 100 },
+                { $sort: { net: -1 } },
+            ]).exec();
+
+            var userIds = rows.map(function (r: any) { return r._id; });
+            var users = await User.find({ _id: { $in: userIds } }, "username avatar").exec();
+            var userMap = new Map<string, { username: string; avatar: string | null }>();
+            for (var u = 0; u < users.length; u++) {
+                userMap.set(String(users[u]._id), { username: users[u].username, avatar: users[u].avatar || null });
+            }
+
+            var players = rows.map(function (r: any) {
+                var info = userMap.get(r._id);
+                return {
+                    userId: r._id,
+                    username: info ? info.username : "Unknown",
+                    avatar: info ? info.avatar : null,
+                    winAmount: r.winAmount.toFixed(2),
+                    lossAmount: r.lossAmount.toFixed(2),
+                    roundsPlayed: r.roundsPlayed,
+                    net: r.net.toFixed(2),
+                };
+            });
+
+            return res.json({ status: true, data: { range: range, players: players } });
+        } catch (err) {
+            return res.status(500).json({ status: false, message: (err as Error).message });
+        }
+    });
+
     // Resets every progressive jackpot (all slot machines plus Pachinko) back to its seed
     // value. All current jackpot machines seed at 0 (see JACKPOT_SEED in pachinkoPayouts.ts
     // and each slot machine's jackpotSeed config), so this always resets to 0 rather than
@@ -125,9 +188,10 @@ module.exports = function (app: express.Application) {
 
     // Daily breakdown for charts: per-day amount in, amount out, net, rounds played,
     // and end-of-day house balance (derived backwards from the current live balance).
-    // amountIn/amountOut/roundsPlayed come from the local XenCasinoActivity collection - only
-    // actual game rounds are recorded there (not daily-quest reward claims), so the per-day
-    // net/balance here reflects wager/payout activity only, not quest-reward money movement.
+    // amountIn/amountOut/roundsPlayed come from the local XenCasinoActivity collection, which
+    // now also includes daily-quest reward claims and admin cheddar grants (see GAME_LABELS'
+    // "quest-reward"/"admin-grant" rows), so the per-day net/balance reflects every real
+    // transfer through the house account, not just in-game wager/payout activity.
     app.get("/api/admin/casino/daily-stats", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
         try {
             var days = Math.min(Math.max(parseInt(req.query.days as string) || 5, 1), 30);
@@ -329,6 +393,11 @@ module.exports = function (app: express.Application) {
                 key,
                 note: `admin_grant:${admin.username}${trimmedNote ? ":" + trimmedNote : ""}`,
             });
+
+            // Recorded so admin stats/daily-stats (which aggregate over XenCasinoActivity)
+            // see this real payout instead of silently drifting from the live house balance
+            // every time an admin sends cheddar.
+            await XenCasinoActivity.record({ userId, game: "admin-grant", wager: 0, payout: amountNum });
 
             return res.json({
                 status: true,

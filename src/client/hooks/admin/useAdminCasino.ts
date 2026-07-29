@@ -58,6 +58,21 @@ export interface AdminUserWallet {
     balance: string | null;
 }
 
+export interface AdminCasinoPlayerStats {
+    userId: string;
+    username: string;
+    avatar: string | null;
+    winAmount: string;
+    lossAmount: string;
+    roundsPlayed: number;
+    net: string;
+}
+
+interface AdminCasinoPlayerStatsResponse {
+    range: string;
+    players: AdminCasinoPlayerStats[];
+}
+
 export const adminCasinoKeys = {
     all: ["adminCasino"] as const,
     byRange: (range: StatsRange) => ["adminCasino", range] as const,
@@ -65,6 +80,7 @@ export const adminCasinoKeys = {
     games: ["adminCasino", "games"] as const,
     discordUsers: ["adminCasino", "discordUsers"] as const,
     wallet: (userId: string) => ["adminCasino", "wallet", userId] as const,
+    playerStatsByRange: (range: StatsRange) => ["adminCasino", "playerStats", range] as const,
 };
 
 const fetchAdminCasinoStats = async (range: StatsRange): Promise<AdminCasinoResponse> => {
@@ -109,6 +125,13 @@ const fetchDiscordUsers = async (): Promise<DiscordLinkedUser[]> => {
 
 const fetchUserWallet = async (userId: string): Promise<AdminUserWallet> => {
     const response = await apiClient.get<ApiResponse<AdminUserWallet>>(`/api/admin/casino/users/${userId}/wallet`);
+    return response.data.data!;
+};
+
+const fetchAdminCasinoPlayerStats = async (range: StatsRange): Promise<AdminCasinoPlayerStatsResponse> => {
+    const response = await apiClient.get<ApiResponse<AdminCasinoPlayerStatsResponse>>(
+        `/api/admin/casino/player-stats?range=${range}`
+    );
     return response.data.data!;
 };
 
@@ -203,6 +226,22 @@ export const useAdminCasinoDailyStats = (days: number = 5) => {
         isLoading,
         isError,
         error: error as Error | null,
+    };
+};
+
+export const useAdminCasinoPlayerStats = (range: StatsRange) => {
+    const { data, isLoading, isError, error, refetch } = useQuery({
+        queryKey: adminCasinoKeys.playerStatsByRange(range),
+        queryFn: () => fetchAdminCasinoPlayerStats(range),
+        staleTime: 30 * 1000,
+    });
+
+    return {
+        players: data?.players ?? [],
+        isLoading,
+        isError,
+        error: error as Error | null,
+        refetch,
     };
 };
 

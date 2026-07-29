@@ -178,30 +178,31 @@ scheduleStaleRoundSweep(SLUG, ROUND_TTL_MS, async (round) => {
 
     // Any balls never fired have no decided outcome to pay out - refund their
     // pro-rated cost instead of either forfeiting it or leaving the round stuck open.
-    if (conditions.ballsRemaining > 0) {
-        const refund = conditions.ballsRemaining * conditions.pricePerBall;
-        if (refund > 0) {
-            await transfer({
-                fromAccountId: xenCasinoAccountId,
-                toAccountId: round.playerAccountId,
-                amount: refund.toFixed(10),
-                key: `xendelta-${SLUG}-refund-${round._id}`,
-                note: `${SLUG}_refund`,
-            });
-        }
+    const refund = conditions.ballsRemaining > 0 ? conditions.ballsRemaining * conditions.pricePerBall : 0;
+    if (refund > 0) {
+        await transfer({
+            fromAccountId: xenCasinoAccountId,
+            toAccountId: round.playerAccountId,
+            amount: refund.toFixed(10),
+            key: `xendelta-${SLUG}-refund-${round._id}`,
+            note: `${SLUG}_refund`,
+        });
     }
 
     await XenCasinoRound.resolve(round._id);
     // Only counts as "played" if at least one ball was actually launched or cashed out
     // - otherwise a buy-then-abandon cycle (fully refunded above) would let a player
-    // farm daily quest progress for free with no risk. Stats-wise, "wager" is the cost of
-    // balls actually fired (never-fired balls were just refunded above, so they were never
-    // genuinely at risk); "payout" is whatever cash a cash-out converted remaining balls into.
+    // farm daily quest progress for free with no risk. Stats-wise, "wager" is the full cost
+    // of every ball ever bought (conditions.ballsTotal), matching the /cashout handler's own
+    // accounting - not just fired balls, since unfired ones are refunded above (or via
+    // cashOutPending) rather than won by the house. "payout" is whichever real transfer paid
+    // the player back: the interrupted cash-out's amount if one was pending, otherwise the
+    // unfired-balls refund just above.
     if (conditions.results.length > 0 || conditions.cashOutPending) {
         await recordCasinoRoundPlayed(round.userId, {
             game: SLUG,
-            wager: conditions.results.length * conditions.pricePerBall,
-            payout: conditions.cashOutPending ? conditions.cashOutPending.amount : 0,
+            wager: conditions.ballsTotal * conditions.pricePerBall,
+            payout: conditions.cashOutPending ? conditions.cashOutPending.amount : refund,
         });
     }
 });
@@ -670,9 +671,13 @@ module.exports = function (app: express.Application) {
             });
 
             await XenCasinoRound.resolve(round._id);
+            // wager is the full cost of every ball ever bought for this batch (conditions.
+            // ballsTotal), not just the ones fired - balls bought but cashed out unfired are a
+            // real refund via `amount` below, not a house win, so counting only fired balls as
+            // wager while paying out the full remaining stack overstated recorded profit.
             await recordCasinoRoundPlayed(userId, {
                 game: SLUG,
-                wager: conditions.results.length * conditions.pricePerBall,
+                wager: conditions.ballsTotal * conditions.pricePerBall,
                 payout: amount,
             });
 
