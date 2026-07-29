@@ -192,7 +192,7 @@ export default function Mine() {
                       { label: "Dig Fee", payout: `${formatCheddar(state.prices.dig.cost)} per real dig - free to move through tunnels you've already cleared` },
                       { label: "Ladder", payout: `${formatCheddar(state.prices.ladder.cost)} each` },
                       { label: "Explosive", payout: `${formatCheddar(state.prices.explosive.cost)} - single-use, blasts through the daily cap, a missing ladder, and/or heavy stone` },
-                      { label: "Reinforcement", payout: `${formatCheddar(state.prices.reinforcement.cost)} - single-use shield against your next cave-in, stays armed until it actually blocks one` },
+                      { label: "Support", payout: `${formatCheddar(state.prices.reinforcement.cost)} - single-use shield against your next cave-in, stays armed until it actually blocks one` },
                       { label: "Flare", payout: `${formatCheddar(state.prices.flare.cost)} - reveals a 3x3 area around you, single-use` },
                       { label: "Reset Map", payout: `${formatCheddar(state.prices.reset.cost)} - wipes your whole map and returns you to the surface` },
                   ],
@@ -316,7 +316,7 @@ export default function Mine() {
     return (
         <GameWrapper
             title="Chip Mine"
-            howToPlay="Moving through tunnels you've already cleared is always free - no digs spent, no cheddar, no risk, walk it as much as you like (you can even head back Up). Only pushing into new, undug territory is a real dig: it spends one of today's limited digs and costs a flat cheddar fee regardless of what's found, and going down also needs a ladder. There's no way to preview a tile in advance except a Flare, which reveals a 3x3 area around you (whether a tile holds a gem, and its tier, or whether it's heavy stone) - otherwise you're digging blind, same as always for cave-in risk. Heavy stone randomly blocks some tiles and needs an Explosive to clear. A cave-in leaves rubble behind that permanently blocks that tunnel - nothing clears it, you'll have to dig around it. A Reinforcement is a single-use shield against your next cave-in - it stays armed through any number of safe digs, only used up the moment it actually blocks one. An Explosive is a universal bypass: spend one to blast through today's dig limit, a missing ladder, and/or heavy stone, any combination at once. The deeper you go, the better the gems get - both the chance of a good find and its value rise with depth. You get one free ladder every day. If you ever want a clean slate, you can wipe your whole map and start over from the surface for a fee - your equipment carries over."
+            howToPlay="Moving through tunnels you've already cleared is always free - no digs spent, no cheddar, no risk, walk it as much as you like (you can even head back Up). Only pushing into new, undug territory is a real dig: it spends one of today's limited digs and costs a flat cheddar fee regardless of what's found, and going down also needs a ladder. There's no way to preview a tile in advance except a Flare, which reveals a 3x3 area around you (whether a tile holds a gem, and its tier, or whether it's heavy stone) - otherwise you're digging blind, same as always for cave-in risk. Heavy stone randomly blocks some tiles and needs an Explosive to clear. A cave-in leaves rubble behind that permanently blocks that tunnel - nothing clears it, you'll have to dig around it. A Support is a single-use shield against your next cave-in - it stays armed through any number of safe digs, only used up the moment it actually blocks one. An Explosive is a universal bypass: spend one to blast through today's dig limit, a missing ladder, and/or heavy stone, any combination at once. The deeper you go, the better the gems get - both the chance of a good find and its value rise with depth. You get one free ladder every day. If you ever want a clean slate, you can wipe your whole map and start over from the surface for a fee - your equipment carries over."
             oddsSections={oddsSections}
         >
             <Card variant="outlined" sx={{ bgcolor: "#0a0a0f", overflow: "hidden", mt: 2 }}>
@@ -486,13 +486,7 @@ export default function Mine() {
                 />
                 <StatTile label="Ladders" value={ladderCount} color={ladderCount > 0 ? undefined : "warning.main"} />
                 <StatTile label="Explosives" value={explosiveCount} color={explosiveCount > 0 ? "warning.main" : undefined} />
-                <StatTile label="Reinforcements" value={reinforcementCount} color={reinforcementCount > 0 ? "info.main" : undefined} />
-                <StatTile label="Best Depth" value={state.deepestDepthReached} />
-                <StatTile
-                    label="Best Find"
-                    value={state.bestGemTier ? state.oreTiers.find((t) => t.key === state.bestGemTier)?.label ?? state.bestGemTier : "—"}
-                    color={state.bestGemTier ? TIER_COLOR[state.bestGemTier] : undefined}
-                />
+                <StatTile label="Supports" value={reinforcementCount} color={reinforcementCount > 0 ? "info.main" : undefined} />
             </Box>
 
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 3, maxWidth: 480, mx: "auto" }}>
@@ -513,7 +507,7 @@ export default function Mine() {
                 />
                 <ActionButton
                     icon={<ShieldIcon />}
-                    label={`Buy Reinforcement (${formatCheddar(state.prices.reinforcement.cost)})`}
+                    label={`Buy Support (${formatCheddar(state.prices.reinforcement.cost)})`}
                     description="Single-use shield against your next cave-in. Stays armed through any number of safe digs - only used up the moment it actually blocks one."
                     color="primary"
                     disabled={isBuying}
