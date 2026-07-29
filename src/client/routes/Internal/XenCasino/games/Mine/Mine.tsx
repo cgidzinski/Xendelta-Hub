@@ -327,7 +327,7 @@ export default function Mine() {
                                         {!isPlayer && tile?.status === "scouted" && tile.oreTier && (
                                             <DiamondIcon sx={{ color: TIER_COLOR[tile.oreTier] ?? "warning.light", fontSize: 18, opacity: 0.6 }} />
                                         )}
-                                        {!isPlayer && tile?.status === "mined" && tile.oreTier && (
+                                        {tile?.status === "mined" && tile.oreTier && (
                                             <DiamondIcon
                                                 sx={{ color: TIER_COLOR[tile.oreTier] ?? "warning.main", fontSize: 12, position: "absolute", bottom: 3, right: 3 }}
                                             />

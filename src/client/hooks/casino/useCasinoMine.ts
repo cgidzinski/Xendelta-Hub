@@ -78,7 +78,7 @@ export const useCasinoMine = () => {
     const { mutateAsync: dig, isPending: isDigging } = useMutation({
         mutationFn: async (direction: "up" | "down" | "left" | "right") =>
             (await apiClient.post<ApiResponse<DigResult>>("/api/casino/mine/dig", { direction })).data.data!,
-        onSuccess: invalidate,
+        onSettled: invalidate,
     });
 
     const { mutateAsync: buyEquipment, isPending: isBuying } = useMutation({
