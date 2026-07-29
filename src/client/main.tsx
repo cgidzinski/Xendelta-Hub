@@ -62,6 +62,7 @@ import Memory from "./routes/Internal/XenCasino/games/Memory/Memory";
 import Garden from "./routes/Internal/XenCasino/games/Garden/Garden";
 import Printer from "./routes/Internal/XenCasino/games/Printer/Printer";
 import Mine from "./routes/Internal/XenCasino/games/Mine/Mine";
+import CheddarRanch from "./routes/Internal/XenCasino/games/CheddarRanch/CheddarRanch";
 // Routes - Xensplit
 import XensplitGroupsList from "./routes/Internal/Xensplit/GroupsList";
 import XensplitGroupDetail from "./routes/Internal/Xensplit/GroupDetail";
@@ -189,6 +190,7 @@ const router = createBrowserRouter(
           <Route path="games/garden" element={<Garden />} />
           <Route path="games/printer" element={<Printer />} />
           <Route path="games/mine" element={<Mine />} />
+          <Route path="games/cheddar-ranch" element={<CheddarRanch />} />
         </Route>
         <Route path="xensplit" index element={<Navigate to="groups" replace />} />
         <Route path="xensplit/groups" element={<XensplitGroupsList />} />

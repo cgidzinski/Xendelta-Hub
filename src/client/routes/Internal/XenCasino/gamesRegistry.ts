@@ -1,4 +1,4 @@
-export type CasinoGameType = "slots" | "scratch" | "plinko" | "pachinko" | "memory" | "garden" | "printer" | "mine";
+export type CasinoGameType = "slots" | "scratch" | "plinko" | "pachinko" | "memory" | "garden" | "printer" | "mine" | "ranch";
 
 export interface CasinoGameRegistryItem {
   key: string;
@@ -22,6 +22,7 @@ export const CASINO_GAME_TYPE_LABELS: Record<CasinoGameType, string> = {
   garden: "Garden",
   printer: "Printing",
   mine: "Mining",
+  ranch: "Creature Ranch",
 };
 
 // Add a new game by adding an entry here plus its own folder under games/ - nothing else
@@ -110,6 +111,15 @@ export const CASINO_GAMES_REGISTRY: CasinoGameRegistryItem[] = [
     description: "Dig a dark shaft for ore - down is riskier, sideways stays safe. Limited digs per day, buy ladders and torches.",
     type: "mine",
     price: 200,
+    priceFrom: true,
+  },
+  {
+    key: "cheddar-ranch",
+    label: "Cheddar Ranch",
+    path: "/internal/xencasino/games/cheddar-ranch",
+    description: "Hatch creatures from weighted-rarity eggs, feed and train your roster, then race them for cheddar payouts.",
+    type: "ranch",
+    price: 2000, // hatch price - see HATCH_PRICE in casinoRanch.ts
     priceFrom: true,
   },
 ];
