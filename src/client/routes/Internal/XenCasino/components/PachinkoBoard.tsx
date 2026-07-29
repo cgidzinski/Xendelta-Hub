@@ -578,8 +578,15 @@ export default function PachinkoBoard({
             drawPocketAmount(ctx, bonus.position.x, bonus.position.y, `${bonusPocketBalls}`, stroke);
         }
 
-        const leftOpen = sessionRef.current?.leftTulipOpen ?? false;
-        const rightOpen = sessionRef.current?.rightTulipOpen ?? false;
+        const jackpotOpenUntil = sessionRef.current?.jackpotOpenUntil ?? 0;
+        // A primed window (jackpotOpenUntil > 0) that has since lapsed means both tulips are
+        // only still reading "open" because the server closes them lazily on the next launch
+        // (see shouldCloseLapsedTulips in pachinko.ts) - mirror that same close here against the
+        // live clock so the tulips visually snap shut in sync with the jackpot pocket below,
+        // instead of staying lit until whatever the next shot happens to be.
+        const jackpotWindowLapsed = jackpotOpenUntil > 0 && jackpotOpenUntil <= Date.now();
+        const leftOpen = (sessionRef.current?.leftTulipOpen ?? false) && !jackpotWindowLapsed;
+        const rightOpen = (sessionRef.current?.rightTulipOpen ?? false) && !jackpotWindowLapsed;
         for (const tulip of layout.tulips) {
             const isOpen = tulip.id === "left" ? leftOpen : rightOpen;
             const isHot = hotPockets.has(`tulip-${tulip.id}`);
@@ -657,10 +664,10 @@ export default function PachinkoBoard({
         }
 
         // Jackpot - the tightest pocket on the board, fixed width even when primed. Driven
-        // purely by the timed window, not the tulip booleans - those only close lazily on the
-        // server (the next launch's shouldCloseLapsedTulips check), so falling back to them here
-        // would keep showing "OPEN" long after the window actually lapsed.
-        const jackpotOpenUntil = sessionRef.current?.jackpotOpenUntil ?? 0;
+        // purely by the timed window (jackpotOpenUntil computed above, alongside the same check
+        // that keeps the tulips in sync), not the tulip booleans - those only close lazily on
+        // the server (the next launch's shouldCloseLapsedTulips check), so falling back to them
+        // here would keep showing "OPEN" long after the window actually lapsed.
         const jackpotOpen = jackpotOpenUntil > Date.now();
         const jackpotHot = hotPockets.has("jackpot");
         const jackpotHeight = layout.jackpot.halfWidth * 2.4;

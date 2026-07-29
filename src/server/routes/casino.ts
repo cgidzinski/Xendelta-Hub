@@ -2,7 +2,7 @@ import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 const { User } = require("../models/user");
-const { XenCasinoUserState, dailyQuestDateKey } = require("../models/xenCasino");
+const { XenCasinoUserState, XenCasinoActivity, dailyQuestDateKey } = require("../models/xenCasino");
 import {
     resolveUserAccount,
     getAccount,
@@ -138,6 +138,11 @@ module.exports = function (app: express.Application) {
             // Only recorded after the transfer actually succeeds - if it fails, the quest
             // stays claimable and the next attempt just replays the same idempotent key.
             await XenCasinoUserState.markDailyQuestClaimed(userId, date);
+            // Recorded directly (not via recordCasinoRoundPlayed, which also bumps quest
+            // round-progress) so admin stats/daily-stats - which aggregate over
+            // XenCasinoActivity - see this real payout instead of silently drifting from
+            // the live house balance every time a quest is claimed.
+            await XenCasinoActivity.record({ userId, game: "quest-reward", wager: 0, payout: DAILY_QUEST_REWARD });
 
             return res.json({ status: true, data: { balance: result.toNewBalance } });
         } catch (err) {

@@ -33,8 +33,13 @@ describe("payout constants", () => {
         expect(CASH_OUT_RATE).toBeGreaterThan(0);
     });
 
-    it("pocket value ordering matches difficulty - bonus pays less than the tulip, which pays less than the rare attacker", () => {
-        expect(BONUS_POCKET_BALLS).toBeLessThan(SIDE_TULIP_BALLS);
+    it("the rare attacker pays more than the frequent bonus/tulip pockets", () => {
+        // Bonus and tulip are no longer strictly ordered against each other - a Monte Carlo
+        // sweep (see pachinkoPayoutTuning.ts) found the tulip has a physics/nail-field sweet
+        // spot at a specific launch power where it's caught far more often than the "easy"
+        // bonus pocket is anywhere on the board, so it was cut hardest of any pocket rather
+        // than assumed to deserve a higher payout than bonus by default.
+        expect(BONUS_POCKET_BALLS).toBeLessThan(ATTACKER_BALLS);
         expect(SIDE_TULIP_BALLS).toBeLessThan(ATTACKER_BALLS);
     });
 });

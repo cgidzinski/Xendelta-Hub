@@ -67,7 +67,7 @@ import {
     MAX_LAUNCH_POWER,
 } from "./pachinkoLayout";
 import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, ATTACKER_OPEN_MS, ATTACKER_BALLS, JACKPOT_OPEN_MS, CONTRIBUTION_RATE, JACKPOT_SEED, CASH_OUT_RATE, MAX_PAYOUT, jackpotBalls, cashOutAmount } from "./pachinkoPayouts";
-import { PachinkoOutcome, ShotResult, TrajectorySample } from "./pachinkoPhysics";
+import { PachinkoOutcome, ShotResult, TrajectorySample, TRAJECTORY_SAMPLE_MS } from "./pachinkoPhysics";
 import { spinReel, ReelSpinResult } from "./pachinkoReels";
 import Piscina from "piscina";
 import path from "path";
@@ -178,30 +178,31 @@ scheduleStaleRoundSweep(SLUG, ROUND_TTL_MS, async (round) => {
 
     // Any balls never fired have no decided outcome to pay out - refund their
     // pro-rated cost instead of either forfeiting it or leaving the round stuck open.
-    if (conditions.ballsRemaining > 0) {
-        const refund = conditions.ballsRemaining * conditions.pricePerBall;
-        if (refund > 0) {
-            await transfer({
-                fromAccountId: xenCasinoAccountId,
-                toAccountId: round.playerAccountId,
-                amount: refund.toFixed(10),
-                key: `xendelta-${SLUG}-refund-${round._id}`,
-                note: `${SLUG}_refund`,
-            });
-        }
+    const refund = conditions.ballsRemaining > 0 ? conditions.ballsRemaining * conditions.pricePerBall : 0;
+    if (refund > 0) {
+        await transfer({
+            fromAccountId: xenCasinoAccountId,
+            toAccountId: round.playerAccountId,
+            amount: refund.toFixed(10),
+            key: `xendelta-${SLUG}-refund-${round._id}`,
+            note: `${SLUG}_refund`,
+        });
     }
 
     await XenCasinoRound.resolve(round._id);
     // Only counts as "played" if at least one ball was actually launched or cashed out
     // - otherwise a buy-then-abandon cycle (fully refunded above) would let a player
-    // farm daily quest progress for free with no risk. Stats-wise, "wager" is the cost of
-    // balls actually fired (never-fired balls were just refunded above, so they were never
-    // genuinely at risk); "payout" is whatever cash a cash-out converted remaining balls into.
+    // farm daily quest progress for free with no risk. Stats-wise, "wager" is the full cost
+    // of every ball ever bought (conditions.ballsTotal), matching the /cashout handler's own
+    // accounting - not just fired balls, since unfired ones are refunded above (or via
+    // cashOutPending) rather than won by the house. "payout" is whichever real transfer paid
+    // the player back: the interrupted cash-out's amount if one was pending, otherwise the
+    // unfired-balls refund just above.
     if (conditions.results.length > 0 || conditions.cashOutPending) {
         await recordCasinoRoundPlayed(round.userId, {
             game: SLUG,
-            wager: conditions.results.length * conditions.pricePerBall,
-            payout: conditions.cashOutPending ? conditions.cashOutPending.amount : 0,
+            wager: conditions.ballsTotal * conditions.pricePerBall,
+            payout: conditions.cashOutPending ? conditions.cashOutPending.amount : refund,
         });
     }
 });
@@ -500,6 +501,15 @@ module.exports = function (app: express.Application) {
 
             const result: PachinkoBallResult = { outcome, ballsAwarded, trajectory, reelSpin };
 
+            // The client never applies a catch's session state (tulip toggles, jackpot window)
+            // the instant this response arrives - it waits for the ball to actually finish
+            // flying to its pocket first (see PachinkoBoard.tsx, so a window can't visibly open
+            // before its own catch is even on screen). A newly-primed jackpot window has to be
+            // anchored to that later moment, not to `now`, or the flight animation alone (easily
+            // a couple of real seconds) would eat a chunk of JACKPOT_OPEN_MS before the player
+            // ever sees the window open at all.
+            const landedAt = now + Math.max(0, trajectory.length - 1) * TRAJECTORY_SAMPLE_MS;
+
             // Everything below - tulip toggle, jackpot priming, attacker stacking, the lapsed-
             // tulip closeout - depends on the board's CURRENT gate state, which by the time we
             // get here (an async physics round-trip later, up to MAX_CONCURRENT_BALLS=20 other
@@ -535,7 +545,7 @@ module.exports = function (app: express.Application) {
                         // "jackpot" outcome branch below), not reset immediately - catching the
                         // jackpot, or letting the window lapse, is what closes them again.
                         if (isJackpotPrimed(nextLeftOpen, nextRightOpen)) {
-                            nextJackpotOpenUntil = now + JACKPOT_OPEN_MS;
+                            nextJackpotOpenUntil = landedAt + JACKPOT_OPEN_MS;
                         }
                     }
                 } else if (outcome === "chucker" && reelSpin && reelSpin.attackerOpenMs > 0) {
@@ -670,9 +680,13 @@ module.exports = function (app: express.Application) {
             });
 
             await XenCasinoRound.resolve(round._id);
+            // wager is the full cost of every ball ever bought for this batch (conditions.
+            // ballsTotal), not just the ones fired - balls bought but cashed out unfired are a
+            // real refund via `amount` below, not a house win, so counting only fired balls as
+            // wager while paying out the full remaining stack overstated recorded profit.
             await recordCasinoRoundPlayed(userId, {
                 game: SLUG,
-                wager: conditions.results.length * conditions.pricePerBall,
+                wager: conditions.ballsTotal * conditions.pricePerBall,
                 payout: amount,
             });
 

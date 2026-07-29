@@ -24,6 +24,9 @@ import {
     TextField,
     Avatar,
     CircularProgress,
+    Tabs,
+    Tab,
+    TableSortLabel,
 } from "@mui/material";
 import { useSnackbar } from "notistack";
 import {
@@ -45,8 +48,10 @@ import {
     useAdminCasinoDiscordUsers,
     useAdminUserWallet,
     useAdminSendMoney,
+    useAdminCasinoPlayerStats,
     type StatsRange,
     type DiscordLinkedUser,
+    type AdminCasinoPlayerStats,
 } from "../../hooks/admin/useAdminCasino";
 import { useTitle } from "../../hooks/useTitle";
 import LoadingSpinner from "../../components/LoadingSpinner";
@@ -105,10 +110,13 @@ export default function Casino() {
     useTitle("Casino");
     const { enqueueSnackbar } = useSnackbar();
     const [range, setRange] = useState<StatsRange>("all");
+    const [activeTab, setActiveTab] = useState<"games" | "players">("games");
     const [clearJackpotsOpen, setClearJackpotsOpen] = useState(false);
     const [clearStatsOpen, setClearStatsOpen] = useState(false);
     const [closeCasinoOpen, setCloseCasinoOpen] = useState(false);
     const { games, isLoading, isError, error, clearJackpots, isClearingJackpots, clearStats, isClearingStats } = useAdminCasino(range);
+    const { players, isLoading: playersLoading, isError: playersIsError, error: playersError } = useAdminCasinoPlayerStats(range);
+    const [playerSort, setPlayerSort] = useState<{ key: "net" | "roundsPlayed" | "lossAmount" | "winAmount"; dir: "asc" | "desc" }>({ key: "net", dir: "desc" });
     const { dailyStats, isLoading: chartLoading } = useAdminCasinoDailyStats(5);
     const {
         games: gameToggles,
@@ -224,6 +232,16 @@ export default function Casino() {
             enqueueSnackbar(err instanceof Error ? err.message : "Failed to send cheddar", { variant: "error" });
         }
     };
+
+    const handlePlayerSort = (key: typeof playerSort.key) => {
+        setPlayerSort((prev) => (prev.key === key ? { key, dir: prev.dir === "desc" ? "asc" : "desc" } : { key, dir: "desc" }));
+    };
+
+    const sortedPlayers = useMemo(() => {
+        const numeric = (p: AdminCasinoPlayerStats) => (playerSort.key === "roundsPlayed" ? p.roundsPlayed : parseFloat(p[playerSort.key]));
+        const sorted = [...players].sort((a, b) => numeric(a) - numeric(b));
+        return playerSort.dir === "desc" ? sorted.reverse() : sorted;
+    }, [players, playerSort]);
 
     const totals = useMemo(() => {
         return games.reduce(
@@ -497,82 +515,171 @@ export default function Casino() {
                 </Paper>
             )}
 
-            {isLoading && <LoadingSpinner />}
+            <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 2 }}>
+                <Tab value="games" label="Games" />
+                <Tab value="players" label="Players" />
+            </Tabs>
 
-            {isError && !isLoading && <ErrorDisplay error={error} />}
+            {activeTab === "games" && (
+                <>
+                    {isLoading && <LoadingSpinner />}
 
-            {!isLoading && !isError && (
-                <Paper variant="outlined">
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>Game</TableCell>
-                                <TableCell align="right">Plays</TableCell>
-                                <TableCell align="right">Amount In</TableCell>
-                                <TableCell align="right">Amount Out</TableCell>
-                                <TableCell align="right">Net</TableCell>
-                                <TableCell align="right">Jackpot</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {games.map((game) => {
-                                const win = parseFloat(game.winAmount);
-                                const loss = parseFloat(game.lossAmount);
-                                const net = loss - win;
-                                const netColor = net > 0 ? "success.main" : net < 0 ? "error.main" : "text.secondary";
+                    {isError && !isLoading && <ErrorDisplay error={error} />}
 
-                                return (
-                                    <TableRow key={game.slug}>
-                                        <TableCell sx={{ fontWeight: 600 }}>{game.label}</TableCell>
-                                        <TableCell align="right">{game.roundsPlayed.toLocaleString()}</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 500 }}>
-                                            {formatCheddar(loss.toFixed(2))}
+                    {!isLoading && !isError && (
+                        <Paper variant="outlined">
+                            <Table>
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell>Game</TableCell>
+                                        <TableCell align="right">Plays</TableCell>
+                                        <TableCell align="right">Amount In</TableCell>
+                                        <TableCell align="right">Amount Out</TableCell>
+                                        <TableCell align="right">Net</TableCell>
+                                        <TableCell align="right">Jackpot</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {games.map((game) => {
+                                        const win = parseFloat(game.winAmount);
+                                        const loss = parseFloat(game.lossAmount);
+                                        const net = loss - win;
+                                        const netColor = net > 0 ? "success.main" : net < 0 ? "error.main" : "text.secondary";
+
+                                        return (
+                                            <TableRow key={game.slug}>
+                                                <TableCell sx={{ fontWeight: 600 }}>{game.label}</TableCell>
+                                                <TableCell align="right">{game.roundsPlayed.toLocaleString()}</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 500 }}>
+                                                    {formatCheddar(loss.toFixed(2))}
+                                                </TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 500 }}>
+                                                    {formatCheddar(win.toFixed(2))}
+                                                </TableCell>
+                                                <TableCell align="right" sx={{ color: netColor, fontWeight: 700 }}>
+                                                    {net > 0 ? "+" : ""}{formatCheddar(net.toFixed(2))}
+                                                </TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 500 }}>
+                                                    {game.jackpotPool !== null ? formatCheddar(game.jackpotPool) : "—"}
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                                <TableHead>
+                                    <TableRow sx={{ "& > td, & > th": { borderBottom: "none" } }}>
+                                        <TableCell sx={{ fontWeight: 700 }}>Totals</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 700 }}>
+                                            {totals.roundsPlayed.toLocaleString()}
                                         </TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 500 }}>
-                                            {formatCheddar(win.toFixed(2))}
+                                        <TableCell align="right" sx={{ fontWeight: 700 }}>
+                                            {formatCheddar(totals.lossAmount.toFixed(2))}
                                         </TableCell>
-                                        <TableCell align="right" sx={{ color: netColor, fontWeight: 700 }}>
-                                            {net > 0 ? "+" : ""}{formatCheddar(net.toFixed(2))}
+                                        <TableCell align="right" sx={{ fontWeight: 700 }}>
+                                            {formatCheddar(totals.winAmount.toFixed(2))}
                                         </TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 500 }}>
-                                            {game.jackpotPool !== null ? formatCheddar(game.jackpotPool) : "—"}
+                                        <TableCell
+                                            align="right"
+                                            sx={{
+                                                fontWeight: 700,
+                                                color:
+                                                    totals.lossAmount - totals.winAmount > 0
+                                                        ? "success.main"
+                                                        : totals.lossAmount - totals.winAmount < 0
+                                                            ? "error.main"
+                                                            : "text.secondary",
+                                            }}
+                                        >
+                                            {totals.lossAmount - totals.winAmount > 0 ? "+" : ""}
+                                            {formatCheddar((totals.lossAmount - totals.winAmount).toFixed(2))}
+                                        </TableCell>
+                                        <TableCell />
+                                    </TableRow>
+                                </TableHead>
+                            </Table>
+                        </Paper>
+                    )}
+                </>
+            )}
+
+            {activeTab === "players" && (
+                <>
+                    {playersLoading && <LoadingSpinner />}
+
+                    {playersIsError && !playersLoading && <ErrorDisplay error={playersError} />}
+
+                    {!playersLoading && !playersIsError && (
+                        <Paper variant="outlined">
+                            <Table>
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell>Player</TableCell>
+                                        <TableCell align="right">
+                                            <TableSortLabel active={playerSort.key === "roundsPlayed"} direction={playerSort.dir} onClick={() => handlePlayerSort("roundsPlayed")}>
+                                                Plays
+                                            </TableSortLabel>
+                                        </TableCell>
+                                        <TableCell align="right">
+                                            <TableSortLabel active={playerSort.key === "lossAmount"} direction={playerSort.dir} onClick={() => handlePlayerSort("lossAmount")}>
+                                                Amount In
+                                            </TableSortLabel>
+                                        </TableCell>
+                                        <TableCell align="right">
+                                            <TableSortLabel active={playerSort.key === "winAmount"} direction={playerSort.dir} onClick={() => handlePlayerSort("winAmount")}>
+                                                Amount Out
+                                            </TableSortLabel>
+                                        </TableCell>
+                                        <TableCell align="right">
+                                            <TableSortLabel active={playerSort.key === "net"} direction={playerSort.dir} onClick={() => handlePlayerSort("net")}>
+                                                Net
+                                            </TableSortLabel>
                                         </TableCell>
                                     </TableRow>
-                                );
-                            })}
-                        </TableBody>
-                        <TableHead>
-                            <TableRow sx={{ "& > td, & > th": { borderBottom: "none" } }}>
-                                <TableCell sx={{ fontWeight: 700 }}>Totals</TableCell>
-                                <TableCell align="right" sx={{ fontWeight: 700 }}>
-                                    {totals.roundsPlayed.toLocaleString()}
-                                </TableCell>
-                                <TableCell align="right" sx={{ fontWeight: 700 }}>
-                                    {formatCheddar(totals.lossAmount.toFixed(2))}
-                                </TableCell>
-                                <TableCell align="right" sx={{ fontWeight: 700 }}>
-                                    {formatCheddar(totals.winAmount.toFixed(2))}
-                                </TableCell>
-                                <TableCell
-                                    align="right"
-                                    sx={{
-                                        fontWeight: 700,
-                                        color:
-                                            totals.lossAmount - totals.winAmount > 0
-                                                ? "success.main"
-                                                : totals.lossAmount - totals.winAmount < 0
-                                                    ? "error.main"
-                                                    : "text.secondary",
-                                    }}
-                                >
-                                    {totals.lossAmount - totals.winAmount > 0 ? "+" : ""}
-                                    {formatCheddar((totals.lossAmount - totals.winAmount).toFixed(2))}
-                                </TableCell>
-                                <TableCell />
-                            </TableRow>
-                        </TableHead>
-                    </Table>
-                </Paper>
+                                </TableHead>
+                                <TableBody>
+                                    {sortedPlayers.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={5}>
+                                                <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: "center" }}>
+                                                    No recorded activity for this range
+                                                </Typography>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                    {sortedPlayers.map((player) => {
+                                        const net = parseFloat(player.net);
+                                        const netColor = net > 0 ? "success.main" : net < 0 ? "error.main" : "text.secondary";
+
+                                        return (
+                                            <TableRow key={player.userId}>
+                                                <TableCell>
+                                                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                                                        <Avatar src={player.avatar || undefined} sx={{ width: 28, height: 28 }}>
+                                                            {player.username[0]?.toUpperCase()}
+                                                        </Avatar>
+                                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                                            {player.username}
+                                                        </Typography>
+                                                    </Box>
+                                                </TableCell>
+                                                <TableCell align="right">{player.roundsPlayed.toLocaleString()}</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 500 }}>
+                                                    {formatCheddar(player.lossAmount)}
+                                                </TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 500 }}>
+                                                    {formatCheddar(player.winAmount)}
+                                                </TableCell>
+                                                <TableCell align="right" sx={{ color: netColor, fontWeight: 700 }}>
+                                                    {net > 0 ? "+" : ""}{formatCheddar(player.net)}
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </Paper>
+                    )}
+                </>
             )}
         </Container>
     );
