@@ -111,7 +111,7 @@ function tileStatusLabel(square: GardenSquare): string {
         default:
             // Fully watered but still waiting out the final cooldown before it's ready -
             // see resolveGardenSquare in xenCasino.js.
-            return square.waterCount >= square.waterAmount ? "Maturing..." : `Growth Stage ${square.waterCount}/${square.waterAmount}`;
+            return square.waterCount >= square.waterAmount ? "Maturing..." : `${square.waterCount}/${square.waterAmount}`;
     }
 }
 
@@ -122,9 +122,9 @@ const STATUS_COLOR: Record<GardenSquare["status"], "default" | "success" | "warn
     dead: "error",
 };
 
-// A small round icon-only badge for the tile corners - no label text, just enough to
-// signal "this is active" without competing for space with the countdown/vermin-count
-// badges that do need a label.
+// A small round icon-only badge for the tile's bottom status row - no label text, just
+// enough to signal "this is active" without competing for space with the countdown/
+// vermin-count badges that do need a label.
 function TileIconBadge({ icon }: { icon: ReactNode }) {
     return (
         <Box
@@ -149,13 +149,13 @@ interface GardenTileProps {
     onOpen: (squareId: number) => void;
 }
 
-// The compact grid tile - an emoji, a progress bar, a one-line status, and (while growing
-// and not yet fully watered) a small watering badge in one corner so you can tell which
-// plots need attention without opening them, plus a rat badge whenever vermin has set
-// this crop back one or more growth stages and small icon badges for any
-// pesticide/fungicide/bonemeal currently active. Everything else (stats, protection/
-// harvest actions, seed picker) lives in the modal that opens on tap (see SquareDetails
-// below).
+// The compact grid tile - a top row (watering badge and/or vermin badge), an emoji, a
+// progress bar, a one-line status, and a bottom row of icon badges for any
+// pesticide/fungicide/bonemeal currently active. Both badge rows are laid out in normal
+// flex flow (not absolutely positioned) so they never overlap the emoji or each other,
+// and reserve consistent space whether or not anything is active. Everything else (stats,
+// protection/harvest actions, seed picker) lives in the modal that opens on tap (see
+// SquareDetails below).
 function GardenTile({ square, onOpen }: GardenTileProps) {
     const progress =
         square.status === "ready"
@@ -171,80 +171,64 @@ function GardenTile({ square, onOpen }: GardenTileProps) {
     const hasFungicide = square.protection.fungicide && square.status === "growing";
     const hasBonemeal = square.protection.bonemeal && square.status === "growing";
 
+    const hasStatusIcon = hasPesticide || hasFungicide || hasBonemeal;
+
     return (
-        <Box sx={{ position: "relative" }}>
-            {needsWatering && (
-                <Chip
-                    size="small"
-                    icon={<WaterDropIcon sx={{ fontSize: "14px !important" }} />}
-                    label={onCooldown ? formatCountdown(cooldownRemaining) : "Ready"}
-                    color={onCooldown ? "default" : "info"}
-                    variant={onCooldown ? "outlined" : "filled"}
-                    sx={{
-                        position: "absolute",
-                        top: 6,
-                        right: 6,
-                        zIndex: 1,
-                        height: 20,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        "& .MuiChip-label": { px: "6px" },
-                    }}
-                />
-            )}
-            {hasVermin && (
-                <Chip
-                    size="small"
-                    label={`🐀 ${square.verminHits}`}
-                    color="warning"
-                    sx={{
-                        position: "absolute",
-                        top: 6,
-                        left: 6,
-                        zIndex: 1,
-                        height: 20,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        "& .MuiChip-label": { px: "6px" },
-                    }}
-                />
-            )}
-            {(hasPesticide || hasFungicide) && (
-                <Box sx={{ position: "absolute", bottom: 6, left: 6, zIndex: 1, display: "flex", gap: 0.5 }}>
+        <CardActionArea
+            onClick={() => onOpen(square.squareId)}
+            sx={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 1,
+                p: 2,
+                borderRadius: 2,
+                border: "1px solid",
+                borderColor: "divider",
+            }}
+        >
+            <Box sx={{ display: "flex", justifyContent: "space-between", width: "100%", minHeight: 24, gap: 0.5 }}>
+                <Box>
+                    {hasVermin && (
+                        <Chip
+                            size="small"
+                            label={`🐀 ${square.verminHits}`}
+                            color="warning"
+                            sx={{ height: 20, fontSize: 11, fontWeight: 700, "& .MuiChip-label": { px: "6px" } }}
+                        />
+                    )}
+                </Box>
+                <Box>
+                    {needsWatering && (
+                        <Chip
+                            size="small"
+                            icon={<WaterDropIcon sx={{ fontSize: "14px !important" }} />}
+                            label={onCooldown ? formatCountdown(cooldownRemaining) : "Ready"}
+                            color={onCooldown ? "default" : "info"}
+                            variant={onCooldown ? "outlined" : "filled"}
+                            sx={{ height: 20, fontSize: 11, fontWeight: 700, "& .MuiChip-label": { px: "6px" } }}
+                        />
+                    )}
+                </Box>
+            </Box>
+            <Typography sx={{ fontSize: 40, lineHeight: 1 }}>{tileEmoji(square)}</Typography>
+            <LinearProgress
+                variant="determinate"
+                value={progress}
+                color={square.status === "ready" ? "success" : square.status === "dead" ? "error" : "warning"}
+                sx={{ width: "100%", height: 6, borderRadius: 999, opacity: square.status === "empty" ? 0 : 1 }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+                {tileStatusLabel(square)}
+            </Typography>
+            {hasStatusIcon && (
+                <Box sx={{ display: "flex", justifyContent: "center", gap: 0.5, minHeight: 20 }}>
                     {hasPesticide && <TileIconBadge icon={<BugReportIcon sx={{ fontSize: 13 }} />} />}
                     {hasFungicide && <TileIconBadge icon={<ScienceIcon sx={{ fontSize: 13 }} />} />}
+                    {hasBonemeal && <TileIconBadge icon={<SpeedIcon sx={{ fontSize: 13 }} />} />}
                 </Box>
             )}
-            {hasBonemeal && (
-                <Box sx={{ position: "absolute", bottom: 6, right: 6, zIndex: 1 }}>
-                    <TileIconBadge icon={<SpeedIcon sx={{ fontSize: 13 }} />} />
-                </Box>
-            )}
-            <CardActionArea
-                onClick={() => onOpen(square.squareId)}
-                sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 1,
-                    p: 2,
-                    borderRadius: 2,
-                    border: "1px solid",
-                    borderColor: "divider",
-                }}
-            >
-                <Typography sx={{ fontSize: 40, lineHeight: 1 }}>{tileEmoji(square)}</Typography>
-                <LinearProgress
-                    variant="determinate"
-                    value={progress}
-                    color={square.status === "ready" ? "success" : square.status === "dead" ? "error" : "warning"}
-                    sx={{ width: "100%", height: 6, borderRadius: 999, opacity: square.status === "empty" ? 0 : 1 }}
-                />
-                <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
-                    {tileStatusLabel(square)}
-                </Typography>
-            </CardActionArea>
-        </Box>
+        </CardActionArea>
     );
 }
 
