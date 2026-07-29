@@ -923,9 +923,10 @@ xenCasinoMineStateSchema.statics.getState = async function (userId) {
 // single-use Explosive is a universal blocker-buster: if the daily cap, a missing
 // ladder, and/or heavy stone are in the way (any combination), one Explosive clears all
 // of them at once for this one dig. If the target tile was already `scouted` (via a
-// Flare), its cached ground truth is reused instead of rolling again. The route calls
-// getState again right after this to build its response - this static only resolves the
-// one tile being moved into or dug.
+// Flare), its cached ground truth is reused instead of rolling again. Returns the same,
+// already-saved `doc` the route needs to build its response, so callers don't have to
+// re-fetch just to see the result - this static only resolves the one tile being moved
+// into or dug.
 xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
   var doc = await this.getState(userId);
   var targetX = doc.positionX + (params.direction === "left" ? -1 : params.direction === "right" ? 1 : 0);
@@ -939,7 +940,7 @@ xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
     doc.positionX = targetX;
     doc.positionY = targetY;
     await doc.save();
-    return { outcome: MINE_OUTCOME.MOVE, oreTier: null, position: { x: targetX, y: targetY }, digsToday: doc.digsToday, targetY: targetY, usedExplosive: false };
+    return { outcome: MINE_OUTCOME.MOVE, oreTier: null, position: { x: targetX, y: targetY }, digsToday: doc.digsToday, targetY: targetY, usedExplosive: false, doc: doc };
   }
   if (params.direction === "up") {
     return { error: "no_tunnel" };
@@ -1035,6 +1036,7 @@ xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
     digsToday: doc.digsToday,
     targetY: targetY,
     usedExplosive: usedExplosive,
+    doc: doc,
   };
 };
 
