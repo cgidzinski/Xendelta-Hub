@@ -4,7 +4,7 @@
  * range across all 6 stats (Speed/Stamina/Power/Intelligence/Luck/Charm), snapshotted onto
  * the creature at hatch time so a later RANCH_RARITY_TIERS rebalance never retroactively
  * changes a creature already in the roster. Each creature also gets a single rolled silly
- * nickname (see CREATURE_NAMES), and a Land/Sea/Air type derived from its species (see
+ * nickname (see NICKNAME_ADJECTIVES/NICKNAME_NOUNS), and a Land/Sea/Air type derived from its species (see
  * SPECIES_TYPE) - not stored, since it's fully determined by species. There is no stat
  * ceiling - feeding always raises every stat - but a creature left unfed too long slowly
  * decays (see resolveRanchDecay) until fed again. Level is never stored; it's always
@@ -244,28 +244,59 @@ const SPECIES_ITEM_KEY: Record<string, string> = {
 };
 
 // Curated so hatching feels a little personal - one silly nickname per creature (no
-// separate formal name), e.g. `The Big Cheese`. Rolled at hatch time; no gameplay effect,
-// pure flavor. A large pool so repeats are rare even with a big roster.
-const CREATURE_NAMES = [
-    "The Big Cheese", "Sir Nibbles-a-Lot", "The Wobble King", "Lady Chomp", "The Curdlord", "Mister Mischief",
-    "The Fuzzy Menace", "Duchess Drama", "The Snack Attack", "Captain Chaos", "The Gouda Gambler", "Baron von Fluff",
-    "The Cheddar Bandit", "Princess Pouncealot", "The Rowdy Rascal", "Sir Snoozington", "The Sneaky Snacker", "Madame Mayhem",
-    "The Whisker Warrior", "Lord Loudmouth", "The Sly Nibbler", "Countess Crumbs", "The Turbo Trotter", "Big Bad Buttercup",
-    "The Grumpy Gourmet", "Sir Stumbles", "The Feisty Feaster", "Queen of Naps", "The Dizzy Dasher", "Professor Pouncer",
-    "The Cheese Thief", "Duke of Drool", "The Wandering Weasel", "Miss Fancy Pants", "The Reckless Rambler", "Sir Chompsalot",
-    "The Midnight Muncher", "Baroness Bumblefoot", "The Galloping Goofball", "Count Fuzzybottom", "The Cheddar Champion",
-    "Lady Sniffs-a-Lot", "The Clumsy Clover", "Mister Zoomies", "The Whiskered Wonder", "Duchess Dillydally",
-    "The Bold Buffoon", "Sir Trots-a-Bunch", "The Grubby Gourmand", "Madame Wiggletail", "The Roaming Rogue",
-    "Captain Cuddlepuff", "The Nutty Nibbler", "Baron Bristlecoat", "The Speedy Slouch", "Lady Munchkin",
-    "The Wobbling Wonder", "Sir Fluffington", "The Bumbling Bandit", "Countess Crunch", "The Prancing Pest",
-    "Duke Snugglesworth", "The Cheeky Chomper", "Miss Puddlejump", "The Grazing Ghost", "Lord Puddinghead",
-    "The Frisky Forager", "Sir Grumblesnout", "The Wily Wobbler", "Baroness Snacksalot", "The Charging Cheeseball",
-    "Captain Clumsyhoof", "The Nibbling Ninja", "Duchess Doodlebug", "The Prowling Prankster", "Sir Chucklefur",
-    "The Mudlark Marauder", "Lady Twinkletoe", "The Blustering Blur", "Count Snickerdoodle",
+// separate formal name), built by pairing a random adjective with a random noun, e.g.
+// `Slender Sizzler`. Rolled at hatch time; no gameplay effect, pure flavor. 200 x 200
+// combinations means repeats are vanishingly rare even with a big roster.
+const NICKNAME_ADJECTIVES = [
+    "Slender", "Wobbly", "Fuzzy", "Grumpy", "Zippy", "Sneaky", "Bouncy", "Chunky", "Sleepy", "Snappy",
+    "Dizzy", "Feisty", "Turbo", "Mighty", "Tiny", "Giant", "Nimble", "Clumsy", "Fluffy", "Spunky",
+    "Rowdy", "Quiet", "Loud", "Bold", "Shy", "Wild", "Calm", "Crispy", "Toasty", "Zesty",
+    "Salty", "Sweet", "Spicy", "Cheesy", "Buttery", "Golden", "Silver", "Shadowy", "Sparkly", "Glossy",
+    "Rusty", "Dusty", "Muddy", "Sandy", "Frosty", "Sunny", "Stormy", "Breezy", "Misty", "Foggy",
+    "Speedy", "Sluggish", "Jumpy", "Hoppy", "Gassy", "Squishy", "Crunchy", "Wiggly", "Jiggly", "Bumpy",
+    "Lumpy", "Chubby", "Skinny", "Plump", "Puffy", "Perky", "Peppy", "Snoozy", "Drowsy", "Groggy",
+    "Chirpy", "Squeaky", "Prickly", "Cuddly", "Cranky", "Jolly", "Merry", "Giddy", "Wacky", "Zany",
+    "Goofy", "Silly", "Nutty", "Bonkers", "Loopy", "Kooky", "Quirky", "Dapper", "Fancy", "Rugged",
+    "Scruffy", "Sturdy", "Brawny", "Lanky", "Stubby", "Stumpy", "Trotting", "Prancing", "Galloping", "Roaming",
+    "Wandering", "Drifting", "Floating", "Gliding", "Soaring", "Diving", "Splashing", "Paddling", "Bubbling", "Fizzy",
+    "Sizzling", "Sparking", "Glowing", "Beaming", "Radiant", "Shining", "Twinkling", "Glittering", "Shimmering", "Velvety",
+    "Silky", "Woolly", "Feathery", "Furry", "Scaly", "Spiny", "Horned", "Antlered", "Whiskered", "Bearded",
+    "Mustached", "Freckled", "Speckled", "Spotted", "Striped", "Dappled", "Patchy", "Mottled", "Marbled", "Bushy",
+    "Boisterous", "Rambunctious", "Frisky", "Sprightly", "Vivacious", "Exuberant", "Bubbly", "Cheery", "Chipper", "Bright",
+    "Luminous", "Mystic", "Magical", "Enchanted", "Legendary", "Mythical", "Ancient", "Timeless", "Eternal", "Cosmic",
+    "Stellar", "Lunar", "Solar", "Astral", "Celestial", "Electric", "Thunderous", "Blazing", "Fiery", "Icy",
+    "Frozen", "Chilly", "Arctic", "Tropical", "Jungly", "Sandswept", "Mossy", "Rocky", "Craggy", "Pebbly",
+    "Gritty", "Grimy", "Slimy", "Slippery", "Greasy", "Oily", "Waxy", "Sticky", "Gooey", "Chewy",
+    "Flaky", "Crumbly", "Melty", "Runny", "Tangy", "Snug", "Plush", "Sassy", "Snarky", "Plucky",
+];
+
+const NICKNAME_NOUNS = [
+    "Sizzler", "Nibbler", "Muncher", "Chomper", "Nabber", "Snatcher", "Grazer", "Forager", "Prowler", "Stalker",
+    "Wanderer", "Rover", "Roamer", "Drifter", "Dasher", "Sprinter", "Racer", "Trotter", "Galloper", "Prancer",
+    "Bouncer", "Hopper", "Jumper", "Leaper", "Skipper", "Waddler", "Wobbler", "Stumbler", "Tumbler", "Roller",
+    "Spinner", "Twirler", "Dancer", "Juggler", "Jester", "Trickster", "Prankster", "Rascal", "Rogue", "Bandit",
+    "Outlaw", "Renegade", "Maverick", "Rebel", "Ranger", "Scout", "Sentinel", "Guardian", "Warden", "Keeper",
+    "Herder", "Shepherd", "Wrangler", "Rustler", "Poacher", "Hunter", "Tracker", "Trapper", "Fisher", "Angler",
+    "Diver", "Paddler", "Swimmer", "Floater", "Glider", "Soarer", "Flyer", "Flapper", "Flutterer", "Buzzer",
+    "Hummer", "Whistler", "Warbler", "Chirper", "Squeaker", "Squawker", "Screecher", "Howler", "Growler", "Grumbler",
+    "Mumbler", "Rambler", "Babbler", "Chatterer", "Gossiper", "Snoozer", "Napper", "Dreamer", "Sleeper", "Slumberer",
+    "Yawner", "Stretcher", "Loafer", "Lounger", "Idler", "Snacker", "Chewer", "Gobbler", "Guzzler", "Slurper",
+    "Licker", "Sniffer", "Snout", "Whisker", "Paw", "Tail", "Ear", "Nose", "Cheek", "Chin",
+    "Fang", "Tusk", "Claw", "Horn", "Hoof", "Wing", "Feather", "Scale", "Shell", "Fin",
+    "Fluff", "Puff", "Fuzzball", "Furball", "Snowball", "Cannonball", "Blob", "Lump", "Bump", "Blimp",
+    "Barrel", "Boulder", "Pebble", "Nugget", "Chunk", "Morsel", "Crumb", "Scrap", "Bit", "Bite",
+    "Snack", "Treat", "Nibble", "Munch", "Chomp", "Gulp", "Burp", "Hiccup", "Wiggle", "Jiggle",
+    "Waggle", "Shuffle", "Shimmy", "Bop", "Bopster", "Zoomie", "Zoom", "Blur", "Flash", "Dash",
+    "Streak", "Bolt", "Rocket", "Comet", "Meteor", "Star", "Spark", "Glimmer", "Glow", "Shine",
+    "Beacon", "Lantern", "Torch", "Ember", "Cinder", "Flare", "Blaze", "Inferno", "Storm", "Tempest",
+    "Cyclone", "Whirlwind", "Gust", "Breeze", "Gale", "Squall", "Drizzle", "Puddle", "Splash", "Ripple",
+    "Wave", "Tide", "Current", "Whirlpool", "Torrent", "Cascade", "Waterfall", "Geyser", "Fountain", "Spring",
 ];
 
 export function rollCreatureName(): string {
-    return CREATURE_NAMES[Math.floor(Math.random() * CREATURE_NAMES.length)];
+    const adjective = NICKNAME_ADJECTIVES[Math.floor(Math.random() * NICKNAME_ADJECTIVES.length)];
+    const noun = NICKNAME_NOUNS[Math.floor(Math.random() * NICKNAME_NOUNS.length)];
+    return `${adjective} ${noun}`;
 }
 
 // Neglect decay - a creature left unfed too long slowly loses stats until fed again.

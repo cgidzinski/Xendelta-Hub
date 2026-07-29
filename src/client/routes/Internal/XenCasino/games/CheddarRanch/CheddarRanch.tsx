@@ -750,22 +750,16 @@ function RaceTab() {
         <Box ref={panelRef}>
             {!pending && !spinning && (
                 <>
-                    {selectedCreature ? (
-                        <Box sx={{ maxWidth: 480, mx: "auto", mb: 3 }}>
-                            <ActionButton
-                                icon={<SportsScoreIcon />}
-                                label={`Race with ${selectedCreature.name} - Pay ${formatCheddar(entryFee)}`}
-                                description="Randomizes the course and your 3 rivals. The fee is non-refundable once paid, even if you forfeit."
-                                color="warning"
-                                disabled={isStartingRace}
-                                onClick={handleStart}
-                            />
-                        </Box>
-                    ) : (
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                            Pick a creature to enter
-                        </Typography>
-                    )}
+                    <Box sx={{ maxWidth: 480, mx: "auto", mb: 3 }}>
+                        <ActionButton
+                            icon={<SportsScoreIcon />}
+                            label={selectedCreature ? `Race with ${selectedCreature.name} - ${formatCheddar(entryFee)} race fee` : "Pick a racer"}
+                            description="Randomizes the course and your 3 rivals. The fee is non-refundable once paid, even if you forfeit."
+                            color="warning"
+                            disabled={!selectedCreature || isStartingRace}
+                            onClick={handleStart}
+                        />
+                    </Box>
                     <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 2, mb: 3 }}>
                         {creatures.map((creature) => (
                             <RanchCard
