@@ -757,7 +757,7 @@ var XenCasinoPrinterState = mongoose.model("XenCasinoPrinterState", xenCasinoPri
 // stay route-owned economics.
 // ---------------------------------------------------------------------------------------
 
-var MINE_OUTCOME = { ORE: "ore", EMPTY: "empty", CAVE_IN: "cave_in", STONE_CLEARED: "stone_cleared", RUBBLE_CLEARED: "rubble_cleared", MOVE: "move" };
+var MINE_OUTCOME = { ORE: "ore", EMPTY: "empty", CAVE_IN: "cave_in", STONE_CLEARED: "stone_cleared", MOVE: "move" };
 
 var MINE_BASE_ORE_CHANCE = 0.3;
 var MINE_ORE_CHANCE_PER_DEPTH = 0.01;
@@ -945,14 +945,19 @@ xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
     return { error: "no_tunnel" };
   }
 
-  var isHeavyStone = existing ? existing.isHeavyStone : Math.random() < mineStoneChanceForDepth(targetY);
-  // A past cave-in leaves permanent rubble - it's a pure obstacle like heavy stone (needs
-  // an Explosive), not something that gets a fresh cave-in/ore roll on a later approach.
+  // A past cave-in leaves permanent rubble - unlike heavy stone/the dig cap/a missing
+  // ladder, no Explosive (or anything else) ever clears it. It's a dead end for good; the
+  // only way past is around it.
   var isCollapsed = !!existing && existing.status === "collapsed";
+  if (isCollapsed) {
+    return { error: "blocked_by_collapse" };
+  }
+
+  var isHeavyStone = existing ? existing.isHeavyStone : Math.random() < mineStoneChanceForDepth(targetY);
   var blockedByCap = doc.digsToday >= params.dailyDigCap;
   var blockedByLadder = params.direction === "down" && doc.ladderCount <= 0;
   var usedExplosive = false;
-  if (blockedByCap || blockedByLadder || isHeavyStone || isCollapsed) {
+  if (blockedByCap || blockedByLadder || isHeavyStone) {
     if (doc.explosiveCount <= 0) {
       if (!existing) {
         // Cache the discovery even on a rejected attempt, same as a Flare scout would -
@@ -960,7 +965,7 @@ xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
         doc.dugTiles.push({ x: targetX, y: targetY, oreTier: null, isHeavyStone: true, status: "blocked" });
         await doc.save();
       }
-      return { error: isCollapsed ? "blocked_by_collapse" : isHeavyStone ? "blocked_by_stone" : blockedByCap ? "no_digs_remaining" : "no_ladders" };
+      return { error: isHeavyStone ? "blocked_by_stone" : blockedByCap ? "no_digs_remaining" : "no_ladders" };
     }
     usedExplosive = true;
   }
@@ -985,13 +990,6 @@ xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
     } else {
       doc.dugTiles.push({ x: targetX, y: targetY, oreTier: null, isHeavyStone: false, status: "mined" });
     }
-    doc.positionX = targetX;
-    doc.positionY = targetY;
-  } else if (isCollapsed) {
-    // Same "pure obstacle" semantics as heavy stone - clearing rubble just opens the
-    // passage through, never rolls ore or another cave-in.
-    outcome = MINE_OUTCOME.RUBBLE_CLEARED;
-    existing.status = "mined";
     doc.positionX = targetX;
     doc.positionY = targetY;
   } else {

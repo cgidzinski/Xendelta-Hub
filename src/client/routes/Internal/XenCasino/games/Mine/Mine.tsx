@@ -18,8 +18,8 @@ import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import { formatCheddar } from "../../utils/currency";
 import { MineTile, useCasinoMine } from "../../../../../hooks/casino/useCasinoMine";
 
-const GRID_COLS = 9;
-const GRID_ROWS_BELOW_PLAYER = 4;
+const VIEW_RADIUS = 3; // tiles visible in every direction around the player
+const GRID_COLS = VIEW_RADIUS * 2 + 1; // fixed viewport width, keeps the page from growing
 const CELL_SIZE = 40;
 
 const ROCK_COLOR = "#3e3229"; // unexplored - reads as solid stone, not a void
@@ -236,8 +236,9 @@ export default function Mine() {
 
     const { position, revealedTiles, digsToday, dailyDigCap, ladderCount, explosiveCount, reinforcementCount } = state;
 
-    const minX = position.x - Math.floor(GRID_COLS / 2);
-    const maxDepthRow = Math.max(position.y + GRID_ROWS_BELOW_PLAYER, 6);
+    const minX = position.x - VIEW_RADIUS;
+    const minY = Math.max(0, position.y - VIEW_RADIUS); // clamp at the surface, never show y < 0
+    const maxY = minY + VIEW_RADIUS * 2; // always exactly GRID_COLS rows tall
 
     const tileAt = (x: number, y: number) => revealedTiles.find((t) => t.x === x && t.y === y);
 
@@ -269,8 +270,6 @@ export default function Mine() {
                     enqueueSnackbar("Cave-in! You lost your remaining digs for today.", { variant: "error" });
                 } else if (r.outcome === "stone_cleared") {
                     enqueueSnackbar("Blasted through the heavy stone - the way is clear.", { variant: "info" });
-                } else if (r.outcome === "rubble_cleared") {
-                    enqueueSnackbar("Blasted through the collapsed rubble - the way is clear.", { variant: "info" });
                 } else if (r.usedExplosive) {
                     enqueueSnackbar("Blasted through with an Explosive - nothing there.", { variant: "info" });
                 }
@@ -293,8 +292,8 @@ export default function Mine() {
         if (t?.status === "blocked" && explosiveCount === 0) {
             return false; // known heavy stone, nothing to clear it with
         }
-        if (t?.status === "collapsed" && explosiveCount === 0) {
-            return false; // rubble from a past cave-in, nothing to clear it with
+        if (t?.status === "collapsed") {
+            return false; // rubble from a past cave-in - permanent, nothing clears it
         }
         const laddersOk = direction === "down" ? canAffordLadderBlock : true;
         return canAffordCapBlock && laddersOk;
@@ -312,14 +311,11 @@ export default function Mine() {
     if (tileAt(targetFor("down").x, targetFor("down").y)?.status === "blocked") {
         stuckReasons.push("heavy stone ahead");
     }
-    if (tileAt(targetFor("down").x, targetFor("down").y)?.status === "collapsed") {
-        stuckReasons.push("a cave-in blocking the way");
-    }
 
     return (
         <GameWrapper
             title="Chip Mine"
-            howToPlay="Moving through tunnels you've already cleared is always free - no digs spent, no cheddar, no risk, walk it as much as you like (you can even head back Up). Only pushing into new, undug territory is a real dig: it spends one of today's limited digs and costs a flat cheddar fee regardless of what's found, and going down also needs a ladder. There's no way to preview a tile in advance except a Flare, which reveals a 3x3 area around you (whether a tile holds a gem, and its tier, or whether it's heavy stone) - otherwise you're digging blind, same as always for cave-in risk. Heavy stone randomly blocks some tiles and needs an Explosive to clear. A cave-in leaves rubble behind that also permanently blocks the way until cleared with an Explosive. A Reinforcement is a single-use shield against your next cave-in - it stays armed through any number of safe digs, only used up the moment it actually blocks one. An Explosive is a universal bypass: spend one to blast through today's dig limit, a missing ladder, heavy stone, and/or collapsed rubble, any combination at once. The deeper you go, the better the gems get - both the chance of a good find and its value rise with depth. You get one free ladder every day. If you ever want a clean slate, you can wipe your whole map and start over from the surface for a fee - your equipment carries over."
+            howToPlay="Moving through tunnels you've already cleared is always free - no digs spent, no cheddar, no risk, walk it as much as you like (you can even head back Up). Only pushing into new, undug territory is a real dig: it spends one of today's limited digs and costs a flat cheddar fee regardless of what's found, and going down also needs a ladder. There's no way to preview a tile in advance except a Flare, which reveals a 3x3 area around you (whether a tile holds a gem, and its tier, or whether it's heavy stone) - otherwise you're digging blind, same as always for cave-in risk. Heavy stone randomly blocks some tiles and needs an Explosive to clear. A cave-in leaves rubble behind that permanently blocks that tunnel - nothing clears it, you'll have to dig around it. A Reinforcement is a single-use shield against your next cave-in - it stays armed through any number of safe digs, only used up the moment it actually blocks one. An Explosive is a universal bypass: spend one to blast through today's dig limit, a missing ladder, and/or heavy stone, any combination at once. The deeper you go, the better the gems get - both the chance of a good find and its value rise with depth. You get one free ladder every day. If you ever want a clean slate, you can wipe your whole map and start over from the surface for a fee - your equipment carries over."
             oddsSections={oddsSections}
         >
             <Card variant="outlined" sx={{ bgcolor: "#0a0a0f", overflow: "hidden", mt: 2 }}>
@@ -335,7 +331,8 @@ export default function Mine() {
                             width: "fit-content",
                         }}
                     >
-                        {Array.from({ length: maxDepthRow + 1 }).flatMap((_, y) => {
+                        {Array.from({ length: maxY - minY + 1 }).flatMap((_, i) => {
+                            const y = minY + i;
                             const cells = Array.from({ length: GRID_COLS }).map((_, col) => {
                                 const x = minX + col;
                                 const isPlayer = x === position.x && y === position.y;

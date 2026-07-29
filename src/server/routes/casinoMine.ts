@@ -158,7 +158,7 @@ module.exports = function (app: express.Application) {
                     result.error === "no_digs_remaining" ? "No digs remaining today - buy an Explosive to blast through" :
                     result.error === "no_ladders" ? "No ladders left - buy more to descend, or use an Explosive to blast through" :
                     result.error === "blocked_by_stone" ? "Heavy duty stone blocks the way - you'll need an Explosive to clear it" :
-                    result.error === "blocked_by_collapse" ? "A cave-in blocks the way - you'll need an Explosive to clear the rubble" :
+                    result.error === "blocked_by_collapse" ? "A cave-in has permanently blocked this tunnel - you'll have to dig around it" :
                     "You can't go that way";
                 return res.status(400).json({ status: false, message });
             }

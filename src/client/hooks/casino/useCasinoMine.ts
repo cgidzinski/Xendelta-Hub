@@ -45,7 +45,7 @@ export interface MineState {
 }
 
 export interface DigResult {
-    outcome: "ore" | "empty" | "cave_in" | "stone_cleared" | "rubble_cleared" | "move";
+    outcome: "ore" | "empty" | "cave_in" | "stone_cleared" | "move";
     oreTier?: string | null;
     payout: number;
     usedExplosive: boolean;
