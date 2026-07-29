@@ -1089,8 +1089,9 @@ var XenCasinoMineState = mongoose.model("XenCasinoMineState", xenCasinoMineState
 
 var xenCasinoRanchCreatureSchema = new mongoose.Schema({
     userId: { type: String, required: true, index: true },
-    species: { type: String, required: true }, // cosmetic flavor, from route-owned SPECIES_BY_TIER
-    name: { type: String, required: true },
+    species: { type: String, required: true }, // cosmetic flavor + the key into route-owned SPECIES_TYPE/SPECIES_ITEM_KEY
+    name: { type: String, required: true }, // rolled from CREATURE_NAMES at hatch time
+    nickname: { type: String, required: true }, // rolled from CREATURE_NICKNAMES at hatch time, shown alongside name
     rarityTier: { type: String, required: true }, // key into RANCH_RARITY_TIERS (route-owned)
     stats: {
         speed: { type: Number, required: true },
@@ -1098,15 +1099,18 @@ var xenCasinoRanchCreatureSchema = new mongoose.Schema({
         power: { type: Number, required: true },
         intelligence: { type: Number, required: true },
         luck: { type: Number, required: true },
+        charm: { type: Number, required: true },
     },
     lastFedAt: { type: Date, default: null },
     feedCount: { type: Number, default: 0 },
     raceWins: { type: Number, default: 0 },
     raceLosses: { type: Number, default: 0 },
-    // Earned from feeding and racing (win or lose) - level is deliberately never stored,
-    // only derived from this (see levelForXp in casinoRanch.ts), same "derive on read from
-    // persisted timestamps/counters" convention as Printer's currentMultiplier.
-    xp: { type: Number, default: 0 },
+    // Ticks of neglect decay already applied since the current no-feeding period started
+    // (see resolveRanchDecay in casinoRanch.ts) - reset whenever lastFedAt moves forward.
+    // Same "catch up correctly across any gap, no cron" shape as Garden's decayTicksApplied,
+    // anchored on lastFedAt (falling back to createdAt when never fed) rather than a
+    // separate timestamp field.
+    decayTicksApplied: { type: Number, default: 0 },
     // Gates the 24h item-production cooldown (see statics.collect) - null means never
     // collected, always immediately available, same convention as lastFedAt/lastWateredAt.
     lastCollectedAt: { type: Date, default: null },
@@ -1119,6 +1123,7 @@ xenCasinoRanchCreatureSchema.statics.createForUser = async function (userId, par
         userId: userId,
         species: params.species,
         name: params.name,
+        nickname: params.nickname,
         rarityTier: params.rarityTier,
         stats: params.stats,
     });
@@ -1153,7 +1158,11 @@ xenCasinoRanchCreatureSchema.statics.feed = async function (userId, creatureId, 
     });
     var updated = await this.findOneAndUpdate(
         { _id: creatureId, userId: userId, lastFedAt: creature.lastFedAt },
-        { $inc: inc, $set: { lastFedAt: now } },
+        // decayTicksApplied resets here because lastFedAt (the neglect anchor) is moving
+        // forward - same "watering restarts the neglect clock" reset Garden's water() does
+        // to its own decayTicksApplied, otherwise a stale tick count from before this feed
+        // would wrongly suppress decay that's genuinely due again later.
+        { $inc: inc, $set: { lastFedAt: now, decayTicksApplied: 0 } },
         { new: true }
     ).exec();
     return updated;
@@ -1167,13 +1176,6 @@ xenCasinoRanchCreatureSchema.statics.recordRaceResult = async function (userId, 
         won ? { $inc: { raceWins: 1 } } : { $inc: { raceLosses: 1 } },
         { new: true }
     ).exec();
-};
-
-// Plain atomic $inc - no cooldown/ownership guard needed beyond the userId filter itself,
-// since XP is never a paid resource (unlike feed/collect) and simply accumulates from
-// feeding and racing.
-xenCasinoRanchCreatureSchema.statics.addXp = async function (userId, creatureId, amount) {
-    return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $inc: { xp: amount } }, { new: true }).exec();
 };
 
 // Same re-read-and-guard shape as statics.feed - re-validates ownership and the 24h
@@ -1245,11 +1247,17 @@ var XenCasinoRanchInventory = mongoose.model("XenCasinoRanchInventory", xenCasin
 // Cheddar Ranch's "prepare a race, then bet on it" primitive - one pending race at a time
 // per user, same one-thing-in-progress shape as XenCasinoPrinterState's `run`, deliberately
 // NOT XenCasinoRound: every XenCasinoRound consumer debits the wager the instant a round is
-// created (that's the whole point of its recovery-sweep machinery), but nothing is owed
-// here while a race is only prepared - the player hasn't chosen a stake, or even whether to
-// bet, yet. `pending` holds { creatureId, course, racers, odds, createdAt, expiresAt } - the
-// exact field/rivals/odds the player is shown, so a later bet resolves against precisely
-// what was displayed rather than anything re-rolled or client-supplied.
+// created (that's the whole point of its recovery-sweep machinery), but that's actually a
+// closer fit here than it first looks - Cheddar Ranch's race attempt now costs a real,
+// non-refundable-on-abandonment entry fee at the moment it starts (see /race/start in
+// casinoRanch.ts). So unlike a truly free "nothing's at stake yet" prepare step, starting a
+// second attempt while one is already in flight must be refused, not silently discarded -
+// same "refuse a second start" semantics as Printer's startRun, via statics.startIfClear.
+// `pending` holds { creatureId, racers, stage, course, odds, createdAt, expiresAt } -
+// `stage` ("awaiting-course" | "awaiting-bet") tracks how far the 3-step start -> spin
+// course -> bet flow has gotten; `course`/`odds` are null until the course-spin step fills
+// them in. The exact field/course/odds the player is shown is always what a later bet
+// resolves against, never anything re-rolled or client-supplied.
 var xenCasinoRanchPendingRaceSchema = new mongoose.Schema({
     userId: { type: String, required: true, unique: true },
     pending: { type: Object, default: null },
@@ -1259,12 +1267,44 @@ xenCasinoRanchPendingRaceSchema.statics.getState = async function (userId) {
     return this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
 };
 
-// Always overwrites any unconsumed prior pending race - unlike Printer's startRun (which
-// refuses a second start), there's no money on the line yet, so silently discarding one on
-// a re-prepare (new creature, re-spun course) is safe.
-xenCasinoRanchPendingRaceSchema.statics.startPending = async function (userId, pending) {
+function pendingRaceIsLive(pending) {
+    return !!pending && new Date(pending.expiresAt).getTime() >= Date.now();
+}
+
+// Only starts if there's no live (unexpired) pending race already - unlike the old
+// unconditional startPending, a real entry fee is charged before this is called, so a
+// second start while one is already in flight must be refused (the route checks this
+// BEFORE charging) rather than silently discarding a race the player already paid for.
+xenCasinoRanchPendingRaceSchema.statics.startIfClear = async function (userId, pending) {
     var doc = await this.getState(userId);
+    if (pendingRaceIsLive(doc.pending)) {
+        return null;
+    }
     doc.pending = pending;
+    doc.markModified("pending");
+    await doc.save();
+    return doc.pending;
+};
+
+// Advances an in-flight race from "awaiting-course" to "awaiting-bet" - guarded on the
+// pending race still matching this exact creature and still being at the expected stage,
+// so a stale/duplicate course-spin request can't double-advance or clobber a race that's
+// already moved on. Refreshes expiresAt so the player gets a fresh window for the next step
+// rather than a deadline that started ticking back at step 1.
+xenCasinoRanchPendingRaceSchema.statics.advanceToCourse = async function (userId, creatureId, course, odds, expiresAt) {
+    var doc = await this.getState(userId);
+    if (
+        !doc.pending ||
+        doc.pending.creatureId !== creatureId ||
+        doc.pending.stage !== "awaiting-course" ||
+        !pendingRaceIsLive(doc.pending)
+    ) {
+        return null;
+    }
+    doc.pending.stage = "awaiting-bet";
+    doc.pending.course = course;
+    doc.pending.odds = odds;
+    doc.pending.expiresAt = expiresAt;
     doc.markModified("pending");
     await doc.save();
     return doc.pending;

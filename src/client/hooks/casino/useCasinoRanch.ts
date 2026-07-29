@@ -5,25 +5,29 @@ import { ApiResponse } from "../../types/api";
 import { casinoBalanceKeys } from "./useCasinoBalance";
 import { casinoLedgerKeys } from "./useCasinoLedger";
 
+export type RanchType = "land" | "sea" | "air";
+
 export interface RanchStats {
     speed: number;
     stamina: number;
     power: number;
     intelligence: number;
     luck: number;
+    charm: number;
 }
 
 export interface RanchCreature {
     id: string;
     species: string;
     name: string;
+    nickname: string;
+    type: RanchType;
     rarityTier: string;
     stats: RanchStats;
     lastFedAt: string | null;
     feedCount: number;
     raceWins: number;
     raceLosses: number;
-    xp: number;
     level: number;
     lastCollectedAt: string | null;
     itemKey: string;
@@ -49,11 +53,13 @@ export interface RanchItem {
     label: string;
     quantity: number;
     sellValue: number;
+    description: string;
 }
 
 export interface RanchFeedItem {
     key: string;
     label: string;
+    type: RanchType;
     price: number;
     quantity: number;
 }
@@ -63,6 +69,8 @@ export interface RanchRacer {
     isPlayer: boolean;
     species: string;
     name: string;
+    nickname: string;
+    type: RanchType;
     level: number;
     stats: RanchStats;
 }
@@ -73,11 +81,14 @@ export interface RanchOdds {
     multiplier: number;
 }
 
+export type PendingRaceStage = "awaiting-course" | "awaiting-bet";
+
 export interface PendingRace {
     creatureId: string;
-    course: RanchRaceCourse;
     racers: RanchRacer[];
-    odds: RanchOdds[];
+    stage: PendingRaceStage;
+    course: RanchRaceCourse | null;
+    odds: RanchOdds[] | null;
     createdAt: string;
     expiresAt: string;
 }
@@ -85,7 +96,7 @@ export interface PendingRace {
 export interface RanchState {
     creatures: RanchCreature[];
     items: RanchItem[];
-    feedItem: RanchFeedItem;
+    feedItems: RanchFeedItem[];
     pendingRace: PendingRace | null;
     rarityTiers: RanchRarityTier[];
     raceCourses: RanchRaceCourse[];
@@ -93,6 +104,9 @@ export interface RanchState {
     feedCooldownMs: number;
     minRaceStake: number;
     maxRaceStake: number;
+    entryFee: number;
+    neglectGraceMs: number;
+    decayTickMs: number;
     releaseSellValue: Record<string, number>;
     collectCooldownMs: number;
 }
@@ -105,6 +119,7 @@ export interface HatchResult {
 export interface FeedResult {
     creature: RanchCreature;
     gains: RanchStats;
+    unitsUsed: number;
 }
 
 export interface ReleaseResult {
@@ -132,10 +147,14 @@ export interface UseItemResult {
 
 export interface BuyFeedResult {
     balance: string;
-    feedItem: RanchFeedItem;
+    feedItems: RanchFeedItem[];
 }
 
-export interface PrepareRaceResult {
+export interface StartRaceResult {
+    pending: PendingRace;
+}
+
+export interface RevealCourseResult {
     pending: PendingRace;
 }
 
@@ -217,13 +236,20 @@ export const useCasinoRanch = () => {
     });
 
     const { mutateAsync: buyFeed, isPending: isBuyingFeed } = useMutation({
-        mutationFn: async () => (await apiClient.post<ApiResponse<BuyFeedResult>>("/api/casino/ranch/feed/buy")).data.data!,
+        mutationFn: async (type: RanchType) =>
+            (await apiClient.post<ApiResponse<BuyFeedResult>>("/api/casino/ranch/feed/buy", { type })).data.data!,
         onSuccess: invalidate,
     });
 
-    const { mutateAsync: prepareRace, isPending: isPreparingRace } = useMutation({
+    const { mutateAsync: startRace, isPending: isStartingRace } = useMutation({
         mutationFn: async (creatureId: string) =>
-            (await apiClient.post<ApiResponse<PrepareRaceResult>>(`/api/casino/ranch/${creatureId}/race/prepare`)).data.data!,
+            (await apiClient.post<ApiResponse<StartRaceResult>>(`/api/casino/ranch/${creatureId}/race/start`)).data.data!,
+        onSuccess: invalidate,
+    });
+
+    const { mutateAsync: revealCourse, isPending: isRevealingCourse } = useMutation({
+        mutationFn: async (creatureId: string) =>
+            (await apiClient.post<ApiResponse<RevealCourseResult>>(`/api/casino/ranch/${creatureId}/race/course`)).data.data!,
         onSuccess: invalidate,
     });
 
@@ -241,7 +267,7 @@ export const useCasinoRanch = () => {
     return {
         creatures: data?.creatures ?? [],
         items: data?.items ?? [],
-        feedItem: data?.feedItem,
+        feedItems: data?.feedItems ?? [],
         pendingRace: data?.pendingRace ?? null,
         rarityTiers: data?.rarityTiers ?? [],
         raceCourses: data?.raceCourses ?? [],
@@ -249,6 +275,9 @@ export const useCasinoRanch = () => {
         feedCooldownMs: data?.feedCooldownMs ?? 0,
         minRaceStake: data?.minRaceStake ?? 0,
         maxRaceStake: data?.maxRaceStake ?? 0,
+        entryFee: data?.entryFee ?? 0,
+        neglectGraceMs: data?.neglectGraceMs ?? 0,
+        decayTickMs: data?.decayTickMs ?? 0,
         releaseSellValue: data?.releaseSellValue ?? {},
         collectCooldownMs: data?.collectCooldownMs ?? 0,
         isLoading,
@@ -269,8 +298,10 @@ export const useCasinoRanch = () => {
         isUsingItem,
         buyFeed,
         isBuyingFeed,
-        prepareRace,
-        isPreparingRace,
+        startRace,
+        isStartingRace,
+        revealCourse,
+        isRevealingCourse,
         betRace,
         isBettingRace,
     };
