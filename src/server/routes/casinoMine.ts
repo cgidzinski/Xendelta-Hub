@@ -70,6 +70,8 @@ function stateView(doc: any) {
         ladderCount: doc.ladderCount,
         explosiveCount: doc.explosiveCount,
         reinforcementCount: doc.reinforcementCount,
+        deepestDepthReached: doc.deepestDepthReached,
+        bestGemTier: doc.bestGemTier,
         revealedTiles: doc.dugTiles.map((t: any) => ({ x: t.x, y: t.y, oreTier: t.oreTier, isHeavyStone: t.isHeavyStone, status: t.status })),
         prices: {
             dig: { cost: DIG_COST },
@@ -118,10 +120,9 @@ module.exports = function (app: express.Application) {
             if (result.error) {
                 return res.status(400).json({ status: false, message: "You can't go that way" });
             }
-            const freshDoc = await XenCasinoMineState.getState(userId);
             return res.json({
                 status: true,
-                data: { outcome: result.outcome, payout: 0, usedExplosive: false, state: stateView(freshDoc) },
+                data: { outcome: result.outcome, payout: 0, usedExplosive: false, state: stateView(result.doc) },
             });
         }
 
@@ -156,6 +157,7 @@ module.exports = function (app: express.Application) {
                     result.error === "no_digs_remaining" ? "No digs remaining today - buy an Explosive to blast through" :
                     result.error === "no_ladders" ? "No ladders left - buy more to descend, or use an Explosive to blast through" :
                     result.error === "blocked_by_stone" ? "Heavy duty stone blocks the way - you'll need an Explosive to clear it" :
+                    result.error === "blocked_by_collapse" ? "A cave-in has permanently blocked this tunnel - you'll have to dig around it" :
                     "You can't go that way";
                 return res.status(400).json({ status: false, message });
             }
@@ -164,10 +166,9 @@ module.exports = function (app: express.Application) {
             // response shape as an empty dig, both still charged the flat dig fee above.
             if (result.outcome !== MINE_OUTCOME.ORE) {
                 await recordCasinoRoundPlayed(userId, { game: SLUG, wager: DIG_COST, payout: 0 });
-                const freshDoc = await XenCasinoMineState.getState(userId);
                 return res.json({
                     status: true,
-                    data: { outcome: result.outcome, payout: 0, usedExplosive: result.usedExplosive, balance: chargeResult.fromNewBalance, state: stateView(freshDoc) },
+                    data: { outcome: result.outcome, payout: 0, usedExplosive: result.usedExplosive, balance: chargeResult.fromNewBalance, state: stateView(result.doc) },
                 });
             }
 
@@ -180,7 +181,6 @@ module.exports = function (app: express.Application) {
                 note: `mine_ore_${result.oreTier}`,
             });
             await recordCasinoRoundPlayed(userId, { game: SLUG, wager: DIG_COST, payout });
-            const freshDoc = await XenCasinoMineState.getState(userId);
             return res.json({
                 status: true,
                 data: {
@@ -189,7 +189,7 @@ module.exports = function (app: express.Application) {
                     payout,
                     usedExplosive: result.usedExplosive,
                     balance: payoutResult.toNewBalance,
-                    state: stateView(freshDoc),
+                    state: stateView(result.doc),
                 },
             });
         } catch (err) {

@@ -30,6 +30,8 @@ export interface MineState {
     ladderCount: number;
     explosiveCount: number;
     reinforcementCount: number;
+    deepestDepthReached: number;
+    bestGemTier: string | null;
     revealedTiles: MineTile[];
     prices: {
         dig: { cost: number };
@@ -78,7 +80,17 @@ export const useCasinoMine = () => {
     const { mutateAsync: dig, isPending: isDigging } = useMutation({
         mutationFn: async (direction: "up" | "down" | "left" | "right") =>
             (await apiClient.post<ApiResponse<DigResult>>("/api/casino/mine/dig", { direction })).data.data!,
-        onSuccess: invalidate,
+        // A successful dig's response already carries the fresh state, so write it
+        // straight into the cache instead of paying for a second round-trip refetch -
+        // this is what makes moving feel instant. A rejected dig has no state in its
+        // response (it may still have persisted a newly-discovered tile server-side
+        // even though it errored), so that path falls back to a real refetch.
+        onSuccess: (data) => {
+            queryClient.setQueryData(casinoMineKeys.all, data.state);
+            queryClient.invalidateQueries({ queryKey: casinoBalanceKeys.all });
+            queryClient.invalidateQueries({ queryKey: casinoLedgerKeys.all });
+        },
+        onError: invalidate,
     });
 
     const { mutateAsync: buyEquipment, isPending: isBuying } = useMutation({

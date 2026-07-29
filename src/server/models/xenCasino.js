@@ -795,6 +795,13 @@ var MINE_ORE_TIERS = [
   { key: "diamond", label: "Diamond", minDepth: 35, weight: 3 },
 ];
 
+// Index into MINE_ORE_TIERS - since it's ordered shallowest/most-common to
+// deepest/rarest, a higher rank means a rarer (better) find. Used to track a player's
+// lifetime-best gem without needing the route-owned $ value multiplier here.
+function tierRank(key) {
+  return MINE_ORE_TIERS.findIndex(function (t) { return t.key === key; });
+}
+
 // Weighted-random among every tier unlocked at `depth` - shallow digs only ever roll
 // Copper (the only tier with minDepth 0), deeper digs add rarer tiers into the pool, so
 // both the chance of a good find and its expected value rise with depth, with no
@@ -835,8 +842,11 @@ var xenCasinoMineStateSchema = new mongoose.Schema({
   dugTiles: { type: [mineTileSchema], default: [] }, // scouted/blocked/mined/collapsed tiles
   digsToday: { type: Number, default: 0 },
   digsDate: { type: String, default: null }, // "YYYY-MM-DD" (UTC) digsToday applies to, lazy-reset like the daily quest
+  ladderGrantDate: { type: String, default: null }, // "YYYY-MM-DD" (UTC) the free daily ladder was last granted, lazy-reset like digsDate
   ladderCount: { type: Number, default: 3 }, // a few free starter ladders
   explosiveCount: { type: Number, default: 0 }, // single-use: blasts through the daily dig cap, a missing ladder, and/or a heavy-stone tile, any combination at once
+  deepestDepthReached: { type: Number, default: 0 }, // lifetime best, never decreases
+  bestGemTier: { type: String, default: null }, // rarest MINE_ORE_TIERS key ever struck, or null
   reinforcementCount: { type: Number, default: 0 }, // single-use shield - stays armed through any number of safe digs, only consumed the moment it actually blocks a cave-in
 });
 
@@ -881,9 +891,18 @@ function scoutTilesInRadius(doc, radius) {
 xenCasinoMineStateSchema.statics.getState = async function (userId) {
   var doc = await this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
   var today = todayKey();
+  var dirty = false;
   if (doc.digsDate !== today) {
     doc.digsDate = today;
     doc.digsToday = 0;
+    dirty = true;
+  }
+  if (doc.ladderGrantDate !== today) {
+    doc.ladderGrantDate = today;
+    doc.ladderCount += 1; // one free ladder per day, on first read
+    dirty = true;
+  }
+  if (dirty) {
     await doc.save();
   }
   return doc;
@@ -904,9 +923,10 @@ xenCasinoMineStateSchema.statics.getState = async function (userId) {
 // single-use Explosive is a universal blocker-buster: if the daily cap, a missing
 // ladder, and/or heavy stone are in the way (any combination), one Explosive clears all
 // of them at once for this one dig. If the target tile was already `scouted` (via a
-// Flare), its cached ground truth is reused instead of rolling again. The route calls
-// getState again right after this to build its response - this static only resolves the
-// one tile being moved into or dug.
+// Flare), its cached ground truth is reused instead of rolling again. Returns the same,
+// already-saved `doc` the route needs to build its response, so callers don't have to
+// re-fetch just to see the result - this static only resolves the one tile being moved
+// into or dug.
 xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
   var doc = await this.getState(userId);
   var targetX = doc.positionX + (params.direction === "left" ? -1 : params.direction === "right" ? 1 : 0);
@@ -920,10 +940,18 @@ xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
     doc.positionX = targetX;
     doc.positionY = targetY;
     await doc.save();
-    return { outcome: MINE_OUTCOME.MOVE, oreTier: null, position: { x: targetX, y: targetY }, digsToday: doc.digsToday, targetY: targetY, usedExplosive: false };
+    return { outcome: MINE_OUTCOME.MOVE, oreTier: null, position: { x: targetX, y: targetY }, digsToday: doc.digsToday, targetY: targetY, usedExplosive: false, doc: doc };
   }
   if (params.direction === "up") {
     return { error: "no_tunnel" };
+  }
+
+  // A past cave-in leaves permanent rubble - unlike heavy stone/the dig cap/a missing
+  // ladder, no Explosive (or anything else) ever clears it. It's a dead end for good; the
+  // only way past is around it.
+  var isCollapsed = !!existing && existing.status === "collapsed";
+  if (isCollapsed) {
+    return { error: "blocked_by_collapse" };
   }
 
   var isHeavyStone = existing ? existing.isHeavyStone : Math.random() < mineStoneChanceForDepth(targetY);
@@ -990,7 +1018,14 @@ xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
       }
       doc.positionX = targetX;
       doc.positionY = targetY;
+      if (resolvedOreTier && tierRank(resolvedOreTier) > tierRank(doc.bestGemTier)) {
+        doc.bestGemTier = resolvedOreTier;
+      }
     }
+  }
+
+  if (doc.positionY > doc.deepestDepthReached) {
+    doc.deepestDepthReached = doc.positionY;
   }
 
   await doc.save();
@@ -1001,6 +1036,7 @@ xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
     digsToday: doc.digsToday,
     targetY: targetY,
     usedExplosive: usedExplosive,
+    doc: doc,
   };
 };
 
