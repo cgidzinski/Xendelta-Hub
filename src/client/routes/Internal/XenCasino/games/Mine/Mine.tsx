@@ -37,6 +37,46 @@ const TIER_COLOR: Record<string, string> = {
     diamond: "#b9f2ff",
 };
 
+// Same tier ordering as TIER_COLOR - just for a bit of extra color in the find toast.
+const TIER_EMOJI: Record<string, string> = {
+    copper: "🟤",
+    silver: "⚪",
+    gold: "🟡",
+    emerald: "🟢",
+    ruby: "🔴",
+    diamond: "💎",
+};
+
+// A brief flash on the just-dug cell so a discovery reads immediately, not just via the
+// toast - same "inline @keyframes in sx" idiom as SpinmaniaGrid's cell-enter animation.
+const DIG_FLASH_MS = 600;
+const DIG_FLASH_SX: Record<string, object> = {
+    ore: {
+        animation: `mineDigFlashOre ${DIG_FLASH_MS}ms ease-out`,
+        "@keyframes mineDigFlashOre": {
+            "0%": { boxShadow: "0 0 0 4px rgba(255,215,0,0.95)", transform: "scale(1.15)" },
+            "100%": { boxShadow: "0 0 0 0px rgba(255,215,0,0)", transform: "scale(1)" },
+        },
+    },
+    cave_in: {
+        animation: `mineDigFlashCaveIn ${DIG_FLASH_MS}ms ease-out`,
+        "@keyframes mineDigFlashCaveIn": {
+            "0%": { boxShadow: "0 0 0 4px rgba(244,67,54,0.9)", transform: "translateX(0)" },
+            "25%": { transform: "translateX(-3px)" },
+            "50%": { transform: "translateX(3px)" },
+            "75%": { transform: "translateX(-2px)" },
+            "100%": { boxShadow: "0 0 0 0px rgba(244,67,54,0)", transform: "translateX(0)" },
+        },
+    },
+    neutral: {
+        animation: `mineDigFlashNeutral ${DIG_FLASH_MS}ms ease-out`,
+        "@keyframes mineDigFlashNeutral": {
+            "0%": { boxShadow: "0 0 0 4px rgba(255,255,255,0.5)" },
+            "100%": { boxShadow: "0 0 0 0px rgba(255,255,255,0)" },
+        },
+    },
+};
+
 // A single icon + one-line-of-context stat row, same pattern as Garden/Printer.
 function StatLine({ icon, children }: { icon: ReactNode; children: ReactNode }) {
     return (
@@ -127,25 +167,7 @@ export default function Mine() {
     } = useCasinoMine();
     const { enqueueSnackbar } = useSnackbar();
     const [confirmingReset, setConfirmingReset] = useState(false);
-
-    const handleDig = (direction: "up" | "down" | "left" | "right") =>
-        dig(direction)
-            .then((r) => {
-                if (r.outcome === "ore") {
-                    const tierLabel = r.state.oreTiers.find((t) => t.key === r.oreTier)?.label ?? "ore";
-                    enqueueSnackbar(
-                        `${r.usedExplosive ? "Blasted through and struck" : "Struck"} ${tierLabel}! +${formatCheddar(r.payout)} cheddar`,
-                        { variant: "success" }
-                    );
-                } else if (r.outcome === "cave_in") {
-                    enqueueSnackbar("Cave-in! You lost your remaining digs for today.", { variant: "error" });
-                } else if (r.outcome === "stone_cleared") {
-                    enqueueSnackbar("Blasted through the heavy stone - the way is clear.", { variant: "info" });
-                } else if (r.usedExplosive) {
-                    enqueueSnackbar("Blasted through with an Explosive - nothing there.", { variant: "info" });
-                }
-            })
-            .catch((e) => enqueueSnackbar(e.message || "Failed to dig", { variant: "error" }));
+    const [flashTile, setFlashTile] = useState<{ x: number; y: number; kind: string } | null>(null);
 
     const handleBuy = (item: "ladder" | "explosive" | "reinforcement") =>
         buyEquipment(item).catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
@@ -228,6 +250,34 @@ export default function Mine() {
         y: position.y + (direction === "down" ? 1 : direction === "up" ? -1 : 0),
     });
 
+    const handleDig = (direction: "up" | "down" | "left" | "right") => {
+        const { x: dugX, y: dugY } = targetFor(direction);
+        dig(direction)
+            .then((r) => {
+                if (r.outcome !== "move") {
+                    setFlashTile({ x: dugX, y: dugY, kind: r.outcome });
+                    setTimeout(() => setFlashTile((cur) => (cur?.x === dugX && cur?.y === dugY ? null : cur)), DIG_FLASH_MS);
+                }
+                if (r.outcome === "ore") {
+                    const tierLabel = r.state.oreTiers.find((t) => t.key === r.oreTier)?.label ?? "ore";
+                    const emoji = (r.oreTier && TIER_EMOJI[r.oreTier]) || "💎";
+                    enqueueSnackbar(
+                        `${emoji} ${r.usedExplosive ? "Blasted through and struck" : "Struck"} ${tierLabel}! +${formatCheddar(r.payout)} cheddar`,
+                        { variant: "success" }
+                    );
+                } else if (r.outcome === "cave_in") {
+                    enqueueSnackbar("Cave-in! You lost your remaining digs for today.", { variant: "error" });
+                } else if (r.outcome === "stone_cleared") {
+                    enqueueSnackbar("Blasted through the heavy stone - the way is clear.", { variant: "info" });
+                } else if (r.outcome === "rubble_cleared") {
+                    enqueueSnackbar("Blasted through the collapsed rubble - the way is clear.", { variant: "info" });
+                } else if (r.usedExplosive) {
+                    enqueueSnackbar("Blasted through with an Explosive - nothing there.", { variant: "info" });
+                }
+            })
+            .catch((e) => enqueueSnackbar(e.message || "Failed to dig", { variant: "error" }));
+    };
+
     function canGo(direction: "up" | "down" | "left" | "right"): boolean {
         const { x, y } = targetFor(direction);
         if (y < 0) {
@@ -242,6 +292,9 @@ export default function Mine() {
         }
         if (t?.status === "blocked" && explosiveCount === 0) {
             return false; // known heavy stone, nothing to clear it with
+        }
+        if (t?.status === "collapsed" && explosiveCount === 0) {
+            return false; // rubble from a past cave-in, nothing to clear it with
         }
         const laddersOk = direction === "down" ? canAffordLadderBlock : true;
         return canAffordCapBlock && laddersOk;
@@ -259,11 +312,14 @@ export default function Mine() {
     if (tileAt(targetFor("down").x, targetFor("down").y)?.status === "blocked") {
         stuckReasons.push("heavy stone ahead");
     }
+    if (tileAt(targetFor("down").x, targetFor("down").y)?.status === "collapsed") {
+        stuckReasons.push("a cave-in blocking the way");
+    }
 
     return (
         <GameWrapper
             title="Chip Mine"
-            howToPlay="Moving through tunnels you've already cleared is always free - no digs spent, no cheddar, no risk, walk it as much as you like (you can even head back Up). Only pushing into new, undug territory is a real dig: it spends one of today's limited digs and costs a flat cheddar fee regardless of what's found, and going down also needs a ladder. There's no way to preview a tile in advance except a Flare, which reveals a 3x3 area around you (whether a tile holds a gem, and its tier, or whether it's heavy stone) - otherwise you're digging blind, same as always for cave-in risk. Heavy stone randomly blocks some tiles and needs an Explosive to clear. A Reinforcement is a single-use shield against your next cave-in - it stays armed through any number of safe digs, only used up the moment it actually blocks one. An Explosive is a universal bypass: spend one to blast through today's dig limit, a missing ladder, and/or heavy stone, any combination at once. The deeper you go, the better the gems get - both the chance of a good find and its value rise with depth. If you ever want a clean slate, you can wipe your whole map and start over from the surface for a fee - your equipment carries over."
+            howToPlay="Moving through tunnels you've already cleared is always free - no digs spent, no cheddar, no risk, walk it as much as you like (you can even head back Up). Only pushing into new, undug territory is a real dig: it spends one of today's limited digs and costs a flat cheddar fee regardless of what's found, and going down also needs a ladder. There's no way to preview a tile in advance except a Flare, which reveals a 3x3 area around you (whether a tile holds a gem, and its tier, or whether it's heavy stone) - otherwise you're digging blind, same as always for cave-in risk. Heavy stone randomly blocks some tiles and needs an Explosive to clear. A cave-in leaves rubble behind that also permanently blocks the way until cleared with an Explosive. A Reinforcement is a single-use shield against your next cave-in - it stays armed through any number of safe digs, only used up the moment it actually blocks one. An Explosive is a universal bypass: spend one to blast through today's dig limit, a missing ladder, heavy stone, and/or collapsed rubble, any combination at once. The deeper you go, the better the gems get - both the chance of a good find and its value rise with depth. You get one free ladder every day. If you ever want a clean slate, you can wipe your whole map and start over from the surface for a fee - your equipment carries over."
             oddsSections={oddsSections}
         >
             <Card variant="outlined" sx={{ bgcolor: "#0a0a0f", overflow: "hidden", mt: 2 }}>
@@ -279,13 +335,14 @@ export default function Mine() {
                             width: "fit-content",
                         }}
                     >
-                        {Array.from({ length: maxDepthRow + 1 }).map((_, y) =>
-                            Array.from({ length: GRID_COLS }).map((_, col) => {
+                        {Array.from({ length: maxDepthRow + 1 }).flatMap((_, y) => {
+                            const cells = Array.from({ length: GRID_COLS }).map((_, col) => {
                                 const x = minX + col;
                                 const isPlayer = x === position.x && y === position.y;
                                 const tile: MineTile | undefined = tileAt(x, y);
                                 const isShaftEntrance = x === 0 && y === 0;
                                 const known = !!tile || isShaftEntrance || isPlayer;
+                                const isFlashing = flashTile?.x === x && flashTile?.y === y;
 
                                 // "collapsed" = cave-in marker. "blocked" = known heavy stone,
                                 // not yet cleared. "scouted" = a Flare preview, not yet dug
@@ -319,6 +376,7 @@ export default function Mine() {
                                             border: tile?.status === "scouted" ? "1px dashed" : "1px solid",
                                             borderColor: tile?.status === "blocked" ? "warning.dark" : known ? "grey.700" : ROCK_COLOR,
                                             position: "relative",
+                                            ...(isFlashing ? DIG_FLASH_SX[flashTile!.kind] ?? DIG_FLASH_SX.neutral : {}),
                                         }}
                                     >
                                         {isPlayer && <PersonPinIcon sx={{ color: "info.light", fontSize: 26, position: "absolute" }} />}
@@ -334,8 +392,25 @@ export default function Mine() {
                                         )}
                                     </Box>
                                 );
-                            })
-                        )}
+                            });
+
+                            // A subtle full-width ruler mark every 10 rows so the shaft's
+                            // depth reads at a glance, not just via the "Depth" stat tile.
+                            if (y > 0 && y % 10 === 0) {
+                                return [
+                                    <Box
+                                        key={`depth-label-${y}`}
+                                        sx={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "center" }}
+                                    >
+                                        <Typography variant="caption" color="text.secondary" sx={{ letterSpacing: 1 }}>
+                                            — Depth {y} —
+                                        </Typography>
+                                    </Box>,
+                                    ...cells,
+                                ];
+                            }
+                            return cells;
+                        })}
                     </Box>
                 </CardContent>
             </Card>
@@ -405,10 +480,20 @@ export default function Mine() {
 
             <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(84px, 1fr))", gap: 1, mt: 2, mb: 2 }}>
                 <StatTile label="Depth" value={position.y} />
-                <StatTile label="Digs Left" value={`${digsRemaining}/${dailyDigCap}`} color={digsRemaining > 0 ? undefined : "error.main"} />
+                <StatTile
+                    label="Digs Left"
+                    value={`${digsRemaining}/${dailyDigCap}`}
+                    color={digsRemaining === 0 ? "error.main" : digsRemaining <= 2 ? "warning.main" : undefined}
+                />
                 <StatTile label="Ladders" value={ladderCount} color={ladderCount > 0 ? undefined : "warning.main"} />
                 <StatTile label="Explosives" value={explosiveCount} color={explosiveCount > 0 ? "warning.main" : undefined} />
                 <StatTile label="Reinforcements" value={reinforcementCount} color={reinforcementCount > 0 ? "info.main" : undefined} />
+                <StatTile label="Best Depth" value={state.deepestDepthReached} />
+                <StatTile
+                    label="Best Find"
+                    value={state.bestGemTier ? state.oreTiers.find((t) => t.key === state.bestGemTier)?.label ?? state.bestGemTier : "—"}
+                    color={state.bestGemTier ? TIER_COLOR[state.bestGemTier] : undefined}
+                />
             </Box>
 
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 3, maxWidth: 480, mx: "auto" }}>

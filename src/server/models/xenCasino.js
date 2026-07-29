@@ -757,7 +757,7 @@ var XenCasinoPrinterState = mongoose.model("XenCasinoPrinterState", xenCasinoPri
 // stay route-owned economics.
 // ---------------------------------------------------------------------------------------
 
-var MINE_OUTCOME = { ORE: "ore", EMPTY: "empty", CAVE_IN: "cave_in", STONE_CLEARED: "stone_cleared", MOVE: "move" };
+var MINE_OUTCOME = { ORE: "ore", EMPTY: "empty", CAVE_IN: "cave_in", STONE_CLEARED: "stone_cleared", RUBBLE_CLEARED: "rubble_cleared", MOVE: "move" };
 
 var MINE_BASE_ORE_CHANCE = 0.3;
 var MINE_ORE_CHANCE_PER_DEPTH = 0.01;
@@ -794,6 +794,13 @@ var MINE_ORE_TIERS = [
   { key: "ruby", label: "Ruby", minDepth: 26, weight: 8 },
   { key: "diamond", label: "Diamond", minDepth: 35, weight: 3 },
 ];
+
+// Index into MINE_ORE_TIERS - since it's ordered shallowest/most-common to
+// deepest/rarest, a higher rank means a rarer (better) find. Used to track a player's
+// lifetime-best gem without needing the route-owned $ value multiplier here.
+function tierRank(key) {
+  return MINE_ORE_TIERS.findIndex(function (t) { return t.key === key; });
+}
 
 // Weighted-random among every tier unlocked at `depth` - shallow digs only ever roll
 // Copper (the only tier with minDepth 0), deeper digs add rarer tiers into the pool, so
@@ -835,8 +842,11 @@ var xenCasinoMineStateSchema = new mongoose.Schema({
   dugTiles: { type: [mineTileSchema], default: [] }, // scouted/blocked/mined/collapsed tiles
   digsToday: { type: Number, default: 0 },
   digsDate: { type: String, default: null }, // "YYYY-MM-DD" (UTC) digsToday applies to, lazy-reset like the daily quest
+  ladderGrantDate: { type: String, default: null }, // "YYYY-MM-DD" (UTC) the free daily ladder was last granted, lazy-reset like digsDate
   ladderCount: { type: Number, default: 3 }, // a few free starter ladders
   explosiveCount: { type: Number, default: 0 }, // single-use: blasts through the daily dig cap, a missing ladder, and/or a heavy-stone tile, any combination at once
+  deepestDepthReached: { type: Number, default: 0 }, // lifetime best, never decreases
+  bestGemTier: { type: String, default: null }, // rarest MINE_ORE_TIERS key ever struck, or null
   reinforcementCount: { type: Number, default: 0 }, // single-use shield - stays armed through any number of safe digs, only consumed the moment it actually blocks a cave-in
 });
 
@@ -881,9 +891,18 @@ function scoutTilesInRadius(doc, radius) {
 xenCasinoMineStateSchema.statics.getState = async function (userId) {
   var doc = await this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
   var today = todayKey();
+  var dirty = false;
   if (doc.digsDate !== today) {
     doc.digsDate = today;
     doc.digsToday = 0;
+    dirty = true;
+  }
+  if (doc.ladderGrantDate !== today) {
+    doc.ladderGrantDate = today;
+    doc.ladderCount += 1; // one free ladder per day, on first read
+    dirty = true;
+  }
+  if (dirty) {
     await doc.save();
   }
   return doc;
@@ -927,10 +946,13 @@ xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
   }
 
   var isHeavyStone = existing ? existing.isHeavyStone : Math.random() < mineStoneChanceForDepth(targetY);
+  // A past cave-in leaves permanent rubble - it's a pure obstacle like heavy stone (needs
+  // an Explosive), not something that gets a fresh cave-in/ore roll on a later approach.
+  var isCollapsed = !!existing && existing.status === "collapsed";
   var blockedByCap = doc.digsToday >= params.dailyDigCap;
   var blockedByLadder = params.direction === "down" && doc.ladderCount <= 0;
   var usedExplosive = false;
-  if (blockedByCap || blockedByLadder || isHeavyStone) {
+  if (blockedByCap || blockedByLadder || isHeavyStone || isCollapsed) {
     if (doc.explosiveCount <= 0) {
       if (!existing) {
         // Cache the discovery even on a rejected attempt, same as a Flare scout would -
@@ -938,7 +960,7 @@ xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
         doc.dugTiles.push({ x: targetX, y: targetY, oreTier: null, isHeavyStone: true, status: "blocked" });
         await doc.save();
       }
-      return { error: isHeavyStone ? "blocked_by_stone" : blockedByCap ? "no_digs_remaining" : "no_ladders" };
+      return { error: isCollapsed ? "blocked_by_collapse" : isHeavyStone ? "blocked_by_stone" : blockedByCap ? "no_digs_remaining" : "no_ladders" };
     }
     usedExplosive = true;
   }
@@ -963,6 +985,13 @@ xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
     } else {
       doc.dugTiles.push({ x: targetX, y: targetY, oreTier: null, isHeavyStone: false, status: "mined" });
     }
+    doc.positionX = targetX;
+    doc.positionY = targetY;
+  } else if (isCollapsed) {
+    // Same "pure obstacle" semantics as heavy stone - clearing rubble just opens the
+    // passage through, never rolls ore or another cave-in.
+    outcome = MINE_OUTCOME.RUBBLE_CLEARED;
+    existing.status = "mined";
     doc.positionX = targetX;
     doc.positionY = targetY;
   } else {
@@ -990,7 +1019,14 @@ xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
       }
       doc.positionX = targetX;
       doc.positionY = targetY;
+      if (resolvedOreTier && tierRank(resolvedOreTier) > tierRank(doc.bestGemTier)) {
+        doc.bestGemTier = resolvedOreTier;
+      }
     }
+  }
+
+  if (doc.positionY > doc.deepestDepthReached) {
+    doc.deepestDepthReached = doc.positionY;
   }
 
   await doc.save();

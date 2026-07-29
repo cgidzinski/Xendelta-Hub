@@ -70,6 +70,8 @@ function stateView(doc: any) {
         ladderCount: doc.ladderCount,
         explosiveCount: doc.explosiveCount,
         reinforcementCount: doc.reinforcementCount,
+        deepestDepthReached: doc.deepestDepthReached,
+        bestGemTier: doc.bestGemTier,
         revealedTiles: doc.dugTiles.map((t: any) => ({ x: t.x, y: t.y, oreTier: t.oreTier, isHeavyStone: t.isHeavyStone, status: t.status })),
         prices: {
             dig: { cost: DIG_COST },
@@ -156,6 +158,7 @@ module.exports = function (app: express.Application) {
                     result.error === "no_digs_remaining" ? "No digs remaining today - buy an Explosive to blast through" :
                     result.error === "no_ladders" ? "No ladders left - buy more to descend, or use an Explosive to blast through" :
                     result.error === "blocked_by_stone" ? "Heavy duty stone blocks the way - you'll need an Explosive to clear it" :
+                    result.error === "blocked_by_collapse" ? "A cave-in blocks the way - you'll need an Explosive to clear the rubble" :
                     "You can't go that way";
                 return res.status(400).json({ status: false, message });
             }

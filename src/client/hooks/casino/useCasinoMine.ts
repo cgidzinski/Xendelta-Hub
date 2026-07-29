@@ -30,6 +30,8 @@ export interface MineState {
     ladderCount: number;
     explosiveCount: number;
     reinforcementCount: number;
+    deepestDepthReached: number;
+    bestGemTier: string | null;
     revealedTiles: MineTile[];
     prices: {
         dig: { cost: number };
@@ -43,7 +45,7 @@ export interface MineState {
 }
 
 export interface DigResult {
-    outcome: "ore" | "empty" | "cave_in" | "stone_cleared" | "move";
+    outcome: "ore" | "empty" | "cave_in" | "stone_cleared" | "rubble_cleared" | "move";
     oreTier?: string | null;
     payout: number;
     usedExplosive: boolean;
