@@ -136,7 +136,8 @@ function typeForSpecies(species: string): RanchType {
 
 const FEED_COOLDOWN_MS = 30 * 60 * 1000;
 const FEED_GAIN_RANGE: [number, number] = [1, 4];
-const FEED_PRICE = 1200; // per unit, same price for all 3 types
+const FEED_PRICE = 100; // per unit, same price for all 3 types
+const ALLOWED_FEED_BUY_QUANTITIES = [1, 5, 10];
 
 // One Feed item per type - a creature can only be fed with the Feed matching its own type.
 const FEED_ITEMS_BY_TYPE: Record<RanchType, { key: string; label: string; type: RanchType; price: number }> = {
@@ -796,11 +797,15 @@ module.exports = function (app: express.Application) {
 
     app.post("/api/casino/ranch/feed/buy", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
-        const { type } = req.body as { type?: RanchType };
+        const { type, quantity } = req.body as { type?: RanchType; quantity?: number };
         const feedItem = type ? FEED_ITEMS_BY_TYPE[type] : undefined;
         if (!feedItem) {
             return res.status(400).json({ status: false, message: "Invalid feed type" });
         }
+        if (!quantity || !ALLOWED_FEED_BUY_QUANTITIES.includes(quantity)) {
+            return res.status(400).json({ status: false, message: "Invalid quantity" });
+        }
+        const totalPrice = feedItem.price * quantity;
 
         const user = await User.findById(userId).exec();
         if (!user) {
@@ -816,25 +821,25 @@ module.exports = function (app: express.Application) {
             const payoutResult = await transfer({
                 fromAccountId: resolved.account.accountId,
                 toAccountId: xenCasinoAccountId,
-                amount: feedItem.price.toFixed(10),
+                amount: totalPrice.toFixed(10),
                 key: txnKey("ranch-buy-feed"),
                 note: `ranch_buy_${feedItem.key}`,
             });
 
             try {
-                await XenCasinoRanchInventory.addItem(userId, feedItem.key, 1);
+                await XenCasinoRanchInventory.addItem(userId, feedItem.key, quantity);
             } catch (creditErr) {
                 await transfer({
                     fromAccountId: xenCasinoAccountId,
                     toAccountId: resolved.account.accountId,
-                    amount: feedItem.price.toFixed(10),
+                    amount: totalPrice.toFixed(10),
                     key: txnKey("ranch-buy-feed-refund"),
                     note: `ranch_buy_${feedItem.key}_refund`,
                 });
                 throw creditErr;
             }
 
-            await XenCasinoActivity.record({ game: SLUG, userId, wager: feedItem.price, payout: 0 });
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: totalPrice, payout: 0 });
             return res.json({ status: true, data: { balance: payoutResult.fromNewBalance, feedItems: await feedItemsView(userId) } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;

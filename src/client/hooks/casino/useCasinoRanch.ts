@@ -236,8 +236,8 @@ export const useCasinoRanch = () => {
     });
 
     const { mutateAsync: buyFeed, isPending: isBuyingFeed } = useMutation({
-        mutationFn: async (type: RanchType) =>
-            (await apiClient.post<ApiResponse<BuyFeedResult>>("/api/casino/ranch/feed/buy", { type })).data.data!,
+        mutationFn: async (params: { type: RanchType; quantity: number }) =>
+            (await apiClient.post<ApiResponse<BuyFeedResult>>("/api/casino/ranch/feed/buy", params)).data.data!,
         onSuccess: invalidate,
     });
 

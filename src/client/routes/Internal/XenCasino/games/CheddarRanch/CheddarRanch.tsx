@@ -975,13 +975,15 @@ function InventoryTab({ items }: { items: RanchItem[] }) {
     );
 }
 
+const FEED_BUY_QUANTITIES = [1, 5, 10];
+
 function ShopTab() {
     const { feedItems, buyFeed, isBuyingFeed } = useCasinoRanch();
     const { enqueueSnackbar } = useSnackbar();
 
-    const handleBuy = (item: RanchFeedItem) =>
-        buyFeed(item.type)
-            .then(() => enqueueSnackbar(`Bought 1x ${item.label}.`, { variant: "success" }))
+    const handleBuy = (item: RanchFeedItem, quantity: number) =>
+        buyFeed({ type: item.type, quantity })
+            .then(() => enqueueSnackbar(`Bought ${quantity}x ${item.label}.`, { variant: "success" }))
             .catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
 
     if (feedItems.length === 0) {
@@ -995,8 +997,7 @@ function ShopTab() {
                     key={item.key}
                     sx={{
                         display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
+                        flexDirection: "column",
                         gap: 1,
                         p: 1.5,
                         border: "1px solid",
@@ -1015,9 +1016,21 @@ function ShopTab() {
                             </Typography>
                         </Box>
                     </Box>
-                    <Button size="small" variant="contained" startIcon={<RestaurantIcon />} disabled={isBuyingFeed} onClick={() => handleBuy(item)}>
-                        Buy ({formatCheddar(item.price)})
-                    </Button>
+                    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
+                        {FEED_BUY_QUANTITIES.map((quantity) => (
+                            <Button
+                                key={quantity}
+                                size="small"
+                                variant="contained"
+                                startIcon={<RestaurantIcon />}
+                                disabled={isBuyingFeed}
+                                onClick={() => handleBuy(item, quantity)}
+                                sx={{ textTransform: "none" }}
+                            >
+                                {quantity}x ({formatCheddar(item.price * quantity)})
+                            </Button>
+                        ))}
+                    </Box>
                 </Box>
             ))}
         </Box>
