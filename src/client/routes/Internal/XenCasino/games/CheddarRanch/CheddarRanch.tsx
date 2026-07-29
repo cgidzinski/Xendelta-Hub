@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import {
     Alert,
     Avatar,
@@ -394,6 +394,9 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCo
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, textAlign: "center" }}>
                     {creature.name}
                 </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: -0.5 }}>
+                    {creature.species}
+                </Typography>
                 <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: "center" }}>
                     <Chip
                         size="small"
@@ -645,12 +648,15 @@ function RaceTab() {
     const [stake, setStake] = useState(minRaceStake || 100);
     const [raceResult, setRaceResult] = useState<BetRaceResult | null>(null);
     const [confirmingForfeit, setConfirmingForfeit] = useState(false);
+    const panelRef = useRef<HTMLDivElement | null>(null);
 
     const selectedCreature = creatures.find((c) => c.id === selectedId) ?? null;
     // The just-started response is used directly (rather than waiting on the roster
     // refetch pendingRace triggers) so the reveal timing is exact, not racing a network
     // round-trip - pendingRace still takes over once set, e.g. on a page refresh.
-    const pending: PendingRace | null = pendingOverride ?? (pendingRace && pendingRace.creatureId === selectedId ? pendingRace : null);
+    const pending: PendingRace | null = spinning
+        ? null
+        : pendingOverride ?? (pendingRace && pendingRace.creatureId === selectedId ? pendingRace : null);
 
     // Resume an in-flight race attempt (e.g. after a page refresh) by auto-selecting its
     // creature, so the player isn't forced to re-find it manually.
@@ -673,6 +679,7 @@ function RaceTab() {
             return;
         }
         setSpinning(true);
+        panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
         const spinId = setInterval(() => {
             setSpinEmojis([0, 1, 2, 3].map(() => SPIN_EMOJI[Math.floor(Math.random() * SPIN_EMOJI.length)]));
         }, 120);
@@ -740,12 +747,25 @@ function RaceTab() {
     }
 
     return (
-        <Box>
+        <Box ref={panelRef}>
             {!pending && !spinning && (
                 <>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                        Pick a creature to enter
-                    </Typography>
+                    {selectedCreature ? (
+                        <Box sx={{ maxWidth: 480, mx: "auto", mb: 3 }}>
+                            <ActionButton
+                                icon={<SportsScoreIcon />}
+                                label={`Race with ${selectedCreature.name} - Pay ${formatCheddar(entryFee)}`}
+                                description="Randomizes the course and your 3 rivals. The fee is non-refundable once paid, even if you forfeit."
+                                color="warning"
+                                disabled={isStartingRace}
+                                onClick={handleStart}
+                            />
+                        </Box>
+                    ) : (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                            Pick a creature to enter
+                        </Typography>
+                    )}
                     <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 2, mb: 3 }}>
                         {creatures.map((creature) => (
                             <RanchCard
@@ -758,19 +778,6 @@ function RaceTab() {
                         ))}
                     </Box>
                 </>
-            )}
-
-            {selectedCreature && !pending && !spinning && (
-                <Box sx={{ maxWidth: 480, mx: "auto" }}>
-                    <ActionButton
-                        icon={<SportsScoreIcon />}
-                        label={`Race with ${selectedCreature.name} - Pay ${formatCheddar(entryFee)}`}
-                        description="Randomizes the course and your 3 rivals. The fee is non-refundable once paid, even if you forfeit."
-                        color="warning"
-                        disabled={isStartingRace}
-                        onClick={handleStart}
-                    />
-                </Box>
             )}
 
             {spinning && (
@@ -1039,10 +1046,15 @@ function ShopTab() {
                 >
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                         <Typography sx={{ fontSize: 24 }}>{TYPE_EMOJI[item.type]}</Typography>
-                        <Box>
-                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                {item.label}
-                            </Typography>
+                        <Box sx={{ flexGrow: 1 }}>
+                            <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    {item.label}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    {formatCheddar(item.price)} each
+                                </Typography>
+                            </Box>
                             <Typography variant="caption" color="text.secondary">
                                 You own {item.quantity} - feeds {TYPE_LABEL[item.type]} creatures
                             </Typography>
@@ -1059,7 +1071,7 @@ function ShopTab() {
                                 onClick={() => handleBuy(item, quantity)}
                                 sx={{ textTransform: "none" }}
                             >
-                                {quantity}x ({formatCheddar(item.price * quantity)})
+                                {quantity}x
                             </Button>
                         ))}
                     </Box>
