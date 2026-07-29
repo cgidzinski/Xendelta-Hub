@@ -21,6 +21,7 @@ import { MineTile, useCasinoMine } from "../../../../../hooks/casino/useCasinoMi
 const VIEW_RADIUS = 3; // tiles visible in every direction around the player
 const GRID_COLS = VIEW_RADIUS * 2 + 1; // fixed viewport width, keeps the page from growing
 const CELL_SIZE = 40;
+const DEPTH_LABEL_COL = 26; // px - fixed-width side gutter for the depth ruler numbers
 
 const ROCK_COLOR = "#3e3229"; // unexplored - reads as solid stone, not a void
 const STONE_BLOCKED_COLOR = "#2a2420"; // known heavy stone - darker/harder than plain rock
@@ -323,7 +324,7 @@ export default function Mine() {
                     <Box
                         sx={{
                             display: "grid",
-                            gridTemplateColumns: `repeat(${GRID_COLS}, ${CELL_SIZE}px)`,
+                            gridTemplateColumns: `${DEPTH_LABEL_COL}px repeat(${GRID_COLS}, ${CELL_SIZE}px) ${DEPTH_LABEL_COL}px`,
                             gridAutoRows: `${CELL_SIZE}px`,
                             gap: "2px",
                             justifyContent: "center",
@@ -391,22 +392,23 @@ export default function Mine() {
                                 );
                             });
 
-                            // A subtle full-width ruler mark every 10 rows so the shaft's
+                            // A ruler number in the side gutters every 10 rows so the shaft's
                             // depth reads at a glance, not just via the "Depth" stat tile.
-                            if (y > 0 && y % 10 === 0) {
-                                return [
-                                    <Box
-                                        key={`depth-label-${y}`}
-                                        sx={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "center" }}
-                                    >
-                                        <Typography variant="caption" color="text.secondary" sx={{ letterSpacing: 1 }}>
-                                            — Depth {y} —
-                                        </Typography>
-                                    </Box>,
-                                    ...cells,
-                                ];
-                            }
-                            return cells;
+                            // Every row emits both gutter cells (empty except on a milestone
+                            // row) so each row has the same item count - a row with fewer
+                            // items than the rest would throw off CSS grid's auto-placement
+                            // and misalign every row after it.
+                            const isMilestone = y > 0 && y % 10 === 0;
+                            const labelSx = { display: "flex", alignItems: "center", justifyContent: "center" };
+                            return [
+                                <Box key={`depth-label-left-${y}`} sx={labelSx}>
+                                    {isMilestone && <Typography variant="caption" color="text.secondary">{y}</Typography>}
+                                </Box>,
+                                ...cells,
+                                <Box key={`depth-label-right-${y}`} sx={labelSx}>
+                                    {isMilestone && <Typography variant="caption" color="text.secondary">{y}</Typography>}
+                                </Box>,
+                            ];
                         })}
                     </Box>
                 </CardContent>
