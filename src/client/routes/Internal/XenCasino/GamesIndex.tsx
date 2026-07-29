@@ -117,7 +117,7 @@ const JACKPOT_CHIP_SX = {
     fontWeight: 800,
 } as const;
 
-type ChipColor = "default" | "success" | "warning" | "error" | "primary";
+type ChipColor = "default" | "success" | "warning" | "error" | "primary" | "info";
 interface StatusChip {
     label: string;
     color: ChipColor;
@@ -126,7 +126,7 @@ interface StatusChip {
 export default function GamesIndex() {
     const navigate = useNavigate();
     const { disabledGames } = useCasinoStatus();
-    const { squares: gardenSquares } = useCasinoGarden();
+    const { squares: gardenSquares, waterCooldownMs: gardenWaterCooldownMs } = useCasinoGarden();
     const { run: printerRun } = useCasinoPrinter();
     const { state: mineState } = useCasinoMine();
 
@@ -206,17 +206,29 @@ export default function GamesIndex() {
     // the instant-resolution games do - instead their cards show a live glance at the
     // player's own state, so there's a reason to check the games list rather than always
     // clicking straight in. Keyed by game.key, same as oddsLabelByKey/rtpLabelByKey above.
+    const gardenEmpty = gardenSquares.filter((s) => s.status === "empty").length;
     const gardenReady = gardenSquares.filter((s) => s.status === "ready").length;
-    const gardenGrowing = gardenSquares.filter((s) => s.status === "growing").length;
     const gardenDead = gardenSquares.filter((s) => s.status === "dead").length;
+    // "Growing" here means still waiting on more waterings (i.e. not yet fully watered and
+    // just riding out the final cooldown) - that subset is what "Needs Water" further
+    // narrows down to plots whose cooldown has actually elapsed and are waterable *right now*.
+    const gardenGrowing = gardenSquares.filter((s) => s.status === "growing" && s.waterCount < s.waterAmount).length;
+    const gardenNeedsWater = gardenSquares.filter((s) => {
+        if (s.status !== "growing" || s.waterCount >= s.waterAmount) {
+            return false;
+        }
+        const msSinceWatered = s.lastWateredAt ? Date.now() - new Date(s.lastWateredAt).getTime() : Infinity;
+        return msSinceWatered >= gardenWaterCooldownMs;
+    }).length;
     const mineDigsLeft = mineState ? Math.max(0, mineState.dailyDigCap - mineState.digsToday) : null;
 
     const statusChipsByKey: Record<string, StatusChip[]> = {
         garden: [
             ...(gardenReady > 0 ? [{ label: `${gardenReady} Ready to Harvest`, color: "success" as ChipColor }] : []),
+            ...(gardenNeedsWater > 0 ? [{ label: `${gardenNeedsWater} Need Water`, color: "info" as ChipColor }] : []),
             ...(gardenGrowing > 0 ? [{ label: `${gardenGrowing} Growing`, color: "default" as ChipColor }] : []),
+            ...(gardenEmpty > 0 ? [{ label: `${gardenEmpty} Empty`, color: "default" as ChipColor }] : []),
             ...(gardenDead > 0 ? [{ label: `${gardenDead} Dead`, color: "error" as ChipColor }] : []),
-            ...(gardenReady === 0 && gardenGrowing === 0 && gardenDead === 0 ? [{ label: "All Plots Empty", color: "default" as ChipColor }] : []),
         ],
         printer: printerRun
             ? [
@@ -303,6 +315,7 @@ export default function GamesIndex() {
                                                         <Typography variant="body2" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
                                                             <Typography component="span" variant="body2" color="error.main" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
                                                                 {formatCheddar(game.price)}
+                                                                {game.priceFrom ? "+" : ""}
                                                             </Typography>
                                                             {" / play"}
                                                         </Typography>

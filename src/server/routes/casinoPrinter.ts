@@ -18,9 +18,10 @@ const { User } = require("../models/user");
 const { XenCasinoPrinterState, XenCasinoActivity, PRINTER_RISK_RAMP_MS, PRINTER_BASE_RAID_CHANCE, PRINTER_MAX_RAID_CHANCE } = require("../models/xenCasino");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../utils/weeabetsClient";
 import { requireGameEnabled } from "../utils/casinoStatus";
+import { recordCasinoRoundPlayed } from "../utils/dailyQuest";
 
 const SLUG = "printer";
-const BRIBE_COST = 1500; // cost of the first bribe on a run - each subsequent one costs more, see nextBribeCost
+const BRIBE_COST = 3000; // cost of the first bribe on a run - each subsequent one costs more, see nextBribeCost
 const BRIBE_COST_STEP = 0.75; // +75% of the base cost per prior bribe on this run
 const START_MULTIPLIER = 0; // collecting the instant a run starts pays out nothing - not free money
 const PEAK_MULTIPLIER = 4; // a run's baseline payout ceiling before parts scale it (see effectivePeakMultiplier)
@@ -33,7 +34,7 @@ const MAX_EFFECTIVE_PEAK_MULTIPLIER = 15;
 // with no raid cost, unlike parts which always trade some of one for the other. Bought
 // fresh for that one run only, same as everything else here - there's no persistent
 // "rig level" to grind toward.
-const MACHINE_UPGRADE_COST = 4000;
+const MACHINE_UPGRADE_COST = 50000;
 const MACHINE_UPGRADE_RATE_BONUS = 0.5;
 
 interface PrinterPart {
@@ -51,12 +52,12 @@ interface PrinterPart {
 // stealth; Liquid Nitrogen Cooler is the reckless high-roller pick. Every part is an
 // upgrade to the base rig - there's no "stock" option.
 const PRINTER_PARTS: Record<string, PrinterPart> = {
-    "case-fan": { key: "case-fan", label: "Case Fan", cost: 800, rateBonus: 0.1, raidBonus: 0.05, description: "Mild, dependable upgrade." },
-    "ram-upgrade": { key: "ram-upgrade", label: "RAM Upgrade", cost: 1200, rateBonus: 0.25, raidBonus: 0.15, description: "Solid boost, moderate risk." },
-    "turbo-fan": { key: "turbo-fan", label: "Turbo Fan", cost: 2000, rateBonus: 0.5, raidBonus: 0.4, description: "Strong boost, but loud - raid risk climbs." },
-    "liquid-nitrogen": { key: "liquid-nitrogen", label: "Liquid Nitrogen Cooler", cost: 3200, rateBonus: 1.0, raidBonus: 0.9, description: "Huge boost, huge risk - the high-roller pick." },
-    "silent-case": { key: "silent-case", label: "Silent Case", cost: 1000, rateBonus: -0.15, raidBonus: -0.3, description: "Slower and smaller, but much quieter." },
-    "faraday-cage": { key: "faraday-cage", label: "Faraday Cage", cost: 1600, rateBonus: 0.05, raidBonus: -0.45, description: "Nearly pure stealth, barely touches rate." },
+    "case-fan": { key: "case-fan", label: "Case Fan", cost: 1600, rateBonus: 0.1, raidBonus: 0.05, description: "Mild, dependable upgrade." },
+    "ram-upgrade": { key: "ram-upgrade", label: "RAM Upgrade", cost: 2400, rateBonus: 0.25, raidBonus: 0.15, description: "Solid boost, moderate risk." },
+    "turbo-fan": { key: "turbo-fan", label: "Turbo Fan", cost: 4000, rateBonus: 0.5, raidBonus: 0.4, description: "Strong boost, but loud - raid risk climbs." },
+    "liquid-nitrogen": { key: "liquid-nitrogen", label: "Liquid Nitrogen Cooler", cost: 6400, rateBonus: 1.0, raidBonus: 0.9, description: "Huge boost, huge risk - the high-roller pick." },
+    "silent-case": { key: "silent-case", label: "Silent Case", cost: 2000, rateBonus: -0.15, raidBonus: -0.3, description: "Slower and smaller, but much quieter." },
+    "faraday-cage": { key: "faraday-cage", label: "Faraday Cage", cost: 3200, rateBonus: 0.05, raidBonus: -0.45, description: "Nearly pure stealth, barely touches rate." },
 };
 
 // Each bribe on the same run costs more than the last, so babysitting a run to peak by
@@ -107,7 +108,11 @@ function runView(run: any) {
         currentMultiplier: run.raidedAt ? 0 : Number(currentMultiplier(run, now).toFixed(3)),
         raidRiskPercent: run.raidedAt ? 0 : Number((raidRiskPercent(run, now) * 100).toFixed(1)),
         peakMultiplier: run.peakMultiplier ?? PEAK_MULTIPLIER,
-        parts: partKeys.map((key) => PRINTER_PARTS[key]?.label || key),
+        // Full catalog entries (not just labels) so the client can render each installed
+        // part as its own small "what this adds" card instead of a plain name chip.
+        parts: partKeys.map((key) => PRINTER_PARTS[key]).filter(Boolean),
+        usedMachineUpgrade: !!run.usedMachineUpgrade,
+        machineUpgradeRateBonus: MACHINE_UPGRADE_RATE_BONUS,
     };
 }
 
@@ -132,8 +137,8 @@ module.exports = function (app: express.Application) {
     app.post("/api/casino/printer/start", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const { partKeys, useMachineUpgrade } = req.body as { partKeys: string[]; useMachineUpgrade?: boolean };
-        if (!Array.isArray(partKeys) || partKeys.length !== 3 || partKeys.some((k) => !PRINTER_PARTS[k])) {
-            return res.status(400).json({ status: false, message: "Pick exactly 3 parts" });
+        if (!Array.isArray(partKeys) || partKeys.length > 3 || partKeys.some((k) => !PRINTER_PARTS[k])) {
+            return res.status(400).json({ status: false, message: "Pick up to 3 parts" });
         }
         const parts = partKeys.map((k) => PRINTER_PARTS[k]);
 
@@ -165,14 +170,18 @@ module.exports = function (app: express.Application) {
             const effectivePeakDurationMs = Math.max(MIN_PEAK_DURATION_MS, BASE_PEAK_DURATION_MS / rateScale);
             const effectivePeakMultiplier = Math.min(MAX_EFFECTIVE_PEAK_MULTIPLIER, PEAK_MULTIPLIER * rateScale);
 
+            // A run with 0 parts and no Machine Upgrade (the "stock rig") costs nothing to
+            // start - skip the transfer(s) entirely rather than round-tripping a $0 amount.
             const xenCasinoAccountId = await getXenCasinoAccountId();
-            const result = await transfer({
-                fromAccountId: resolved.account.accountId,
-                toAccountId: xenCasinoAccountId,
-                amount: totalCost.toFixed(10),
-                key: `printer-start-${userId}-${Date.now()}`,
-                note: "printer_start",
-            });
+            const result = totalCost > 0
+                ? await transfer({
+                    fromAccountId: resolved.account.accountId,
+                    toAccountId: xenCasinoAccountId,
+                    amount: totalCost.toFixed(10),
+                    key: `printer-start-${userId}-${Date.now()}`,
+                    note: "printer_start",
+                })
+                : { fromNewBalance: resolved.account.balance };
 
             const run = await XenCasinoPrinterState.startRun(
                 userId,
@@ -180,16 +189,19 @@ module.exports = function (app: express.Application) {
                 effectivePeakDurationMs,
                 effectivePeakMultiplier,
                 raidScale,
-                partKeys
+                partKeys,
+                !!useMachineUpgrade
             );
             if (!run) {
-                await transfer({
-                    fromAccountId: xenCasinoAccountId,
-                    toAccountId: resolved.account.accountId,
-                    amount: totalCost.toFixed(10),
-                    key: `printer-start-refund-${userId}-${Date.now()}`,
-                    note: "printer_start_refund",
-                });
+                if (totalCost > 0) {
+                    await transfer({
+                        fromAccountId: xenCasinoAccountId,
+                        toAccountId: resolved.account.accountId,
+                        amount: totalCost.toFixed(10),
+                        key: `printer-start-refund-${userId}-${Date.now()}`,
+                        note: "printer_start_refund",
+                    });
+                }
                 return res.status(400).json({ status: false, message: "A print run is already going" });
             }
 
@@ -265,6 +277,7 @@ module.exports = function (app: express.Application) {
 
         if (state.run.raidedAt) {
             await XenCasinoPrinterState.clearRun(userId);
+            await recordCasinoRoundPlayed(userId, { game: SLUG, wager: 0, payout: 0 });
             return res.json({ status: true, data: { raided: true, payout: 0 } });
         }
 
@@ -286,7 +299,7 @@ module.exports = function (app: express.Application) {
             });
 
             await XenCasinoPrinterState.clearRun(userId);
-            await XenCasinoActivity.record({ game: SLUG, userId, wager: 0, payout });
+            await recordCasinoRoundPlayed(userId, { game: SLUG, wager: 0, payout });
 
             return res.json({ status: true, data: { raided: false, payout, balance: result.toNewBalance } });
         } catch (err) {

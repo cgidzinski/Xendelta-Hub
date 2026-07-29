@@ -14,10 +14,16 @@ export interface GardenSquare {
     lastWateredAt: string | null;
     waterAmount: number;
     waterCount: number;
+    verminHits: number;
+    // Per-square, not the page-level base - shorter than the base once bonemeal has been
+    // bought for this square.
+    waterCooldownMs: number;
     cost: number;
     baseMultiplier: number;
     variance: number;
-    protection: { pesticide: boolean; fungicide: boolean; fertilized: boolean };
+    verminChance: number;
+    diseaseChance: number;
+    protection: { pesticide: boolean; fungicide: boolean; fertilized: boolean; bonemeal: boolean };
     status: "empty" | "growing" | "ready" | "dead";
 }
 
@@ -36,7 +42,7 @@ export interface SeedTier {
 export interface GardenState {
     squares: GardenSquare[];
     seedTiers: SeedTier[];
-    protectionCost: { pesticide: number; fungicide: number; fertilizer: number };
+    protectionCost: { pesticide: number; fungicide: number; fertilizer: number; bonemeal: number };
     waterCooldownMs: number;
     neglectGraceMs: number;
     cleanupFee: number;
@@ -80,7 +86,7 @@ export const useCasinoGarden = () => {
     });
 
     const { mutateAsync: protect, isPending: isProtecting } = useMutation({
-        mutationFn: async (params: { squareId: number; item: "pesticide" | "fungicide" | "fertilizer" }) =>
+        mutationFn: async (params: { squareId: number; item: "pesticide" | "fungicide" | "fertilizer" | "bonemeal" }) =>
             (await apiClient.post<ApiResponse<{ square: GardenSquare; balance: string }>>("/api/casino/garden/protect", params)).data.data!,
         onSuccess: invalidate,
     });
@@ -100,7 +106,7 @@ export const useCasinoGarden = () => {
     return {
         squares: data?.squares ?? [],
         seedTiers: data?.seedTiers ?? [],
-        protectionCost: data?.protectionCost ?? { pesticide: 0, fungicide: 0, fertilizer: 0 },
+        protectionCost: data?.protectionCost ?? { pesticide: 0, fungicide: 0, fertilizer: 0, bonemeal: 0 },
         waterCooldownMs: data?.waterCooldownMs ?? 60 * 60 * 1000,
         neglectGraceMs: data?.neglectGraceMs ?? 24 * 60 * 60 * 1000,
         cleanupFee: data?.cleanupFee ?? 0,

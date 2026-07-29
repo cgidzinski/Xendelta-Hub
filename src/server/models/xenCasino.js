@@ -338,6 +338,19 @@ var GARDEN_NEGLECT_GRACE_MS = 24 * 60 * 60 * 1000;
 // Once past the grace period, one decay tick fires every hour: -1 waterCount, or death
 // if waterCount is already 0. Watering at any point resets the neglect clock.
 var GARDEN_DECAY_TICK_MS = 60 * 60 * 1000;
+// Bonemeal (see statics.protect) shortens every watering cooldown on that square from
+// then on, applied against the square's *current* effective cooldown so it composes with
+// itself sanely if ever stacked (it can't be today - single-use per crop - but this way
+// the math still holds if that ever changes).
+var GARDEN_BONEMEAL_GROWTH_BOOST = 0.25;
+
+// The cooldown between waterings on this particular square, right now - shorter than the
+// base GARDEN_WATER_COOLDOWN_MS once bonemeal has been applied. This is also the same
+// cooldown the hazard-tick cadence and the final ready-flip wait key off of (see
+// resolveGardenSquare) - one number governs "how fast does this square move" everywhere.
+function effectiveWaterCooldownMs(square) {
+  return square.protection.bonemeal ? Math.round(GARDEN_WATER_COOLDOWN_MS * (1 - GARDEN_BONEMEAL_GROWTH_BOOST)) : GARDEN_WATER_COOLDOWN_MS;
+}
 
 function emptyGardenSquares() {
   var squares = [];
@@ -359,16 +372,18 @@ var gardenSquareSchema = new mongoose.Schema(
     // Snapshotted from the seed tier at plant time (see casinoGarden.ts SEED_TIERS) -
     // this square's own copy, immune to later tier rebalances.
     cost: { type: Number, default: 0 },
-    waterAmount: { type: Number, default: 0 }, // total waterings required to mature - a vermin hit raises this
-    waterCount: { type: Number, default: 0 }, // waterings delivered so far
+    waterAmount: { type: Number, default: 0 }, // total growth stages required to mature - a vermin hit raises this
+    waterCount: { type: Number, default: 0 }, // growth stages reached so far
+    verminHits: { type: Number, default: 0 }, // how many times vermin has set this crop back a growth stage - shown to the player, not just inferred
     verminChance: { type: Number, default: 0 }, // per tick, while unprotected - adds +1 to waterAmount
     diseaseChance: { type: Number, default: 0 }, // per tick, while unprotected - kills outright
     baseMultiplier: { type: Number, default: 0 }, // harvest payout = cost * baseMultiplier * (1 +/- variance)
     variance: { type: Number, default: 0 },
     protection: {
-      pesticide: { type: Boolean, default: false }, // blocks vermin for the rest of this square's grow cycle
-      fungicide: { type: Boolean, default: false }, // blocks disease for the rest of this square's grow cycle
+      pesticide: { type: Boolean, default: false }, // single-use shield - persists across misses, consumed only when it actually blocks a hit (see resolveGardenSquare)
+      fungicide: { type: Boolean, default: false }, // single-use shield - persists across misses, consumed only when it actually blocks a hit (see resolveGardenSquare)
       fertilized: { type: Boolean, default: false }, // single-use - already applied, can't be bought again on this crop
+      bonemeal: { type: Boolean, default: false }, // single-use - speeds up this square's watering cooldown, see effectiveWaterCooldownMs
     },
     status: { type: String, enum: ["empty", "growing", "ready", "dead"], default: "empty" },
   },
@@ -381,31 +396,45 @@ var xenCasinoGardenStateSchema = new mongoose.Schema({
 });
 
 // Advances one growing square against `now`: rolls vermin/disease once per completed
-// GARDEN_WATER_COOLDOWN_MS tick since planting (or the last roll) - catching up
-// correctly across any gap, same pattern as resolvePrinterRun below - then, once a full
-// GARDEN_NEGLECT_GRACE_MS has passed with zero watering, applies one decay tick per
-// completed GARDEN_DECAY_TICK_MS since the grace period ended: -1 waterCount, or death
-// if waterCount is already 0. A vermin hit raises `waterAmount` by 1 (needs one more
-// watering to mature); disease kills outright, independent of decay. Flips growing ->
-// ready once `waterCount` reaches `waterAmount`. No-op for any square not currently
-// growing. Mutates in place; returns whether anything changed.
+// cooldown tick since planting (or the last roll) - catching up correctly across any gap,
+// same pattern as resolvePrinterRun below - then, once a full GARDEN_NEGLECT_GRACE_MS has
+// passed with zero watering, applies one decay tick per completed GARDEN_DECAY_TICK_MS
+// since the grace period ended: -1 waterCount, or death if waterCount is already 0. A
+// vermin hit raises `waterAmount` by 1 (needs one more watering to mature); disease kills
+// outright, independent of decay. Pesticide/fungicide are a shield, not a per-check
+// coin flip: the hazard roll happens on every tick same as always, protected or not, and
+// a miss leaves the shield untouched (it holds across as many ticks/phases as it takes) -
+// it's only consumed the moment a roll actually would have hit, absorbing that one hit
+// and then flipping protection.pesticide/fungicide back to false. Flips growing -> ready
+// once `waterCount` reaches `waterAmount`. No-op for any square not currently growing.
+// Mutates in place; returns whether anything changed.
 function resolveGardenSquare(square, now) {
   if (square.status !== "growing") {
     return false;
   }
   var changed = false;
+  var cooldownMs = effectiveWaterCooldownMs(square);
 
   var tick = new Date((square.lastCareCheckAt || square.plantedAt).getTime());
-  while (now.getTime() - tick.getTime() >= GARDEN_WATER_COOLDOWN_MS) {
-    tick = new Date(tick.getTime() + GARDEN_WATER_COOLDOWN_MS);
+  while (now.getTime() - tick.getTime() >= cooldownMs) {
+    tick = new Date(tick.getTime() + cooldownMs);
     changed = true;
-    if (!square.protection.fungicide && Math.random() < square.diseaseChance) {
-      square.status = "dead";
-      square.lastCareCheckAt = tick;
-      return true;
+    if (Math.random() < square.diseaseChance) {
+      if (square.protection.fungicide) {
+        square.protection.fungicide = false; // consumed - it just blocked an actual hit
+      } else {
+        square.status = "dead";
+        square.lastCareCheckAt = tick;
+        return true;
+      }
     }
-    if (!square.protection.pesticide && Math.random() < square.verminChance) {
-      square.waterAmount += 1;
+    if (Math.random() < square.verminChance) {
+      if (square.protection.pesticide) {
+        square.protection.pesticide = false; // consumed - it just blocked an actual hit
+      } else {
+        square.waterAmount += 1;
+        square.verminHits += 1;
+      }
     }
   }
   if (changed) {
@@ -435,7 +464,7 @@ function resolveGardenSquare(square, now) {
   // Even once fully watered, the plot still needs the same cooldown to pass since that
   // final watering before it's actually ready - matches the wait between every other
   // watering rather than finishing the instant the last one lands (see statics.water).
-  if (square.waterCount >= square.waterAmount && now.getTime() - neglectAnchor.getTime() >= GARDEN_WATER_COOLDOWN_MS) {
+  if (square.waterCount >= square.waterAmount && now.getTime() - neglectAnchor.getTime() >= cooldownMs) {
     square.status = "ready";
     changed = true;
   }
@@ -453,11 +482,12 @@ function clearGardenSquare(square) {
   square.cost = 0;
   square.waterAmount = 0;
   square.waterCount = 0;
+  square.verminHits = 0;
   square.verminChance = 0;
   square.diseaseChance = 0;
   square.baseMultiplier = 0;
   square.variance = 0;
-  square.protection = { pesticide: false, fungicide: false, fertilized: false };
+  square.protection = { pesticide: false, fungicide: false, fertilized: false, bonemeal: false };
   square.status = "empty";
 }
 
@@ -498,21 +528,23 @@ xenCasinoGardenStateSchema.statics.plant = async function (userId, squareId, see
   square.cost = tier.cost;
   square.waterAmount = tier.waterAmount;
   square.waterCount = 0; // planting does NOT count as a watering - the player must water it themselves
+  square.verminHits = 0;
   square.verminChance = tier.verminChance;
   square.diseaseChance = tier.diseaseChance;
   square.baseMultiplier = tier.baseMultiplier;
   square.variance = tier.variance;
-  square.protection = { pesticide: false, fungicide: false, fertilized: false };
+  square.protection = { pesticide: false, fungicide: false, fertilized: false, bonemeal: false };
   square.status = "growing";
   await doc.save();
   return square;
 };
 
-// The one place the 1h-per-square cooldown is enforced - rejects (returns null) if this
-// square was already watered within the last GARDEN_WATER_COOLDOWN_MS, so the route can
-// respond with a clear "still on cooldown" 400 rather than silently no-op'ing. The very
-// first watering (lastWateredAt still null - planting no longer auto-waters) is always
-// allowed immediately; the cooldown only applies between waterings.
+// The one place the per-square cooldown is enforced - rejects (returns null) if this
+// square was already watered within its effectiveWaterCooldownMs (shorter than the base
+// GARDEN_WATER_COOLDOWN_MS once bonemeal has been applied), so the route can respond with
+// a clear "still on cooldown" 400 rather than silently no-op'ing. The very first watering
+// (lastWateredAt still null - planting no longer auto-waters) is always allowed
+// immediately; the cooldown only applies between waterings.
 xenCasinoGardenStateSchema.statics.water = async function (userId, squareId) {
   var doc = await this.getState(userId);
   var square = doc.squares.find(function (s) { return s.squareId === squareId; });
@@ -520,7 +552,7 @@ xenCasinoGardenStateSchema.statics.water = async function (userId, squareId) {
     return null;
   }
   var now = new Date();
-  if (square.lastWateredAt && now.getTime() - square.lastWateredAt.getTime() < GARDEN_WATER_COOLDOWN_MS) {
+  if (square.lastWateredAt && now.getTime() - square.lastWateredAt.getTime() < effectiveWaterCooldownMs(square)) {
     return null;
   }
   square.lastWateredAt = now;
@@ -533,19 +565,29 @@ xenCasinoGardenStateSchema.statics.water = async function (userId, squareId) {
   return square;
 };
 
-// `item` is "pesticide" (blocks vermin), "fungicide" (blocks disease), or "fertilizer"
-// (single-use, immediately reduces the remaining waterAmount by 1, floored at 1 - it
-// doesn't skip watering, just shortens how many are needed). Each is single-use per
-// crop - already-true guards against paying twice for the same effect on one plant.
+// `item` is "pesticide" (a shield against vermin - stays active through any number of
+// misses and is only consumed the moment it actually blocks a hit, see
+// resolveGardenSquare), "fungicide" (same, but for disease), "fertilizer" (immediately
+// reduces the remaining waterAmount by 1 - it doesn't skip watering, just shortens how
+// many are needed), or "bonemeal" (speeds up this square's watering cooldown from now on,
+// permanently for the rest of this crop - see effectiveWaterCooldownMs, applied via the
+// protection.bonemeal flag set below with no extra state to mutate). Each is single-use
+// per crop - already-true guards against paying twice while one's still active/pending.
+// Fertilizer is additionally refused once only the last growth stage is left, so the
+// final stage always has to be reached by an actual watering rather than bought away
+// entirely.
 xenCasinoGardenStateSchema.statics.protect = async function (userId, squareId, item) {
   var doc = await this.getState(userId);
   var square = doc.squares.find(function (s) { return s.squareId === squareId; });
   if (!square || square.status !== "growing" || square.protection[item]) {
     return null;
   }
+  if (item === "fertilizer" && square.waterAmount - square.waterCount <= 1) {
+    return null;
+  }
   square.protection[item] = true;
   if (item === "fertilizer") {
-    square.waterAmount = Math.max(1, square.waterAmount - 1);
+    square.waterAmount -= 1;
   }
   await doc.save();
   return square;
@@ -649,7 +691,7 @@ xenCasinoPrinterStateSchema.statics.getState = async function (userId) {
 // (and clamped) by casinoPrinter.ts from the sum of its 3 chosen parts' rateBonus/
 // raidBonus - stored here so every later read (currentMultiplier, printerRaidChance)
 // uses this specific run's curve, not the global constants.
-xenCasinoPrinterStateSchema.statics.startRun = async function (userId, partsCost, peakDurationMs, peakMultiplier, raidMultiplier, partKeys) {
+xenCasinoPrinterStateSchema.statics.startRun = async function (userId, partsCost, peakDurationMs, peakMultiplier, raidMultiplier, partKeys, usedMachineUpgrade) {
   var doc = await this.getState(userId);
   if (doc.run) {
     return null;
@@ -662,6 +704,7 @@ xenCasinoPrinterStateSchema.statics.startRun = async function (userId, partsCost
     peakMultiplier: peakMultiplier,
     raidMultiplier: raidMultiplier,
     partKeys: partKeys,
+    usedMachineUpgrade: !!usedMachineUpgrade, // just for display (see runView) - already baked into peakMultiplier above
     lastBribeAt: now,
     lastRiskRollAt: now,
     raidedAt: null,
@@ -700,17 +743,20 @@ xenCasinoPrinterStateSchema.statics.clearRun = async function (userId) {
 var XenCasinoPrinterState = mongoose.model("XenCasinoPrinterState", xenCasinoPrinterStateSchema);
 
 // ---------------------------------------------------------------------------------------
-// Chip Mine - a dark, side-view shaft the player actively digs into. Down digs consume a
-// ladder and enter a higher risk band; sideways digs don't. Every tile the player has
-// ever dug stays visible permanently (no re-hiding your own history behind fog); torches
-// instead scout a preview of not-yet-dug neighboring tiles as you move - showing whether
-// they hold ore before you commit to digging them. Cave-in risk is never previewable,
-// only ore presence is. Ore/cave-in chance by depth and torch radius by level are
-// structural, depth/position-derived math that lives here (like the Money Printer's
-// raid-risk formula); item prices and payout $ amounts stay route-owned economics.
+// Chip Mine - a dark, side-view shaft the player actively digs into. Moving through
+// tunnels you've already cleared is always free (no risk, no dig spent, no equipment
+// touched) - only pushing into new, undug territory is a real "dig": it spends one of
+// today's digs, needs a ladder to go down, and resolves whatever's actually there (heavy
+// stone, a cave-in, or a gem). Every tile the player has ever dug stays visible
+// permanently. There's no passive/automatic scouting anymore - a Flare is the only way
+// to preview a tile (its gem tier, or whether it's heavy stone) before committing to dig
+// it; blind digging is the default, same as it's always been for cave-in risk. Ore
+// tier/cave-in/heavy-stone chance by depth are structural, depth-derived math that lives
+// here (like the Money Printer's raid-risk formula); item prices and payout $ amounts
+// stay route-owned economics.
 // ---------------------------------------------------------------------------------------
 
-var MINE_OUTCOME = { ORE: "ore", EMPTY: "empty", CAVE_IN: "cave_in" };
+var MINE_OUTCOME = { ORE: "ore", EMPTY: "empty", CAVE_IN: "cave_in", STONE_CLEARED: "stone_cleared", MOVE: "move" };
 
 var MINE_BASE_ORE_CHANCE = 0.3;
 var MINE_ORE_CHANCE_PER_DEPTH = 0.01;
@@ -718,9 +764,11 @@ var MINE_MAX_ORE_CHANCE = 0.6;
 var MINE_BASE_CAVE_IN_CHANCE = 0.03;
 var MINE_CAVE_IN_CHANCE_PER_DEPTH = 0.015;
 var MINE_MAX_CAVE_IN_CHANCE = 0.4;
-var MINE_BASE_TORCH_RADIUS = 1;
+var MINE_BASE_STONE_CHANCE = 0.05;
+var MINE_STONE_CHANCE_PER_DEPTH = 0.008;
+var MINE_MAX_STONE_CHANCE = 0.35;
 
-// A sideways dig uses the *current* depth's cave-in chance; a down dig uses the
+// A sideways dig uses the *current* depth's cave-in/stone chance; a down dig uses the
 // *target* (deeper) depth's - this is what makes "down" the risk-escalating direction
 // and "side" the flat-risk one (see casinoMine.ts for how depth is picked per direction).
 function mineOreChanceForDepth(depth) {
@@ -729,26 +777,52 @@ function mineOreChanceForDepth(depth) {
 function mineCaveInChanceForDepth(depth) {
   return Math.min(MINE_MAX_CAVE_IN_CHANCE, MINE_BASE_CAVE_IN_CHANCE + depth * MINE_CAVE_IN_CHANCE_PER_DEPTH);
 }
-// No more torch "level" to grind - radius is flat as long as there's fuel left. A Flare
-// (see useFlare below) is the one-off way to see further, bought fresh each time.
-function mineTorchRadiusFor(doc) {
-  return doc.torchFuel > 0 ? MINE_BASE_TORCH_RADIUS : 0;
+function mineStoneChanceForDepth(depth) {
+  return Math.min(MINE_MAX_STONE_CHANCE, MINE_BASE_STONE_CHANCE + depth * MINE_STONE_CHANCE_PER_DEPTH);
 }
 
-// "scouted": ground truth (hasOre) rolled and cached, not yet dug - a torch preview.
-// "mined": actually dug (ore collected if present, or was empty) - resolved for good.
-// "collapsed": a cave-in happened here - a hazard marker, unrelated to ore/scouting.
+// Ordered shallowest-to-deepest on purpose - pickOreTier below walks this to find the
+// slice unlocked at a given depth. `minDepth`/`weight` are structural (what's findable
+// where), so they live here; each tier's $ value multiplier is economics and stays
+// route-owned (see MINE_ORE_TIER_VALUE in casinoMine.ts).
+var MINE_ORE_TIERS = [
+  { key: "copper", label: "Copper Ore", minDepth: 0, weight: 100 },
+  { key: "silver", label: "Silver Ore", minDepth: 4, weight: 55 },
+  { key: "gold", label: "Gold Nugget", minDepth: 10, weight: 30 },
+  { key: "emerald", label: "Emerald", minDepth: 18, weight: 15 },
+  { key: "ruby", label: "Ruby", minDepth: 26, weight: 8 },
+  { key: "diamond", label: "Diamond", minDepth: 35, weight: 3 },
+];
+
+// Weighted-random among every tier unlocked at `depth` - shallow digs only ever roll
+// Copper (the only tier with minDepth 0), deeper digs add rarer tiers into the pool, so
+// both the chance of a good find and its expected value rise with depth, with no
+// separate formula needed - it falls straight out of the min-depth gate.
+function pickOreTier(depth) {
+  var eligible = MINE_ORE_TIERS.filter(function (t) { return t.minDepth <= depth; });
+  var totalWeight = eligible.reduce(function (sum, t) { return sum + t.weight; }, 0);
+  var roll = Math.random() * totalWeight;
+  for (var i = 0; i < eligible.length; i++) {
+    roll -= eligible[i].weight;
+    if (roll <= 0) {
+      return eligible[i].key;
+    }
+  }
+  return eligible[eligible.length - 1].key;
+}
+
+// "scouted": ground truth (oreTier) rolled and cached via a Flare, not yet dug. "blocked":
+// rolled/discovered as heavy stone (via a Flare or a rejected dig attempt) - needs an
+// Explosive to clear, not diggable normally. "mined": actually dug and resolved for good
+// (a gem collected if oreTier is set, or was empty, or was cleared stone). "collapsed": a
+// cave-in happened here - a hazard marker, unrelated to ore/scouting.
 var mineTileSchema = new mongoose.Schema(
   {
     x: { type: Number, required: true },
     y: { type: Number, required: true },
-    hasOre: Boolean,
-    // Defaulted rather than required: existing tiles saved before this field existed
-    // (back when a tile only had `mined: Boolean`) would otherwise fail schema
-    // validation on the very next save and crash every read through getState() for any
-    // player who'd already dug in the mine. "mined" is the right fallback for that old
-    // data anyway - the "scouted" preview concept didn't exist yet.
-    status: { type: String, enum: ["scouted", "mined", "collapsed"], default: "mined" },
+    oreTier: { type: String, default: null }, // one of MINE_ORE_TIERS' keys, or null (empty/stone/collapsed)
+    isHeavyStone: { type: Boolean, default: false },
+    status: { type: String, enum: ["scouted", "blocked", "mined", "collapsed"], default: "mined" },
   },
   { _id: false }
 );
@@ -757,29 +831,28 @@ var xenCasinoMineStateSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
   positionX: { type: Number, default: 0 },
   positionY: { type: Number, default: 0 }, // depth - increases downward from the shaft entrance at 0
-  dugTiles: { type: [mineTileSchema], default: [] }, // both scouted-but-undug and actually-dug tiles
+  dugTiles: { type: [mineTileSchema], default: [] }, // scouted/blocked/mined/collapsed tiles
   digsToday: { type: Number, default: 0 },
   digsDate: { type: String, default: null }, // "YYYY-MM-DD" (UTC) digsToday applies to, lazy-reset like the daily quest
   ladderCount: { type: Number, default: 3 }, // a few free starter ladders
-  torchFuel: { type: Number, default: 20 },
-  explosiveCount: { type: Number, default: 0 }, // single-use: blasts through once digsToday is at the daily cap
+  explosiveCount: { type: Number, default: 0 }, // single-use: blasts through the daily dig cap, a missing ladder, and/or a heavy-stone tile, any combination at once
+  reinforcementCount: { type: Number, default: 0 }, // single-use shield - stays armed through any number of safe digs, only consumed the moment it actually blocks a cave-in
 });
 
 // Reveals not-yet-known tiles within `radius` of `doc`'s position, rolling and caching
-// each one's ground-truth `hasOre` (using the same depth-based chance a dig would use) as
-// a "scouted" tile. When `consumeFuel` is true (normal torch scouting), one unit of
-// torchFuel is spent per newly revealed tile and the pass stops once fuel runs out; a
-// Flare pass (see useFlare below) reveals everything in its wider radius for free since
-// it was already paid for up front. Already-known tiles (scouted, mined, or collapsed)
-// are never touched or re-charged. Mutates `doc.dugTiles`/`doc.torchFuel` in place;
-// returns whether anything changed.
-function scoutTilesInRadius(doc, radius, consumeFuel) {
+// each one's ground truth - whether it's heavy stone, and if not, its ore tier if any
+// (using the same depth-based chances a dig would use) - as a "scouted" (has a gem, or
+// empty) or "blocked" (heavy stone) tile. Already-known tiles (scouted, blocked, mined,
+// or collapsed) are never touched or re-rolled. Cave-in risk is deliberately never
+// rolled/revealed here - it isn't knowable until you actually commit to the dig. Mutates
+// `doc.dugTiles` in place; returns whether anything changed.
+function scoutTilesInRadius(doc, radius) {
   if (radius <= 0) {
     return false;
   }
   var changed = false;
-  for (var dx = -radius; dx <= radius && (!consumeFuel || doc.torchFuel > 0); dx++) {
-    for (var dy = -radius; dy <= radius && (!consumeFuel || doc.torchFuel > 0); dy++) {
+  for (var dx = -radius; dx <= radius; dx++) {
+    for (var dy = -radius; dy <= radius; dy++) {
       if (dx === 0 && dy === 0) {
         continue;
       }
@@ -792,9 +865,11 @@ function scoutTilesInRadius(doc, radius, consumeFuel) {
       if (known) {
         continue;
       }
-      doc.dugTiles.push({ x: x, y: y, hasOre: Math.random() < mineOreChanceForDepth(y), status: "scouted" });
-      if (consumeFuel) {
-        doc.torchFuel -= 1;
+      if (Math.random() < mineStoneChanceForDepth(y)) {
+        doc.dugTiles.push({ x: x, y: y, oreTier: null, isHeavyStone: true, status: "blocked" });
+      } else {
+        var hasOre = Math.random() < mineOreChanceForDepth(y);
+        doc.dugTiles.push({ x: x, y: y, oreTier: hasOre ? pickOreTier(y) : null, isHeavyStone: false, status: "scouted" });
       }
       changed = true;
     }
@@ -802,88 +877,125 @@ function scoutTilesInRadius(doc, radius, consumeFuel) {
   return changed;
 }
 
-function scoutAroundPosition(doc) {
-  return scoutTilesInRadius(doc, mineTorchRadiusFor(doc), true);
-}
-
 xenCasinoMineStateSchema.statics.getState = async function (userId) {
   var doc = await this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
-  var changed = false;
   var today = todayKey();
   if (doc.digsDate !== today) {
     doc.digsDate = today;
     doc.digsToday = 0;
-    changed = true;
-  }
-  if (scoutAroundPosition(doc)) {
-    changed = true;
-  }
-  if (changed) {
     await doc.save();
   }
   return doc;
 };
 
-// Re-validates quota/ladder availability itself against a fresh read (rather than
+// Re-validates quota/ladder/stone availability itself against a fresh read (rather than
 // trusting an earlier GET), rolls the outcome, and persists the result - all in one call
 // so a dig is never left half-applied. `dailyDigCap` is route-owned economics and passed
-// in; ore/cave-in chance are computed here from depth. Once digsToday is already at the
-// cap, a single-use explosive (bought fresh, doesn't carry over) blasts through for one
-// more dig instead of blocking outright. If the target tile was already `scouted`, its
-// cached `hasOre` is reused instead of rolling again - a torch preview is a real answer,
-// not just flavor. The route calls getState again right after this to build its
-// response, which is what actually runs the next scouting pass around the (possibly new)
-// position - this static only resolves the one tile being dug.
+// in; ore/cave-in/stone chance are computed here from depth.
+//
+// Moving into an already-`mined` tile is always free (no dig spent, nothing rolled) -
+// this is the only path "up" ever takes, since you can never dig upward (the tile above
+// was necessarily already mined to get here). Anything else targeting a new/undug tile
+// is a real dig: heavy stone is resolved first (a pure obstacle, no ore/cave-in possible
+// on it), then - if not stone - the cave-in roll (blockable once by a Reinforcement,
+// which stays armed through any number of safe digs and is only consumed on an actual
+// hit, same shield semantics as Garden's pesticide/fungicide), then the gem tier. A
+// single-use Explosive is a universal blocker-buster: if the daily cap, a missing
+// ladder, and/or heavy stone are in the way (any combination), one Explosive clears all
+// of them at once for this one dig. If the target tile was already `scouted` (via a
+// Flare), its cached ground truth is reused instead of rolling again. The route calls
+// getState again right after this to build its response - this static only resolves the
+// one tile being moved into or dug.
 xenCasinoMineStateSchema.statics.applyDig = async function (userId, params) {
   var doc = await this.getState(userId);
+  var targetX = doc.positionX + (params.direction === "left" ? -1 : params.direction === "right" ? 1 : 0);
+  var targetY = doc.positionY + (params.direction === "down" ? 1 : params.direction === "up" ? -1 : 0);
+  if (targetY < 0) {
+    return { error: "invalid_direction" };
+  }
+  var existing = doc.dugTiles.find(function (t) { return t.x === targetX && t.y === targetY; });
+
+  if (existing && existing.status === "mined") {
+    doc.positionX = targetX;
+    doc.positionY = targetY;
+    await doc.save();
+    return { outcome: MINE_OUTCOME.MOVE, oreTier: null, position: { x: targetX, y: targetY }, digsToday: doc.digsToday, targetY: targetY, usedExplosive: false };
+  }
+  if (params.direction === "up") {
+    return { error: "no_tunnel" };
+  }
+
+  var isHeavyStone = existing ? existing.isHeavyStone : Math.random() < mineStoneChanceForDepth(targetY);
+  var blockedByCap = doc.digsToday >= params.dailyDigCap;
+  var blockedByLadder = params.direction === "down" && doc.ladderCount <= 0;
   var usedExplosive = false;
-  if (doc.digsToday >= params.dailyDigCap) {
+  if (blockedByCap || blockedByLadder || isHeavyStone) {
     if (doc.explosiveCount <= 0) {
-      return { error: "no_digs_remaining" };
+      if (!existing) {
+        // Cache the discovery even on a rejected attempt, same as a Flare scout would -
+        // no need to re-discover this tile's stone status next time.
+        doc.dugTiles.push({ x: targetX, y: targetY, oreTier: null, isHeavyStone: true, status: "blocked" });
+        await doc.save();
+      }
+      return { error: isHeavyStone ? "blocked_by_stone" : blockedByCap ? "no_digs_remaining" : "no_ladders" };
     }
     usedExplosive = true;
   }
-  if (params.direction === "down" && doc.ladderCount <= 0) {
-    return { error: "no_ladders" };
-  }
-
-  var targetX = doc.positionX + (params.direction === "left" ? -1 : params.direction === "right" ? 1 : 0);
-  var targetY = doc.positionY + (params.direction === "down" ? 1 : 0);
-  var existing = doc.dugTiles.find(function (t) { return t.x === targetX && t.y === targetY; });
 
   doc.digsToday += 1;
   if (usedExplosive) {
     doc.explosiveCount -= 1;
   }
-  if (params.direction === "down") {
+  if (params.direction === "down" && !usedExplosive) {
     doc.ladderCount -= 1;
   }
 
   var outcome;
-  if (Math.random() < mineCaveInChanceForDepth(targetY)) {
-    outcome = MINE_OUTCOME.CAVE_IN;
-    doc.digsToday = params.dailyDigCap; // a collapse locks out the rest of today's digs
-    if (existing) {
-      existing.status = "collapsed";
-    } else {
-      doc.dugTiles.push({ x: targetX, y: targetY, hasOre: false, status: "collapsed" });
-    }
-  } else {
-    var hasOre = existing && existing.status === "scouted" ? existing.hasOre : Math.random() < mineOreChanceForDepth(targetY);
-    outcome = hasOre ? MINE_OUTCOME.ORE : MINE_OUTCOME.EMPTY;
+  var resolvedOreTier = null;
+  if (isHeavyStone) {
+    // A pure obstacle - clearing it always just opens the passage through, never rolls
+    // ore or a cave-in.
+    outcome = MINE_OUTCOME.STONE_CLEARED;
     if (existing) {
       existing.status = "mined";
-      existing.hasOre = hasOre;
+      existing.isHeavyStone = false;
     } else {
-      doc.dugTiles.push({ x: targetX, y: targetY, hasOre: hasOre, status: "mined" });
+      doc.dugTiles.push({ x: targetX, y: targetY, oreTier: null, isHeavyStone: false, status: "mined" });
     }
     doc.positionX = targetX;
     doc.positionY = targetY;
+  } else {
+    var caveIn = Math.random() < mineCaveInChanceForDepth(targetY);
+    if (caveIn && doc.reinforcementCount > 0) {
+      doc.reinforcementCount -= 1;
+      caveIn = false;
+    }
+    if (caveIn) {
+      outcome = MINE_OUTCOME.CAVE_IN;
+      doc.digsToday = params.dailyDigCap; // a collapse locks out the rest of today's digs
+      if (existing) {
+        existing.status = "collapsed";
+      } else {
+        doc.dugTiles.push({ x: targetX, y: targetY, oreTier: null, isHeavyStone: false, status: "collapsed" });
+      }
+    } else {
+      resolvedOreTier = existing && existing.status === "scouted" ? existing.oreTier : (Math.random() < mineOreChanceForDepth(targetY) ? pickOreTier(targetY) : null);
+      outcome = resolvedOreTier ? MINE_OUTCOME.ORE : MINE_OUTCOME.EMPTY;
+      if (existing) {
+        existing.status = "mined";
+        existing.oreTier = resolvedOreTier;
+      } else {
+        doc.dugTiles.push({ x: targetX, y: targetY, oreTier: resolvedOreTier, isHeavyStone: false, status: "mined" });
+      }
+      doc.positionX = targetX;
+      doc.positionY = targetY;
+    }
   }
 
   await doc.save();
   return {
     outcome: outcome,
+    oreTier: resolvedOreTier,
     position: { x: doc.positionX, y: doc.positionY },
     digsToday: doc.digsToday,
     targetY: targetY,
@@ -895,22 +1007,33 @@ xenCasinoMineStateSchema.statics.addEquipment = async function (userId, item, am
   var doc = await this.getState(userId);
   if (item === "ladder") {
     doc.ladderCount += amount;
-  } else if (item === "torch") {
-    doc.torchFuel += amount;
   } else if (item === "explosive") {
     doc.explosiveCount += amount;
+  } else if (item === "reinforcement") {
+    doc.reinforcementCount += amount;
   }
   await doc.save();
   return doc;
 };
 
-// A Flare is bought and burned in the same action - a one-off wider scouting pass
-// (radius is route-owned economics, passed in) around the current position, free of
-// torchFuel cost since it's already paid for. Nothing persists afterward; buy another to
-// do it again.
+// A Flare is bought and burned in the same action - the only way to preview a tile (its
+// gem tier, or whether it's heavy stone) before committing to dig it, now that there's
+// no passive/automatic scouting. `flareRadius` is route-owned economics, passed in.
 xenCasinoMineStateSchema.statics.useFlare = async function (userId, flareRadius) {
   var doc = await this.getState(userId);
-  scoutTilesInRadius(doc, flareRadius, false);
+  scoutTilesInRadius(doc, flareRadius);
+  await doc.save();
+  return doc;
+};
+
+// Wipes the whole dug map and returns to the shaft entrance - equipment inventory and
+// today's dig count are untouched, only the physical layout/position resets. The route
+// charges a flat cheddar fee for this before calling it.
+xenCasinoMineStateSchema.statics.resetMap = async function (userId) {
+  var doc = await this.getState(userId);
+  doc.dugTiles = [];
+  doc.positionX = 0;
+  doc.positionY = 0;
   await doc.save();
   return doc;
 };
@@ -927,12 +1050,15 @@ module.exports = {
   // and render the same cooldown it's actually enforcing, rather than a second copy.
   GARDEN_WATER_COOLDOWN_MS: GARDEN_WATER_COOLDOWN_MS,
   GARDEN_NEGLECT_GRACE_MS: GARDEN_NEGLECT_GRACE_MS,
+  // Exported so casinoGarden.ts can render/pre-check the same per-square cooldown
+  // (shorter once bonemeal is applied) it's actually enforcing, rather than a second copy.
+  effectiveWaterCooldownMs: effectiveWaterCooldownMs,
   XenCasinoPrinterState,
   XenCasinoMineState,
   MINE_OUTCOME: MINE_OUTCOME,
-  // Exported so casinoMine.ts can render the same visibility radius applyDig/getState
-  // actually scout against, rather than a second copy of the formula.
-  mineTorchRadiusFor: mineTorchRadiusFor,
+  // Exported so casinoMine.ts can build its own $-value-per-tier table and render tier
+  // labels/unlock depths, without duplicating the minDepth/weight gating logic here.
+  MINE_ORE_TIERS: MINE_ORE_TIERS,
   // Exported so casinoPrinter.ts can render the same raid-risk percentage it's actually
   // being rolled against, rather than approximating it with a second copy of the formula.
   PRINTER_RISK_RAMP_MS: PRINTER_RISK_RAMP_MS,

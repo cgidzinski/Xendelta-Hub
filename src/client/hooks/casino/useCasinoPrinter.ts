@@ -19,7 +19,9 @@ export interface PrinterRun {
     partsCost: number;
     peakAt: string;
     peakMultiplier: number;
-    parts: string[]; // labels of the 3 parts this run was started with
+    parts: PrinterPart[]; // full catalog entries for the 3 parts this run was started with
+    usedMachineUpgrade: boolean;
+    machineUpgradeRateBonus: number;
     lastBribeAt: string;
     bribeCount: number;
     nextBribeCost: number;

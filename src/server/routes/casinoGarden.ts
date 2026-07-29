@@ -2,13 +2,17 @@
  * Casino Garden - a 3x3 grid, one seed per square, growing in parallel. Each seed tier has
  * its own cost, watering amount, vermin/disease risk, and payout curve - so "different
  * plant, different game" rather than one economy with cosmetic reskins. Watering a square
- * is on a uniform 1-hour-per-square cooldown (GARDEN_WATER_COOLDOWN_MS). There's no
+ * is on a base 1-hour-per-square cooldown (GARDEN_WATER_COOLDOWN_MS), shorter once
+ * bonemeal has been bought for that square (see effectiveWaterCooldownMs). There's no
  * penalty at all for the first 24h a square goes unwatered; past that, it loses one
  * delivered watering every hour until it's rewatered or runs out and dies. Unprotected
  * squares also roll a vermin (adds one more required watering) or disease (kills)
- * chance once per cooldown tick, countered by purchasable pesticide/fungicide.
- * Fertilizer is a third single-use item that instead shortens the remaining waterings
- * needed. A square is ready once it's received its required number of waterings. Harvest pays cost *
+ * chance once per cooldown tick, countered by purchasable pesticide/fungicide - each is a
+ * shield that stays up through any number of misses and is only consumed the moment it
+ * actually blocks a hit, not a one-shot that expires on the very next check regardless.
+ * Fertilizer instead shortens the remaining waterings needed; bonemeal speeds up every
+ * watering cooldown on that square from then on. A square is ready once it's received
+ * its required number of waterings. Harvest pays cost *
  * baseMultiplier * a random swing of +/- variance - the guaranteed baseline is the
  * tier's baseMultiplier, the variance is how much casino luck can move it either
  * direction. A dead square (from decay or disease) needs a paid cleanup before replanting.
@@ -20,9 +24,16 @@ import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 const { User } = require("../models/user");
-const { XenCasinoGardenState, XenCasinoActivity, GARDEN_WATER_COOLDOWN_MS, GARDEN_NEGLECT_GRACE_MS } = require("../models/xenCasino");
+const {
+    XenCasinoGardenState,
+    XenCasinoActivity,
+    GARDEN_WATER_COOLDOWN_MS,
+    GARDEN_NEGLECT_GRACE_MS,
+    effectiveWaterCooldownMs,
+} = require("../models/xenCasino");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../utils/weeabetsClient";
 import { requireGameEnabled } from "../utils/casinoStatus";
+import { recordCasinoRoundPlayed } from "../utils/dailyQuest";
 
 const SLUG = "garden";
 
@@ -50,22 +61,34 @@ function seedTier(params: Omit<SeedTier, "growDurationMs">): SeedTier {
 //  - Golden Vine: the expensive slow-grower (most waterings needed), moderate risk,
 //    biggest base multiplier and widest variance - the true high-roller plant.
 export const SEED_TIERS: Record<string, SeedTier> = {
-    sprout: seedTier({ key: "sprout", label: "Sprout", cost: 500, waterAmount: 2, verminChance: 0.05, diseaseChance: 0.02, baseMultiplier: 1.3, variance: 0.3 }),
-    clover: seedTier({ key: "clover", label: "Lucky Clover", cost: 2000, waterAmount: 4, verminChance: 0.08, diseaseChance: 0.03, baseMultiplier: 1.6, variance: 0.6 }),
-    nightshade: seedTier({ key: "nightshade", label: "Nightshade", cost: 3500, waterAmount: 5, verminChance: 0.15, diseaseChance: 0.08, baseMultiplier: 2.2, variance: 0.4 }),
-    "golden-vine": seedTier({ key: "golden-vine", label: "Golden Vine", cost: 8000, waterAmount: 10, verminChance: 0.1, diseaseChance: 0.05, baseMultiplier: 3.0, variance: 0.9 }),
+    sprout: seedTier({ key: "sprout", label: "Sprout", cost: 1000, waterAmount: 2, verminChance: 0.05, diseaseChance: 0.02, baseMultiplier: 1.3, variance: 0.3 }),
+    clover: seedTier({ key: "clover", label: "Lucky Clover", cost: 4000, waterAmount: 4, verminChance: 0.08, diseaseChance: 0.03, baseMultiplier: 1.6, variance: 0.6 }),
+    nightshade: seedTier({ key: "nightshade", label: "Nightshade", cost: 7000, waterAmount: 5, verminChance: 0.15, diseaseChance: 0.08, baseMultiplier: 2.2, variance: 0.4 }),
+    "golden-vine": seedTier({ key: "golden-vine", label: "Golden Vine", cost: 16000, waterAmount: 10, verminChance: 0.1, diseaseChance: 0.05, baseMultiplier: 3.0, variance: 0.9 }),
 };
 
-// "fertilizer" is handled specially by XenCasinoGardenState.protect (reduces waterAmount
-// by 1, floored at 1) rather than blocking a hazard like pesticide/fungicide do.
-const PROTECTION_COST: Record<"pesticide" | "fungicide" | "fertilizer", number> = {
-    pesticide: 300,
-    fungicide: 400,
-    fertilizer: 350,
+// "fertilizer" and "bonemeal" are handled specially by XenCasinoGardenState.protect -
+// fertilizer reduces waterAmount by 1 instead of blocking a hazard like pesticide/fungicide
+// do, and bonemeal speeds up the square's watering cooldown from then on (25% - see
+// GARDEN_BONEMEAL_GROWTH_BOOST in the model).
+const PROTECTION_COST: Record<"pesticide" | "fungicide" | "fertilizer" | "bonemeal", number> = {
+    pesticide: 600,
+    fungicide: 800,
+    fertilizer: 700,
+    bonemeal: 1200,
 };
 
 // Charged to clear out a dead plot (from decay or disease) before it can be replanted.
-const GARDEN_CLEANUP_FEE = 250;
+const GARDEN_CLEANUP_FEE = 1000;
+
+// Idempotency keys are capped at 64 chars by the transfer API - "fertilizer" pushed the
+// protect key over that limit, so every item gets a short form just for the key string.
+const PROTECT_KEY_ABBR: Record<"pesticide" | "fungicide" | "fertilizer" | "bonemeal", string> = {
+    pesticide: "pest",
+    fungicide: "fung",
+    fertilizer: "fert",
+    bonemeal: "bone",
+};
 
 function squareView(square: any) {
     return {
@@ -77,9 +100,15 @@ function squareView(square: any) {
         lastWateredAt: square.lastWateredAt,
         waterAmount: square.waterAmount,
         waterCount: square.waterCount,
+        verminHits: square.verminHits,
+        // Per-square, not the global base - shorter than GARDEN_WATER_COOLDOWN_MS once
+        // bonemeal has been applied to this crop.
+        waterCooldownMs: effectiveWaterCooldownMs(square),
         cost: square.cost,
         baseMultiplier: square.baseMultiplier,
         variance: square.variance,
+        verminChance: square.verminChance,
+        diseaseChance: square.diseaseChance,
         protection: square.protection,
         status: square.status,
     };
@@ -162,11 +191,12 @@ module.exports = function (app: express.Application) {
         const state = await XenCasinoGardenState.getState(userId);
         const before = state.squares.find((s: any) => s.squareId === squareId);
         if (before && before.status === "growing" && before.lastWateredAt) {
+            const cooldownMs = effectiveWaterCooldownMs(before);
             const msSinceWatered = Date.now() - new Date(before.lastWateredAt).getTime();
-            if (msSinceWatered < GARDEN_WATER_COOLDOWN_MS) {
+            if (msSinceWatered < cooldownMs) {
                 return res.status(400).json({
                     status: false,
-                    message: `Still on cooldown - wait ${Math.ceil((GARDEN_WATER_COOLDOWN_MS - msSinceWatered) / 60000)}m before watering again`,
+                    message: `Still on cooldown - wait ${Math.ceil((cooldownMs - msSinceWatered) / 60000)}m before watering again`,
                 });
             }
         }
@@ -180,7 +210,7 @@ module.exports = function (app: express.Application) {
 
     app.post("/api/casino/garden/protect", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
-        const { squareId, item } = req.body as { squareId: number; item: "pesticide" | "fungicide" | "fertilizer" };
+        const { squareId, item } = req.body as { squareId: number; item: "pesticide" | "fungicide" | "fertilizer" | "bonemeal" };
         const cost = PROTECTION_COST[item];
         if (!cost) {
             return res.status(400).json({ status: false, message: "Invalid protection item" });
@@ -202,7 +232,7 @@ module.exports = function (app: express.Application) {
                 fromAccountId: resolved.account.accountId,
                 toAccountId: xenCasinoAccountId,
                 amount: cost.toFixed(10),
-                key: `garden-protect-${userId}-${squareId}-${item}-${Date.now()}`,
+                key: `garden-protect-${userId}-${squareId}-${PROTECT_KEY_ABBR[item]}-${Date.now()}`,
                 note: `garden_protect_${item}`,
             });
 
@@ -212,7 +242,7 @@ module.exports = function (app: express.Application) {
                     fromAccountId: xenCasinoAccountId,
                     toAccountId: resolved.account.accountId,
                     amount: cost.toFixed(10),
-                    key: `garden-protect-refund-${userId}-${squareId}-${item}-${Date.now()}`,
+                    key: `garden-protect-rf-${userId}-${squareId}-${PROTECT_KEY_ABBR[item]}-${Date.now()}`,
                     note: "garden_protect_refund",
                 });
                 return res.status(400).json({ status: false, message: "Nothing growing here to protect" });
@@ -263,7 +293,7 @@ module.exports = function (app: express.Application) {
             });
 
             await XenCasinoGardenState.clearHarvestedSquare(userId, squareId);
-            await XenCasinoActivity.record({ game: SLUG, userId, wager: 0, payout });
+            await recordCasinoRoundPlayed(userId, { game: SLUG, wager: 0, payout });
 
             return res.json({ status: true, data: { payout, balance: result.toNewBalance } });
         } catch (err) {

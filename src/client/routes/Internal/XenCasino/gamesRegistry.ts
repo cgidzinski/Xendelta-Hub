@@ -7,6 +7,10 @@ export interface CasinoGameRegistryItem {
   description: string;
   type: CasinoGameType;
   price: number; // fixed ticket price, or a slot machine's base (1x) bet
+  // True for the persistent games (Garden/Printer/Mine), where `price` is only the
+  // cheapest way in (e.g. Garden's cheapest seed) rather than a fixed per-play cost -
+  // rendered as "X+ / play" instead of "X / play" so it doesn't read as a flat price.
+  priceFrom?: boolean;
 }
 
 export const CASINO_GAME_TYPE_LABELS: Record<CasinoGameType, string> = {
@@ -87,15 +91,17 @@ export const CASINO_GAMES_REGISTRY: CasinoGameRegistryItem[] = [
     path: "/internal/xencasino/games/garden",
     description: "Plant seeds across a 3x3 grid - water daily, guard against vermin and disease, and harvest for a payout.",
     type: "garden",
-    price: 500,
+    price: 1000, // cheapest seed (Sprout) - see SEED_TIERS in casinoGarden.ts
+    priceFrom: true,
   },
   {
     key: "printer",
     label: "Money Printer",
     path: "/internal/xencasino/games/printer",
-    description: "Install 3 parts and start a print run - let it age for a bigger payout, or cash out before rising raid risk seizes your rig.",
+    description: "Install up to 3 parts and start a print run - let it age for a bigger payout, or cash out before rising raid risk seizes your rig.",
     type: "printer",
-    price: 5000,
+    price: 5000, // roughly the cheapest 3-part run (3x Case Fan = 4800) - see PRINTER_PARTS in casinoPrinter.ts
+    priceFrom: true,
   },
   {
     key: "mine",
@@ -104,5 +110,6 @@ export const CASINO_GAMES_REGISTRY: CasinoGameRegistryItem[] = [
     description: "Dig a dark shaft for ore - down is riskier, sideways stays safe. Limited digs per day, buy ladders and torches.",
     type: "mine",
     price: 200,
+    priceFrom: true,
   },
 ];

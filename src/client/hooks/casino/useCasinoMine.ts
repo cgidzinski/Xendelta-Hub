@@ -8,10 +8,19 @@ import { casinoLedgerKeys } from "./useCasinoLedger";
 export interface MineTile {
     x: number;
     y: number;
-    hasOre: boolean;
-    // "scouted": a torch preview, not yet dug. "mined": actually dug (resolved for
-    // good). "collapsed": a cave-in marker.
-    status: "scouted" | "mined" | "collapsed";
+    oreTier: string | null;
+    isHeavyStone: boolean;
+    // "scouted": a Flare preview, not yet dug. "blocked": known heavy stone, needs an
+    // Explosive. "mined": actually dug (resolved for good, walking back through it is
+    // always free). "collapsed": a cave-in marker.
+    status: "scouted" | "blocked" | "mined" | "collapsed";
+}
+
+export interface MineOreTier {
+    key: string;
+    label: string;
+    minDepth: number;
+    valueMultiplier: number;
 }
 
 export interface MineState {
@@ -19,20 +28,23 @@ export interface MineState {
     digsToday: number;
     dailyDigCap: number;
     ladderCount: number;
-    torchFuel: number;
     explosiveCount: number;
-    visibilityRadius: number;
+    reinforcementCount: number;
     revealedTiles: MineTile[];
     prices: {
+        dig: { cost: number };
         ladder: { cost: number; amount: number };
-        torch: { cost: number; amount: number };
         explosive: { cost: number; amount: number };
+        reinforcement: { cost: number; amount: number };
         flare: { cost: number; radius: number };
+        reset: { cost: number };
     };
+    oreTiers: MineOreTier[];
 }
 
 export interface DigResult {
-    outcome: "ore" | "empty" | "cave_in";
+    outcome: "ore" | "empty" | "cave_in" | "stone_cleared" | "move";
+    oreTier?: string | null;
     payout: number;
     usedExplosive: boolean;
     balance?: string;
@@ -64,19 +76,24 @@ export const useCasinoMine = () => {
     };
 
     const { mutateAsync: dig, isPending: isDigging } = useMutation({
-        mutationFn: async (direction: "down" | "left" | "right") =>
+        mutationFn: async (direction: "up" | "down" | "left" | "right") =>
             (await apiClient.post<ApiResponse<DigResult>>("/api/casino/mine/dig", { direction })).data.data!,
         onSuccess: invalidate,
     });
 
     const { mutateAsync: buyEquipment, isPending: isBuying } = useMutation({
-        mutationFn: async (item: "ladder" | "torch" | "explosive") =>
+        mutationFn: async (item: "ladder" | "explosive" | "reinforcement") =>
             (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/mine/buy-equipment", { item })).data.data!,
         onSuccess: invalidate,
     });
 
     const { mutateAsync: useFlare, isPending: isFlaring } = useMutation({
         mutationFn: async () => (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/mine/flare")).data.data!,
+        onSuccess: invalidate,
+    });
+
+    const { mutateAsync: resetMap, isPending: isResetting } = useMutation({
+        mutationFn: async () => (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/mine/reset")).data.data!,
         onSuccess: invalidate,
     });
 
@@ -92,5 +109,7 @@ export const useCasinoMine = () => {
         isBuying,
         useFlare,
         isFlaring,
+        resetMap,
+        isResetting,
     };
 };
