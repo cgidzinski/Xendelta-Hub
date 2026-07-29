@@ -478,7 +478,6 @@ export default function Mine() {
             </Box>
 
             <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(84px, 1fr))", gap: 1, mt: 2, mb: 2 }}>
-                <StatTile label="Depth" value={position.y} />
                 <StatTile
                     label="Digs Left"
                     value={`${digsRemaining}/${dailyDigCap}`}
