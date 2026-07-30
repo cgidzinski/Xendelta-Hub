@@ -10,6 +10,7 @@ import AddIcon from "@mui/icons-material/Add";
 import LocalFloristIcon from "@mui/icons-material/LocalFlorist";
 import PrintIcon from "@mui/icons-material/Print";
 import TerrainIcon from "@mui/icons-material/Terrain";
+import PetsIcon from "@mui/icons-material/Pets";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../../config/api";
 import { ApiResponse } from "../../../types/api";
@@ -21,6 +22,7 @@ import { useCasinoStatus } from "../../../hooks/casino/useCasinoStatus";
 import { useCasinoGarden } from "../../../hooks/casino/useCasinoGarden";
 import { useCasinoPrinter } from "../../../hooks/casino/useCasinoPrinter";
 import { useCasinoMine } from "../../../hooks/casino/useCasinoMine";
+import { useCasinoRanch } from "../../../hooks/casino/useCasinoRanch";
 
 interface SlotsOddsSummary {
     paytable: { probability: number }[];
@@ -82,9 +84,10 @@ const TYPE_ICON: Record<CasinoGameType, ComponentType<SvgIconProps>> = {
     garden: LocalFloristIcon,
     printer: PrintIcon,
     mine: TerrainIcon,
+    ranch: PetsIcon,
 };
 
-const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko", "memory", "garden", "printer", "mine"];
+const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko", "memory", "garden", "printer", "mine", "ranch"];
 
 const GHOST_COPY: Partial<Record<CasinoGameType, string>> = {
     slots: "New reel sets and jackpots land here as they ship.",
@@ -129,6 +132,7 @@ export default function GamesIndex() {
     const { squares: gardenSquares, waterCooldownMs: gardenWaterCooldownMs } = useCasinoGarden();
     const { run: printerRun } = useCasinoPrinter();
     const { state: mineState } = useCasinoMine();
+    const { creatures: ranchCreatures, feedCooldownMs: ranchFeedCooldownMs } = useCasinoRanch();
 
     const { data: easySpinOdds } = useQuery({
         queryKey: ["slotsOdds", "easy-spin"],
@@ -221,6 +225,12 @@ export default function GamesIndex() {
         return msSinceWatered >= gardenWaterCooldownMs;
     }).length;
     const mineDigsLeft = mineState ? Math.max(0, mineState.dailyDigCap - mineState.digsToday) : null;
+    const ranchReadyToFeed = ranchCreatures.filter((c) => {
+        if (!c.lastFedAt) {
+            return true;
+        }
+        return Date.now() - new Date(c.lastFedAt).getTime() >= ranchFeedCooldownMs;
+    }).length;
 
     const statusChipsByKey: Record<string, StatusChip[]> = {
         garden: [
@@ -244,6 +254,10 @@ export default function GamesIndex() {
                   { label: `${mineDigsLeft}/${mineState.dailyDigCap} Digs Left`, color: mineDigsLeft ? "primary" as ChipColor : "error" as ChipColor },
               ]
             : [],
+        "cheddar-ranch": [
+            { label: `${ranchCreatures.length} Creature${ranchCreatures.length === 1 ? "" : "s"}`, color: "default" as ChipColor },
+            ...(ranchReadyToFeed > 0 ? [{ label: `${ranchReadyToFeed} Ready to Feed`, color: "info" as ChipColor }] : []),
+        ],
     };
 
     const groups = TYPE_ORDER.map((type) => ({

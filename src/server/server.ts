@@ -111,3 +111,4 @@ require("./routes/casinoGames/pachinko.ts")(app);
 require("./routes/casinoGarden.ts")(app);
 require("./routes/casinoPrinter.ts")(app);
 require("./routes/casinoMine.ts")(app);
+require("./routes/casinoRanch.ts")(app);

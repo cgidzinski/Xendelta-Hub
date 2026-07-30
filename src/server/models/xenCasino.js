@@ -1077,6 +1077,273 @@ xenCasinoMineStateSchema.statics.resetMap = async function (userId) {
 
 var XenCasinoMineState = mongoose.model("XenCasinoMineState", xenCasinoMineStateSchema);
 
+// ---------------------------------------------------------------------------------------
+// Cheddar Ranch - creature-collection game. Hatching is a gacha-style weighted rarity pull
+// (RANCH_RARITY_TIERS, route-owned economics in casinoRanch.ts); each creature is its own
+// document in its own collection (a growing, unbounded-per-user roster, unlike Garden's
+// fixed 3x3 grid or Mine's singleton position) since feeding/racing/releasing all act on
+// one creature at a time and need independent per-creature lifecycle (feed cooldown, win/
+// loss record). Feeding is guarded by the same "re-validate against a fresh read" pattern
+// as Garden's water()/Mine's applyDig() - never trust an earlier GET.
+// ---------------------------------------------------------------------------------------
+
+var xenCasinoRanchCreatureSchema = new mongoose.Schema({
+    userId: { type: String, required: true, index: true },
+    species: { type: String, required: true }, // cosmetic flavor + the key into route-owned SPECIES_TYPE/SPECIES_ITEM_KEY
+    name: { type: String, required: true }, // a single silly nickname, rolled from CREATURE_NAMES at hatch time
+    rarityTier: { type: String, required: true }, // key into RANCH_RARITY_TIERS (route-owned)
+    stats: {
+        speed: { type: Number, required: true },
+        stamina: { type: Number, required: true },
+        power: { type: Number, required: true },
+        intelligence: { type: Number, required: true },
+        luck: { type: Number, required: true },
+        charm: { type: Number, required: true },
+    },
+    lastFedAt: { type: Date, default: null },
+    feedCount: { type: Number, default: 0 },
+    raceWins: { type: Number, default: 0 },
+    raceLosses: { type: Number, default: 0 },
+    // Ticks of neglect decay already applied since the current no-feeding period started
+    // (see resolveRanchDecay in casinoRanch.ts) - reset whenever lastFedAt moves forward.
+    // Same "catch up correctly across any gap, no cron" shape as Garden's decayTicksApplied,
+    // anchored on lastFedAt (falling back to createdAt when never fed) rather than a
+    // separate timestamp field.
+    decayTicksApplied: { type: Number, default: 0 },
+    // Gates the 24h item-production cooldown (see statics.collect). createForUser seeds
+    // this to the creature's own creation time (not null) so a freshly hatched creature has
+    // to wait out the same cooldown before its very first collect too - null here only
+    // means "an older creature from before this field existed", still treated as
+    // already-ready for backward compatibility.
+    lastCollectedAt: { type: Date, default: null },
+    // How many times in a row this creature has been collected from without racing (see
+    // statics.collect) - capped at RANCH_COLLECT_STREAK_LIMIT (casinoRanch.ts), past which
+    // collect refuses to produce anything until the creature races again. Reset to 0 by
+    // statics.recordRaceResult on every resolved race, win or lose.
+    collectStreak: { type: Number, default: 0 },
+    // Set by using a Decay Shield item (casinoRanch.ts) - resolveRanchDecay short-circuits
+    // with zero decay while now < decayShieldUntil, same shape as the neglect grace period
+    // it sits alongside. Null (the default) means no active shield.
+    decayShieldUntil: { type: Date, default: null },
+    createdAt: { type: Date, default: Date.now },
+});
+xenCasinoRanchCreatureSchema.index({ userId: 1, createdAt: 1 });
+
+xenCasinoRanchCreatureSchema.statics.createForUser = async function (userId, params) {
+    return this.create({
+        userId: userId,
+        species: params.species,
+        name: params.name,
+        rarityTier: params.rarityTier,
+        stats: params.stats,
+        // Wait out the full collect cooldown before the very first collect too, same as any
+        // later one - see the lastCollectedAt schema comment above.
+        lastCollectedAt: new Date(),
+    });
+};
+
+xenCasinoRanchCreatureSchema.statics.listByUser = async function (userId) {
+    return this.find({ userId: userId }).sort({ createdAt: 1 }).exec();
+};
+
+xenCasinoRanchCreatureSchema.statics.getOwned = async function (userId, creatureId) {
+    return this.findOne({ _id: creatureId, userId: userId }).exec();
+};
+
+// Re-reads fresh and rejects (returns null) if the creature isn't owned by userId or is
+// still on cooldown, rather than trusting an earlier GET - same guard Garden's water() and
+// Mine's applyDig() use. No stat ceiling - `gains` is an already-rolled { statKey: amount }
+// object (one Feed item now bumps every stat at once, see casinoRanch.ts), applied as a
+// single atomic $inc across every key it contains, guarded on the previously-read
+// lastFedAt so a concurrent feed on the same creature can't double-apply.
+xenCasinoRanchCreatureSchema.statics.feed = async function (userId, creatureId, gains, cooldownMs) {
+    var creature = await this.findOne({ _id: creatureId, userId: userId }).exec();
+    if (!creature) {
+        return null;
+    }
+    var now = new Date();
+    if (creature.lastFedAt && now.getTime() - creature.lastFedAt.getTime() < cooldownMs) {
+        return null;
+    }
+    var inc = { feedCount: 1 };
+    Object.keys(gains).forEach(function (statKey) {
+        inc["stats." + statKey] = gains[statKey];
+    });
+    var updated = await this.findOneAndUpdate(
+        { _id: creatureId, userId: userId, lastFedAt: creature.lastFedAt },
+        // decayTicksApplied resets here because lastFedAt (the neglect anchor) is moving
+        // forward - same "watering restarts the neglect clock" reset Garden's water() does
+        // to its own decayTicksApplied, otherwise a stale tick count from before this feed
+        // would wrongly suppress decay that's genuinely due again later.
+        { $inc: inc, $set: { lastFedAt: now, decayTicksApplied: 0 } },
+        { new: true }
+    ).exec();
+    return updated;
+};
+
+// Atomic $inc of raceWins/raceLosses - called only after the route has already resolved
+// the win/loss roll (and, on a win, after the payout transfer succeeds). Also resets
+// collectStreak to 0 - racing at all (win or lose) is what re-enables collecting, not
+// winning specifically. `statBoost` is an optional { statKey: amount } object (see
+// raceStatBoostForPlace in casinoRanch.ts) folded into the same $inc so the placement
+// reward lands in the same atomic update as everything else here.
+xenCasinoRanchCreatureSchema.statics.recordRaceResult = async function (userId, creatureId, won, statBoost) {
+    var inc = won ? { raceWins: 1 } : { raceLosses: 1 };
+    if (statBoost) {
+        Object.keys(statBoost).forEach(function (key) {
+            if (statBoost[key]) {
+                inc["stats." + key] = statBoost[key];
+            }
+        });
+    }
+    return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $inc: inc, $set: { collectStreak: 0 } }, { new: true }).exec();
+};
+
+// Same re-read-and-guard shape as statics.feed - re-validates ownership and the 24h
+// cooldown against a fresh read, then atomically stamps lastCollectedAt and bumps
+// collectStreak via findOneAndUpdate guarded on the previously-read value so a concurrent
+// collect on the same creature can't double-apply. The route checks collectStreak against
+// RANCH_COLLECT_STREAK_LIMIT before ever calling this, so this static only needs to worry
+// about the cooldown, not the streak limit.
+xenCasinoRanchCreatureSchema.statics.collect = async function (userId, creatureId, cooldownMs) {
+    var creature = await this.findOne({ _id: creatureId, userId: userId }).exec();
+    if (!creature) {
+        return null;
+    }
+    var now = new Date();
+    if (creature.lastCollectedAt && now.getTime() - creature.lastCollectedAt.getTime() < cooldownMs) {
+        return null;
+    }
+    var updated = await this.findOneAndUpdate(
+        { _id: creatureId, userId: userId, lastCollectedAt: creature.lastCollectedAt },
+        { $set: { lastCollectedAt: now }, $inc: { collectStreak: 1 } },
+        { new: true }
+    ).exec();
+    return updated;
+};
+
+// Deletes only if still owned by userId - the route charges/credits the cheddar sell
+// value before calling this, same "resolve money first" order as Garden's
+// clearHarvestedSquare.
+xenCasinoRanchCreatureSchema.statics.releaseOwned = async function (userId, creatureId) {
+    return this.findOneAndDelete({ _id: creatureId, userId: userId }).exec();
+};
+
+// Applies a Tonic's flat, guaranteed gain to one stat (see TONIC_ITEMS in casinoRanch.ts) -
+// no cooldown/guard needed since Tonics aren't rate-limited like feed().
+xenCasinoRanchCreatureSchema.statics.applyTonic = async function (userId, creatureId, statKey, gain) {
+    var inc = {};
+    inc["stats." + statKey] = gain;
+    return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $inc: inc }, { new: true }).exec();
+};
+
+// Used by a Type-Swap Serum (casinoRanch.ts) - only species (and therefore the derived
+// type/produced item) changes; stats and level are untouched.
+xenCasinoRanchCreatureSchema.statics.setSpecies = async function (userId, creatureId, species) {
+    return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $set: { species: species } }, { new: true }).exec();
+};
+
+// Used by a Decay Shield (casinoRanch.ts) - `until` is compared against resolveRanchDecay's
+// `now` on every subsequent read.
+xenCasinoRanchCreatureSchema.statics.setDecayShield = async function (userId, creatureId, until) {
+    return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $set: { decayShieldUntil: until } }, { new: true }).exec();
+};
+
+var XenCasinoRanchCreature = mongoose.model("XenCasinoRanchCreature", xenCasinoRanchCreatureSchema);
+
+// A per-user fungible item stack (itemKey -> quantity) produced by creatures via
+// statics.collect above - one singleton doc per user, same shape as Garden/Mine's
+// per-user state, rather than one document per item unit, since items of the same key are
+// interchangeable (their "power" is expressed as how many units a collection yields, via
+// the source creature's level, not as per-unit potency - see casinoRanch.ts).
+var xenCasinoRanchInventorySchema = new mongoose.Schema({
+    userId: { type: String, required: true, unique: true },
+    items: { type: Map, of: Number, default: {} },
+});
+
+xenCasinoRanchInventorySchema.statics.getState = async function (userId) {
+    return this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
+};
+
+xenCasinoRanchInventorySchema.statics.addItem = async function (userId, itemKey, amount) {
+    return this.findOneAndUpdate(
+        { userId: userId },
+        { $inc: { ["items." + itemKey]: amount } },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+    ).exec();
+};
+
+// Guarded decrement - only applies if at least `amount` is still present at update time,
+// so a sell/use action can never drive a stack negative even under a concurrent request.
+// Returns null (rather than throwing) if the guard doesn't match, same "treat null as
+// nothing to reconcile" convention as XenCasinoRound.applyConditionsUpdate.
+xenCasinoRanchInventorySchema.statics.subtractItem = async function (userId, itemKey, amount) {
+    return this.findOneAndUpdate(
+        { userId: userId, ["items." + itemKey]: { $gte: amount } },
+        { $inc: { ["items." + itemKey]: -amount } },
+        { new: true }
+    ).exec();
+};
+
+var XenCasinoRanchInventory = mongoose.model("XenCasinoRanchInventory", xenCasinoRanchInventorySchema);
+
+// Cheddar Ranch's "prepare a race, then bet on it" primitive - one pending race at a time
+// per user, same one-thing-in-progress shape as XenCasinoPrinterState's `run`, deliberately
+// NOT XenCasinoRound: every XenCasinoRound consumer debits the wager the instant a round is
+// created (that's the whole point of its recovery-sweep machinery), but that's actually a
+// closer fit here than it first looks - Cheddar Ranch's race attempt now costs a real,
+// non-refundable-on-abandonment entry fee at the moment it starts (see /race/start in
+// casinoRanch.ts). So unlike a truly free "nothing's at stake yet" prepare step, starting a
+// second attempt while one is already in flight must be refused, not silently discarded -
+// same "refuse a second start" semantics as Printer's startRun, via statics.startIfClear.
+// `pending` holds { creatureId, racers, course, odds, createdAt, expiresAt } - the whole
+// field/course/odds are rolled together in one /race/start call, so there's no in-between
+// stage to track: a pending race is always immediately ready for a bet (or a forfeit) the
+// moment it exists. The exact field/course/odds the player is shown is always what a later
+// bet resolves against, never anything re-rolled or client-supplied.
+var xenCasinoRanchPendingRaceSchema = new mongoose.Schema({
+    userId: { type: String, required: true, unique: true },
+    pending: { type: Object, default: null },
+});
+
+xenCasinoRanchPendingRaceSchema.statics.getState = async function (userId) {
+    return this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
+};
+
+function pendingRaceIsLive(pending) {
+    return !!pending && new Date(pending.expiresAt).getTime() >= Date.now();
+}
+
+// Only starts if there's no live (unexpired) pending race already - unlike the old
+// unconditional startPending, a real entry fee is charged before this is called, so a
+// second start while one is already in flight must be refused (the route checks this
+// BEFORE charging) rather than silently discarding a race the player already paid for.
+xenCasinoRanchPendingRaceSchema.statics.startIfClear = async function (userId, pending) {
+    var doc = await this.getState(userId);
+    if (pendingRaceIsLive(doc.pending)) {
+        return null;
+    }
+    doc.pending = pending;
+    doc.markModified("pending");
+    await doc.save();
+    return doc.pending;
+};
+
+// Clears unconditionally - called once a bet has resolved (win or lose) or the player
+// forfeits, same "the caller has already decided this is done" shape as Printer's
+// clearRun.
+xenCasinoRanchPendingRaceSchema.statics.clearPending = async function (userId) {
+    var doc = await this.findOne({ userId: userId }).exec();
+    if (!doc) {
+        return null;
+    }
+    doc.pending = null;
+    await doc.save();
+    return doc;
+};
+
+var XenCasinoRanchPendingRace = mongoose.model("XenCasinoRanchPendingRace", xenCasinoRanchPendingRaceSchema);
+
 module.exports = {
   XenCasino,
   XenCasinoRound,
@@ -1101,6 +1368,9 @@ module.exports = {
   PRINTER_RISK_RAMP_MS: PRINTER_RISK_RAMP_MS,
   PRINTER_BASE_RAID_CHANCE: PRINTER_BASE_RAID_CHANCE,
   PRINTER_MAX_RAID_CHANCE: PRINTER_MAX_RAID_CHANCE,
+  XenCasinoRanchCreature,
+  XenCasinoRanchInventory,
+  XenCasinoRanchPendingRace,
   dailyQuestDateKey: todayKey,
   // Exported for unit testing the lazy-reset-on-date-change logic without a live Mongo
   // connection - pure functions over plain objects, no I/O.

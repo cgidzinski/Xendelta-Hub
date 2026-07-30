@@ -1,0 +1,449 @@
+import { describe, it, expect } from "vitest";
+import {
+    RANCH_RARITY_TIERS,
+    RACE_COURSES,
+    RANCH_NEGLECT_GRACE_MS,
+    RANCH_DECAY_TICK_MS,
+    RANCH_DECAY_PER_TICK,
+    RANCH_STAT_FLOOR,
+    rollHatch,
+    rarityDistribution,
+    rollFeedGains,
+    rollRival,
+    rollCreatureName,
+    pickCourse,
+    effectiveRaceTotal,
+    simulateRace,
+    estimateWinProbabilities,
+    multiplierForProbability,
+    levelForStats,
+    feedUnitsRequired,
+    collectQuantityForTier,
+    RANCH_COLLECT_STREAK_LIMIT,
+    resolveRanchDecay,
+    RANCH_DECAY_SHIELD_MS,
+    widenedRivalRange,
+    raceStatBoostForPlace,
+    TONIC_GAIN,
+    FORFEIT_INSURANCE_REFUND_RATE,
+    RanchStats,
+    Racer,
+} from "./casinoRanch";
+
+const STAT_KEYS: (keyof RanchStats)[] = ["speed", "stamina", "power", "intelligence", "luck", "charm"];
+
+// Monte Carlo sanity check that the real rollHatch() (not a reimplementation) actually
+// realizes the distribution implied by RANCH_RARITY_TIERS' weights - a regression guard
+// against a future change to rollHatch's arithmetic silently decoupling the real draw from
+// the weight table it's supposed to be a plain draw from (same pattern as
+// kittyScratch.test.ts's generateRound Monte Carlo check).
+describe("rollHatch: real Monte Carlo matches the theoretical weight table", () => {
+    it("converges observed tier frequencies within tolerance of rarityDistribution()", () => {
+        const ROUNDS = 200_000;
+        const TOLERANCE = 0.01;
+
+        const counts: Record<string, number> = {};
+        for (let i = 0; i < ROUNDS; i++) {
+            const { tier } = rollHatch();
+            counts[tier.key] = (counts[tier.key] ?? 0) + 1;
+        }
+
+        for (const { key, probability } of rarityDistribution()) {
+            const observed = (counts[key] ?? 0) / ROUNDS;
+            expect(observed).toBeGreaterThan(probability - TOLERANCE);
+            expect(observed).toBeLessThan(probability + TOLERANCE);
+        }
+    }, 60_000);
+
+    it("never rolls a stat outside the hatched tier's declared statRange, for all 6 stats", () => {
+        const ROUNDS = 20_000;
+        for (let i = 0; i < ROUNDS; i++) {
+            const { tier, stats } = rollHatch();
+            const [lo, hi] = tier.statRange;
+            for (const key of STAT_KEYS) {
+                expect(stats[key]).toBeGreaterThanOrEqual(lo);
+                expect(stats[key]).toBeLessThanOrEqual(hi);
+            }
+        }
+    }, 30_000);
+});
+
+describe("rarityDistribution", () => {
+    it("sums to 1 across every tier", () => {
+        const total = rarityDistribution().reduce((sum, t) => sum + t.probability, 0);
+        expect(total).toBeCloseTo(1, 10);
+    });
+
+    it("covers every tier in RANCH_RARITY_TIERS", () => {
+        const keys = rarityDistribution().map((t) => t.key);
+        expect(keys.sort()).toEqual(RANCH_RARITY_TIERS.map((t) => t.key).sort());
+    });
+});
+
+describe("rollFeedGains", () => {
+    it("rolls all 6 stats within FEED_GAIN_RANGE ([1, 4])", () => {
+        const ROUNDS = 20_000;
+        for (let i = 0; i < ROUNDS; i++) {
+            const gains = rollFeedGains();
+            for (const key of STAT_KEYS) {
+                expect(gains[key]).toBeGreaterThanOrEqual(1);
+                expect(gains[key]).toBeLessThanOrEqual(4);
+            }
+        }
+    }, 30_000);
+});
+
+describe("rollRival", () => {
+    it("rolls stats within the given tier's declared statRange", () => {
+        const ROUNDS = 20_000;
+        for (const tier of RANCH_RARITY_TIERS) {
+            for (let i = 0; i < ROUNDS / RANCH_RARITY_TIERS.length; i++) {
+                const { stats } = rollRival(tier.key);
+                const [lo, hi] = tier.statRange;
+                for (const key of STAT_KEYS) {
+                    expect(stats[key]).toBeGreaterThanOrEqual(lo);
+                    expect(stats[key]).toBeLessThanOrEqual(hi);
+                }
+            }
+        }
+    }, 30_000);
+
+    it("falls back to the first tier for an unknown tier key", () => {
+        const { stats } = rollRival("not-a-real-tier");
+        const [lo, hi] = RANCH_RARITY_TIERS[0].statRange;
+        for (const key of STAT_KEYS) {
+            expect(stats[key]).toBeGreaterThanOrEqual(lo);
+            expect(stats[key]).toBeLessThanOrEqual(hi);
+        }
+    });
+
+    it("assigns a valid land/sea/air type and a name", () => {
+        const rival = rollRival("common");
+        expect(["land", "sea", "air"]).toContain(rival.type);
+        expect(rival.name.length).toBeGreaterThan(0);
+    });
+});
+
+describe("rollCreatureName", () => {
+    it("always returns a non-empty string", () => {
+        for (let i = 0; i < 500; i++) {
+            expect(rollCreatureName().length).toBeGreaterThan(0);
+        }
+    });
+
+    it("draws from a large, varied pool (not always the same value)", () => {
+        const names = new Set<string>();
+        for (let i = 0; i < 500; i++) {
+            names.add(rollCreatureName());
+        }
+        expect(names.size).toBeGreaterThan(20);
+    });
+});
+
+describe("pickCourse", () => {
+    it("picks roughly uniformly across every course over many trials", () => {
+        const ROUNDS = 70_000;
+        const counts: Record<string, number> = {};
+        for (let i = 0; i < ROUNDS; i++) {
+            const course = pickCourse();
+            counts[course.key] = (counts[course.key] ?? 0) + 1;
+        }
+        const expected = 1 / RACE_COURSES.length;
+        for (const course of RACE_COURSES) {
+            const observed = (counts[course.key] ?? 0) / ROUNDS;
+            expect(observed).toBeGreaterThan(expected - 0.02);
+            expect(observed).toBeLessThan(expected + 0.02);
+        }
+    }, 30_000);
+});
+
+describe("effectiveRaceTotal", () => {
+    const stats: RanchStats = { speed: 100, stamina: 50, power: 10, intelligence: 20, luck: 5, charm: 30 };
+    const sprint = RACE_COURSES.find((c) => c.key === "sprint")!;
+    const brawl = RACE_COURSES.find((c) => c.key === "brawl")!;
+    const charmParade = RACE_COURSES.find((c) => c.key === "charm-parade")!;
+
+    it("weights all 6 stats according to the course", () => {
+        const expectedSprint = STAT_KEYS.reduce((sum, k) => sum + stats[k] * sprint.weights[k], 0);
+        const expectedBrawl = STAT_KEYS.reduce((sum, k) => sum + stats[k] * brawl.weights[k], 0);
+        expect(effectiveRaceTotal(stats, sprint)).toBeCloseTo(expectedSprint, 5);
+        expect(effectiveRaceTotal(stats, brawl)).toBeCloseTo(expectedBrawl, 5);
+    });
+
+    it("favors a speed-heavy creature more on Sprint than on Brawl", () => {
+        expect(effectiveRaceTotal(stats, sprint)).toBeGreaterThan(effectiveRaceTotal(stats, brawl));
+    });
+
+    it("favors a charm-heavy creature more on Charm Parade than on Sprint", () => {
+        const charmHeavy: RanchStats = { speed: 10, stamina: 10, power: 10, intelligence: 10, luck: 10, charm: 100 };
+        expect(effectiveRaceTotal(charmHeavy, charmParade)).toBeGreaterThan(effectiveRaceTotal(charmHeavy, sprint));
+    });
+});
+
+function makeRacer(id: string, stats: RanchStats): Racer {
+    return { id, isPlayer: id === "player", species: "Test", name: "Test", type: "land", level: 1, stats };
+}
+
+const EVEN_STATS: RanchStats = { speed: 50, stamina: 50, power: 50, intelligence: 50, luck: 50, charm: 50 };
+const ALL_ROUNDER = RACE_COURSES.find((c) => c.key === "all-rounder")!;
+
+describe("simulateRace", () => {
+    it("returns exactly one entry per racer, with places forming a permutation of 1..N", () => {
+        const racers = [makeRacer("player", EVEN_STATS), makeRacer("rival-1", EVEN_STATS), makeRacer("rival-2", EVEN_STATS), makeRacer("rival-3", EVEN_STATS)];
+        const order = simulateRace(racers, ALL_ROUNDER);
+        expect(order).toHaveLength(4);
+        expect(order.map((o) => o.place).sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+        expect(new Set(order.map((o) => o.racerId)).size).toBe(4);
+    });
+});
+
+describe("estimateWinProbabilities", () => {
+    it("sums to 1 across all racers", () => {
+        const racers = [makeRacer("player", EVEN_STATS), makeRacer("rival-1", EVEN_STATS), makeRacer("rival-2", EVEN_STATS), makeRacer("rival-3", EVEN_STATS)];
+        const probs = estimateWinProbabilities(racers, ALL_ROUNDER);
+        const total = Object.values(probs).reduce((sum, p) => sum + p, 0);
+        expect(total).toBeCloseTo(1, 5);
+    });
+
+    it("is roughly equal for 4 identical racers", () => {
+        const racers = [makeRacer("player", EVEN_STATS), makeRacer("rival-1", EVEN_STATS), makeRacer("rival-2", EVEN_STATS), makeRacer("rival-3", EVEN_STATS)];
+        const probs = estimateWinProbabilities(racers, ALL_ROUNDER, 8000);
+        for (const p of Object.values(probs)) {
+            expect(p).toBeGreaterThan(0.15);
+            expect(p).toBeLessThan(0.35);
+        }
+    });
+
+    it("heavily favors a dominant racer", () => {
+        const dominant: RanchStats = { speed: 500, stamina: 500, power: 500, intelligence: 500, luck: 500, charm: 500 };
+        const weak: RanchStats = { speed: 10, stamina: 10, power: 10, intelligence: 10, luck: 10, charm: 10 };
+        const racers = [makeRacer("player", dominant), makeRacer("rival-1", weak), makeRacer("rival-2", weak), makeRacer("rival-3", weak)];
+        const probs = estimateWinProbabilities(racers, ALL_ROUNDER);
+        expect(probs["player"]).toBeGreaterThan(0.9);
+    });
+});
+
+describe("multiplierForProbability", () => {
+    it("is monotonically decreasing in probability", () => {
+        expect(multiplierForProbability(0.2)).toBeGreaterThan(multiplierForProbability(0.3));
+        expect(multiplierForProbability(0.3)).toBeGreaterThan(multiplierForProbability(0.5));
+        expect(multiplierForProbability(0.5)).toBeGreaterThan(multiplierForProbability(0.7));
+    });
+
+    it("matches targetRtp / p in the unclamped middle band", () => {
+        expect(multiplierForProbability(0.3)).toBeCloseTo(0.9 / 0.3, 5);
+        expect(multiplierForProbability(0.5)).toBeCloseTo(0.9 / 0.5, 5);
+    });
+
+    it("clamps at the extremes", () => {
+        expect(multiplierForProbability(0.99)).toBeGreaterThanOrEqual(1.05);
+        expect(multiplierForProbability(0.001)).toBeLessThanOrEqual(8);
+    });
+});
+
+describe("levelForStats", () => {
+    it("is the floor of the average of all 6 stats", () => {
+        expect(levelForStats({ speed: 10, stamina: 10, power: 10, intelligence: 10, luck: 10, charm: 10 })).toBe(10);
+        expect(levelForStats({ speed: 60, stamina: 0, power: 0, intelligence: 0, luck: 0, charm: 0 })).toBe(10);
+    });
+
+    it("floors rather than rounds", () => {
+        // sum = 61 -> avg = 10.1666... -> floor = 10, not 10 rounded up to 11
+        expect(levelForStats({ speed: 61, stamina: 0, power: 0, intelligence: 0, luck: 0, charm: 0 })).toBe(10);
+        // sum = 65 -> avg = 10.8333... -> still floors to 10
+        expect(levelForStats({ speed: 65, stamina: 0, power: 0, intelligence: 0, luck: 0, charm: 0 })).toBe(10);
+    });
+});
+
+describe("feedUnitsRequired", () => {
+    it("ramps by 1 unit every 10 levels", () => {
+        expect(feedUnitsRequired(1)).toBe(1);
+        expect(feedUnitsRequired(10)).toBe(1);
+        expect(feedUnitsRequired(11)).toBe(2);
+        expect(feedUnitsRequired(20)).toBe(2);
+        expect(feedUnitsRequired(21)).toBe(3);
+        expect(feedUnitsRequired(100)).toBe(10);
+    });
+});
+
+describe("collectQuantityForTier", () => {
+    it("is a small flat amount per rarity tier, not tied to a creature's current level", () => {
+        expect(collectQuantityForTier("common")).toBe(1);
+        expect(collectQuantityForTier("uncommon")).toBe(2);
+        expect(collectQuantityForTier("rare")).toBe(3);
+        expect(collectQuantityForTier("epic")).toBe(4);
+        expect(collectQuantityForTier("legendary")).toBe(6);
+    });
+
+    it("falls back to 1 for an unrecognized tier", () => {
+        expect(collectQuantityForTier("not-a-real-tier")).toBe(1);
+    });
+});
+
+describe("RANCH_COLLECT_STREAK_LIMIT", () => {
+    it("is a small positive number of collects allowed between races", () => {
+        expect(RANCH_COLLECT_STREAK_LIMIT).toBeGreaterThan(0);
+        expect(RANCH_COLLECT_STREAK_LIMIT).toBeLessThan(10);
+    });
+});
+
+describe("resolveRanchDecay", () => {
+    const stats: RanchStats = { speed: 50, stamina: 50, power: 50, intelligence: 50, luck: 50, charm: 50 };
+    const createdAt = new Date("2024-01-01T00:00:00Z");
+
+    it("does not change anything before the grace period has elapsed", () => {
+        const now = new Date(createdAt.getTime() + RANCH_NEGLECT_GRACE_MS - 1000);
+        const result = resolveRanchDecay(stats, null, createdAt, 0, now);
+        expect(result.changed).toBe(false);
+        expect(result.stats).toEqual(stats);
+    });
+
+    it("applies exactly one tick right at the grace boundary", () => {
+        const now = new Date(createdAt.getTime() + RANCH_NEGLECT_GRACE_MS + 1);
+        const result = resolveRanchDecay(stats, null, createdAt, 0, now);
+        expect(result.changed).toBe(true);
+        expect(result.decayTicksApplied).toBe(1);
+        expect(result.stats.speed).toBe(50 - RANCH_DECAY_PER_TICK);
+    });
+
+    it("catches up multiple ticks after a long gap in one call", () => {
+        const now = new Date(createdAt.getTime() + RANCH_NEGLECT_GRACE_MS + RANCH_DECAY_TICK_MS * 10);
+        const result = resolveRanchDecay(stats, null, createdAt, 0, now);
+        expect(result.decayTicksApplied).toBe(11);
+        expect(result.stats.speed).toBe(50 - RANCH_DECAY_PER_TICK * 11);
+    });
+
+    it("never re-applies ticks already accounted for", () => {
+        const now = new Date(createdAt.getTime() + RANCH_NEGLECT_GRACE_MS + RANCH_DECAY_TICK_MS * 5);
+        const result = resolveRanchDecay(stats, null, createdAt, 6, now); // already caught up past what's due
+        expect(result.changed).toBe(false);
+    });
+
+    it("floors every stat at RANCH_STAT_FLOOR even after an enormous gap", () => {
+        const now = new Date(createdAt.getTime() + RANCH_NEGLECT_GRACE_MS + RANCH_DECAY_TICK_MS * 100_000);
+        const lowStats: RanchStats = { speed: 5, stamina: 5, power: 5, intelligence: 5, luck: 5, charm: 5 };
+        const result = resolveRanchDecay(lowStats, null, createdAt, 0, now);
+        for (const key of STAT_KEYS) {
+            expect(result.stats[key]).toBe(RANCH_STAT_FLOOR);
+        }
+    });
+
+    it("resets relative to a recent lastFedAt (feeding restarts the grace clock)", () => {
+        const recentFeed = new Date(createdAt.getTime() + RANCH_NEGLECT_GRACE_MS * 5); // long after createdAt
+        const now = new Date(recentFeed.getTime() + 1000); // but just after the recent feed
+        const result = resolveRanchDecay(stats, recentFeed, createdAt, 0, now);
+        expect(result.changed).toBe(false);
+    });
+
+    it("applies zero decay while an active Decay Shield covers `now`, even long past the grace period", () => {
+        const now = new Date(createdAt.getTime() + RANCH_NEGLECT_GRACE_MS + RANCH_DECAY_TICK_MS * 10);
+        const shieldedUntil = new Date(now.getTime() + 1000); // still active at `now`
+        const result = resolveRanchDecay(stats, null, createdAt, 0, now, shieldedUntil);
+        expect(result.changed).toBe(false);
+        expect(result.stats).toEqual(stats);
+    });
+
+    it("resumes normal decay once the shield has expired", () => {
+        const now = new Date(createdAt.getTime() + RANCH_NEGLECT_GRACE_MS + RANCH_DECAY_TICK_MS * 10);
+        const expiredShield = new Date(now.getTime() - 1000); // expired just before `now`
+        const result = resolveRanchDecay(stats, null, createdAt, 0, now, expiredShield);
+        expect(result.changed).toBe(true);
+    });
+});
+
+describe("widenedRivalRange", () => {
+    it("widens up to the next tier's ceiling while keeping the current tier's floor", () => {
+        const rareTier = RANCH_RARITY_TIERS.find((t) => t.key === "rare")!;
+        const epicTier = RANCH_RARITY_TIERS.find((t) => t.key === "epic")!;
+        expect(widenedRivalRange("rare")).toEqual([rareTier.statRange[0], epicTier.statRange[1]]);
+    });
+
+    it("widens by its own span for the top tier, which has no tier above it", () => {
+        const legendaryTier = RANCH_RARITY_TIERS.find((t) => t.key === "legendary")!;
+        const span = legendaryTier.statRange[1] - legendaryTier.statRange[0];
+        expect(widenedRivalRange("legendary")).toEqual([legendaryTier.statRange[0], legendaryTier.statRange[1] + span]);
+    });
+
+    it("is always at least as wide as the tier's own normal range", () => {
+        for (const tier of RANCH_RARITY_TIERS) {
+            const [lo, hi] = widenedRivalRange(tier.key);
+            expect(lo).toBe(tier.statRange[0]);
+            expect(hi).toBeGreaterThanOrEqual(tier.statRange[1]);
+        }
+    });
+});
+
+describe("raceStatBoostForPlace", () => {
+    it("is highest for 1st place and never increases as place gets worse", () => {
+        let previous = Infinity;
+        for (let place = 1; place <= 5; place++) {
+            const boost = raceStatBoostForPlace(place);
+            expect(boost).toBeLessThanOrEqual(previous);
+            previous = boost;
+        }
+        expect(raceStatBoostForPlace(1)).toBeGreaterThan(0);
+    });
+
+    it("stays well below a single Feed's total stat points, so it can't out-train Feed", () => {
+        // Feed rolls 1-4 (avg ~2.5) independently across all 6 stats - roughly 15 points
+        // total per feeding. The place boost applies the same amount to all 6 stats, so its
+        // total (boost * 6) should stay comfortably under that.
+        for (let place = 1; place <= 5; place++) {
+            expect(raceStatBoostForPlace(place) * 6).toBeLessThan(15);
+        }
+    });
+
+    it("falls back to 0 for a place outside the known field size", () => {
+        expect(raceStatBoostForPlace(6)).toBe(0);
+    });
+});
+
+describe("rollRival with a statRangeOverride", () => {
+    it("rolls stats from the override range instead of the tier's own range", () => {
+        const override: [number, number] = [500, 500]; // fixed value makes the assertion exact
+        const rival = rollRival("common", override);
+        for (const key of STAT_KEYS) {
+            expect(rival.stats[key]).toBe(500);
+        }
+    });
+});
+
+describe("TONIC_GAIN / FORFEIT_INSURANCE_REFUND_RATE", () => {
+    it("Tonics give a positive, guaranteed stat gain", () => {
+        expect(TONIC_GAIN).toBeGreaterThan(0);
+    });
+
+    it("Forfeit Insurance refunds a fraction between 0 and 1 of the entry fee", () => {
+        expect(FORFEIT_INSURANCE_REFUND_RATE).toBeGreaterThan(0);
+        expect(FORFEIT_INSURANCE_REFUND_RATE).toBeLessThan(1);
+    });
+});
+
+// Monte Carlo RTP sanity check across random race fields and random bet targets - wider
+// tolerance than a flat-multiplier race system's typical band, since the favorite/longshot
+// clamp intentionally skews realized RTP away from the exact target.
+describe("race betting RTP", () => {
+    it("lands in a wide sanity band across random fields and random bet targets", () => {
+        const ROUNDS = 20_000;
+        const STAKE = 100;
+
+        let totalPayout = 0;
+        for (let i = 0; i < ROUNDS; i++) {
+            const tier = RANCH_RARITY_TIERS[Math.floor(Math.random() * RANCH_RARITY_TIERS.length)];
+            const course = pickCourse();
+            const racers = ["player", "rival-1", "rival-2", "rival-3"].map((id) => makeRacer(id, rollRival(tier.key).stats));
+            const probs = estimateWinProbabilities(racers, course, 500);
+            const betRacerId = racers[Math.floor(Math.random() * racers.length)].id;
+            const multiplier = multiplierForProbability(probs[betRacerId]);
+
+            const order = simulateRace(racers, course);
+            if (order[0].racerId === betRacerId) {
+                totalPayout += STAKE * multiplier;
+            }
+        }
+        const realizedRtp = totalPayout / ROUNDS / STAKE;
+
+        expect(realizedRtp).toBeGreaterThan(0.7);
+        expect(realizedRtp).toBeLessThan(0.95);
+    }, 60_000);
+});
