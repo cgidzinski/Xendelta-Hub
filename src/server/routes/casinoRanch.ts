@@ -180,6 +180,9 @@ export function levelForStats(stats: RanchStats): number {
 interface RaceCourse {
     key: string;
     label: string;
+    // Shown to the player under the course label so a weighted course reads as a real
+    // course, not just a stat multiplier - purely cosmetic, no gameplay effect of its own.
+    description: string;
     // Multiplies each stat before summing into the effective total used for the race
     // simulation - a course weighted toward one stat rewards a creature built around that
     // stat, rather than every course rewarding raw total stats the same way. Randomly spun
@@ -191,13 +194,48 @@ interface RaceCourse {
 // now that Charm exists. No weight field needed here (unlike RANCH_RARITY_TIERS) since this
 // isn't a gacha table - pickCourse is a plain uniform pick.
 export const RACE_COURSES: RaceCourse[] = [
-    { key: "sprint", label: "Sprint", weights: { speed: 2, stamina: 0.5, power: 0.5, intelligence: 0.5, luck: 0.5, charm: 0.5 } },
-    { key: "endurance", label: "Endurance", weights: { speed: 0.5, stamina: 2, power: 0.5, intelligence: 0.5, luck: 0.5, charm: 0.5 } },
-    { key: "brawl", label: "Brawl", weights: { speed: 0.5, stamina: 0.5, power: 2, intelligence: 0.5, luck: 0.5, charm: 0.5 } },
-    { key: "puzzle-maze", label: "Puzzle Maze", weights: { speed: 0.5, stamina: 0.5, power: 0.5, intelligence: 2, luck: 0.5, charm: 0.5 } },
-    { key: "lucky-clover", label: "Lucky Clover Run", weights: { speed: 0.5, stamina: 0.5, power: 0.5, intelligence: 0.5, luck: 2, charm: 0.5 } },
-    { key: "charm-parade", label: "Charm Parade", weights: { speed: 0.5, stamina: 0.5, power: 0.5, intelligence: 0.5, luck: 0.5, charm: 2 } },
-    { key: "all-rounder", label: "All-Rounder Pasture", weights: { speed: 1, stamina: 1, power: 1, intelligence: 1, luck: 1, charm: 1 } },
+    {
+        key: "sprint",
+        label: "Sprint",
+        description: "A flat, straight-line dash - raw Speed wins the day.",
+        weights: { speed: 2, stamina: 0.5, power: 0.5, intelligence: 0.5, luck: 0.5, charm: 0.5 },
+    },
+    {
+        key: "endurance",
+        label: "Endurance",
+        description: "A long, grinding haul - Stamina carries you to the finish.",
+        weights: { speed: 0.5, stamina: 2, power: 0.5, intelligence: 0.5, luck: 0.5, charm: 0.5 },
+    },
+    {
+        key: "brawl",
+        label: "Brawl",
+        description: "A rough, physical scrum - Power muscles through the pack.",
+        weights: { speed: 0.5, stamina: 0.5, power: 2, intelligence: 0.5, luck: 0.5, charm: 0.5 },
+    },
+    {
+        key: "puzzle-maze",
+        label: "Puzzle Maze",
+        description: "A twisting maze of shortcuts - Intelligence finds the fastest path.",
+        weights: { speed: 0.5, stamina: 0.5, power: 0.5, intelligence: 2, luck: 0.5, charm: 0.5 },
+    },
+    {
+        key: "lucky-clover",
+        label: "Lucky Clover Run",
+        description: "A course full of forks and four-leaf clovers - Luck decides the winner.",
+        weights: { speed: 0.5, stamina: 0.5, power: 0.5, intelligence: 0.5, luck: 2, charm: 0.5 },
+    },
+    {
+        key: "charm-parade",
+        label: "Charm Parade",
+        description: "A crowd-judged parade route - Charm wins over the audience.",
+        weights: { speed: 0.5, stamina: 0.5, power: 0.5, intelligence: 0.5, luck: 0.5, charm: 2 },
+    },
+    {
+        key: "all-rounder",
+        label: "All-Rounder Pasture",
+        description: "An even, ordinary course - every stat counts equally.",
+        weights: { speed: 1, stamina: 1, power: 1, intelligence: 1, luck: 1, charm: 1 },
+    },
 ];
 
 export function pickCourse(): RaceCourse {
@@ -617,7 +655,7 @@ async function rosterView(userId: string) {
             probability: t.weight / RANCH_RARITY_TIERS.reduce((sum, x) => sum + x.weight, 0),
             statRange: t.statRange,
         })),
-        raceCourses: RACE_COURSES.map((c) => ({ key: c.key, label: c.label, weights: c.weights })),
+        raceCourses: RACE_COURSES.map((c) => ({ key: c.key, label: c.label, description: c.description, weights: c.weights })),
         hatchPrice: HATCH_PRICE,
         feedCooldownMs: FEED_COOLDOWN_MS,
         minRaceStake: MIN_RACE_STAKE,

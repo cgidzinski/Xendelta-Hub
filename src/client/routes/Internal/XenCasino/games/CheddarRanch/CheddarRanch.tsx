@@ -600,28 +600,30 @@ function RaceAnimation({ racers, result, onFinished }: RaceAnimationProps) {
 
 function RacerRow({ racer, odds }: { racer: RanchRacer; odds?: RanchOdds }) {
     return (
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, width: "100%" }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
-                <Typography sx={{ fontSize: 28 }}>{TYPE_EMOJI[racer.type]}</Typography>
-                <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        {racer.name}
-                        {racer.isPlayer ? " (You)" : ""}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                        Lv {racer.level} - Spd {racer.stats.speed} / Sta {racer.stats.stamina} / Pwr {racer.stats.power} / Int{" "}
-                        {racer.stats.intelligence} / Lck {racer.stats.luck} / Chr {racer.stats.charm}
-                    </Typography>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%" }}>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontSize: 28 }}>{TYPE_EMOJI[racer.type]}</Typography>
+                    <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            {racer.name}
+                            {racer.isPlayer ? " (You)" : ""}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                            Level {racer.level}
+                        </Typography>
+                    </Box>
                 </Box>
+                {odds && (
+                    <Box sx={{ textAlign: "right", flexShrink: 0 }}>
+                        <Chip size="small" color="warning" label={`x${odds.multiplier.toFixed(2)}`} sx={{ fontWeight: 700 }} />
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
+                            {(odds.winProbability * 100).toFixed(0)}% win
+                        </Typography>
+                    </Box>
+                )}
             </Box>
-            {odds && (
-                <Box sx={{ textAlign: "right", flexShrink: 0 }}>
-                    <Chip size="small" color="warning" label={`x${odds.multiplier.toFixed(2)}`} sx={{ fontWeight: 700 }} />
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
-                        {(odds.winProbability * 100).toFixed(0)}% win
-                    </Typography>
-                </Box>
-            )}
+            <StatsGrid stats={racer.stats} />
         </Box>
     );
 }
@@ -695,7 +697,6 @@ function RaceTab() {
                     clearInterval(spinId);
                     setSpinning(false);
                     setPendingOverride(r.pending);
-                    setBetRacerId("player");
                 }, 1400);
             })
             .catch((e) => {
@@ -811,62 +812,80 @@ function RaceTab() {
 
             {pending && !raceResult && (
                 <Box sx={{ maxWidth: 560, mx: "auto" }}>
-                    <Typography variant="subtitle1" sx={{ textAlign: "center", fontWeight: 700, mb: 2 }}>
+                    <Typography variant="subtitle1" sx={{ textAlign: "center", fontWeight: 700 }}>
                         Course: {pending.course.label}
                     </Typography>
-
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 2 }}>
-                        {pending.racers.map((racer) => {
-                            const odds = pending.odds.find((o) => o.racerId === racer.id);
-                            return (
-                                <CardActionArea
-                                    key={racer.id}
-                                    onClick={() => setBetRacerId(racer.id)}
-                                    sx={{
-                                        p: 1.5,
-                                        borderRadius: 1.5,
-                                        border: betRacerId === racer.id ? "2px solid" : "1px solid",
-                                        borderColor: betRacerId === racer.id ? "primary.main" : "divider",
-                                    }}
-                                >
-                                    <RacerRow racer={racer} odds={odds} />
-                                </CardActionArea>
-                            );
-                        })}
-                    </Box>
-
-                    <Typography variant="caption" color="text.secondary">
-                        Stake
+                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mb: 2 }}>
+                        {pending.course.description}
                     </Typography>
-                    <ToggleButtonGroup
-                        size="small"
-                        exclusive
-                        value={stake}
-                        onChange={(_, value) => value && setStake(value)}
-                        fullWidth
-                        sx={{ mb: 1.5, mt: 0.5, flexWrap: "wrap" }}
-                    >
-                        {STAKE_PRESETS.filter((s) => s >= minRaceStake && s <= maxRaceStake).map((s) => (
-                            <ToggleButton key={s} value={s} sx={{ textTransform: "none" }}>
-                                {formatCheddar(s)}
-                            </ToggleButton>
-                        ))}
-                    </ToggleButtonGroup>
 
-                    <ActionButton
-                        icon={<SportsScoreIcon />}
-                        label={`Race (${formatCheddar(stake)} bet)`}
-                        description={
-                            betRacerId
-                                ? `Betting on ${pending.racers.find((r) => r.id === betRacerId)?.name}${
-                                      betRacerId === "player" ? " (your own creature)" : ""
-                                  }`
-                                : "Pick a racer above to bet on"
-                        }
-                        color="warning"
-                        disabled={isBettingRace || !betRacerId}
-                        onClick={handleBet}
-                    />
+                    {!betRacerId ? (
+                        <>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                                Pick a racer to bet on
+                            </Typography>
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mb: 2 }}>
+                                {pending.racers.map((racer) => {
+                                    const odds = pending.odds.find((o) => o.racerId === racer.id);
+                                    return (
+                                        <CardActionArea
+                                            key={racer.id}
+                                            onClick={() => setBetRacerId(racer.id)}
+                                            sx={{ p: 1.5, borderRadius: 1.5, border: "1px solid", borderColor: "divider" }}
+                                        >
+                                            <RacerRow racer={racer} odds={odds} />
+                                        </CardActionArea>
+                                    );
+                                })}
+                            </Box>
+                        </>
+                    ) : (
+                        <>
+                            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                                <Typography variant="body2" color="text.secondary">
+                                    Your bet
+                                </Typography>
+                                <Button variant="text" size="small" sx={{ textTransform: "none" }} onClick={() => setBetRacerId(null)}>
+                                    Change pick
+                                </Button>
+                            </Box>
+                            <Box sx={{ p: 1.5, mb: 2, borderRadius: 1.5, border: "2px solid", borderColor: "primary.main" }}>
+                                <RacerRow
+                                    racer={pending.racers.find((r) => r.id === betRacerId)!}
+                                    odds={pending.odds.find((o) => o.racerId === betRacerId)}
+                                />
+                            </Box>
+
+                            <Typography variant="caption" color="text.secondary">
+                                Stake
+                            </Typography>
+                            <ToggleButtonGroup
+                                size="small"
+                                exclusive
+                                value={stake}
+                                onChange={(_, value) => value && setStake(value)}
+                                fullWidth
+                                sx={{ mb: 1.5, mt: 0.5, flexWrap: "wrap" }}
+                            >
+                                {STAKE_PRESETS.filter((s) => s >= minRaceStake && s <= maxRaceStake).map((s) => (
+                                    <ToggleButton key={s} value={s} sx={{ textTransform: "none" }}>
+                                        {formatCheddar(s)}
+                                    </ToggleButton>
+                                ))}
+                            </ToggleButtonGroup>
+
+                            <ActionButton
+                                icon={<SportsScoreIcon />}
+                                label={`Race (${formatCheddar(stake)} bet)`}
+                                description={`Betting on ${pending.racers.find((r) => r.id === betRacerId)?.name}${
+                                    betRacerId === "player" ? " (your own creature)" : ""
+                                }`}
+                                color="warning"
+                                disabled={isBettingRace}
+                                onClick={handleBet}
+                            />
+                        </>
+                    )}
 
                     {!confirmingForfeit ? (
                         <Button

@@ -46,6 +46,7 @@ export interface RanchRarityTier {
 export interface RanchRaceCourse {
     key: string;
     label: string;
+    description: string;
     weights: RanchStats;
 }
 
