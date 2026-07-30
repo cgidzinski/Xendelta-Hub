@@ -75,7 +75,7 @@ import { PachinkoPhysicsTask } from "./pachinkoPhysicsWorker";
 
 const SLUG = "pachinko";
 const PRICE_PER_BALL = 100;
-const REUP_SIZES = [100, 1000];
+const REUP_SIZES = [1000];
 
 // simulateShot (up to 2000 matter-js Engine.update() calls per shot) runs on a worker thread
 // pool instead of inline, so a burst of hold-to-fire launches can't block the main event loop -

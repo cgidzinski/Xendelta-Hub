@@ -12,6 +12,24 @@ export class WeeabetsUnavailable extends Error {}
 // Weeabets /api/xencasino/ledger hard-caps `limit` at 200 (422 above that).
 export const MAX_LEDGER_LIMIT = 200;
 
+// Comfortably under the client's own 20s request timeout (src/client/config/api.ts) - none of
+// these fetch() calls had any timeout at all before, so a slow/hung Weeabets left our server
+// waiting on Node's own multi-minute default (undici's headersTimeout/bodyTimeout), well past
+// the point the CLIENT already gave up and showed a misleading "Network error - please check
+// your connection" toast that blamed the player's own connection for what was actually Weeabets
+// being unresponsive. Failing fast here, as a WeeabetsUnavailable (every route already maps that
+// to a clean 503 - see the `err instanceof WeeabetsUnavailable` checks throughout src/server/
+// routes/), lets the real cause reach the player instead.
+const WEEABETS_TIMEOUT_MS = 8000;
+
+async function weeabetsFetch(url: string, init: RequestInit): Promise<Response> {
+    try {
+        return await fetch(url, { ...init, signal: AbortSignal.timeout(WEEABETS_TIMEOUT_MS) });
+    } catch (err) {
+        throw new WeeabetsUnavailable(`Weeabets did not respond in time: ${err instanceof Error ? err.message : String(err)}`);
+    }
+}
+
 export class WeeabetsTransferError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -56,7 +74,7 @@ function toRawAmount(display: string): string {
 
 export async function getAccount(discordId: string): Promise<WeeabetsAccount | null> {
   assertServiceConfigured();
-  const res = await fetch(`${WEEABETS_API_URL}/api/xencasino/user/${encodeURIComponent(discordId)}`, {
+  const res = await weeabetsFetch(`${WEEABETS_API_URL}/api/xencasino/user/${encodeURIComponent(discordId)}`, {
     headers: { Authorization: `Bearer ${WEEABETS_XENCASINO_SERVICE_TOKEN}` },
   });
   if (res.status === 404) {
@@ -87,7 +105,7 @@ export async function transfer(params: {
   note: string;
 }): Promise<{ fromNewBalance: string; toNewBalance: string }> {
   assertServiceConfigured();
-  const res = await fetch(`${WEEABETS_API_URL}/api/xencasino/transfer`, {
+  const res = await weeabetsFetch(`${WEEABETS_API_URL}/api/xencasino/transfer`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${WEEABETS_XENCASINO_SERVICE_TOKEN}`,
@@ -117,7 +135,7 @@ export async function getLedger(params: { limit?: number; beforeId?: number } = 
   if (params.beforeId) qs.set("before_id", String(params.beforeId));
   const query = qs.toString();
   // Public endpoint - no bearer token needed, on purpose (transparency).
-  const res = await fetch(`${WEEABETS_API_URL}/api/xencasino/ledger${query ? `?${query}` : ""}`);
+  const res = await weeabetsFetch(`${WEEABETS_API_URL}/api/xencasino/ledger${query ? `?${query}` : ""}`, {});
   if (!res.ok) {
     throw new Error(`Weeabets ledger fetch failed: ${res.status} ${await res.text()}`);
   }

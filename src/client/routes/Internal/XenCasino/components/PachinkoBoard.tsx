@@ -109,6 +109,8 @@ export interface PachinkoBoardProps {
     launch: (launchPower: number) => Promise<PachinkoLaunchResult>;
     reup: (balls: number) => Promise<unknown>;
     isReuping: boolean;
+    onCashOut: () => void;
+    isCashingOut: boolean;
     onSessionUpdate: (session: PachinkoSession) => void;
 }
 
@@ -121,7 +123,7 @@ const CALLOUT_MS = 1000; // how long the center win/loss callout stays on screen
 const FIRE_INTERVAL_MS = 400; // 100 balls/minute while the launch button is held
 const MAX_CONCURRENT_BALLS = 20;
 const PARTICLE_COUNT = 12;
-const REUP_AMOUNTS = [100, 1000];
+const REUP_AMOUNTS = [1000];
 
 // The board's central digital reel - a real modern machine's own "heso" (start chucker) -> LCD
 // reel -> bonus round gimmick (see pachinko.ts's chucker branch and pachinkoReels.ts on the
@@ -353,9 +355,10 @@ function drawReelDisplay(ctx: CanvasRenderingContext2D, now: number, anim: ReelA
  * job is to play trajectories back and reflect the session state it's handed.
  *
  * The economy is ball-only: every catch adds balls to the session's own ballsRemaining, never
- * cheddar directly (see pachinko.ts). The board shows the tray's current cash value; cashing
- * out happens automatically when the game modal closes (see Pachinko.tsx), not via a button
- * here.
+ * cheddar directly (see pachinko.ts). The board shows the tray's current cash value; the Cash
+ * Out button below converts it back to real cheddar - a deliberate action, not automatic on
+ * close (an unattended cash-out on navigate-away can race an in-flight launch still resolving
+ * server-side, see Pachinko.tsx's own handleCashOut comment).
  *
  * Multiple balls can be in flight at once, same as Plinko: holding the launch button fires one
  * shot immediately and then one every FIRE_INTERVAL_MS while held, and every active ball
@@ -375,6 +378,8 @@ export default function PachinkoBoard({
     launch,
     reup,
     isReuping,
+    onCashOut,
+    isCashingOut,
     onSessionUpdate,
 }: PachinkoBoardProps) {
     const [callouts, setCallouts] = useState<Callout[]>([]);
@@ -1044,6 +1049,18 @@ export default function PachinkoBoard({
                         +{amount}🔴 (🧀{formatCheddar(amount * pricePerBall)})
                     </Button>
                 ))}
+                {/* The only way a tray ever converts back to real cheddar - deliberate, not
+                    automatic on close (see Pachinko.tsx's own handleCashOut comment for why an
+                    unattended cash-out on navigate-away used to race in-flight launches). */}
+                <Button
+                    variant="contained"
+                    color="warning"
+                    onClick={onCashOut}
+                    disabled={isCashingOut || isResuming || ballsRemaining <= 0}
+                    sx={{ borderRadius: 999, px: 3, fontWeight: 700, textTransform: "none" }}
+                >
+                    Cash Out
+                </Button>
             </Box>
 
             {/* Tray: every catch adds balls here, never cheddar directly - Cash Out is the only

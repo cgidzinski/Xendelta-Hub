@@ -267,7 +267,7 @@ ReactDOM.createRoot(rootElement).render(
             <NavBarProvider>
               <SnackbarProvider
                 maxSnack={10}
-                autoHideDuration={2500}
+                autoHideDuration={6000}
                 anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
               >
                 <RouterProvider router={router} />
