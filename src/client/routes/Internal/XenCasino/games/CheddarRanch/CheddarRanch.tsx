@@ -1305,14 +1305,14 @@ function ShopTab() {
                             <Box sx={{ flexGrow: 1 }}>
                                 <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
                                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                        {item.label}
+                                        {item.label} (x{item.quantity})
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary">
                                         {formatCheddar(item.price)} each
                                     </Typography>
                                 </Box>
                                 <Typography variant="caption" color="text.secondary">
-                                    You own {item.quantity} - feeds {TYPE_LABEL[item.type]} creatures
+                                    Feeds {TYPE_LABEL[item.type]} creatures
                                 </Typography>
                             </Box>
                         </Box>
@@ -1354,10 +1354,10 @@ function ShopTab() {
                                 {STAT_ICON[recipe.statKey]}
                                 <Box sx={{ flexGrow: 1 }}>
                                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                        {shopItem.label}
+                                        {shopItem.label} (x{shopItem.quantity})
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary">
-                                        You own {shopItem.quantity} - {shopItem.description}
+                                        {shopItem.description}
                                     </Typography>
                                 </Box>
                             </Box>
@@ -1410,14 +1410,14 @@ function ShopTab() {
                         <Box>
                             <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
                                 <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                    {item.label}
+                                    {item.label} (x{item.quantity})
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
                                     {formatCheddar(item.price)} each
                                 </Typography>
                             </Box>
                             <Typography variant="caption" color="text.secondary">
-                                You own {item.quantity} - {item.description}
+                                {item.description}
                             </Typography>
                         </Box>
                         <Button
