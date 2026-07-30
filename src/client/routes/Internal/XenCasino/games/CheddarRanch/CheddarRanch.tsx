@@ -42,6 +42,7 @@ import {
     RanchItem,
     RanchOdds,
     RanchRacer,
+    RanchStats,
     RanchType,
     useCasinoRanch,
 } from "../../../../../hooks/casino/useCasinoRanch";
@@ -598,7 +599,54 @@ function RaceAnimation({ racers, result, onFinished }: RaceAnimationProps) {
     );
 }
 
-function RacerRow({ racer, odds }: { racer: RanchRacer; odds?: RanchOdds }) {
+const STAT_ORDER: (keyof RanchStats)[] = ["speed", "stamina", "power", "intelligence", "luck", "charm"];
+
+const STAT_ICON: Record<keyof RanchStats, ReactNode> = {
+    speed: <SpeedIcon sx={{ fontSize: 15 }} />,
+    stamina: <BatteryChargingFullIcon sx={{ fontSize: 15 }} />,
+    power: <BoltIcon sx={{ fontSize: 15 }} />,
+    intelligence: <PsychologyIcon sx={{ fontSize: 15 }} />,
+    luck: <CasinoIcon sx={{ fontSize: 15 }} />,
+    charm: <FavoriteIcon sx={{ fontSize: 15 }} />,
+};
+
+// The course's single strongest-weighted stat, or undefined if it's a flat all-rounder
+// course (every weight tied) - used to pick out that stat on the race field so a player can
+// size up who's built for the course at a glance, not just read six numbers.
+function favoredStatForCourse(weights: RanchStats): keyof RanchStats | undefined {
+    const max = Math.max(...STAT_ORDER.map((key) => weights[key]));
+    const top = STAT_ORDER.filter((key) => weights[key] === max);
+    return top.length === 1 ? top[0] : undefined;
+}
+
+// Dense single-row stat display - just the same icons the Ranch tab's stat grid already
+// uses, inlined next to their number with no tile borders or labels, so a 5-racer field
+// stays compact instead of a full StatsGrid per racer.
+function StatStrip({ stats, favoredStat }: { stats: RanchStats; favoredStat?: keyof RanchStats }) {
+    return (
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.25 }}>
+            {STAT_ORDER.map((key) => {
+                const isFavored = key === favoredStat;
+                return (
+                    <Box
+                        key={key}
+                        sx={{ display: "flex", alignItems: "center", gap: 0.5, color: isFavored ? "warning.main" : "text.secondary" }}
+                    >
+                        {STAT_ICON[key]}
+                        <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums", color: isFavored ? "warning.main" : "text.primary" }}
+                        >
+                            {stats[key]}
+                        </Typography>
+                    </Box>
+                );
+            })}
+        </Box>
+    );
+}
+
+function RacerRow({ racer, odds, favoredStat }: { racer: RanchRacer; odds?: RanchOdds; favoredStat?: keyof RanchStats }) {
     return (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%" }}>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
@@ -623,7 +671,7 @@ function RacerRow({ racer, odds }: { racer: RanchRacer; odds?: RanchOdds }) {
                     </Box>
                 )}
             </Box>
-            <StatsGrid stats={racer.stats} />
+            <StatStrip stats={racer.stats} favoredStat={favoredStat} />
         </Box>
     );
 }
@@ -650,7 +698,7 @@ function RaceTab() {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [pendingOverride, setPendingOverride] = useState<PendingRace | null>(null);
     const [spinning, setSpinning] = useState(false);
-    const [spinEmojis, setSpinEmojis] = useState<string[]>(["🐾", "🐾", "🐾", "🐾"]);
+    const [spinEmojis, setSpinEmojis] = useState<string[]>(["🐾", "🐾", "🐾", "🐾", "🐾"]);
     const [betRacerId, setBetRacerId] = useState<string | null>(null);
     const [stake, setStake] = useState(minRaceStake || 100);
     const [raceResult, setRaceResult] = useState<BetRaceResult | null>(null);
@@ -688,7 +736,7 @@ function RaceTab() {
         setSpinning(true);
         panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
         const spinId = setInterval(() => {
-            setSpinEmojis([0, 1, 2, 3].map(() => SPIN_EMOJI[Math.floor(Math.random() * SPIN_EMOJI.length)]));
+            setSpinEmojis([0, 1, 2, 3, 4].map(() => SPIN_EMOJI[Math.floor(Math.random() * SPIN_EMOJI.length)]));
         }, 120);
 
         startRace(selectedCreature.id)
@@ -760,7 +808,7 @@ function RaceTab() {
                         <ActionButton
                             icon={<SportsScoreIcon />}
                             label={selectedCreature ? `Race with ${selectedCreature.name} - ${formatCheddar(entryFee)} race fee` : "Pick a racer"}
-                            description="Randomizes the course and your 3 rivals. The fee is non-refundable once paid, even if you forfeit."
+                            description="Randomizes the course and your 4 rivals. The fee is non-refundable once paid, even if you forfeit."
                             color="warning"
                             disabled={!selectedCreature || isStartingRace}
                             onClick={handleStart}
@@ -833,7 +881,7 @@ function RaceTab() {
                                             onClick={() => setBetRacerId(racer.id)}
                                             sx={{ p: 1.5, borderRadius: 1.5, border: "1px solid", borderColor: "divider" }}
                                         >
-                                            <RacerRow racer={racer} odds={odds} />
+                                            <RacerRow racer={racer} odds={odds} favoredStat={favoredStatForCourse(pending.course.weights)} />
                                         </CardActionArea>
                                     );
                                 })}
@@ -853,6 +901,7 @@ function RaceTab() {
                                 <RacerRow
                                     racer={pending.racers.find((r) => r.id === betRacerId)!}
                                     odds={pending.odds.find((o) => o.racerId === betRacerId)}
+                                    favoredStat={favoredStatForCourse(pending.course.weights)}
                                 />
                             </Box>
 
@@ -1122,11 +1171,11 @@ export default function CheddarRanch() {
             })),
             footnote: `On the Race tab, paying the flat ${formatCheddar(
                 entryFee
-            )} entry fee (non-refundable once paid, even if you forfeit) randomizes both the course - which weights the 6 stats differently - and your 3 rivals, then reveals real bookmaker-style odds for all 4 racers. You can then bet ${formatCheddar(
+            )} entry fee (non-refundable once paid, even if you forfeit) randomizes both the course - which weights the 6 stats differently - and your 4 rivals, then reveals real bookmaker-style odds for all 5 racers. You can then bet ${formatCheddar(
                 minRaceStake
             )}-${formatCheddar(
                 maxRaceStake
-            )} on any one of the 4 to win - a favorite pays a lower multiplier, a longshot pays a higher one - or forfeit and walk away (still losing the entry fee). Your own creature's win/loss record and level track whether it actually placed first, independent of who you bet on.`,
+            )} on any one of the 5 to win - a favorite pays a lower multiplier, a longshot pays a higher one - or forfeit and walk away (still losing the entry fee). Your own creature's win/loss record and level track whether it actually placed first, independent of who you bet on.`,
         },
     ];
 
@@ -1151,7 +1200,7 @@ export default function CheddarRanch() {
     return (
         <GameWrapper
             title="Cheddar Ranch"
-            howToPlay="Ranch: tap the + tile to hatch a Cheddar Egg (rarity, species, and Land/Sea/Air type are randomized). Feed a creature with the Feed matching its own type to raise every stat by a random amount - higher-level creatures need more Feed per feeding, and a creature left unfed too long slowly loses stats. Collect its item every 24 hours (a fixed amount for its rarity tier, even a freshly hatched creature needs to wait out the cooldown first) - but collect from the same creature twice in a row without racing it and it'll refuse to produce again until it races, win or lose. Or release a creature for a flat cheddar payout. Race: pick a creature and pay the entry fee to randomize the course and reveal 3 rivals all at once, then bet on any of the 4 racers (including your own) and watch the race play out - or forfeit if you don't like your odds (the entry fee is gone either way). Your own creature's record and level track whether it actually placed first, regardless of who you bet on. Inventory: tap an item for details, then sell the stack for cheddar or use one (no effect yet). Shop: buy Land/Sea/Air Feed."
+            howToPlay="Ranch: tap the + tile to hatch a Cheddar Egg (rarity, species, and Land/Sea/Air type are randomized). Feed a creature with the Feed matching its own type to raise every stat by a random amount - higher-level creatures need more Feed per feeding, and a creature left unfed too long slowly loses stats. Collect its item every 24 hours (a fixed amount for its rarity tier, even a freshly hatched creature needs to wait out the cooldown first) - but collect from the same creature twice in a row without racing it and it'll refuse to produce again until it races, win or lose. Or release a creature for a flat cheddar payout. Race: pick a creature and pay the entry fee to randomize the course and reveal 4 rivals all at once, then bet on any of the 5 racers (including your own) and watch the race play out - or forfeit if you don't like your odds (the entry fee is gone either way). Your own creature's record and level track whether it actually placed first, regardless of who you bet on. Inventory: tap an item for details, then sell the stack for cheddar or use one (no effect yet). Shop: buy Land/Sea/Air Feed."
             oddsSections={oddsSections}
         >
             <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 3 }} variant="fullWidth">

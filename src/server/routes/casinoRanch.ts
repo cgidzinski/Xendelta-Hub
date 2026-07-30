@@ -19,14 +19,14 @@
  *
  * Racing is a two-step flow, because a real, non-refundable-on-abandonment entry fee is
  * charged before anything is revealed:
- *   1. POST /:id/race/start - charges a flat entry fee (RANCH_RACE_ENTRY_FEE), then rolls 3
+ *   1. POST /:id/race/start - charges a flat entry fee (RANCH_RACE_ENTRY_FEE), then rolls 4
  *      rival creatures (same rarity tier as the player's own creature), picks a random
  *      course (weights the 6 stats differently - see RACE_COURSES), and computes
- *      bookmaker-style odds for the whole 4-racer field via an internal Monte Carlo
+ *      bookmaker-style odds for the whole 5-racer field via an internal Monte Carlo
  *      (estimateWinProbabilities) - all in one shot, so the client can play a single
  *      "randomizing" reveal animation (the field and the course "spinning" together) before
  *      showing the real result. From here the player either bets or forfeits.
- *   2. POST /:id/race/bet - the player bets a stake on any one of the 4 racers. Debits the
+ *   2. POST /:id/race/bet - the player bets a stake on any one of the 5 racers. Debits the
  *      stake, then runs ONE real call to simulateRace (the exact same scoring function the
  *      odds were estimated from) against the stored field/course to decide the actual
  *      winner and finishing order, pays out stake * multiplier if the bet racer won, and
@@ -958,7 +958,7 @@ module.exports = function (app: express.Application) {
     });
 
     // Step 1 of 2 - charges the flat, non-refundable-on-abandonment entry fee, then rolls
-    // the 3 rivals, the course, and the odds all together in one shot (the client plays a
+    // the 4 rivals, the course, and the odds all together in one shot (the client plays a
     // single cosmetic "randomizing" reveal over this one response rather than waiting on a
     // second request for the course).
     app.post(
@@ -999,7 +999,7 @@ module.exports = function (app: express.Application) {
                     note: "ranch_race_start",
                 });
 
-                const rivals: Racer[] = [1, 2, 3].map((n) => {
+                const rivals: Racer[] = [1, 2, 3, 4].map((n) => {
                     const rival = rollRival(creature.rarityTier);
                     return {
                         id: `rival-${n}`,
@@ -1084,7 +1084,7 @@ module.exports = function (app: express.Application) {
         }
     );
 
-    // Step 2 of 2 - the player bets on one of the 4 racers; resolves immediately.
+    // Step 2 of 2 - the player bets on one of the 5 racers; resolves immediately.
     app.post(
         "/api/casino/ranch/:id/race/bet",
         authenticateToken,
