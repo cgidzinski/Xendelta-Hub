@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSnackbar } from "notistack";
 import { apiClient } from "../../../../../config/api";
@@ -124,7 +124,7 @@ export default function Pachinko() {
         onError: (error: Error) => enqueueSnackbar(error.message || "Failed to launch", { variant: "error" }),
     });
 
-    const { mutateAsync: cashOutAsync } = useMutation({
+    const { mutateAsync: cashOutAsync, isPending: isCashingOut } = useMutation({
         mutationFn: cashOutBalls,
         onSuccess: (data) => {
             enqueueSnackbar(`Cashed out ${data.ballsCashedOut} balls`, { variant: "success" });
@@ -134,30 +134,17 @@ export default function Pachinko() {
         onError: (error: Error) => enqueueSnackbar(error.message || "Failed to cash out", { variant: "error" }),
     });
 
-    // No manual Cash Out button - closing the modal (X or Escape, see PlayLauncher's own
-    // onClose) settles up automatically instead, same as walking away from a real machine and
-    // having the attendant count out your tray. Only fires the transfer if there's actually
-    // something to cash out - opening and immediately closing without playing shouldn't throw
-    // an error toast.
-    const handleClose = () => {
+    // Cashing out is a deliberate action (the button wired up below), not something that fires
+    // automatically on close/navigate-away - an unattended cash-out could race an in-flight
+    // launch still resolving server-side (hold-to-fire), fail with a 409, and have nowhere to
+    // retry since nothing's listening for the result anymore. Closing without cashing out just
+    // leaves the round active - it's resumable next time (see handleOpen below), and the
+    // server's own stale-round sweep settles it if the player never comes back.
+    const handleCashOut = () => {
         if (session && session.ballsRemaining > 0) {
             cashOutAsync();
         }
     };
-
-    // Closing via X/Escape isn't the only way to leave an active round - the "Back to Games"
-    // button, a browser/mobile back gesture, or any other route change away from this page all
-    // just unmount this component instead of going through PlayLauncher's onClose. Settle up the
-    // same way handleClose does whenever that happens, so real cheddar isn't left stranded in an
-    // abandoned round until the server's stale-round sweep eventually refunds it. Kept in a ref
-    // so the unmount cleanup (which must only fire once, on the actual unmount) always calls the
-    // latest handleClose rather than one closed over a stale session.
-    const handleCloseRef = useRef(handleClose);
-    handleCloseRef.current = handleClose;
-
-    useEffect(() => {
-        return () => handleCloseRef.current();
-    }, []);
 
     // Fires every time the modal opens (not just the first time) - a batch bought in a previous
     // visit may still be open, so this decides whether to resume it or start with no session
@@ -202,7 +189,7 @@ export default function Pachinko() {
                     { label: "Jackpot, primed", payout: "Pool → balls" },
                 ],
                 footnote:
-                    "Every catch pays out in balls, never cheddar directly - closing the game cashes out your tray automatically. Most balls miss, like a real pachinko board. Side tulips toggle open/closed each time they catch a ball; the jackpot pocket is nearly impossible to catch until both side tulips are open at once, then it pays the whole jackpot pool, converted to balls. The chucker doesn't pay anything itself directly, but spins the board's central reel - a real modern machine's own start-chucker-triggers-the-LCD-reel gimmick. Two matching symbols add a modest ball bonus; three matching symbols add a bigger bonus AND opens the attacker gate for a few seconds - the attacker only opens on a 3x reel match, not on every chucker catch.",
+                    "Every catch pays out in balls, never cheddar directly - press Cash Out to convert your tray back to real cheddar whenever you're ready. Most balls miss, like a real pachinko board. Side tulips toggle open/closed each time they catch a ball; the jackpot pocket is nearly impossible to catch until both side tulips are open at once, then it pays the whole jackpot pool, converted to balls. The chucker doesn't pay anything itself directly, but spins the board's central reel - a real modern machine's own start-chucker-triggers-the-LCD-reel gimmick. Two matching symbols add a modest ball bonus; three matching symbols add a bigger bonus AND opens the attacker gate for a few seconds - the attacker only opens on a 3x reel match, not on every chucker catch.",
             },
         ]
         : [];
@@ -210,7 +197,7 @@ export default function Pachinko() {
     return (
         <GameWrapper
             title="Pachinko"
-            howToPlay="Buy balls with the +100/+1000 buttons, then hold Launch to fire them at your own power - balls fly one every 600ms while held. Most balls miss - catches add more balls to your tray instead of paying cash. Closing the game cashes out your tray automatically."
+            howToPlay="Buy balls with the +1000 button, then hold Launch to fire them at your own power - balls fly one every 600ms while held. Most balls miss - catches add more balls to your tray instead of paying cash. Press Cash Out whenever you're ready to convert your tray back to cheddar."
             oddsSections={oddsSections}
             maxWin={odds?.maxPayout}
         >
@@ -220,7 +207,6 @@ export default function Pachinko() {
                 jackpotLabel={odds?.jackpotPool ? `🎰 ${formatCheddar(odds.jackpotPool)}` : undefined}
                 price={odds?.pricePerBall}
                 onOpen={handleOpen}
-                onClose={handleClose}
             >
                 <PachinkoBoard
                     session={session}
@@ -236,6 +222,8 @@ export default function Pachinko() {
                     launch={launchAsync}
                     reup={reupAsync}
                     isReuping={isReuping}
+                    onCashOut={handleCashOut}
+                    isCashingOut={isCashingOut}
                     onSessionUpdate={setSession}
                 />
             </PlayLauncher>
