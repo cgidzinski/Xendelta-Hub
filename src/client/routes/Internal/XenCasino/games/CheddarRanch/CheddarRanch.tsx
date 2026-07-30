@@ -261,7 +261,6 @@ function RanchCard({ creature, feedCooldownMs, selected, onClick }: RanchCardPro
                     label={creature.rarityTier}
                     sx={{ textTransform: "capitalize", fontWeight: 700, bgcolor: TIER_COLOR[creature.rarityTier], color: "#000" }}
                 />
-                <Chip size="small" label={`${TYPE_EMOJI[creature.type]} ${TYPE_LABEL[creature.type]}`} variant="outlined" />
                 <Chip size="small" label={`Lv ${creature.level}`} variant="outlined" />
             </Box>
             <Typography variant="caption" color="text.secondary">
