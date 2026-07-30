@@ -1383,9 +1383,16 @@ function ShopTab() {
                                     Craft (free)
                                 </Button>
                             </Box>
-                            <Typography variant="caption" color="text.secondary">
-                                Craft from: {recipe.recipes.map((r) => `${r.quantity}x ${r.materialLabel} (own ${r.owned})`).join(", or ")}
-                            </Typography>
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
+                                <Typography variant="caption" color="text.secondary">
+                                    Craft from:
+                                </Typography>
+                                {recipe.recipes.map((r) => (
+                                    <Typography key={r.materialKey} variant="caption" color="text.secondary">
+                                        {r.quantity}x {r.materialLabel} - you own {r.owned}
+                                    </Typography>
+                                ))}
+                            </Box>
                         </Box>
                     );
                 })}
