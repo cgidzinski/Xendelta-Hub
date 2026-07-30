@@ -53,8 +53,18 @@
  * every couple of collections to keep working, tying passive item income back to the same
  * house-edged activity as everything else. Collected items land in a per-user fungible
  * stack (XenCasinoRanchInventory, shared with the bought Feed items under different keys)
- * that can be sold for cheddar or "used" - used is a stub for now (consumes the item, no
- * effect yet).
+ * that can be sold for cheddar, "used" as a plain material (a stub for now), or crafted
+ * into a Tonic (see TONIC_RECIPES) instead of selling.
+ *
+ * Beyond Feed, the Shop also sells 6 Tonics (one per stat, a guaranteed +TONIC_GAIN to that
+ * one stat - craftable for free from materials too) and 5 single consumables: a Type-Swap
+ * Serum (rerolls a creature's species within its own rarity tier, stats untouched), a Decay
+ * Shield (pauses neglect decay for RANCH_DECAY_SHIELD_MS), a Course Ticket (an optional
+ * /race/start flag that rerolls the course once), a Hardened Feed (an optional /race/start
+ * flag that widens all 4 rivals' stat range toward the next rarity tier - no new payout math
+ * needed, since the existing bookmaker odds already pay more for a lower win probability),
+ * and Forfeit Insurance (consumed automatically by /race/forfeit if owned, refunding
+ * FORFEIT_INSURANCE_REFUND_RATE of the entry fee instead of nothing).
  *
  * Every Weeabets transfer key here is a short random token (txnKey), not userId+creatureId
  * embedded directly - both are 24-char Mongo ObjectIds, and prefix + both + a timestamp
@@ -316,6 +326,139 @@ const SPECIES_ITEM_KEY: Record<string, string> = {
     "Void Kraken": "void-ink",
 };
 
+export const TONIC_GAIN = 10; // flat, guaranteed - vs Feed's random 1-4 per stat across all six at once
+const TONIC_PRICE = 150;
+
+interface TonicDef {
+    key: string;
+    label: string;
+    statKey: keyof RanchStats;
+    price: number;
+    gain: number;
+    description: string;
+}
+
+// One Tonic per stat - a guaranteed, targeted boost, unlike Feed's random roll across every
+// stat at once. Buyable directly in the Shop, or crafted for free from materials (see
+// TONIC_RECIPES below) - giving materials a real use beyond selling them for cheddar.
+const TONIC_ITEMS: Record<keyof RanchStats, TonicDef> = {
+    speed: { key: "tonic-speed", label: "Speed Tonic", statKey: "speed", price: TONIC_PRICE, gain: TONIC_GAIN, description: `A guaranteed +${TONIC_GAIN} Speed.` },
+    stamina: {
+        key: "tonic-stamina",
+        label: "Stamina Tonic",
+        statKey: "stamina",
+        price: TONIC_PRICE,
+        gain: TONIC_GAIN,
+        description: `A guaranteed +${TONIC_GAIN} Stamina.`,
+    },
+    power: { key: "tonic-power", label: "Power Tonic", statKey: "power", price: TONIC_PRICE, gain: TONIC_GAIN, description: `A guaranteed +${TONIC_GAIN} Power.` },
+    intelligence: {
+        key: "tonic-intelligence",
+        label: "Intelligence Tonic",
+        statKey: "intelligence",
+        price: TONIC_PRICE,
+        gain: TONIC_GAIN,
+        description: `A guaranteed +${TONIC_GAIN} Intelligence.`,
+    },
+    luck: { key: "tonic-luck", label: "Luck Tonic", statKey: "luck", price: TONIC_PRICE, gain: TONIC_GAIN, description: `A guaranteed +${TONIC_GAIN} Luck.` },
+    charm: { key: "tonic-charm", label: "Charm Tonic", statKey: "charm", price: TONIC_PRICE, gain: TONIC_GAIN, description: `A guaranteed +${TONIC_GAIN} Charm.` },
+};
+
+const TONIC_ITEMS_BY_KEY: Record<string, TonicDef> = Object.fromEntries(Object.values(TONIC_ITEMS).map((t) => [t.key, t]));
+
+interface TonicRecipe {
+    materialKey: string;
+    quantity: number;
+}
+
+// Crafting recipes for each Tonic - owning enough of ANY ONE listed recipe is enough to
+// craft it (the route uses whichever one the player can afford in materials). Quantity
+// scales DOWN as a material's own rarity/sellValue goes up, since a rarer material is worth
+// more, so between them every one of the 15 existing materials feeds into exactly one
+// Tonic - nothing is craft-useless.
+const TONIC_RECIPES: Record<keyof RanchStats, TonicRecipe[]> = {
+    speed: [
+        { materialKey: "down-feather", quantity: 5 },
+        { materialKey: "falcon-plume", quantity: 1 },
+    ],
+    stamina: [
+        { materialKey: "puppy-fluff", quantity: 5 },
+        { materialKey: "goat-milk", quantity: 3 },
+    ],
+    power: [
+        { materialKey: "storm-hide", quantity: 2 },
+        { materialKey: "badger-claw", quantity: 2 },
+        { materialKey: "ember-fur", quantity: 1 },
+    ],
+    intelligence: [
+        { materialKey: "otter-pelt", quantity: 3 },
+        { materialKey: "wyrm-scale", quantity: 1 },
+    ],
+    luck: [
+        { materialKey: "whisker-tuft", quantity: 5 },
+        { materialKey: "moon-fang", quantity: 2 },
+        { materialKey: "void-ink", quantity: 1 },
+    ],
+    charm: [
+        { materialKey: "fox-tail", quantity: 3 },
+        { materialKey: "gilded-horn", quantity: 1 },
+        { materialKey: "solar-antler", quantity: 1 },
+    ],
+};
+
+interface ShopItemDef {
+    key: string;
+    label: string;
+    price: number;
+    description: string;
+}
+
+// Five single-use consumables beyond Feed/Tonics. Each is handled by name in the routes
+// below rather than through a shared "item effect" abstraction, since each does something
+// structurally different (reroll a course, widen a rival range, refund on forfeit, mutate a
+// creature) - a generic effect system would be more machinery than five items justify.
+const TYPE_SWAP_SERUM: ShopItemDef = {
+    key: "type-swap-serum",
+    label: "Type-Swap Serum",
+    price: 500,
+    description: "Rerolls a creature's species (and Land/Sea/Air type) to another species of the same rarity tier - stats and level are untouched.",
+};
+const DECAY_SHIELD: ShopItemDef = {
+    key: "decay-shield",
+    label: "Decay Shield",
+    price: 800,
+    description: "Protects a creature from neglect decay for 3 days.",
+};
+const COURSE_TICKET: ShopItemDef = {
+    key: "course-ticket",
+    label: "Course Ticket",
+    price: 1000,
+    description: "Rerolls the race course once if you don't like what comes up - toggle it on before you start a race.",
+};
+const HARDENED_FEED: ShopItemDef = {
+    key: "hardened-feed",
+    label: "Hardened Feed",
+    price: 1200,
+    description: "Toughens up all 4 rivals for one race, widening their stat range toward the next rarity tier - harder to beat, but pays out more if you do.",
+};
+const FORFEIT_INSURANCE: ShopItemDef = {
+    key: "forfeit-insurance",
+    label: "Forfeit Insurance",
+    price: 1000,
+    description: "Refunds half the entry fee if you forfeit a race instead of betting - used up automatically the next time you forfeit.",
+};
+
+const SHOP_ITEMS: Record<string, ShopItemDef> = {
+    ...TONIC_ITEMS_BY_KEY,
+    [TYPE_SWAP_SERUM.key]: TYPE_SWAP_SERUM,
+    [DECAY_SHIELD.key]: DECAY_SHIELD,
+    [COURSE_TICKET.key]: COURSE_TICKET,
+    [HARDENED_FEED.key]: HARDENED_FEED,
+    [FORFEIT_INSURANCE.key]: FORFEIT_INSURANCE,
+};
+
+export const FORFEIT_INSURANCE_REFUND_RATE = 0.5;
+
 // Curated so hatching feels a little personal - one silly nickname per creature (no
 // separate formal name), built by pairing a random adjective with a random noun, e.g.
 // `Slender Sizzler`. Rolled at hatch time; no gameplay effect, pure flavor. 200 x 200
@@ -384,14 +527,19 @@ export const RANCH_NEGLECT_GRACE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 export const RANCH_DECAY_TICK_MS = 24 * 60 * 60 * 1000; // 1 tick/day past grace
 export const RANCH_DECAY_PER_TICK = 1; // -1 to every stat, per tick
 export const RANCH_STAT_FLOOR = 1; // never below 1 - no "death" state
+export const RANCH_DECAY_SHIELD_MS = 3 * 24 * 60 * 60 * 1000; // how long a used Decay Shield protects a creature for
 
 export function resolveRanchDecay(
     stats: RanchStats,
     lastFedAt: Date | null,
     createdAt: Date,
     decayTicksApplied: number,
-    now: Date
+    now: Date,
+    shieldedUntil: Date | null = null
 ): { stats: RanchStats; decayTicksApplied: number; changed: boolean } {
+    if (shieldedUntil && now.getTime() < shieldedUntil.getTime()) {
+        return { stats, decayTicksApplied, changed: false };
+    }
     const anchor = (lastFedAt ?? createdAt).getTime();
     const elapsed = now.getTime() - anchor;
     if (elapsed < RANCH_NEGLECT_GRACE_MS) {
@@ -460,16 +608,37 @@ export function rollFeedGains(): RanchStats {
 // A rival's stats/species/name are rolled the same way a hatch would be, from the SAME
 // rarity tier as the player's own creature (reusing RANCH_RARITY_TIERS/SPECIES_BY_TIER
 // directly, not a second stat generation system) so the field stays naturally competitive
-// without a separate opponent-scaling formula.
-export function rollRival(tierKey: string): { species: string; name: string; type: RanchType; stats: RanchStats } {
+// without a separate opponent-scaling formula. `statRangeOverride` lets a Difficulty item
+// (see widenedRivalRange below) widen the roll without touching the species/name logic.
+export function rollRival(
+    tierKey: string,
+    statRangeOverride?: [number, number]
+): { species: string; name: string; type: RanchType; stats: RanchStats } {
     const tier = RANCH_RARITY_TIERS.find((t) => t.key === tierKey) ?? RANCH_RARITY_TIERS[0];
     const species = randomSpecies(tier.key);
     return {
         species,
         name: rollCreatureName(),
         type: typeForSpecies(species),
-        stats: rollStatsInRange(tier.statRange),
+        stats: rollStatsInRange(statRangeOverride ?? tier.statRange),
     };
+}
+
+// The stat range a Difficulty item's toughened rivals roll from for one race: the player's
+// own tier's floor up to the NEXT tier's ceiling (so e.g. a rare player can face rivals as
+// strong as an epic), or, for legendary (no tier above it), the top widened by the tier's
+// own span instead. No new payout math needed anywhere that calls this - tougher rivals
+// just organically lower win probability, and estimateWinProbabilities/
+// multiplierForProbability already pay more for a lower-probability win.
+export function widenedRivalRange(tierKey: string): [number, number] {
+    const index = RANCH_RARITY_TIERS.findIndex((t) => t.key === tierKey);
+    const tier = RANCH_RARITY_TIERS[index === -1 ? 0 : index];
+    const nextTier = RANCH_RARITY_TIERS[index + 1];
+    if (nextTier) {
+        return [tier.statRange[0], nextTier.statRange[1]];
+    }
+    const span = tier.statRange[1] - tier.statRange[0];
+    return [tier.statRange[0], tier.statRange[1] + span];
 }
 
 export interface Racer {
@@ -558,6 +727,7 @@ function creatureView(doc: any) {
         itemLabel: ITEM_DEFS[SPECIES_ITEM_KEY[doc.species]]?.label,
         collectQuantity: collectQuantityForTier(doc.rarityTier),
         collectBlocked: (doc.collectStreak ?? 0) >= RANCH_COLLECT_STREAK_LIMIT,
+        decayShieldUntil: doc.decayShieldUntil ?? null,
         createdAt: doc.createdAt,
     };
 }
@@ -592,7 +762,14 @@ async function ensureCreatureFresh(creature: any) {
         }
     }
 
-    const decay = resolveRanchDecay(mergedStats, creature.lastFedAt, creature.createdAt, creature.decayTicksApplied ?? 0, new Date());
+    const decay = resolveRanchDecay(
+        mergedStats,
+        creature.lastFedAt,
+        creature.createdAt,
+        creature.decayTicksApplied ?? 0,
+        new Date(),
+        creature.decayShieldUntil ?? null
+    );
     if (decay.changed) {
         for (const key of STAT_KEYS) {
             setFields["stats." + key] = decay.stats[key];
@@ -630,6 +807,36 @@ async function feedItemsView(userId: string) {
     });
 }
 
+// Tonics + the 5 single consumables (Type-Swap Serum, Decay Shield, Course Ticket,
+// Hardened Feed, Forfeit Insurance) - everything buyable in the Shop beyond Feed.
+async function shopItemsView(userId: string) {
+    const doc = await inventoryDoc(userId);
+    return Object.values(SHOP_ITEMS).map((item) => ({
+        key: item.key,
+        label: item.label,
+        price: item.price,
+        description: item.description,
+        quantity: doc.items.get(item.key) || 0,
+    }));
+}
+
+// What the Shop's crafting UI needs to show for each Tonic - which materials (and how many)
+// craft it, alongside how many the player currently owns of each.
+async function tonicRecipesView(userId: string) {
+    const doc = await inventoryDoc(userId);
+    return STAT_KEYS.map((statKey) => ({
+        statKey,
+        tonicKey: TONIC_ITEMS[statKey].key,
+        tonicLabel: TONIC_ITEMS[statKey].label,
+        recipes: TONIC_RECIPES[statKey].map((r) => ({
+            materialKey: r.materialKey,
+            materialLabel: ITEM_DEFS[r.materialKey]?.label ?? r.materialKey,
+            quantity: r.quantity,
+            owned: doc.items.get(r.materialKey) || 0,
+        })),
+    }));
+}
+
 async function pendingRaceView(userId: string) {
     const doc = await XenCasinoRanchPendingRace.getState(userId);
     if (!doc.pending || new Date(doc.pending.expiresAt).getTime() < Date.now()) {
@@ -643,11 +850,15 @@ async function rosterView(userId: string) {
     const creatures = await Promise.all(rawCreatures.map((c: any) => ensureCreatureFresh(c)));
     const items = await itemsView(userId);
     const feedItems = await feedItemsView(userId);
+    const shopItems = await shopItemsView(userId);
+    const tonicRecipes = await tonicRecipesView(userId);
     const pendingRace = await pendingRaceView(userId);
     return {
         creatures: creatures.map(creatureView),
         items,
         feedItems,
+        shopItems,
+        tonicRecipes,
         pendingRace,
         rarityTiers: RANCH_RARITY_TIERS.map((t) => ({
             key: t.key,
@@ -656,6 +867,7 @@ async function rosterView(userId: string) {
             statRange: t.statRange,
         })),
         raceCourses: RACE_COURSES.map((c) => ({ key: c.key, label: c.label, description: c.description, weights: c.weights })),
+        speciesByTier: SPECIES_BY_TIER,
         hatchPrice: HATCH_PRICE,
         feedCooldownMs: FEED_COOLDOWN_MS,
         minRaceStake: MIN_RACE_STAKE,
@@ -889,21 +1101,163 @@ module.exports = function (app: express.Application) {
 
     // Placeholder - consumes one unit but has no effect yet. Kept as its own endpoint (not
     // just left unbuilt) so the item-use flow already exists end to end for whenever a real
-    // effect gets designed.
+    // effect gets designed. Tonics, the Type-Swap Serum, and the Decay Shield all target a
+    // specific creature (`creatureId` in the body); plain materials fall through to the
+    // original no-op stub.
     app.post("/api/casino/ranch/items/:key/use", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const { key } = req.params;
-        if (!ITEM_DEFS[key]) {
+        const { creatureId, species } = req.body as { creatureId?: string; species?: string };
+
+        const tonic = TONIC_ITEMS_BY_KEY[key];
+        const isTypeSwap = key === TYPE_SWAP_SERUM.key;
+        const isDecayShield = key === DECAY_SHIELD.key;
+        const isMaterial = !!ITEM_DEFS[key];
+        if (!tonic && !isTypeSwap && !isDecayShield && !isMaterial) {
             return res.status(400).json({ status: false, message: "Invalid item" });
         }
 
-        const updated = await XenCasinoRanchInventory.subtractItem(userId, key, 1);
-        if (!updated) {
+        const needsCreature = !!tonic || isTypeSwap || isDecayShield;
+        if (needsCreature && !creatureId) {
+            return res.status(400).json({ status: false, message: "Pick a creature to use this on" });
+        }
+
+        let creature: any = null;
+        if (needsCreature) {
+            creature = await XenCasinoRanchCreature.getOwned(userId, creatureId!);
+            if (!creature) {
+                return res.status(404).json({ status: false, message: "Creature not found" });
+            }
+            creature = await ensureCreatureFresh(creature);
+        }
+
+        const consumed = await XenCasinoRanchInventory.subtractItem(userId, key, 1);
+        if (!consumed) {
             return res.status(400).json({ status: false, message: "You don't have any of this item" });
+        }
+
+        if (tonic) {
+            const updated = await XenCasinoRanchCreature.applyTonic(userId, creatureId!, tonic.statKey, tonic.gain);
+            return res.json({
+                status: true,
+                data: {
+                    message: `${updated.name}'s ${tonic.label.replace(" Tonic", "")} rose by ${tonic.gain}!`,
+                    creature: creatureView(updated),
+                    items: await itemsView(userId),
+                    shopItems: await shopItemsView(userId),
+                },
+            });
+        }
+
+        if (isTypeSwap) {
+            const tier = RANCH_RARITY_TIERS.find((t) => t.key === creature.rarityTier) ?? RANCH_RARITY_TIERS[0];
+            const options = SPECIES_BY_TIER[tier.key] ?? [];
+            const nextSpecies = species && options.includes(species) ? species : options.find((s) => s !== creature.species) ?? options[0];
+            const updated = await XenCasinoRanchCreature.setSpecies(userId, creatureId!, nextSpecies);
+            return res.json({
+                status: true,
+                data: { message: `${updated.name} transformed into a ${nextSpecies}!`, creature: creatureView(updated), shopItems: await shopItemsView(userId) },
+            });
+        }
+
+        if (isDecayShield) {
+            const until = new Date(Date.now() + RANCH_DECAY_SHIELD_MS);
+            const updated = await XenCasinoRanchCreature.setDecayShield(userId, creatureId!, until);
+            return res.json({
+                status: true,
+                data: {
+                    message: `${updated.name} is shielded from decay for 3 days.`,
+                    creature: creatureView(updated),
+                    shopItems: await shopItemsView(userId),
+                },
+            });
         }
 
         return res.json({ status: true, data: { message: "Nothing happens... yet.", items: await itemsView(userId) } });
     });
+
+    app.post("/api/casino/ranch/shop/:key/buy", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+        const { key } = req.params;
+        const item = SHOP_ITEMS[key];
+        if (!item) {
+            return res.status(400).json({ status: false, message: "Invalid item" });
+        }
+
+        const user = await User.findById(userId).exec();
+        if (!user) {
+            return res.status(404).json({ status: false, message: "User not found" });
+        }
+
+        try {
+            const resolved = await resolveUserAccount(user);
+            if (!resolved.linked || !resolved.account) {
+                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
+            }
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+            const payoutResult = await transfer({
+                fromAccountId: resolved.account.accountId,
+                toAccountId: xenCasinoAccountId,
+                amount: item.price.toFixed(10),
+                key: txnKey("ranch-shop-buy"),
+                note: `ranch_buy_${item.key}`,
+            });
+
+            try {
+                await XenCasinoRanchInventory.addItem(userId, item.key, 1);
+            } catch (creditErr) {
+                await transfer({
+                    fromAccountId: xenCasinoAccountId,
+                    toAccountId: resolved.account.accountId,
+                    amount: item.price.toFixed(10),
+                    key: txnKey("ranch-shop-buy-refund"),
+                    note: `ranch_buy_${item.key}_refund`,
+                });
+                throw creditErr;
+            }
+
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: item.price, payout: 0 });
+            return res.json({ status: true, data: { balance: payoutResult.fromNewBalance, shopItems: await shopItemsView(userId) } });
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    // Crafts a Tonic from materials instead of buying it - free (no cheddar involved),
+    // purely a material sink. Uses whichever of the stat's TONIC_RECIPES the player has
+    // enough of; if several qualify, the first one listed wins.
+    app.post(
+        "/api/casino/ranch/tonics/:statKey/craft",
+        authenticateToken,
+        requireGameEnabled(SLUG),
+        async function (req: express.Request, res: express.Response) {
+            const userId = String((req as AuthenticatedRequest).user!._id);
+            const statKey = req.params.statKey as keyof RanchStats;
+            const tonic = TONIC_ITEMS[statKey];
+            const recipes = TONIC_RECIPES[statKey];
+            if (!tonic || !recipes) {
+                return res.status(400).json({ status: false, message: "Invalid tonic" });
+            }
+
+            const doc = await inventoryDoc(userId);
+            const usable = recipes.find((r) => (doc.items.get(r.materialKey) || 0) >= r.quantity);
+            if (!usable) {
+                return res.status(400).json({ status: false, message: `Not enough materials to craft a ${tonic.label}` });
+            }
+
+            const consumed = await XenCasinoRanchInventory.subtractItem(userId, usable.materialKey, usable.quantity);
+            if (!consumed) {
+                return res.status(400).json({ status: false, message: `Not enough materials to craft a ${tonic.label}` });
+            }
+            await XenCasinoRanchInventory.addItem(userId, tonic.key, 1);
+
+            return res.json({
+                status: true,
+                data: { message: `Crafted 1x ${tonic.label}.`, items: await itemsView(userId), shopItems: await shopItemsView(userId) },
+            });
+        }
+    );
 
     app.post("/api/casino/ranch/feed/buy", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
@@ -960,7 +1314,11 @@ module.exports = function (app: express.Application) {
     // Step 1 of 2 - charges the flat, non-refundable-on-abandonment entry fee, then rolls
     // the 4 rivals, the course, and the odds all together in one shot (the client plays a
     // single cosmetic "randomizing" reveal over this one response rather than waiting on a
-    // second request for the course).
+    // second request for the course). Optionally consumes a Course Ticket (rerolls the
+    // course once, keeping only the second roll) and/or a Hardened Feed (widens all 4
+    // rivals' stat range - see widenedRivalRange) if the body asks for them and the player
+    // owns one; either is consumed BEFORE the entry fee moves, so a missing item never
+    // costs the player anything.
     app.post(
         "/api/casino/ranch/:id/race/start",
         authenticateToken,
@@ -968,6 +1326,7 @@ module.exports = function (app: express.Application) {
         async function (req: express.Request, res: express.Response) {
             const userId = String((req as AuthenticatedRequest).user!._id);
             const { id } = req.params;
+            const { useCourseTicket, useDifficultyItem } = req.body as { useCourseTicket?: boolean; useDifficultyItem?: boolean };
 
             let creature = await XenCasinoRanchCreature.getOwned(userId, id);
             if (!creature) {
@@ -985,9 +1344,29 @@ module.exports = function (app: express.Application) {
                 return res.status(404).json({ status: false, message: "User not found" });
             }
 
+            let courseTicketConsumed = false;
+            let difficultyItemConsumed = false;
+            if (useCourseTicket) {
+                courseTicketConsumed = !!(await XenCasinoRanchInventory.subtractItem(userId, COURSE_TICKET.key, 1));
+                if (!courseTicketConsumed) {
+                    return res.status(400).json({ status: false, message: "You don't have a Course Ticket" });
+                }
+            }
+            if (useDifficultyItem) {
+                difficultyItemConsumed = !!(await XenCasinoRanchInventory.subtractItem(userId, HARDENED_FEED.key, 1));
+                if (!difficultyItemConsumed) {
+                    if (courseTicketConsumed) {
+                        await XenCasinoRanchInventory.addItem(userId, COURSE_TICKET.key, 1);
+                    }
+                    return res.status(400).json({ status: false, message: "You don't have a Hardened Feed" });
+                }
+            }
+
             try {
                 const resolved = await resolveUserAccount(user);
                 if (!resolved.linked || !resolved.account) {
+                    if (courseTicketConsumed) await XenCasinoRanchInventory.addItem(userId, COURSE_TICKET.key, 1);
+                    if (difficultyItemConsumed) await XenCasinoRanchInventory.addItem(userId, HARDENED_FEED.key, 1);
                     return res.status(400).json({ status: false, message: "Link your Discord account to play" });
                 }
                 const xenCasinoAccountId = await getXenCasinoAccountId();
@@ -999,8 +1378,9 @@ module.exports = function (app: express.Application) {
                     note: "ranch_race_start",
                 });
 
+                const rivalRange = difficultyItemConsumed ? widenedRivalRange(creature.rarityTier) : undefined;
                 const rivals: Racer[] = [1, 2, 3, 4].map((n) => {
-                    const rival = rollRival(creature.rarityTier);
+                    const rival = rollRival(creature.rarityTier, rivalRange);
                     return {
                         id: `rival-${n}`,
                         isPlayer: false,
@@ -1024,7 +1404,10 @@ module.exports = function (app: express.Application) {
                     ...rivals,
                 ];
 
-                const course = pickCourse();
+                let course = pickCourse();
+                if (courseTicketConsumed) {
+                    course = pickCourse(); // reroll once, discarding the first result
+                }
                 const probabilities = estimateWinProbabilities(racers, course);
                 const odds = racers.map((r) => ({
                     racerId: r.id,
@@ -1050,6 +1433,8 @@ module.exports = function (app: express.Application) {
                         key: txnKey("ranch-race-start-refund"),
                         note: "ranch_race_start_refund",
                     });
+                    if (courseTicketConsumed) await XenCasinoRanchInventory.addItem(userId, COURSE_TICKET.key, 1);
+                    if (difficultyItemConsumed) await XenCasinoRanchInventory.addItem(userId, HARDENED_FEED.key, 1);
                     return res.status(400).json({ status: false, message: "Finish or wait out your current race attempt first" });
                 }
 
@@ -1063,8 +1448,9 @@ module.exports = function (app: express.Application) {
     );
 
     // Forfeits an in-flight race attempt without betting - the entry fee already paid in
-    // /race/start is never refunded, forfeit or not, so this just clears the pending record
-    // (no Weeabets call at all) so the player can start a fresh attempt.
+    // /race/start is never refunded, forfeit or not, UNLESS the player owns a Forfeit
+    // Insurance, which is consumed automatically here (no separate "activate" step) and
+    // refunds half the entry fee.
     app.post(
         "/api/casino/ranch/:id/race/forfeit",
         authenticateToken,
@@ -1079,8 +1465,44 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "No race attempt in progress for this creature" });
             }
 
-            await XenCasinoRanchPendingRace.clearPending(userId);
-            return res.json({ status: true, data: { message: "Forfeited - the entry fee was not refunded." } });
+            const insured = !!(await XenCasinoRanchInventory.subtractItem(userId, FORFEIT_INSURANCE.key, 1));
+            if (!insured) {
+                await XenCasinoRanchPendingRace.clearPending(userId);
+                return res.json({ status: true, data: { message: "Forfeited - the entry fee was not refunded." } });
+            }
+
+            const refundAmount = Math.round(RANCH_RACE_ENTRY_FEE * FORFEIT_INSURANCE_REFUND_RATE);
+            const user = await User.findById(userId).exec();
+            if (!user) {
+                await XenCasinoRanchInventory.addItem(userId, FORFEIT_INSURANCE.key, 1);
+                return res.status(404).json({ status: false, message: "User not found" });
+            }
+
+            try {
+                const resolved = await resolveUserAccount(user);
+                if (!resolved.linked || !resolved.account) {
+                    await XenCasinoRanchInventory.addItem(userId, FORFEIT_INSURANCE.key, 1);
+                    return res.status(400).json({ status: false, message: "Link your Discord account to play" });
+                }
+                const xenCasinoAccountId = await getXenCasinoAccountId();
+                const payoutResult = await transfer({
+                    fromAccountId: xenCasinoAccountId,
+                    toAccountId: resolved.account.accountId,
+                    amount: refundAmount.toFixed(10),
+                    key: txnKey("ranch-forfeit-insurance"),
+                    note: "ranch_forfeit_insurance",
+                });
+
+                await XenCasinoRanchPendingRace.clearPending(userId);
+                return res.json({
+                    status: true,
+                    data: { message: `Forfeited - your Forfeit Insurance refunded ${refundAmount} cheddar.`, balance: payoutResult.toNewBalance },
+                });
+            } catch (err) {
+                await XenCasinoRanchInventory.addItem(userId, FORFEIT_INSURANCE.key, 1);
+                const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
+                return res.status(status).json({ status: false, message: (err as Error).message });
+            }
         }
     );
 

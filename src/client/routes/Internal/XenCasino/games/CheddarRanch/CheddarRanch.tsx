@@ -5,12 +5,17 @@ import {
     Box,
     Button,
     CardActionArea,
+    Checkbox,
     Chip,
     Dialog,
     DialogContent,
     DialogTitle,
+    FormControl,
+    FormControlLabel,
     IconButton,
     LinearProgress,
+    MenuItem,
+    Select,
     Tab,
     Tabs,
     ToggleButton,
@@ -18,6 +23,8 @@ import {
     Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import AutorenewIcon from "@mui/icons-material/Autorenew";
+import ShieldIcon from "@mui/icons-material/Shield";
 import PetsIcon from "@mui/icons-material/Pets";
 import RestaurantIcon from "@mui/icons-material/Restaurant";
 import SportsScoreIcon from "@mui/icons-material/SportsScore";
@@ -42,10 +49,18 @@ import {
     RanchItem,
     RanchOdds,
     RanchRacer,
+    RanchShopItem,
     RanchStats,
+    RanchTonicRecipe,
     RanchType,
     useCasinoRanch,
 } from "../../../../../hooks/casino/useCasinoRanch";
+
+const COURSE_TICKET_KEY = "course-ticket";
+const HARDENED_FEED_KEY = "hardened-feed";
+const FORFEIT_INSURANCE_KEY = "forfeit-insurance";
+const TYPE_SWAP_SERUM_KEY = "type-swap-serum";
+const DECAY_SHIELD_KEY = "decay-shield";
 
 // Mirrors feedUnitsRequired in casinoRanch.ts - display-only (the server is the real
 // authority on what a feed action actually consumes), so the Feed button can show the cost
@@ -349,9 +364,11 @@ interface CreatureDetailsProps {
 
 // Ranch-tab dialog - feed/collect/release only. Racing lives entirely on the Race tab now.
 function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCooldownMs, onReleased }: CreatureDetailsProps) {
-    const { feed, isFeeding, release, isReleasing, collect, isCollecting, feedItems } = useCasinoRanch();
+    const { feed, isFeeding, release, isReleasing, collect, isCollecting, feedItems, shopItems, speciesByTier, useItem, isUsingItem } = useCasinoRanch();
     const { enqueueSnackbar } = useSnackbar();
     const [confirmingRelease, setConfirmingRelease] = useState(false);
+    const [swappingSpecies, setSwappingSpecies] = useState(false);
+    const [pickedSpecies, setPickedSpecies] = useState("");
 
     const cooldownRemaining = useCountdown(feedReadyAt(creature, feedCooldownMs));
     const onCooldown = cooldownRemaining > 0;
@@ -361,6 +378,35 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCo
     const feedItem = feedItems.find((f: RanchFeedItem) => f.type === creature.type);
     const units = feedUnitsRequired(creature.level);
     const owned = feedItem?.quantity ?? 0;
+
+    const tonicItems = shopItems.filter((i) => i.key.startsWith("tonic-"));
+    const serumOwned = shopItems.find((i) => i.key === TYPE_SWAP_SERUM_KEY)?.quantity ?? 0;
+    const shieldOwned = shopItems.find((i) => i.key === DECAY_SHIELD_KEY)?.quantity ?? 0;
+    const speciesOptions = (speciesByTier[creature.rarityTier] ?? []).filter((s) => s !== creature.species);
+    const shieldActive = creature.decayShieldUntil && new Date(creature.decayShieldUntil).getTime() > Date.now();
+
+    const handleUseTonic = (item: RanchShopItem) =>
+        useItem({ itemKey: item.key, creatureId: creature.id })
+            .then((r) => enqueueSnackbar(r.message, { variant: "success" }))
+            .catch((e) => enqueueSnackbar(e.message || "Failed to use tonic", { variant: "error" }));
+
+    const handleTypeSwap = () => {
+        if (!pickedSpecies) {
+            return;
+        }
+        useItem({ itemKey: TYPE_SWAP_SERUM_KEY, creatureId: creature.id, species: pickedSpecies })
+            .then((r) => {
+                enqueueSnackbar(r.message, { variant: "success" });
+                setSwappingSpecies(false);
+                setPickedSpecies("");
+            })
+            .catch((e) => enqueueSnackbar(e.message || "Failed to swap species", { variant: "error" }));
+    };
+
+    const handleDecayShield = () =>
+        useItem({ itemKey: DECAY_SHIELD_KEY, creatureId: creature.id })
+            .then((r) => enqueueSnackbar(r.message, { variant: "success" }))
+            .catch((e) => enqueueSnackbar(e.message || "Failed to use Decay Shield", { variant: "error" }));
 
     const handleFeed = () =>
         feed(creature.id)
@@ -425,6 +471,89 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCo
                 color="success"
                 disabled={isCollecting || !canCollect}
                 onClick={handleCollect}
+            />
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
+                <Typography variant="caption" color="text.secondary">
+                    Tonics - guaranteed, targeted stat boosts
+                </Typography>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                    {STAT_ORDER.map((statKey) => {
+                        const item = tonicItems.find((i) => i.key === `tonic-${statKey}`);
+                        if (!item) {
+                            return null;
+                        }
+                        return (
+                            <Button
+                                key={item.key}
+                                size="small"
+                                variant="outlined"
+                                disabled={isUsingItem || item.quantity <= 0}
+                                onClick={() => handleUseTonic(item)}
+                                sx={{ display: "flex", flexDirection: "column", gap: 0.25, minWidth: 56, py: 0.75, textTransform: "none" }}
+                            >
+                                {STAT_ICON[statKey]}
+                                <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                                    x{item.quantity}
+                                </Typography>
+                            </Button>
+                        );
+                    })}
+                </Box>
+            </Box>
+
+            {!swappingSpecies ? (
+                <ActionButton
+                    icon={<AutorenewIcon />}
+                    label={`Type-Swap Serum (${serumOwned} owned)`}
+                    description={serumOwned > 0 ? "Rerolls this creature's species within its own rarity tier" : "Buy in the Shop first"}
+                    disabled={isUsingItem || serumOwned <= 0 || speciesOptions.length === 0}
+                    onClick={() => setSwappingSpecies(true)}
+                />
+            ) : (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
+                    <FormControl size="small" fullWidth>
+                        <Select value={pickedSpecies} displayEmpty onChange={(e) => setPickedSpecies(e.target.value)}>
+                            <MenuItem value="" disabled>
+                                Choose a new species
+                            </MenuItem>
+                            {speciesOptions.map((s) => (
+                                <MenuItem key={s} value={s}>
+                                    {s}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    <Box sx={{ display: "flex", gap: 1 }}>
+                        <Button
+                            variant="outlined"
+                            fullWidth
+                            onClick={() => {
+                                setSwappingSpecies(false);
+                                setPickedSpecies("");
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button variant="contained" fullWidth disabled={!pickedSpecies || isUsingItem} onClick={handleTypeSwap}>
+                            Confirm Swap
+                        </Button>
+                    </Box>
+                </Box>
+            )}
+
+            <ActionButton
+                icon={<ShieldIcon />}
+                label={shieldActive ? "Decay Shield active" : `Decay Shield (${shieldOwned} owned)`}
+                description={
+                    shieldActive
+                        ? `Protected from decay until ${new Date(creature.decayShieldUntil!).toLocaleString()}`
+                        : shieldOwned > 0
+                          ? "Protects from neglect decay for 3 days"
+                          : "Buy in the Shop first"
+                }
+                disabled={isUsingItem || shieldOwned <= 0 || !!shieldActive}
+                onClick={handleDecayShield}
             />
 
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
@@ -687,6 +816,7 @@ function RaceTab() {
         maxRaceStake,
         entryFee,
         pendingRace,
+        shopItems,
         startRace,
         isStartingRace,
         forfeitRace,
@@ -703,7 +833,13 @@ function RaceTab() {
     const [stake, setStake] = useState(minRaceStake || 100);
     const [raceResult, setRaceResult] = useState<BetRaceResult | null>(null);
     const [confirmingForfeit, setConfirmingForfeit] = useState(false);
+    const [useCourseTicket, setUseCourseTicket] = useState(false);
+    const [useDifficultyItem, setUseDifficultyItem] = useState(false);
     const panelRef = useRef<HTMLDivElement | null>(null);
+
+    const courseTicketOwned = shopItems.find((i) => i.key === COURSE_TICKET_KEY)?.quantity ?? 0;
+    const hardenedFeedOwned = shopItems.find((i) => i.key === HARDENED_FEED_KEY)?.quantity ?? 0;
+    const insuranceOwned = shopItems.find((i) => i.key === FORFEIT_INSURANCE_KEY)?.quantity ?? 0;
 
     const selectedCreature = creatures.find((c) => c.id === selectedId) ?? null;
     // The just-started response is used directly (rather than waiting on the roster
@@ -739,12 +875,14 @@ function RaceTab() {
             setSpinEmojis([0, 1, 2, 3, 4].map(() => SPIN_EMOJI[Math.floor(Math.random() * SPIN_EMOJI.length)]));
         }, 120);
 
-        startRace(selectedCreature.id)
+        startRace({ creatureId: selectedCreature.id, useCourseTicket, useDifficultyItem })
             .then((r) => {
                 setTimeout(() => {
                     clearInterval(spinId);
                     setSpinning(false);
                     setPendingOverride(r.pending);
+                    setUseCourseTicket(false);
+                    setUseDifficultyItem(false);
                 }, 1400);
             })
             .catch((e) => {
@@ -768,8 +906,8 @@ function RaceTab() {
             return;
         }
         forfeitRace(selectedCreature.id)
-            .then(() => {
-                enqueueSnackbar("Forfeited - the entry fee was not refunded.", { variant: "info" });
+            .then((r) => {
+                enqueueSnackbar(r.message, { variant: "info" });
                 setPendingOverride(null);
                 setBetRacerId(null);
                 setConfirmingForfeit(false);
@@ -813,6 +951,30 @@ function RaceTab() {
                             disabled={!selectedCreature || isStartingRace}
                             onClick={handleStart}
                         />
+                        {selectedCreature && (courseTicketOwned > 0 || hardenedFeedOwned > 0) && (
+                            <Box sx={{ display: "flex", flexDirection: "column", mt: 0.5 }}>
+                                {courseTicketOwned > 0 && (
+                                    <FormControlLabel
+                                        control={<Checkbox size="small" checked={useCourseTicket} onChange={(e) => setUseCourseTicket(e.target.checked)} />}
+                                        label={
+                                            <Typography variant="caption" color="text.secondary">
+                                                Use a Course Ticket to reroll the course ({courseTicketOwned} owned)
+                                            </Typography>
+                                        }
+                                    />
+                                )}
+                                {hardenedFeedOwned > 0 && (
+                                    <FormControlLabel
+                                        control={<Checkbox size="small" checked={useDifficultyItem} onChange={(e) => setUseDifficultyItem(e.target.checked)} />}
+                                        label={
+                                            <Typography variant="caption" color="text.secondary">
+                                                Use Hardened Feed for tougher, better-paying rivals ({hardenedFeedOwned} owned)
+                                            </Typography>
+                                        }
+                                    />
+                                )}
+                            </Box>
+                        )}
                     </Box>
                     <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 2, mb: 3 }}>
                         {creatures.map((creature) => (
@@ -945,12 +1107,16 @@ function RaceTab() {
                             disabled={isForfeitingRace}
                             onClick={() => setConfirmingForfeit(true)}
                         >
-                            Forfeit (lose {formatCheddar(entryFee)})
+                            {insuranceOwned > 0 ? `Forfeit (refunds ${formatCheddar(Math.round(entryFee * 0.5))} - Forfeit Insurance)` : `Forfeit (lose ${formatCheddar(entryFee)})`}
                         </Button>
                     ) : (
                         <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 1, p: 1.5, border: "1px solid", borderColor: "error.main", borderRadius: 1 }}>
                             <Typography variant="body2" color="text.secondary">
-                                Forfeit without betting? The {formatCheddar(entryFee)} entry fee is already gone either way.
+                                {insuranceOwned > 0
+                                    ? `Forfeit without betting? A Forfeit Insurance will be used automatically, refunding ${formatCheddar(
+                                          Math.round(entryFee * 0.5)
+                                      )} of the entry fee.`
+                                    : `Forfeit without betting? The ${formatCheddar(entryFee)} entry fee is already gone either way.`}
                             </Typography>
                             <Box sx={{ display: "flex", gap: 1 }}>
                                 <Button variant="outlined" fullWidth disabled={isForfeitingRace} onClick={() => setConfirmingForfeit(false)}>
@@ -999,7 +1165,7 @@ function InventoryTab({ items }: { items: RanchItem[] }) {
         if (!selectedItem) {
             return;
         }
-        useItem(selectedItem.key)
+        useItem({ itemKey: selectedItem.key })
             .then((r) => {
                 enqueueSnackbar(r.message, { variant: "info" });
                 setSelectedKey(null);
@@ -1084,36 +1250,157 @@ function InventoryTab({ items }: { items: RanchItem[] }) {
 const FEED_BUY_QUANTITIES = [1, 5, 10];
 
 function ShopTab() {
-    const { feedItems, buyFeed, isBuyingFeed } = useCasinoRanch();
+    const {
+        feedItems,
+        shopItems,
+        tonicRecipes,
+        buyFeed,
+        isBuyingFeed,
+        buyShopItem,
+        isBuyingShopItem,
+        craftTonic,
+        isCraftingTonic,
+    } = useCasinoRanch();
     const { enqueueSnackbar } = useSnackbar();
 
-    const handleBuy = (item: RanchFeedItem, quantity: number) =>
+    const handleBuyFeed = (item: RanchFeedItem, quantity: number) =>
         buyFeed({ type: item.type, quantity })
             .then(() => enqueueSnackbar(`Bought ${quantity}x ${item.label}.`, { variant: "success" }))
             .catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
+
+    const handleBuyShopItem = (item: RanchShopItem) =>
+        buyShopItem(item.key)
+            .then(() => enqueueSnackbar(`Bought 1x ${item.label}.`, { variant: "success" }))
+            .catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
+
+    const handleCraft = (recipe: RanchTonicRecipe) =>
+        craftTonic(recipe.statKey)
+            .then((r) => enqueueSnackbar(r.message, { variant: "success" }))
+            .catch((e) => enqueueSnackbar(e.message || "Failed to craft", { variant: "error" }));
+
+    const otherItems = shopItems.filter((i) => !i.key.startsWith("tonic-"));
 
     if (feedItems.length === 0) {
         return <LinearProgress sx={{ mt: 2 }} />;
     }
 
     return (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            {feedItems.map((item) => (
-                <Box
-                    key={item.key}
-                    sx={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 1,
-                        p: 1.5,
-                        border: "1px solid",
-                        borderColor: "divider",
-                        borderRadius: 1.5,
-                    }}
-                >
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <Typography sx={{ fontSize: 24 }}>{TYPE_EMOJI[item.type]}</Typography>
-                        <Box sx={{ flexGrow: 1 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                {feedItems.map((item) => (
+                    <Box
+                        key={item.key}
+                        sx={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 1,
+                            p: 1.5,
+                            border: "1px solid",
+                            borderColor: "divider",
+                            borderRadius: 1.5,
+                        }}
+                    >
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <Typography sx={{ fontSize: 24 }}>{TYPE_EMOJI[item.type]}</Typography>
+                            <Box sx={{ flexGrow: 1 }}>
+                                <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                        {item.label}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        {formatCheddar(item.price)} each
+                                    </Typography>
+                                </Box>
+                                <Typography variant="caption" color="text.secondary">
+                                    You own {item.quantity} - feeds {TYPE_LABEL[item.type]} creatures
+                                </Typography>
+                            </Box>
+                        </Box>
+                        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
+                            {FEED_BUY_QUANTITIES.map((quantity) => (
+                                <Button
+                                    key={quantity}
+                                    size="small"
+                                    variant="contained"
+                                    startIcon={<RestaurantIcon />}
+                                    disabled={isBuyingFeed}
+                                    onClick={() => handleBuyFeed(item, quantity)}
+                                    sx={{ textTransform: "none" }}
+                                >
+                                    {quantity}x
+                                </Button>
+                            ))}
+                        </Box>
+                    </Box>
+                ))}
+            </Box>
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    Tonics
+                </Typography>
+                {tonicRecipes.map((recipe) => {
+                    const shopItem = shopItems.find((i) => i.key === recipe.tonicKey);
+                    if (!shopItem) {
+                        return null;
+                    }
+                    const craftable = recipe.recipes.some((r) => r.owned >= r.quantity);
+                    return (
+                        <Box
+                            key={recipe.tonicKey}
+                            sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}
+                        >
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                {STAT_ICON[recipe.statKey]}
+                                <Box sx={{ flexGrow: 1 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                        {shopItem.label}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        You own {shopItem.quantity} - {shopItem.description}
+                                    </Typography>
+                                </Box>
+                            </Box>
+                            <Box sx={{ display: "flex", gap: 1 }}>
+                                <Button
+                                    size="small"
+                                    variant="contained"
+                                    fullWidth
+                                    disabled={isBuyingShopItem}
+                                    onClick={() => handleBuyShopItem(shopItem)}
+                                    sx={{ textTransform: "none" }}
+                                >
+                                    Buy ({formatCheddar(shopItem.price)})
+                                </Button>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    fullWidth
+                                    disabled={isCraftingTonic || !craftable}
+                                    onClick={() => handleCraft(recipe)}
+                                    sx={{ textTransform: "none" }}
+                                >
+                                    Craft (free)
+                                </Button>
+                            </Box>
+                            <Typography variant="caption" color="text.secondary">
+                                Craft from: {recipe.recipes.map((r) => `${r.quantity}x ${r.materialLabel} (own ${r.owned})`).join(", or ")}
+                            </Typography>
+                        </Box>
+                    );
+                })}
+            </Box>
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    Other Items
+                </Typography>
+                {otherItems.map((item) => (
+                    <Box
+                        key={item.key}
+                        sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}
+                    >
+                        <Box>
                             <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
                                 <Typography variant="body2" sx={{ fontWeight: 700 }}>
                                     {item.label}
@@ -1123,27 +1410,21 @@ function ShopTab() {
                                 </Typography>
                             </Box>
                             <Typography variant="caption" color="text.secondary">
-                                You own {item.quantity} - feeds {TYPE_LABEL[item.type]} creatures
+                                You own {item.quantity} - {item.description}
                             </Typography>
                         </Box>
+                        <Button
+                            size="small"
+                            variant="contained"
+                            disabled={isBuyingShopItem}
+                            onClick={() => handleBuyShopItem(item)}
+                            sx={{ textTransform: "none" }}
+                        >
+                            Buy ({formatCheddar(item.price)})
+                        </Button>
                     </Box>
-                    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
-                        {FEED_BUY_QUANTITIES.map((quantity) => (
-                            <Button
-                                key={quantity}
-                                size="small"
-                                variant="contained"
-                                startIcon={<RestaurantIcon />}
-                                disabled={isBuyingFeed}
-                                onClick={() => handleBuy(item, quantity)}
-                                sx={{ textTransform: "none" }}
-                            >
-                                {quantity}x
-                            </Button>
-                        ))}
-                    </Box>
-                </Box>
-            ))}
+                ))}
+            </Box>
         </Box>
     );
 }

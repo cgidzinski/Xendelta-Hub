@@ -21,6 +21,10 @@ import {
     collectQuantityForTier,
     RANCH_COLLECT_STREAK_LIMIT,
     resolveRanchDecay,
+    RANCH_DECAY_SHIELD_MS,
+    widenedRivalRange,
+    TONIC_GAIN,
+    FORFEIT_INSURANCE_REFUND_RATE,
     RanchStats,
     Racer,
 } from "./casinoRanch";
@@ -328,6 +332,64 @@ describe("resolveRanchDecay", () => {
         const now = new Date(recentFeed.getTime() + 1000); // but just after the recent feed
         const result = resolveRanchDecay(stats, recentFeed, createdAt, 0, now);
         expect(result.changed).toBe(false);
+    });
+
+    it("applies zero decay while an active Decay Shield covers `now`, even long past the grace period", () => {
+        const now = new Date(createdAt.getTime() + RANCH_NEGLECT_GRACE_MS + RANCH_DECAY_TICK_MS * 10);
+        const shieldedUntil = new Date(now.getTime() + 1000); // still active at `now`
+        const result = resolveRanchDecay(stats, null, createdAt, 0, now, shieldedUntil);
+        expect(result.changed).toBe(false);
+        expect(result.stats).toEqual(stats);
+    });
+
+    it("resumes normal decay once the shield has expired", () => {
+        const now = new Date(createdAt.getTime() + RANCH_NEGLECT_GRACE_MS + RANCH_DECAY_TICK_MS * 10);
+        const expiredShield = new Date(now.getTime() - 1000); // expired just before `now`
+        const result = resolveRanchDecay(stats, null, createdAt, 0, now, expiredShield);
+        expect(result.changed).toBe(true);
+    });
+});
+
+describe("widenedRivalRange", () => {
+    it("widens up to the next tier's ceiling while keeping the current tier's floor", () => {
+        const rareTier = RANCH_RARITY_TIERS.find((t) => t.key === "rare")!;
+        const epicTier = RANCH_RARITY_TIERS.find((t) => t.key === "epic")!;
+        expect(widenedRivalRange("rare")).toEqual([rareTier.statRange[0], epicTier.statRange[1]]);
+    });
+
+    it("widens by its own span for the top tier, which has no tier above it", () => {
+        const legendaryTier = RANCH_RARITY_TIERS.find((t) => t.key === "legendary")!;
+        const span = legendaryTier.statRange[1] - legendaryTier.statRange[0];
+        expect(widenedRivalRange("legendary")).toEqual([legendaryTier.statRange[0], legendaryTier.statRange[1] + span]);
+    });
+
+    it("is always at least as wide as the tier's own normal range", () => {
+        for (const tier of RANCH_RARITY_TIERS) {
+            const [lo, hi] = widenedRivalRange(tier.key);
+            expect(lo).toBe(tier.statRange[0]);
+            expect(hi).toBeGreaterThanOrEqual(tier.statRange[1]);
+        }
+    });
+});
+
+describe("rollRival with a statRangeOverride", () => {
+    it("rolls stats from the override range instead of the tier's own range", () => {
+        const override: [number, number] = [500, 500]; // fixed value makes the assertion exact
+        const rival = rollRival("common", override);
+        for (const key of STAT_KEYS) {
+            expect(rival.stats[key]).toBe(500);
+        }
+    });
+});
+
+describe("TONIC_GAIN / FORFEIT_INSURANCE_REFUND_RATE", () => {
+    it("Tonics give a positive, guaranteed stat gain", () => {
+        expect(TONIC_GAIN).toBeGreaterThan(0);
+    });
+
+    it("Forfeit Insurance refunds a fraction between 0 and 1 of the entry fee", () => {
+        expect(FORFEIT_INSURANCE_REFUND_RATE).toBeGreaterThan(0);
+        expect(FORFEIT_INSURANCE_REFUND_RATE).toBeLessThan(1);
     });
 });
 

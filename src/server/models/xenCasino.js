@@ -1121,6 +1121,10 @@ var xenCasinoRanchCreatureSchema = new mongoose.Schema({
     // collect refuses to produce anything until the creature races again. Reset to 0 by
     // statics.recordRaceResult on every resolved race, win or lose.
     collectStreak: { type: Number, default: 0 },
+    // Set by using a Decay Shield item (casinoRanch.ts) - resolveRanchDecay short-circuits
+    // with zero decay while now < decayShieldUntil, same shape as the neglect grace period
+    // it sits alongside. Null (the default) means no active shield.
+    decayShieldUntil: { type: Date, default: null },
     createdAt: { type: Date, default: Date.now },
 });
 xenCasinoRanchCreatureSchema.index({ userId: 1, createdAt: 1 });
@@ -1217,6 +1221,26 @@ xenCasinoRanchCreatureSchema.statics.collect = async function (userId, creatureI
 // clearHarvestedSquare.
 xenCasinoRanchCreatureSchema.statics.releaseOwned = async function (userId, creatureId) {
     return this.findOneAndDelete({ _id: creatureId, userId: userId }).exec();
+};
+
+// Applies a Tonic's flat, guaranteed gain to one stat (see TONIC_ITEMS in casinoRanch.ts) -
+// no cooldown/guard needed since Tonics aren't rate-limited like feed().
+xenCasinoRanchCreatureSchema.statics.applyTonic = async function (userId, creatureId, statKey, gain) {
+    var inc = {};
+    inc["stats." + statKey] = gain;
+    return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $inc: inc }, { new: true }).exec();
+};
+
+// Used by a Type-Swap Serum (casinoRanch.ts) - only species (and therefore the derived
+// type/produced item) changes; stats and level are untouched.
+xenCasinoRanchCreatureSchema.statics.setSpecies = async function (userId, creatureId, species) {
+    return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $set: { species: species } }, { new: true }).exec();
+};
+
+// Used by a Decay Shield (casinoRanch.ts) - `until` is compared against resolveRanchDecay's
+// `now` on every subsequent read.
+xenCasinoRanchCreatureSchema.statics.setDecayShield = async function (userId, creatureId, until) {
+    return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $set: { decayShieldUntil: until } }, { new: true }).exec();
 };
 
 var XenCasinoRanchCreature = mongoose.model("XenCasinoRanchCreature", xenCasinoRanchCreatureSchema);
