@@ -1,6 +1,7 @@
 import { ReactNode, useEffect } from "react";
-import { Box, Button, Typography, Paper } from "@mui/material";
+import { Box, Button, Typography, Accordion, AccordionSummary, AccordionDetails } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useNavigate } from "react-router-dom";
 import OddsDisplay, { OddsRow } from "./OddsDisplay";
 import { useXenCasinoTitlebar } from "../context/XenCasinoTitlebarContext";
@@ -25,10 +26,11 @@ interface GameWrapperProps {
  * not here - this component just registers it there for as long as the game page is
  * mounted (via context, since the navbar renders outside this page in XenCasinoLayout). The
  * odds ratio itself is shown under the Start Playing button (see PlayLauncher), not in the
- * navbar. "How to Play" and the odds/paytable breakdown render inline, directly under the
- * game, rather than behind a help modal. The "Back to Games" control stays here in the page
- * body. Every new game variant (more scratch tickets, more slots) should be built as
- * `children` inside this wrapper rather than reinventing any of this chrome.
+ * navbar. "How to Play" and the odds/paytable breakdown render in a collapsible accordion
+ * directly under the game, rather than behind a separate help modal. The "Back to Games"
+ * control stays here in the page body. Every new game variant (more scratch tickets, more
+ * slots) should be built as `children` inside this wrapper rather than reinventing any of
+ * this chrome.
  */
 export default function GameWrapper({ title, howToPlay, oddsSections, maxWin, children }: GameWrapperProps) {
     const navigate = useNavigate();
@@ -52,22 +54,26 @@ export default function GameWrapper({ title, howToPlay, oddsSections, maxWin, ch
 
             {children}
 
-            <Paper variant="outlined" sx={{ p: 3, mt: 4 }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-                    How to Play
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                    {howToPlay}
-                </Typography>
-                {maxWin !== undefined && (
-                    <Typography variant="body2" sx={{ fontWeight: 700, mt: 1, color: "success.main" }}>
-                        Max win: {formatCheddar(maxWin)}
+            <Accordion variant="outlined" sx={{ mt: 4 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                        How to Play
                     </Typography>
-                )}
-                {oddsSections.map((section, i) => (
-                    <OddsDisplay key={i} title={section.title} rows={section.rows} footnote={section.footnote} />
-                ))}
-            </Paper>
+                </AccordionSummary>
+                <AccordionDetails>
+                    <Typography variant="body2" color="text.secondary">
+                        {howToPlay}
+                    </Typography>
+                    {maxWin !== undefined && (
+                        <Typography variant="body2" sx={{ fontWeight: 700, mt: 1, color: "success.main" }}>
+                            Max win: {formatCheddar(maxWin)}
+                        </Typography>
+                    )}
+                    {oddsSections.map((section, i) => (
+                        <OddsDisplay key={i} title={section.title} rows={section.rows} footnote={section.footnote} />
+                    ))}
+                </AccordionDetails>
+            </Accordion>
         </Box>
     );
 }
