@@ -1184,13 +1184,19 @@ xenCasinoRanchCreatureSchema.statics.feed = async function (userId, creatureId, 
 // Atomic $inc of raceWins/raceLosses - called only after the route has already resolved
 // the win/loss roll (and, on a win, after the payout transfer succeeds). Also resets
 // collectStreak to 0 - racing at all (win or lose) is what re-enables collecting, not
-// winning specifically.
-xenCasinoRanchCreatureSchema.statics.recordRaceResult = async function (userId, creatureId, won) {
-    return this.findOneAndUpdate(
-        { _id: creatureId, userId: userId },
-        { $inc: won ? { raceWins: 1 } : { raceLosses: 1 }, $set: { collectStreak: 0 } },
-        { new: true }
-    ).exec();
+// winning specifically. `statBoost` is an optional { statKey: amount } object (see
+// raceStatBoostForPlace in casinoRanch.ts) folded into the same $inc so the placement
+// reward lands in the same atomic update as everything else here.
+xenCasinoRanchCreatureSchema.statics.recordRaceResult = async function (userId, creatureId, won, statBoost) {
+    var inc = won ? { raceWins: 1 } : { raceLosses: 1 };
+    if (statBoost) {
+        Object.keys(statBoost).forEach(function (key) {
+            if (statBoost[key]) {
+                inc["stats." + key] = statBoost[key];
+            }
+        });
+    }
+    return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $inc: inc, $set: { collectStreak: 0 } }, { new: true }).exec();
 };
 
 // Same re-read-and-guard shape as statics.feed - re-validates ownership and the 24h

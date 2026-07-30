@@ -23,6 +23,7 @@ import {
     resolveRanchDecay,
     RANCH_DECAY_SHIELD_MS,
     widenedRivalRange,
+    raceStatBoostForPlace,
     TONIC_GAIN,
     FORFEIT_INSURANCE_REFUND_RATE,
     RanchStats,
@@ -369,6 +370,31 @@ describe("widenedRivalRange", () => {
             expect(lo).toBe(tier.statRange[0]);
             expect(hi).toBeGreaterThanOrEqual(tier.statRange[1]);
         }
+    });
+});
+
+describe("raceStatBoostForPlace", () => {
+    it("is highest for 1st place and never increases as place gets worse", () => {
+        let previous = Infinity;
+        for (let place = 1; place <= 5; place++) {
+            const boost = raceStatBoostForPlace(place);
+            expect(boost).toBeLessThanOrEqual(previous);
+            previous = boost;
+        }
+        expect(raceStatBoostForPlace(1)).toBeGreaterThan(0);
+    });
+
+    it("stays well below a single Feed's total stat points, so it can't out-train Feed", () => {
+        // Feed rolls 1-4 (avg ~2.5) independently across all 6 stats - roughly 15 points
+        // total per feeding. The place boost applies the same amount to all 6 stats, so its
+        // total (boost * 6) should stay comfortably under that.
+        for (let place = 1; place <= 5; place++) {
+            expect(raceStatBoostForPlace(place) * 6).toBeLessThan(15);
+        }
+    });
+
+    it("falls back to 0 for a place outside the known field size", () => {
+        expect(raceStatBoostForPlace(6)).toBe(0);
     });
 });
 

@@ -210,6 +210,8 @@ export interface BetRaceResult {
     order: RaceResultEntry[];
     winnerId: string;
     betRacerId: string;
+    place: number;
+    placeBoost: number;
     creature: RanchCreature;
     balance: string;
 }

@@ -62,6 +62,13 @@ const FORFEIT_INSURANCE_KEY = "forfeit-insurance";
 const TYPE_SWAP_SERUM_KEY = "type-swap-serum";
 const DECAY_SHIELD_KEY = "decay-shield";
 
+// Race fields are always 5 racers (see casinoRanch.ts), so place is always 1-5 - a flat
+// lookup is simpler than general ordinal-suffix logic no other place in the game needs.
+const PLACE_ORDINAL: Record<number, string> = { 1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th" };
+function ordinal(place: number): string {
+    return PLACE_ORDINAL[place] ?? `${place}th`;
+}
+
 // Mirrors feedUnitsRequired in casinoRanch.ts - display-only (the server is the real
 // authority on what a feed action actually consumes), so the Feed button can show the cost
 // before the player taps it.
@@ -922,6 +929,12 @@ function RaceTab() {
                 enqueueSnackbar(`Your bet won! +${formatCheddar(raceResult.payout)} cheddar (${raceResult.multiplier}x)`, { variant: "success" });
             } else {
                 enqueueSnackbar(`Your bet lost - ${formatCheddar(raceResult.stake)} cheddar wagered.`, { variant: "error" });
+            }
+            if (raceResult.placeBoost > 0) {
+                enqueueSnackbar(
+                    `${raceResult.creature.name} placed ${ordinal(raceResult.place)} and gained +${raceResult.placeBoost} to every stat!`,
+                    { variant: "info" }
+                );
             }
         }
         setRaceResult(null);

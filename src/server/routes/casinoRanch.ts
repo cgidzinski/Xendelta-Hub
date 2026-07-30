@@ -31,7 +31,9 @@
  *      odds were estimated from) against the stored field/course to decide the actual
  *      winner and finishing order, pays out stake * multiplier if the bet racer won, and
  *      clears the pending race. The player's own creature's win/loss record is updated
- *      based on whether IT placed first - independent of which racer was bet on.
+ *      based on whether IT placed first - independent of which racer was bet on - and it
+ *      also earns a small stat boost sized to its own placement (see
+ *      raceStatBoostForPlace), again independent of the bet.
  *   Alternatively, POST /:id/race/forfeit clears the pending race without betting - the
  *   entry fee already paid in step 1 is never refunded, forfeit or not.
  * The client plays a purely cosmetic CSS-transition "race" animation using the finishing
@@ -327,7 +329,7 @@ const SPECIES_ITEM_KEY: Record<string, string> = {
 };
 
 export const TONIC_GAIN = 10; // flat, guaranteed - vs Feed's random 1-4 per stat across all six at once
-const TONIC_PRICE = 150;
+const TONIC_PRICE = 15000; // 3x the race entry fee - a deliberate purchase, not an impulse buy
 
 interface TonicDef {
     key: string;
@@ -378,31 +380,31 @@ interface TonicRecipe {
 // Tonic - nothing is craft-useless.
 const TONIC_RECIPES: Record<keyof RanchStats, TonicRecipe[]> = {
     speed: [
-        { materialKey: "down-feather", quantity: 5 },
-        { materialKey: "falcon-plume", quantity: 1 },
+        { materialKey: "down-feather", quantity: 10 },
+        { materialKey: "falcon-plume", quantity: 2 },
     ],
     stamina: [
-        { materialKey: "puppy-fluff", quantity: 5 },
-        { materialKey: "goat-milk", quantity: 3 },
+        { materialKey: "puppy-fluff", quantity: 10 },
+        { materialKey: "goat-milk", quantity: 6 },
     ],
     power: [
-        { materialKey: "storm-hide", quantity: 2 },
-        { materialKey: "badger-claw", quantity: 2 },
-        { materialKey: "ember-fur", quantity: 1 },
+        { materialKey: "storm-hide", quantity: 4 },
+        { materialKey: "badger-claw", quantity: 4 },
+        { materialKey: "ember-fur", quantity: 2 },
     ],
     intelligence: [
-        { materialKey: "otter-pelt", quantity: 3 },
-        { materialKey: "wyrm-scale", quantity: 1 },
+        { materialKey: "otter-pelt", quantity: 6 },
+        { materialKey: "wyrm-scale", quantity: 2 },
     ],
     luck: [
-        { materialKey: "whisker-tuft", quantity: 5 },
-        { materialKey: "moon-fang", quantity: 2 },
-        { materialKey: "void-ink", quantity: 1 },
+        { materialKey: "whisker-tuft", quantity: 10 },
+        { materialKey: "moon-fang", quantity: 4 },
+        { materialKey: "void-ink", quantity: 2 },
     ],
     charm: [
-        { materialKey: "fox-tail", quantity: 3 },
-        { materialKey: "gilded-horn", quantity: 1 },
-        { materialKey: "solar-antler", quantity: 1 },
+        { materialKey: "fox-tail", quantity: 6 },
+        { materialKey: "gilded-horn", quantity: 2 },
+        { materialKey: "solar-antler", quantity: 2 },
     ],
 };
 
@@ -639,6 +641,18 @@ export function widenedRivalRange(tierKey: string): [number, number] {
     }
     const span = tier.statRange[1] - tier.statRange[0];
     return [tier.statRange[0], tier.statRange[1] + span];
+}
+
+// A small per-stat boost the player's OWN creature earns just for racing, sized to how well
+// it actually placed (1st best) - applied regardless of which racer was bet on or whether
+// that bet won, so racing itself (not just winning a bet) trains the creature a little.
+// Deliberately modest - well below a single Feed's ~15 total stat points across all six
+// stats - since races have no cooldown of their own (only the entry fee gates frequency),
+// so this can never out-train Feed as a free stat-grinding loop.
+const RACE_PLACE_BOOST_BY_PLACE: Record<number, number> = { 1: 2, 2: 1, 3: 1, 4: 0, 5: 0 };
+
+export function raceStatBoostForPlace(place: number): number {
+    return RACE_PLACE_BOOST_BY_PLACE[place] ?? 0;
 }
 
 export interface Racer {
@@ -1506,7 +1520,10 @@ module.exports = function (app: express.Application) {
         }
     );
 
-    // Step 2 of 2 - the player bets on one of the 5 racers; resolves immediately.
+    // Step 2 of 2 - the player bets on one of the 5 racers; resolves immediately. The
+    // player's own creature also gets a small stat boost sized to where IT placed (see
+    // raceStatBoostForPlace), independent of which racer was bet on or whether that bet
+    // won - racing itself is rewarded, not just winning a bet.
     app.post(
         "/api/casino/ranch/:id/race/bet",
         authenticateToken,
@@ -1577,8 +1594,10 @@ module.exports = function (app: express.Application) {
 
                     const playerEntry = order.find((o) => o.racerId === "player")!;
                     const playerPlacedFirst = playerEntry.place === 1;
+                    const placeBoost = raceStatBoostForPlace(playerEntry.place);
+                    const statBoost = placeBoost > 0 ? Object.fromEntries(STAT_KEYS.map((key) => [key, placeBoost])) : null;
                     await recordCasinoRoundPlayed(userId, { game: SLUG, wager: stake, payout });
-                    const updatedCreature = await XenCasinoRanchCreature.recordRaceResult(userId, id, playerPlacedFirst);
+                    const updatedCreature = await XenCasinoRanchCreature.recordRaceResult(userId, id, playerPlacedFirst, statBoost);
                     await XenCasinoRanchPendingRace.clearPending(userId);
 
                     return res.json({
@@ -1591,6 +1610,8 @@ module.exports = function (app: express.Application) {
                             order,
                             winnerId,
                             betRacerId: racerId,
+                            place: playerEntry.place,
+                            placeBoost,
                             creature: creatureView(updatedCreature ?? racer),
                             balance,
                         },
