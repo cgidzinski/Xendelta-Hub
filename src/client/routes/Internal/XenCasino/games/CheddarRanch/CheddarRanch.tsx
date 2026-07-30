@@ -355,7 +355,7 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCo
     const cooldownRemaining = useCountdown(feedReadyAt(creature, feedCooldownMs));
     const onCooldown = cooldownRemaining > 0;
     const collectCooldownRemaining = useCountdown(collectReadyAt(creature, collectCooldownMs));
-    const canCollect = collectCooldownRemaining <= 0;
+    const canCollect = collectCooldownRemaining <= 0 && !creature.collectBlocked;
     const sellValue = releaseSellValue[creature.rarityTier] ?? 0;
     const feedItem = feedItems.find((f: RanchFeedItem) => f.type === creature.type);
     const units = feedUnitsRequired(creature.level);
@@ -413,8 +413,14 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCo
 
             <ActionButton
                 icon={<GrassIcon />}
-                label={canCollect ? `Collect ${creature.level}x ${creature.itemLabel}` : `${creature.itemLabel} - collecting`}
-                description={canCollect ? "Free - ready to collect" : `Ready again in ${formatCountdown(collectCooldownRemaining)}`}
+                label={canCollect ? `Collect ${creature.collectQuantity}x ${creature.itemLabel}` : `${creature.itemLabel} - collecting`}
+                description={
+                    creature.collectBlocked
+                        ? `${creature.name} is too sad to work - race it to keep collecting`
+                        : canCollect
+                          ? "Free - ready to collect"
+                          : `Ready again in ${formatCountdown(collectCooldownRemaining)}`
+                }
                 color="success"
                 disabled={isCollecting || !canCollect}
                 onClick={handleCollect}
@@ -1126,7 +1132,7 @@ export default function CheddarRanch() {
     return (
         <GameWrapper
             title="Cheddar Ranch"
-            howToPlay="Ranch: tap the + tile to hatch a Cheddar Egg (rarity, species, and Land/Sea/Air type are randomized). Feed a creature with the Feed matching its own type to raise every stat by a random amount - higher-level creatures need more Feed per feeding, and a creature left unfed too long slowly loses stats. Collect its item every 24 hours, or release it for a flat cheddar payout. Race: pick a creature and pay the entry fee to randomize the course and reveal 3 rivals all at once, then bet on any of the 4 racers (including your own) and watch the race play out - or forfeit if you don't like your odds (the entry fee is gone either way). Your own creature's record and level track whether it actually placed first, regardless of who you bet on. Inventory: tap an item for details, then sell the stack for cheddar or use one (no effect yet). Shop: buy Land/Sea/Air Feed."
+            howToPlay="Ranch: tap the + tile to hatch a Cheddar Egg (rarity, species, and Land/Sea/Air type are randomized). Feed a creature with the Feed matching its own type to raise every stat by a random amount - higher-level creatures need more Feed per feeding, and a creature left unfed too long slowly loses stats. Collect its item every 24 hours (a fixed amount for its rarity tier, even a freshly hatched creature needs to wait out the cooldown first) - but collect from the same creature twice in a row without racing it and it'll refuse to produce again until it races, win or lose. Or release a creature for a flat cheddar payout. Race: pick a creature and pay the entry fee to randomize the course and reveal 3 rivals all at once, then bet on any of the 4 racers (including your own) and watch the race play out - or forfeit if you don't like your odds (the entry fee is gone either way). Your own creature's record and level track whether it actually placed first, regardless of who you bet on. Inventory: tap an item for details, then sell the stack for cheddar or use one (no effect yet). Shop: buy Land/Sea/Air Feed."
             oddsSections={oddsSections}
         >
             <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 3 }} variant="fullWidth">

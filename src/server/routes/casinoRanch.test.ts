@@ -18,6 +18,8 @@ import {
     multiplierForProbability,
     levelForStats,
     feedUnitsRequired,
+    collectQuantityForTier,
+    RANCH_COLLECT_STREAK_LIMIT,
     resolveRanchDecay,
     RanchStats,
     Racer,
@@ -256,6 +258,27 @@ describe("feedUnitsRequired", () => {
         expect(feedUnitsRequired(20)).toBe(2);
         expect(feedUnitsRequired(21)).toBe(3);
         expect(feedUnitsRequired(100)).toBe(10);
+    });
+});
+
+describe("collectQuantityForTier", () => {
+    it("is a small flat amount per rarity tier, not tied to a creature's current level", () => {
+        expect(collectQuantityForTier("common")).toBe(1);
+        expect(collectQuantityForTier("uncommon")).toBe(2);
+        expect(collectQuantityForTier("rare")).toBe(3);
+        expect(collectQuantityForTier("epic")).toBe(4);
+        expect(collectQuantityForTier("legendary")).toBe(6);
+    });
+
+    it("falls back to 1 for an unrecognized tier", () => {
+        expect(collectQuantityForTier("not-a-real-tier")).toBe(1);
+    });
+});
+
+describe("RANCH_COLLECT_STREAK_LIMIT", () => {
+    it("is a small positive number of collects allowed between races", () => {
+        expect(RANCH_COLLECT_STREAK_LIMIT).toBeGreaterThan(0);
+        expect(RANCH_COLLECT_STREAK_LIMIT).toBeLessThan(10);
     });
 });
 

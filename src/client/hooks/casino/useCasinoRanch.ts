@@ -31,6 +31,8 @@ export interface RanchCreature {
     lastCollectedAt: string | null;
     itemKey: string;
     itemLabel: string;
+    collectQuantity: number;
+    collectBlocked: boolean;
     createdAt: string;
 }
 

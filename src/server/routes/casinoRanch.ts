@@ -42,11 +42,19 @@
  * explicitly bet on or forfeited.
  *
  * Each species also produces its own fixed item on a 24h manual-collect cooldown (see
- * XenCasinoRanchCreature.collect); the quantity produced per collection is the creature's
- * current level. Collected items land in a per-user fungible stack
- * (XenCasinoRanchInventory, shared with the bought Feed items under different keys) that
- * can be sold for cheddar or "used" - used is a stub for now (consumes the item, no effect
- * yet).
+ * XenCasinoRanchCreature.collect) - a freshly hatched creature is seeded with
+ * lastCollectedAt = now, so even the very first collect has to wait out the cooldown like
+ * any other. The quantity produced per collection is a flat number for the creature's
+ * rarity tier (see collectQuantityForTier), NOT its current level - level is unbounded via
+ * feeding, so tying quantity to it turned collecting into a runaway income source
+ * completely disconnected from the race economy. A creature also refuses to produce
+ * anything once it's been collected from RANCH_COLLECT_STREAK_LIMIT times in a row without
+ * racing (collectStreak, reset by any resolved race, win or lose) - it has to actually race
+ * every couple of collections to keep working, tying passive item income back to the same
+ * house-edged activity as everything else. Collected items land in a per-user fungible
+ * stack (XenCasinoRanchInventory, shared with the bought Feed items under different keys)
+ * that can be sold for cheddar or "used" - used is a stub for now (consumes the item, no
+ * effect yet).
  *
  * Every Weeabets transfer key here is a short random token (txnKey), not userId+creatureId
  * embedded directly - both are 24-char Mongo ObjectIds, and prefix + both + a timestamp
@@ -204,26 +212,53 @@ export function effectiveRaceTotal(stats: RanchStats, course: RaceCourse): numbe
 const COLLECT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 // One fixed item per species (not per rarity tier or per individual creature) - every
-// creature of a given species always produces the same item, but how much a given
-// collection yields scales with that specific creature's own level (see the /collect
-// route). Sell values roughly track the rarity tier each species belongs to.
+// creature of a given species always produces the same item. Sell values roughly track the
+// rarity tier each species belongs to, deliberately kept modest - see
+// COLLECT_QUANTITY_BY_TIER below for why quantity no longer scales with the creature's own
+// (unbounded, feed-grown) level: sellValue * quantity per collection is sized to sit well
+// under a single race entry fee even at the top tier, so passive collecting stays a small
+// supplement to racing rather than outpacing it.
 const ITEM_DEFS: Record<string, { key: string; label: string; sellValue: number; description: string }> = {
-    "down-feather": { key: "down-feather", label: "Down Feather", sellValue: 20, description: "A soft feather molted by a Cheddar Chick." },
-    "puppy-fluff": { key: "puppy-fluff", label: "Puppy Fluff", sellValue: 20, description: "A tuft of fluff shed by a Barnyard Pup." },
-    "whisker-tuft": { key: "whisker-tuft", label: "Whisker Tuft", sellValue: 20, description: "A wisp of whisker fur from a Field Mouse." },
-    "goat-milk": { key: "goat-milk", label: "Goat Milk", sellValue: 60, description: "A jar of fresh milk from a Ridgeback Goat." },
-    "otter-pelt": { key: "otter-pelt", label: "Otter Pelt", sellValue: 60, description: "A sleek pelt shed by a Marsh Otter." },
-    "fox-tail": { key: "fox-tail", label: "Fox Tail", sellValue: 60, description: "A bushy tuft from a Meadow Fox's tail." },
-    "storm-hide": { key: "storm-hide", label: "Storm Hide", sellValue: 150, description: "A tough hide scale shed by a Thundercalf." },
-    "moon-fang": { key: "moon-fang", label: "Moon Fang", sellValue: 150, description: "A gleaming fang shed by a Moonlit Lynx." },
-    "badger-claw": { key: "badger-claw", label: "Badger Claw", sellValue: 150, description: "A sturdy claw shed by a Cave Badger." },
-    "gilded-horn": { key: "gilded-horn", label: "Gilded Horn", sellValue: 400, description: "A gold-flecked horn shard from a Gilded Ram." },
-    "falcon-plume": { key: "falcon-plume", label: "Falcon Plume", sellValue: 400, description: "A wind-swept plume from a Storm Falcon." },
-    "ember-fur": { key: "ember-fur", label: "Ember Fur", sellValue: 400, description: "A warm tuft of fur from an Ember Wolf." },
-    "wyrm-scale": { key: "wyrm-scale", label: "Wyrm Scale", sellValue: 1200, description: "A shimmering scale shed by a Cheddar Wyrm." },
-    "solar-antler": { key: "solar-antler", label: "Solar Antler", sellValue: 1200, description: "A sun-bright antler shard from a Solar Stag." },
-    "void-ink": { key: "void-ink", label: "Void Ink", sellValue: 1200, description: "A vial of inky essence drawn from a Void Kraken." },
+    "down-feather": { key: "down-feather", label: "Down Feather", sellValue: 15, description: "A soft feather molted by a Cheddar Chick." },
+    "puppy-fluff": { key: "puppy-fluff", label: "Puppy Fluff", sellValue: 15, description: "A tuft of fluff shed by a Barnyard Pup." },
+    "whisker-tuft": { key: "whisker-tuft", label: "Whisker Tuft", sellValue: 15, description: "A wisp of whisker fur from a Field Mouse." },
+    "goat-milk": { key: "goat-milk", label: "Goat Milk", sellValue: 40, description: "A jar of fresh milk from a Ridgeback Goat." },
+    "otter-pelt": { key: "otter-pelt", label: "Otter Pelt", sellValue: 40, description: "A sleek pelt shed by a Marsh Otter." },
+    "fox-tail": { key: "fox-tail", label: "Fox Tail", sellValue: 40, description: "A bushy tuft from a Meadow Fox's tail." },
+    "storm-hide": { key: "storm-hide", label: "Storm Hide", sellValue: 100, description: "A tough hide scale shed by a Thundercalf." },
+    "moon-fang": { key: "moon-fang", label: "Moon Fang", sellValue: 100, description: "A gleaming fang shed by a Moonlit Lynx." },
+    "badger-claw": { key: "badger-claw", label: "Badger Claw", sellValue: 100, description: "A sturdy claw shed by a Cave Badger." },
+    "gilded-horn": { key: "gilded-horn", label: "Gilded Horn", sellValue: 250, description: "A gold-flecked horn shard from a Gilded Ram." },
+    "falcon-plume": { key: "falcon-plume", label: "Falcon Plume", sellValue: 250, description: "A wind-swept plume from a Storm Falcon." },
+    "ember-fur": { key: "ember-fur", label: "Ember Fur", sellValue: 250, description: "A warm tuft of fur from an Ember Wolf." },
+    "wyrm-scale": { key: "wyrm-scale", label: "Wyrm Scale", sellValue: 600, description: "A shimmering scale shed by a Cheddar Wyrm." },
+    "solar-antler": { key: "solar-antler", label: "Solar Antler", sellValue: 600, description: "A sun-bright antler shard from a Solar Stag." },
+    "void-ink": { key: "void-ink", label: "Void Ink", sellValue: 600, description: "A vial of inky essence drawn from a Void Kraken." },
 };
+
+// Flat, tier-based collection quantity - deliberately NOT derived from the creature's
+// current level (unlike the old formula), because level is unbounded via feeding: tying
+// quantity to it meant grinding Feed turned collection into a runaway, ever-growing income
+// source completely disconnected from the race economy. A fixed number per tier still
+// rewards a rarer hatch without letting a single creature's payout grow forever.
+const COLLECT_QUANTITY_BY_TIER: Record<string, number> = {
+    common: 1,
+    uncommon: 2,
+    rare: 3,
+    epic: 4,
+    legendary: 6,
+};
+
+export function collectQuantityForTier(tier: string): number {
+    return COLLECT_QUANTITY_BY_TIER[tier] ?? 1;
+}
+
+// A creature refuses to produce anything once it's been collected from this many times in
+// a row without racing - collect() resets this counter to 0, and so does every resolved
+// race (win or lose, see XenCasinoRanchCreature.recordRaceResult) - so passive item farming
+// can't fully replace actually playing the race game; the creature has to be raced at least
+// once every couple of collections to keep producing.
+export const RANCH_COLLECT_STREAK_LIMIT = 2;
 
 const SPECIES_ITEM_KEY: Record<string, string> = {
     "Cheddar Chick": "down-feather",
@@ -483,6 +518,8 @@ function creatureView(doc: any) {
         lastCollectedAt: doc.lastCollectedAt,
         itemKey: SPECIES_ITEM_KEY[doc.species],
         itemLabel: ITEM_DEFS[SPECIES_ITEM_KEY[doc.species]]?.label,
+        collectQuantity: collectQuantityForTier(doc.rarityTier),
+        collectBlocked: (doc.collectStreak ?? 0) >= RANCH_COLLECT_STREAK_LIMIT,
         createdAt: doc.createdAt,
     };
 }
@@ -737,14 +774,21 @@ module.exports = function (app: express.Application) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const { id } = req.params;
 
-        const existing = await XenCasinoRanchCreature.getOwned(userId, id);
+        let existing = await XenCasinoRanchCreature.getOwned(userId, id);
         if (!existing) {
             return res.status(404).json({ status: false, message: "Creature not found" });
         }
+        existing = await ensureCreatureFresh(existing);
         const itemKey = SPECIES_ITEM_KEY[existing.species];
         const itemDef = itemKey ? ITEM_DEFS[itemKey] : undefined;
         if (!itemDef) {
             return res.status(400).json({ status: false, message: "This creature doesn't produce anything" });
+        }
+        if ((existing.collectStreak ?? 0) >= RANCH_COLLECT_STREAK_LIMIT) {
+            return res.status(400).json({
+                status: false,
+                message: `${existing.name} is too sad to work - it wants to race, not farm materials! Race it before collecting again.`,
+            });
         }
 
         const updated = await XenCasinoRanchCreature.collect(userId, id, COLLECT_COOLDOWN_MS);
@@ -752,7 +796,7 @@ module.exports = function (app: express.Application) {
             return res.status(400).json({ status: false, message: "Nothing ready to collect yet" });
         }
 
-        const quantity = levelForStats(updated.stats);
+        const quantity = collectQuantityForTier(updated.rarityTier);
         await XenCasinoRanchInventory.addItem(userId, itemKey, quantity);
 
         return res.json({

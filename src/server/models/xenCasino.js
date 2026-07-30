@@ -1110,9 +1110,17 @@ var xenCasinoRanchCreatureSchema = new mongoose.Schema({
     // anchored on lastFedAt (falling back to createdAt when never fed) rather than a
     // separate timestamp field.
     decayTicksApplied: { type: Number, default: 0 },
-    // Gates the 24h item-production cooldown (see statics.collect) - null means never
-    // collected, always immediately available, same convention as lastFedAt/lastWateredAt.
+    // Gates the 24h item-production cooldown (see statics.collect). createForUser seeds
+    // this to the creature's own creation time (not null) so a freshly hatched creature has
+    // to wait out the same cooldown before its very first collect too - null here only
+    // means "an older creature from before this field existed", still treated as
+    // already-ready for backward compatibility.
     lastCollectedAt: { type: Date, default: null },
+    // How many times in a row this creature has been collected from without racing (see
+    // statics.collect) - capped at RANCH_COLLECT_STREAK_LIMIT (casinoRanch.ts), past which
+    // collect refuses to produce anything until the creature races again. Reset to 0 by
+    // statics.recordRaceResult on every resolved race, win or lose.
+    collectStreak: { type: Number, default: 0 },
     createdAt: { type: Date, default: Date.now },
 });
 xenCasinoRanchCreatureSchema.index({ userId: 1, createdAt: 1 });
@@ -1124,6 +1132,9 @@ xenCasinoRanchCreatureSchema.statics.createForUser = async function (userId, par
         name: params.name,
         rarityTier: params.rarityTier,
         stats: params.stats,
+        // Wait out the full collect cooldown before the very first collect too, same as any
+        // later one - see the lastCollectedAt schema comment above.
+        lastCollectedAt: new Date(),
     });
 };
 
@@ -1167,19 +1178,23 @@ xenCasinoRanchCreatureSchema.statics.feed = async function (userId, creatureId, 
 };
 
 // Atomic $inc of raceWins/raceLosses - called only after the route has already resolved
-// the win/loss roll (and, on a win, after the payout transfer succeeds).
+// the win/loss roll (and, on a win, after the payout transfer succeeds). Also resets
+// collectStreak to 0 - racing at all (win or lose) is what re-enables collecting, not
+// winning specifically.
 xenCasinoRanchCreatureSchema.statics.recordRaceResult = async function (userId, creatureId, won) {
     return this.findOneAndUpdate(
         { _id: creatureId, userId: userId },
-        won ? { $inc: { raceWins: 1 } } : { $inc: { raceLosses: 1 } },
+        { $inc: won ? { raceWins: 1 } : { raceLosses: 1 }, $set: { collectStreak: 0 } },
         { new: true }
     ).exec();
 };
 
 // Same re-read-and-guard shape as statics.feed - re-validates ownership and the 24h
-// cooldown against a fresh read, then atomically stamps lastCollectedAt via
-// findOneAndUpdate guarded on the previously-read value so a concurrent collect on the
-// same creature can't double-apply.
+// cooldown against a fresh read, then atomically stamps lastCollectedAt and bumps
+// collectStreak via findOneAndUpdate guarded on the previously-read value so a concurrent
+// collect on the same creature can't double-apply. The route checks collectStreak against
+// RANCH_COLLECT_STREAK_LIMIT before ever calling this, so this static only needs to worry
+// about the cooldown, not the streak limit.
 xenCasinoRanchCreatureSchema.statics.collect = async function (userId, creatureId, cooldownMs) {
     var creature = await this.findOne({ _id: creatureId, userId: userId }).exec();
     if (!creature) {
@@ -1191,7 +1206,7 @@ xenCasinoRanchCreatureSchema.statics.collect = async function (userId, creatureI
     }
     var updated = await this.findOneAndUpdate(
         { _id: creatureId, userId: userId, lastCollectedAt: creature.lastCollectedAt },
-        { $set: { lastCollectedAt: now } },
+        { $set: { lastCollectedAt: now }, $inc: { collectStreak: 1 } },
         { new: true }
     ).exec();
     return updated;
