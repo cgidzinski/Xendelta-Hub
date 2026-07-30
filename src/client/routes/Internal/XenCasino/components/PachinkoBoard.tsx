@@ -122,6 +122,17 @@ const POOF_MS = 450; // how long the ball+particle burst takes once a trajectory
 const CALLOUT_MS = 1000; // how long the center win/loss callout stays on screen
 const FIRE_INTERVAL_MS = 400; // 100 balls/minute while the launch button is held
 const MAX_CONCURRENT_BALLS = 20;
+// Caps how many /launch requests can be sent but not yet answered at once - firing blindly
+// every FIRE_INTERVAL_MS regardless of whether earlier requests have come back can outrun the
+// server's actual physics throughput under sustained hold-to-fire, building a backlog of
+// already-sent "pending" balls (drawn as a static dot at the launcher, see the "pending" phase
+// below) that only resolve and visibly take off later - releasing stops new requests instantly,
+// but that backlog keeps trickling in for however long it takes to drain, reading as balls still
+// launching well after you let go. Throttling to this cap makes firing self-pace to the real
+// round-trip time instead: a no-op when responses return well within FIRE_INTERVAL_MS (the cap
+// never binds), but it keeps the backlog small under load so there's little left to drain once
+// you release.
+const MAX_PENDING_LAUNCHES = 3;
 const PARTICLE_COUNT = 12;
 const REUP_AMOUNTS = [1000];
 
@@ -389,6 +400,7 @@ export default function PachinkoBoard({
     const rafRef = useRef<number | null>(null);
     const fireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const activeBallsRef = useRef<Map<number, ActiveBall>>(new Map());
+    const pendingLaunchesRef = useRef(0);
     const latestAppliedSeqRef = useRef(0);
     const reelQueueRef = useRef<ReelQueueItem[]>([]);
     const currentReelAnimRef = useRef<ReelAnimState | null>(null);
@@ -907,16 +919,22 @@ export default function PachinkoBoard({
         if (activeBallsRef.current.size >= MAX_CONCURRENT_BALLS) {
             return;
         }
+        if (pendingLaunchesRef.current >= MAX_PENDING_LAUNCHES) {
+            return;
+        }
         const id = nextBallId++;
         const seq = ++nextLaunchSeq;
         activeBallsRef.current.set(id, { id, phase: "pending" });
         ballsRemainingRef.current -= 1;
+        pendingLaunchesRef.current += 1;
 
         launch(launchPowerRef.current)
             .then((result) => {
+                pendingLaunchesRef.current -= 1;
                 activeBallsRef.current.set(id, { id, phase: "falling", result, startTime: performance.now(), seq });
             })
             .catch(() => {
+                pendingLaunchesRef.current -= 1;
                 activeBallsRef.current.delete(id);
                 ballsRemainingRef.current += 1;
                 stopFiring();
