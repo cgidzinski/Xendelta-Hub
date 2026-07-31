@@ -236,19 +236,22 @@ interface Callout {
 }
 
 // One ball's whole client-side lifecycle, same shape as PlinkoBoard's ActiveBall: "pending" from
-// the instant the launch ticket request goes out (rendered immediately at the launcher so
-// there's no dead gap), "falling" once the LOCAL preview simulation (see usePachinkoSimWorker)
-// finishes and starts interpolating - not once the server responds, that's the whole point of
-// the ticket/confirm split - "landed" (poof + particle burst) before it's removed.
+// the instant it's fired (rendered immediately at the launcher so there's no dead gap), "falling"
+// once the sim worker resolves and its trajectory starts interpolating, "landed" (poof + particle
+// burst) before it's removed.
 //
-// This is purely the ball's own VISUAL lifecycle now, entirely decoupled from when its shot
-// actually gets scored - see the tick loop and confirmFired below for that separate flow.
-// `won` is a display-only guess (outcome !== "gutter") for the poof's particle color, since the
-// real ballsAwarded isn't known locally; only affects a chucker whiff's particle color, never
-// anything that's actually credited.
+// The shot's SCORING truth (localGateStateRef) is decided the instant the worker resolves,
+// independent of this animation - it has to be, so the next shot's own local preview reads
+// correct gate state (see applyLocalOutcome's own comment). But this ball's own player-facing
+// REWARD (tray-count bump, callout popup, chucker reel spin) is deliberately carried here
+// (`ballsAwarded`/`queueChuckerSpin`) rather than applied the instant it's known, and only
+// released once this specific ball reaches "landed" (see releaseLandedReward, called from the
+// tick loop) - so the player never sees a catch's payoff before the ball that earned it has
+// visibly arrived. `won` is a display-only guess (outcome !== "gutter") for the poof's particle
+// color, not itself used for scoring.
 type ActiveBall =
     | { id: number; phase: "pending" }
-    | { id: number; phase: "falling"; trajectory: PachinkoTrajectorySample[]; outcome: PachinkoOutcome; startTime: number }
+    | { id: number; phase: "falling"; trajectory: PachinkoTrajectorySample[]; outcome: PachinkoOutcome; startTime: number; seq: number; ballsAwarded: number; queueChuckerSpin: boolean }
     | { id: number; phase: "landed"; trajectory: PachinkoTrajectorySample[]; outcome: PachinkoOutcome; won: boolean; landedAt: number; particles: Particle[] };
 
 let nextBallId = 0;
@@ -499,6 +502,16 @@ export default function PachinkoBoard({
         attackerOpenUntil: session?.attackerOpenUntil ?? 0,
         jackpotOpenUntil: session?.jackpotOpenUntil ?? 0,
     });
+    // What's actually SHOWN to the player, as opposed to localGateStateRef's own ballsRemaining
+    // (the internal truth, updated the instant a shot's cost/outcome is known so the NEXT shot's
+    // own local preview reads correct gate state). These two necessarily diverge while any ball
+    // is still in flight: a shot's -1 firing cost is real and shown immediately (see fireOnce -
+    // a ball leaving the tray the moment it launches is intuitive), but its +ballsAwarded reward
+    // is only released into THIS ref once that specific ball visibly lands (see
+    // releaseLandedReward) - never before, which is the whole fix for the "chucker going off
+    // before a ball hits it" bug. This is the only ref that ever feeds
+    // pendingSessionPatchRef.current.ballsRemaining from here on.
+    const visibleBallsRemainingRef = useRef(session?.ballsRemaining ?? 0);
     const lastSyncedRoundIdRef = useRef<string | null>(session?.roundId ?? null);
     const lastSyncedBallsTotalRef = useRef<number>(session?.ballsTotal ?? 0);
     // This board's own local firing-order cursor - assigned to each shot as it fires (see
@@ -551,10 +564,12 @@ export default function PachinkoBoard({
                 attackerOpenUntil: session.attackerOpenUntil,
                 jackpotOpenUntil: session.jackpotOpenUntil,
             };
+            visibleBallsRemainingRef.current = session.ballsRemaining;
         } else if (session.ballsTotal !== lastSyncedBallsTotalRef.current) {
             const delta = session.ballsTotal - lastSyncedBallsTotalRef.current;
             lastSyncedBallsTotalRef.current = session.ballsTotal;
             localGateStateRef.current = { ...localGateStateRef.current, ballsRemaining: localGateStateRef.current.ballsRemaining + delta };
+            visibleBallsRemainingRef.current += delta;
         }
     }, [session]);
 
@@ -918,13 +933,17 @@ export default function PachinkoBoard({
                     const lastIndex = ball.trajectory.length - 1;
                     const elapsedFrames = (now - ball.startTime) / FRAME_MS;
                     if (elapsedFrames >= lastIndex) {
-                        // Purely visual - the confirmed outcome (callout, reel queue, session
-                        // update) is driven separately, by confirmFired below, whenever the
-                        // server's own reply actually arrives (see fireOnce). That's usually
-                        // close to this same moment - confirm is a cheap background call, not a
-                        // multi-second physics round trip anymore - but never gated on it, so a
-                        // slow confirm can't leave a ball hanging mid-air.
+                        // This shot's scoring TRUTH (localGateStateRef) was already applied back
+                        // in fireOnce/applyLocalOutcome, the instant the sim worker resolved -
+                        // that has to stay immediate so the next fired shot's own local preview
+                        // reads correct gate state (see applyLocalOutcome's own comment). What
+                        // happens HERE is different: this is the ball's own visual arrival, and
+                        // it's the one true moment this specific shot's player-facing reward
+                        // (tray-count bump, callout popup, chucker reel spin) is released - see
+                        // releaseLandedReward - so nothing the player sees ever claims a catch
+                        // before the ball that earned it has actually arrived.
                         const { trajectory, outcome } = ball;
+                        releaseLandedReward(ball);
                         activeBallsRef.current.set(ball.id, { id: ball.id, phase: "landed", trajectory, outcome, won: outcome !== "gutter", landedAt: now, particles: makeParticles() });
                     }
                 } else if (ball.phase === "landed") {
@@ -1081,8 +1100,17 @@ export default function PachinkoBoard({
             shotAssumptionsRef.current.delete(result.seq);
             const correction = result.ballsAwarded - assumed;
             if (correction !== 0) {
+                // Kept immediate, not gated on this shot's own ball landing - a batch round trip
+                // is normally slower than one ball's ~1-3s flight, so by the time a correction
+                // arrives the ball in question has typically already landed and released its
+                // (slightly wrong) assumed reward; gating this on landing would either be a no-op
+                // or confusingly re-delay a correction that has nothing to do with any ball still
+                // in flight. Routed through visibleBallsRemainingRef (not localGateStateRef
+                // directly) since that's the only ref allowed to feed the visible tray count -
+                // see its own comment.
                 localGateStateRef.current = { ...localGateStateRef.current, ballsRemaining: localGateStateRef.current.ballsRemaining + correction };
-                pendingSessionPatchRef.current = { ...pendingSessionPatchRef.current, ballsRemaining: localGateStateRef.current.ballsRemaining };
+                visibleBallsRemainingRef.current += correction;
+                pendingSessionPatchRef.current = { ...pendingSessionPatchRef.current, ballsRemaining: visibleBallsRemainingRef.current };
             }
 
             if (result.outcome === "chucker" && result.reelSpin) {
@@ -1106,6 +1134,31 @@ export default function PachinkoBoard({
                 }
             }
         }
+
+        // Defense-in-depth: per-shot corrections above only ever catch drift in the two things
+        // that are genuinely unpredictable locally (chucker/jackpot awards - see economy.ts's own
+        // header). Anything else that ever slips between the local mirror and the server's own
+        // rules (a bug, not by design) would otherwise compound silently forever. When no shot
+        // has fired locally since this exact batch was sent (nextSeqRef caught up to what the
+        // server just confirmed it's processed through), it's safe to adopt the server's own gate
+        // state wholesale as the new truth - closing any such drift in one step.
+        //
+        // Deliberately touches ONLY localGateStateRef (the internal/gating truth), never
+        // visibleBallsRemainingRef. response.ballsRemaining reflects every shot in this batch
+        // fully settled - cost AND reward - including ones whose balls may still be mid-flight and
+        // haven't visually landed yet; adopting it into the DISPLAYED count here would show those
+        // balls' rewards before they arrive, reintroducing the exact bug this whole release-on-
+        // landing design exists to fix. The visible count stays owned entirely by fireOnce's -1,
+        // releaseLandedReward's per-ball +ballsAwarded, and the correction just above.
+        if (nextSeqRef.current === response.lastProcessedSeq) {
+            localGateStateRef.current = {
+                ballsRemaining: response.ballsRemaining,
+                leftTulipOpen: response.leftTulipOpen,
+                rightTulipOpen: response.rightTulipOpen,
+                attackerOpenUntil: response.attackerOpenUntil,
+                jackpotOpenUntil: response.jackpotOpenUntil,
+            };
+        }
     };
 
     // Cash Out needs the server's own authoritative ballsRemaining, which only reflects shots
@@ -1124,50 +1177,79 @@ export default function PachinkoBoard({
         }
     };
 
-    // Applies one shot's now-known outcome to the local economy mirror the instant the sim worker
-    // resolves it (see fireOnce) - purely local, no network dependency, which is the entire point
-    // of this redesign. Records what THIS shot assumed its ballsAwarded was (see
-    // shotAssumptionsRef) so reconcileBatch can correct it later if the server's own replay
-    // disagrees (only ever possible for chucker/jackpot - see economy.ts's own header).
-    const applyLocalOutcome = (seq: number, outcome: PachinkoOutcome) => {
+    // Applies one shot's now-known outcome to the local economy TRUTH (localGateStateRef) the
+    // instant the sim worker resolves it (see fireOnce) - purely local, no network dependency,
+    // and deliberately immediate/synchronous: the very next fired shot reads this same ref for
+    // its own chuckerActive/attackerActive/jackpotActive gate params, and the server applies
+    // every shot's full effect immediately in strict seq order with no concept of "animation
+    // time" - so this has to stay in fire order, or a later shot's local preview could show an
+    // outright different outcome than what the server will independently derive, not just a late
+    // one. Records what THIS shot assumed its ballsAwarded was (see shotAssumptionsRef) so
+    // reconcileBatch can correct it later if the server's own replay disagrees (only ever
+    // possible for chucker/jackpot - see economy.ts's own header).
+    //
+    // Deliberately does NOT touch anything player-visible (tray count, callout, reel spin) - that
+    // was this function's own bug: pushing those immediately made a catch's reward appear before
+    // the ball had visibly reached its pocket. The returned ballsAwarded/queueChuckerSpin are
+    // carried on the ball's own ActiveBall entry instead, and released once THAT ball's own
+    // flight animation finishes landing - see releaseLandedReward, called from the tick loop.
+    const applyLocalOutcome = (seq: number, outcome: PachinkoOutcome): { ballsAwarded: number; queueChuckerSpin: boolean } => {
         const now = Date.now();
         const { ballsAwarded, nextState } = applyShotOutcome(localGateStateRef.current, outcome, { bonusPocketBalls, sideTulipBalls, attackerBalls, jackpotOpenMs }, jackpotPool, pricePerBall, now);
         localGateStateRef.current = nextState;
         shotAssumptionsRef.current.set(seq, ballsAwarded);
 
+        // leftTulipOpen/rightTulipOpen/jackpotOpenUntil are board state, not "this ball's own
+        // reward" - unlike the tray count/callout/reel, there's no single ball whose landing they
+        // wait on, so these stay immediate here rather than deferred through the ActiveBall/
+        // releaseLandedReward path. attackerOpenUntil is deliberately omitted - economy.ts never
+        // changes it locally (only a chucker's real reel spin can, and that's only known once
+        // reconcileBatch gets it back - see the tick loop's own reel-landing comment for where it
+        // actually applies).
         pendingSessionPatchRef.current = {
             ...pendingSessionPatchRef.current,
-            ballsRemaining: nextState.ballsRemaining,
             leftTulipOpen: nextState.leftTulipOpen,
             rightTulipOpen: nextState.rightTulipOpen,
             jackpotOpenUntil: nextState.jackpotOpenUntil,
-            // attackerOpenUntil deliberately omitted - economy.ts never changes it locally (only
-            // a chucker's real reel spin can, and that's only known once reconcileBatch gets it
-            // back - see the tick loop's own reel-landing comment for where it actually applies).
         };
+
+        let queueChuckerSpin = false;
+        if (outcome === "chucker") {
+            const totalQueued = (currentReelAnimRef.current ? 1 : 0) + reelQueueRef.current.length;
+            queueChuckerSpin = totalQueued < MAX_QUEUED_SPINS;
+        }
+
+        flushBatch();
+        return { ballsAwarded, queueChuckerSpin };
+    };
+
+    // The one true release point for a shot's player-facing reward - called from the tick loop
+    // exactly when THIS ball's own flight animation finishes landing, never before. Splits into
+    // three parts, matching what applyLocalOutcome used to push immediately (see its own
+    // comment for why that was wrong): the tray-count reward, the catch callout, and the chucker
+    // reel-spin placeholder. hotPockets glow (set by the caller, tick loop) already fires at this
+    // same moment - this just brings the other three signals into line with it.
+    const releaseLandedReward = (ball: { outcome: PachinkoOutcome; ballsAwarded: number; queueChuckerSpin: boolean }) => {
+        visibleBallsRemainingRef.current += ball.ballsAwarded;
+        pendingSessionPatchRef.current = { ...pendingSessionPatchRef.current, ballsRemaining: visibleBallsRemainingRef.current };
 
         // Misses don't get a popup - they're the most common outcome by far, so surfacing them
         // would mostly just be clutter; only an actual catch (even a 0-ball one like a chucker
         // hit, or a jackpot before its estimate can possibly be known - see economy.ts) is worth
         // calling out.
-        if (outcome !== "gutter") {
+        if (ball.outcome !== "gutter") {
             const calloutId = nextCalloutId++;
-            setCallouts((prev) => [...prev, { id: calloutId, outcome, ballsAwarded, won: ballsAwarded > 0 }]);
+            setCallouts((prev) => [...prev, { id: calloutId, outcome: ball.outcome, ballsAwarded: ball.ballsAwarded, won: ball.ballsAwarded > 0 }]);
             setTimeout(() => setCallouts((prev) => prev.filter((c) => c.id !== calloutId)), CALLOUT_MS);
         }
 
-        if (outcome === "chucker") {
-            const totalQueued = (currentReelAnimRef.current ? 1 : 0) + reelQueueRef.current.length;
-            if (totalQueued < MAX_QUEUED_SPINS) {
-                // The real reel result is decided server-only (see pachinkoReels.ts's own
-                // comment on why) - queue a pending placeholder now so the reel visibly starts
-                // spinning the instant the chucker is hit, filled in by reconcileBatch once the
-                // real symbols are known.
-                reelQueueRef.current.push({ symbols: ["ITEM_A", "ITEM_A", "ITEM_A"], matchTier: "none", pending: true });
-            }
+        if (ball.outcome === "chucker" && ball.queueChuckerSpin) {
+            // The real reel result is decided server-only (see pachinkoReels.ts's own comment on
+            // why) - queue a pending placeholder now, so the reel only starts visibly spinning
+            // once the ball has actually landed in the chucker pocket. Filled in by
+            // reconcileBatch once the real symbols are known.
+            reelQueueRef.current.push({ symbols: ["ITEM_A", "ITEM_A", "ITEM_A"], matchTier: "none", pending: true });
         }
-
-        flushBatch();
     };
 
     const fireOnce = () => {
@@ -1190,6 +1272,16 @@ export default function PachinkoBoard({
         const attackerOpen = gateState.attackerOpenUntil > now;
         const jackpotOpen = gateState.jackpotOpenUntil > now;
 
+        // The cost of firing THIS ball, charged immediately - mirrors pachinko.ts's own
+        // processBatch, which decrements 1 ball for every shot it processes, miss or catch,
+        // before it even knows the outcome. Applied to both the internal gate truth (so the very
+        // next fireOnce call's own ballsRemaining <= 0 check above sees it) and the visible tray
+        // count (a ball leaving the tray the instant it launches is intuitive and needs no
+        // deferral, unlike a catch's reward below - see visibleBallsRemainingRef's own comment).
+        localGateStateRef.current = { ...gateState, ballsRemaining: gateState.ballsRemaining - 1 };
+        visibleBallsRemainingRef.current -= 1;
+        pendingSessionPatchRef.current = { ...pendingSessionPatchRef.current, ballsRemaining: visibleBallsRemainingRef.current };
+
         activeBallsRef.current.set(id, { id, phase: "pending" });
         pendingShotsRef.current.push({ seq, seed, launchPower });
 
@@ -1197,13 +1289,25 @@ export default function PachinkoBoard({
         // what both animates the ball AND (via applyLocalOutcome) updates the economy mirror,
         // with zero network dependency between pressing fire and either of those happening.
         simulate({ seed, launchPower, chuckerActive: !attackerOpen, attackerActive: attackerOpen, jackpotActive: jackpotOpen }).then(({ trajectory, outcome }) => {
-            // The ball may have already been removed (e.g. the player cashed out/closed the
-            // game) by the time the worker responds - don't resurrect it or score it.
-            if (!activeBallsRef.current.has(id)) {
-                return;
+            // The gate-state TRUTH update must happen unconditionally, even if this ball has
+            // already been removed (e.g. the player cashed out/closed the game mid-flight) - the
+            // server already scored this shot the moment its batch was processed, regardless of
+            // what this component's own animation state looks like, and the next fired shot's
+            // local preview needs correct gate state regardless of what happened to this ball.
+            const { ballsAwarded, queueChuckerSpin } = applyLocalOutcome(seq, outcome);
+
+            if (activeBallsRef.current.has(id)) {
+                // The normal path - this ball's own reward/callout/reel-spin are carried on it
+                // and released once it visibly lands (see the tick loop and releaseLandedReward).
+                activeBallsRef.current.set(id, { id, phase: "falling", trajectory, outcome, startTime: performance.now(), seq, ballsAwarded, queueChuckerSpin });
+            } else {
+                // This ball will never reach "landed" now, so its reward would otherwise never be
+                // released, permanently leaking the -1 charged above with nothing crediting it
+                // back. Nothing left to animate to, so apply just the balls-remaining credit here
+                // - skip the callout/reel-spin, there's no board left to show them on.
+                visibleBallsRemainingRef.current += ballsAwarded;
+                pendingSessionPatchRef.current = { ...pendingSessionPatchRef.current, ballsRemaining: visibleBallsRemainingRef.current };
             }
-            activeBallsRef.current.set(id, { id, phase: "falling", trajectory, outcome, startTime: performance.now() });
-            applyLocalOutcome(seq, outcome);
         });
     };
 
