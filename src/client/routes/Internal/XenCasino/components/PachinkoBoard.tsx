@@ -1275,8 +1275,12 @@ export default function PachinkoBoard({
     // turn here - which is what guarantees the displayed state is always a state that genuinely
     // existed, and never jumps around.
     //
-    // Called on every landing AND once per frame, because one of its release conditions is a
-    // deadline rather than an event (see the chucker branch below).
+    // Every release condition here is event-driven (a ball landing) now, so `now` is unused below -
+    // it used to gate a chucker entry on its own reel finishing, a deadline rather than an event,
+    // which is also why this used to be called once per frame as well as on landing. Both the
+    // per-frame call and the parameter are left in place rather than pulled: harmless (an early
+    // return costs nothing), and exactly what a reel-related deadline release would need again if
+    // one ever comes back.
     const drainLedger = (now: number) => {
         for (;;) {
             const entry = shotLedgerRef.current.get(displayedSeqRef.current + 1);
@@ -1341,6 +1345,12 @@ export default function PachinkoBoard({
             // at 84s, with up to 41 entries applied in a single frame. The gate no longer needs the
             // ledger's help anyway: it's a timestamp now, rendered live, and applyShot already
             // anchors it to REEL_LANDED_MS after this ball lands.
+            if (entry.outcome === "chucker" && entry.reelSpin) {
+                const totalQueued = (currentReelAnimRef.current ? 1 : 0) + reelQueueRef.current.length;
+                if (totalQueued < MAX_QUEUED_SPINS) {
+                    reelQueueRef.current.push({ symbols: entry.reelSpin.symbols, matchTier: entry.reelSpin.matchTier });
+                }
+            }
 
             patchVisibleSession();
         }

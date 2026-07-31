@@ -95,5 +95,10 @@ describe("pachinko worst-case RTP", () => {
         // measured ~300%.
         expect(worstRtp, `worst-case RTP ${(worstRtp * 100).toFixed(1)}% at power=${worstPower.toFixed(1)} - a future constant edit may have reopened a power-specific exploit (currently measured worst case is ~105%)`).toBeLessThan(1.45);
         expect(worstRtp).toBeGreaterThan(0.2);
-    }, 180000);
+        // 300000, not 180000 - this is a genuinely CPU-heavy Monte Carlo run (13 power buckets x
+        // 300 shots, each a real matter-js simulation, synchronous in the test process rather than
+        // farmed out to a worker pool the way the server route and pachinkoPayoutTuning.ts both do),
+        // and 180s was measured tipping over on a modest sandbox under ordinary background load,
+        // not because anything about the test itself changed. Extra headroom, not a looser check.
+    }, 300000);
 });
