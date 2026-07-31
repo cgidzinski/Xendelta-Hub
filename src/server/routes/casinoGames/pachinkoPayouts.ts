@@ -25,7 +25,7 @@ import { capPayout } from "./payoutCap";
 // pachinkoRules.ts's own header for why the gate windows are counted in balls rather than
 // seconds). Re-exported here so this file stays the single import site for everything
 // payout-related on the server.
-export { ATTACKER_OPEN_SHOTS, JACKPOT_OPEN_SHOTS, REEL_TWO_MATCH_BALLS, REEL_THREE_MATCH_BALLS } from "../../../shared/pachinko/pachinkoRules";
+export { ATTACKER_OPEN_MS, JACKPOT_OPEN_MS, REEL_TWO_MATCH_BALLS, REEL_THREE_MATCH_BALLS } from "../../../shared/pachinko/pachinkoRules";
 
 // Frequent, small top-ups - the easiest pocket to catch on the board (see pachinkoLayout.ts's
 // BONUS_POCKETS, the widest non-jackpot target). Cut to 1 when the left field went in: the far-left
@@ -49,12 +49,12 @@ export const SIDE_TULIP_BALLS = 2;
 // (see shared/pachinko/pachinkoReels.ts), a real modern machine's own "heso" -> LCD reel -> bonus
 // round flow. Only a three-of-a-kind match opens the attacker gate; a miss or a two-of-a-kind
 // opens nothing - the chucker's own catch does not unconditionally open the attacker. How long
-// it stays open (ATTACKER_OPEN_SHOTS) and what each match tier pays (REEL_TWO/THREE_MATCH_BALLS)
+// it stays open (ATTACKER_OPEN_MS) and what each match tier pays (REEL_TWO/THREE_MATCH_BALLS)
 // are re-exported from shared/pachinko/pachinkoRules.ts at the top of this file.
 
 // A big, rare payout - the attacker is a wide target, but only reachable during its short open
 // window, and only reachable AT ALL via a chucker catch that also lands a reel match. Cut from 24
-// to 9 alongside shortening the window itself (see ATTACKER_OPEN_SHOTS in
+// to 9 alongside shortening the window itself (see ATTACKER_OPEN_MS in
 // shared/pachinko/pachinkoRules.ts): the two multiply, and the pair together was carrying ~91% of
 // the board's entire worst-case RTP once the window's real cost was measured properly. Trimmed
 // again to 6, with the window down to 5 balls, after the left field raised the chucker rate that
@@ -68,15 +68,17 @@ export const SIDE_TULIP_BALLS = 2;
 // 6 balls it wasn't worth chasing, which made the board's whole bonus-round structure pointless.
 //
 // The cost was measured, not guessed, before and after. At 6: worst-case RTP 0.830 at power 50,
-// attacker chain 0.156 of that. At 20: worst-case RTP 1.1952 at the same power, attacker chain
-// 0.568 - i.e. the house loses money at power 50. No compensating cut was made anywhere else; that
-// was the call. pachinkoPayouts.rtp.test.ts's upper bound was widened to suit (see its own comment
-// for why the old one became a flake risk rather than a signal).
+// attacker chain 0.156 of that. At 20, measured against the window this board HAD at the time (a
+// ball-counted one that opened before the player could see it, so most of its nominal length was
+// unreachable): worst-case RTP 1.1952, attacker chain 0.568. No compensating cut was made anywhere
+// else; that was the call. pachinkoPayouts.rtp.test.ts's upper bound was widened to suit.
 //
-// If it ever needs walking back, the cheapest lever is NOT this number - it's ATTACKER_OPEN_SHOTS
-// in shared/pachinko/pachinkoRules.ts. Window length and per-catch value multiply, so 5 -> 3 alone
-// recovers ~0.21 while keeping each individual catch feeling worth the wait, which is the property
-// this change was after in the first place.
+// That measurement changed again once the window became genuinely reachable (see ATTACKER_OPEN_MS
+// in shared/pachinko/pachinkoRules.ts for why "reachable" wasn't true before) - a fully usable
+// window pays out closer to its nominal value, which cost more, so ATTACKER_OPEN_MS was shortened
+// to bring the worst case back down rather than touching this number. Current measured worst case:
+// 1.0478. If it ever needs walking back further, that duration is still the cheapest lever, not
+// this constant - window length and per-catch value multiply.
 export const ATTACKER_BALLS = 20;
 
 // Fraction of every ball's price that feeds the shared jackpot pool (fed by every ball fired,

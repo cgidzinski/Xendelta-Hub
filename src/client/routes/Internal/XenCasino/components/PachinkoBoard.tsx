@@ -3,7 +3,8 @@ import { Box, Button, Slider, Typography } from "@mui/material";
 import { formatCheddar } from "../utils/currency";
 import { usePachinkoSimWorker } from "../workers/usePachinkoSimWorker";
 import { applyShot, gateFlagsFor, PachinkoGateState } from "../../../../../shared/pachinko/economy";
-import { TrajectorySample as PachinkoTrajectorySample } from "../../../../../shared/pachinko/pachinkoPhysics";
+import { REEL_LANDED_MS, HOLD_TO_FIRE_INTERVAL_MS } from "../../../../../shared/pachinko/pachinkoRules";
+import { TrajectorySample as PachinkoTrajectorySample, TRAJECTORY_SAMPLE_MS } from "../../../../../shared/pachinko/pachinkoPhysics";
 import { spinReel, reelRngForSeed, ReelSpinResult, ReelMatchTier } from "../../../../../shared/pachinko/pachinkoReels";
 // The board's geometry and the /launch/batch wire shapes are declared once in the shared contract
 // (see pachinkoApi.ts's header) rather than redeclared here to match whatever the server happens
@@ -19,14 +20,25 @@ export interface PachinkoSession {
     pricePerBall: number;
     leftTulipOpen: boolean;
     rightTulipOpen: boolean;
-    // BALLS remaining on each gate window, not timestamps - see shared/pachinko/pachinkoRules.ts
-    // for why wall-clock windows had to go. 0 means closed.
-    attackerShotsRemaining: number;
-    jackpotShotsRemaining: number;
+    // Round-relative milliseconds at which each gate stops paying - see
+    // shared/pachinko/pachinkoRules.ts for why these are durations carried by the shot rather than
+    // anything either side reads off a clock. 0 means closed.
+    // Both ends of each window - see PachinkoGateState's own comment in shared/pachinko/economy.ts
+    // for why the open bound exists alongside the close.
+    attackerOpenFromMs: number;
+    attackerOpenUntilMs: number;
+    jackpotOpenFromMs: number;
+    jackpotOpenUntilMs: number;
     // The server's own ordering cursor for this round (see pachinko.ts's own field of the same
     // name) - lets a resumed/reloaded board continue its local seq counter without colliding with
     // seqs the server already processed before the page was closed/refreshed.
     lastProcessedSeq: number;
+    // The highest firedAtMs the server has accepted for this round (see PachinkoGateFields in
+    // pachinkoApi.ts). A resumed board needs this to seed its own local clock - see roundStartRef -
+    // since firedAtMs is round-relative and the browser's own monotonic clock restarts at ~0 on
+    // every page load, which would otherwise be BELOW what the server already has on file and get
+    // every subsequent shot rejected.
+    lastFiredAtMs: number;
 }
 
 export interface PachinkoBoardProps {
@@ -58,7 +70,12 @@ const POCKET_HEIGHT = 18; // matches pachinkoLayout.ts's POCKET_DEPTH - the phys
 const FRAME_MS = 1000 / 30; // matches the server's ~30fps trajectory sample rate
 const POOF_MS = 450; // how long the ball+particle burst takes once a trajectory finishes
 const CALLOUT_MS = 1000; // how long the center win/loss callout stays on screen
-const FIRE_INTERVAL_MS = 400; // 100 balls/minute while the launch button is held
+// 100 balls/minute while the launch button is held. Imported from the shared rules module rather
+// than a client-local literal, because it stopped being purely a rendering detail once the gate
+// windows became durations: pachinkoPayoutTuning.ts's attacker term is `ATTACKER_OPEN_MS / this`,
+// so a client that fires faster or slower than the constant the board was tuned against silently
+// changes how many attempts a window is really worth.
+const FIRE_INTERVAL_MS = HOLD_TO_FIRE_INTERVAL_MS;
 const MAX_CONCURRENT_BALLS = 20;
 const PARTICLE_COUNT = 12;
 // No REUP_AMOUNTS constant here. The purchase sizes come in as a prop, sourced from /odds's own
@@ -97,41 +114,32 @@ const REEL_SYMBOLS: Record<string, string> = {
 };
 const REEL_FLICKER_POOL = Object.values(REEL_SYMBOLS);
 const REEL_BOX = { x: 230, y: 195, width: 120, height: 26 };
-const REEL_SPIN_MS = 900; // base spin duration before the first reel starts landing
-const REEL_STOP_STAGGER_MS = [0, 220, 440]; // per-reel landing stagger, added to REEL_SPIN_MS
+// Per-reel landing stagger, added to the base spin duration below.
+const REEL_STOP_STAGGER_MS = [0, 220, 440];
+// Base spin duration before the first reel starts landing - DERIVED, not chosen, so that the last
+// reel stops at exactly REEL_LANDED_MS. That constant is shared with the fold (pachinkoRules.ts),
+// which anchors the attacker's window to it: a window that opens REEL_LANDED_MS after the ball
+// lands is only honest if the animation on screen really did finish then. Writing this as a literal
+// and the shared value as another literal is how those two quietly drift into showing a gate that
+// opens before or after the reels it is supposed to be waiting for.
+const REEL_SPIN_MS = REEL_LANDED_MS - Math.max(...REEL_STOP_STAGGER_MS);
 const REEL_FLICKER_INTERVAL_MS = 70;
 const REEL_RESULT_GLOW_MS = 1600; // how long a match keeps its glow after the last reel lands
-// Chucker greys out ("CHUCKER - FULL") once this many spins are queued (queue + current).
+// Chucker greys out ("CHUCKER - FULL") once this many spins are queued (queue + current), so it's
+// visually obvious there's nothing to gain from hitting it again until some clear.
 //
-// This is now effectively unreachable, and left in place knowingly rather than by oversight. Since
-// a chucker's ledger entry waits for its own spin to land before it is applied (see reelHasLanded),
-// and the entry after it can't be applied before that either, a second spin can't be requested
-// until the first has already been handed over - so the queue never exceeds a depth of 2. The
-// greyed-out state is display-only and harmless, and the cap is what the deadlock fallback in
-// reelHasLanded guards against, so nothing here is dead in the sense of being unsafe. If stacked
-// chucker catches ever feel sluggish, the lever is not this number: it's that the scheduler waits
-// out the full REEL_RESULT_GLOW_MS before starting the next spin, on top of REEL_LANDED_MS.
+// Reachable again, and worth keeping honest about why: spins are serialised by the display, so if
+// chuckers arrive faster than the reel can show them the queue really does fill. At the worst launch
+// power they arrive about every 2694ms against a reel that clears one every REEL_LANDED_MS, which
+// leaves headroom - but only because the scheduler no longer waits out the result glow first. It
+// used to, at 2940ms a spin, which is slower than they arrive.
 const MAX_QUEUED_SPINS = 6;
 
 interface ReelAnimState {
     symbols: [string, string, string];
     matchTier: ReelMatchTier;
     startTime: number;
-    // Which shot fired this spin. The ledger entry for that shot is held until THIS spin has
-    // visibly landed (see drainLedger), so the animation has to be identifiable, not just present.
-    seq: number;
 }
-
-// When all three reels have stopped, relative to a spin's startTime. This is the moment the reel
-// has told the player what it rolled - the glow that follows is celebration, not information, so
-// it's deliberately not part of this.
-const REEL_LANDED_MS = REEL_SPIN_MS + Math.max(...REEL_STOP_STAGGER_MS);
-
-// Longest a ledger entry may sit waiting on its reel before it gives up and applies anyway. Sized
-// well clear of any legitimate wait - a spin queued behind another still starts within
-// REEL_LANDED_MS + REEL_RESULT_GLOW_MS (~2.9s) - so it can only ever fire on a genuine fault. See
-// reelHasLanded.
-const REEL_HOLD_TIMEOUT_MS = 6000;
 
 // A chucker catch's reel result is known the instant the shot resolves now - it's derived from
 // the shot's own seed (see shared/pachinko/pachinkoReels.ts), not fetched from the server - so a
@@ -141,7 +149,6 @@ const REEL_HOLD_TIMEOUT_MS = 6000;
 interface ReelQueueItem {
     symbols: [string, string, string];
     matchTier: ReelMatchTier;
-    seq: number; // carried into ReelAnimState.seq when this spin starts - see there
 }
 
 const OUTCOME_LABEL: Record<PachinkoOutcome, string> = {
@@ -205,8 +212,10 @@ function gateStateFromSession(session: PachinkoSession | null): PachinkoGateStat
         ballsRemaining: session?.ballsRemaining ?? 0,
         leftTulipOpen: session?.leftTulipOpen ?? false,
         rightTulipOpen: session?.rightTulipOpen ?? false,
-        attackerShotsRemaining: session?.attackerShotsRemaining ?? 0,
-        jackpotShotsRemaining: session?.jackpotShotsRemaining ?? 0,
+        attackerOpenFromMs: session?.attackerOpenFromMs ?? 0,
+        attackerOpenUntilMs: session?.attackerOpenUntilMs ?? 0,
+        jackpotOpenFromMs: session?.jackpotOpenFromMs ?? 0,
+        jackpotOpenUntilMs: session?.jackpotOpenUntilMs ?? 0,
     };
 }
 
@@ -224,9 +233,6 @@ interface ShotLedgerEntry {
     // were folded in by a later entry's stateAfter; it stays in the ledger only so the ledger
     // still knows a ball is outstanding, and is dropped when that ball finally lands.
     skipped?: boolean;
-    // Chucker entries only: its reel spin has been handed to the animation queue, and the entry is
-    // now waiting for that spin to visibly land before it may be applied. See drainLedger.
-    reelQueuedAt?: number;
 }
 
 let nextBallId = 0;
@@ -511,6 +517,18 @@ export default function PachinkoBoard({
     // this. See drainLedger.
     const firedNotDisplayedRef = useRef(0);
 
+    // Round-relative firing clock. Every shot's firedAtMs is `performance.now() - this`, a duration
+    // off the browser's own monotonic clock rather than an epoch timestamp - see
+    // shared/pachinko/pachinkoRules.ts's header for why that's what makes a timer-based window safe
+    // to fold identically on both sides.
+    //
+    // Seeded from the session's lastFiredAtMs rather than starting fresh at mount, because
+    // performance.now() itself resets to ~0 on every page load. Without this, a resumed round's
+    // very first shot after a reload would claim a firedAtMs the server has already accepted for
+    // this round, and validateShotTimings (pachinko.ts) would reject the whole batch - a genuine
+    // reload-mid-round bug, not a hypothetical. Re-seeded on every actual round change in the sync
+    // effect below.
+    const roundStartRef = useRef(performance.now() - (session?.lastFiredAtMs ?? 0));
     const lastSyncedRoundIdRef = useRef<string | null>(session?.roundId ?? null);
     const lastSyncedBallsTotalRef = useRef<number>(session?.ballsTotal ?? 0);
     // This board's own local firing-order cursor - assigned to each shot as it fires (see
@@ -545,6 +563,9 @@ export default function PachinkoBoard({
         if (session.roundId !== lastSyncedRoundIdRef.current) {
             lastSyncedRoundIdRef.current = session.roundId;
             lastSyncedBallsTotalRef.current = session.ballsTotal;
+            // See roundStartRef's own comment - this is what lets a resumed round's shots continue
+            // counting up from where the server left off instead of colliding with them.
+            roundStartRef.current = performance.now() - session.lastFiredAtMs;
             nextSeqRef.current = session.lastProcessedSeq;
             lastReconciledSeqRef.current = session.lastProcessedSeq;
             displayedSeqRef.current = session.lastProcessedSeq;
@@ -731,8 +752,23 @@ export default function PachinkoBoard({
         // falling balls were simulated against it - never localGateStateRef, which has already
         // run ahead by however many balls are still in the air. See displayedGateStateRef.
         const displayed = displayedGateStateRef.current;
-        const attackerShotsLeft = displayed.attackerShotsRemaining;
-        const attackerOpen = attackerShotsLeft > 0;
+        // Whether a timed gate is CURRENTLY open is derived live from the clock, not from whichever
+        // entry the ledger last happened to apply - the boundaries themselves are still only ever
+        // updated by an in-order ledger application, but once they're known, "is the clock inside
+        // them" is answered by comparing against it every frame. That decouples the gate's visible
+        // state from ledger throughput entirely: it used to require the ledger to apply a specific
+        // entry at the specific moment the window should open or close, which is exactly the
+        // mechanism that let a reel-display backlog drag the whole board's timing down with it.
+        //
+        // Reuses gateFlagsFor itself rather than hand-rolling the same comparison a second time -
+        // it's a pure function of (state, aTime), and the live clock reading is just another time to
+        // ask it about. That also means the DISPLAY and the FOLD's own enforcement can never quietly
+        // disagree about what "open" means, including the open bound most render logic would be
+        // tempted to forget (see PachinkoGateState's own comment in economy.ts for why it matters).
+        const roundNowMs = now - roundStartRef.current;
+        const liveFlags = gateFlagsFor(displayed, roundNowMs);
+        const attackerRemainingMs = displayed.attackerOpenUntilMs - roundNowMs;
+        const attackerOpen = liveFlags.attackerActive;
 
         for (const bonus of layout.bonusPockets) {
             const isHot = hotPockets.has(`bonus-${bonus.id}`);
@@ -742,11 +778,11 @@ export default function PachinkoBoard({
             drawPocketAmount(ctx, bonus.position.x, bonus.position.y, `${bonusPocketBalls}`, stroke);
         }
 
-        const jackpotShotsLeft = displayed.jackpotShotsRemaining;
-        // No lapsed-window fixup needed here any more. A window measured in balls can't quietly
-        // expire behind the UI's back the way a wall-clock one could - it only ever changes when a
-        // shot is applied, and applyShot already closes both tulips in the same step that takes
-        // the counter to zero. What's drawn is simply the state, with no clock to reconcile.
+        // Live against the clock, same reasoning as attackerOpen above. The tulip BOOLEANS below are
+        // still pure ledger state (they only flip via an in-order fold, never derived from time),
+        // but whether the jackpot POCKET currently pays is, like the attacker, a live comparison.
+        const jackpotRemainingMs = displayed.jackpotOpenUntilMs - roundNowMs;
+        const jackpotOpen = liveFlags.jackpotActive;
         const leftOpen = displayed.leftTulipOpen;
         const rightOpen = displayed.rightTulipOpen;
         for (const tulip of layout.tulips) {
@@ -848,19 +884,19 @@ export default function PachinkoBoard({
         ctx.font = "bold 11px sans-serif";
         ctx.fillText(`${attackerBalls}`, layout.attacker.position.x, attackerLabelY + 14);
         if (attackerOpen) {
-            // Counts down in BALLS, not seconds - the window is literally measured in shots now
-            // (see shared/pachinko/pachinkoRules.ts), so this is exact rather than an estimate,
-            // and it's a number the player controls directly by choosing when to fire.
+            // Counts down in seconds now, not balls - the window is a duration (see
+            // shared/pachinko/pachinkoRules.ts), so a ball count would be an estimate that depends
+            // on how fast the player is firing, where seconds are just true. One decimal keeps it
+            // legible without implying more precision than a 30fps display can actually show.
             ctx.fillStyle = "rgba(189,245,207,0.95)";
             ctx.font = "bold 9px sans-serif";
             ctx.textAlign = "center";
-            ctx.fillText(`${attackerShotsLeft} balls`, layout.attacker.position.x, attackerLabelY + 28);
+            ctx.fillText(`${(attackerRemainingMs / 1000).toFixed(1)}s`, layout.attacker.position.x, attackerLabelY + 28);
         }
 
-        // Jackpot - the tightest pocket on the board, fixed width even when primed. Driven by its
-        // own ball-counted window, not the tulip booleans (which are reset by the same shot that
-        // closes the window).
-        const jackpotOpen = jackpotShotsLeft > 0;
+        // Jackpot - the tightest pocket on the board, fixed width even when primed. `jackpotOpen`
+        // (computed above via liveFlags) is driven by its own timed window, not the tulip booleans
+        // (which are reset by the same shot that closes the window).
         const jackpotHot = hotPockets.has("jackpot");
         const jackpotHeight = layout.jackpot.halfWidth * 2.4;
         const jackpotStroke = jackpotHot ? "#FFD700" : jackpotOpen ? "#ffd0dd" : "rgba(170,170,170,0.7)";
@@ -879,7 +915,7 @@ export default function PachinkoBoard({
             ctx.fillStyle = "rgba(255,77,125,0.95)";
             ctx.font = "bold 9px sans-serif";
             ctx.textAlign = "center";
-            ctx.fillText(`${jackpotShotsLeft} balls`, layout.jackpot.position.x, layout.jackpot.position.y + jackpotHeight / 2 + 12);
+            ctx.fillText(`${(jackpotRemainingMs / 1000).toFixed(1)}s`, layout.jackpot.position.x, layout.jackpot.position.y + jackpotHeight / 2 + 12);
         }
 
         // Pending balls - appear instantly at the launcher the moment a shot is fired.
@@ -994,14 +1030,21 @@ export default function PachinkoBoard({
             // symbols from the moment it's queued (derived from its shot's seed), so there's
             // nothing to wait on and no placeholder state to skip over.
             if (currentReelAnimRef.current) {
-                const finishedAt = currentReelAnimRef.current.startTime + REEL_LANDED_MS + REEL_RESULT_GLOW_MS;
+                // Freed when the reels STOP, not when the glow fades. The glow still renders for its
+                // full REEL_RESULT_GLOW_MS (drawReelDisplay owns that); it just no longer holds the
+                // queue behind it. Including it here made the display clear one spin every 2940ms
+                // against chuckers arriving every ~2694ms at the worst power - throughput below
+                // arrival rate, so the queue grew without bound and every spin shown was older than
+                // the last. A glow cut short by the next catch is the correct outcome there: a
+                // second chucker landing during it is exactly when the board should move on.
+                const finishedAt = currentReelAnimRef.current.startTime + REEL_LANDED_MS;
                 if (now >= finishedAt) {
                     const next = reelQueueRef.current.shift();
-                    currentReelAnimRef.current = next ? { symbols: next.symbols, matchTier: next.matchTier, startTime: now, seq: next.seq } : null;
+                    currentReelAnimRef.current = next ? { symbols: next.symbols, matchTier: next.matchTier, startTime: now } : null;
                 }
             } else if (reelQueueRef.current.length > 0) {
                 const next = reelQueueRef.current.shift()!;
-                currentReelAnimRef.current = { symbols: next.symbols, matchTier: next.matchTier, startTime: now, seq: next.seq };
+                currentReelAnimRef.current = { symbols: next.symbols, matchTier: next.matchTier, startTime: now };
             }
 
             // Cheap due-check every frame - see flushBatch's own comment. Actually posts only
@@ -1133,8 +1176,10 @@ export default function PachinkoBoard({
                 ballsRemaining: response.ballsRemaining,
                 leftTulipOpen: response.leftTulipOpen,
                 rightTulipOpen: response.rightTulipOpen,
-                attackerShotsRemaining: response.attackerShotsRemaining,
-                jackpotShotsRemaining: response.jackpotShotsRemaining,
+                attackerOpenFromMs: response.attackerOpenFromMs,
+                attackerOpenUntilMs: response.attackerOpenUntilMs,
+                jackpotOpenFromMs: response.jackpotOpenFromMs,
+                jackpotOpenUntilMs: response.jackpotOpenUntilMs,
             };
             localGateStateRef.current = authoritative;
             displayedGateStateRef.current = { ...authoritative };
@@ -1174,8 +1219,10 @@ export default function PachinkoBoard({
             ballsRemaining: displayed.ballsRemaining - firedNotDisplayedRef.current,
             leftTulipOpen: displayed.leftTulipOpen,
             rightTulipOpen: displayed.rightTulipOpen,
-            attackerShotsRemaining: displayed.attackerShotsRemaining,
-            jackpotShotsRemaining: displayed.jackpotShotsRemaining,
+            attackerOpenFromMs: displayed.attackerOpenFromMs,
+            attackerOpenUntilMs: displayed.attackerOpenUntilMs,
+            jackpotOpenFromMs: displayed.jackpotOpenFromMs,
+            jackpotOpenUntilMs: displayed.jackpotOpenUntilMs,
         };
     };
 
@@ -1183,21 +1230,21 @@ export default function PachinkoBoard({
     // currently displayed state - the only condition under which drainLedger may step over a ball
     // that hasn't landed yet.
     //
-    // It holds for a miss fired while neither timed gate is running, which is the overwhelmingly
-    // common shot (roughly seven in ten). Read applyShot alongside this: a "gutter" outcome awards
-    // no balls, fires no reel, and toggles no tulip; its only two effects are the -1 ball cost and
-    // decrementing both windows. The cost is already shown the instant the shot is fired, via
-    // firedNotDisplayedRef, so it isn't waiting on this. The decrements are what the window checks
-    // are for - at 0 they're clamped no-ops, but at 1 or more they'd tick a counter the player is
-    // watching down a ball early, before the ball it belongs to has visibly landed, which is the
-    // whole class of bug the ledger exists to prevent. Both the displayed state and the entry's own
-    // stateAfter are checked, so this stays true no matter which one drifts.
+    // Under the timer model a miss (outcome "gutter") never touches gate state EXCEPT indirectly:
+    // applyShot's lapse check runs on every shot regardless of outcome, and closes both tulips the
+    // moment some shot's firedAtMs crosses a running jackpot window's boundary. So a gutter is safe
+    // to skip only when it provably isn't the one doing that - which "the jackpot window isn't
+    // currently running" rules out directly (the lapse check is a no-op when its own input boundary
+    // is already 0).
+    //
+    // Checking `displayed` alone is actually sufficient - a priming or catching shot is never a
+    // gutter, so it's never itself eligible for step-over, which means it's always applied to
+    // displayedGateStateRef in true seq order before any gutter after it is ever considered here.
+    // So if displayed already reads 0, every gutter from here until the next real gate-changing
+    // shot genuinely started from 0 too. entry.stateAfter is checked as well anyway, cheaply, as a
+    // second line of defense against that reasoning ever being wrong.
     const canStepOver = (entry: ShotLedgerEntry, displayed: PachinkoGateState): boolean =>
-        entry.outcome === "gutter" &&
-        displayed.attackerShotsRemaining === 0 &&
-        displayed.jackpotShotsRemaining === 0 &&
-        entry.stateAfter.attackerShotsRemaining === 0 &&
-        entry.stateAfter.jackpotShotsRemaining === 0;
+        entry.outcome === "gutter" && displayed.jackpotOpenUntilMs === 0 && entry.stateAfter.jackpotOpenUntilMs === 0;
 
     // The run of not-yet-landed entries sitting in front of the next LANDED one, if every entry in
     // that run can be stepped over. Null - meaning "wait, as before" - if any of them can't, or if
@@ -1212,15 +1259,6 @@ export default function PachinkoBoard({
                 return null; // nothing behind the gap yet - the wait is real
             }
             if (entry.landed) {
-                // "Landed" is necessary but not sufficient: a chucker still waiting on its reel
-                // won't be applied this pass either, and stepping over a run that then isn't
-                // followed by an application is exactly what breaks the accounting below - the
-                // stepped balls' cost leaves firedNotDisplayedRef without arriving in the displayed
-                // state, so the visible ball count reads wrong until the hold clears. Wait instead;
-                // the same step-over happens for free on a later frame once the reel has landed.
-                if (reelStillHolding(entry, now)) {
-                    return null;
-                }
                 return run.length > 0 ? run : null;
             }
             if (!canStepOver(entry, displayed)) {
@@ -1229,56 +1267,6 @@ export default function PachinkoBoard({
             run.push(entry);
         }
         return null;
-    };
-
-    // A chucker's ball landing is only half its story. The chucker pays nothing itself - its entire
-    // value is the reel spin it fires, and it's the reel, not the catch, that decides whether the
-    // attacker opens. Applying the entry the moment the ball lands therefore showed the effect
-    // before the cause: the attacker lit up and "Gate Open!" popped a full REEL_LANDED_MS (1.34s)
-    // before the reels revealed the three-of-a-kind that had opened it.
-    //
-    // So a landed chucker entry additionally waits for its OWN spin to finish landing. Its own,
-    // specifically - hence the seq tag on ReelAnimState. Waiting on "some spin is animating" would
-    // release the entry against whichever spin happened to be on screen.
-    //
-    // Note this waits for the reels to STOP, not for REEL_RESULT_GLOW_MS to elapse. The glow is
-    // celebration; the information the gate depends on is complete the moment the third reel lands.
-    //
-    // Deliberately PURE - it is used both to gate the head of the ledger and as a lookahead by
-    // collectStepOver, and a lookahead that queued a spin as a side effect would start reels for
-    // shots whose turn hasn't come. Queueing lives in startReelFor, called only for the head entry.
-    const reelStillHolding = (entry: ShotLedgerEntry, now: number): boolean => {
-        if (entry.outcome !== "chucker" || !entry.reelSpin) {
-            return false;
-        }
-        if (entry.reelQueuedAt === undefined) {
-            return true; // its spin hasn't even been handed over yet
-        }
-        // Belt and braces against a permanent stall. startReelFor's queue push is conditional, and
-        // an entry waiting on a spin that was never enqueued would wedge the ledger forever - every
-        // later shot's effects frozen behind it, with no event that could ever free them. It cannot
-        // happen as things stand (serialising chuckers this way holds the queue at a depth of at
-        // most 2 against a MAX_QUEUED_SPINS of 6), but "currently unreachable" is a poor guarantee
-        // to hang a permanent freeze on, and the cost of being wrong is the whole board stopping.
-        if (now - entry.reelQueuedAt > REEL_HOLD_TIMEOUT_MS) {
-            return false;
-        }
-        const anim = currentReelAnimRef.current;
-        return !(anim?.seq === entry.seq && now - anim.startTime >= REEL_LANDED_MS);
-    };
-
-    // Hands this entry's spin to the animation queue, once. Only ever called for the entry at the
-    // head of the ledger, so reels play in fire order and a spin never starts ahead of an earlier
-    // ball that hasn't resolved yet.
-    const startReelFor = (entry: ShotLedgerEntry, now: number) => {
-        if (entry.reelQueuedAt !== undefined) {
-            return;
-        }
-        const totalQueued = (currentReelAnimRef.current ? 1 : 0) + reelQueueRef.current.length;
-        if (totalQueued < MAX_QUEUED_SPINS) {
-            reelQueueRef.current.push({ symbols: entry.reelSpin!.symbols, matchTier: entry.reelSpin!.matchTier, seq: entry.seq });
-        }
-        entry.reelQueuedAt = now;
     };
 
     // Makes a landed shot's effects visible, and then any already-landed shots queued behind it,
@@ -1293,19 +1281,6 @@ export default function PachinkoBoard({
         for (;;) {
             const entry = shotLedgerRef.current.get(displayedSeqRef.current + 1);
             if (!entry) {
-                return;
-            }
-            if (entry.landed && reelStillHolding(entry, now)) {
-                // A chucker's ball landing is only half its story. The chucker pays nothing itself -
-                // its entire value is the reel spin it fires, and it's the reel, not the catch, that
-                // decides whether the attacker opens. Applying on landing therefore showed the
-                // effect before its cause: the attacker lit up and "Gate Open!" popped a full
-                // REEL_LANDED_MS (1.34s) before the reels revealed the three-of-a-kind behind it.
-                //
-                // So the whole entry waits for its own reel, rather than the gate alone being
-                // delayed - a half-applied entry would put the displayed board into a configuration
-                // that never existed in the fold, which is the one invariant this ledger has.
-                startReelFor(entry, now);
                 return;
             }
             if (!entry.landed) {
@@ -1355,11 +1330,17 @@ export default function PachinkoBoard({
                 setTimeout(() => setCallouts((prev) => prev.filter((c) => c.id !== calloutId)), CALLOUT_MS);
             }
 
-            // No reel queueing here any more - reelHasLanded already did it, back when this entry
-            // first reached the head of the ledger. By the time execution gets here the spin has
-            // been running for REEL_LANDED_MS and has just finished revealing what it rolled, which
-            // is precisely what makes the gate state applied above land at the same moment as its
-            // own explanation.
+            // A chucker's reel spin, with its real symbols already known - queued so rapid catches
+            // stack visually instead of clobbering each other, and dropped once the queue is full.
+            //
+            // The ledger deliberately does NOT wait for this reel before applying the entry. It did
+            // briefly, to stop the attacker opening before the reels revealed why, and that was a
+            // bad trade: the reel display clears roughly one spin every 2940ms while chuckers arrive
+            // every ~2694ms at the worst power, so making the ledger wait on it inherited a backlog
+            // that grew without bound - measured median display lag went from 2.5s to 35.5s, peaking
+            // at 84s, with up to 41 entries applied in a single frame. The gate no longer needs the
+            // ledger's help anyway: it's a timestamp now, rendered live, and applyShot already
+            // anchors it to REEL_LANDED_MS after this ball lands.
 
             patchVisibleSession();
         }
@@ -1395,14 +1376,20 @@ export default function PachinkoBoard({
         const seq = ++nextSeqRef.current;
         const seed = randomSeed();
         const launchPower = launchPowerRef.current;
-        // Derived through the same shared helper the server uses, from the same ball-counted
-        // state - so the two sides cannot pick different geometry for this shot. (And since the
-        // trajectory no longer depends on these flags at all, even a disagreement could only
-        // change whether a landing scores, never where the ball goes.)
-        const flags = gateFlagsFor(gateState);
+        // Round-relative, off the browser's own monotonic clock - see roundStartRef's own comment.
+        // Captured once, here, and reused for every use this shot has: the flags below, the ledger
+        // entry, and the QueuedShot the server eventually replays against. All three have to agree
+        // on when this shot happened, or the server's own re-derivation (pachinko.ts) disagrees
+        // with what the client already showed the player.
+        const firedAtMs = performance.now() - roundStartRef.current;
+        // Derived through the same shared helper the server uses, from the same state - so the two
+        // sides cannot pick different geometry for this shot. (And since the trajectory no longer
+        // depends on these flags at all, even a disagreement could only change whether a landing
+        // scores, never where the ball goes.)
+        const flags = gateFlagsFor(gateState, firedAtMs);
 
         activeBallsRef.current.set(id, { id, phase: "pending" });
-        pendingShotsRef.current.push({ seq, seed, launchPower });
+        pendingShotsRef.current.push({ seq, seed, launchPower, firedAtMs });
         // The ball is spent the moment it's launched - reflected in the tray immediately, while
         // whatever it wins waits for it to land.
         firedNotDisplayedRef.current += 1;
@@ -1411,16 +1398,32 @@ export default function PachinkoBoard({
         // Runs off the main thread and resolves in tens of ms, not a network round trip. The
         // worker processes messages in the order they arrive, so outcomes resolve in fire order
         // and the ledger below is built in seq order without any explicit sorting.
-        simulate({ seed, launchPower, ...flags }).then(({ trajectory, outcome }) => {
+        simulate({ seed, launchPower, ...flags }).then(({ trajectory, outcome: rawOutcome }) => {
             // Everything about scoring is derived locally and immediately - including the reel,
             // which used to require a round trip and left the client blind to its own attacker
             // window in the meantime.
-            const reelSpin = outcome === "chucker" ? spinReel(reelRngForSeed(seed)) : undefined;
-            const { ballsAwarded, nextState } = applyShot(localGateStateRef.current, outcome, reelSpin, payoutConstantsRef.current, jackpotPoolRef.current, pricePerBallRef.current);
+            const reelSpin = rawOutcome === "chucker" ? spinReel(reelRngForSeed(seed)) : undefined;
+            const flightMs = trajectory.length * TRAJECTORY_SAMPLE_MS;
+            // `outcome` here is what the shot actually SCORED as, which can differ from what the
+            // physics sim reported hitting (`rawOutcome`) - see applyShot's own gate-enforcement
+            // comment. `gateState` above was read synchronously at fire time; by the time this
+            // callback runs, localGateStateRef.current may have moved on if another shot resolved
+            // in between, so applyShot re-derives its own flags from firedAtMs rather than trusting
+            // the ones `rawOutcome` was simulated under. Everything downstream - the ledger entry,
+            // the falling ball's own outcome field, every rendering decision - uses this enforced
+            // `outcome`, never `rawOutcome` directly, which is what stops a stale flag from ever
+            // being honoured for real.
+            const { ballsAwarded, outcome, nextState } = applyShot(localGateStateRef.current, rawOutcome, reelSpin, payoutConstantsRef.current, jackpotPoolRef.current, pricePerBallRef.current, firedAtMs, flightMs);
             localGateStateRef.current = nextState;
             shotLedgerRef.current.set(seq, { seq, outcome, ballsAwarded, reelSpin, stateAfter: nextState, landed: false });
 
             if (activeBallsRef.current.has(id)) {
+                // The TRAJECTORY still ends wherever the physics sim actually put the ball (it was
+                // simulated under `rawOutcome`'s flags) - only the scoring `outcome` attached to it
+                // is the enforced one. On the rare gate-enforcement edge case these disagree: the
+                // ball visually rests in a pocket's cup, but is treated as the miss it actually was
+                // for every game-state purpose (no highlight, no popup, no payout). See applyShot's
+                // own comment for why that's the accepted trade.
                 activeBallsRef.current.set(id, { id, phase: "falling", trajectory, outcome, startTime: performance.now(), seq });
             } else {
                 // The ball was removed mid-flight (the player cashed out or closed the board), so

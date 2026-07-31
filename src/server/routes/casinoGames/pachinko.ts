@@ -35,9 +35,12 @@
  *     add/remove real collision walls, so a single disagreed-upon boolean could put the ball in a
  *     completely different pocket. Now every shot simulates the identical board and the gates only
  *     decide whether a landing SCORES.
- *   - **Gate windows are counted in balls, not milliseconds** (shared/pachinko/pachinkoRules.ts).
- *     They used to be epoch-ms timestamps minted on one machine's clock and compared against
- *     another's, which drifted with clock skew and with when each side happened to apply them.
+ *   - **Gate windows are durations the SHOT carries, not anything either side reads off a clock**
+ *     (shared/pachinko/pachinkoRules.ts). They were once epoch-ms timestamps minted on one
+ *     machine's clock and compared against another's, which drifted with clock skew and with when
+ *     each side happened to apply them; then ball counts, which agreed perfectly but spent
+ *     themselves on balls already in the air, before the player could see the window at all. Now
+ *     every shot arrives with its own firedAtMs and the fold only compares numbers handed to it.
  *   - **The reel is derived from the shot's own seed** (shared/pachinko/pachinkoReels.ts), so the
  *     client knows a chucker's result - and therefore whether the attacker just opened - the
  *     instant the shot resolves, instead of being blind to it until a batch response came back.
@@ -58,12 +61,12 @@
  * Tulip open/closed state and the attacker's/jackpot's own remaining-ball counters live on the
  * player's own round (conditions.*), not shared across players - each player works through their
  * own priming sequence within their own batch. Both the attacker and the jackpot are real windows
- * measured in balls, not standing "primed" flags: a chucker catch spins the board's central reel
+ * measured windows, not standing "primed" flags: a chucker catch spins the board's central reel
  * (see shared/pachinko/pachinkoReels.ts), and only a three-of-a-kind opens the attacker, for
- * ATTACKER_OPEN_SHOTS balls - queued matches (multiple chucker catches landing close together
- * under hold-to-fire) each ADD that many balls on top of whatever's currently left rather than
- * resetting it. Hitting both tulips simultaneously opens the jackpot for JACKPOT_OPEN_SHOTS balls
- * and immediately resets both tulips - there's no standing "primed" state to sit open
+ * ATTACKER_OPEN_MS from the moment the reels stop - queued matches (multiple chucker catches
+ * landing close together under hold-to-fire) each EXTEND the window from wherever it currently ends
+ * rather than resetting it. Hitting both tulips simultaneously opens the jackpot for
+ * JACKPOT_OPEN_MS and immediately resets both tulips - there's no standing "primed" state to sit open
  * indefinitely, just that one window. The jackpot pool *is* shared
  * (same pattern Slots' own pool already uses): every non-jackpot ball feeds it by
  * CONTRIBUTION_RATE * pricePerBall, and a jackpot catch converts the live pool value to balls,
@@ -103,8 +106,9 @@ import {
     MIN_LAUNCH_POWER,
     MAX_LAUNCH_POWER,
 } from "../../../shared/pachinko/pachinkoLayout";
-import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, ATTACKER_OPEN_SHOTS, ATTACKER_BALLS, JACKPOT_OPEN_SHOTS, CONTRIBUTION_RATE, JACKPOT_SEED, CASH_OUT_RATE, MAX_PAYOUT, cashOutAmount } from "./pachinkoPayouts";
-import { PachinkoOutcome, ShotResult } from "../../../shared/pachinko/pachinkoPhysics";
+import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, ATTACKER_OPEN_MS, ATTACKER_BALLS, JACKPOT_OPEN_MS, CONTRIBUTION_RATE, JACKPOT_SEED, CASH_OUT_RATE, MAX_PAYOUT, cashOutAmount } from "./pachinkoPayouts";
+import { MIN_SHOT_SPACING_MS } from "../../../shared/pachinko/pachinkoRules";
+import { PachinkoOutcome, ShotResult, TRAJECTORY_SAMPLE_MS } from "../../../shared/pachinko/pachinkoPhysics";
 import { spinReel, reelRngForSeed, ReelSpinResult } from "../../../shared/pachinko/pachinkoReels";
 import { applyShot, gateFlagsFor, PachinkoGateState, PachinkoPayoutConstants } from "../../../shared/pachinko/economy";
 import {
@@ -180,6 +184,12 @@ interface IncomingShot {
     seq: number;
     seed: number;
     launchPower: number;
+    // Round-relative milliseconds at which the client fired this shot, off its own monotonic clock.
+    // Not trusted as-is: validateShotTimings below enforces that a batch's timings are ordered and
+    // no faster than a real client could fire, which is what stops a lying client from cramming
+    // extra shots into a paying window. See shared/pachinko/pachinkoRules.ts on why the windows are
+    // durations carried by the shot rather than anything either side reads off a clock.
+    firedAtMs: number;
 }
 
 interface PachinkoConditions {
@@ -188,13 +198,20 @@ interface PachinkoConditions {
     pricePerBall: number;
     leftTulipOpen: boolean;
     rightTulipOpen: boolean;
-    // BALLS, not milliseconds - how many more shots each gate stays open for, counting down one
-    // per shot processed; 0 means closed. These replaced a pair of epoch-ms timestamps, which
-    // were the single biggest source of client/server disagreement on this board: one side minted
-    // them on its own clock and the other compared them against a different clock. See
-    // shared/pachinko/pachinkoRules.ts's header for the full reasoning.
-    attackerShotsRemaining: number;
-    jackpotShotsRemaining: number;
+    // Round-relative milliseconds at which each gate stops paying; 0 means closed. NOT epoch
+    // timestamps - the original design used those and they were the single biggest source of
+    // client/server disagreement on this board, because one side minted them on its own clock and
+    // the other compared them against a different one. These are on the same scale as a shot's own
+    // firedAtMs and are only ever compared against that, so no clock is involved on either side.
+    // See shared/pachinko/pachinkoRules.ts's header for all three designs this has been.
+    attackerOpenFromMs: number;
+    attackerOpenUntilMs: number;
+    jackpotOpenFromMs: number;
+    jackpotOpenUntilMs: number;
+    // Highest firedAtMs this round has ever accepted. Carried across batches so validateShotTimings
+    // can enforce its rate cap over the whole round rather than only within one request - without
+    // it a client could restart its clock at every flush and replay the same paying window forever.
+    lastFiredAtMs: number;
     results: PachinkoBallResult[];
     topups: PachinkoTopup[];
     // Highest shot seq this round has ever processed (0 = none yet) - the server's own ordering
@@ -221,7 +238,7 @@ const nailField = generateNailField(); // static geometry, computed once and reu
 // round self-heals on its very next chucker catch. New rounds always write both fields.
 function readConditions(round: { conditions: unknown }): PachinkoConditions {
     const c = round.conditions as PachinkoConditions;
-    return { ...c, attackerShotsRemaining: c.attackerShotsRemaining ?? 0, jackpotShotsRemaining: c.jackpotShotsRemaining ?? 0 };
+    return { ...c, attackerOpenFromMs: c.attackerOpenFromMs ?? 0, attackerOpenUntilMs: c.attackerOpenUntilMs ?? 0, jackpotOpenFromMs: c.jackpotOpenFromMs ?? 0, jackpotOpenUntilMs: c.jackpotOpenUntilMs ?? 0, lastFiredAtMs: c.lastFiredAtMs ?? 0 };
 }
 
 // The one place any shot ever gets scored - see the file header for why the server never trusts
@@ -237,6 +254,44 @@ function readConditions(round: { conditions: unknown }): PachinkoConditions {
 //
 // Returns null only when the round itself is gone (resolved/never existed) - not an error case,
 // just nothing left to do.
+// Thrown when a batch's claimed firing times are not something a real client could have produced.
+// Its own class so the route can answer 400 (the client sent something invalid) rather than the 500
+// every other processBatch failure means.
+class PachinkoBadTimingsError extends Error {
+    constructor() {
+        super("invalid shot timings in batch");
+        this.name = "PachinkoBadTimingsError";
+    }
+}
+
+// Are this batch's claimed firing times something a real client could have produced?
+//
+// The gate windows are durations now, and a duration - unlike the ball count it replaced - does not
+// cap its own value. Five balls is five balls however fast you fire, but a 2000ms attacker window is
+// worth whatever a client claims it fired during it. Left unchecked, a client reporting fifty shots
+// 1ms apart would multiply the attacker's payout tenfold.
+//
+// So the cap that used to be implicit in "one shot per ball" is checked explicitly here: timings
+// must advance, and must advance no faster than a real client fires. Anything else is not a client
+// with a slow frame, it's a client making things up, and the caller rejects the whole batch rather
+// than clamping - a silent clamp would let a probing client discover the boundary for free.
+function validateShotTimings(ordered: IncomingShot[], sinceMs: number): boolean {
+    let previous = sinceMs;
+    for (const shot of ordered) {
+        if (!Number.isFinite(shot.firedAtMs) || shot.firedAtMs < 0) {
+            return false;
+        }
+        // `previous` starts at the last time this round already accepted, so the check spans batch
+        // boundaries too - otherwise a client could restart its clock every flush and replay the
+        // same paying window indefinitely.
+        if (shot.firedAtMs < previous + MIN_SHOT_SPACING_MS) {
+            return false;
+        }
+        previous = shot.firedAtMs;
+    }
+    return true;
+}
+
 async function processBatch(userId: string, shots: IncomingShot[]): Promise<{ newResults: PachinkoBallResult[]; updatedConditions: PachinkoConditions } | null> {
     const ordered = [...shots].sort((a, b) => a.seq - b.seq);
 
@@ -255,9 +310,19 @@ async function processBatch(userId: string, shots: IncomingShot[]): Promise<{ ne
             ballsRemaining: start.ballsRemaining,
             leftTulipOpen: start.leftTulipOpen,
             rightTulipOpen: start.rightTulipOpen,
-            attackerShotsRemaining: start.attackerShotsRemaining,
-            jackpotShotsRemaining: start.jackpotShotsRemaining,
+            attackerOpenFromMs: start.attackerOpenFromMs,
+            attackerOpenUntilMs: start.attackerOpenUntilMs,
+            jackpotOpenFromMs: start.jackpotOpenFromMs,
+            jackpotOpenUntilMs: start.jackpotOpenUntilMs,
         };
+        // Re-checked inside the retry loop, against the snapshot this attempt actually simulates
+        // against - a concurrent batch that won in between moved the cursor, and this attempt has to
+        // answer to the new one, not the one it read first time round.
+        const newShots = ordered.filter((s) => s.seq > start.lastProcessedSeq);
+        if (!validateShotTimings(newShots, start.lastFiredAtMs)) {
+            throw new PachinkoBadTimingsError();
+        }
+        let lastFiredAtMs = start.lastFiredAtMs;
         let lastProcessedSeq = start.lastProcessedSeq;
         // Tracks what the shared jackpot pool would read AFTER each poolOp queued so far in this
         // attempt, without touching the real pool until this whole batch durably persists (see
@@ -277,41 +342,52 @@ async function processBatch(userId: string, shots: IncomingShot[]): Promise<{ ne
             }
 
             // Gate flags come from THIS attempt's own accumulating state via the shared
-            // gateFlagsFor - never the client's claim about what was open when it fired. Since
-            // both sides derive them through the same function from the same ball-counted state,
-            // and the trajectory no longer depends on them at all (see pachinkoPhysics.ts), the
-            // client's local preview and this replay cannot land the ball in different pockets.
-            const flags = gateFlagsFor(gateState);
-            const { outcome }: ShotResult = await physicsPool.run({
+            // gateFlagsFor - never the client's claim about what was open when it fired. Both sides
+            // derive them through the same function, from the same windows, against the same
+            // shot-carried firedAtMs, so the client's local preview and this replay cannot land the
+            // ball in different pockets.
+            const flags = gateFlagsFor(gateState, shot.firedAtMs);
+            const { outcome, trajectory }: ShotResult = await physicsPool.run({
                 seed: shot.seed,
                 launchPower: shot.launchPower,
                 ...flags,
             });
+            // How long this ball is actually in the air on the client, derived from the trajectory
+            // this replay just produced rather than anything the client said. It's what places the
+            // moment a window opens (see applyShot), so it has to be re-derived here for the same
+            // reason the outcome is.
+            const flightMs = trajectory.length * TRAJECTORY_SAMPLE_MS;
 
             // Derived from the shot's own seed, so this is the identical spin the client already
             // showed the player - no server-only randomness left anywhere in the scoring path.
             const reelSpin: ReelSpinResult | undefined = outcome === "chucker" ? spinReel(reelRngForSeed(shot.seed)) : undefined;
 
-            // Every ball fired feeds the shared pool except a jackpot catch, which empties it.
-            // Tracked against `simulatedPool` so a jackpot's ball value uses the pool as it stands
-            // at that point in the batch, while the real side effects stay deferred (see poolOps).
+            // The one and only place a shot is scored - the same shared function the client runs
+            // (see economy.ts). Everything the old inline copy did (payouts, the -1 firing cost,
+            // tulip toggling, jackpot priming, attacker stacking, the lapsed-tulip closeout) lives
+            // there now, so there is no second implementation left to drift out of sync.
+            const { ballsAwarded, outcome: scored, nextState } = applyShot(gateState, outcome, reelSpin, PAYOUT_CONSTANTS, simulatedPool, start.pricePerBall, shot.firedAtMs, flightMs);
+            gateState = nextState;
+
+            // Everything below keys off `scored`, never the raw simulated `outcome`: applyShot can
+            // refuse a catch whose gate wasn't actually open, and a refused jackpot must not empty
+            // the shared pool. Reading the pre-fold outcome here would hand out the pool for a catch
+            // that paid nothing.
+            //
+            // Every ball fired feeds the pool except a jackpot catch, which empties it. Tracked
+            // against `simulatedPool` so a jackpot's ball value uses the pool as it stands at that
+            // point in the batch, while the real side effects stay deferred (see poolOps).
             const contribution = start.pricePerBall * CONTRIBUTION_RATE;
-            if (outcome === "jackpot") {
+            if (scored === "jackpot") {
                 poolOps.push({ type: "reset" });
             } else {
                 poolOps.push({ type: "contribute", amount: contribution });
             }
 
-            // The one and only place a shot is scored - the same shared function the client runs
-            // (see economy.ts). Everything the old inline copy did (payouts, the -1 firing cost,
-            // tulip toggling, jackpot priming, attacker stacking, the lapsed-tulip closeout) lives
-            // there now, so there is no second implementation left to drift out of sync.
-            const { ballsAwarded, nextState } = applyShot(gateState, outcome, reelSpin, PAYOUT_CONSTANTS, simulatedPool, start.pricePerBall);
-            gateState = nextState;
-
-            simulatedPool = outcome === "jackpot" ? JACKPOT_SEED : simulatedPool + contribution;
+            simulatedPool = scored === "jackpot" ? JACKPOT_SEED : simulatedPool + contribution;
+            lastFiredAtMs = shot.firedAtMs;
             lastProcessedSeq = shot.seq;
-            newResults.push({ seq: shot.seq, outcome, ballsAwarded, reelSpin });
+            newResults.push({ seq: shot.seq, outcome: scored, ballsAwarded, reelSpin });
         }
 
         if (lastProcessedSeq === start.lastProcessedSeq) {
@@ -343,8 +419,11 @@ async function processBatch(userId: string, shots: IncomingShot[]): Promise<{ ne
                     "conditions.ballsRemaining": gateState.ballsRemaining,
                     "conditions.leftTulipOpen": gateState.leftTulipOpen,
                     "conditions.rightTulipOpen": gateState.rightTulipOpen,
-                    "conditions.attackerShotsRemaining": gateState.attackerShotsRemaining,
-                    "conditions.jackpotShotsRemaining": gateState.jackpotShotsRemaining,
+                    "conditions.attackerOpenFromMs": gateState.attackerOpenFromMs,
+                    "conditions.attackerOpenUntilMs": gateState.attackerOpenUntilMs,
+                    "conditions.jackpotOpenFromMs": gateState.jackpotOpenFromMs,
+                    "conditions.jackpotOpenUntilMs": gateState.jackpotOpenUntilMs,
+                    "conditions.lastFiredAtMs": lastFiredAtMs,
                     "conditions.lastProcessedSeq": lastProcessedSeq,
                 },
                 $push: { "conditions.results": { $each: newResults } },
@@ -451,7 +530,7 @@ module.exports = function (app: express.Application) {
         // Every payload below is annotated with its shared wire type (see
         // shared/pachinko/pachinkoApi.ts) so a field the client expects can never go missing or
         // get misnamed without failing the build - an untyped res.json literal is exactly how the
-        // attackerShotsRemaining rename silently half-landed and killed the tulips.
+        // attackerOpenUntilMs rename silently half-landed and killed the tulips.
         const data: PachinkoOddsResponse = {
                 pricePerBall: PRICE_PER_BALL,
                 reupSizes: REUP_SIZES,
@@ -481,8 +560,8 @@ module.exports = function (app: express.Application) {
                 sideTulipBalls: SIDE_TULIP_BALLS,
                 bonusPocketBalls: BONUS_POCKET_BALLS,
                 attackerBalls: ATTACKER_BALLS,
-                attackerOpenShots: ATTACKER_OPEN_SHOTS,
-                jackpotOpenShots: JACKPOT_OPEN_SHOTS,
+                attackerOpenMs: ATTACKER_OPEN_MS,
+                jackpotOpenMs: JACKPOT_OPEN_MS,
                 cashOutRate: CASH_OUT_RATE,
             jackpotPool,
             maxPayout: MAX_PAYOUT,
@@ -505,8 +584,13 @@ module.exports = function (app: express.Application) {
                 pricePerBall: conditions.pricePerBall,
                 leftTulipOpen: conditions.leftTulipOpen,
                 rightTulipOpen: conditions.rightTulipOpen,
-                attackerShotsRemaining: conditions.attackerShotsRemaining,
-                jackpotShotsRemaining: conditions.jackpotShotsRemaining,
+                attackerOpenFromMs: conditions.attackerOpenFromMs,
+                attackerOpenUntilMs: conditions.attackerOpenUntilMs,
+                jackpotOpenFromMs: conditions.jackpotOpenFromMs,
+                jackpotOpenUntilMs: conditions.jackpotOpenUntilMs,
+                // The client needs this to seed its own firedAtMs clock correctly on resume - see
+                // PachinkoGateFields's own comment.
+                lastFiredAtMs: conditions.lastFiredAtMs,
                 // A resuming client needs to know where to continue its own local shot-sequence
                 // counter from (see PachinkoBoard.tsx) - starting back at 0/1 could collide with
                 // seqs this round already processed before the page was closed/refreshed, and a
@@ -596,8 +680,11 @@ module.exports = function (app: express.Application) {
                         pricePerBall: conditions.pricePerBall,
                         leftTulipOpen: conditions.leftTulipOpen,
                         rightTulipOpen: conditions.rightTulipOpen,
-                        attackerShotsRemaining: conditions.attackerShotsRemaining,
-                        jackpotShotsRemaining: conditions.jackpotShotsRemaining,
+                        attackerOpenFromMs: conditions.attackerOpenFromMs,
+                        attackerOpenUntilMs: conditions.attackerOpenUntilMs,
+                        jackpotOpenFromMs: conditions.jackpotOpenFromMs,
+                        jackpotOpenUntilMs: conditions.jackpotOpenUntilMs,
+                        lastFiredAtMs: conditions.lastFiredAtMs,
                         lastProcessedSeq: conditions.lastProcessedSeq,
                         balance,
                 };
@@ -610,8 +697,11 @@ module.exports = function (app: express.Application) {
                 pricePerBall: PRICE_PER_BALL,
                 leftTulipOpen: false,
                 rightTulipOpen: false,
-                attackerShotsRemaining: 0,
-                jackpotShotsRemaining: 0,
+                attackerOpenFromMs: 0,
+                attackerOpenUntilMs: 0,
+                jackpotOpenFromMs: 0,
+                jackpotOpenUntilMs: 0,
+                lastFiredAtMs: 0,
                 results: [],
                 topups: [],
                 lastProcessedSeq: 0,
@@ -663,8 +753,11 @@ module.exports = function (app: express.Application) {
                     pricePerBall: PRICE_PER_BALL,
                     leftTulipOpen: false,
                     rightTulipOpen: false,
-                    attackerShotsRemaining: 0,
-                    jackpotShotsRemaining: 0,
+                    attackerOpenFromMs: 0,
+                    attackerOpenUntilMs: 0,
+                    jackpotOpenFromMs: 0,
+                    jackpotOpenUntilMs: 0,
+                    lastFiredAtMs: 0,
                     lastProcessedSeq: 0,
                     balance,
             };
@@ -694,7 +787,13 @@ module.exports = function (app: express.Application) {
                 typeof shot?.launchPower !== "number" ||
                 !Number.isFinite(shot.launchPower) ||
                 shot.launchPower < MIN_LAUNCH_POWER ||
-                shot.launchPower > MAX_LAUNCH_POWER
+                shot.launchPower > MAX_LAUNCH_POWER ||
+                // Shape only. Whether the timings are PLAUSIBLE is a different question, and one
+                // that needs the round's own history to answer - see validateShotTimings, which
+                // processBatch runs against the snapshot it simulates from.
+                typeof shot?.firedAtMs !== "number" ||
+                !Number.isFinite(shot.firedAtMs) ||
+                shot.firedAtMs < 0
             ) {
                 return res.status(400).json({ status: false, message: "invalid shot in batch" });
             }
@@ -713,14 +812,18 @@ module.exports = function (app: express.Application) {
                     results: newResults.map((r) => ({ seq: r.seq, outcome: r.outcome, ballsAwarded: r.ballsAwarded, reelSpin: r.reelSpin })),
                     leftTulipOpen: updatedConditions.leftTulipOpen,
                     rightTulipOpen: updatedConditions.rightTulipOpen,
-                    attackerShotsRemaining: updatedConditions.attackerShotsRemaining,
-                    jackpotShotsRemaining: updatedConditions.jackpotShotsRemaining,
+                    attackerOpenFromMs: updatedConditions.attackerOpenFromMs,
+                    attackerOpenUntilMs: updatedConditions.attackerOpenUntilMs,
+                    jackpotOpenFromMs: updatedConditions.jackpotOpenFromMs,
+                    jackpotOpenUntilMs: updatedConditions.jackpotOpenUntilMs,
+                    lastFiredAtMs: updatedConditions.lastFiredAtMs,
                     ballsRemaining: updatedConditions.ballsRemaining,
                     lastProcessedSeq: updatedConditions.lastProcessedSeq,
             };
             return res.json({ status: true, data });
         } catch (err) {
-            const status = err instanceof WeeabetsUnavailable ? 503 : 500;
+            // Bad timings are the client's fault, not the server's - see validateShotTimings.
+            const status = err instanceof PachinkoBadTimingsError ? 400 : err instanceof WeeabetsUnavailable ? 503 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });
         }
     });

@@ -11,6 +11,10 @@
  * number`, the server sent `attackerOpenUntil`, and `tsc` had nothing to compare: a response body
  * passed to `res.json()` is just an `any`-shaped literal.
  *
+ * Those same fields have since been renamed twice more (to `attackerOpenUntilMs` and friends), and
+ * both times the compiler listed every site that needed changing in seconds. That is the whole
+ * return on this file.
+ *
  * The runtime result was disproportionate to the typo. The field read `undefined`, and
  * `undefined <= 0` is `false` in JavaScript (relational comparison coerces to NaN, and every
  * comparison against NaN is false), so the tulip-toggle rule in economy.ts was skipped on every
@@ -88,10 +92,23 @@ export interface PachinkoLayoutData {
 export interface PachinkoGateFields {
     leftTulipOpen: boolean;
     rightTulipOpen: boolean;
-    // BALLS remaining on each window, not epoch timestamps - see pachinkoRules.ts's header for
-    // why wall-clock windows had to go. 0 means closed.
-    attackerShotsRemaining: number;
-    jackpotShotsRemaining: number;
+    // Round-relative milliseconds at which each window stops paying, on the same scale as a shot's
+    // own firedAtMs and only ever compared against that. NOT epoch timestamps - see
+    // pachinkoRules.ts's header for all three designs this has been and why only this one both
+    // agrees across machines and gives the player a window they can react to. 0 means closed.
+    // Both ends of each window, not just the close - see PachinkoGateState's own comment in
+    // economy.ts for why the open bound exists: a shot fired in the gap between a catch's near-
+    // instant fold and its own visible reveal must NOT see the gate as already open.
+    attackerOpenFromMs: number;
+    attackerOpenUntilMs: number;
+    jackpotOpenFromMs: number;
+    jackpotOpenUntilMs: number;
+    // The highest firedAtMs the server has accepted for this round so far - see
+    // pachinko.ts's validateShotTimings. Needed on every response that (re)establishes gate state
+    // because the client's own firedAtMs clock is round-relative and resets to ~0 on every page
+    // load; on resume it has to pick up counting from HERE, not from 0, or its very first shot after
+    // a reload would claim a firedAtMs the server has already seen and reject the whole batch.
+    lastFiredAtMs: number;
 }
 
 export interface PachinkoOddsResponse {
@@ -102,8 +119,8 @@ export interface PachinkoOddsResponse {
     sideTulipBalls: number;
     bonusPocketBalls: number;
     attackerBalls: number;
-    attackerOpenShots: number;
-    jackpotOpenShots: number;
+    attackerOpenMs: number;
+    jackpotOpenMs: number;
     cashOutRate: number;
     jackpotPool: number;
     maxPayout: number;
@@ -142,6 +159,11 @@ export interface QueuedShot {
     seq: number;
     seed: number;
     launchPower: number;
+    // Round-relative milliseconds at which this shot was fired, off the client's own monotonic
+    // clock. The one piece of timing the server takes from the client, and it is validated rather
+    // than trusted (see pachinko.ts's validateShotTimings): the gate windows are durations now, so
+    // an unchecked timing claim would let a client cram extra shots into a paying window.
+    firedAtMs: number;
 }
 
 // The server's authoritative replay of one shot. Should always match what the client already

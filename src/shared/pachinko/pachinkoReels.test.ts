@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { spinReel, reelMatchTier, reelRngForSeed } from "./pachinkoReels";
-import { ATTACKER_OPEN_SHOTS, REEL_TWO_MATCH_BALLS, REEL_THREE_MATCH_BALLS } from "./pachinkoRules";
+import { ATTACKER_OPEN_MS, REEL_TWO_MATCH_BALLS, REEL_THREE_MATCH_BALLS } from "./pachinkoRules";
 import { mulberry32 } from "./prng";
 
 describe("reelMatchTier", () => {
@@ -53,15 +53,15 @@ describe("spinReel", () => {
             if (spin.matchTier === "three") {
                 sawThree = true;
                 expect(spin.ballsAwarded).toBe(REEL_THREE_MATCH_BALLS);
-                expect(spin.attackerOpenShots).toBe(ATTACKER_OPEN_SHOTS);
+                expect(spin.attackerOpenMs).toBe(ATTACKER_OPEN_MS);
             } else if (spin.matchTier === "two") {
                 sawTwo = true;
                 expect(spin.ballsAwarded).toBe(REEL_TWO_MATCH_BALLS);
-                expect(spin.attackerOpenShots).toBe(0);
+                expect(spin.attackerOpenMs).toBe(0);
             } else {
                 sawNone = true;
                 expect(spin.ballsAwarded).toBe(0);
-                expect(spin.attackerOpenShots).toBe(0);
+                expect(spin.attackerOpenMs).toBe(0);
             }
         }
         expect(sawThree && sawTwo && sawNone).toBe(true);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, ATTACKER_OPEN_SHOTS, ATTACKER_BALLS, CONTRIBUTION_RATE, JACKPOT_SEED, CASH_OUT_RATE, jackpotBalls, cashOutAmount } from "./pachinkoPayouts";
+import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, ATTACKER_OPEN_MS, ATTACKER_BALLS, CONTRIBUTION_RATE, JACKPOT_SEED, CASH_OUT_RATE, jackpotBalls, cashOutAmount } from "./pachinkoPayouts";
 
 describe("jackpotBalls", () => {
     it("converts the pool's cheddar value to balls at the price per ball", () => {
@@ -26,7 +26,7 @@ describe("payout constants", () => {
         expect(BONUS_POCKET_BALLS).toBeGreaterThan(0);
         expect(SIDE_TULIP_BALLS).toBeGreaterThan(0);
         expect(ATTACKER_BALLS).toBeGreaterThan(0);
-        expect(ATTACKER_OPEN_SHOTS).toBeGreaterThan(0);
+        expect(ATTACKER_OPEN_MS).toBeGreaterThan(0);
         expect(CONTRIBUTION_RATE).toBeGreaterThan(0);
         expect(CONTRIBUTION_RATE).toBeLessThanOrEqual(1);
         expect(JACKPOT_SEED).toBeGreaterThanOrEqual(0);

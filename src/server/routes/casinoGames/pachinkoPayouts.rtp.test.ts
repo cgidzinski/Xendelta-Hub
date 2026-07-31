@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { simulateShot } from "../../../shared/pachinko/pachinkoPhysics";
 import { MIN_LAUNCH_POWER, MAX_LAUNCH_POWER } from "../../../shared/pachinko/pachinkoLayout";
 import { spinReel } from "../../../shared/pachinko/pachinkoReels";
-import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, REEL_TWO_MATCH_BALLS, REEL_THREE_MATCH_BALLS, ATTACKER_BALLS, ATTACKER_OPEN_SHOTS } from "./pachinkoPayouts";
+import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, REEL_TWO_MATCH_BALLS, REEL_THREE_MATCH_BALLS, ATTACKER_BALLS, ATTACKER_OPEN_MS } from "./pachinkoPayouts";
+import { HOLD_TO_FIRE_INTERVAL_MS } from "../../../shared/pachinko/pachinkoRules";
 
 // Monte Carlo RTP regression guard, same spirit as spinmaniaGrid.rtp.test.ts but WORST-CASE
 // across launch power, not a blended average - launch power is a free, continuous, player-chosen
@@ -60,11 +61,17 @@ describe("pachinko worst-case RTP", () => {
             }
             const pAttackerCatchGivenOpen = attackerHits / SHOTS_PER_BUCKET;
 
+            // The window is a duration now, not a ball count - a player holding the launch button
+            // through it fires one shot every HOLD_TO_FIRE_INTERVAL_MS, so that ratio is how many
+            // attempts a triggering event is worth. Same worst-case-pessimistic reasoning as
+            // pachinkoPayoutTuning.ts's own attackerAttempts: a player just told the attacker is
+            // open holds the button down, so modelling full fire rate is the right upper bound.
+            const attackerAttempts = ATTACKER_OPEN_MS / HOLD_TO_FIRE_INTERVAL_MS;
             const rtp =
                 pBonus * BONUS_POCKET_BALLS +
                 pTulip * SIDE_TULIP_BALLS +
                 pChucker * (pReelTwo * REEL_TWO_MATCH_BALLS + pReelThree * REEL_THREE_MATCH_BALLS) +
-                pChucker * pReelThree * ATTACKER_OPEN_SHOTS * pAttackerCatchGivenOpen * ATTACKER_BALLS;
+                pChucker * pReelThree * attackerAttempts * pAttackerCatchGivenOpen * ATTACKER_BALLS;
 
             if (rtp > worstRtp) {
                 worstRtp = rtp;
@@ -77,16 +84,16 @@ describe("pachinko worst-case RTP", () => {
         // pachinkoPayoutTuning.ts for the real, high-precision derivation). The upper bound is
         // the one that actually matters: it's what would have caught the original bug.
         //
-        // The bound is 1.45 rather than the 1.3 it used to be, and NOT because the number drifted:
-        // the board's intended worst case is now genuinely ~1.20 (measured 1.1952 at power 50 by
-        // pachinkoPayoutTuning.ts), because ATTACKER_BALLS was deliberately raised to 20 above what
-        // tuning targets - see its comment in pachinkoPayouts.ts for that decision. At 300 shots a
-        // bucket only ~45 land in the chucker, and the attacker chain those feed is both the
-        // largest and by far the noisiest term, so a 1.3 bound sat close enough to the intended
-        // value to fail on an unlucky draw. Raised to keep this a signal about the constants rather
-        // than about the sample. It still catches what it was built to catch by a wide margin - the
-        // bug that prompted it measured ~300%.
-        expect(worstRtp, `worst-case RTP ${(worstRtp * 100).toFixed(1)}% at power=${worstPower.toFixed(1)} - a future constant edit may have reopened a power-specific exploit (intended worst case is ~120%)`).toBeLessThan(1.45);
+        // The bound is 1.45 rather than the 1.3 it used to be, kept wide deliberately rather than
+        // retightened now that the measured worst case (currently ~1.05, see ATTACKER_OPEN_MS in
+        // shared/pachinko/pachinkoRules.ts for how it got there) sits comfortably under it again.
+        // ATTACKER_BALLS is deliberately raised to 20 above what a plain tuning-script run targets -
+        // see its own comment in pachinkoPayouts.ts - and the attacker chain that feeds is both the
+        // largest and by far the noisiest term at only 300 shots a bucket (~45 land in the chucker),
+        // so a tight bound sat close enough to the intended value to fail on an unlucky draw before.
+        // It still catches what it was built to catch by a wide margin - the bug that prompted it
+        // measured ~300%.
+        expect(worstRtp, `worst-case RTP ${(worstRtp * 100).toFixed(1)}% at power=${worstPower.toFixed(1)} - a future constant edit may have reopened a power-specific exploit (currently measured worst case is ~105%)`).toBeLessThan(1.45);
         expect(worstRtp).toBeGreaterThan(0.2);
     }, 180000);
 });

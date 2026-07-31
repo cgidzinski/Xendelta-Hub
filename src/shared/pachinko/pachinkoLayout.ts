@@ -264,7 +264,7 @@ export interface FixedPocket {
 
 // Side tulips - catching one toggles it open/closed and awards SIDE_TULIP_BALLS unconditionally
 // (see pachinkoPayouts.ts). Both open at once opens the jackpot pocket below for a timed window
-// (JACKPOT_OPEN_SHOTS balls - see pachinkoRules.ts) and immediately resets both back to closed -
+// (JACKPOT_OPEN_MS - see pachinkoRules.ts) and immediately resets both back to closed -
 // see economy.ts's applyShot, which owns every gate transition on this board.
 // Moved inward from 172/288 (58px either side of centre) to 196/264 (34px), and the reason is
 // measured rather than aesthetic. Priming the jackpot needs BOTH tulips open at once, and they
@@ -288,7 +288,7 @@ export const TULIPS: FixedPocket[] = [
 // Jackpot pocket - a real "just fits one ball" target, barely wider than the ball itself
 // (BALL_RADIUS*2 = 5px across; this pocket is 7px), always this same tiny width.
 // Physically catchable at any time, but only actually PAYS (and visually lights up, vs. sitting
-// grey) while primed - see economy.ts's applyShot and JACKPOT_OPEN_SHOTS in pachinkoRules.ts for
+// grey) while primed - see economy.ts's applyShot and JACKPOT_OPEN_MS in pachinkoRules.ts for
 // that window, which is counted in balls rather than seconds.
 export const JACKPOT: FixedPocket = { id: "jackpot", position: { x: 230, y: 372 }, halfWidth: 3.5 };
 
@@ -316,13 +316,13 @@ export const BONUS_POCKETS: FixedPocket[] = [
 
 // Chucker (heso) - small, always-open trigger, sitting directly below the stage/life-nails (see
 // STAGE_BOX/LIFE_NAILS below) - the real anatomy this board now follows. Catching it doesn't pay
-// anything on its own; it's what opens the attacker gate below for ATTACKER_OPEN_SHOTS balls (see
+// anything on its own; it's what opens the attacker gate below for ATTACKER_OPEN_MS (see
 // pachinkoRules.ts), and only on a reel three-of-a-kind.
 export const CHUCKER: FixedPocket = { id: "chucker", position: { x: 230, y: 248 }, halfWidth: 5 };
 
 // Attacker - a wide gate, always this same width, directly below the chucker in the classic
 // column real machines use. Whether a catch here pays ATTACKER_BALLS or nothing is entirely a
-// gate-state decision (attackerShotsRemaining, via economy.ts's gateFlagsFor) - this module
+// gate-state decision (attackerOpenUntilMs, via economy.ts's gateFlagsFor) - this module
 // doesn't need to know the window state at all.
 export const ATTACKER: FixedPocket = { id: "attacker", position: { x: 230, y: 284 }, halfWidth: 32 };
 

@@ -28,7 +28,7 @@
  * RTP(power) = P(bonusLeft|power)+P(bonusRight|power)) * BONUS_POCKET_BALLS
  *            + (P(tulipLeft|power)+P(tulipRight|power)) * SIDE_TULIP_BALLS
  *            + P(chucker|power) * [P(two|chucker)*REEL_TWO_MATCH_BALLS + P(three|chucker)*REEL_THREE_MATCH_BALLS]
- *            + P(chucker|power) * P(three|chucker) * ATTACKER_OPEN_SHOTS * P(attackerCatch|open,power) * ATTACKER_BALLS
+ *            + P(chucker|power) * P(three|chucker) * (ATTACKER_OPEN_MS/HOLD_TO_FIRE_INTERVAL_MS) * P(attackerCatch|open,power) * ATTACKER_BALLS
  *
  * Reel-tier probabilities (P(two|chucker), P(three|chucker)) don't depend on launch power - the
  * reel spin (pachinkoReels.ts) is pure JS, unrelated to where the ball came from - so they're
@@ -41,7 +41,7 @@
  * pachinkoPayouts.ts), the measured "balls returned per ball fired" figure below IS the cash RTP
  * directly.
  *
- * The attacker's contribution charges ATTACKER_OPEN_SHOTS attempts per triggering
+ * The attacker's contribution charges a full window of attempts per triggering
  * chucker-three-match event - the window is measured in balls now (see
  * shared/pachinko/pachinkoRules.ts), and a player who opens it fires every one of those balls
  * into an open attacker. Since the chucker and attacker share a gate, no new three-of-a-kind can
@@ -50,7 +50,8 @@
 import { simulateShot } from "../../../shared/pachinko/pachinkoPhysics";
 import { MIN_LAUNCH_POWER, MAX_LAUNCH_POWER } from "../../../shared/pachinko/pachinkoLayout";
 import { spinReel } from "../../../shared/pachinko/pachinkoReels";
-import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, REEL_TWO_MATCH_BALLS, REEL_THREE_MATCH_BALLS, ATTACKER_BALLS, ATTACKER_OPEN_SHOTS } from "./pachinkoPayouts";
+import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, REEL_TWO_MATCH_BALLS, REEL_THREE_MATCH_BALLS, ATTACKER_BALLS, ATTACKER_OPEN_MS } from "./pachinkoPayouts";
+import { HOLD_TO_FIRE_INTERVAL_MS } from "../../../shared/pachinko/pachinkoRules";
 
 const TARGET_RTP = 0.9;
 const POWER_BUCKETS = Number(process.argv[2]) || 21;
@@ -132,15 +133,19 @@ function evForBucket(bucket: { pBonus: number; pTulip: number; pChucker: number;
     const evBonus = bucket.pBonus * constants.bonus;
     const evTulip = bucket.pTulip * constants.tulip;
     const evReel = bucket.pChucker * (reel.pTwo * constants.two + reel.pThree * constants.three);
-    // A three-of-a-kind opens the attacker for ATTACKER_OPEN_SHOTS BALLS, and the player fires
-    // every one of them into an open attacker - so a triggering event is worth that many attempts,
-    // not one. The old model charged a single attempt and called the undercount "safe"; once the
-    // window became an explicit ball count that undercount is a ~37x understatement of the
-    // attacker's EV, which is far too large to wave through.
+    // A three-of-a-kind opens the attacker for ATTACKER_OPEN_MS, and a player holding the launch
+    // button fires one ball every HOLD_TO_FIRE_INTERVAL_MS into it - so a triggering event is worth
+    // that many attempts, not one. The old model charged a single attempt and called the undercount
+    // "safe"; it is really a ~37x understatement of the attacker's EV, far too large to wave through.
+    //
+    // Modelling the window at full fire rate is deliberately the pessimistic reading, which is the
+    // right one for a worst-case figure: a player who has just been told the attacker is open holds
+    // the button down. A slower player simply gets fewer attempts and a lower RTP than this.
     //
     // The chucker and attacker share one gate, so no NEW three-of-a-kind can trigger during the
     // window - which is exactly what keeps this term finite rather than compounding.
-    const evAttacker = bucket.pChucker * reel.pThree * ATTACKER_OPEN_SHOTS * bucket.pAttackerCatchGivenOpen * constants.attacker;
+    const attackerAttempts = ATTACKER_OPEN_MS / HOLD_TO_FIRE_INTERVAL_MS;
+    const evAttacker = bucket.pChucker * reel.pThree * attackerAttempts * bucket.pAttackerCatchGivenOpen * constants.attacker;
     return { evBonus, evTulip, evReel, evAttacker, rtp: evBonus + evTulip + evReel + evAttacker };
 }
 

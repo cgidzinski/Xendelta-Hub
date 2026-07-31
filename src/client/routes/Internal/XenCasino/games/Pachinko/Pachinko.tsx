@@ -32,8 +32,9 @@ import { formatCheddar } from "../../utils/currency";
 // The wire shapes are declared once in shared/pachinko/pachinkoApi.ts and imported by both sides,
 // rather than hand-written here to match what the server happens to send. They used to be
 // redeclared locally, which is how a half-landed field rename shipped: this file promised
-// `attackerShotsRemaining` while the server still sent `attackerOpenUntil`, and nothing compared
-// the two. See that file's header for the full story.
+// `attackerShotsRemaining` while the server sent `attackerOpenUntil` (both long since renamed
+// again, to `attackerOpenUntilMs`), and nothing compared the two. See that file's header for the
+// full story.
 type BuyResponse = PachinkoBuyResponse;
 type ActiveBatchResponse = PachinkoActiveResponse;
 type CashOutResponse = PachinkoCashOutResponse;
@@ -65,8 +66,8 @@ export default function Pachinko() {
         queryClient.invalidateQueries({ queryKey: ["pachinkoOdds"] }); // jackpot pool moved
     };
 
-    // A reup response's gate fields (leftTulipOpen/rightTulipOpen/attackerShotsRemaining/
-    // jackpotShotsRemaining) are just whatever the DB happened to hold at that read - reup doesn't
+    // A reup response's gate fields (leftTulipOpen/rightTulipOpen/attackerOpenUntilMs/
+    // jackpotOpenUntilMs) are just whatever the DB happened to hold at that read - reup doesn't
     // change any of them - and this request has no ordering guard against a batch response
     // landing around the same time. Applying it wholesale could clobber fresher gate state a
     // just-landed batch already applied. So: only overwrite the fields a buy/reup response
@@ -87,9 +88,16 @@ export default function Pachinko() {
             pricePerBall: data.pricePerBall,
             leftTulipOpen: prev?.leftTulipOpen ?? data.leftTulipOpen,
             rightTulipOpen: prev?.rightTulipOpen ?? data.rightTulipOpen,
-            attackerShotsRemaining: prev?.attackerShotsRemaining ?? data.attackerShotsRemaining,
-            jackpotShotsRemaining: prev?.jackpotShotsRemaining ?? data.jackpotShotsRemaining,
+            attackerOpenFromMs: prev?.attackerOpenFromMs ?? data.attackerOpenFromMs,
+            attackerOpenUntilMs: prev?.attackerOpenUntilMs ?? data.attackerOpenUntilMs,
+            jackpotOpenFromMs: prev?.jackpotOpenFromMs ?? data.jackpotOpenFromMs,
+            jackpotOpenUntilMs: prev?.jackpotOpenUntilMs ?? data.jackpotOpenUntilMs,
             lastProcessedSeq: data.lastProcessedSeq,
+            // Always taken from the response, never carried forward from prev - unlike the gate
+            // fields above, this isn't state that a fresher batch could already have moved past. It
+            // exists purely to seed PachinkoBoard's local firing clock (see roundStartRef there),
+            // and the server's own figure is always what that clock has to agree with.
+            lastFiredAtMs: data.lastFiredAtMs,
         }));
         invalidateShared();
     };
@@ -153,9 +161,12 @@ export default function Pachinko() {
                     pricePerBall: active.pricePerBall,
                     leftTulipOpen: active.leftTulipOpen ?? false,
                     rightTulipOpen: active.rightTulipOpen ?? false,
-                    attackerShotsRemaining: active.attackerShotsRemaining ?? 0,
-                    jackpotShotsRemaining: active.jackpotShotsRemaining ?? 0,
+                    attackerOpenFromMs: active.attackerOpenFromMs ?? 0,
+                    attackerOpenUntilMs: active.attackerOpenUntilMs ?? 0,
+                    jackpotOpenFromMs: active.jackpotOpenFromMs ?? 0,
+                    jackpotOpenUntilMs: active.jackpotOpenUntilMs ?? 0,
                     lastProcessedSeq: active.lastProcessedSeq ?? 0,
+                    lastFiredAtMs: active.lastFiredAtMs ?? 0,
                 });
             } else {
                 setSession(null);
@@ -177,7 +188,7 @@ export default function Pachinko() {
                     { label: "Side tulip (left or right)", payout: `+${odds.sideTulipBalls} balls` },
                     { label: "Chucker", payout: "Spins the reel" },
                     { label: "Reel, 2 of a kind", payout: "Small ball bonus" },
-                    { label: "Reel, 3 of a kind", payout: `Bigger bonus + opens attacker (${odds.attackerOpenShots} balls)` },
+                    { label: "Reel, 3 of a kind", payout: `Bigger bonus + opens attacker (${(odds.attackerOpenMs / 1000).toFixed(1)}s)` },
                     { label: "Attacker (while open)", payout: `+${odds.attackerBalls} balls` },
                     { label: "Jackpot, primed", payout: "Pool → balls" },
                 ],

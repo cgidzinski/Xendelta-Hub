@@ -38,7 +38,7 @@
  * deliberately modest starting values, not solved for a target return.
  */
 import { Rng, mulberry32 } from "./prng";
-import { ATTACKER_OPEN_SHOTS, REEL_TWO_MATCH_BALLS, REEL_THREE_MATCH_BALLS } from "./pachinkoRules";
+import { ATTACKER_OPEN_MS, REEL_TWO_MATCH_BALLS, REEL_THREE_MATCH_BALLS } from "./pachinkoRules";
 
 export type ReelSymbol = string;
 export type ReelMatchTier = "none" | "two" | "three";
@@ -47,10 +47,11 @@ export interface ReelSpinResult {
     symbols: [ReelSymbol, ReelSymbol, ReelSymbol];
     matchTier: ReelMatchTier;
     ballsAwarded: number;
-    // Only a three-of-a-kind match opens the attacker (ATTACKER_OPEN_SHOTS); two-of-a-kind and
-    // misses award zero attacker balls. pachinko.ts's chucker branch ADDS this to whatever's
-    // currently left on the attacker's counter rather than resetting it.
-    attackerOpenShots: number;
+    // How long a match holds the attacker open for, in milliseconds; 0 for anything but a
+    // three-of-a-kind, since two-of-a-kind and misses don't open it at all. economy.ts's chucker
+    // branch extends the attacker's existing window by this rather than replacing it, so rapid
+    // catches accumulate - and starts it at the moment the reels stop, not when the ball landed.
+    attackerOpenMs: number;
 }
 
 interface WeightedOption<T> {
@@ -111,6 +112,6 @@ export function spinReel(rng: Rng = Math.random): ReelSpinResult {
         symbols,
         matchTier,
         ballsAwarded: matchTier === "three" ? REEL_THREE_MATCH_BALLS : matchTier === "two" ? REEL_TWO_MATCH_BALLS : 0,
-        attackerOpenShots: matchTier === "three" ? ATTACKER_OPEN_SHOTS : 0,
+        attackerOpenMs: matchTier === "three" ? ATTACKER_OPEN_MS : 0,
     };
 }
