@@ -216,14 +216,30 @@ export function launchPowerToRailSpeed(power: number): number {
 }
 
 // The free body's exit speed along RELEASE_TANGENT. Empirically tuned (see pachinkoPhysics.ts's
-// simulateShot and its own verification script) against this board's geometry: minimum power
-// should only just carry the ball clear of the release point before gravity pulls it back down
-// into the release-deflector nails right below; maximum power should carry it up near the top
-// boundary with speed left to ride the curve across, not just arc weakly and fall straight back.
+// simulateShot and pachinkoReachability.ts) against this board's geometry: minimum power should
+// only just carry the ball clear of the release point before gravity pulls it back down into the
+// release-deflector nails right below; maximum power should carry it up over the top and down the
+// left side of the field with speed to spare.
+//
+// Eased at the top rather than linear, and the reason is measured. The curve used to run straight
+// from 1.4 to 13, but the board's ceiling is at y=44 (FIELD_CY - FIELD_RY) and an exit velocity
+// above ~8.1 pins the ball's apex against it - so powers 58 through 100 traced an *identical*
+// path, to within half a pixel. Two fifths of the player's only control did nothing whatsoever.
+// Below the knee the curve is deliberately unchanged, so every launch power that already behaved
+// well still produces exactly the velocity it always did (the tulip band around power 25 in
+// particular is tuned against these numbers); above it, the range is compressed so the upper half
+// of the slider spreads across the left field instead of collapsing onto one ceiling-scraping arc.
+const EXIT_VELOCITY_MIN = 1.4;
+const EXIT_VELOCITY_KNEE_POWER = 45; // below this, identical to the original linear curve
+const EXIT_VELOCITY_KNEE = 6.62; // 1.4 + (45/100) * 11.6, i.e. exactly where the old curve was here
+const EXIT_VELOCITY_MAX = 7.8; // measured: the apex starts pinning against the ceiling around 8.1, so stay under it across the whole slider
 export function launchPowerToExitVelocity(power: number): number {
     const clamped = Math.min(MAX_LAUNCH_POWER, Math.max(MIN_LAUNCH_POWER, power));
-    const t = clamped / MAX_LAUNCH_POWER;
-    return 1.4 + t * 11.6; // 1.4 to 13
+    if (clamped <= EXIT_VELOCITY_KNEE_POWER) {
+        return EXIT_VELOCITY_MIN + (clamped / MAX_LAUNCH_POWER) * 11.6;
+    }
+    const t = (clamped - EXIT_VELOCITY_KNEE_POWER) / (MAX_LAUNCH_POWER - EXIT_VELOCITY_KNEE_POWER);
+    return EXIT_VELOCITY_KNEE + t * (EXIT_VELOCITY_MAX - EXIT_VELOCITY_KNEE);
 }
 
 // --- Scoring pockets ------------------------------------------------------------------------
@@ -250,9 +266,23 @@ export interface FixedPocket {
 // (see pachinkoPayouts.ts). Both open at once opens the jackpot pocket below for a timed window
 // (JACKPOT_OPEN_SHOTS balls - see pachinkoRules.ts) and immediately resets both back to closed -
 // see economy.ts's applyShot, which owns every gate transition on this board.
+// Moved inward from 172/288 (58px either side of centre) to 196/264 (34px), and the reason is
+// measured rather than aesthetic. Priming the jackpot needs BOTH tulips open at once, and they
+// toggle - so what matters is the weaker side's rate at a SINGLE launch power, not the total. The
+// ball's lateral position is essentially fixed by the time it leaves the release deflector at
+// y=145 and barely drifts afterwards, and the spread of that stream at any one power is only
+// ~30-70px wide. At 116px apart, no single power could put meaningful mass on both tulips: low
+// power fed only the right one, power 35-45 only the left, and a power that feeds one side just
+// opens and shuts the same tulip over and over. At 68px apart both sit inside the stream's own
+// spread, and the weaker side's rate at the best power measured 3x better.
+//
+// That extra reach costs RTP, so SIDE_TULIP_BALLS came down to compensate (see pachinkoPayouts.ts)
+// - the catch rate is what makes the jackpot reachable, and the payout per catch is what pays for
+// it. Widening the pockets instead was measured and rejected: it scales both sides but doesn't
+// widen the usable power band at all, because the stream still never arrives.
 export const TULIPS: FixedPocket[] = [
-    { id: "left", position: { x: 172, y: 250 }, halfWidth: 8 },
-    { id: "right", position: { x: 288, y: 250 }, halfWidth: 8 },
+    { id: "left", position: { x: 196, y: 250 }, halfWidth: 8 },
+    { id: "right", position: { x: 264, y: 250 }, halfWidth: 8 },
 ];
 
 // Jackpot pocket - a real "just fits one ball" target, barely wider than the ball itself
@@ -436,6 +466,52 @@ const SECOND_ROAD_PATH: Point[] = [
 export const RELEASE_DEFLECTOR: Point[] = sampleRoadNails(RELEASE_DEFLECTOR_PATH);
 export const SECOND_ROAD: Point[] = sampleRoadNails(SECOND_ROAD_PATH);
 
+// --- Left field -----------------------------------------------------
+// The board's left return lane. Everything else on this board is a right-and-centre structure:
+// nothing at all used to exist west of x=130 between y=100 and y=227, and no nail anywhere had
+// x < 110. That void is where a hard shot actually lands - the release tangent throws the ball up
+// and left, so above roughly half power it arcs clean over TOP_NAILS and comes down against the
+// left glass, crossing y=150 around x=80 and y=200 around x=66. Measured, its closest approach to
+// any nail on that entire descent was 39-41px, where contact needs 3.6px. It wasn't being deflected
+// badly; there was simply nothing there. It slid down the glass, accelerating the whole way, and
+// drained - every time, for the entire upper half of the launch range.
+//
+// So: a real left field, hugging the inside of the glass across exactly that descent. Derived from
+// the boundary formula rather than hardcoded (same approach RAIL_CLIMB_PATH takes) so it stays
+// correct if the board is ever re-proportioned - the whole point is that it tracks the wall the
+// ball is sliding down, and a hand-typed polyline would silently stop doing that.
+//
+// Deliberately a separate structure rather than an extension of RELEASE_DEFLECTOR, even though
+// that row's left terminus is nearby: the deflector is what sets a LOW-power ball's lateral
+// position, which measurement shows is the single most sensitive parameter on this board (a ball's
+// x is essentially decided by y=145 and barely drifts afterwards). Extending it would have
+// perturbed every working low-power shot to fix a high-power problem. This only ever touches balls
+// that enter the void.
+// Angles follow this file's own convention: 0 = rightmost, -90 = straight up, so the upper-left
+// quadrant runs from -90 down to -180, and continuing past -180 wraps into the lower left. This
+// span covers y~125 at the top, through the glass's widest point at y=230, down to y~285 where it
+// hands off to road 1 and the left bonus pocket.
+const LEFT_FIELD_THETA_START = -145 * DEG;
+const LEFT_FIELD_THETA_END = -200 * DEG;
+// Inboard of the boundary centerline. Deliberately tight: a ball sliding on the glass sits about
+// 4px off the wall (its own radius plus the wall's half-thickness), and contact needs
+// PIN_RADIUS + BALL_RADIUS = 3.6px, so anything much looser than this is measurably a near-miss -
+// an earlier 11px inset left the nails ~6px from the ball's centre line and they simply never
+// touched it. At 7 the pins also leave less than a ball's width of gap against the glass, so a
+// wall-hugging descent cannot thread past them at all.
+const LEFT_FIELD_INSET = 7;
+const LEFT_FIELD_STEPS = 15;
+const LEFT_FIELD_PATH: Point[] = Array.from({ length: LEFT_FIELD_STEPS + 1 }, (_, i) => {
+    const theta = LEFT_FIELD_THETA_START + (i / LEFT_FIELD_STEPS) * (LEFT_FIELD_THETA_END - LEFT_FIELD_THETA_START);
+    // Same ellipse-above / circle-below hybrid the boundary itself uses (above centre means
+    // sin(theta) < 0 with y pointing down), so the inset stays a true constant gap from the glass
+    // rather than drifting open as it passes the widest point.
+    const rx = FIELD_RX - LEFT_FIELD_INSET;
+    const ry = Math.sin(theta) < 0 ? FIELD_RY - LEFT_FIELD_INSET : rx;
+    return { x: FIELD_CX + rx * Math.cos(theta), y: FIELD_CY + ry * Math.sin(theta) };
+});
+export const LEFT_FIELD: Point[] = sampleRoadNails(LEFT_FIELD_PATH);
+
 // --- Pin conflicts & assembly ---------------------------------------
 const ALL_POCKETS_FOR_CLEARANCE: FixedPocket[] = [...TULIPS, JACKPOT, ATTACKER, ...BONUS_POCKETS, CHUCKER];
 const POCKET_PIN_CLEARANCE = PIN_RADIUS + BALL_RADIUS;
@@ -455,7 +531,7 @@ function conflictsWithAny(p: Point): boolean {
 
 export function generateNailField(): PinPosition[] {
     const pins: PinPosition[] = [];
-    for (const fixedPin of [...TOP_NAILS, ...RELEASE_DEFLECTOR, ...SECOND_ROAD, ...LIFE_NAILS]) pins.push({ x: fixedPin.x, y: fixedPin.y });
+    for (const fixedPin of [...TOP_NAILS, ...RELEASE_DEFLECTOR, ...SECOND_ROAD, ...LEFT_FIELD, ...LIFE_NAILS]) pins.push({ x: fixedPin.x, y: fixedPin.y });
     for (const candidate of [...generateRoadNails(), ...generateFunnelRows(), ...generateJackpotGuideNails()]) {
         if (conflictsWithAny(candidate)) continue;
         pins.push({ x: candidate.x, y: candidate.y });

@@ -32,10 +32,16 @@ export { ATTACKER_OPEN_SHOTS, JACKPOT_OPEN_SHOTS, REEL_TWO_MATCH_BALLS, REEL_THR
 export const BONUS_POCKET_BALLS = 2;
 
 // Catching a side tulip also toggles it open/closed - both open at once primes the jackpot. Cut
-// hardest of every constant in this file (was 8) - this is the pocket with the exploitable
+// hardest of every constant in this file (was 8, then 2) - this is the pocket with the exploitable
 // power sweet spot described above, so its own worst-case-power EV alone had to come down to
 // target before anything else in the board's economy could be trusted.
-export const SIDE_TULIP_BALLS = 2;
+//
+// Halved again when the tulips moved inward (see pachinkoLayout.ts's TULIPS). That move roughly
+// tripled how often the weaker-side tulip is caught at the best launch power, which is what makes
+// the jackpot primeable at all - but a catch-rate increase is an RTP increase, so the payout per
+// catch comes down to pay for it. The reach is the point; the per-catch value is the currency it's
+// bought with.
+export const SIDE_TULIP_BALLS = 1;
 
 // The chucker itself never pays balls directly - it only fires the board's central reel gimmick
 // (see shared/pachinko/pachinkoReels.ts), a real modern machine's own "heso" -> LCD reel -> bonus
