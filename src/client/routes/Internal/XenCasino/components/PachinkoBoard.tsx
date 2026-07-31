@@ -994,16 +994,16 @@ export default function PachinkoBoard({
                 const lastStopAt = REEL_SPIN_MS + (REEL_STOP_STAGGER_MS[REEL_STOP_STAGGER_MS.length - 1] ?? 0);
                 const finishedAt = currentReelAnimRef.current.startTime + lastStopAt + REEL_RESULT_GLOW_MS;
                 if (now >= finishedAt) {
-                    // The attacker only actually opens once ITS OWN spin has visually landed on
-                    // the three-of-a-kind that earned it - apply the deferred update right as
-                    // that spin's animation concludes, not the instant the batch response
-                    // reporting it arrived (see reconcileBatch). Folded into the local mirror
-                    // immediately (so the very next shot reads the post-open gate correctly) and
-                    // merged into the pending patch (see pendingSessionPatchRef) rather than
+                    // This is purely a DISPLAY update - the attacker pocket only visibly reads
+                    // "open" once its own spin has visually landed on the three-of-a-kind that
+                    // earned it, not the instant the batch response reporting it arrived. The gate
+                    // TRUTH (localGateStateRef) already updated back in reconcileBatch, the moment
+                    // that response was processed - it has to, so shots fired locally in the
+                    // meantime read correct gate state (see reconcileBatch's own comment on this).
+                    // Merged into the pending patch (see pendingSessionPatchRef) rather than
                     // applied directly, so it can't land as a second separate re-render in the
                     // same frame as any other update that happens to land right now.
                     if (currentReelAnimRef.current.attackerOpenUntil !== undefined) {
-                        localGateStateRef.current = { ...localGateStateRef.current, attackerOpenUntil: currentReelAnimRef.current.attackerOpenUntil };
                         pendingSessionPatchRef.current = { ...pendingSessionPatchRef.current, attackerOpenUntil: currentReelAnimRef.current.attackerOpenUntil };
                     }
                     if (reelQueueRef.current.length > 0 && !reelQueueRef.current[0].pending) {
@@ -1132,10 +1132,27 @@ export default function PachinkoBoard({
 
             if (result.outcome === "chucker" && result.reelSpin) {
                 const isThreeMatch = result.reelSpin.matchTier === "three";
-                // The attacker only actually opens once THIS spin has visually landed on its own
-                // three-of-a-kind (applied by the tick loop above) - not the instant the batch
-                // response reporting it arrives.
                 const attackerOpenUntil = isThreeMatch ? result.attackerOpenUntil : undefined;
+
+                // The GATE TRUTH updates right here, the instant this batch response is
+                // processed - it has to, same reason as everything else in localGateStateRef:
+                // the very next locally-fired shot reads this for its own chuckerActive/
+                // attackerActive params, and the server applied this exact change the instant it
+                // processed this shot in seq order, with no concept of animation time at all. An
+                // earlier version of this fix mistakenly folded this into the tick loop's own
+                // reel-landing block instead (see below) - up to several seconds later, during
+                // which every shot fired locally used a stale attacker window for its own
+                // physics, close enough to the tulips (chucker/attacker sit right above them) to
+                // produce genuinely wrong local-preview outcomes near them. Processed in strict
+                // seq order (existing lastReconciledSeqRef guard above), so this stays correctly
+                // cumulative across multiple three-matches, same as the server's own
+                // Math.max(now, attackerOpenUntil) + reelSpin.attackerOpenMs stacking.
+                if (isThreeMatch) {
+                    // Always present on any chucker result (see pachinko.ts's own
+                    // "outcome === chucker ? attackerOpenUntil : undefined") - only optional in
+                    // the type because non-chucker results never carry it at all.
+                    localGateStateRef.current = { ...localGateStateRef.current, attackerOpenUntil: result.attackerOpenUntil! };
+                }
 
                 // Matched by THIS shot's exact seq (see ReelQueueItem's own comment for why FIFO
                 // "oldest pending" matching was wrong) - the ball may already have landed and
