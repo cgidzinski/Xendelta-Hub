@@ -209,6 +209,14 @@ interface ReelQueueItem {
     // once real symbols exist; `symbols`/`matchTier` are dummy values while this is true, never
     // drawn (see the tick loop's queue-advance, which never promotes a pending item to "current").
     pending: boolean;
+    // The shot that queued this placeholder - reconcileBatch matches its incoming results back to
+    // a queue entry by this exact seq, never by array position/FIFO order. A batch report's round
+    // trip is routinely faster than this ball's own multi-second flight, so the real result can
+    // (and often does) arrive before this ball has even landed and pushed its own placeholder -
+    // FIFO "first pending" matching would then fill in the WRONG entry (a different, later shot's
+    // still-queued placeholder) once one eventually exists. See pendingReelResultsRef for the
+    // other half of this - where a result that arrives before its own placeholder exists gets held.
+    seq: number;
 }
 
 const OUTCOME_LABEL: Record<PachinkoOutcome, string> = {
@@ -529,6 +537,14 @@ export default function PachinkoBoard({
     // difference between that guess and the server's own authoritative figure, never more.
     // Entries are deleted once reconciled so this can't grow unbounded across a long session.
     const shotAssumptionsRef = useRef<Map<number, number>>(new Map());
+    // Holds a chucker catch's real, server-confirmed reel result (see ReelQueueItem's own
+    // comment) for shots whose ball hasn't visually landed yet when reconcileBatch processes
+    // their result - the common case, since a batch round trip is normally faster than a ball's
+    // multi-second flight. Consumed and deleted by releaseLandedReward once that ball actually
+    // lands; also cleared on round reset alongside shotAssumptionsRef, so a catch dropped for
+    // being over MAX_QUEUED_SPINS capacity (whose entry here would otherwise never be consumed)
+    // can't accumulate indefinitely across a session.
+    const pendingReelResultsRef = useRef<Map<number, { symbols: [string, string, string]; matchTier: ReelMatchTier; attackerOpenUntil?: number }>>(new Map());
     // Shots fired locally but not yet included in a request to /launch/batch - see flushBatch.
     const pendingShotsRef = useRef<QueuedShot[]>([]);
     const lastFlushAtRef = useRef(0);
@@ -556,6 +572,7 @@ export default function PachinkoBoard({
             nextSeqRef.current = session.lastProcessedSeq;
             lastReconciledSeqRef.current = session.lastProcessedSeq;
             shotAssumptionsRef.current.clear();
+            pendingReelResultsRef.current.clear();
             pendingShotsRef.current = [];
             localGateStateRef.current = {
                 ballsRemaining: session.ballsRemaining,
@@ -1114,23 +1131,28 @@ export default function PachinkoBoard({
             }
 
             if (result.outcome === "chucker" && result.reelSpin) {
-                // Fills in the OLDEST still-pending placeholder (see ReelQueueItem) - reel spins
-                // are queued in fire order and results arrive in seq order, so FIFO matching is
-                // exact. If it's already gone (the queue was full when this shot fired - see
-                // MAX_QUEUED_SPINS), there's nothing left to fill in; the balls correction above
-                // still applies regardless of whether the animation had room for it.
-                const idx = reelQueueRef.current.findIndex((item) => item.pending);
+                const isThreeMatch = result.reelSpin.matchTier === "three";
+                // The attacker only actually opens once THIS spin has visually landed on its own
+                // three-of-a-kind (applied by the tick loop above) - not the instant the batch
+                // response reporting it arrives.
+                const attackerOpenUntil = isThreeMatch ? result.attackerOpenUntil : undefined;
+
+                // Matched by THIS shot's exact seq (see ReelQueueItem's own comment for why FIFO
+                // "oldest pending" matching was wrong) - the ball may already have landed and
+                // queued its own placeholder, in which case fill it in directly.
+                const idx = reelQueueRef.current.findIndex((item) => item.seq === result.seq);
                 if (idx !== -1) {
-                    const isThreeMatch = result.reelSpin.matchTier === "three";
-                    reelQueueRef.current[idx] = {
-                        symbols: result.reelSpin.symbols,
-                        matchTier: result.reelSpin.matchTier,
-                        // The attacker only actually opens once THIS spin has visually landed on
-                        // its own three-of-a-kind (applied by the tick loop above) - not the
-                        // instant the batch response reporting it arrives.
-                        attackerOpenUntil: isThreeMatch ? result.attackerOpenUntil : undefined,
-                        pending: false,
-                    };
+                    reelQueueRef.current[idx] = { symbols: result.reelSpin.symbols, matchTier: result.reelSpin.matchTier, attackerOpenUntil, pending: false, seq: result.seq };
+                } else {
+                    // The ball hasn't landed yet - routine, since a batch round trip is normally
+                    // faster than this ball's own multi-second flight. Hold onto the real result
+                    // here instead of dropping it; releaseLandedReward checks this the instant the
+                    // ball lands and uses it immediately, skipping the placeholder/flicker
+                    // entirely (nothing left to wait on - the result's already known). If this
+                    // shot's own reel slot was dropped for being over MAX_QUEUED_SPINS capacity
+                    // when it fired, this entry just sits unused until the next round reset clears
+                    // it - a small, bounded cost, not a leak.
+                    pendingReelResultsRef.current.set(result.seq, { symbols: result.reelSpin.symbols, matchTier: result.reelSpin.matchTier, attackerOpenUntil });
                 }
             }
         }
@@ -1229,7 +1251,7 @@ export default function PachinkoBoard({
     // comment for why that was wrong): the tray-count reward, the catch callout, and the chucker
     // reel-spin placeholder. hotPockets glow (set by the caller, tick loop) already fires at this
     // same moment - this just brings the other three signals into line with it.
-    const releaseLandedReward = (ball: { outcome: PachinkoOutcome; ballsAwarded: number; queueChuckerSpin: boolean }) => {
+    const releaseLandedReward = (ball: { seq: number; outcome: PachinkoOutcome; ballsAwarded: number; queueChuckerSpin: boolean }) => {
         visibleBallsRemainingRef.current += ball.ballsAwarded;
         pendingSessionPatchRef.current = { ...pendingSessionPatchRef.current, ballsRemaining: visibleBallsRemainingRef.current };
 
@@ -1245,10 +1267,20 @@ export default function PachinkoBoard({
 
         if (ball.outcome === "chucker" && ball.queueChuckerSpin) {
             // The real reel result is decided server-only (see pachinkoReels.ts's own comment on
-            // why) - queue a pending placeholder now, so the reel only starts visibly spinning
-            // once the ball has actually landed in the chucker pocket. Filled in by
-            // reconcileBatch once the real symbols are known.
-            reelQueueRef.current.push({ symbols: ["ITEM_A", "ITEM_A", "ITEM_A"], matchTier: "none", pending: true });
+            // why) - but reconcileBatch may already have it waiting (a batch round trip is
+            // normally faster than this ball's own flight - see pendingReelResultsRef's own
+            // comment), in which case there's no need for a placeholder/flicker at all: push the
+            // real, resolved result straight in.
+            const resolved = pendingReelResultsRef.current.get(ball.seq);
+            if (resolved) {
+                pendingReelResultsRef.current.delete(ball.seq);
+                reelQueueRef.current.push({ symbols: resolved.symbols, matchTier: resolved.matchTier, attackerOpenUntil: resolved.attackerOpenUntil, pending: false, seq: ball.seq });
+            } else {
+                // Not known yet - queue a pending placeholder so the reel visibly starts spinning
+                // the instant the ball lands, filled in by reconcileBatch (matched by this exact
+                // seq) once the real symbols arrive.
+                reelQueueRef.current.push({ symbols: ["ITEM_A", "ITEM_A", "ITEM_A"], matchTier: "none", pending: true, seq: ball.seq });
+            }
         }
     };
 

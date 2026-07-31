@@ -420,13 +420,22 @@ export const TOP_NAILS: Point[] = [
 ];
 
 // --- Release deflector & second road --------------------------------
-export const RELEASE_DEFLECTOR: Point[] = [
+// Both densified the same way ROAD_PATHS is (sampleRoadNails, ROAD_NAIL_SPACING) rather than left
+// as their own raw anchor points - the raw spacing here (18-28px) was more than double a real
+// ball+pin contact zone (~7.2px, see POCKET_PIN_CLEARANCE below), wide enough for a ball to slip
+// through un-deflected on its very first chance to interact with anything (RELEASE_DEFLECTOR is
+// literally the row whose whole job is catching the ball right as it leaves the launcher - see
+// its own header) and pass most of the rest of the field untouched. The raw anchor points below
+// still define each road's actual shape/curve; sampleRoadNails just fills the line between them.
+const RELEASE_DEFLECTOR_PATH: Point[] = [
     { x: 322, y: 100 }, { x: 308, y: 112 }, { x: 288, y: 121 }, { x: 264, y: 128 },
     { x: 238, y: 132 }, { x: 210, y: 135 }, { x: 182, y: 137 }, { x: 156, y: 140 },
 ];
-export const SECOND_ROAD: Point[] = [
+const SECOND_ROAD_PATH: Point[] = [
     { x: 130, y: 160 }, { x: 142, y: 172 }, { x: 152, y: 184 }, { x: 162, y: 194 }, { x: 172, y: 200 },
 ];
+export const RELEASE_DEFLECTOR: Point[] = sampleRoadNails(RELEASE_DEFLECTOR_PATH);
+export const SECOND_ROAD: Point[] = sampleRoadNails(SECOND_ROAD_PATH);
 
 // --- Pin conflicts & assembly ---------------------------------------
 const ALL_POCKETS_FOR_CLEARANCE: FixedPocket[] = [...TULIPS, JACKPOT, ATTACKER, ...BONUS_POCKETS, CHUCKER];
