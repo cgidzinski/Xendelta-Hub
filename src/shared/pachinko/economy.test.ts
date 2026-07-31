@@ -117,6 +117,42 @@ describe("applyShot", () => {
         expect(applyShot(state(), "jackpot", undefined, CONSTANTS, 1000, 0).ballsAwarded).toBe(0);
     });
 
+    // Regression test for a real, shipped bug. One API response briefly sent the OLD field names
+    // (attackerOpenUntil instead of attackerShotsRemaining), so the counters arrived `undefined`.
+    // That didn't merely misbehave - `undefined <= 0` is false in JS, so the tulip-toggle guard
+    // below was skipped on every single shot and the tulips never opened at all, while
+    // `Math.max(0, undefined - 1)` turned both counters into NaN and jammed every gate shut for
+    // the rest of the round. Silent, total, and invisible in the type system.
+    it("survives non-finite counters instead of silently voiding the rules", () => {
+        const broken = [
+            { ...state(), attackerShotsRemaining: undefined as unknown as number, jackpotShotsRemaining: undefined as unknown as number },
+            { ...state(), attackerShotsRemaining: NaN, jackpotShotsRemaining: NaN },
+            { ...state(), attackerShotsRemaining: -5, jackpotShotsRemaining: -5 },
+        ];
+        for (const s of broken) {
+            // The tulip must still toggle - this is what the player reported as "not toggling at all".
+            const toggled = apply(s, "tulipLeft");
+            expect(toggled.nextState.leftTulipOpen).toBe(true);
+            expect(toggled.ballsAwarded).toBe(CONSTANTS.sideTulipBalls);
+
+            // And the counters must come back finite rather than propagating NaN forever.
+            expect(Number.isFinite(toggled.nextState.attackerShotsRemaining)).toBe(true);
+            expect(Number.isFinite(toggled.nextState.jackpotShotsRemaining)).toBe(true);
+            expect(Number.isFinite(toggled.nextState.ballsRemaining)).toBe(true);
+
+            // Gates read as closed rather than as an unusable NaN.
+            expect(gateFlagsFor(s)).toEqual({ chuckerActive: true, attackerActive: false, jackpotActive: false });
+        }
+    });
+
+    it("a three-of-a-kind still opens the attacker even from a non-finite starting counter", () => {
+        const three: ReelSpinResult = { symbols: ["ITEM_A", "ITEM_A", "ITEM_A"], matchTier: "three", ballsAwarded: 14, attackerOpenShots: ATTACKER_OPEN_SHOTS };
+        const broken = { ...state(), attackerShotsRemaining: NaN as number };
+        const next = apply(broken, "chucker", three).nextState;
+        expect(next.attackerShotsRemaining).toBe(ATTACKER_OPEN_SHOTS);
+        expect(gateFlagsFor(next).attackerActive).toBe(true);
+    });
+
     // The property the whole redesign rests on: state is a pure fold over the shot sequence, with
     // no clock and no unshared randomness. Replaying the same shots must always land on exactly
     // the same state - which is what makes the client's local prediction and the server's

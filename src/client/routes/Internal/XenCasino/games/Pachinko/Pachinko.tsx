@@ -8,7 +8,15 @@ import { casinoLedgerKeys } from "../../../../../hooks/casino/useCasinoLedger";
 import { casinoDailyQuestKeys } from "../../../../../hooks/casino/useCasinoDailyQuest";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import PlayLauncher from "../../components/PlayLauncher";
-import PachinkoBoard, { QueuedShot, PachinkoBatchResponse, PachinkoLayoutData, PachinkoSession } from "../../components/PachinkoBoard";
+import PachinkoBoard, { PachinkoSession } from "../../components/PachinkoBoard";
+import {
+    QueuedShot,
+    PachinkoBatchResponse,
+    PachinkoOddsResponse,
+    PachinkoActiveResponse,
+    PachinkoBuyResponse,
+    PachinkoCashOutResponse,
+} from "../../../../../../shared/pachinko/pachinkoApi";
 import { formatCheddar } from "../../utils/currency";
 
 // Everything Pachinko needs lives in this one file, same shape as Plinko.tsx - it only imports
@@ -21,52 +29,14 @@ import { formatCheddar } from "../../utils/currency";
 // a pre-selected weighted draw. There's also no cash payout per shot: every catch adds balls to
 // the tray, and Cash Out (wired up below) is the only thing that ever converts that tray back
 // to real cheddar - see pachinko.ts's own file header for the full economy shape.
-interface PachinkoOddsResponse {
-    pricePerBall: number;
-    reupSizes: number[];
-    launchPowerRange: { min: number; max: number };
-    layout: PachinkoLayoutData;
-    sideTulipBalls: number;
-    bonusPocketBalls: number;
-    attackerBalls: number;
-    attackerOpenShots: number;
-    jackpotOpenShots: number;
-    cashOutRate: number;
-    jackpotPool: number;
-    maxPayout: number;
-}
-
-interface ActiveBatchResponse {
-    active: boolean;
-    roundId?: string;
-    ballsTotal?: number;
-    ballsRemaining?: number;
-    pricePerBall?: number;
-    leftTulipOpen?: boolean;
-    rightTulipOpen?: boolean;
-    attackerShotsRemaining?: number;
-    jackpotShotsRemaining?: number;
-    lastProcessedSeq?: number;
-}
-
-interface BuyResponse {
-    roundId: string;
-    ballsTotal: number;
-    ballsRemaining: number;
-    pricePerBall: number;
-    leftTulipOpen: boolean;
-    rightTulipOpen: boolean;
-    attackerShotsRemaining: number;
-    jackpotShotsRemaining: number;
-    lastProcessedSeq: number;
-    balance: string;
-}
-
-interface CashOutResponse {
-    ballsCashedOut: number;
-    amount: number;
-    balance: string;
-}
+// The wire shapes are declared once in shared/pachinko/pachinkoApi.ts and imported by both sides,
+// rather than hand-written here to match what the server happens to send. They used to be
+// redeclared locally, which is how a half-landed field rename shipped: this file promised
+// `attackerShotsRemaining` while the server still sent `attackerOpenUntil`, and nothing compared
+// the two. See that file's header for the full story.
+type BuyResponse = PachinkoBuyResponse;
+type ActiveBatchResponse = PachinkoActiveResponse;
+type CashOutResponse = PachinkoCashOutResponse;
 
 const fetchOdds = async (): Promise<PachinkoOddsResponse> => (await apiClient.get<ApiResponse<PachinkoOddsResponse>>("/api/casino/games/pachinko/odds")).data.data!;
 const fetchActive = async (): Promise<ActiveBatchResponse> => (await apiClient.get<ApiResponse<ActiveBatchResponse>>("/api/casino/games/pachinko/active")).data.data!;
@@ -95,14 +65,17 @@ export default function Pachinko() {
         queryClient.invalidateQueries({ queryKey: ["pachinkoOdds"] }); // jackpot pool moved
     };
 
-    // A reup response's gate fields (leftTulipOpen/rightTulipOpen/attackerOpenUntil/
-    // jackpotOpenUntil) are just whatever the DB happened to hold at that read - reup doesn't
+    // A reup response's gate fields (leftTulipOpen/rightTulipOpen/attackerShotsRemaining/
+    // jackpotShotsRemaining) are just whatever the DB happened to hold at that read - reup doesn't
     // change any of them - and this request has no ordering guard against a batch response
     // landing around the same time. Applying it wholesale could clobber fresher gate state a
     // just-landed batch already applied. So: only overwrite the fields a buy/reup response
     // actually owns, and carry forward the existing session's gate state when there already is
-    // one - a fresh buy (no prior session) still gets correct initial values from the response
-    // itself, since those start false/0 for a brand new round anyway. ballsTotal/ballsRemaining
+    // one - a fresh buy (no prior session) falls through to the response's own values, which start
+    // false/0 for a brand new round. Note that fallback is only safe because the response is now
+    // contract-checked against a shared type: when the server briefly sent the wrong field names
+    // here, `prev` was null on a fresh buy and these silently became `undefined`, which poisoned
+    // the whole gate system (see pachinkoApi.ts's header). ballsTotal/ballsRemaining
     // ARE always taken from the response even on a reup - PachinkoBoard's own local economy
     // mirror picks up the same delta independently (see its own sync effect keyed off
     // ballsTotal), so this isn't racing anything.

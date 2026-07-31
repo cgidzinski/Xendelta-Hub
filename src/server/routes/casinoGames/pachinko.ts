@@ -107,6 +107,14 @@ import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, ATTACKER_OPEN_SHOTS, ATTACKER_BAL
 import { PachinkoOutcome, ShotResult } from "../../../shared/pachinko/pachinkoPhysics";
 import { spinReel, reelRngForSeed, ReelSpinResult } from "../../../shared/pachinko/pachinkoReels";
 import { applyShot, gateFlagsFor, PachinkoGateState, PachinkoPayoutConstants } from "../../../shared/pachinko/economy";
+import {
+    PachinkoOddsResponse,
+    PachinkoActiveResponse,
+    PachinkoBuyResponse,
+    PachinkoBatchResponse,
+    PachinkoCashOutResponse,
+    QueuedShot,
+} from "../../../shared/pachinko/pachinkoApi";
 
 import Piscina from "piscina";
 import path from "path";
@@ -145,13 +153,7 @@ interface PachinkoBallResult {
     seq: number; // the client-assigned shot sequence number this result came from - lets the client correlate a batch response back to which locally-fired ball(s) it covers
     outcome: PachinkoOutcome;
     ballsAwarded: number;
-    reelSpin?: ReelSpinResult; // only present on a chucker catch - see pachinkoReels.ts
-    // Only present on a chucker catch - THIS shot's own resulting attacker window, not the
-    // batch's final one. A batch can contain more than one three-of-a-kind (each stacking time on
-    // top of the last - see the loop below), so the client needs each shot's own post-state to
-    // reconcile its reel-queue animation correctly instead of applying the final batch value to
-    // every queued spin.
-    attackerOpenUntil?: number;
+    reelSpin?: ReelSpinResult; // only present on a chucker catch - see shared/pachinko/pachinkoReels.ts
 }
 
 interface PachinkoTopup {
@@ -439,9 +441,11 @@ scheduleStaleRoundSweep(SLUG, ROUND_TTL_MS, async (round) => {
 module.exports = function (app: express.Application) {
     app.get(`/api/casino/games/${SLUG}/odds`, authenticateToken, async function (_req: express.Request, res: express.Response) {
         const jackpotPool = await XenCasino.getPachinkoJackpotPool();
-        return res.json({
-            status: true,
-            data: {
+        // Every payload below is annotated with its shared wire type (see
+        // shared/pachinko/pachinkoApi.ts) so a field the client expects can never go missing or
+        // get misnamed without failing the build - an untyped res.json literal is exactly how the
+        // attackerShotsRemaining rename silently half-landed and killed the tulips.
+        const data: PachinkoOddsResponse = {
                 pricePerBall: PRICE_PER_BALL,
                 reupSizes: REUP_SIZES,
                 launchPowerRange: { min: MIN_LAUNCH_POWER, max: MAX_LAUNCH_POWER },
@@ -473,10 +477,10 @@ module.exports = function (app: express.Application) {
                 attackerOpenShots: ATTACKER_OPEN_SHOTS,
                 jackpotOpenShots: JACKPOT_OPEN_SHOTS,
                 cashOutRate: CASH_OUT_RATE,
-                jackpotPool,
-                maxPayout: MAX_PAYOUT,
-            },
-        });
+            jackpotPool,
+            maxPayout: MAX_PAYOUT,
+        };
+        return res.json({ status: true, data });
     });
 
     app.get(`/api/casino/games/${SLUG}/active`, authenticateToken, async function (req: express.Request, res: express.Response) {
@@ -486,9 +490,7 @@ module.exports = function (app: express.Application) {
             return res.json({ status: true, data: { active: false } });
         }
         const conditions = readConditions(round);
-        return res.json({
-            status: true,
-            data: {
+        const data: PachinkoActiveResponse = {
                 active: true,
                 roundId: round._id,
                 ballsTotal: conditions.ballsTotal,
@@ -506,8 +508,8 @@ module.exports = function (app: express.Application) {
                 // Trajectories deliberately omitted for already-launched balls - resuming shows
                 // a summary, not a replay, so this stays small regardless of batch size.
                 results: conditions.results.map((r) => ({ outcome: r.outcome, ballsAwarded: r.ballsAwarded })),
-            },
-        });
+        };
+        return res.json({ status: true, data });
     });
 
     // Buys balls - creates a fresh batch if the player has no active round, or reups (tops up)
@@ -580,9 +582,7 @@ module.exports = function (app: express.Application) {
                 }
 
                 const conditions = readConditions(reserved);
-                return res.json({
-                    status: true,
-                    data: {
+                const data: PachinkoBuyResponse = {
                         roundId: reserved._id,
                         ballsTotal: conditions.ballsTotal,
                         ballsRemaining: conditions.ballsRemaining,
@@ -593,8 +593,8 @@ module.exports = function (app: express.Application) {
                         jackpotShotsRemaining: conditions.jackpotShotsRemaining,
                         lastProcessedSeq: conditions.lastProcessedSeq,
                         balance,
-                    },
-                });
+                };
+                return res.json({ status: true, data });
             }
 
             const conditions: PachinkoConditions = {
@@ -649,21 +649,19 @@ module.exports = function (app: express.Application) {
                 throw err;
             }
 
-            return res.json({
-                status: true,
-                data: {
+            const data: PachinkoBuyResponse = {
                     roundId: round._id,
                     ballsTotal: balls,
                     ballsRemaining: balls,
                     pricePerBall: PRICE_PER_BALL,
                     leftTulipOpen: false,
                     rightTulipOpen: false,
-                    attackerOpenUntil: 0,
-                    jackpotOpenUntil: 0,
+                    attackerShotsRemaining: 0,
+                    jackpotShotsRemaining: 0,
                     lastProcessedSeq: 0,
                     balance,
-                },
-            });
+            };
+            return res.json({ status: true, data });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });
@@ -704,9 +702,7 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "No active batch - buy balls first" });
             }
             const { newResults, updatedConditions } = settled;
-            return res.json({
-                status: true,
-                data: {
+            const data: PachinkoBatchResponse = {
                     results: newResults.map((r) => ({ seq: r.seq, outcome: r.outcome, ballsAwarded: r.ballsAwarded, reelSpin: r.reelSpin })),
                     leftTulipOpen: updatedConditions.leftTulipOpen,
                     rightTulipOpen: updatedConditions.rightTulipOpen,
@@ -714,8 +710,8 @@ module.exports = function (app: express.Application) {
                     jackpotShotsRemaining: updatedConditions.jackpotShotsRemaining,
                     ballsRemaining: updatedConditions.ballsRemaining,
                     lastProcessedSeq: updatedConditions.lastProcessedSeq,
-                },
-            });
+            };
+            return res.json({ status: true, data });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });
@@ -779,10 +775,8 @@ module.exports = function (app: express.Application) {
                 payout: amount,
             });
 
-            return res.json({
-                status: true,
-                data: { ballsCashedOut: balls, amount, balance: transferResult.toNewBalance },
-            });
+            const data: PachinkoCashOutResponse = { ballsCashedOut: balls, amount, balance: transferResult.toNewBalance };
+            return res.json({ status: true, data });
         } catch (err) {
             // The claim (cashOutPending) is already durable even if we got here - leave the
             // round in place rather than trying to unwind it; the stale-round sweep replays the

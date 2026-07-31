@@ -3,68 +3,14 @@ import { Box, Button, Slider, Typography } from "@mui/material";
 import { formatCheddar } from "../utils/currency";
 import { usePachinkoSimWorker } from "../workers/usePachinkoSimWorker";
 import { applyShot, gateFlagsFor, PachinkoGateState } from "../../../../../shared/pachinko/economy";
+import { TrajectorySample as PachinkoTrajectorySample } from "../../../../../shared/pachinko/pachinkoPhysics";
 import { spinReel, reelRngForSeed, ReelSpinResult, ReelMatchTier } from "../../../../../shared/pachinko/pachinkoReels";
+// The board's geometry and the /launch/batch wire shapes are declared once in the shared contract
+// (see pachinkoApi.ts's header) rather than redeclared here to match whatever the server happens
+// to send - a half-landed rename between the two is what silently killed the tulips.
+import { PachinkoLayoutData, PachinkoBezierSegment, QueuedShot, PachinkoBatchResponse } from "../../../../../shared/pachinko/pachinkoApi";
 
 export type PachinkoOutcome = "gutter" | "tulipLeft" | "tulipRight" | "jackpot" | "bonusLeft" | "bonusRight" | "chucker" | "attacker";
-
-export interface PachinkoTrajectorySample {
-    x: number;
-    y: number;
-    r: number;
-    spinnerAngles?: number[]; // per-windmill rotation angles, index matches layout.windmills
-}
-
-export interface PachinkoPoint {
-    x: number;
-    y: number;
-}
-
-export interface PachinkoBezierSegment {
-    p0: PachinkoPoint;
-    c1: PachinkoPoint;
-    c2: PachinkoPoint;
-    p1: PachinkoPoint;
-}
-
-export interface PachinkoFixedPocket {
-    id: string;
-    position: PachinkoPoint;
-    halfWidth: number;
-}
-
-export interface PachinkoWindmillLayout {
-    position: PachinkoPoint;
-    radius: number;
-}
-
-export interface PachinkoRailCap {
-    center: PachinkoPoint;
-    radius: number;
-    startAngle: number;
-    endAngle: number;
-}
-
-export interface PachinkoLayoutData {
-    canvasWidth: number;
-    canvasHeight: number;
-    boundaryRightArc: PachinkoBezierSegment[];
-    boundaryLeftArc: PachinkoBezierSegment[];
-    railOuterArc: PachinkoBezierSegment[];
-    railInnerArc: PachinkoBezierSegment[];
-    railCap: PachinkoRailCap;
-    launcherPosition: PachinkoPoint;
-    releasePoint: PachinkoPoint;
-    gutterCutoutXStart: number;
-    gutterCutoutXEnd: number;
-    gutterPocket: PachinkoPoint[];
-    nailField: PachinkoPoint[];
-    tulips: PachinkoFixedPocket[];
-    jackpot: PachinkoFixedPocket;
-    attacker: PachinkoFixedPocket;
-    bonusPockets: PachinkoFixedPocket[];
-    chucker: PachinkoFixedPocket;
-    windmills: PachinkoWindmillLayout[];
-}
 
 export interface PachinkoSession {
     roundId: string;
@@ -80,41 +26,6 @@ export interface PachinkoSession {
     // The server's own ordering cursor for this round (see pachinko.ts's own field of the same
     // name) - lets a resumed/reloaded board continue its local seq counter without colliding with
     // seqs the server already processed before the page was closed/refreshed.
-    lastProcessedSeq: number;
-}
-
-// One shot as fired locally, queued for batch reporting - just enough for the server to replay
-// it (seed + launchPower) plus its firing order (seq). See pachinko.ts's own file header: the
-// server never trusts anything else about a shot, only re-derives outcome and gate state itself.
-export interface QueuedShot {
-    seq: number;
-    seed: number;
-    launchPower: number;
-}
-
-// What POST /launch/batch hands back - the server's own authoritative replay of every shot in the
-// batch that hadn't already been processed, plus the round's resulting state.
-//
-// Every field here SHOULD now exactly match what this component already derived locally: both
-// sides run the same shared applyShot over the same shots in the same order, with no clock and no
-// unshared randomness anywhere in the path (see pachinko.ts's own header). The one legitimate
-// exception is a jackpot catch's ballsAwarded, which depends on the live shared pool. So this
-// response is used as a correction of last resort, not as the thing that drives the UI - see
-// reconcileBatch.
-export interface PachinkoBatchResult {
-    seq: number;
-    outcome: PachinkoOutcome;
-    ballsAwarded: number;
-    reelSpin?: ReelSpinResult;
-}
-
-export interface PachinkoBatchResponse {
-    results: PachinkoBatchResult[];
-    leftTulipOpen: boolean;
-    rightTulipOpen: boolean;
-    attackerShotsRemaining: number;
-    jackpotShotsRemaining: number;
-    ballsRemaining: number;
     lastProcessedSeq: number;
 }
 
@@ -237,6 +148,21 @@ type ActiveBall =
     | { id: number; phase: "pending" }
     | { id: number; phase: "falling"; trajectory: PachinkoTrajectorySample[]; outcome: PachinkoOutcome; startTime: number; seq: number }
     | { id: number; phase: "landed"; trajectory: PachinkoTrajectorySample[]; outcome: PachinkoOutcome; won: boolean; landedAt: number; particles: Particle[] };
+
+// The single place a session is turned into gate state, used by both the initial ref and the
+// round-sync effect below. Those two used to build it separately and only one of them defaulted
+// its counters, so a session that arrived with an undefined counter (which one mistyped API field
+// was enough to cause - see shared/pachinko/pachinkoApi.ts) poisoned the whole round through the
+// path that didn't. Mirrors readConditions on the server, which does the same job there.
+function gateStateFromSession(session: PachinkoSession | null): PachinkoGateState {
+    return {
+        ballsRemaining: session?.ballsRemaining ?? 0,
+        leftTulipOpen: session?.leftTulipOpen ?? false,
+        rightTulipOpen: session?.rightTulipOpen ?? false,
+        attackerShotsRemaining: session?.attackerShotsRemaining ?? 0,
+        jackpotShotsRemaining: session?.jackpotShotsRemaining ?? 0,
+    };
+}
 
 // One fired shot, fully scored locally, waiting for its own ball to visibly land before anything
 // it did is shown to the player. See the ledger's own comment on shotLedgerRef.
@@ -498,13 +424,7 @@ export default function PachinkoBoard({
     // simulateShot flags come from (via the shared gateFlagsFor). Advances the instant a shot's
     // outcome is known, because the next shot fires ~400ms later and must be simulated against a
     // board that already includes this one, exactly as the server's own seq-ordered replay does.
-    const localGateStateRef = useRef<PachinkoGateState>({
-        ballsRemaining: session?.ballsRemaining ?? 0,
-        leftTulipOpen: session?.leftTulipOpen ?? false,
-        rightTulipOpen: session?.rightTulipOpen ?? false,
-        attackerShotsRemaining: session?.attackerShotsRemaining ?? 0,
-        jackpotShotsRemaining: session?.jackpotShotsRemaining ?? 0,
-    });
+    const localGateStateRef = useRef<PachinkoGateState>(gateStateFromSession(session));
 
     // Gate state as the PLAYER currently sees it - the state after the last shot whose ball has
     // visibly landed. This is what draw() renders and what the session patch carries.
@@ -576,13 +496,7 @@ export default function PachinkoBoard({
             shotLedgerRef.current.clear();
             firedNotDisplayedRef.current = 0;
             pendingShotsRef.current = [];
-            const fresh: PachinkoGateState = {
-                ballsRemaining: session.ballsRemaining,
-                leftTulipOpen: session.leftTulipOpen,
-                rightTulipOpen: session.rightTulipOpen,
-                attackerShotsRemaining: session.attackerShotsRemaining,
-                jackpotShotsRemaining: session.jackpotShotsRemaining,
-            };
+            const fresh = gateStateFromSession(session);
             localGateStateRef.current = fresh;
             displayedGateStateRef.current = { ...fresh };
         } else if (session.ballsTotal !== lastSyncedBallsTotalRef.current) {
@@ -823,8 +737,8 @@ export default function PachinkoBoard({
 
         // Attacker - fixed width always (see pachinkoLayout.ts). Grey and dashed while closed,
         // solid and colored while open, with the ball award shown inside and a live countdown
-        // UNDERNEATH (not overlapping the amount), read straight off session.attackerOpenUntil
-        // against the real clock every frame, not a locally-tracked timer.
+        // UNDERNEATH (not overlapping the amount), read off the displayed gate state's own ball
+        // counter - see the countdown just below.
         const attackerHot = hotPockets.has("attacker");
         const attackerStroke = attackerHot ? "#FFD700" : attackerOpen ? "rgba(189,245,207,0.95)" : "rgba(170,170,170,0.7)";
         drawPocket(

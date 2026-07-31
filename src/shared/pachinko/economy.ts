@@ -53,13 +53,19 @@ export interface PachinkoShotEffect {
     nextState: PachinkoGateState;
 }
 
+// Any non-finite or negative window counter reads as "closed" - see applyShot's own comment on why
+// trusting these blindly is dangerous rather than merely untidy.
+function finiteCount(value: number): number {
+    return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
 // Which of the three gated pockets are live for the NEXT shot to be fired against this state.
 // The chucker and the attacker share one physical gate - the chucker scores only while the
 // attacker it opens isn't already running. Both sides derive a shot's simulateShot() flags
 // through this one function so they cannot pick different geometry for the same shot.
 export function gateFlagsFor(state: PachinkoGateState): { chuckerActive: boolean; attackerActive: boolean; jackpotActive: boolean } {
-    const attackerActive = state.attackerShotsRemaining > 0;
-    return { chuckerActive: !attackerActive, attackerActive, jackpotActive: state.jackpotShotsRemaining > 0 };
+    const attackerActive = finiteCount(state.attackerShotsRemaining) > 0;
+    return { chuckerActive: !attackerActive, attackerActive, jackpotActive: finiteCount(state.jackpotShotsRemaining) > 0 };
 }
 
 /**
@@ -82,7 +88,16 @@ export function applyShot(
     pricePerBall: number
 ): PachinkoShotEffect {
     let ballsAwarded = 0;
-    let { leftTulipOpen, rightTulipOpen, attackerShotsRemaining, jackpotShotsRemaining } = state;
+    let { leftTulipOpen, rightTulipOpen } = state;
+    // Coerced rather than trusted. A counter that arrives non-finite doesn't just misbehave, it
+    // silently disables rules: `undefined <= 0` is false (relational comparison coerces to NaN,
+    // and every comparison against NaN is false), so the tulip-toggle guard below would never
+    // fire, and `Math.max(0, undefined - 1)` is NaN, which then poisons the counter for the rest
+    // of the round and keeps every gate shut. That is exactly what a single mistyped field name
+    // on one API response did once - see pachinkoApi.ts's header. The contract is typed now, but
+    // a pure scoring function shouldn't be one bad input away from quietly voiding the rulebook.
+    let attackerShotsRemaining = finiteCount(state.attackerShotsRemaining);
+    let jackpotShotsRemaining = finiteCount(state.jackpotShotsRemaining);
 
     // --- What this shot paid --------------------------------------------------------------
     if (outcome === "bonusLeft" || outcome === "bonusRight") {
