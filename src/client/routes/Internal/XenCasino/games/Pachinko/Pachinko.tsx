@@ -190,7 +190,7 @@ export default function Pachinko() {
     return (
         <GameWrapper
             title="Pachinko"
-            howToPlay="Buy balls with the +1000 button, then hold Launch to fire them at your own power - balls fly a few times a second while held. Most balls miss - catches add more balls to your tray instead of paying cash. Press Cash Out whenever you're ready to convert your tray back to cheddar."
+            howToPlay="Buy balls with the +balls button, then hold Launch to fire them at your own power - balls fly a few times a second while held. Most balls miss - catches add more balls to your tray instead of paying cash. Press Cash Out whenever you're ready to convert your tray back to cheddar."
             oddsSections={oddsSections}
             maxWin={odds?.maxPayout}
         >
@@ -211,6 +211,10 @@ export default function Pachinko() {
                     attackerBalls={odds?.attackerBalls ?? 0}
                     launchPowerRange={odds?.launchPowerRange ?? { min: 0, max: 100 }}
                     pricePerBall={odds?.pricePerBall ?? 0}
+                    // Empty until /odds answers, which just means no buy buttons render yet - far
+                    // better than guessing a size the server would reject. See the note in
+                    // PachinkoBoard.tsx where its hardcoded copy of this used to live.
+                    reupSizes={odds?.reupSizes ?? []}
                     isResuming={checkingActive}
                     reportBatch={reportBatchAsync}
                     reup={reupAsync}

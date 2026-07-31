@@ -39,6 +39,7 @@ export interface PachinkoBoardProps {
     attackerBalls: number;
     launchPowerRange: { min: number; max: number };
     pricePerBall: number; // needed even when session is null, so reup button costs can show before any batch exists
+    reupSizes: number[]; // straight from /odds, which is the server's own REUP_SIZES - see the note where REUP_AMOUNTS used to be
     isResuming: boolean; // the post-open "resume an existing batch?" check is in flight
     reportBatch: (shots: QueuedShot[]) => Promise<PachinkoBatchResponse>;
     reup: (balls: number) => Promise<unknown>;
@@ -60,7 +61,12 @@ const CALLOUT_MS = 1000; // how long the center win/loss callout stays on screen
 const FIRE_INTERVAL_MS = 400; // 100 balls/minute while the launch button is held
 const MAX_CONCURRENT_BALLS = 20;
 const PARTICLE_COUNT = 12;
-const REUP_AMOUNTS = [1000];
+// No REUP_AMOUNTS constant here. The purchase sizes come in as a prop, sourced from /odds's own
+// reupSizes (see PachinkoOddsResponse) - which is the server's REUP_SIZES, the same array /buy
+// validates against. This used to be a hardcoded [1000] alongside the server's own [1000]: two
+// constants in two files that had to agree, with nothing making them. A client offering a size the
+// server rejects is a buy button that just fails, and silent client/server constant drift is
+// exactly what broke the tulips once already (see shared/pachinko/pachinkoApi.ts's header).
 
 // Batched shot reporting - see the file header. A queued shot flushes to POST /launch/batch once
 // either threshold is hit, whichever comes first: enough shots have piled up, or enough time has
@@ -95,13 +101,37 @@ const REEL_SPIN_MS = 900; // base spin duration before the first reel starts lan
 const REEL_STOP_STAGGER_MS = [0, 220, 440]; // per-reel landing stagger, added to REEL_SPIN_MS
 const REEL_FLICKER_INTERVAL_MS = 70;
 const REEL_RESULT_GLOW_MS = 1600; // how long a match keeps its glow after the last reel lands
-const MAX_QUEUED_SPINS = 6; // chucker goes inactive once this many spins are queued (queue + current)
+// Chucker greys out ("CHUCKER - FULL") once this many spins are queued (queue + current).
+//
+// This is now effectively unreachable, and left in place knowingly rather than by oversight. Since
+// a chucker's ledger entry waits for its own spin to land before it is applied (see reelHasLanded),
+// and the entry after it can't be applied before that either, a second spin can't be requested
+// until the first has already been handed over - so the queue never exceeds a depth of 2. The
+// greyed-out state is display-only and harmless, and the cap is what the deadlock fallback in
+// reelHasLanded guards against, so nothing here is dead in the sense of being unsafe. If stacked
+// chucker catches ever feel sluggish, the lever is not this number: it's that the scheduler waits
+// out the full REEL_RESULT_GLOW_MS before starting the next spin, on top of REEL_LANDED_MS.
+const MAX_QUEUED_SPINS = 6;
 
 interface ReelAnimState {
     symbols: [string, string, string];
     matchTier: ReelMatchTier;
     startTime: number;
+    // Which shot fired this spin. The ledger entry for that shot is held until THIS spin has
+    // visibly landed (see drainLedger), so the animation has to be identifiable, not just present.
+    seq: number;
 }
+
+// When all three reels have stopped, relative to a spin's startTime. This is the moment the reel
+// has told the player what it rolled - the glow that follows is celebration, not information, so
+// it's deliberately not part of this.
+const REEL_LANDED_MS = REEL_SPIN_MS + Math.max(...REEL_STOP_STAGGER_MS);
+
+// Longest a ledger entry may sit waiting on its reel before it gives up and applies anyway. Sized
+// well clear of any legitimate wait - a spin queued behind another still starts within
+// REEL_LANDED_MS + REEL_RESULT_GLOW_MS (~2.9s) - so it can only ever fire on a genuine fault. See
+// reelHasLanded.
+const REEL_HOLD_TIMEOUT_MS = 6000;
 
 // A chucker catch's reel result is known the instant the shot resolves now - it's derived from
 // the shot's own seed (see shared/pachinko/pachinkoReels.ts), not fetched from the server - so a
@@ -111,6 +141,7 @@ interface ReelAnimState {
 interface ReelQueueItem {
     symbols: [string, string, string];
     matchTier: ReelMatchTier;
+    seq: number; // carried into ReelAnimState.seq when this spin starts - see there
 }
 
 const OUTCOME_LABEL: Record<PachinkoOutcome, string> = {
@@ -193,6 +224,9 @@ interface ShotLedgerEntry {
     // were folded in by a later entry's stateAfter; it stays in the ledger only so the ledger
     // still knows a ball is outstanding, and is dropped when that ball finally lands.
     skipped?: boolean;
+    // Chucker entries only: its reel spin has been handed to the animation queue, and the entry is
+    // now waiting for that spin to visibly land before it may be applied. See drainLedger.
+    reelQueuedAt?: number;
 }
 
 let nextBallId = 0;
@@ -384,6 +418,7 @@ export default function PachinkoBoard({
     attackerBalls,
     launchPowerRange,
     pricePerBall,
+    reupSizes,
     isResuming,
     reportBatch,
     reup,
@@ -750,7 +785,16 @@ export default function PachinkoBoard({
                 ctx.stroke();
                 ctx.restore();
             }
-            drawPocketLabel(ctx, tulip.position.x, tulip.position.y, POCKET_HEIGHT, isOpen ? "TULIP - OPEN" : "TULIP", isHot ? "#FFD700" : stroke);
+            // No text label. drawPocketLabel centres above the pocket, and the tulips sit only 34px
+            // either side of the chucker - "TULIP - OPEN" is ~75px wide at this font and simply ran
+            // through "CHUCKER", which is drawn 2px higher. The payout number below is inside the
+            // cup and collides with nothing, so it stays.
+            //
+            // This is only safe because the fill, stroke and glow above are authoritative from the
+            // frame the ball lands. They didn't used to be - the catch flash painted over them for
+            // 450ms, and the label was the one thing that changed immediately, which is exactly why
+            // it was here. Anything that reintroduces a flash covering the open/closed colours has
+            // to bring a replacement signal with it, because this text is no longer the fallback.
             drawPocketAmount(ctx, tulip.position.x, tulip.position.y, `${sideTulipBalls}`, isOpen ? "#08321a" : stroke);
         }
 
@@ -790,10 +834,16 @@ export default function PachinkoBoard({
             { dashed: !attackerOpen && !attackerHot }
         );
         // Attacker text drawn below the pocket, not above/inside - keeps the wide pocket clean.
+        //
+        // The 13 is close to the maximum this block can be dropped by, so treat it as bounded
+        // rather than arbitrary: JACKPOT_GUIDES converges inward from y=300, reaching x~170 and
+        // x~290 by y~332. The widest string here is "ATTACKER - OPEN" (~80px, centred on x=230, so
+        // spanning 190-270), and the third line of the block lands at exactly that y. It clears the
+        // guide nails by ~20px; a few more pixels down and the label starts sitting on them.
         ctx.fillStyle = attackerStroke;
         ctx.font = "bold 9px sans-serif";
         ctx.textAlign = "center";
-        const attackerLabelY = layout.attacker.position.y + POCKET_HEIGHT / 2 + 5;
+        const attackerLabelY = layout.attacker.position.y + POCKET_HEIGHT / 2 + 13;
         ctx.fillText(attackerOpen ? "ATTACKER - OPEN" : "ATTACKER", layout.attacker.position.x, attackerLabelY);
         ctx.font = "bold 11px sans-serif";
         ctx.fillText(`${attackerBalls}`, layout.attacker.position.x, attackerLabelY + 14);
@@ -907,7 +957,7 @@ export default function PachinkoBoard({
                         // this is the ONLY thing in the component that makes a shot's effects
                         // visible, and it does so in strict seq order (see drainLedger).
                         const { trajectory, outcome } = ball;
-                        markLanded(ball.seq);
+                        markLanded(ball.seq, now);
                         activeBallsRef.current.set(ball.id, { id: ball.id, phase: "landed", trajectory, outcome, won: outcome !== "gutter", landedAt: now, particles: makeParticles() });
                         // Light the pocket on this very frame, not the next one. The ball only
                         // becomes "landed" here, so without this the frame that first paints the
@@ -929,20 +979,29 @@ export default function PachinkoBoard({
                 activeBallsRef.current.delete(id);
             }
 
+            // Drain every frame, not only when a ball lands. A chucker entry's release condition is
+            // a deadline - its reel finishing - and no event fires at that moment, so a purely
+            // landing-driven drain would leave it (and everything behind it) sitting until the next
+            // ball happened to land, which under slow or stopped firing could be a long time or
+            // never. Cheap: it returns immediately unless the head entry is actually ready.
+            //
+            // Before the reel scheduler below, so a spin this call hands over starts on this very
+            // frame instead of idling a frame first.
+            drainLedger(now);
+
             // Reel spin queue: once the current animation has fully finished (all reels landed +
             // glow elapsed), start the next queued spin. Every queued spin now carries real
             // symbols from the moment it's queued (derived from its shot's seed), so there's
             // nothing to wait on and no placeholder state to skip over.
             if (currentReelAnimRef.current) {
-                const lastStopAt = REEL_SPIN_MS + (REEL_STOP_STAGGER_MS[REEL_STOP_STAGGER_MS.length - 1] ?? 0);
-                const finishedAt = currentReelAnimRef.current.startTime + lastStopAt + REEL_RESULT_GLOW_MS;
+                const finishedAt = currentReelAnimRef.current.startTime + REEL_LANDED_MS + REEL_RESULT_GLOW_MS;
                 if (now >= finishedAt) {
                     const next = reelQueueRef.current.shift();
-                    currentReelAnimRef.current = next ? { symbols: next.symbols, matchTier: next.matchTier, startTime: now } : null;
+                    currentReelAnimRef.current = next ? { symbols: next.symbols, matchTier: next.matchTier, startTime: now, seq: next.seq } : null;
                 }
             } else if (reelQueueRef.current.length > 0) {
                 const next = reelQueueRef.current.shift()!;
-                currentReelAnimRef.current = { symbols: next.symbols, matchTier: next.matchTier, startTime: now };
+                currentReelAnimRef.current = { symbols: next.symbols, matchTier: next.matchTier, startTime: now, seq: next.seq };
             }
 
             // Cheap due-check every frame - see flushBatch's own comment. Actually posts only
@@ -1144,7 +1203,7 @@ export default function PachinkoBoard({
     // that run can be stepped over. Null - meaning "wait, as before" - if any of them can't, or if
     // there's no landed entry behind them to unblock, since stepping over on its own accomplishes
     // nothing and would leave the visible ball count transiently short (see drainLedger).
-    const collectStepOver = (): ShotLedgerEntry[] | null => {
+    const collectStepOver = (now: number): ShotLedgerEntry[] | null => {
         const displayed = displayedGateStateRef.current;
         const run: ShotLedgerEntry[] = [];
         for (let seq = displayedSeqRef.current + 1; run.length < MAX_CONCURRENT_BALLS; seq++) {
@@ -1153,6 +1212,15 @@ export default function PachinkoBoard({
                 return null; // nothing behind the gap yet - the wait is real
             }
             if (entry.landed) {
+                // "Landed" is necessary but not sufficient: a chucker still waiting on its reel
+                // won't be applied this pass either, and stepping over a run that then isn't
+                // followed by an application is exactly what breaks the accounting below - the
+                // stepped balls' cost leaves firedNotDisplayedRef without arriving in the displayed
+                // state, so the visible ball count reads wrong until the hold clears. Wait instead;
+                // the same step-over happens for free on a later frame once the reel has landed.
+                if (reelStillHolding(entry, now)) {
+                    return null;
+                }
                 return run.length > 0 ? run : null;
             }
             if (!canStepOver(entry, displayed)) {
@@ -1163,15 +1231,81 @@ export default function PachinkoBoard({
         return null;
     };
 
+    // A chucker's ball landing is only half its story. The chucker pays nothing itself - its entire
+    // value is the reel spin it fires, and it's the reel, not the catch, that decides whether the
+    // attacker opens. Applying the entry the moment the ball lands therefore showed the effect
+    // before the cause: the attacker lit up and "Gate Open!" popped a full REEL_LANDED_MS (1.34s)
+    // before the reels revealed the three-of-a-kind that had opened it.
+    //
+    // So a landed chucker entry additionally waits for its OWN spin to finish landing. Its own,
+    // specifically - hence the seq tag on ReelAnimState. Waiting on "some spin is animating" would
+    // release the entry against whichever spin happened to be on screen.
+    //
+    // Note this waits for the reels to STOP, not for REEL_RESULT_GLOW_MS to elapse. The glow is
+    // celebration; the information the gate depends on is complete the moment the third reel lands.
+    //
+    // Deliberately PURE - it is used both to gate the head of the ledger and as a lookahead by
+    // collectStepOver, and a lookahead that queued a spin as a side effect would start reels for
+    // shots whose turn hasn't come. Queueing lives in startReelFor, called only for the head entry.
+    const reelStillHolding = (entry: ShotLedgerEntry, now: number): boolean => {
+        if (entry.outcome !== "chucker" || !entry.reelSpin) {
+            return false;
+        }
+        if (entry.reelQueuedAt === undefined) {
+            return true; // its spin hasn't even been handed over yet
+        }
+        // Belt and braces against a permanent stall. startReelFor's queue push is conditional, and
+        // an entry waiting on a spin that was never enqueued would wedge the ledger forever - every
+        // later shot's effects frozen behind it, with no event that could ever free them. It cannot
+        // happen as things stand (serialising chuckers this way holds the queue at a depth of at
+        // most 2 against a MAX_QUEUED_SPINS of 6), but "currently unreachable" is a poor guarantee
+        // to hang a permanent freeze on, and the cost of being wrong is the whole board stopping.
+        if (now - entry.reelQueuedAt > REEL_HOLD_TIMEOUT_MS) {
+            return false;
+        }
+        const anim = currentReelAnimRef.current;
+        return !(anim?.seq === entry.seq && now - anim.startTime >= REEL_LANDED_MS);
+    };
+
+    // Hands this entry's spin to the animation queue, once. Only ever called for the entry at the
+    // head of the ledger, so reels play in fire order and a spin never starts ahead of an earlier
+    // ball that hasn't resolved yet.
+    const startReelFor = (entry: ShotLedgerEntry, now: number) => {
+        if (entry.reelQueuedAt !== undefined) {
+            return;
+        }
+        const totalQueued = (currentReelAnimRef.current ? 1 : 0) + reelQueueRef.current.length;
+        if (totalQueued < MAX_QUEUED_SPINS) {
+            reelQueueRef.current.push({ symbols: entry.reelSpin!.symbols, matchTier: entry.reelSpin!.matchTier, seq: entry.seq });
+        }
+        entry.reelQueuedAt = now;
+    };
+
     // Makes a landed shot's effects visible, and then any already-landed shots queued behind it,
     // strictly in seq order. Balls don't necessarily land in the order they were fired (a gentler
     // shot fired later can have a shorter flight), so a ball that arrives early simply waits its
     // turn here - which is what guarantees the displayed state is always a state that genuinely
     // existed, and never jumps around.
-    const drainLedger = () => {
+    //
+    // Called on every landing AND once per frame, because one of its release conditions is a
+    // deadline rather than an event (see the chucker branch below).
+    const drainLedger = (now: number) => {
         for (;;) {
             const entry = shotLedgerRef.current.get(displayedSeqRef.current + 1);
             if (!entry) {
+                return;
+            }
+            if (entry.landed && reelStillHolding(entry, now)) {
+                // A chucker's ball landing is only half its story. The chucker pays nothing itself -
+                // its entire value is the reel spin it fires, and it's the reel, not the catch, that
+                // decides whether the attacker opens. Applying on landing therefore showed the
+                // effect before its cause: the attacker lit up and "Gate Open!" popped a full
+                // REEL_LANDED_MS (1.34s) before the reels revealed the three-of-a-kind behind it.
+                //
+                // So the whole entry waits for its own reel, rather than the gate alone being
+                // delayed - a half-applied entry would put the displayed board into a configuration
+                // that never existed in the fold, which is the one invariant this ledger has.
+                startReelFor(entry, now);
                 return;
             }
             if (!entry.landed) {
@@ -1190,7 +1324,7 @@ export default function PachinkoBoard({
                 //
                 // What IS safe is stepping over an entry that could not have changed anything on
                 // screen, keeping the fire-order fold exactly as it is. See canStepOver.
-                const steppable = collectStepOver();
+                const steppable = collectStepOver(now);
                 if (!steppable) {
                     return;
                 }
@@ -1221,20 +1355,17 @@ export default function PachinkoBoard({
                 setTimeout(() => setCallouts((prev) => prev.filter((c) => c.id !== calloutId)), CALLOUT_MS);
             }
 
-            // A chucker's reel spin, with its real symbols already known - queued so rapid catches
-            // stack visually instead of clobbering each other, and dropped once the queue is full.
-            if (entry.outcome === "chucker" && entry.reelSpin) {
-                const totalQueued = (currentReelAnimRef.current ? 1 : 0) + reelQueueRef.current.length;
-                if (totalQueued < MAX_QUEUED_SPINS) {
-                    reelQueueRef.current.push({ symbols: entry.reelSpin.symbols, matchTier: entry.reelSpin.matchTier });
-                }
-            }
+            // No reel queueing here any more - reelHasLanded already did it, back when this entry
+            // first reached the head of the ledger. By the time execution gets here the spin has
+            // been running for REEL_LANDED_MS and has just finished revealing what it rolled, which
+            // is precisely what makes the gate state applied above land at the same moment as its
+            // own explanation.
 
             patchVisibleSession();
         }
     };
 
-    const markLanded = (seq: number) => {
+    const markLanded = (seq: number, now: number) => {
         const entry = shotLedgerRef.current.get(seq);
         if (entry?.skipped) {
             // Already accounted for while it was still in the air - drainLedger will never look at
@@ -1247,7 +1378,7 @@ export default function PachinkoBoard({
         if (entry) {
             entry.landed = true;
         }
-        drainLedger();
+        drainLedger(now);
     };
 
     const fireOnce = () => {
@@ -1296,7 +1427,7 @@ export default function PachinkoBoard({
                 // it will never land to release its own entry. Release it now instead - the shot
                 // really happened and the server has already scored it; leaving it queued would
                 // strand this shot and every shot behind it.
-                markLanded(seq);
+                markLanded(seq, performance.now());
             }
         });
     };
@@ -1416,7 +1547,7 @@ export default function PachinkoBoard({
             </Box>
 
             <Box sx={{ display: "flex", justifyContent: "center", gap: 1.5, mt: 2 }}>
-                {REUP_AMOUNTS.map((amount) => (
+                {reupSizes.map((amount) => (
                     <Button
                         key={amount}
                         variant="outlined"

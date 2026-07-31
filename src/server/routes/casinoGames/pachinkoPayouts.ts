@@ -59,7 +59,25 @@ export const SIDE_TULIP_BALLS = 2;
 // the board's entire worst-case RTP once the window's real cost was measured properly. Trimmed
 // again to 6, with the window down to 5 balls, after the left field raised the chucker rate that
 // feeds this whole chain to 18% at the worst-case power.
-export const ATTACKER_BALLS = 6;
+//
+// ## 20 is a deliberate product decision that the tuning script will disagree with
+//
+// Do not "fix" this back on the strength of a pachinkoPayoutTuning.ts run. It is knowingly above
+// what that script targets, and it was raised 6 -> 20 on purpose: the attacker is the rarest thing
+// on the board (it needs a chucker catch AND a reel three-of-a-kind, roughly 9% of catches) and at
+// 6 balls it wasn't worth chasing, which made the board's whole bonus-round structure pointless.
+//
+// The cost was measured, not guessed, before and after. At 6: worst-case RTP 0.830 at power 50,
+// attacker chain 0.156 of that. At 20: worst-case RTP 1.1952 at the same power, attacker chain
+// 0.568 - i.e. the house loses money at power 50. No compensating cut was made anywhere else; that
+// was the call. pachinkoPayouts.rtp.test.ts's upper bound was widened to suit (see its own comment
+// for why the old one became a flake risk rather than a signal).
+//
+// If it ever needs walking back, the cheapest lever is NOT this number - it's ATTACKER_OPEN_SHOTS
+// in shared/pachinko/pachinkoRules.ts. Window length and per-catch value multiply, so 5 -> 3 alone
+// recovers ~0.21 while keeping each individual catch feeling worth the wait, which is the property
+// this change was after in the first place.
+export const ATTACKER_BALLS = 20;
 
 // Fraction of every ball's price that feeds the shared jackpot pool (fed by every ball fired,
 // not just misses - the pool is jackpot-only money, unrelated to what any individual shot pays

@@ -125,7 +125,14 @@ const PAYOUT_CONSTANTS: PachinkoPayoutConstants = { bonusPocketBalls: BONUS_POCK
 
 const SLUG = "pachinko";
 const PRICE_PER_BALL = 100;
-const REUP_SIZES = [1000];
+// The only purchase sizes /buy will accept, and the single source of truth for them - the client
+// renders its buy buttons from whatever this returns via /odds (see PachinkoOddsResponse.reupSizes)
+// rather than carrying its own copy, so the two can't disagree about what a purchase is.
+// 200 balls at PRICE_PER_BALL is a 20,000 buy-in, down from 1000/100,000: a full tray used to be a
+// long commitment before a player could reasonably stop, and nothing about the board needs a round
+// to be that long. Existing rounds are unaffected - this only validates new purchases, and a round
+// in progress carries its own ballsTotal.
+const REUP_SIZES = [200];
 
 // simulateShot (up to 2000 matter-js Engine.update() calls per shot) runs on a worker thread
 // pool instead of inline, so a burst of hold-to-fire confirms can't block the main event loop -

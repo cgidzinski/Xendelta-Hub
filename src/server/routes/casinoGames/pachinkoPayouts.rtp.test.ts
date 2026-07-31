@@ -76,7 +76,17 @@ describe("pachinko worst-case RTP", () => {
         // regression guard against a gross reopening of the exploit, not a precision check (see
         // pachinkoPayoutTuning.ts for the real, high-precision derivation). The upper bound is
         // the one that actually matters: it's what would have caught the original bug.
-        expect(worstRtp, `worst-case RTP ${(worstRtp * 100).toFixed(1)}% at power=${worstPower.toFixed(1)} - a future constant edit may have reopened a power-specific exploit`).toBeLessThan(1.3);
+        //
+        // The bound is 1.45 rather than the 1.3 it used to be, and NOT because the number drifted:
+        // the board's intended worst case is now genuinely ~1.20 (measured 1.1952 at power 50 by
+        // pachinkoPayoutTuning.ts), because ATTACKER_BALLS was deliberately raised to 20 above what
+        // tuning targets - see its comment in pachinkoPayouts.ts for that decision. At 300 shots a
+        // bucket only ~45 land in the chucker, and the attacker chain those feed is both the
+        // largest and by far the noisiest term, so a 1.3 bound sat close enough to the intended
+        // value to fail on an unlucky draw. Raised to keep this a signal about the constants rather
+        // than about the sample. It still catches what it was built to catch by a wide margin - the
+        // bug that prompted it measured ~300%.
+        expect(worstRtp, `worst-case RTP ${(worstRtp * 100).toFixed(1)}% at power=${worstPower.toFixed(1)} - a future constant edit may have reopened a power-specific exploit (intended worst case is ~120%)`).toBeLessThan(1.45);
         expect(worstRtp).toBeGreaterThan(0.2);
     }, 180000);
 });
