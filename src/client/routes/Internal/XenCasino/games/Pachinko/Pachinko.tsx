@@ -8,7 +8,7 @@ import { casinoLedgerKeys } from "../../../../../hooks/casino/useCasinoLedger";
 import { casinoDailyQuestKeys } from "../../../../../hooks/casino/useCasinoDailyQuest";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import PlayLauncher from "../../components/PlayLauncher";
-import PachinkoBoard, { PachinkoTicket, PachinkoConfirmResult, PachinkoLayoutData, PachinkoSession } from "../../components/PachinkoBoard";
+import PachinkoBoard, { QueuedShot, PachinkoBatchResponse, PachinkoLayoutData, PachinkoSession } from "../../components/PachinkoBoard";
 import { formatCheddar } from "../../utils/currency";
 
 // Everything Pachinko needs lives in this one file, same shape as Plinko.tsx - it only imports
@@ -30,6 +30,7 @@ interface PachinkoOddsResponse {
     bonusPocketBalls: number;
     attackerBalls: number;
     attackerOpenMs: number;
+    jackpotOpenMs: number;
     cashOutRate: number;
     jackpotPool: number;
     maxPayout: number;
@@ -45,6 +46,7 @@ interface ActiveBatchResponse {
     rightTulipOpen?: boolean;
     attackerOpenUntil?: number;
     jackpotOpenUntil?: number;
+    lastProcessedSeq?: number;
 }
 
 interface BuyResponse {
@@ -56,6 +58,7 @@ interface BuyResponse {
     rightTulipOpen: boolean;
     attackerOpenUntil: number;
     jackpotOpenUntil: number;
+    lastProcessedSeq: number;
     balance: string;
 }
 
@@ -70,15 +73,11 @@ const fetchActive = async (): Promise<ActiveBatchResponse> => (await apiClient.g
 // Same endpoint creates a fresh batch or reups an existing one - the server decides which based
 // on whether the player already has an active round (see pachinko.ts's /buy handler).
 const buyBalls = async (balls: number): Promise<BuyResponse> => (await apiClient.post<ApiResponse<BuyResponse>>("/api/casino/games/pachinko/buy", { balls })).data.data!;
-// Cheap - just claims a ball and hands back a seed, no physics at all (see pachinko.ts's own
-// file header for the whole ticket/confirm protocol this and confirmLaunch below are half of).
-const launchTicket = async (launchPower: number): Promise<PachinkoTicket> =>
-    (await apiClient.post<ApiResponse<PachinkoTicket>>("/api/casino/games/pachinko/launch", { launchPower })).data.data!;
-// The other half - the server's own authoritative replay of that seed, which is what actually
-// decides the shot. Called from PachinkoBoard's confirmFired, in the background, never something
-// the firing loop waits on.
-const confirmLaunch = async (seed: number): Promise<PachinkoConfirmResult> =>
-    (await apiClient.post<ApiResponse<PachinkoConfirmResult>>("/api/casino/games/pachinko/launch/confirm", { seed })).data.data!;
+// The only endpoint firing ever touches, and never before a shot fires - PachinkoBoard fires
+// fully locally and reports batches of already-fired shots here in the background (see its own
+// file header and pachinko.ts's for the full protocol).
+const reportLaunchBatch = async (shots: QueuedShot[]): Promise<PachinkoBatchResponse> =>
+    (await apiClient.post<ApiResponse<PachinkoBatchResponse>>("/api/casino/games/pachinko/launch/batch", { shots })).data.data!;
 const cashOutBalls = async (): Promise<CashOutResponse> => (await apiClient.post<ApiResponse<CashOutResponse>>("/api/casino/games/pachinko/cashout")).data.data!;
 
 export default function Pachinko() {
@@ -98,13 +97,15 @@ export default function Pachinko() {
 
     // A reup response's gate fields (leftTulipOpen/rightTulipOpen/attackerOpenUntil/
     // jackpotOpenUntil) are just whatever the DB happened to hold at that read - reup doesn't
-    // change any of them - and this request has no seq/staleness guard the way launch responses
-    // do (see PachinkoBoard.tsx's latestAppliedSeqRef). If a reup fired while balls were still
-    // resolving from hold-to-fire, applying it wholesale could clobber fresher gate state a
-    // just-landed launch response already applied. So: only overwrite the fields a buy/reup
-    // response actually owns, and carry forward the existing session's gate state when there
-    // already is one - a fresh buy (no prior session) still gets correct initial values from the
-    // response itself, since those start false/0 for a brand new round anyway.
+    // change any of them - and this request has no ordering guard against a batch response
+    // landing around the same time. Applying it wholesale could clobber fresher gate state a
+    // just-landed batch already applied. So: only overwrite the fields a buy/reup response
+    // actually owns, and carry forward the existing session's gate state when there already is
+    // one - a fresh buy (no prior session) still gets correct initial values from the response
+    // itself, since those start false/0 for a brand new round anyway. ballsTotal/ballsRemaining
+    // ARE always taken from the response even on a reup - PachinkoBoard's own local economy
+    // mirror picks up the same delta independently (see its own sync effect keyed off
+    // ballsTotal), so this isn't racing anything.
     const applyBuyResponse = (data: BuyResponse) => {
         setSession((prev) => ({
             roundId: data.roundId,
@@ -115,6 +116,7 @@ export default function Pachinko() {
             rightTulipOpen: prev?.rightTulipOpen ?? data.rightTulipOpen,
             attackerOpenUntil: prev?.attackerOpenUntil ?? data.attackerOpenUntil,
             jackpotOpenUntil: prev?.jackpotOpenUntil ?? data.jackpotOpenUntil,
+            lastProcessedSeq: data.lastProcessedSeq,
         }));
         invalidateShared();
     };
@@ -125,17 +127,19 @@ export default function Pachinko() {
         onError: (error: Error) => enqueueSnackbar(error.message || "Failed to buy balls", { variant: "error" }),
     });
 
-    // Plain functions, not useMutation - PachinkoBoard fires many of these concurrently under
-    // hold-to-fire (one ticket + confirm pair per ball), and each already handles its own
-    // failure/retry internally (see PachinkoBoard's confirmFired and fireOnce) rather than
-    // needing shared pending/error state or an error toast per attempt, which would just spam
-    // toasts on any transient hiccup instead of the quiet self-healing that's the whole point.
-    const launchTicketAsync = launchTicket;
-    const confirmLaunchAsync = async (seed: number) => {
-        const result = await confirmLaunch(seed);
-        if (!result.alreadySettled) {
-            invalidateShared();
-        }
+    // A plain function, not useMutation - PachinkoBoard calls this itself on its own batching
+    // schedule (see flushBatch there), entirely decoupled from any single shot's UI state, so
+    // there's no per-call pending/error state worth surfacing here. A failed batch just means
+    // PachinkoBoard retries it on the next flush (see its own file header) - not something this
+    // component needs to react to. Only the jackpot pool (part of the odds query) ever moves as a
+    // side effect of a launch - no real cheddar changes hands on a launch (see pachinko.ts's own
+    // file header), so unlike applyBuyResponse/handleCashOut this deliberately does NOT invalidate
+    // balance/ledger/dailyQuest - doing that on every batch flush (as often as every 750ms under
+    // sustained hold-to-fire) would mean hammering Weeabets with balance refetches nobody asked
+    // for, the exact kind of avoidable network load the rest of this redesign exists to cut.
+    const reportBatchAsync = async (shots: QueuedShot[]) => {
+        const result = await reportLaunchBatch(shots);
+        queryClient.invalidateQueries({ queryKey: ["pachinkoOdds"] });
         return result;
     };
 
@@ -178,6 +182,7 @@ export default function Pachinko() {
                     rightTulipOpen: active.rightTulipOpen ?? false,
                     attackerOpenUntil: active.attackerOpenUntil ?? 0,
                     jackpotOpenUntil: active.jackpotOpenUntil ?? 0,
+                    lastProcessedSeq: active.lastProcessedSeq ?? 0,
                 });
             } else {
                 setSession(null);
@@ -231,11 +236,11 @@ export default function Pachinko() {
                     bonusPocketBalls={odds?.bonusPocketBalls ?? 0}
                     sideTulipBalls={odds?.sideTulipBalls ?? 0}
                     attackerBalls={odds?.attackerBalls ?? 0}
+                    jackpotOpenMs={odds?.jackpotOpenMs ?? 0}
                     launchPowerRange={odds?.launchPowerRange ?? { min: 0, max: 100 }}
                     pricePerBall={odds?.pricePerBall ?? 0}
                     isResuming={checkingActive}
-                    launchTicket={launchTicketAsync}
-                    confirmLaunch={confirmLaunchAsync}
+                    reportBatch={reportBatchAsync}
                     reup={reupAsync}
                     isReuping={isReuping}
                     onCashOut={handleCashOut}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Box, Button, Slider, Typography } from "@mui/material";
 import { formatCheddar } from "../utils/currency";
 import { usePachinkoSimWorker } from "../workers/usePachinkoSimWorker";
+import { applyShotOutcome, EconomyGateState } from "../../../../../shared/pachinko/economy";
 
 export type PachinkoOutcome = "gutter" | "tulipLeft" | "tulipRight" | "jackpot" | "bonusLeft" | "bonusRight" | "chucker" | "attacker";
 
@@ -73,6 +74,10 @@ export interface PachinkoSession {
     rightTulipOpen: boolean;
     attackerOpenUntil: number; // epoch ms; attacker pays while Date.now() < this
     jackpotOpenUntil: number; // epoch ms; jackpot pays while Date.now() < this
+    // The server's own ordering cursor for this round (see pachinko.ts's own field of the same
+    // name) - lets a resumed/reloaded board continue its local seq counter without colliding with
+    // seqs the server already processed before the page was closed/refreshed.
+    lastProcessedSeq: number;
 }
 
 export type ReelMatchTier = "none" | "two" | "three";
@@ -84,34 +89,36 @@ export interface PachinkoReelSpin {
     attackerBonusMs: number;
 }
 
-// What POST /launch now hands back - a cheap claim, not a decided outcome (see pachinko.ts's own
-// file header for the whole ticket/confirm shape). The client replays this exact seed itself
-// (see usePachinkoSimWorker) to get an instant local preview to animate; nothing here is an
-// outcome yet.
-export interface PachinkoTicket {
+// One shot as fired locally, queued for batch reporting - just enough for the server to replay
+// it (seed + launchPower) plus its firing order (seq). See pachinko.ts's own file header: the
+// server never trusts anything else about a shot, only re-derives outcome and gate state itself.
+export interface QueuedShot {
+    seq: number;
     seed: number;
     launchPower: number;
-    chuckerActive: boolean;
-    attackerActive: boolean;
-    jackpotActive: boolean;
-    ballsRemaining: number;
 }
 
-// What POST /launch/confirm hands back - the server's own authoritative replay of that same
-// seed, which is what actually counts (never anything the client's own local preview claimed).
-// `alreadySettled` is true when this seed was already confirmed by an earlier call (a retry
-// racing its own prior success, or the server's own opportunistic stale-ticket sweep beating the
-// client to it) - every other field is only present when it's not.
-export interface PachinkoConfirmResult {
-    alreadySettled: boolean;
-    outcome?: PachinkoOutcome;
-    ballsAwarded?: number;
+// What POST /launch/batch hands back - the server's own authoritative replay of every shot in
+// the batch that hadn't already been processed, plus the round's resulting state. `results` is
+// keyed by seq so the client can correlate each entry back to the locally-fired ball(s) it
+// covers and correct its own optimistic guess (see the economy mirror in
+// src/shared/pachinko/economy.ts and reconcileBatch below) - never the other way around.
+export interface PachinkoBatchResult {
+    seq: number;
+    outcome: PachinkoOutcome;
+    ballsAwarded: number;
     reelSpin?: PachinkoReelSpin;
-    leftTulipOpen?: boolean;
-    rightTulipOpen?: boolean;
-    attackerOpenUntil?: number;
-    jackpotOpenUntil?: number;
-    ballsRemaining?: number;
+    attackerOpenUntil?: number; // only present on a chucker catch - see pachinko.ts's own comment on why this has to be per-shot, not the batch's final value
+}
+
+export interface PachinkoBatchResponse {
+    results: PachinkoBatchResult[];
+    leftTulipOpen: boolean;
+    rightTulipOpen: boolean;
+    attackerOpenUntil: number;
+    jackpotOpenUntil: number;
+    ballsRemaining: number;
+    lastProcessedSeq: number;
 }
 
 export interface PachinkoBoardProps {
@@ -122,13 +129,16 @@ export interface PachinkoBoardProps {
     bonusPocketBalls: number;
     sideTulipBalls: number;
     attackerBalls: number;
+    jackpotOpenMs: number;
     launchPowerRange: { min: number; max: number };
     pricePerBall: number; // needed even when session is null, so reup button costs can show before any batch exists
     isResuming: boolean; // the post-open "resume an existing batch?" check is in flight
-    launchTicket: (launchPower: number) => Promise<PachinkoTicket>;
-    confirmLaunch: (seed: number) => Promise<PachinkoConfirmResult>;
+    reportBatch: (shots: QueuedShot[]) => Promise<PachinkoBatchResponse>;
     reup: (balls: number) => Promise<unknown>;
     isReuping: boolean;
+    // Called once any not-yet-reported shots have been flushed and acknowledged (see
+    // flushAllPending below) - only then does the server's own ballsRemaining reflect every shot
+    // the player actually fired, which is what Cash Out has to read, never the client's own guess.
     onCashOut: () => void;
     isCashingOut: boolean;
     onSessionUpdate: (session: PachinkoSession) => void;
@@ -142,14 +152,20 @@ const POOF_MS = 450; // how long the ball+particle burst takes once a trajectory
 const CALLOUT_MS = 1000; // how long the center win/loss callout stays on screen
 const FIRE_INTERVAL_MS = 400; // 100 balls/minute while the launch button is held
 const MAX_CONCURRENT_BALLS = 20;
-// Caps how many /launch ticket requests can be sent but not yet answered at once. /launch is
-// cheap now (no physics at all, see pachinko.ts) so this rarely matters anymore, but it's kept
-// as the same defense-in-depth against outrunning the server under real load that it always was
-// - a no-op when responses return well within FIRE_INTERVAL_MS (the cap never binds), only
-// slowing new ticket requests down to match the server's actual response rate if it's ever slow.
-const MAX_PENDING_LAUNCHES = 3;
 const PARTICLE_COUNT = 12;
 const REUP_AMOUNTS = [1000];
+
+// Batched shot reporting - see the file header. A queued shot flushes to POST /launch/batch once
+// either threshold is hit, whichever comes first: enough shots have piled up, or enough time has
+// passed since the last flush (so a slow, deliberate player still reports promptly instead of
+// waiting on a 5th shot that may never come). Neither threshold ever blocks firing itself - see
+// flushBatch below.
+const BATCH_SIZE_THRESHOLD = 5;
+const BATCH_TIME_THRESHOLD_MS = 750;
+// How many times Cash Out will retry flushing not-yet-reported shots before giving up and reading
+// whatever ballsRemaining the server already has - see flushAllPending. Bounded, not infinite: a
+// genuinely offline player shouldn't have Cash Out hang forever.
+const CASHOUT_FLUSH_MAX_ATTEMPTS = 5;
 
 // The board's central digital reel - a real modern machine's own "heso" (start chucker) -> LCD
 // reel -> bonus round gimmick (see pachinko.ts's chucker branch and pachinkoReels.ts on the
@@ -187,6 +203,12 @@ interface ReelQueueItem {
     symbols: [string, string, string];
     matchTier: ReelMatchTier;
     attackerOpenUntil?: number;
+    // True until a batch response fills in this catch's real reel result (see reconcileBatch) -
+    // the reel result (spinReel's crypto.randomInt draw) is deliberately server-only, so a chucker
+    // catch queues a placeholder the instant it's hit and only starts actually spinning-to-land
+    // once real symbols exist; `symbols`/`matchTier` are dummy values while this is true, never
+    // drawn (see the tick loop's queue-advance, which never promotes a pending item to "current").
+    pending: boolean;
 }
 
 const OUTCOME_LABEL: Record<PachinkoOutcome, string> = {
@@ -231,7 +253,15 @@ type ActiveBall =
 
 let nextBallId = 0;
 let nextCalloutId = 0;
-let nextLaunchSeq = 0;
+
+// A fresh 32-bit seed per shot, straight from the browser's CSPRNG - crypto.getRandomValues
+// rather than Math.random() since this seed is what the server independently replays to decide
+// the whole shot (see pachinko.ts's own file header); Math.random() is fine for cosmetic-only
+// randomness elsewhere on this board (particles, etc.) but not for the one value that actually
+// decides an outcome.
+function randomSeed(): number {
+    return crypto.getRandomValues(new Uint32Array(1))[0];
+}
 
 function makeParticles(): Particle[] {
     return Array.from({ length: PARTICLE_COUNT }, () => ({
@@ -328,7 +358,7 @@ function drawPocketAmount(ctx: CanvasRenderingContext2D, x: number, y: number, t
 // shape SlotMachine.tsx's reels use, ported into plain canvas draws since this board is one
 // continuous canvas (a ball needs to visibly fly in front of this, which only works if it's
 // painted in the same pass as everything else, not a separate DOM layer).
-function drawReelDisplay(ctx: CanvasRenderingContext2D, now: number, anim: ReelAnimState | null) {
+function drawReelDisplay(ctx: CanvasRenderingContext2D, now: number, anim: ReelAnimState | null, awaitingResult: boolean) {
     const { x, y, width, height } = REEL_BOX;
     ctx.save();
     ctx.fillStyle = "rgba(8,8,14,0.92)";
@@ -350,6 +380,11 @@ function drawReelDisplay(ctx: CanvasRenderingContext2D, now: number, anim: ReelA
             const elapsed = now - anim.startTime;
             const stopAt = REEL_SPIN_MS + (REEL_STOP_STAGGER_MS[i] ?? 0);
             symbol = elapsed < stopAt ? REEL_FLICKER_POOL[Math.floor(elapsed / REEL_FLICKER_INTERVAL_MS) % REEL_FLICKER_POOL.length] : REEL_SYMBOLS[anim.symbols[i]] ?? "❔";
+        } else if (awaitingResult) {
+            // A chucker was hit but the batch reporting it hasn't come back yet (see
+            // ReelQueueItem's own comment) - keeps flickering indefinitely rather than "landing",
+            // since there's nothing to land on yet.
+            symbol = REEL_FLICKER_POOL[Math.floor(now / REEL_FLICKER_INTERVAL_MS) % REEL_FLICKER_POOL.length];
         }
         ctx.fillStyle = "rgba(255,255,255,0.92)";
         ctx.fillText(symbol, cx, y + 1);
@@ -380,13 +415,15 @@ function drawReelDisplay(ctx: CanvasRenderingContext2D, now: number, anim: ReelA
 
 /**
  * The reusable Pachinko board - canvas analog of PlinkoBoard, but physics is isomorphic now
- * (see src/shared/pachinko/pachinkoPhysics.ts), not server-only: launchTicket claims a ball and
- * hands back a random seed near-instantly (no physics compute at all), this component replays
- * that exact seed itself off the main thread (see usePachinkoSimWorker) for an instant local
- * preview it animates immediately, and confirmLaunch fires in the background to get the
- * server's own authoritative replay of the same seed - the one that actually decides what a
- * shot paid, never anything this component's own local run claims. See pachinko.ts's own file
- * header for the full protocol and confirmFired below for how the two get reconciled.
+ * (see src/shared/pachinko/pachinkoPhysics.ts) and firing is fully client-first: every shot
+ * generates its own seed and sequence number locally (randomSeed/nextSeqRef), reads gate state
+ * from this component's own local economy mirror (localGateStateRef, see
+ * src/shared/pachinko/economy.ts), runs the sim worker, and animates immediately - zero network
+ * dependency between pressing fire and the ball moving. Fired shots are queued and reported to
+ * POST /launch/batch in the background (see flushBatch) - the server is the sole authority on
+ * what actually happened, replaying each shot's seed itself; this component's own local run is
+ * only ever an optimistic preview, corrected once a batch response reconciles it (see
+ * reconcileBatch). See pachinko.ts's own file header for the full protocol.
  *
  * The economy is ball-only: every catch adds balls to the session's own ballsRemaining, never
  * cheddar directly (see pachinko.ts). The board shows the tray's current cash value; the Cash
@@ -406,11 +443,11 @@ export default function PachinkoBoard({
     bonusPocketBalls,
     sideTulipBalls,
     attackerBalls,
+    jackpotOpenMs,
     launchPowerRange,
     pricePerBall,
     isResuming,
-    launchTicket,
-    confirmLaunch,
+    reportBatch,
     reup,
     isReuping,
     onCashOut,
@@ -425,16 +462,14 @@ export default function PachinkoBoard({
     const rafRef = useRef<number | null>(null);
     const fireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const activeBallsRef = useRef<Map<number, ActiveBall>>(new Map());
-    const pendingLaunchesRef = useRef(0);
-    const latestAppliedSeqRef = useRef(0);
-    // Confirms now resolve over the network, independently of the RAF loop - under hold-to-fire
-    // a burst of them can land within milliseconds of each other, and calling onSessionUpdate
-    // (a setState in the parent) once per confirm would fire a separate uncoalesced React
-    // re-render for each one, competing with the launch slider's own pointer-move handling for
-    // the main thread (this is what made dragging feel unresponsive - confirms used to be
-    // implicitly rate-limited by each ball's multi-second flight animation finishing in the tick
-    // loop; now they aren't). Every session-affecting confirm merges into this ref instead, and
-    // the tick loop below flushes it to onSessionUpdate at most once per animation frame.
+    // Session updates now come from two places that can both fire within milliseconds of each
+    // other under hold-to-fire: this component's own optimistic per-shot update (fireOnce, below)
+    // and a batch reconciliation (reconcileBatch). Calling onSessionUpdate (a setState in the
+    // parent) once per shot would fire a separate uncoalesced React re-render for each one,
+    // competing with the launch slider's own pointer-move handling for the main thread (this is
+    // what made dragging feel unresponsive before). Every session-affecting update merges into
+    // this ref instead, and the tick loop below flushes it to onSessionUpdate at most once per
+    // animation frame.
     const pendingSessionPatchRef = useRef<Partial<PachinkoSession> | null>(null);
     const reelQueueRef = useRef<ReelQueueItem[]>([]);
     const currentReelAnimRef = useRef<ReelAnimState | null>(null);
@@ -445,13 +480,83 @@ export default function PachinkoBoard({
     sessionRef.current = session;
     const launchPowerRef = useRef(launchPower);
     launchPowerRef.current = launchPower;
+    // flushBatch (below) is called from inside the tick RAF loop's own closure, which - like
+    // every callback prop this board holds onto across renders - needs the CURRENT reportBatch,
+    // not whatever identity it happened to have on the render the loop's effect last ran.
+    const reportBatchRef = useRef(reportBatch);
+    reportBatchRef.current = reportBatch;
 
-    const ballsRemainingRef = useRef(session?.ballsRemaining ?? 0);
-    useEffect(() => {
-        ballsRemainingRef.current = session?.ballsRemaining ?? 0;
-    }, [session?.ballsRemaining]);
+    // This component's own local mirror of the round's economy (see
+    // src/shared/pachinko/economy.ts) - what fireOnce actually reads and writes synchronously on
+    // every shot, since waiting on the session prop to round-trip through React state (or worse,
+    // through a batch response) would reintroduce exactly the kind of lag this whole redesign
+    // exists to remove. Reset wholesale when the round itself changes (fresh buy / resumed
+    // session) and nudged by exactly a reup's own delta when one lands - see the effect below.
+    const localGateStateRef = useRef<EconomyGateState>({
+        ballsRemaining: session?.ballsRemaining ?? 0,
+        leftTulipOpen: session?.leftTulipOpen ?? false,
+        rightTulipOpen: session?.rightTulipOpen ?? false,
+        attackerOpenUntil: session?.attackerOpenUntil ?? 0,
+        jackpotOpenUntil: session?.jackpotOpenUntil ?? 0,
+    });
+    const lastSyncedRoundIdRef = useRef<string | null>(session?.roundId ?? null);
+    const lastSyncedBallsTotalRef = useRef<number>(session?.ballsTotal ?? 0);
+    // This board's own local firing-order cursor - assigned to each shot as it fires (see
+    // fireOnce) and never reused, resumed from the server's own lastProcessedSeq on load/reopen
+    // so it can't collide with seqs an earlier visit already got processed (see PachinkoSession's
+    // own comment on the field).
+    const nextSeqRef = useRef(session?.lastProcessedSeq ?? 0);
+    // The highest seq this board has already folded a batch result for - guards reconcileBatch
+    // against re-applying the same correction twice if responses ever arrive with overlapping
+    // seqs (shouldn't normally happen given processBatch's own idempotency, but cheap to guard).
+    const lastReconciledSeqRef = useRef(session?.lastProcessedSeq ?? 0);
+    // What THIS shot's own optimistic applyShotOutcome call assumed its ballsAwarded was (0 for
+    // chucker/gutter, exact for bonus/tulip/attacker, a pool-based estimate for jackpot) - kept
+    // per-seq so reconcileBatch can correct localGateStateRef.ballsRemaining by exactly the
+    // difference between that guess and the server's own authoritative figure, never more.
+    // Entries are deleted once reconciled so this can't grow unbounded across a long session.
+    const shotAssumptionsRef = useRef<Map<number, number>>(new Map());
+    // Shots fired locally but not yet included in a request to /launch/batch - see flushBatch.
+    const pendingShotsRef = useRef<QueuedShot[]>([]);
+    const lastFlushAtRef = useRef(0);
+    const flushInFlightRef = useRef(false);
+    // The currently in-flight flush's own promise, if any - lets flushAllPending (Cash Out) await
+    // whatever's already in flight instead of racing a second overlapping request against it.
+    const flushPromiseRef = useRef<Promise<void> | null>(null);
 
     const plungerReleaseRef = useRef<(() => void) | null>(null);
+
+    // Keeps the local economy mirror in step with session changes that DIDN'T originate from this
+    // component's own firing/reconciliation - a fresh buy or a resumed round (roundId changes, a
+    // full reset from the server's own snapshot) and a reup on the current round (ballsTotal
+    // grows - see Pachinko.tsx's applyBuyResponse - by exactly the number of balls just bought,
+    // applied as a delta on top of whatever the local mirror already has rather than overwritten
+    // wholesale, so a reup landing mid-hold-to-fire can't stomp balls a shot already credited
+    // locally but hasn't made it back into the session prop yet).
+    useEffect(() => {
+        if (!session) {
+            return;
+        }
+        if (session.roundId !== lastSyncedRoundIdRef.current) {
+            lastSyncedRoundIdRef.current = session.roundId;
+            lastSyncedBallsTotalRef.current = session.ballsTotal;
+            nextSeqRef.current = session.lastProcessedSeq;
+            lastReconciledSeqRef.current = session.lastProcessedSeq;
+            shotAssumptionsRef.current.clear();
+            pendingShotsRef.current = [];
+            localGateStateRef.current = {
+                ballsRemaining: session.ballsRemaining,
+                leftTulipOpen: session.leftTulipOpen,
+                rightTulipOpen: session.rightTulipOpen,
+                attackerOpenUntil: session.attackerOpenUntil,
+                jackpotOpenUntil: session.jackpotOpenUntil,
+            };
+        } else if (session.ballsTotal !== lastSyncedBallsTotalRef.current) {
+            const delta = session.ballsTotal - lastSyncedBallsTotalRef.current;
+            lastSyncedBallsTotalRef.current = session.ballsTotal;
+            localGateStateRef.current = { ...localGateStateRef.current, ballsRemaining: localGateStateRef.current.ballsRemaining + delta };
+        }
+    }, [session]);
 
     const draw = (now: number, hotPockets: Set<string>) => {
         const canvas = canvasRef.current;
@@ -547,7 +652,7 @@ export default function PachinkoBoard({
 
         // Central digital reel - drawn here (after the nail field, before the ball) so a ball
         // still visibly flies in front of it, matching a real screen module's own depth.
-        drawReelDisplay(ctx, now, currentReelAnimRef.current);
+        drawReelDisplay(ctx, now, currentReelAnimRef.current, !currentReelAnimRef.current && (reelQueueRef.current[0]?.pending ?? false));
 
         // Stars under the reel: one ⭐ per queued spin (excluding the currently-animating one).
         // Gold stars, centered under the reel box, so rapid chucker catches visibly stack.
@@ -847,32 +952,39 @@ export default function PachinkoBoard({
             }
 
             // Reel spin queue: if the current animation has fully finished (all reels landed +
-            // glow elapsed) and there's a queued spin waiting, start the next one.
+            // glow elapsed) and there's a queued spin waiting WITH real data (never promote a
+            // still-pending placeholder - see ReelQueueItem's own comment), start the next one.
             if (currentReelAnimRef.current) {
                 const lastStopAt = REEL_SPIN_MS + (REEL_STOP_STAGGER_MS[REEL_STOP_STAGGER_MS.length - 1] ?? 0);
                 const finishedAt = currentReelAnimRef.current.startTime + lastStopAt + REEL_RESULT_GLOW_MS;
                 if (now >= finishedAt) {
                     // The attacker only actually opens once ITS OWN spin has visually landed on
                     // the three-of-a-kind that earned it - apply the deferred update right as
-                    // that spin's animation concludes, not the instant the catch's response
-                    // arrived (see where this is queued, above). Also merged into the pending
-                    // patch (see pendingSessionPatchRef) rather than applied directly, so it
-                    // can't land as a second separate re-render in the same frame as any other
-                    // confirm that happens to resolve right now.
-                    if (currentReelAnimRef.current.attackerOpenUntil !== undefined && sessionRef.current) {
+                    // that spin's animation concludes, not the instant the batch response
+                    // reporting it arrived (see reconcileBatch). Folded into the local mirror
+                    // immediately (so the very next shot reads the post-open gate correctly) and
+                    // merged into the pending patch (see pendingSessionPatchRef) rather than
+                    // applied directly, so it can't land as a second separate re-render in the
+                    // same frame as any other update that happens to land right now.
+                    if (currentReelAnimRef.current.attackerOpenUntil !== undefined) {
+                        localGateStateRef.current = { ...localGateStateRef.current, attackerOpenUntil: currentReelAnimRef.current.attackerOpenUntil };
                         pendingSessionPatchRef.current = { ...pendingSessionPatchRef.current, attackerOpenUntil: currentReelAnimRef.current.attackerOpenUntil };
                     }
-                    if (reelQueueRef.current.length > 0) {
+                    if (reelQueueRef.current.length > 0 && !reelQueueRef.current[0].pending) {
                         const next = reelQueueRef.current.shift()!;
                         currentReelAnimRef.current = { symbols: next.symbols, matchTier: next.matchTier, startTime: now, attackerOpenUntil: next.attackerOpenUntil };
                     } else {
                         currentReelAnimRef.current = null;
                     }
                 }
-            } else if (reelQueueRef.current.length > 0) {
+            } else if (reelQueueRef.current.length > 0 && !reelQueueRef.current[0].pending) {
                 const next = reelQueueRef.current.shift()!;
                 currentReelAnimRef.current = { symbols: next.symbols, matchTier: next.matchTier, startTime: now, attackerOpenUntil: next.attackerOpenUntil };
             }
+
+            // Cheap due-check every frame - see flushBatch's own comment. Actually posts only
+            // when a threshold (queue size or time since last flush) is met; a no-op otherwise.
+            flushBatch();
 
             // Flush at most once per frame - see pendingSessionPatchRef's own comment. Any
             // number of confirms can have merged into it since the last flush; this is the one
@@ -911,138 +1023,188 @@ export default function PachinkoBoard({
     const ballsRemaining = session?.ballsRemaining ?? 0;
     const canLaunch = !isResuming && ballsRemaining > 0;
 
-    // What actually scores a shot - called the instant a ticket comes back (in parallel with the
-    // local preview simulation below, not after it), and again on retry if it fails. Never
-    // anything the firing loop waits on: a slow or repeatedly-failing confirm only means this one
-    // ball's credit is delayed, not that hold-to-fire itself should stop (that blanket "any single
-    // failure kills the whole session" behavior was the actual bug behind Pachinko becoming
-    // unplayable under load - see the investigation this whole ticket/confirm redesign answers).
-    // The server has its own safety net regardless (a stale ticket gets opportunistically settled
-    // on the player's next launch, or by the stale-round sweep if they stop playing entirely), so
-    // giving up after a few local retries is safe, not a real loss.
-    const CONFIRM_MAX_ATTEMPTS = 4;
-    const CONFIRM_RETRY_DELAY_MS = 1000;
-    const confirmFired = (seed: number, seq: number, attempt = 0) => {
-        confirmLaunch(seed)
-            .then((confirmed) => {
-                if (confirmed.alreadySettled) {
-                    return;
-                }
-                const outcome = confirmed.outcome!;
-                const ballsAwarded = confirmed.ballsAwarded!;
+    // Sends whatever's queued in pendingShotsRef to POST /launch/batch - see the file header and
+    // BATCH_SIZE_THRESHOLD/BATCH_TIME_THRESHOLD_MS's own comment for when. Never something firing
+    // waits on: called opportunistically (after every shot, and once per tick-loop frame so a
+    // short burst that never hits the count threshold still flushes on the time one) and a no-op
+    // whenever neither threshold is actually due, or a flush is already in flight - the next due
+    // check picks up whatever's accumulated since. `force` skips both threshold checks (but still
+    // respects "already in flight" - see flushAllPending for how Cash Out waits that out instead
+    // of racing it).
+    const flushBatch = (force = false): Promise<void> => {
+        if (flushInFlightRef.current) {
+            return flushPromiseRef.current ?? Promise.resolve();
+        }
+        if (pendingShotsRef.current.length === 0) {
+            return Promise.resolve();
+        }
+        const due = force || pendingShotsRef.current.length >= BATCH_SIZE_THRESHOLD || Date.now() - lastFlushAtRef.current >= BATCH_TIME_THRESHOLD_MS;
+        if (!due) {
+            return Promise.resolve();
+        }
 
-                // Misses don't get a popup - they're the most common outcome by far, so
-                // surfacing them would mostly just be clutter; only an actual catch (even a
-                // 0-ball one like a non-matching chucker spin) is worth calling out.
-                if (outcome !== "gutter") {
-                    const calloutId = nextCalloutId++;
-                    setCallouts((prev) => [...prev, { id: calloutId, outcome, ballsAwarded, won: ballsAwarded > 0 }]);
-                    setTimeout(() => setCallouts((prev) => prev.filter((c) => c.id !== calloutId)), CALLOUT_MS);
-                }
+        const shots = pendingShotsRef.current;
+        pendingShotsRef.current = [];
+        lastFlushAtRef.current = Date.now();
+        flushInFlightRef.current = true;
 
-                // The chucker's reel spin only exists once confirmed (see pachinko.ts - it's
-                // decided fresh at confirm time, not predictable from the client's own seed).
-                // Each catch queues a spin; they animate one at a time so rapid chucker hits
-                // stack visually instead of clobbering each other. Capped at MAX_QUEUED_SPINS
-                // total (current + queued) - once full, further catches are silently dropped.
-                let deferAttackerUpdate = false;
-                if (outcome === "chucker" && confirmed.reelSpin) {
-                    const totalQueued = (currentReelAnimRef.current ? 1 : 0) + reelQueueRef.current.length;
-                    if (totalQueued < MAX_QUEUED_SPINS) {
-                        const isThreeMatch = confirmed.reelSpin.matchTier === "three";
-                        reelQueueRef.current.push({
-                            symbols: confirmed.reelSpin.symbols,
-                            matchTier: confirmed.reelSpin.matchTier,
-                            // The attacker only actually opens once this spin has visually landed
-                            // on the three-of-a-kind that earned it (applied by the tick loop
-                            // below) - not the instant it's queued here.
-                            attackerOpenUntil: isThreeMatch ? confirmed.attackerOpenUntil : undefined,
-                        });
-                        deferAttackerUpdate = isThreeMatch;
-                    }
-                }
+        const promise = reportBatchRef
+            .current(shots)
+            .then((response) => reconcileBatch(response))
+            .catch(() => {
+                // Never blocks firing (see the file header) - put the shots back so the next due
+                // flush retries them; nothing about a failed report undoes what already fired
+                // locally, it just means the server doesn't know about it yet.
+                pendingShotsRef.current = [...shots, ...pendingShotsRef.current];
+            })
+            .finally(() => {
+                flushInFlightRef.current = false;
+                flushPromiseRef.current = null;
+            });
+        flushPromiseRef.current = promise;
+        return promise;
+    };
 
-                // Confirms can resolve out of order under hold-to-fire - only apply this one's
-                // session state if it's actually the freshest shot to confirm so far, so a late
-                // confirm for an earlier ball can never regress ballsRemaining or stomp a more
-                // recent tulip/attacker state change. Merges into the pending patch rather than
-                // calling onSessionUpdate directly - see pendingSessionPatchRef's own comment for
-                // why. attackerOpenUntil is deliberately left out of the patch when deferred, not
-                // set to the current value, so it doesn't clobber whatever an earlier still-
-                // pending patch (or the eventual reel-landing update below) is holding there.
-                if (seq > latestAppliedSeqRef.current && sessionRef.current) {
-                    latestAppliedSeqRef.current = seq;
-                    pendingSessionPatchRef.current = {
-                        ...pendingSessionPatchRef.current,
-                        ballsRemaining: confirmed.ballsRemaining!,
-                        leftTulipOpen: confirmed.leftTulipOpen!,
-                        rightTulipOpen: confirmed.rightTulipOpen!,
-                        jackpotOpenUntil: confirmed.jackpotOpenUntil!,
-                        ...(deferAttackerUpdate ? {} : { attackerOpenUntil: confirmed.attackerOpenUntil! }),
+    // Folds a batch response's per-shot results into the local economy mirror and reel queue -
+    // the correction point for the two things this board can't predict exactly on its own (see
+    // economy.ts's own header): a chucker's real reel award, and a jackpot's real pool-derived
+    // one. Every other outcome is fully deterministic from constants both sides already know, so
+    // this correction should normally be 0.
+    const reconcileBatch = (response: PachinkoBatchResponse) => {
+        for (const result of response.results) {
+            if (result.seq <= lastReconciledSeqRef.current) {
+                continue; // shouldn't normally happen (processBatch is idempotent by seq), but cheap to guard
+            }
+            lastReconciledSeqRef.current = result.seq;
+
+            const assumed = shotAssumptionsRef.current.get(result.seq) ?? 0;
+            shotAssumptionsRef.current.delete(result.seq);
+            const correction = result.ballsAwarded - assumed;
+            if (correction !== 0) {
+                localGateStateRef.current = { ...localGateStateRef.current, ballsRemaining: localGateStateRef.current.ballsRemaining + correction };
+                pendingSessionPatchRef.current = { ...pendingSessionPatchRef.current, ballsRemaining: localGateStateRef.current.ballsRemaining };
+            }
+
+            if (result.outcome === "chucker" && result.reelSpin) {
+                // Fills in the OLDEST still-pending placeholder (see ReelQueueItem) - reel spins
+                // are queued in fire order and results arrive in seq order, so FIFO matching is
+                // exact. If it's already gone (the queue was full when this shot fired - see
+                // MAX_QUEUED_SPINS), there's nothing left to fill in; the balls correction above
+                // still applies regardless of whether the animation had room for it.
+                const idx = reelQueueRef.current.findIndex((item) => item.pending);
+                if (idx !== -1) {
+                    const isThreeMatch = result.reelSpin.matchTier === "three";
+                    reelQueueRef.current[idx] = {
+                        symbols: result.reelSpin.symbols,
+                        matchTier: result.reelSpin.matchTier,
+                        // The attacker only actually opens once THIS spin has visually landed on
+                        // its own three-of-a-kind (applied by the tick loop above) - not the
+                        // instant the batch response reporting it arrives.
+                        attackerOpenUntil: isThreeMatch ? result.attackerOpenUntil : undefined,
+                        pending: false,
                     };
                 }
-            })
-            .catch(() => {
-                if (attempt < CONFIRM_MAX_ATTEMPTS) {
-                    setTimeout(() => confirmFired(seed, seq, attempt + 1), CONFIRM_RETRY_DELAY_MS);
-                }
-                // Attempts exhausted - give up quietly rather than surfacing a scary error toast
-                // for something that's already self-healing server-side (see this function's own
-                // header).
-            });
+            }
+        }
+    };
+
+    // Cash Out needs the server's own authoritative ballsRemaining, which only reflects shots
+    // it's actually seen - flush whatever's still queued (retrying a few times if a flush fails
+    // outright) before letting the caller proceed. Waits out any flush already in flight rather
+    // than racing a second overlapping request against it.
+    const flushAllPending = async () => {
+        for (let attempt = 0; attempt < CASHOUT_FLUSH_MAX_ATTEMPTS; attempt++) {
+            if (flushPromiseRef.current) {
+                await flushPromiseRef.current;
+            }
+            if (pendingShotsRef.current.length === 0) {
+                return;
+            }
+            await flushBatch(true);
+        }
+    };
+
+    // Applies one shot's now-known outcome to the local economy mirror the instant the sim worker
+    // resolves it (see fireOnce) - purely local, no network dependency, which is the entire point
+    // of this redesign. Records what THIS shot assumed its ballsAwarded was (see
+    // shotAssumptionsRef) so reconcileBatch can correct it later if the server's own replay
+    // disagrees (only ever possible for chucker/jackpot - see economy.ts's own header).
+    const applyLocalOutcome = (seq: number, outcome: PachinkoOutcome) => {
+        const now = Date.now();
+        const { ballsAwarded, nextState } = applyShotOutcome(localGateStateRef.current, outcome, { bonusPocketBalls, sideTulipBalls, attackerBalls, jackpotOpenMs }, jackpotPool, pricePerBall, now);
+        localGateStateRef.current = nextState;
+        shotAssumptionsRef.current.set(seq, ballsAwarded);
+
+        pendingSessionPatchRef.current = {
+            ...pendingSessionPatchRef.current,
+            ballsRemaining: nextState.ballsRemaining,
+            leftTulipOpen: nextState.leftTulipOpen,
+            rightTulipOpen: nextState.rightTulipOpen,
+            jackpotOpenUntil: nextState.jackpotOpenUntil,
+            // attackerOpenUntil deliberately omitted - economy.ts never changes it locally (only
+            // a chucker's real reel spin can, and that's only known once reconcileBatch gets it
+            // back - see the tick loop's own reel-landing comment for where it actually applies).
+        };
+
+        // Misses don't get a popup - they're the most common outcome by far, so surfacing them
+        // would mostly just be clutter; only an actual catch (even a 0-ball one like a chucker
+        // hit, or a jackpot before its estimate can possibly be known - see economy.ts) is worth
+        // calling out.
+        if (outcome !== "gutter") {
+            const calloutId = nextCalloutId++;
+            setCallouts((prev) => [...prev, { id: calloutId, outcome, ballsAwarded, won: ballsAwarded > 0 }]);
+            setTimeout(() => setCallouts((prev) => prev.filter((c) => c.id !== calloutId)), CALLOUT_MS);
+        }
+
+        if (outcome === "chucker") {
+            const totalQueued = (currentReelAnimRef.current ? 1 : 0) + reelQueueRef.current.length;
+            if (totalQueued < MAX_QUEUED_SPINS) {
+                // The real reel result is decided server-only (see pachinkoReels.ts's own
+                // comment on why) - queue a pending placeholder now so the reel visibly starts
+                // spinning the instant the chucker is hit, filled in by reconcileBatch once the
+                // real symbols are known.
+                reelQueueRef.current.push({ symbols: ["ITEM_A", "ITEM_A", "ITEM_A"], matchTier: "none", pending: true });
+            }
+        }
+
+        flushBatch();
     };
 
     const fireOnce = () => {
-        if (ballsRemainingRef.current <= 0) {
+        const gateState = localGateStateRef.current;
+        if (gateState.ballsRemaining <= 0) {
             stopFiring();
             return;
         }
         if (activeBallsRef.current.size >= MAX_CONCURRENT_BALLS) {
             return;
         }
-        if (pendingLaunchesRef.current >= MAX_PENDING_LAUNCHES) {
-            return;
-        }
+
         const id = nextBallId++;
-        const seq = ++nextLaunchSeq;
+        const seq = ++nextSeqRef.current;
+        const seed = randomSeed();
+        const launchPower = launchPowerRef.current;
+        const now = Date.now();
+        // Mirrors pachinko.ts's own processBatch exactly: the chucker is active unless the
+        // attacker currently is (same physical gate, different behavior while open).
+        const attackerOpen = gateState.attackerOpenUntil > now;
+        const jackpotOpen = gateState.jackpotOpenUntil > now;
+
         activeBallsRef.current.set(id, { id, phase: "pending" });
-        ballsRemainingRef.current -= 1;
-        pendingLaunchesRef.current += 1;
+        pendingShotsRef.current.push({ seq, seed, launchPower });
 
-        launchTicket(launchPowerRef.current)
-            .then((ticket) => {
-                pendingLaunchesRef.current -= 1;
-
-                // Confirm runs in the background immediately, in parallel with the local preview
-                // below - it doesn't need to wait on the (purely visual) simulation to finish,
-                // and never blocks the next shot from firing.
-                confirmFired(ticket.seed, seq);
-
-                // Instant local preview - the whole point of the ticket/confirm split. Never
-                // trusted for scoring (see confirmFired above), just what the player sees fly.
-                simulate({
-                    seed: ticket.seed,
-                    launchPower: ticket.launchPower,
-                    chuckerActive: ticket.chuckerActive,
-                    attackerActive: ticket.attackerActive,
-                    jackpotActive: ticket.jackpotActive,
-                }).then(({ trajectory, outcome }) => {
-                    // The ball may have already been removed (e.g. the player closed the game)
-                    // by the time the worker responds - don't resurrect it.
-                    if (activeBallsRef.current.has(id)) {
-                        activeBallsRef.current.set(id, { id, phase: "falling", trajectory, outcome, startTime: performance.now() });
-                    }
-                });
-            })
-            .catch(() => {
-                pendingLaunchesRef.current -= 1;
-                activeBallsRef.current.delete(id);
-                ballsRemainingRef.current += 1;
-                // Deliberately NOT calling stopFiring() here - a single failed ticket request
-                // (a network hiccup, a transient 409) shouldn't end the whole hold-to-fire
-                // session. The ballsRemainingRef <= 0 check at the top of this function is the
-                // only thing that should ever stop firing on its own.
-            });
+        // Runs off the main thread; resolves in tens of ms, not a network round trip - this is
+        // what both animates the ball AND (via applyLocalOutcome) updates the economy mirror,
+        // with zero network dependency between pressing fire and either of those happening.
+        simulate({ seed, launchPower, chuckerActive: !attackerOpen, attackerActive: attackerOpen, jackpotActive: jackpotOpen }).then(({ trajectory, outcome }) => {
+            // The ball may have already been removed (e.g. the player cashed out/closed the
+            // game) by the time the worker responds - don't resurrect it or score it.
+            if (!activeBallsRef.current.has(id)) {
+                return;
+            }
+            activeBallsRef.current.set(id, { id, phase: "falling", trajectory, outcome, startTime: performance.now() });
+            applyLocalOutcome(seq, outcome);
+        });
     };
 
     function startFiring() {
@@ -1173,11 +1335,16 @@ export default function PachinkoBoard({
                 ))}
                 {/* The only way a tray ever converts back to real cheddar - deliberate, not
                     automatic on close (see Pachinko.tsx's own handleCashOut comment for why an
-                    unattended cash-out on navigate-away used to race in-flight launches). */}
+                    unattended cash-out on navigate-away used to race in-flight launches). Flushes
+                    any not-yet-reported shots first (see flushAllPending) so the server's own
+                    ballsRemaining is what actually gets cashed out, never this board's own guess. */}
                 <Button
                     variant="contained"
                     color="warning"
-                    onClick={onCashOut}
+                    onClick={() => {
+                        stopFiring();
+                        flushAllPending().finally(onCashOut);
+                    }}
                     disabled={isCashingOut || isResuming || ballsRemaining <= 0}
                     sx={{ borderRadius: 999, px: 3, fontWeight: 700, textTransform: "none" }}
                 >

@@ -4,32 +4,33 @@
  * batch of balls, then launch them one at a time" - a multi-step session built on
  * XenCasinoRound, not a one-shot durable record.
  *
- * Ticket/confirm launch protocol, not a single request-response: the old design ran the whole
- * matter-js simulation inline in /launch, so every ball's flight couldn't even START animating
- * client-side until a full network round trip PLUS the physics compute finished. Under sustained
- * hold-to-fire that backlog of not-yet-answered requests could take several real seconds to
- * drain, reading as balls still launching well after letting go of the fire button, and any
- * single slow/failed request risked derailing the whole session.
+ * Fully client-fired, server-verified-after-the-fact - not a request/response per shot at all.
+ * Two earlier designs both still put a network call in the critical path of firing (first a
+ * synchronous inline physics simulation, then a "cheap ticket" call before the client could even
+ * start its own local preview) and both still felt laggy under any real-world network latency,
+ * because *some* server round trip always had to complete before a ball could move. This design
+ * has none: the client generates its own seed and sequence number, reads gate state from its own
+ * locally-tracked mirror of the round's economy (see PachinkoBoard.tsx), and fires immediately -
+ * zero network dependency between pressing fire and the ball moving.
  *
- * Now: POST /launch does no physics at all - it just claims a ball, generates a random seed, and
- * hands back {seed, launchPower, gate state} near-instantly. The client immediately replays
- * pachinkoPhysics.simulateShot() with that exact seed ITSELF (see PachinkoBoard.tsx's sim
- * worker - the shared, isomorphic src/shared/pachinko/pachinkoPhysics.ts runs unmodified on
- * both sides) and starts animating the ball right away, no waiting on the server for an outcome.
- * POST /launch/confirm then re-runs that same seeded simulation server-side (on the existing
- * physics worker pool) in the background - not blocking the next shot - and THAT replay, never
- * anything the client claims, is what actually credits balls, moves gate state, and feeds the
- * jackpot pool. The client's own local run is a preview only; if it ever disagreed with the
- * server's replay (matter-js has no internal randomness of its own - see pachinkoPhysics.ts's
- * header - so this should only ever be floating-point drift across environments, not a real
- * discrepancy), the server's replay is what actually counts, unconditionally.
+ * What the client fires is only ever a preview. It queues {seq, seed, launchPower} for every shot
+ * and reports them to POST /launch/batch in the background, batched and never blocking further
+ * firing. The server is the sole authority on what actually happened: it processes a batch's
+ * shots in strict seq order, re-deriving gate state and outcomes itself via
+ * pachinkoPhysics.simulateShot() (the same isomorphic, seeded function the client's own local
+ * preview uses - see src/shared/pachinko/pachinkoPhysics.ts) against its OWN accumulating gate
+ * state, never anything the client reports about outcome or gate state - only the seed and the
+ * firing order are taken from the client, everything else is independently re-derived. A shot
+ * whose seq was already processed (a retried/resubmitted batch) is skipped, making batch
+ * submission safely idempotent; a client that claims to have fired more balls than it had simply
+ * has the extra shots silently dropped once ballsRemaining would go negative.
  *
  * The economy is ball-only, not instant cash: every pocket (bonus, tulip, chucker, attacker,
- * jackpot) awards more balls, credited straight into the round's own ballsRemaining once its
- * ticket is confirmed - there's no per-ball money transfer or deferred settlement step the way
- * earlier drafts of this game had, because no real money moves on a launch at all. Real cheddar
- * only moves on /buy, /cashout, and the stale-round recovery sweep's refund of never-fired balls
- * - see /cashout's own comment for how it stays crash-recoverable the same way /buy already is.
+ * jackpot) awards more balls, credited once a batch containing that shot is processed - there's
+ * no per-ball money transfer or deferred settlement step the way earlier drafts of this game had,
+ * because no real money moves on a launch at all. Real cheddar only moves on /buy, /cashout, and
+ * the stale-round recovery sweep's refund of never-fired balls - see /cashout's own comment for
+ * how it stays crash-recoverable the same way /buy already is.
  *
  * Tulip open/closed state and the attacker's/jackpot's own open-until timestamps live on the
  * player's own round (conditions.*), not shared across players - each player works through their
@@ -81,8 +82,7 @@ import {
     MAX_LAUNCH_POWER,
 } from "../../../shared/pachinko/pachinkoLayout";
 import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, ATTACKER_OPEN_MS, ATTACKER_BALLS, JACKPOT_OPEN_MS, CONTRIBUTION_RATE, JACKPOT_SEED, CASH_OUT_RATE, MAX_PAYOUT, jackpotBalls, cashOutAmount } from "./pachinkoPayouts";
-import { PachinkoOutcome, ShotResult, TrajectorySample, TRAJECTORY_SAMPLE_MS } from "../../../shared/pachinko/pachinkoPhysics";
-import { randomSeed } from "../../../shared/pachinko/prng";
+import { PachinkoOutcome, ShotResult, TrajectorySample } from "../../../shared/pachinko/pachinkoPhysics";
 import { spinReel, ReelSpinResult } from "./pachinkoReels";
 import Piscina from "piscina";
 import path from "path";
@@ -102,29 +102,29 @@ const physicsPool = new Piscina<PachinkoPhysicsTask, ShotResult>({
     filename: path.resolve(__dirname, "pachinkoPhysicsWorkerEntry.cjs"),
 });
 
-// Backstop only, now checked at /confirm time (not /launch, which no longer touches physics at
-// all) - a saturated pool means the physics queue is deep enough that a new job would take a
-// while. Generous on purpose: under normal load this should never trigger, and confirms are a
-// background, fire-and-forget-with-retry concern from the client's perspective, not something
-// blocking the next shot.
+// Backstop only, checked before processing a batch - a saturated pool means the physics queue is
+// deep enough that a new job would take a while. Generous on purpose: under normal load this
+// should never trigger, and batch processing is a background, fire-and-forget-with-retry concern
+// from the client's firing loop perspective, not something blocking the next shot.
 const MAX_QUEUED_PHYSICS_JOBS = 40;
 
-// /confirm's gate-state write (tulip/attacker/jackpot) is guarded on the exact values it was
-// computed from and retried on conflict - see that handler's own comment. Bounded well above
-// MAX_CONCURRENT_BALLS (20, PachinkoBoard.tsx) worth of plausible pile-up so a retry storm still
-// resolves within one request rather than 409ing a legitimate catch.
+// A batch's gate-state write (tulip/attacker/jackpot/ballsRemaining/lastProcessedSeq) is guarded
+// on the exact values it was computed from and retried on conflict - see processBatch's own
+// comment. Bounded well above how many concurrent writers could plausibly collide (duplicate
+// tabs, a retried batch racing a fresh one) so a retry storm still resolves within one request.
 const MAX_LAUNCH_WRITE_ATTEMPTS = 25;
 
-// A ticket nobody ever confirms (client crashed, tab closed mid-flight) shouldn't strand its
-// already-claimed ball forever - the stale-round sweep settles any still-pending tickets itself
-// (see confirmTicket below, its only other caller) before computing what's left to refund.
-const TICKET_TTL_MS = 60 * 1000;
-
 interface PachinkoBallResult {
+    seq: number; // the client-assigned shot sequence number this result came from - lets the client correlate a batch response back to which locally-fired ball(s) it covers
     outcome: PachinkoOutcome;
     ballsAwarded: number;
-    trajectory: TrajectorySample[];
     reelSpin?: ReelSpinResult; // only present on a chucker catch - see pachinkoReels.ts
+    // Only present on a chucker catch - THIS shot's own resulting attacker window, not the
+    // batch's final one. A batch can contain more than one three-of-a-kind (each stacking time on
+    // top of the last - see the loop below), so the client needs each shot's own post-state to
+    // reconcile its reel-queue animation correctly instead of applying the final batch value to
+    // every queued spin.
+    attackerOpenUntil?: number;
 }
 
 interface PachinkoTopup {
@@ -137,21 +137,18 @@ interface CashOutPending {
     amount: number;
 }
 
-// One claimed-but-not-yet-scored shot. Everything simulateShot needs to replay it is captured
-// here at issue time so /confirm (and the stale-round sweep) never has to trust anything the
-// client sends back except which seed it's confirming.
-interface PendingTicket {
+// One shot as the client reports it - just enough to replay it (seed + launchPower) plus its
+// firing order (seq). Nothing about outcome or gate state is ever included; see the file header
+// for why those are only ever independently re-derived server-side, never trusted from a report.
+interface IncomingShot {
+    seq: number;
     seed: number;
     launchPower: number;
-    chuckerActive: boolean;
-    attackerActive: boolean;
-    jackpotActive: boolean;
-    issuedAt: number; // epoch ms - also what the jackpot window's landedAt anchors to, see confirmTicket
 }
 
 interface PachinkoConditions {
     ballsTotal: number; // balls ever purchased - only grows from /buy or /reup, never from in-round catches, so "spent" stays an honest reflection of real money in
-    ballsRemaining: number; // balls left to fire - grows from pocket catches, shrinks by 1 per launch ticket issued (not per confirm - firing always costs a ball the instant you commit to the shot)
+    ballsRemaining: number; // balls left to fire - grows from pocket catches, shrinks by 1 per shot actually processed (see processBatch) - not per shot merely reported, a client can report more than it can afford and the excess is just dropped
     pricePerBall: number;
     leftTulipOpen: boolean;
     rightTulipOpen: boolean;
@@ -159,7 +156,11 @@ interface PachinkoConditions {
     jackpotOpenUntil: number; // epoch ms; jackpot pays while Date.now() < this - 0 means never primed yet. Set the instant both tulips are simultaneously open, which also immediately resets both back to closed (see the tulip branches below) - there's no standing "primed" state, only this timed window.
     results: PachinkoBallResult[];
     topups: PachinkoTopup[];
-    pendingTickets: PendingTicket[]; // claimed, not yet confirmed - see PendingTicket
+    // Highest shot seq this round has ever processed (0 = none yet) - the server's own ordering
+    // cursor, never advanced by anything but a successfully-persisted processBatch call. Lets a
+    // resubmitted/retried batch safely skip whatever it already covered (see processBatch), and
+    // lets a resuming client (see /active) know where to continue its own local seq counter from.
+    lastProcessedSeq: number;
     // Set atomically the instant a cash-out claims the round's balls (before the real-money
     // transfer even starts), cleared once that transfer confirms. If the process dies in
     // between, the round's balls are already zeroed but the player hasn't been paid yet -
@@ -170,191 +171,205 @@ interface PachinkoConditions {
 
 const nailField = generateNailField(); // static geometry, computed once and reused for every /odds response
 
-// The one place a ticket actually gets scored - re-runs the exact seeded simulation the client
-// already showed a preview of, and is the SOLE source of truth for the outcome (nothing the
-// client claims is ever trusted or even looked at). Called from both the live /confirm route and
-// the stale-round sweep (a ticket nobody ever confirms still needs settling, not just refunding -
-// the ball was already fired, its cost already spent, so it has a real decided outcome due).
+// The one place any shot ever gets scored - see the file header for why the server never trusts
+// anything the client reports about outcome or gate state, only the seed and the firing order
+// (seq). Processes `shots` in strict ascending seq order, re-deriving both the outcome (via
+// simulateShot on the physics worker pool) and every gate-state transition (tulip toggle,
+// jackpot priming/window, attacker stacking, lapsed-tulip closeout - identical rules to what
+// this file always used) against the server's OWN accumulating state, never the client's.
+// Already-processed seqs (<=  the round's own lastProcessedSeq) are silently skipped, making a
+// resubmitted/retried batch safe to call more than once. If ballsRemaining would go negative
+// partway through, the rest of the batch is simply dropped - a client can't get credit for
+// shots it couldn't actually afford.
 //
-// Returns null when there's nothing to do: the seed doesn't match any currently-pending ticket,
-// either because it was already confirmed (a client retry racing its own earlier success) or
-// because it's bogus. Never a hard failure worth surfacing as an error in that case.
-async function confirmTicket(userId: string, seed: number): Promise<{ result: PachinkoBallResult; updatedConditions: PachinkoConditions } | null> {
-    const round = await XenCasinoRound.findActive(SLUG, userId);
-    if (!round) {
-        return null;
-    }
-    let liveConditions = round.conditions as PachinkoConditions;
-    const ticket = liveConditions.pendingTickets.find((t) => t.seed === seed);
-    if (!ticket) {
-        return null;
-    }
+// Returns null only when the round itself is gone (resolved/never existed) - not an error case,
+// just nothing left to do.
+async function processBatch(userId: string, shots: IncomingShot[]): Promise<{ newResults: PachinkoBallResult[]; updatedConditions: PachinkoConditions } | null> {
+    const ordered = [...shots].sort((a, b) => a.seq - b.seq);
 
-    // Fully decided before anything is persisted - see the file header. Runs on the physics
-    // worker pool (see physicsPool above), not inline on the main thread. Re-derives the exact
-    // same trajectory/outcome the client already showed a preview of, from the same seed - never
-    // anything the client itself reports.
-    const { trajectory, outcome }: ShotResult = await physicsPool.run({
-        seed: ticket.seed,
-        launchPower: ticket.launchPower,
-        chuckerActive: ticket.chuckerActive,
-        attackerActive: ticket.attackerActive,
-        jackpotActive: ticket.jackpotActive,
-    });
-
-    // ballsAwarded/reelSpin/poolContribution/resetPool depend only on `outcome` (already
-    // decided) plus one-shot randomness (spinReel, the jackpot pool read) - never on the
-    // board's own tulip/attacker/jackpot gate state, so these are safe to decide once.
-    let ballsAwarded = 0;
-    let poolContribution = 0;
-    let resetPool = false;
-    let reelSpin: ReelSpinResult | undefined;
-
-    if (outcome === "bonusLeft" || outcome === "bonusRight") {
-        ballsAwarded = BONUS_POCKET_BALLS;
-        poolContribution = liveConditions.pricePerBall * CONTRIBUTION_RATE;
-    } else if (outcome === "tulipLeft" || outcome === "tulipRight") {
-        ballsAwarded = SIDE_TULIP_BALLS;
-        poolContribution = liveConditions.pricePerBall * CONTRIBUTION_RATE;
-    } else if (outcome === "chucker") {
-        // Fires the board's own central reel gimmick - a real machine's "heso" -> LCD
-        // reel -> bonus round flow (see pachinkoReels.ts). A catch with no match or a
-        // two-of-a-kind opens nothing; only a three-of-a-kind match opens the attacker
-        // for ATTACKER_OPEN_MS, ADDED on top of whatever's currently left on the clock
-        // (not reset to it) - queued chucker catches landing close together under
-        // hold-to-fire stack their time instead of one clobbering another's.
-        reelSpin = spinReel();
-        ballsAwarded = reelSpin.ballsAwarded;
-        poolContribution = liveConditions.pricePerBall * CONTRIBUTION_RATE;
-    } else if (outcome === "attacker") {
-        // Physics only ever returns "attacker" while attackerActive was true, i.e. it
-        // was actually open for this shot - no need to re-check attackerOpen here.
-        ballsAwarded = ATTACKER_BALLS;
-        poolContribution = liveConditions.pricePerBall * CONTRIBUTION_RATE;
-    } else if (outcome === "jackpot") {
-        // Physics only ever returns "jackpot" while jackpotActive was true, i.e. within
-        // its own timed window - no need to re-check jackpotOpen here. Catching it closes
-        // the window immediately rather than letting it run out naturally.
-        const pool = await XenCasino.getPachinkoJackpotPool();
-        ballsAwarded = jackpotBalls(pool, liveConditions.pricePerBall);
-        resetPool = true;
-    } else {
-        poolContribution = liveConditions.pricePerBall * CONTRIBUTION_RATE;
-    }
-
-    const result: PachinkoBallResult = { outcome, ballsAwarded, trajectory, reelSpin };
-
-    // The client's own local preview already started flying this ball the instant the ticket
-    // arrived (see PachinkoBoard.tsx's sim worker) - not once THIS confirm response arrives,
-    // which could be a while after under hold-to-fire (confirms run in the background, not
-    // gating the next shot). A newly-primed jackpot window has to be anchored to when the client
-    // actually showed the catch (ticket.issuedAt + however long that flight took), not to now.
-    const now = Date.now();
-    const landedAt = ticket.issuedAt + Math.max(0, trajectory.length - 1) * TRAJECTORY_SAMPLE_MS;
-
-    // Everything below - tulip toggle, jackpot priming, attacker stacking, the lapsed-tulip
-    // closeout - depends on the board's CURRENT gate state, which by the time we get here may no
-    // longer match `liveConditions` (other tickets for this same round can confirm concurrently,
-    // same as launches always could). Guard the write on the exact gate fields this transition
-    // was computed from, and recompute against fresh state on conflict instead of blindly
-    // overwriting whatever another concurrent confirm already decided. Also guard on the ticket
-    // itself still being pending (`$pull`ed atomically alongside), so two racing confirms for the
-    // same seed can't both credit it.
     let updated: Awaited<ReturnType<typeof XenCasinoRound.applyConditionsUpdate>> = null;
+    let newResults: PachinkoBallResult[] = [];
+    let poolOps: Array<{ type: "contribute"; amount: number } | { type: "reset" }> = [];
+
     for (let attempt = 0; attempt < MAX_LAUNCH_WRITE_ATTEMPTS && !updated; attempt++) {
-        let nextLeftOpen = liveConditions.leftTulipOpen;
-        let nextRightOpen = liveConditions.rightTulipOpen;
-        let nextAttackerOpenUntil = liveConditions.attackerOpenUntil;
-        let nextJackpotOpenUntil = liveConditions.jackpotOpenUntil;
+        const round = await XenCasinoRound.findActive(SLUG, userId);
+        if (!round) {
+            return null;
+        }
+        const start = round.conditions as PachinkoConditions;
 
-        const jackpotWindowActive = liveConditions.jackpotOpenUntil > now;
-        if (outcome === "tulipLeft" || outcome === "tulipRight") {
-            if (jackpotWindowActive) {
-                // Both tulips are held open for the rest of an already-active jackpot
-                // window - a catch on either side still pays SIDE_TULIP_BALLS (handled
-                // above) but doesn't toggle the gate itself until the window resolves.
-            } else {
-                if (outcome === "tulipLeft") {
-                    nextLeftOpen = !liveConditions.leftTulipOpen;
-                } else {
-                    nextRightOpen = !liveConditions.rightTulipOpen;
-                }
-                // The instant both are simultaneously open is the priming moment - starts
-                // the jackpot's own timed window (see JACKPOT_OPEN_MS). Both tulips then
-                // stay open for the whole window (see jackpotWindowActive above and the
-                // "jackpot" outcome branch below), not reset immediately - catching the
-                // jackpot, or letting the window lapse, is what closes them again.
-                if (isJackpotPrimed(nextLeftOpen, nextRightOpen)) {
-                    nextJackpotOpenUntil = landedAt + JACKPOT_OPEN_MS;
-                }
+        let ballsRemaining = start.ballsRemaining;
+        let leftTulipOpen = start.leftTulipOpen;
+        let rightTulipOpen = start.rightTulipOpen;
+        let attackerOpenUntil = start.attackerOpenUntil;
+        let jackpotOpenUntil = start.jackpotOpenUntil;
+        let lastProcessedSeq = start.lastProcessedSeq;
+        // Tracks what the shared jackpot pool would read AFTER each poolOp queued so far in this
+        // attempt, without touching the real pool until this whole batch durably persists (see
+        // below) - a jackpot hit needs the live value to compute jackpotBalls, but the actual
+        // increment/reset side effects must never apply until the round write they're paired
+        // with has actually won, or a retried attempt would double-apply them.
+        let simulatedPool = await XenCasino.getPachinkoJackpotPool();
+
+        newResults = [];
+        poolOps = [];
+        const now = Date.now();
+
+        for (const shot of ordered) {
+            if (shot.seq <= lastProcessedSeq) {
+                continue; // already processed - safe to see again in a retried/resubmitted batch
             }
-        } else if (outcome === "chucker" && reelSpin && reelSpin.attackerOpenMs > 0) {
-            nextAttackerOpenUntil = Math.max(now, liveConditions.attackerOpenUntil) + reelSpin.attackerOpenMs;
-        } else if (outcome === "jackpot") {
-            // Catching the jackpot pocket resolves the window right now, same as letting
-            // it lapse - close both tulips immediately rather than waiting for the next
-            // shot's shouldCloseLapsedTulips check to notice.
-            nextJackpotOpenUntil = 0;
-            nextLeftOpen = false;
-            nextRightOpen = false;
+            if (ballsRemaining <= 0) {
+                break; // can't have legitimately fired this - the rest of the batch is void
+            }
+            ballsRemaining -= 1;
+
+            // The chucker, the attacker, and the jackpot are each only ever physically present
+            // (real walls, real catch) while active - see pachinkoPhysics.ts's own comment on
+            // chuckerActive/attackerActive/jackpotActive. Read from THIS attempt's own
+            // accumulating state, never the client's claim about what was active when it fired.
+            const attackerOpen = attackerOpenUntil > now;
+            const jackpotOpen = jackpotOpenUntil > now;
+            const { outcome }: ShotResult = await physicsPool.run({
+                seed: shot.seed,
+                launchPower: shot.launchPower,
+                chuckerActive: !attackerOpen,
+                attackerActive: attackerOpen,
+                jackpotActive: jackpotOpen,
+            });
+
+            let ballsAwarded = 0;
+            let reelSpin: ReelSpinResult | undefined;
+            const contribution = start.pricePerBall * CONTRIBUTION_RATE;
+
+            if (outcome === "bonusLeft" || outcome === "bonusRight") {
+                ballsAwarded = BONUS_POCKET_BALLS;
+                poolOps.push({ type: "contribute", amount: contribution });
+                simulatedPool += contribution;
+            } else if (outcome === "tulipLeft" || outcome === "tulipRight") {
+                ballsAwarded = SIDE_TULIP_BALLS;
+                poolOps.push({ type: "contribute", amount: contribution });
+                simulatedPool += contribution;
+            } else if (outcome === "chucker") {
+                // Fires the board's own central reel gimmick - a real machine's "heso" -> LCD
+                // reel -> bonus round flow (see pachinkoReels.ts). A catch with no match or a
+                // two-of-a-kind opens nothing; only a three-of-a-kind match opens the attacker
+                // for ATTACKER_OPEN_MS, ADDED on top of whatever's currently left on the clock
+                // (not reset to it) - queued chucker catches landing close together under
+                // hold-to-fire stack their time instead of one clobbering another's.
+                reelSpin = spinReel();
+                ballsAwarded = reelSpin.ballsAwarded;
+                poolOps.push({ type: "contribute", amount: contribution });
+                simulatedPool += contribution;
+            } else if (outcome === "attacker") {
+                // Physics only ever returns "attacker" while attackerActive was true, i.e. it
+                // was actually open for this shot - no need to re-check attackerOpen here.
+                ballsAwarded = ATTACKER_BALLS;
+                poolOps.push({ type: "contribute", amount: contribution });
+                simulatedPool += contribution;
+            } else if (outcome === "jackpot") {
+                // Physics only ever returns "jackpot" while jackpotActive was true, i.e. within
+                // its own timed window - no need to re-check jackpotOpen here. Catching it closes
+                // the window immediately rather than letting it run out naturally.
+                ballsAwarded = jackpotBalls(simulatedPool, start.pricePerBall);
+                poolOps.push({ type: "reset" });
+                simulatedPool = JACKPOT_SEED;
+            } else {
+                poolOps.push({ type: "contribute", amount: contribution });
+                simulatedPool += contribution;
+            }
+
+            ballsRemaining += ballsAwarded;
+            lastProcessedSeq = shot.seq;
+
+            // Everything below - tulip toggle, jackpot priming, attacker stacking, the lapsed-
+            // tulip closeout - is identical to what this file always did per shot, just applied
+            // in a loop across the whole batch instead of once per request. `now` is shared
+            // across the whole batch (not re-read per shot) - a harmless simplification given
+            // JACKPOT_OPEN_MS/ATTACKER_OPEN_MS are multi-second windows and a batch processes in
+            // a small fraction of that.
+            const previousJackpotOpenUntil = jackpotOpenUntil;
+            const jackpotWindowActive = jackpotOpenUntil > now;
+            if (outcome === "tulipLeft" || outcome === "tulipRight") {
+                if (!jackpotWindowActive) {
+                    if (outcome === "tulipLeft") {
+                        leftTulipOpen = !leftTulipOpen;
+                    } else {
+                        rightTulipOpen = !rightTulipOpen;
+                    }
+                    if (isJackpotPrimed(leftTulipOpen, rightTulipOpen)) {
+                        jackpotOpenUntil = now + JACKPOT_OPEN_MS;
+                    }
+                }
+            } else if (outcome === "chucker" && reelSpin && reelSpin.attackerOpenMs > 0) {
+                attackerOpenUntil = Math.max(now, attackerOpenUntil) + reelSpin.attackerOpenMs;
+            } else if (outcome === "jackpot") {
+                jackpotOpenUntil = 0;
+                leftTulipOpen = false;
+                rightTulipOpen = false;
+            }
+            if (shouldCloseLapsedTulips(previousJackpotOpenUntil, jackpotOpenUntil, now)) {
+                leftTulipOpen = false;
+                rightTulipOpen = false;
+                jackpotOpenUntil = 0;
+            }
+
+            // Pushed after the gate-state updates above (not right after ballsAwarded), so a
+            // chucker result can carry ITS OWN post-state attackerOpenUntil - see
+            // PachinkoBallResult's own comment on why that has to be per-shot, not the batch's
+            // final value.
+            newResults.push({ seq: shot.seq, outcome, ballsAwarded, reelSpin, attackerOpenUntil: outcome === "chucker" ? attackerOpenUntil : undefined });
         }
 
-        // If a jackpot window WAS actually primed and has since expired without being
-        // caught, close any open tulips - they exist only to prime the jackpot, so
-        // there's no reason to leave them open once the window ends (see
-        // shouldCloseLapsedTulips's own comment for why this can't just be "there's
-        // currently no open window"). Also clears jackpotOpenUntil back to 0 - leaving it
-        // at its lapsed (past) timestamp would make this same check true forever after,
-        // permanently re-closing every future tulip toggle on the very shot that made it.
-        if (shouldCloseLapsedTulips(liveConditions.jackpotOpenUntil, nextJackpotOpenUntil, now)) {
-            nextLeftOpen = false;
-            nextRightOpen = false;
-            nextJackpotOpenUntil = 0;
+        if (lastProcessedSeq === start.lastProcessedSeq) {
+            // Nothing new in this batch (every seq was already processed, or there were no
+            // balls left to fire any of it) - no write needed, just report current state as-is.
+            updated = round;
+            break;
         }
 
+        // Guarded on the exact snapshot this attempt simulated against, same "compute, then
+        // compare-and-swap" shape every other write in this file uses - a concurrent batch for
+        // the same round (duplicate tab, a retry racing a fresh submission) loses cleanly and
+        // this whole attempt re-simulates against fresh state instead of silently clobbering it.
         updated = await XenCasinoRound.applyConditionsUpdate(
             round._id,
             {
-                "conditions.pendingTickets.seed": seed,
-                "conditions.leftTulipOpen": liveConditions.leftTulipOpen,
-                "conditions.rightTulipOpen": liveConditions.rightTulipOpen,
-                "conditions.attackerOpenUntil": liveConditions.attackerOpenUntil,
-                "conditions.jackpotOpenUntil": liveConditions.jackpotOpenUntil,
+                "conditions.ballsRemaining": start.ballsRemaining,
+                "conditions.leftTulipOpen": start.leftTulipOpen,
+                "conditions.rightTulipOpen": start.rightTulipOpen,
+                "conditions.attackerOpenUntil": start.attackerOpenUntil,
+                "conditions.jackpotOpenUntil": start.jackpotOpenUntil,
+                "conditions.lastProcessedSeq": start.lastProcessedSeq,
             },
             {
-                $inc: { "conditions.ballsRemaining": ballsAwarded },
-                $push: { "conditions.results": result },
-                $pull: { "conditions.pendingTickets": { seed } },
                 $set: {
-                    "conditions.leftTulipOpen": nextLeftOpen,
-                    "conditions.rightTulipOpen": nextRightOpen,
-                    "conditions.attackerOpenUntil": nextAttackerOpenUntil,
-                    "conditions.jackpotOpenUntil": nextJackpotOpenUntil,
+                    "conditions.ballsRemaining": ballsRemaining,
+                    "conditions.leftTulipOpen": leftTulipOpen,
+                    "conditions.rightTulipOpen": rightTulipOpen,
+                    "conditions.attackerOpenUntil": attackerOpenUntil,
+                    "conditions.jackpotOpenUntil": jackpotOpenUntil,
+                    "conditions.lastProcessedSeq": lastProcessedSeq,
                 },
+                $push: { "conditions.results": { $each: newResults } },
             }
         );
-        if (!updated) {
-            const fresh = await XenCasinoRound.findActive(SLUG, userId);
-            const freshConditions = fresh?.conditions as PachinkoConditions | undefined;
-            const freshTicket = freshConditions?.pendingTickets.find((t) => t.seed === seed);
-            if (!freshConditions || !freshTicket) {
-                // Already confirmed (or the round's gone) - nothing left for this call to do.
-                return null;
-            }
-            liveConditions = freshConditions; // gate state moved under us - retry against it
-        }
     }
     if (!updated) {
         throw new Error("Pachinko board is busy right now - try again");
     }
 
-    if (resetPool) {
-        await XenCasino.resetPachinkoJackpotPool(JACKPOT_SEED);
-    } else if (poolContribution > 0) {
-        await XenCasino.incrementPachinkoJackpotPool(poolContribution);
+    // Side effects only after the round write actually won - see poolOps' own comment on why
+    // these can't apply any earlier (a losing/retried attempt must never touch the real pool).
+    for (const op of poolOps) {
+        if (op.type === "reset") {
+            await XenCasino.resetPachinkoJackpotPool(JACKPOT_SEED);
+        } else {
+            await XenCasino.incrementPachinkoJackpotPool(op.amount);
+        }
     }
 
-    return { result, updatedConditions: updated.conditions as PachinkoConditions };
+    return { newResults, updatedConditions: updated.conditions as PachinkoConditions };
 }
 
 // A session can legitimately sit open for minutes between launches (think-time between balls).
@@ -362,15 +377,12 @@ async function confirmTicket(userId: string, seed: number): Promise<{ result: Pa
 // never mistaken for an abandoned one.
 const ROUND_TTL_MS = 5 * 60 * 1000;
 scheduleStaleRoundSweep(SLUG, ROUND_TTL_MS, async (round) => {
-    // Settle any tickets nobody ever confirmed FIRST - each one already cost a real ball (spent
-    // at /launch time, see PendingTicket), so it has a genuine decided outcome still owed, not
-    // just an unfired ball to refund. Re-fetches conditions fresh afterward since confirmTicket
-    // mutates ballsRemaining/results out from under the snapshot the sweep loop originally read.
-    for (const ticket of (round.conditions as PachinkoConditions).pendingTickets ?? []) {
-        await confirmTicket(round.userId, ticket.seed);
-    }
-    const settled = await XenCasinoRound.findActive(SLUG, round.userId);
-    const conditions = (settled?.conditions ?? round.conditions) as PachinkoConditions;
+    // Nothing pending to settle server-side anymore before refunding - a shot only ever exists
+    // here once a batch containing it has actually been processed (see processBatch); anything
+    // the client fired locally but never successfully reported simply never happened as far as
+    // the server's concerned, no different from never having fired it. ballsRemaining already
+    // reflects every shot this round ever got credit for.
+    const conditions = round.conditions as PachinkoConditions;
     const xenCasinoAccountId = await getXenCasinoAccountId();
 
     // Replaying the batch debit is safe even if it already went through - the key makes
@@ -499,6 +511,11 @@ module.exports = function (app: express.Application) {
                 rightTulipOpen: conditions.rightTulipOpen,
                 attackerOpenUntil: conditions.attackerOpenUntil,
                 jackpotOpenUntil: conditions.jackpotOpenUntil,
+                // A resuming client needs to know where to continue its own local shot-sequence
+                // counter from (see PachinkoBoard.tsx) - starting back at 0/1 could collide with
+                // seqs this round already processed before the page was closed/refreshed, and a
+                // colliding seq gets silently skipped as "already processed" (see processBatch).
+                lastProcessedSeq: conditions.lastProcessedSeq,
                 // Trajectories deliberately omitted for already-launched balls - resuming shows
                 // a summary, not a replay, so this stays small regardless of batch size.
                 results: conditions.results.map((r) => ({ outcome: r.outcome, ballsAwarded: r.ballsAwarded })),
@@ -523,12 +540,24 @@ module.exports = function (app: express.Application) {
         const wager = balls * PRICE_PER_BALL;
 
         try {
-            const resolved = await resolveUserAccount(user);
-            if (!resolved.linked || !resolved.account) {
-                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
-            }
-            if (Number(resolved.account.balance) < wager) {
-                return res.status(400).json({ status: false, message: "Insufficient balance" });
+            // A cached Weeabets account id (set once resolveUserAccount ever succeeds for this
+            // user - see weeabetsClient.ts) already tells us who to debit, so skip the extra
+            // lookup call and its balance pre-check entirely on a returning player - transfer()
+            // below already rejects insufficient funds on its own (WeeabetsTransferError status
+            // 400, handled identically either way), so the pre-check was redundant. This halves
+            // the number of sequential Weeabets calls /buy makes, which matters a lot when
+            // Weeabets itself is slow - two back-to-back slow calls was the whole reason a
+            // simple purchase could take several real seconds.
+            const discordLinked = user.authProviders?.some((p: { provider: string; isActive: boolean }) => p.provider === "discord" && p.isActive);
+            let accountId: number;
+            if (user.weeabetsAccountId && discordLinked) {
+                accountId = user.weeabetsAccountId;
+            } else {
+                const resolved = await resolveUserAccount(user);
+                if (!resolved.linked || !resolved.account) {
+                    return res.status(400).json({ status: false, message: "Link your Discord account to play" });
+                }
+                accountId = resolved.account.accountId;
             }
 
             const xenCasinoAccountId = await getXenCasinoAccountId();
@@ -545,7 +574,7 @@ module.exports = function (app: express.Application) {
                 let balance: string;
                 try {
                     const result = await transfer({
-                        fromAccountId: resolved.account.accountId,
+                        fromAccountId: accountId,
                         toAccountId: xenCasinoAccountId,
                         amount: wager.toFixed(10),
                         key: debitKey,
@@ -575,6 +604,7 @@ module.exports = function (app: express.Application) {
                         rightTulipOpen: conditions.rightTulipOpen,
                         attackerOpenUntil: conditions.attackerOpenUntil,
                         jackpotOpenUntil: conditions.jackpotOpenUntil,
+                        lastProcessedSeq: conditions.lastProcessedSeq,
                         balance,
                     },
                 });
@@ -590,7 +620,7 @@ module.exports = function (app: express.Application) {
                 jackpotOpenUntil: 0,
                 results: [],
                 topups: [],
-                pendingTickets: [],
+                lastProcessedSeq: 0,
                 cashOutPending: null,
             };
             const roundId = new mongoose.Types.ObjectId();
@@ -604,7 +634,7 @@ module.exports = function (app: express.Application) {
                     userId,
                     wager,
                     debitKey,
-                    playerAccountId: resolved.account.accountId,
+                    playerAccountId: accountId,
                     conditions,
                 });
             } catch (err) {
@@ -617,7 +647,7 @@ module.exports = function (app: express.Application) {
             let balance: string;
             try {
                 const result = await transfer({
-                    fromAccountId: resolved.account.accountId,
+                    fromAccountId: accountId,
                     toAccountId: xenCasinoAccountId,
                     amount: wager.toFixed(10),
                     key: debitKey,
@@ -643,6 +673,7 @@ module.exports = function (app: express.Application) {
                     rightTulipOpen: false,
                     attackerOpenUntil: 0,
                     jackpotOpenUntil: 0,
+                    lastProcessedSeq: 0,
                     balance,
                 },
             });
@@ -652,123 +683,50 @@ module.exports = function (app: express.Application) {
         }
     });
 
-    // Cheap - claims a ball and hands back a ticket, no physics at all (see the file header for
-    // why: this used to be where the whole matter-js simulation ran, which is exactly what let a
-    // slow/backed-up physics pool stall the entire hold-to-fire loop). The client replays the
-    // exact same seeded shot locally the instant this response arrives and starts animating
-    // immediately; /launch/confirm (below) is what actually scores it, in the background.
-    app.post(`/api/casino/games/${SLUG}/launch`, authenticateToken, async function (req: express.Request, res: express.Response) {
+    // The only endpoint firing ever touches, and it never runs while a ball is waiting on it -
+    // see the file header. The client fires locally (its own seed, its own seq, its own gate
+    // state read from a local mirror of this same round's economy) and reports batches of
+    // {seq, seed, launchPower} here in the background. processBatch (above) is the only place
+    // any of it actually gets scored - nothing about outcome or gate state is read from the
+    // request body at all, only used to know which shots to replay and in what order.
+    app.post(`/api/casino/games/${SLUG}/launch/batch`, authenticateToken, async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
-        const { launchPower } = req.body as { launchPower?: number };
-        if (typeof launchPower !== "number" || !Number.isFinite(launchPower) || launchPower < MIN_LAUNCH_POWER || launchPower > MAX_LAUNCH_POWER) {
-            return res.status(400).json({ status: false, message: `launchPower must be between ${MIN_LAUNCH_POWER} and ${MAX_LAUNCH_POWER}` });
+        const { shots } = req.body as { shots?: IncomingShot[] };
+        if (!Array.isArray(shots) || shots.length === 0) {
+            return res.status(400).json({ status: false, message: "shots must be a non-empty array" });
         }
-
-        try {
-            const round = await XenCasinoRound.findActive(SLUG, userId);
-            if (!round) {
-                return res.status(400).json({ status: false, message: "No active batch - buy balls first" });
+        for (const shot of shots) {
+            if (
+                typeof shot?.seq !== "number" ||
+                typeof shot?.seed !== "number" ||
+                typeof shot?.launchPower !== "number" ||
+                !Number.isFinite(shot.launchPower) ||
+                shot.launchPower < MIN_LAUNCH_POWER ||
+                shot.launchPower > MAX_LAUNCH_POWER
+            ) {
+                return res.status(400).json({ status: false, message: "invalid shot in batch" });
             }
-            const conditions = round.conditions as PachinkoConditions;
-            if (conditions.ballsRemaining <= 0) {
-                return res.status(400).json({ status: false, message: "No balls remaining in this batch" });
-            }
-
-            const now = Date.now();
-            // Self-healing safety net for tickets whose /confirm call never made it back (a
-            // client that gave up retrying, a tab that died mid-flight) - an actively-firing
-            // round never goes stale (see ROUND_TTL_MS/lastActivityAt below), so a dangling
-            // ticket in one could otherwise sit unconfirmed indefinitely despite the ball's cost
-            // already being spent. Piggybacks on the player's own next launch rather than a
-            // separate background job; fire-and-forget so a slow settle never delays this shot.
-            for (const stale of conditions.pendingTickets) {
-                if (now - stale.issuedAt > TICKET_TTL_MS) {
-                    void confirmTicket(userId, stale.seed).catch(() => undefined);
-                }
-            }
-            // The chucker, the attacker, and the jackpot are each only ever physically present
-            // (real walls, real catch) while active - see pachinkoPhysics.ts's own comment on
-            // chuckerActive/attackerActive/jackpotActive. Locked into the ticket now, at issue
-            // time - both the client's own preview and the server's later /confirm replay must
-            // simulate against the exact same gate state, not whatever it happens to be by the
-            // time confirm actually runs.
-            const attackerOpen = conditions.attackerOpenUntil > now;
-            const jackpotOpen = conditions.jackpotOpenUntil > now;
-            const ticket: PendingTicket = {
-                seed: randomSeed(),
-                launchPower,
-                chuckerActive: !attackerOpen,
-                attackerActive: attackerOpen,
-                jackpotActive: jackpotOpen,
-                issuedAt: now,
-            };
-
-            // Optimistic claim - guarded on the exact ballsRemaining just read, same shape every
-            // other claim-then-act write in this file uses. On conflict, just tell the client to
-            // retry rather than looping: unlike the old inline-physics /launch, nothing expensive
-            // has happened yet, so there's nothing to unwind and no reason to retry server-side.
-            const updated = await XenCasinoRound.applyConditionsUpdate(
-                round._id,
-                { "conditions.ballsRemaining": { $gt: 0 } },
-                { $inc: { "conditions.ballsRemaining": -1 }, $push: { "conditions.pendingTickets": ticket } }
-            );
-            if (!updated) {
-                return res.status(409).json({ status: false, message: "No balls remaining" });
-            }
-
-            const updatedConditions = updated.conditions as PachinkoConditions;
-            return res.json({
-                status: true,
-                data: {
-                    seed: ticket.seed,
-                    launchPower,
-                    chuckerActive: ticket.chuckerActive,
-                    attackerActive: ticket.attackerActive,
-                    jackpotActive: ticket.jackpotActive,
-                    ballsRemaining: updatedConditions.ballsRemaining,
-                },
-            });
-        } catch (err) {
-            const status = err instanceof WeeabetsUnavailable ? 503 : 500;
-            return res.status(status).json({ status: false, message: (err as Error).message });
-        }
-    });
-
-    // The only place a launch ticket actually gets scored - see confirmTicket's own header for
-    // why the client's own local preview is never trusted here. Meant to be called in the
-    // background right after the client's local sim finishes (or retried later if that fails) -
-    // never something the firing loop waits on, so a slow or failed confirm can't stall hold-to-
-    // fire the way a slow inline /launch used to.
-    app.post(`/api/casino/games/${SLUG}/launch/confirm`, authenticateToken, async function (req: express.Request, res: express.Response) {
-        const userId = String((req as AuthenticatedRequest).user!._id);
-        const { seed } = req.body as { seed?: number };
-        if (typeof seed !== "number" || !Number.isFinite(seed)) {
-            return res.status(400).json({ status: false, message: "seed must be a number" });
         }
         if (physicsPool.queueSize >= MAX_QUEUED_PHYSICS_JOBS) {
             return res.status(503).json({ status: false, message: "Pachinko is under heavy load right now - try again in a moment" });
         }
 
         try {
-            const settled = await confirmTicket(userId, seed);
+            const settled = await processBatch(userId, shots);
             if (!settled) {
-                // Already confirmed (a client retry racing its own earlier success) or the round
-                // is gone - either way there's nothing left to do, and definitely nothing to
-                // treat as a fresh error the client should react to.
-                return res.json({ status: true, data: { alreadySettled: true } });
+                return res.status(400).json({ status: false, message: "No active batch - buy balls first" });
             }
-            const { result, updatedConditions } = settled;
+            const { newResults, updatedConditions } = settled;
             return res.json({
                 status: true,
                 data: {
-                    outcome: result.outcome,
-                    ballsAwarded: result.ballsAwarded,
-                    reelSpin: result.reelSpin,
+                    results: newResults.map((r) => ({ seq: r.seq, outcome: r.outcome, ballsAwarded: r.ballsAwarded, reelSpin: r.reelSpin, attackerOpenUntil: r.attackerOpenUntil })),
                     leftTulipOpen: updatedConditions.leftTulipOpen,
                     rightTulipOpen: updatedConditions.rightTulipOpen,
                     attackerOpenUntil: updatedConditions.attackerOpenUntil,
                     jackpotOpenUntil: updatedConditions.jackpotOpenUntil,
                     ballsRemaining: updatedConditions.ballsRemaining,
+                    lastProcessedSeq: updatedConditions.lastProcessedSeq,
                 },
             });
         } catch (err) {
@@ -787,24 +745,16 @@ module.exports = function (app: express.Application) {
     app.post(`/api/casino/games/${SLUG}/cashout`, authenticateToken, async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         try {
-            let round = await XenCasinoRound.findActive(SLUG, userId);
+            const round = await XenCasinoRound.findActive(SLUG, userId);
             if (!round) {
                 return res.status(400).json({ status: false, message: "No active batch" });
             }
 
-            // Settle any still-in-flight tickets before reading ballsRemaining for the cash-out
-            // amount - each one already cost a real ball and may have a real payout due; cashing
-            // out from underneath an unconfirmed shot would silently strand its winnings once the
-            // round resolves. Normally a no-op (there's rarely anything pending by the time a
-            // player deliberately presses Cash Out).
-            for (const ticket of (round.conditions as PachinkoConditions).pendingTickets) {
-                await confirmTicket(userId, ticket.seed);
-            }
-            round = await XenCasinoRound.findActive(SLUG, userId);
-            if (!round) {
-                return res.status(400).json({ status: false, message: "No active batch" });
-            }
-
+            // Nothing to settle here anymore before reading ballsRemaining - the client itself
+            // flushes any not-yet-reported shots via /launch/batch before ever calling this (see
+            // PachinkoBoard.tsx's cash-out handler), so by the time this request lands,
+            // ballsRemaining already reflects everything the player actually fired that made it
+            // to the server.
             const conditions = round.conditions as PachinkoConditions;
             if (conditions.ballsRemaining <= 0) {
                 return res.status(400).json({ status: false, message: "No balls to cash out" });
