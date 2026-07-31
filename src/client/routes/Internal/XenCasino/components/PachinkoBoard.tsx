@@ -124,6 +124,21 @@ const OUTCOME_LABEL: Record<PachinkoOutcome, string> = {
     jackpot: "JACKPOT!",
 };
 
+// Which pocket a landing ball lights up, or null for a miss. Keyed the same way draw() looks the
+// pockets up, so the mapping lives in exactly one place - the tick loop marks a pocket hot on the
+// frame a ball transitions to "landed" AND on every frame it stays landed, and those two callers
+// drifting apart is what produced a one-frame gap where the pocket was neither hot nor repainted.
+const HOT_POCKET_ID: Record<PachinkoOutcome, string | null> = {
+    gutter: null,
+    bonusLeft: "bonus-left",
+    bonusRight: "bonus-right",
+    tulipLeft: "tulip-left",
+    tulipRight: "tulip-right",
+    chucker: "chucker",
+    attacker: "attacker",
+    jackpot: "jackpot",
+};
+
 interface Particle {
     angle: number;
     speed: number; // px/sec
@@ -173,6 +188,11 @@ interface ShotLedgerEntry {
     reelSpin?: ReelSpinResult;
     stateAfter: PachinkoGateState;
     landed: boolean;
+    // Set when drainLedger stepped over this entry while its ball was still in the air, because
+    // showing it could not have changed anything on screen (see canStepOver). Its state effects
+    // were folded in by a later entry's stateAfter; it stays in the ledger only so the ledger
+    // still knows a ball is outstanding, and is dropped when that ball finally lands.
+    skipped?: boolean;
 }
 
 let nextBallId = 0;
@@ -701,18 +721,36 @@ export default function PachinkoBoard({
             // chucker/attacker are, it's just not toggled yet, so it shouldn't read as grey/off.
             // Open needs to be unmistakably brighter though: a vivid, near-solid glowing green
             // vs. a light, translucent green when closed.
-            const stroke = isHot ? "#FFD700" : isOpen ? "#7CFFB2" : "#BFF0D2";
+            //
+            // The catch flash is ADDITIVE here, unlike every other pocket on the board, and that
+            // matters more than it sounds. It used to replace the stroke and fill outright and
+            // suppress the open glow, which meant the tulip that had just caught a ball was
+            // painted solid gold for the whole POOF_MS window - exactly the moment the player is
+            // watching to see whether it toggled. The state change was instant all along; it was
+            // simply invisible for 450ms, which read as lag. Only the label text gave it away,
+            // because that was never gated on isHot. So: keep the open/closed colours authoritative
+            // at all times, and layer the flash on as a gold ring around the outside instead.
+            const stroke = isOpen ? "#7CFFB2" : "#BFF0D2";
             drawPocket(
                 ctx,
                 tulip.position.x,
                 tulip.position.y,
                 tulip.halfWidth,
                 POCKET_HEIGHT,
-                isHot ? "rgba(255,215,0,0.35)" : isOpen ? "rgba(99,214,138,0.75)" : "rgba(99,214,138,0.22)",
+                isOpen ? "rgba(99,214,138,0.75)" : "rgba(99,214,138,0.22)",
                 stroke,
-                { glow: isHot ? undefined : isOpen ? "rgba(124,255,178,0.9)" : undefined }
+                { glow: isHot ? "rgba(255,215,0,0.95)" : isOpen ? "rgba(124,255,178,0.9)" : undefined }
             );
-            drawPocketLabel(ctx, tulip.position.x, tulip.position.y, POCKET_HEIGHT, isOpen ? "TULIP - OPEN" : "TULIP", stroke);
+            if (isHot) {
+                ctx.save();
+                ctx.strokeStyle = "#FFD700";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.roundRect(tulip.position.x - tulip.halfWidth - 2.5, tulip.position.y - POCKET_HEIGHT / 2 - 2.5, tulip.halfWidth * 2 + 5, POCKET_HEIGHT + 5, [0, 0, 4, 4]);
+                ctx.stroke();
+                ctx.restore();
+            }
+            drawPocketLabel(ctx, tulip.position.x, tulip.position.y, POCKET_HEIGHT, isOpen ? "TULIP - OPEN" : "TULIP", isHot ? "#FFD700" : stroke);
             drawPocketAmount(ctx, tulip.position.x, tulip.position.y, `${sideTulipBalls}`, isOpen ? "#08321a" : stroke);
         }
 
@@ -871,24 +909,19 @@ export default function PachinkoBoard({
                         const { trajectory, outcome } = ball;
                         markLanded(ball.seq);
                         activeBallsRef.current.set(ball.id, { id: ball.id, phase: "landed", trajectory, outcome, won: outcome !== "gutter", landedAt: now, particles: makeParticles() });
+                        // Light the pocket on this very frame, not the next one. The ball only
+                        // becomes "landed" here, so without this the frame that first paints the
+                        // pocket's new open/closed state is also the one frame it isn't hot - the
+                        // player sees the new colour, one frame of gold, then the new colour again.
+                        const pocketId = HOT_POCKET_ID[outcome];
+                        if (pocketId) hotPockets.add(pocketId);
                     }
                 } else if (ball.phase === "landed") {
                     if (now - ball.landedAt >= POOF_MS) {
                         toRemove.push(ball.id);
-                    } else if (ball.outcome === "bonusLeft") {
-                        hotPockets.add("bonus-left");
-                    } else if (ball.outcome === "bonusRight") {
-                        hotPockets.add("bonus-right");
-                    } else if (ball.outcome === "tulipLeft") {
-                        hotPockets.add("tulip-left");
-                    } else if (ball.outcome === "tulipRight") {
-                        hotPockets.add("tulip-right");
-                    } else if (ball.outcome === "chucker") {
-                        hotPockets.add("chucker");
-                    } else if (ball.outcome === "attacker") {
-                        hotPockets.add("attacker");
-                    } else if (ball.outcome === "jackpot") {
-                        hotPockets.add("jackpot");
+                    } else {
+                        const pocketId = HOT_POCKET_ID[ball.outcome];
+                        if (pocketId) hotPockets.add(pocketId);
                     }
                 }
             }
@@ -1087,6 +1120,49 @@ export default function PachinkoBoard({
         };
     };
 
+    // Whether showing this entry would change literally nothing the player can see, given the
+    // currently displayed state - the only condition under which drainLedger may step over a ball
+    // that hasn't landed yet.
+    //
+    // It holds for a miss fired while neither timed gate is running, which is the overwhelmingly
+    // common shot (roughly seven in ten). Read applyShot alongside this: a "gutter" outcome awards
+    // no balls, fires no reel, and toggles no tulip; its only two effects are the -1 ball cost and
+    // decrementing both windows. The cost is already shown the instant the shot is fired, via
+    // firedNotDisplayedRef, so it isn't waiting on this. The decrements are what the window checks
+    // are for - at 0 they're clamped no-ops, but at 1 or more they'd tick a counter the player is
+    // watching down a ball early, before the ball it belongs to has visibly landed, which is the
+    // whole class of bug the ledger exists to prevent. Both the displayed state and the entry's own
+    // stateAfter are checked, so this stays true no matter which one drifts.
+    const canStepOver = (entry: ShotLedgerEntry, displayed: PachinkoGateState): boolean =>
+        entry.outcome === "gutter" &&
+        displayed.attackerShotsRemaining === 0 &&
+        displayed.jackpotShotsRemaining === 0 &&
+        entry.stateAfter.attackerShotsRemaining === 0 &&
+        entry.stateAfter.jackpotShotsRemaining === 0;
+
+    // The run of not-yet-landed entries sitting in front of the next LANDED one, if every entry in
+    // that run can be stepped over. Null - meaning "wait, as before" - if any of them can't, or if
+    // there's no landed entry behind them to unblock, since stepping over on its own accomplishes
+    // nothing and would leave the visible ball count transiently short (see drainLedger).
+    const collectStepOver = (): ShotLedgerEntry[] | null => {
+        const displayed = displayedGateStateRef.current;
+        const run: ShotLedgerEntry[] = [];
+        for (let seq = displayedSeqRef.current + 1; run.length < MAX_CONCURRENT_BALLS; seq++) {
+            const entry = shotLedgerRef.current.get(seq);
+            if (!entry) {
+                return null; // nothing behind the gap yet - the wait is real
+            }
+            if (entry.landed) {
+                return run.length > 0 ? run : null;
+            }
+            if (!canStepOver(entry, displayed)) {
+                return null;
+            }
+            run.push(entry);
+        }
+        return null;
+    };
+
     // Makes a landed shot's effects visible, and then any already-landed shots queued behind it,
     // strictly in seq order. Balls don't necessarily land in the order they were fired (a gentler
     // shot fired later can have a shorter flight), so a ball that arrives early simply waits its
@@ -1095,8 +1171,41 @@ export default function PachinkoBoard({
     const drainLedger = () => {
         for (;;) {
             const entry = shotLedgerRef.current.get(displayedSeqRef.current + 1);
-            if (!entry || !entry.landed) {
+            if (!entry) {
                 return;
+            }
+            if (!entry.landed) {
+                // Head-of-line blocking, and it is not rare: flight time is driven by pin scatter
+                // rather than launch power, and a caught ball's flight is systematically SHORTER
+                // than a miss's (the cup stops it mid-board where a miss falls all the way
+                // through), so the catches - the only shots with anything to show - are precisely
+                // the ones most likely to overtake an earlier ball and be made to wait for it.
+                //
+                // Applying entries in landing order instead is NOT a fix; it's a different bug.
+                // The fold doesn't commute: tulipLeft then tulipRight primes a 12-ball jackpot
+                // window where the reverse order primes nothing, because of applyShot's guard
+                // against tulips re-toggling during an open window, and stacked attacker windows
+                // don't commute against its Math.max(0, x-1) clamp either. Fire order is also what
+                // the server replays, so any other order gets snapped back by reconcileBatch.
+                //
+                // What IS safe is stepping over an entry that could not have changed anything on
+                // screen, keeping the fire-order fold exactly as it is. See canStepOver.
+                const steppable = collectStepOver();
+                if (!steppable) {
+                    return;
+                }
+                for (const skipped of steppable) {
+                    skipped.skipped = true;
+                    displayedSeqRef.current = skipped.seq;
+                    firedNotDisplayedRef.current = Math.max(0, firedNotDisplayedRef.current - 1);
+                }
+                // Deliberately no patchVisibleSession here: on its own a step-over leaves the
+                // visible ball count momentarily short by the stepped balls' cost, because their
+                // cost moves out of firedNotDisplayedRef and only lands back in displayed state
+                // when the following entry's (cumulative) stateAfter is applied. collectStepOver
+                // only ever returns a run that IS followed by a landed entry, so the next turn of
+                // this loop applies it in the same synchronous pass and nothing renders in between.
+                continue;
             }
             shotLedgerRef.current.delete(entry.seq);
             displayedSeqRef.current = entry.seq;
@@ -1127,6 +1236,14 @@ export default function PachinkoBoard({
 
     const markLanded = (seq: number) => {
         const entry = shotLedgerRef.current.get(seq);
+        if (entry?.skipped) {
+            // Already accounted for while it was still in the air - drainLedger will never look at
+            // it again, since displayedSeqRef has long since passed it. Dropping it here is what
+            // keeps the ledger's "is any ball still outstanding" reading honest, which
+            // reconcileBatch's adopt-wholesale safety net depends on being exactly right.
+            shotLedgerRef.current.delete(seq);
+            return;
+        }
         if (entry) {
             entry.landed = true;
         }

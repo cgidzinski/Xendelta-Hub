@@ -215,10 +215,23 @@ function buildAttemptWorld(rng: Rng): { engine: Matter.Engine; ball: Matter.Body
     }
 
     // 0.25, not a higher value - matter-js resolves a collision's restitution as
-    // max(bodyA.restitution, bodyB.restitution), so the ball's own value is a floor under every
-    // collision in the field regardless of what it hits. Kept under the deflector's own low
-    // restitution above (0.02-0.06) so that nail's dampening actually takes effect, while every
-    // other nail in the field (0.3-0.6) still wins that max() comparison exactly as before.
+    // max(bodyA.restitution, bodyB.restitution) and its friction as min(bodyA, bodyB) (Pair.js:69-71),
+    // so the ball's own values are a floor under the bounce and a ceiling under the grip of every
+    // collision in the field, regardless of what it hits.
+    //
+    // Which means the release deflector's special-casing above is currently INERT, and the comment
+    // here used to claim the opposite. 0.25 is 4-12x ABOVE the deflector's 0.02-0.06, so it wins
+    // that max() and the deflector bounces exactly like an ordinary pin; its friction 0.3 loses the
+    // min() to the ball's 0.02 just the same. The ordinary nails (0.3-0.6) do win their max(), so
+    // the general field behaves as written - only the deflector's "less bouncy, more grabby"
+    // characterisation does nothing.
+    //
+    // Left as-is deliberately rather than quietly repaired: a static pin can never dampen a
+    // bouncier ball under max(), so making the deflector's intent real means lowering the BALL's
+    // restitution, which moves every trajectory on the board and forces a full re-tune of both
+    // pachinkoPayoutTuning.ts and pachinkoReachability.ts. That's a real decision worth making on
+    // its own, not a rider on an unrelated fix. Flagged here so the next person reaching for "just
+    // tune the pin material" knows that lever is disconnected before they pull it.
     const ball = Matter.Bodies.circle(RELEASE_POINT.x, RELEASE_POINT.y, BALL_RADIUS, {
         restitution: 0.25,
         friction: 0.02,

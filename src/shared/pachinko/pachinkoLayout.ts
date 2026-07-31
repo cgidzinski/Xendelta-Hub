@@ -476,10 +476,10 @@ export const SECOND_ROAD: Point[] = sampleRoadNails(SECOND_ROAD_PATH);
 // badly; there was simply nothing there. It slid down the glass, accelerating the whole way, and
 // drained - every time, for the entire upper half of the launch range.
 //
-// So: a real left field, hugging the inside of the glass across exactly that descent. Derived from
-// the boundary formula rather than hardcoded (same approach RAIL_CLIMB_PATH takes) so it stays
-// correct if the board is ever re-proportioned - the whole point is that it tracks the wall the
-// ball is sliding down, and a hand-typed polyline would silently stop doing that.
+// So: a real left field across exactly that descent. Derived from the boundary formula rather than
+// hardcoded (same approach RAIL_CLIMB_PATH takes) so it stays correct if the board is ever
+// re-proportioned - the whole point is that it tracks the wall the ball is sliding down, and a
+// hand-typed polyline would silently stop doing that.
 //
 // Deliberately a separate structure rather than an extension of RELEASE_DEFLECTOR, even though
 // that row's left terminus is nearby: the deflector is what sets a LOW-power ball's lateral
@@ -487,30 +487,105 @@ export const SECOND_ROAD: Point[] = sampleRoadNails(SECOND_ROAD_PATH);
 // x is essentially decided by y=145 and barely drifts afterwards). Extending it would have
 // perturbed every working low-power shot to fix a high-power problem. This only ever touches balls
 // that enter the void.
+//
 // Angles follow this file's own convention: 0 = rightmost, -90 = straight up, so the upper-left
 // quadrant runs from -90 down to -180, and continuing past -180 wraps into the lower left. This
-// span covers y~125 at the top, through the glass's widest point at y=230, down to y~285 where it
-// hands off to road 1 and the left bonus pocket.
-const LEFT_FIELD_THETA_START = -145 * DEG;
-const LEFT_FIELD_THETA_END = -200 * DEG;
-// Inboard of the boundary centerline. Deliberately tight: a ball sliding on the glass sits about
-// 4px off the wall (its own radius plus the wall's half-thickness), and contact needs
-// PIN_RADIUS + BALL_RADIUS = 3.6px, so anything much looser than this is measurably a near-miss -
-// an earlier 11px inset left the nails ~6px from the ball's centre line and they simply never
-// touched it. At 7 the pins also leave less than a ball's width of gap against the glass, so a
-// wall-hugging descent cannot thread past them at all.
-const LEFT_FIELD_INSET = 7;
-const LEFT_FIELD_STEPS = 15;
-const LEFT_FIELD_PATH: Point[] = Array.from({ length: LEFT_FIELD_STEPS + 1 }, (_, i) => {
-    const theta = LEFT_FIELD_THETA_START + (i / LEFT_FIELD_STEPS) * (LEFT_FIELD_THETA_END - LEFT_FIELD_THETA_START);
-    // Same ellipse-above / circle-below hybrid the boundary itself uses (above centre means
-    // sin(theta) < 0 with y pointing down), so the inset stays a true constant gap from the glass
-    // rather than drifting open as it passes the widest point.
-    const rx = FIELD_RX - LEFT_FIELD_INSET;
-    const ry = Math.sin(theta) < 0 ? FIELD_RY - LEFT_FIELD_INSET : rx;
+// span covers y~121 at the top, through the glass's widest point at y=230, down to y~288 where it
+// hands off to road 1 and the left bonus pocket. Theta DECREASING is downhill along the glass.
+const LEFT_FIELD_THETA_START = -147;
+const LEFT_FIELD_SEGMENT_SPAN = 11; // degrees of arc per kicker, ~33px
+const LEFT_FIELD_SEGMENT_GAP = 3; // open degrees between kickers, ~9px
+const LEFT_FIELD_SEGMENTS = 4;
+
+// ## Why this is four short ramps and not one line parallel to the glass
+//
+// It WAS one line, at a constant 7px inset, and that shape wedged balls: measured across the power
+// range, roughly 30% of shots at powers 64-100 came to a dead stop against the left glass. (Flight
+// duration doesn't show this - simulateShot's stall detector gives up on a stationary ball and
+// glides it to the drain, so a jam reports an ordinary-length trajectory. What shows it is a run of
+// near-stationary samples; pachinkoReachability.ts measures exactly that, and should be re-run after
+// any edit here.)
+//
+// The arithmetic of the trap, all of it forced by three numbers - the wall is 3px thick so its
+// inner face is 1.5px inboard of the boundary centreline, PIN_RADIUS is 1.1, and the ball is 5px
+// across:
+//
+//   clear gap between glass and a pin at inset d  =  (d - PIN_RADIUS) - 1.5  =  d - 2.6
+//
+// At d=7 that is 4.4px against a 5px ball. The ball cannot pass - which was the intent - but it
+// misses by only 0.6px, and a 0.6px interference is a squeeze the solver has to grind the ball out
+// of, not a clean deflection. Worse, consecutive pins at ROAD_NAIL_SPACING=10 leave 7.8px between
+// their edges, comfortably more than the ball, so the ball could slip sideways INTO that channel and
+// then sit in a pocket bounded by glass, pin and pin with every exit fractionally too small.
+//
+// So two rules, chosen to make the wedge unrepresentable rather than merely rarer:
+//
+//   1. **No pin sits in the trap band.** A pin is either sealing (d small enough that the gap is far
+//      under a ball width, so there is no space to enter) or open (d large enough that the gap
+//      comfortably exceeds one, so the ball passes cleanly). Nothing in between. Sealing pins sit at
+//      4.5 - a 1.9px gap, unenterable, while still leaving the pin 1.9px clear of the glass so it is
+//      never buried in wall geometry. Open pins start at 11 (an 8.4px gap).
+//   2. **No pin line ever runs parallel to the glass.** Each kicker's inset grows monotonically as it
+//      descends, so any space the ball is in is already widening ahead of it and there is no closed
+//      pocket to come to rest in. At most one sealing pin per kicker, with nothing near the glass
+//      below it, so there is never a second near-wall pin to close a pocket underneath the ball.
+//
+// A ball sliding down the glass meets a kicker's sealing pin, cannot get past it on the wall side,
+// and is guided down the ramp and released into open field 16px off the glass. That is the same
+// shape RELEASE_DEFLECTOR has on the right, and why that structure redirects without ever jamming
+// despite also hugging the boundary. The open gaps between kickers exist so a ball that does return
+// to the glass gets caught again by the next one rather than riding a continuous rail all the way
+// down.
+//
+// Result, measured the same way as the baseline above: the worst power's left-glass stall rate went
+// from 48% to 3.5%, with no power band failing, while the dead-zone and both-tulips checks this
+// structure exists to satisfy still pass. The few percent that remain are not wedges - see
+// LEFT_CORRIDOR_X in pachinkoReachability.ts for what they are and why chasing them is a mistake.
+//
+// The insets are a real constraint, not taste: raising the sealing pins past ~7.6 (a 5px gap) lets
+// wall-hugging balls thread through and brings back the dead launch band this whole structure was
+// added to fix, and lowering them under ~2.6 buries them in the wall.
+const LEFT_FIELD_SEAL_INSET = 4.5;
+const LEFT_FIELD_OPEN_INSET = 11;
+const LEFT_FIELD_END_INSET = 16;
+
+// Only the kickers on the sloping upper glass get a sealing pin; the lower ones are ramp-only.
+//
+// A sealing pin works by standing in the way of a ball that is being pressed INTO the glass as it
+// descends, which is what the wall's own slope does above this angle - the ball arrives at the pin
+// off-centre and on a slope, and runs off it inboard. Below roughly -170 the glass is within 10
+// degrees of vertical, and past -180 it undercuts and curves back inboard, so a ball there is
+// already being carried away from the wall by the wall itself. A pin in that stretch isn't a kicker,
+// it's a shelf: the ball comes down almost vertically, lands square on top of it with no lateral
+// component to shed, and balances.
+//
+// That is not a guess. With sealing pins on all four kickers, the two below this line produced 84 of
+// 129 left-corridor stalls on their own - the single worst site being the lowest seal, with 72 - while
+// the two above produced 2 between them. Same inset, same spacing, same construction; the only
+// difference is the angle of the glass behind them.
+const LEFT_FIELD_SEAL_ABOVE_THETA = -170;
+// Degrees between the sealing pin and the first open one. Kept short deliberately: sampleRoadNails
+// only subdivides a leg longer than ROAD_NAIL_SPACING, so at this spacing the seal-to-open leg emits
+// its two endpoints and nothing between them - which is what keeps rule 1 true, since any pin
+// interpolated along that leg would land squarely in the 2.6-7.6 trap band it jumps over.
+const LEFT_FIELD_SEAL_RUN = 2.5;
+
+// Same ellipse-above / circle-below hybrid the boundary itself uses (above centre means
+// sin(theta) < 0 with y pointing down), so an inset is a true constant gap from the glass rather
+// than one that drifts open as it passes the widest point.
+function leftFieldPoint(thetaDeg: number, inset: number): Point {
+    const theta = thetaDeg * DEG;
+    const rx = FIELD_RX - inset;
+    const ry = Math.sin(theta) < 0 ? FIELD_RY - inset : rx;
     return { x: FIELD_CX + rx * Math.cos(theta), y: FIELD_CY + ry * Math.sin(theta) };
+}
+
+const LEFT_FIELD_KICKERS: Point[][] = Array.from({ length: LEFT_FIELD_SEGMENTS }, (_, i) => {
+    const start = LEFT_FIELD_THETA_START - i * (LEFT_FIELD_SEGMENT_SPAN + LEFT_FIELD_SEGMENT_GAP);
+    const ramp = [leftFieldPoint(start - LEFT_FIELD_SEAL_RUN, LEFT_FIELD_OPEN_INSET), leftFieldPoint(start - LEFT_FIELD_SEGMENT_SPAN, LEFT_FIELD_END_INSET)];
+    return start > LEFT_FIELD_SEAL_ABOVE_THETA ? [leftFieldPoint(start, LEFT_FIELD_SEAL_INSET), ...ramp] : ramp;
 });
-export const LEFT_FIELD: Point[] = sampleRoadNails(LEFT_FIELD_PATH);
+export const LEFT_FIELD: Point[] = LEFT_FIELD_KICKERS.flatMap(sampleRoadNails);
 
 // --- Pin conflicts & assembly ---------------------------------------
 const ALL_POCKETS_FOR_CLEARANCE: FixedPocket[] = [...TULIPS, JACKPOT, ATTACKER, ...BONUS_POCKETS, CHUCKER];
