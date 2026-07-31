@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { simulateShot } from "../../../shared/pachinko/pachinkoPhysics";
 import { MIN_LAUNCH_POWER, MAX_LAUNCH_POWER } from "../../../shared/pachinko/pachinkoLayout";
-import { spinReel } from "./pachinkoReels";
-import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, REEL_TWO_MATCH_BALLS, REEL_THREE_MATCH_BALLS, ATTACKER_BALLS } from "./pachinkoPayouts";
+import { spinReel } from "../../../shared/pachinko/pachinkoReels";
+import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, REEL_TWO_MATCH_BALLS, REEL_THREE_MATCH_BALLS, ATTACKER_BALLS, ATTACKER_OPEN_SHOTS } from "./pachinkoPayouts";
 
 // Monte Carlo RTP regression guard, same spirit as spinmaniaGrid.rtp.test.ts but WORST-CASE
 // across launch power, not a blended average - launch power is a free, continuous, player-chosen
@@ -64,7 +64,7 @@ describe("pachinko worst-case RTP", () => {
                 pBonus * BONUS_POCKET_BALLS +
                 pTulip * SIDE_TULIP_BALLS +
                 pChucker * (pReelTwo * REEL_TWO_MATCH_BALLS + pReelThree * REEL_THREE_MATCH_BALLS) +
-                pChucker * pReelThree * pAttackerCatchGivenOpen * ATTACKER_BALLS;
+                pChucker * pReelThree * ATTACKER_OPEN_SHOTS * pAttackerCatchGivenOpen * ATTACKER_BALLS;
 
             if (rtp > worstRtp) {
                 worstRtp = rtp;

@@ -21,6 +21,12 @@
  */
 import { capPayout } from "./payoutCap";
 
+// The constants BOTH sides need to derive round state identically live in shared/ (see
+// pachinkoRules.ts's own header for why the gate windows are counted in balls rather than
+// seconds). Re-exported here so this file stays the single import site for everything
+// payout-related on the server.
+export { ATTACKER_OPEN_SHOTS, JACKPOT_OPEN_SHOTS, REEL_TWO_MATCH_BALLS, REEL_THREE_MATCH_BALLS } from "../../../shared/pachinko/pachinkoRules";
+
 // Frequent, small top-ups - the easiest pocket to catch on the board (see pachinkoLayout.ts's
 // BONUS_POCKETS, the widest non-jackpot target).
 export const BONUS_POCKET_BALLS = 2;
@@ -32,27 +38,15 @@ export const BONUS_POCKET_BALLS = 2;
 export const SIDE_TULIP_BALLS = 2;
 
 // The chucker itself never pays balls directly - it only fires the board's central reel gimmick
-// (see pachinkoReels.ts), a real modern machine's own "heso" -> LCD reel -> bonus round flow.
-// Only a three-of-a-kind match opens the attacker gate for this long; a miss or a two-of-a-kind
-// opens nothing - the chucker's own catch does not unconditionally open the attacker.
-// Queued matches (multiple chucker catches landing close together under hold-to-fire) each ADD
-// this much time on top of whatever's currently left rather than resetting it - see pachinko.ts's
-// own chucker branch for the Math.max(now, ...) + ATTACKER_OPEN_MS stacking.
-export const ATTACKER_OPEN_MS = 15000;
-
-// Two-of-a-kind is a small top-up and opens nothing; three-of-a-kind is bigger AND opens the
-// attacker (see ATTACKER_OPEN_MS above) - only the "three" tier touches the attacker at all.
-export const REEL_TWO_MATCH_BALLS = 4;
-export const REEL_THREE_MATCH_BALLS = 14;
+// (see shared/pachinko/pachinkoReels.ts), a real modern machine's own "heso" -> LCD reel -> bonus
+// round flow. Only a three-of-a-kind match opens the attacker gate; a miss or a two-of-a-kind
+// opens nothing - the chucker's own catch does not unconditionally open the attacker. How long
+// it stays open (ATTACKER_OPEN_SHOTS) and what each match tier pays (REEL_TWO/THREE_MATCH_BALLS)
+// are re-exported from shared/pachinko/pachinkoRules.ts at the top of this file.
 
 // A big, rare payout - the attacker is a wide target, but only reachable during its short open
 // window, and only reachable AT ALL via a chucker catch that also lands a reel match.
 export const ATTACKER_BALLS = 24;
-
-// How long the jackpot pocket actually pays once both tulips are simultaneously open - same
-// timed-window shape as the attacker (see pachinko.ts's own jackpot-priming branch), not a
-// standing "primed" state that sits open indefinitely until caught.
-export const JACKPOT_OPEN_MS = 5000;
 
 // Fraction of every ball's price that feeds the shared jackpot pool (fed by every ball fired,
 // not just misses - the pool is jackpot-only money, unrelated to what any individual shot pays

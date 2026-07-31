@@ -20,13 +20,13 @@
  * thing that can tunnel through under normal discrete collision detection), and once it reaches
  * the release point it becomes a real, unmodified free body - gravity, nail clusters with
  * per-shot restitution jitter, windmill bumpers, and every scoring pocket, which is a real
- * three-sided physical cup (open top only - see buildPocketWalls), not just an invisible
- * detection zone. Whatever the ball actually falls into is the outcome; a ball that clips a
- * pocket's side wall bounces off it like anything else in the field, it doesn't "catch" from
- * the side. Priming/timer state (tulip open/closed, jackpot primed, attacker's open window)
- * never changes what's physically reachable - see pachinkoLayout.ts's own comment on that -
- * it's resolved entirely by the caller (pachinko.ts) from the outcome this returns, not by this
- * module. A small amount of honest per-shot randomness (nail jitter, a touch of launch noise),
+ * physical cup (open top only - see buildPocketWalls), not just an invisible detection zone.
+ * Whatever the ball actually falls into is the outcome; a ball that clips a pocket's side wall
+ * bounces off it like anything else in the field, it doesn't "catch" from the side. Gate state
+ * (chucker/attacker/jackpot open or closed) never changes the board's physical geometry, so it
+ * never changes where a ball goes - it only decides whether entering one of those three pockets
+ * SCORES. See simulateShot's own header for why that separation matters so much.
+ * A small amount of honest per-shot randomness (nail jitter, a touch of launch noise),
  * drawn from the shot's own seeded RNG, means a fixed power value doesn't deterministically
  * reproduce the same outcome shot to shot - but the SAME seed always does, which is the whole
  * point.
@@ -125,44 +125,50 @@ function buildWallSegments(points: Point[]): Matter.Body[] {
     return segments;
 }
 
-// A pocket is a real three-sided cup, not just a detection zone: left/right walls plus a floor,
-// open only at the top (pocket.position.y, the same y the hit-test below uses as the catch
-// window's center). A ball can only ever fall in through that open top - hitting a side wall
-// bounces it away like any other obstacle, it can't "jump in" sideways or up through the floor.
+// The three pockets whose scoring is gated by round state - the chucker (closed while the
+// attacker it opens is still running), the attacker (closed until a chucker catch opens it), and
+// the jackpot (unprimed until both tulips are open). Every other pocket always both exists and
+// scores. See buildPocketWalls for why these three are built without a floor.
+const GATED_POCKET_IDS = new Set(["chucker", "attacker", "jackpot"]);
+
+// A pocket is a real physical cup, not just a detection zone: left/right walls, plus a floor for
+// the ungated pockets. A ball can only ever be inside one by having fallen in through the open
+// top - hitting a side wall bounces it away like any other obstacle, it can't "jump in" sideways.
+//
+// The three GATED pockets deliberately get NO floor, whatever their current state, which is what
+// makes a ball's whole trajectory independent of gate state (see simulateShot's own header). They
+// still get their side walls, so the field's geometry - and therefore every ball's path - is
+// exactly the same on every shot, no matter which gates happen to be open. A gated pocket that's
+// currently CLOSED behaves as it always has: the ball falls through the empty mouth and carries
+// on down the board. A gated pocket that's currently OPEN catches the ball the moment it enters
+// the mouth (see checkPocketHit), and the trajectory is truncated right there - so the floor that
+// would have stopped it is never reached and never needed. Only a floor could make the path
+// itself depend on a gate, so not building one is the whole trick.
 function buildPocketWalls(pocket: FixedPocket): Matter.Body[] {
     const top = pocket.position.y - POCKET_DEPTH / 2;
     const bottom = pocket.position.y + POCKET_DEPTH / 2;
     const left = pocket.position.x - pocket.halfWidth;
     const right = pocket.position.x + pocket.halfWidth;
     const wallOptions = { isStatic: true, restitution: 0.55, friction: 0.05, label: "pocket-wall" };
-    return [
+    const walls = [
         Matter.Bodies.rectangle(left, (top + bottom) / 2, 2, POCKET_DEPTH, wallOptions),
         Matter.Bodies.rectangle(right, (top + bottom) / 2, 2, POCKET_DEPTH, wallOptions),
-        Matter.Bodies.rectangle((left + right) / 2, bottom, right - left, 2, wallOptions),
     ];
+    if (!GATED_POCKET_IDS.has(pocket.id)) {
+        walls.push(Matter.Bodies.rectangle((left + right) / 2, bottom, right - left, 2, wallOptions));
+    }
+    return walls;
 }
 
-// The chucker while inactive (attacker already open from an earlier catch), the attacker while
-// closed (no chucker catch has opened it yet), and the jackpot while unprimed (tulips not both
-// open) all work the same way: not just unlit, literally not there - no walls, so a ball flies
-// straight through that space instead of bouncing off an obstacle that isn't currently doing
-// anything. pocketsInPlay is every pocket except whichever of those three is presently inactive.
-function pocketsInPlay(chuckerActive: boolean, attackerActive: boolean, jackpotActive: boolean): FixedPocket[] {
-    return ALL_POCKETS.filter((p) => {
-        if (p.id === "chucker") return chuckerActive;
-        if (p.id === "attacker") return attackerActive;
-        if (p.id === "jackpot") return jackpotActive;
-        return true;
-    });
-}
-
-function buildAttemptWorld(chuckerActive: boolean, attackerActive: boolean, jackpotActive: boolean, rng: Rng): { engine: Matter.Engine; ball: Matter.Body; spinnerBodies: Matter.Body[] } {
+// Takes no gate flags at all - that's the point. Every shot builds the identical world, so the
+// ball's path is a pure function of (seed, launchPower). See simulateShot's own header.
+function buildAttemptWorld(rng: Rng): { engine: Matter.Engine; ball: Matter.Body; spinnerBodies: Matter.Body[] } {
     const engine = Matter.Engine.create({ gravity: { x: 0, y: 1, scale: 0.001 }, positionIterations: 12, velocityIterations: 10 });
 
     const bodies: Matter.Body[] = [
         ...buildWallSegments(BOUNDARY_RIGHT_POINTS),
         ...buildWallSegments(BOUNDARY_LEFT_POINTS),
-        ...pocketsInPlay(chuckerActive, attackerActive, jackpotActive).flatMap(buildPocketWalls),
+        ...ALL_POCKETS.flatMap(buildPocketWalls),
     ];
 
     for (const pin of nailPositions) {
@@ -260,9 +266,17 @@ function railTrajectory(launchPower: number): { samples: TrajectorySample[] } {
     return { samples };
 }
 
-// The real "catch" check - now that every pocket has physical walls (buildPocketWalls), a ball
-// can only ever be within this x/y window by having actually fallen in through the open top, so
-// this can just be a plain window check, no velocity-direction heuristic needed.
+// The real "catch" check - every pocket has physical side walls (buildPocketWalls), so a ball can
+// only ever be within this x/y window by having actually entered through the open top, so this
+// can just be a plain window check, no velocity-direction heuristic needed.
+//
+// This is now the ONLY place gate state has any effect at all (via checkPocketHit's flags below).
+// A gated pocket has no floor, so the ball passes right through its mouth window - which means
+// this window has to be sampled finely enough that a fast ball can't skip clean over it between
+// two checks. That's why the simulation loop calls checkPocketHit once per SUBSTEP rather than
+// once per step: per-substep displacement is already well under the 3px boundary-wall thickness
+// (that's what SUBSTEPS exists for), so an 18px-deep pocket window gets sampled several times
+// over, and a catch can't be missed.
 function withinPocket(ball: Matter.Body, pocket: FixedPocket): boolean {
     return Math.abs(ball.position.x - pocket.position.x) <= pocket.halfWidth && Math.abs(ball.position.y - pocket.position.y) <= POCKET_DEPTH / 2;
 }
@@ -310,23 +324,31 @@ function gutterPocketTrajectory(lastSample: TrajectorySample): TrajectorySample[
     return samples;
 }
 
-// chuckerActive defaults true (the chucker is a real obstacle/target most of the time), the
-// caller only passes false while the attacker it opens is still counting down from an earlier
-// catch. attackerActive and jackpotActive both default false (mirror image - the attacker
-// starts every round closed until a chucker catch opens it, and the jackpot starts every round
-// unprimed until both tulips are open). In every case, "inactive" means no walls at all (see
-// buildAttemptWorld) and no catch (see checkPocketHit) - a ball flies straight through that
-// space like the pocket was never there, not just an unlit/non-scoring target.
+// The ball's PATH is a pure function of (launchPower, rng) - the gate flags do not affect it at
+// all, and deliberately so. Every shot simulates the identical board (see buildAttemptWorld /
+// buildPocketWalls); the flags only decide whether entering one of the three gated pockets counts
+// as a catch (see checkPocketHit). That's what makes the client's local preview and the server's
+// authoritative replay physically identical even if the two ever disagree about a gate: the ball
+// always visibly goes exactly where the server scores it, and at worst they'd differ over whether
+// a landing paid - never over where the ball went. An earlier design removed a closed pocket's
+// walls entirely, which meant one boolean could relocate a ball to a completely different pocket
+// (measured: ~9% of all shots, and 24-34% in the low-power band, purely from the attacker's 64px
+// mouth appearing or vanishing) - that was the cause of pockets seeming to fire at random.
+//
+// chuckerActive defaults true (the chucker scores most of the time), the caller only passes false
+// while the attacker it opens is still running. attackerActive and jackpotActive both default
+// false (mirror image - the attacker starts every round closed until a chucker catch opens it,
+// and the jackpot starts every round unprimed until both tulips are open).
 //
 // `rng` defaults to Math.random for every caller that doesn't care about reproducing a shot
-// (the RTP tuning script, the payout tests) - the seeded ticket/confirm flow (pachinko.ts,
+// (the RTP tuning script, the payout tests) - the seeded batch-replay flow (pachinko.ts,
 // the client sim worker) is the only caller that ever passes a real seeded one in, via
 // mulberry32(seed) (see prng.ts).
 export function simulateShot(launchPower: number, chuckerActive = true, attackerActive = false, jackpotActive = false, rng: Rng = Math.random): ShotResult {
     const { samples: railSamples } = railTrajectory(launchPower);
     const exitVelocity = launchPowerToExitVelocity(launchPower);
 
-    const { engine, ball, spinnerBodies } = buildAttemptWorld(chuckerActive, attackerActive, jackpotActive, rng);
+    const { engine, ball, spinnerBodies } = buildAttemptWorld(rng);
     // Velocity direction is RELEASE_TANGENT - tangent to the boundary curve at the release
     // point - not a fixed straight-up vector, so the ball leaves the rail already riding the
     // same arc as the glass (see launchPowerToExitVelocity's own comment for the magnitude
@@ -352,7 +374,7 @@ export function simulateShot(launchPower: number, chuckerActive = true, attacker
         freeBodySamples.push({ x: ball.position.x, y: ball.position.y, r: ball.angle, spinnerAngles: sampleSpinnerAngles() });
     };
 
-    for (let step = 0; step < MAX_STEPS; step++) {
+    for (let step = 0; step < MAX_STEPS && !outcome; step++) {
         // Several smaller updates instead of one big one - matter-js does discrete (not
         // continuous) collision detection, so a fast-moving ball can cross a thin wall segment
         // entirely within a single update and never register the collision at all. Splitting
@@ -360,12 +382,17 @@ export function simulateShot(launchPower: number, chuckerActive = true, attacker
         // check, without changing the sampling rate or the total simulated time.
         for (let sub = 0; sub < SUBSTEPS; sub++) {
             Matter.Engine.update(engine, FIXED_TIMESTEP_MS / SUBSTEPS);
+            // Checked per SUBSTEP, not per step - a gated pocket has no floor to stop the ball,
+            // so its mouth window has to be sampled finely enough that a fast ball can't skip
+            // clean over it between checks. See withinPocket's own comment.
+            const hit = checkPocketHit(ball, chuckerActive, attackerActive, jackpotActive);
+            if (hit) {
+                outcome = hit;
+                pushSample();
+                break;
+            }
         }
-
-        const hit = checkPocketHit(ball, chuckerActive, attackerActive, jackpotActive);
-        if (hit) {
-            outcome = hit;
-            pushSample();
+        if (outcome) {
             break;
         }
         if (ball.position.y > GUTTER_CUTOUT_Y + 10) {

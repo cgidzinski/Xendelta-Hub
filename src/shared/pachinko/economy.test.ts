@@ -1,151 +1,150 @@
 import { describe, it, expect } from "vitest";
-import { applyShotOutcome, EconomyGateState, EconomyConstants } from "./economy";
+import { applyShot, gateFlagsFor, PachinkoGateState, PachinkoPayoutConstants } from "./economy";
+import { spinReel, reelRngForSeed, ReelSpinResult } from "./pachinkoReels";
+import { ATTACKER_OPEN_SHOTS, JACKPOT_OPEN_SHOTS } from "./pachinkoRules";
 
-// Mirrors pachinko.ts's own constants closely enough for these tests' purposes - not imported
-// directly since that file is server-only (mongoose/express/Piscina), but the values themselves
-// don't matter for what's being tested here, only that both sides of a comparison use the same
-// ones.
-const CONSTANTS: EconomyConstants = {
-    bonusPocketBalls: 8,
-    sideTulipBalls: 4,
-    attackerBalls: 15,
-    jackpotOpenMs: 5000,
-};
-
+const CONSTANTS: PachinkoPayoutConstants = { bonusPocketBalls: 2, sideTulipBalls: 2, attackerBalls: 24 };
 const PRICE_PER_BALL = 100;
 
-function freshState(overrides: Partial<EconomyGateState> = {}): EconomyGateState {
-    return { ballsRemaining: 10, leftTulipOpen: false, rightTulipOpen: false, attackerOpenUntil: 0, jackpotOpenUntil: 0, ...overrides };
+function state(overrides: Partial<PachinkoGateState> = {}): PachinkoGateState {
+    return { ballsRemaining: 100, leftTulipOpen: false, rightTulipOpen: false, attackerShotsRemaining: 0, jackpotShotsRemaining: 0, ...overrides };
 }
 
-describe("applyShotOutcome", () => {
-    it("is pure - never mutates the state object passed in", () => {
-        const state = freshState();
-        const snapshot = { ...state };
-        applyShotOutcome(state, "bonusLeft", CONSTANTS, 1000, PRICE_PER_BALL, 0);
-        expect(state).toEqual(snapshot);
+const apply = (s: PachinkoGateState, outcome: Parameters<typeof applyShot>[1], reelSpin?: ReelSpinResult) => applyShot(s, outcome, reelSpin, CONSTANTS, 1000, PRICE_PER_BALL);
+
+describe("gateFlagsFor", () => {
+    it("chucker and attacker share one gate - the chucker only scores while the attacker isn't running", () => {
+        expect(gateFlagsFor(state())).toEqual({ chuckerActive: true, attackerActive: false, jackpotActive: false });
+        expect(gateFlagsFor(state({ attackerShotsRemaining: 3 }))).toEqual({ chuckerActive: false, attackerActive: true, jackpotActive: false });
     });
 
-    it("awards exactly bonusPocketBalls on a bonus pocket catch, no gate-state change", () => {
-        const state = freshState();
-        const { ballsAwarded, nextState } = applyShotOutcome(state, "bonusLeft", CONSTANTS, 1000, PRICE_PER_BALL, 0);
-        expect(ballsAwarded).toBe(CONSTANTS.bonusPocketBalls);
-        expect(nextState).toEqual({ ...state, ballsRemaining: state.ballsRemaining + CONSTANTS.bonusPocketBalls });
+    it("the jackpot is live exactly while its ball counter is above zero", () => {
+        expect(gateFlagsFor(state({ jackpotShotsRemaining: 1 })).jackpotActive).toBe(true);
+        expect(gateFlagsFor(state({ jackpotShotsRemaining: 0 })).jackpotActive).toBe(false);
+    });
+});
+
+describe("applyShot", () => {
+    it("is pure - never mutates the state passed in", () => {
+        const s = state();
+        const snapshot = { ...s };
+        apply(s, "bonusLeft");
+        expect(s).toEqual(snapshot);
     });
 
-    it("a miss (gutter) awards nothing and changes nothing", () => {
-        const state = freshState({ leftTulipOpen: true });
-        const { ballsAwarded, nextState } = applyShotOutcome(state, "gutter", CONSTANTS, 1000, PRICE_PER_BALL, 0);
-        expect(ballsAwarded).toBe(0);
-        expect(nextState).toEqual(state);
+    it("charges exactly one ball for firing, on every outcome including a miss", () => {
+        expect(apply(state(), "gutter").nextState.ballsRemaining).toBe(99);
+        expect(apply(state(), "bonusLeft").nextState.ballsRemaining).toBe(99 + CONSTANTS.bonusPocketBalls);
+        expect(apply(state(), "attacker").nextState.ballsRemaining).toBe(99 + CONSTANTS.attackerBalls);
     });
 
-    it("a chucker catch awards 0 balls locally and leaves every gate untouched, including attackerOpenUntil - only a batch response can ever change those (see this file's own header)", () => {
-        const state = freshState({ attackerOpenUntil: 0 });
-        const { ballsAwarded, nextState } = applyShotOutcome(state, "chucker", CONSTANTS, 1000, PRICE_PER_BALL, 0);
-        expect(ballsAwarded).toBe(0);
-        expect(nextState).toEqual(state);
+    it("toggles the matching tulip and pays the tulip award", () => {
+        const first = apply(state(), "tulipLeft");
+        expect(first.ballsAwarded).toBe(CONSTANTS.sideTulipBalls);
+        expect(first.nextState.leftTulipOpen).toBe(true);
+        expect(first.nextState.rightTulipOpen).toBe(false);
+        // Catching it again closes it back up.
+        expect(apply(first.nextState, "tulipLeft").nextState.leftTulipOpen).toBe(false);
     });
 
-    it("toggles the matching tulip open, and awards sideTulipBalls, when the jackpot window isn't active", () => {
-        const state = freshState({ leftTulipOpen: false });
-        const { ballsAwarded, nextState } = applyShotOutcome(state, "tulipLeft", CONSTANTS, 1000, PRICE_PER_BALL, 0);
-        expect(ballsAwarded).toBe(CONSTANTS.sideTulipBalls);
-        expect(nextState.leftTulipOpen).toBe(true);
-        expect(nextState.rightTulipOpen).toBe(false);
+    it("opening both tulips primes the jackpot for exactly JACKPOT_OPEN_SHOTS balls", () => {
+        const next = apply(state({ leftTulipOpen: true }), "tulipRight").nextState;
+        expect(next.jackpotShotsRemaining).toBe(JACKPOT_OPEN_SHOTS);
+        expect(gateFlagsFor(next).jackpotActive).toBe(true);
     });
 
-    it("toggles the tulip back closed on a second catch", () => {
-        const state = freshState({ leftTulipOpen: true });
-        const { nextState } = applyShotOutcome(state, "tulipLeft", CONSTANTS, 1000, PRICE_PER_BALL, 0);
-        expect(nextState.leftTulipOpen).toBe(false);
+    it("the jackpot window covers exactly the next JACKPOT_OPEN_SHOTS shots, then closes and resets both tulips", () => {
+        let s = apply(state({ leftTulipOpen: true }), "tulipRight").nextState;
+        for (let i = 0; i < JACKPOT_OPEN_SHOTS; i++) {
+            expect(gateFlagsFor(s).jackpotActive).toBe(true);
+            s = apply(s, "gutter").nextState;
+        }
+        expect(gateFlagsFor(s).jackpotActive).toBe(false);
+        // Window ran out without being converted - the priming sequence starts over.
+        expect(s.leftTulipOpen).toBe(false);
+        expect(s.rightTulipOpen).toBe(false);
     });
 
-    it("does NOT toggle a tulip while the jackpot window is already active - still awards the balls though", () => {
-        const state = freshState({ leftTulipOpen: false, jackpotOpenUntil: 5000 });
-        const { ballsAwarded, nextState } = applyShotOutcome(state, "tulipLeft", CONSTANTS, 1000, PRICE_PER_BALL, 1000);
-        expect(ballsAwarded).toBe(CONSTANTS.sideTulipBalls);
-        expect(nextState.leftTulipOpen).toBe(false);
-        expect(nextState.jackpotOpenUntil).toBe(5000);
+    it("tulips don't re-toggle while the jackpot window they primed is still running", () => {
+        const primed = apply(state({ leftTulipOpen: true }), "tulipRight").nextState;
+        const during = apply(primed, "tulipLeft");
+        expect(during.ballsAwarded).toBe(CONSTANTS.sideTulipBalls); // still pays
+        expect(during.nextState.leftTulipOpen).toBe(true); // but doesn't flip
+        expect(during.nextState.jackpotShotsRemaining).toBe(JACKPOT_OPEN_SHOTS - 1); // and doesn't re-prime
     });
 
-    it("opening both tulips at once primes the jackpot window for jackpotOpenMs", () => {
-        const state = freshState({ leftTulipOpen: true, rightTulipOpen: false });
-        const now = 1000;
-        const { nextState } = applyShotOutcome(state, "tulipRight", CONSTANTS, 1000, PRICE_PER_BALL, now);
-        expect(nextState.leftTulipOpen).toBe(true);
-        expect(nextState.rightTulipOpen).toBe(true);
-        expect(nextState.jackpotOpenUntil).toBe(now + CONSTANTS.jackpotOpenMs);
+    it("catching the jackpot closes its window immediately and resets both tulips", () => {
+        const primed = apply(state({ leftTulipOpen: true }), "tulipRight").nextState;
+        const hit = apply(primed, "jackpot");
+        expect(hit.ballsAwarded).toBe(Math.round(1000 / PRICE_PER_BALL));
+        expect(hit.nextState.jackpotShotsRemaining).toBe(0);
+        expect(hit.nextState.leftTulipOpen).toBe(false);
+        expect(hit.nextState.rightTulipOpen).toBe(false);
     });
 
-    it("a jackpot catch estimates ballsAwarded from the pool/price ratio, rounded, and resets both tulips + the window", () => {
-        const state = freshState({ leftTulipOpen: true, rightTulipOpen: true, jackpotOpenUntil: 5000 });
-        const pool = 1234;
-        const { ballsAwarded, nextState } = applyShotOutcome(state, "jackpot", CONSTANTS, pool, PRICE_PER_BALL, 1000);
-        expect(ballsAwarded).toBe(Math.round(pool / PRICE_PER_BALL));
-        expect(nextState.leftTulipOpen).toBe(false);
-        expect(nextState.rightTulipOpen).toBe(false);
-        expect(nextState.jackpotOpenUntil).toBe(0);
+    it("a chucker pays only what its reel spin says, and only a three-of-a-kind opens the attacker", () => {
+        const noMatch: ReelSpinResult = { symbols: ["ITEM_A", "ITEM_B", "ITEM_C"], matchTier: "none", ballsAwarded: 0, attackerOpenShots: 0 };
+        const three: ReelSpinResult = { symbols: ["ITEM_A", "ITEM_A", "ITEM_A"], matchTier: "three", ballsAwarded: 14, attackerOpenShots: ATTACKER_OPEN_SHOTS };
+
+        const miss = apply(state(), "chucker", noMatch);
+        expect(miss.ballsAwarded).toBe(0);
+        expect(miss.nextState.attackerShotsRemaining).toBe(0);
+
+        const win = apply(state(), "chucker", three);
+        expect(win.ballsAwarded).toBe(14);
+        expect(win.nextState.attackerShotsRemaining).toBe(ATTACKER_OPEN_SHOTS);
+        // The window covers the NEXT shots, not the one that opened it.
+        expect(gateFlagsFor(win.nextState).attackerActive).toBe(true);
     });
 
-    it("a jackpot catch awards 0 when pricePerBall is 0 (never divides by zero)", () => {
-        const state = freshState();
-        const { ballsAwarded } = applyShotOutcome(state, "jackpot", CONSTANTS, 1000, 0, 0);
-        expect(ballsAwarded).toBe(0);
+    it("stacked three-of-a-kinds add to the attacker window rather than resetting it", () => {
+        const three: ReelSpinResult = { symbols: ["ITEM_A", "ITEM_A", "ITEM_A"], matchTier: "three", ballsAwarded: 14, attackerOpenShots: ATTACKER_OPEN_SHOTS };
+        const once = apply(state(), "chucker", three).nextState;
+        const twice = apply(once, "chucker", three).nextState;
+        // One ball burned by the second shot, then a second full window added on top.
+        expect(twice.attackerShotsRemaining).toBe(ATTACKER_OPEN_SHOTS - 1 + ATTACKER_OPEN_SHOTS);
     });
 
-    it("a lapsed jackpot window (already past `now`) closes both tulips on the next shot, same as pachinko.ts's shouldCloseLapsedTulips", () => {
-        // Window opened at t=0 for 5000ms; by t=6000 it's lapsed. The next shot processed after
-        // that (any outcome, even a plain miss) should observe both tulips snap shut.
-        const state = freshState({ leftTulipOpen: true, rightTulipOpen: true, jackpotOpenUntil: 5000 });
-        const { nextState } = applyShotOutcome(state, "gutter", CONSTANTS, 1000, PRICE_PER_BALL, 6000);
-        expect(nextState.leftTulipOpen).toBe(false);
-        expect(nextState.rightTulipOpen).toBe(false);
-        expect(nextState.jackpotOpenUntil).toBe(0);
+    it("never lets a window counter go negative", () => {
+        let s = state({ attackerShotsRemaining: 1 });
+        s = apply(s, "gutter").nextState;
+        expect(s.attackerShotsRemaining).toBe(0);
+        s = apply(s, "gutter").nextState;
+        expect(s.attackerShotsRemaining).toBe(0);
     });
 
-    // The whole point of this module (see its own file header): PachinkoBoard.tsx applies these
-    // same transitions locally, shot by shot, entirely independent of pachinko.ts's processBatch
-    // - which implements the identical rules server-side. This walks a full multi-shot sequence
-    // through applyShotOutcome and checks it lands on exactly the state processBatch's own logic
-    // would produce for the same sequence, so a divergence between the two copies of these rules
-    // would show up here rather than only as an in-production balance mismatch.
-    it("a realistic multi-shot sequence lands on the exact expected final gate state", () => {
-        let state = freshState({ ballsRemaining: 100 });
-        const now = 0;
+    it("a jackpot catch awards 0 rather than dividing by zero when pricePerBall is 0", () => {
+        expect(applyShot(state(), "jackpot", undefined, CONSTANTS, 1000, 0).ballsAwarded).toBe(0);
+    });
 
-        // 1. Bonus catch - +8 balls, no gate change.
-        let step = applyShotOutcome(state, "bonusLeft", CONSTANTS, 1000, PRICE_PER_BALL, now);
-        state = step.nextState;
-        expect(state.ballsRemaining).toBe(108);
+    // The property the whole redesign rests on: state is a pure fold over the shot sequence, with
+    // no clock and no unshared randomness. Replaying the same shots must always land on exactly
+    // the same state - which is what makes the client's local prediction and the server's
+    // independent replay agree by construction rather than by careful maintenance.
+    it("is a deterministic fold - replaying an identical shot sequence lands on an identical state", () => {
+        const script: Array<[Parameters<typeof applyShot>[1], number]> = [
+            ["gutter", 1],
+            ["tulipLeft", 2],
+            ["chucker", 3],
+            ["bonusRight", 4],
+            ["tulipRight", 5],
+            ["gutter", 6],
+            ["chucker", 7],
+            ["attacker", 8],
+            ["jackpot", 9],
+            ["tulipLeft", 10],
+        ];
 
-        // 2. Left tulip - opens, +4 balls.
-        step = applyShotOutcome(state, "tulipLeft", CONSTANTS, 1000, PRICE_PER_BALL, now);
-        state = step.nextState;
-        expect(state.leftTulipOpen).toBe(true);
-        expect(state.ballsRemaining).toBe(112);
+        const replay = () => {
+            let s = state({ ballsRemaining: 500 });
+            for (const [outcome, seed] of script) {
+                const reelSpin = outcome === "chucker" ? spinReel(reelRngForSeed(seed)) : undefined;
+                s = applyShot(s, outcome, reelSpin, CONSTANTS, 1000, PRICE_PER_BALL).nextState;
+            }
+            return s;
+        };
 
-        // 3. Right tulip - opens too, primes the jackpot window, +4 balls.
-        step = applyShotOutcome(state, "tulipRight", CONSTANTS, 1000, PRICE_PER_BALL, now);
-        state = step.nextState;
-        expect(state.rightTulipOpen).toBe(true);
-        expect(state.jackpotOpenUntil).toBe(now + CONSTANTS.jackpotOpenMs);
-        expect(state.ballsRemaining).toBe(116);
-
-        // 4. Jackpot catch while the window is active - pool is now 5000, so +50 balls, window
-        // and both tulips reset.
-        step = applyShotOutcome(state, "jackpot", CONSTANTS, 5000, PRICE_PER_BALL, now);
-        state = step.nextState;
-        expect(step.ballsAwarded).toBe(50);
-        expect(state.ballsRemaining).toBe(166);
-        expect(state.leftTulipOpen).toBe(false);
-        expect(state.rightTulipOpen).toBe(false);
-        expect(state.jackpotOpenUntil).toBe(0);
-
-        // 5. A chucker catch afterwards - locally worth nothing until a batch reconciles it, and
-        // doesn't touch any gate.
-        step = applyShotOutcome(state, "chucker", CONSTANTS, 500, PRICE_PER_BALL, now);
-        expect(step.ballsAwarded).toBe(0);
-        expect(step.nextState).toEqual(state);
+        expect(replay()).toEqual(replay());
+        expect(replay()).toEqual(replay());
     });
 });

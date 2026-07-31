@@ -234,14 +234,17 @@ export interface FixedPocket {
     halfWidth: number;
 }
 
-// Every scoring pocket on this board is now the SAME shape of thing: a fixed-width physical cup
-// (see POCKET_DEPTH/buildPocketWalls in pachinkoPhysics.ts - real side/bottom walls, so a ball
-// can only ever enter through the open top and bounces off if it hits a side, it never "jumps
-// in" sideways) that never changes size. Priming/open-closed state (tulips toggling, the
-// jackpot needing both tulips open, the attacker's timed window) only ever changes what a catch
-// there PAYS or what it visually looks like - never whether it's physically reachable. That's a
-// deliberate simplification from an earlier draft where some of these gates literally shrank
-// when "closed" - a real pachinko pocket's opening doesn't change size, only whether it's lit.
+// Every scoring pocket on this board is the SAME shape of thing: a fixed-width physical cup (see
+// POCKET_DEPTH/buildPocketWalls in pachinkoPhysics.ts - real side walls, so a ball can only ever
+// enter through the open top and bounces off if it hits a side, it never "jumps in" sideways)
+// that never changes size. Open/closed state (tulips toggling, the jackpot needing both tulips
+// open, the attacker's window) only ever changes what a catch there PAYS and what it visually
+// looks like - never whether it's physically reachable, and never the board's geometry, so it can
+// never change where a ball goes. The three gated pockets are built without a floor precisely to
+// guarantee that (see buildPocketWalls); every other pocket has one. That's a deliberate
+// simplification from an earlier draft where some of these gates literally shrank - or vanished
+// outright - when "closed"; a real pachinko pocket's opening doesn't change size, only whether
+// it's lit.
 
 // Side tulips - catching one toggles it open/closed and awards SIDE_TULIP_BALLS unconditionally
 // (see pachinkoPayouts.ts). Both open at once opens the jackpot pocket below for a timed window
@@ -267,15 +270,11 @@ export function isJackpotPrimed(leftOpen: boolean, rightOpen: boolean): boolean 
     return leftOpen && rightOpen;
 }
 
-// Whether a lapsed jackpot window should force any still-open tulips closed. Only true when a
-// window actually existed before this shot (previousJackpotOpenUntil > 0) and has since expired
-// (nextJackpotOpenUntil <= now) - NOT simply "there's currently no open window", which is also
-// true on an ordinary single-tulip catch where no window was ever primed at all
-// (previousJackpotOpenUntil still its default 0). See pachinko.ts's own chucker/tulip branch,
-// the only caller.
-export function shouldCloseLapsedTulips(previousJackpotOpenUntil: number, nextJackpotOpenUntil: number, now: number): boolean {
-    return previousJackpotOpenUntil > 0 && nextJackpotOpenUntil <= now;
-}
+// (The old shouldCloseLapsedTulips helper lived here. It took two wall-clock timestamps and a
+// `now`, which is exactly the shape that no longer exists: gate windows are counted in balls, not
+// milliseconds - see pachinkoRules.ts's header. The rule it encoded, "a jackpot window that was
+// running and has now run out takes both tulips shut with it", now lives inline in economy.ts's
+// applyShot alongside every other transition, where it reads as one line against the shot counter.)
 
 // Bonus pockets - frequent, small top-ups. Sized bigger than the tulips (18px wide vs 16px)
 // since they pay less - pocket width scales inversely with payout throughout this board, the

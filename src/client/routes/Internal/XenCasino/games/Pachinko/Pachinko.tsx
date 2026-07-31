@@ -29,8 +29,8 @@ interface PachinkoOddsResponse {
     sideTulipBalls: number;
     bonusPocketBalls: number;
     attackerBalls: number;
-    attackerOpenMs: number;
-    jackpotOpenMs: number;
+    attackerOpenShots: number;
+    jackpotOpenShots: number;
     cashOutRate: number;
     jackpotPool: number;
     maxPayout: number;
@@ -44,8 +44,8 @@ interface ActiveBatchResponse {
     pricePerBall?: number;
     leftTulipOpen?: boolean;
     rightTulipOpen?: boolean;
-    attackerOpenUntil?: number;
-    jackpotOpenUntil?: number;
+    attackerShotsRemaining?: number;
+    jackpotShotsRemaining?: number;
     lastProcessedSeq?: number;
 }
 
@@ -56,8 +56,8 @@ interface BuyResponse {
     pricePerBall: number;
     leftTulipOpen: boolean;
     rightTulipOpen: boolean;
-    attackerOpenUntil: number;
-    jackpotOpenUntil: number;
+    attackerShotsRemaining: number;
+    jackpotShotsRemaining: number;
     lastProcessedSeq: number;
     balance: string;
 }
@@ -114,8 +114,8 @@ export default function Pachinko() {
             pricePerBall: data.pricePerBall,
             leftTulipOpen: prev?.leftTulipOpen ?? data.leftTulipOpen,
             rightTulipOpen: prev?.rightTulipOpen ?? data.rightTulipOpen,
-            attackerOpenUntil: prev?.attackerOpenUntil ?? data.attackerOpenUntil,
-            jackpotOpenUntil: prev?.jackpotOpenUntil ?? data.jackpotOpenUntil,
+            attackerShotsRemaining: prev?.attackerShotsRemaining ?? data.attackerShotsRemaining,
+            jackpotShotsRemaining: prev?.jackpotShotsRemaining ?? data.jackpotShotsRemaining,
             lastProcessedSeq: data.lastProcessedSeq,
         }));
         invalidateShared();
@@ -180,8 +180,8 @@ export default function Pachinko() {
                     pricePerBall: active.pricePerBall,
                     leftTulipOpen: active.leftTulipOpen ?? false,
                     rightTulipOpen: active.rightTulipOpen ?? false,
-                    attackerOpenUntil: active.attackerOpenUntil ?? 0,
-                    jackpotOpenUntil: active.jackpotOpenUntil ?? 0,
+                    attackerShotsRemaining: active.attackerShotsRemaining ?? 0,
+                    jackpotShotsRemaining: active.jackpotShotsRemaining ?? 0,
                     lastProcessedSeq: active.lastProcessedSeq ?? 0,
                 });
             } else {
@@ -204,7 +204,7 @@ export default function Pachinko() {
                     { label: "Side tulip (left or right)", payout: `+${odds.sideTulipBalls} balls` },
                     { label: "Chucker", payout: "Spins the reel" },
                     { label: "Reel, 2 of a kind", payout: "Small ball bonus" },
-                    { label: "Reel, 3 of a kind", payout: `Bigger bonus + opens attacker (${Math.round(odds.attackerOpenMs / 1000)}s)` },
+                    { label: "Reel, 3 of a kind", payout: `Bigger bonus + opens attacker (${odds.attackerOpenShots} balls)` },
                     { label: "Attacker (while open)", payout: `+${odds.attackerBalls} balls` },
                     { label: "Jackpot, primed", payout: "Pool → balls" },
                 ],
@@ -236,7 +236,6 @@ export default function Pachinko() {
                     bonusPocketBalls={odds?.bonusPocketBalls ?? 0}
                     sideTulipBalls={odds?.sideTulipBalls ?? 0}
                     attackerBalls={odds?.attackerBalls ?? 0}
-                    jackpotOpenMs={odds?.jackpotOpenMs ?? 0}
                     launchPowerRange={odds?.launchPowerRange ?? { min: 0, max: 100 }}
                     pricePerBall={odds?.pricePerBall ?? 0}
                     isResuming={checkingActive}
