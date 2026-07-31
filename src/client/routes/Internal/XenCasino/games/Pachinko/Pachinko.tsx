@@ -8,7 +8,7 @@ import { casinoLedgerKeys } from "../../../../../hooks/casino/useCasinoLedger";
 import { casinoDailyQuestKeys } from "../../../../../hooks/casino/useCasinoDailyQuest";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import PlayLauncher from "../../components/PlayLauncher";
-import PachinkoBoard, { PachinkoLaunchResult, PachinkoLayoutData, PachinkoSession } from "../../components/PachinkoBoard";
+import PachinkoBoard, { PachinkoTicket, PachinkoConfirmResult, PachinkoLayoutData, PachinkoSession } from "../../components/PachinkoBoard";
 import { formatCheddar } from "../../utils/currency";
 
 // Everything Pachinko needs lives in this one file, same shape as Plinko.tsx - it only imports
@@ -70,8 +70,15 @@ const fetchActive = async (): Promise<ActiveBatchResponse> => (await apiClient.g
 // Same endpoint creates a fresh batch or reups an existing one - the server decides which based
 // on whether the player already has an active round (see pachinko.ts's /buy handler).
 const buyBalls = async (balls: number): Promise<BuyResponse> => (await apiClient.post<ApiResponse<BuyResponse>>("/api/casino/games/pachinko/buy", { balls })).data.data!;
-const launchBall = async (launchPower: number): Promise<PachinkoLaunchResult> =>
-    (await apiClient.post<ApiResponse<PachinkoLaunchResult>>("/api/casino/games/pachinko/launch", { launchPower })).data.data!;
+// Cheap - just claims a ball and hands back a seed, no physics at all (see pachinko.ts's own
+// file header for the whole ticket/confirm protocol this and confirmLaunch below are half of).
+const launchTicket = async (launchPower: number): Promise<PachinkoTicket> =>
+    (await apiClient.post<ApiResponse<PachinkoTicket>>("/api/casino/games/pachinko/launch", { launchPower })).data.data!;
+// The other half - the server's own authoritative replay of that seed, which is what actually
+// decides the shot. Called from PachinkoBoard's confirmFired, in the background, never something
+// the firing loop waits on.
+const confirmLaunch = async (seed: number): Promise<PachinkoConfirmResult> =>
+    (await apiClient.post<ApiResponse<PachinkoConfirmResult>>("/api/casino/games/pachinko/launch/confirm", { seed })).data.data!;
 const cashOutBalls = async (): Promise<CashOutResponse> => (await apiClient.post<ApiResponse<CashOutResponse>>("/api/casino/games/pachinko/cashout")).data.data!;
 
 export default function Pachinko() {
@@ -118,11 +125,19 @@ export default function Pachinko() {
         onError: (error: Error) => enqueueSnackbar(error.message || "Failed to buy balls", { variant: "error" }),
     });
 
-    const { mutateAsync: launchAsync } = useMutation({
-        mutationFn: launchBall,
-        onSuccess: invalidateShared,
-        onError: (error: Error) => enqueueSnackbar(error.message || "Failed to launch", { variant: "error" }),
-    });
+    // Plain functions, not useMutation - PachinkoBoard fires many of these concurrently under
+    // hold-to-fire (one ticket + confirm pair per ball), and each already handles its own
+    // failure/retry internally (see PachinkoBoard's confirmFired and fireOnce) rather than
+    // needing shared pending/error state or an error toast per attempt, which would just spam
+    // toasts on any transient hiccup instead of the quiet self-healing that's the whole point.
+    const launchTicketAsync = launchTicket;
+    const confirmLaunchAsync = async (seed: number) => {
+        const result = await confirmLaunch(seed);
+        if (!result.alreadySettled) {
+            invalidateShared();
+        }
+        return result;
+    };
 
     const { mutateAsync: cashOutAsync, isPending: isCashingOut } = useMutation({
         mutationFn: cashOutBalls,
@@ -219,7 +234,8 @@ export default function Pachinko() {
                     launchPowerRange={odds?.launchPowerRange ?? { min: 0, max: 100 }}
                     pricePerBall={odds?.pricePerBall ?? 0}
                     isResuming={checkingActive}
-                    launch={launchAsync}
+                    launchTicket={launchTicketAsync}
+                    confirmLaunch={confirmLaunchAsync}
                     reup={reupAsync}
                     isReuping={isReuping}
                     onCashOut={handleCashOut}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, Button, Slider, Typography } from "@mui/material";
 import { formatCheddar } from "../utils/currency";
+import { usePachinkoSimWorker } from "../workers/usePachinkoSimWorker";
 
 export type PachinkoOutcome = "gutter" | "tulipLeft" | "tulipRight" | "jackpot" | "bonusLeft" | "bonusRight" | "chucker" | "attacker";
 
@@ -83,16 +84,34 @@ export interface PachinkoReelSpin {
     attackerBonusMs: number;
 }
 
-export interface PachinkoLaunchResult {
-    outcome: PachinkoOutcome;
-    ballsAwarded: number;
-    trajectory: PachinkoTrajectorySample[];
-    reelSpin?: PachinkoReelSpin; // only present on a chucker catch - see pachinkoReels.ts (server)
-    leftTulipOpen: boolean;
-    rightTulipOpen: boolean;
-    attackerOpenUntil: number;
-    jackpotOpenUntil: number;
+// What POST /launch now hands back - a cheap claim, not a decided outcome (see pachinko.ts's own
+// file header for the whole ticket/confirm shape). The client replays this exact seed itself
+// (see usePachinkoSimWorker) to get an instant local preview to animate; nothing here is an
+// outcome yet.
+export interface PachinkoTicket {
+    seed: number;
+    launchPower: number;
+    chuckerActive: boolean;
+    attackerActive: boolean;
+    jackpotActive: boolean;
     ballsRemaining: number;
+}
+
+// What POST /launch/confirm hands back - the server's own authoritative replay of that same
+// seed, which is what actually counts (never anything the client's own local preview claimed).
+// `alreadySettled` is true when this seed was already confirmed by an earlier call (a retry
+// racing its own prior success, or the server's own opportunistic stale-ticket sweep beating the
+// client to it) - every other field is only present when it's not.
+export interface PachinkoConfirmResult {
+    alreadySettled: boolean;
+    outcome?: PachinkoOutcome;
+    ballsAwarded?: number;
+    reelSpin?: PachinkoReelSpin;
+    leftTulipOpen?: boolean;
+    rightTulipOpen?: boolean;
+    attackerOpenUntil?: number;
+    jackpotOpenUntil?: number;
+    ballsRemaining?: number;
 }
 
 export interface PachinkoBoardProps {
@@ -106,7 +125,8 @@ export interface PachinkoBoardProps {
     launchPowerRange: { min: number; max: number };
     pricePerBall: number; // needed even when session is null, so reup button costs can show before any batch exists
     isResuming: boolean; // the post-open "resume an existing batch?" check is in flight
-    launch: (launchPower: number) => Promise<PachinkoLaunchResult>;
+    launchTicket: (launchPower: number) => Promise<PachinkoTicket>;
+    confirmLaunch: (seed: number) => Promise<PachinkoConfirmResult>;
     reup: (balls: number) => Promise<unknown>;
     isReuping: boolean;
     onCashOut: () => void;
@@ -122,16 +142,11 @@ const POOF_MS = 450; // how long the ball+particle burst takes once a trajectory
 const CALLOUT_MS = 1000; // how long the center win/loss callout stays on screen
 const FIRE_INTERVAL_MS = 400; // 100 balls/minute while the launch button is held
 const MAX_CONCURRENT_BALLS = 20;
-// Caps how many /launch requests can be sent but not yet answered at once - firing blindly
-// every FIRE_INTERVAL_MS regardless of whether earlier requests have come back can outrun the
-// server's actual physics throughput under sustained hold-to-fire, building a backlog of
-// already-sent "pending" balls (drawn as a static dot at the launcher, see the "pending" phase
-// below) that only resolve and visibly take off later - releasing stops new requests instantly,
-// but that backlog keeps trickling in for however long it takes to drain, reading as balls still
-// launching well after you let go. Throttling to this cap makes firing self-pace to the real
-// round-trip time instead: a no-op when responses return well within FIRE_INTERVAL_MS (the cap
-// never binds), but it keeps the backlog small under load so there's little left to drain once
-// you release.
+// Caps how many /launch ticket requests can be sent but not yet answered at once. /launch is
+// cheap now (no physics at all, see pachinko.ts) so this rarely matters anymore, but it's kept
+// as the same defense-in-depth against outrunning the server under real load that it always was
+// - a no-op when responses return well within FIRE_INTERVAL_MS (the cap never binds), only
+// slowing new ticket requests down to match the server's actual response rate if it's ever slow.
 const MAX_PENDING_LAUNCHES = 3;
 const PARTICLE_COUNT = 12;
 const REUP_AMOUNTS = [1000];
@@ -198,17 +213,21 @@ interface Callout {
     won: boolean;
 }
 
-// One ball's whole client-side lifecycle, same shape as PlinkoBoard's ActiveBall: "pending"
-// from the instant the launch request goes out (rendered immediately at the launcher so
-// there's no dead gap while the server simulates the shot), "falling" once the real
-// trajectory comes back and starts interpolating, "landed" (poof + particle burst) before
-// it's removed. `seq` on "falling"/"landed" is this ball's own launch order, used so a
-// late-arriving response for an earlier-fired ball can never clobber session state a
-// later-arriving one already applied (see the tick loop below).
+// One ball's whole client-side lifecycle, same shape as PlinkoBoard's ActiveBall: "pending" from
+// the instant the launch ticket request goes out (rendered immediately at the launcher so
+// there's no dead gap), "falling" once the LOCAL preview simulation (see usePachinkoSimWorker)
+// finishes and starts interpolating - not once the server responds, that's the whole point of
+// the ticket/confirm split - "landed" (poof + particle burst) before it's removed.
+//
+// This is purely the ball's own VISUAL lifecycle now, entirely decoupled from when its shot
+// actually gets scored - see the tick loop and confirmFired below for that separate flow.
+// `won` is a display-only guess (outcome !== "gutter") for the poof's particle color, since the
+// real ballsAwarded isn't known locally; only affects a chucker whiff's particle color, never
+// anything that's actually credited.
 type ActiveBall =
     | { id: number; phase: "pending" }
-    | { id: number; phase: "falling"; result: PachinkoLaunchResult; startTime: number; seq: number }
-    | { id: number; phase: "landed"; result: PachinkoLaunchResult; landedAt: number; particles: Particle[] };
+    | { id: number; phase: "falling"; trajectory: PachinkoTrajectorySample[]; outcome: PachinkoOutcome; startTime: number }
+    | { id: number; phase: "landed"; trajectory: PachinkoTrajectorySample[]; outcome: PachinkoOutcome; won: boolean; landedAt: number; particles: Particle[] };
 
 let nextBallId = 0;
 let nextCalloutId = 0;
@@ -360,10 +379,14 @@ function drawReelDisplay(ctx: CanvasRenderingContext2D, now: number, anim: ReelA
 }
 
 /**
- * The reusable Pachinko board - canvas analog of PlinkoBoard, replaying physics trajectories
- * captured server-side. The server decides the whole outcome (a real matter-js simulation
- * driven by the player's own launch power) before any of this runs; this component's only
- * job is to play trajectories back and reflect the session state it's handed.
+ * The reusable Pachinko board - canvas analog of PlinkoBoard, but physics is isomorphic now
+ * (see src/shared/pachinko/pachinkoPhysics.ts), not server-only: launchTicket claims a ball and
+ * hands back a random seed near-instantly (no physics compute at all), this component replays
+ * that exact seed itself off the main thread (see usePachinkoSimWorker) for an instant local
+ * preview it animates immediately, and confirmLaunch fires in the background to get the
+ * server's own authoritative replay of the same seed - the one that actually decides what a
+ * shot paid, never anything this component's own local run claims. See pachinko.ts's own file
+ * header for the full protocol and confirmFired below for how the two get reconciled.
  *
  * The economy is ball-only: every catch adds balls to the session's own ballsRemaining, never
  * cheddar directly (see pachinko.ts). The board shows the tray's current cash value; the Cash
@@ -386,7 +409,8 @@ export default function PachinkoBoard({
     launchPowerRange,
     pricePerBall,
     isResuming,
-    launch,
+    launchTicket,
+    confirmLaunch,
     reup,
     isReuping,
     onCashOut,
@@ -395,6 +419,7 @@ export default function PachinkoBoard({
 }: PachinkoBoardProps) {
     const [callouts, setCallouts] = useState<Callout[]>([]);
     const [launchPower, setLaunchPower] = useState(() => launchPowerRange.min);
+    const { simulate } = usePachinkoSimWorker();
 
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const rafRef = useRef<number | null>(null);
@@ -433,7 +458,7 @@ export default function PachinkoBoard({
             if (ball.phase === "pending") {
                 positions.push({ x: layout.launcherPosition.x, y: layout.launcherPosition.y });
             } else if (ball.phase === "falling") {
-                const frames = ball.result.trajectory;
+                const frames = ball.trajectory;
                 const lastIndex = frames.length - 1;
                 if (lastIndex >= 0) {
                     const rawIndex = Math.max(0, (now - ball.startTime) / FRAME_MS);
@@ -445,7 +470,7 @@ export default function PachinkoBoard({
                     positions.push({ x: s0.x + (s1.x - s0.x) * frac, y: s0.y + (s1.y - s0.y) * frac });
                 }
             } else if (ball.phase === "landed") {
-                const frames = ball.result.trajectory;
+                const frames = ball.trajectory;
                 const final = frames[frames.length - 1];
                 if (final) positions.push({ x: final.x, y: final.y });
             }
@@ -720,7 +745,7 @@ export default function PachinkoBoard({
 
         for (const ball of activeBallsRef.current.values()) {
             if (ball.phase === "falling") {
-                const frames = ball.result.trajectory;
+                const frames = ball.trajectory;
                 const lastIndex = frames.length - 1;
                 if (lastIndex < 0) {
                     continue;
@@ -740,7 +765,7 @@ export default function PachinkoBoard({
                 ctx.arc(x, y, BALL_RADIUS, 0, Math.PI * 2);
                 ctx.fill();
             } else if (ball.phase === "landed") {
-                const frames = ball.result.trajectory;
+                const frames = ball.trajectory;
                 const final = frames[frames.length - 1] ?? layout.releasePoint;
                 const t = Math.min(1, (now - ball.landedAt) / POOF_MS);
 
@@ -752,7 +777,7 @@ export default function PachinkoBoard({
                     ctx.fill();
                 }
 
-                const won = ball.result.ballsAwarded > 0;
+                const won = ball.won;
                 for (const particle of ball.particles) {
                     const dist = particle.speed * (t * (POOF_MS / 1000));
                     const px = final.x + Math.cos(particle.angle) * dist;
@@ -776,79 +801,34 @@ export default function PachinkoBoard({
             const toRemove: number[] = [];
             for (const ball of activeBallsRef.current.values()) {
                 if (ball.phase === "falling") {
-                    const lastIndex = ball.result.trajectory.length - 1;
+                    const lastIndex = ball.trajectory.length - 1;
                     const elapsedFrames = (now - ball.startTime) / FRAME_MS;
                     if (elapsedFrames >= lastIndex) {
-                        const { result, seq } = ball;
-                        activeBallsRef.current.set(ball.id, { id: ball.id, phase: "landed", result, landedAt: now, particles: makeParticles() });
-
-                        // Misses don't get a popup - they're the most common outcome by far, so
-                        // surfacing them would mostly just be clutter; only an actual catch
-                        // (even a 0-ball one like a non-matching chucker spin) is worth calling
-                        // out.
-                        if (result.outcome !== "gutter") {
-                            const calloutId = nextCalloutId++;
-                            setCallouts((prev) => [...prev, { id: calloutId, outcome: result.outcome, ballsAwarded: result.ballsAwarded, won: result.ballsAwarded > 0 }]);
-                            setTimeout(() => setCallouts((prev) => prev.filter((c) => c.id !== calloutId)), CALLOUT_MS);
-                        }
-
-                        // The chucker fires the central reel the instant the ball actually lands
-                        // there (not the instant the response arrives) - same "catch has to be
-                        // visible before its consequence shows up" causality the callouts above
-                        // already follow. Each catch queues a spin; they animate one at a time
-                        // so rapid chucker hits stack visually instead of clobbering each other.
-                        // Capped at MAX_QUEUED_SPINS total (current + queued) - once full, the
-                        // chucker greys out and further catches are silently dropped.
-                        let deferAttackerUpdate = false;
-                        if (result.outcome === "chucker" && result.reelSpin) {
-                            const totalQueued = (currentReelAnimRef.current ? 1 : 0) + reelQueueRef.current.length;
-                            if (totalQueued < MAX_QUEUED_SPINS) {
-                                const isThreeMatch = result.reelSpin.matchTier === "three";
-                                reelQueueRef.current.push({
-                                    symbols: result.reelSpin.symbols,
-                                    matchTier: result.reelSpin.matchTier,
-                                    // The attacker only actually opens once this spin has visually
-                                    // landed on the three-of-a-kind that earned it (applied by the
-                                    // tick loop below) - not the instant this response arrives,
-                                    // which could be well before the reel even starts spinning.
-                                    attackerOpenUntil: isThreeMatch ? result.attackerOpenUntil : undefined,
-                                });
-                                deferAttackerUpdate = isThreeMatch;
-                            }
-                        }
-
-                        // Responses can arrive out of order under hold-to-fire - only apply this
-                        // one's session state if it's actually the freshest launch to land so
-                        // far, so a late response for an earlier ball can't regress ballsRemaining
-                        // or stomp a more recent tulip/attacker state change.
-                        if (seq > latestAppliedSeqRef.current && sessionRef.current) {
-                            latestAppliedSeqRef.current = seq;
-                            onSessionUpdate({
-                                ...sessionRef.current,
-                                ballsRemaining: result.ballsRemaining,
-                                leftTulipOpen: result.leftTulipOpen,
-                                rightTulipOpen: result.rightTulipOpen,
-                                attackerOpenUntil: deferAttackerUpdate ? sessionRef.current.attackerOpenUntil : result.attackerOpenUntil,
-                                jackpotOpenUntil: result.jackpotOpenUntil,
-                            });
-                        }
+                        // Purely visual - the confirmed outcome (callout, reel queue, session
+                        // update) is driven separately, by confirmFired below, whenever the
+                        // server's own reply actually arrives (see fireOnce). That's usually
+                        // close to this same moment - confirm is a cheap background call, not a
+                        // multi-second physics round trip anymore - but never gated on it, so a
+                        // slow confirm can't leave a ball hanging mid-air.
+                        const { trajectory, outcome } = ball;
+                        activeBallsRef.current.set(ball.id, { id: ball.id, phase: "landed", trajectory, outcome, won: outcome !== "gutter", landedAt: now, particles: makeParticles() });
                     }
                 } else if (ball.phase === "landed") {
                     if (now - ball.landedAt >= POOF_MS) {
                         toRemove.push(ball.id);
-                    } else if (ball.result.outcome === "bonusLeft") {
+                    } else if (ball.outcome === "bonusLeft") {
                         hotPockets.add("bonus-left");
-                    } else if (ball.result.outcome === "bonusRight") {
+                    } else if (ball.outcome === "bonusRight") {
                         hotPockets.add("bonus-right");
-                    } else if (ball.result.outcome === "tulipLeft") {
+                    } else if (ball.outcome === "tulipLeft") {
                         hotPockets.add("tulip-left");
-                    } else if (ball.result.outcome === "tulipRight") {
+                    } else if (ball.outcome === "tulipRight") {
                         hotPockets.add("tulip-right");
-                    } else if (ball.result.outcome === "chucker") {
+                    } else if (ball.outcome === "chucker") {
                         hotPockets.add("chucker");
-                    } else if (ball.result.outcome === "attacker") {
+                    } else if (ball.outcome === "attacker") {
                         hotPockets.add("attacker");
-                    } else if (ball.result.outcome === "jackpot") {
+                    } else if (ball.outcome === "jackpot") {
                         hotPockets.add("jackpot");
                     }
                 }
@@ -911,6 +891,83 @@ export default function PachinkoBoard({
     const ballsRemaining = session?.ballsRemaining ?? 0;
     const canLaunch = !isResuming && ballsRemaining > 0;
 
+    // What actually scores a shot - called the instant a ticket comes back (in parallel with the
+    // local preview simulation below, not after it), and again on retry if it fails. Never
+    // anything the firing loop waits on: a slow or repeatedly-failing confirm only means this one
+    // ball's credit is delayed, not that hold-to-fire itself should stop (that blanket "any single
+    // failure kills the whole session" behavior was the actual bug behind Pachinko becoming
+    // unplayable under load - see the investigation this whole ticket/confirm redesign answers).
+    // The server has its own safety net regardless (a stale ticket gets opportunistically settled
+    // on the player's next launch, or by the stale-round sweep if they stop playing entirely), so
+    // giving up after a few local retries is safe, not a real loss.
+    const CONFIRM_MAX_ATTEMPTS = 4;
+    const CONFIRM_RETRY_DELAY_MS = 1000;
+    const confirmFired = (seed: number, seq: number, attempt = 0) => {
+        confirmLaunch(seed)
+            .then((confirmed) => {
+                if (confirmed.alreadySettled) {
+                    return;
+                }
+                const outcome = confirmed.outcome!;
+                const ballsAwarded = confirmed.ballsAwarded!;
+
+                // Misses don't get a popup - they're the most common outcome by far, so
+                // surfacing them would mostly just be clutter; only an actual catch (even a
+                // 0-ball one like a non-matching chucker spin) is worth calling out.
+                if (outcome !== "gutter") {
+                    const calloutId = nextCalloutId++;
+                    setCallouts((prev) => [...prev, { id: calloutId, outcome, ballsAwarded, won: ballsAwarded > 0 }]);
+                    setTimeout(() => setCallouts((prev) => prev.filter((c) => c.id !== calloutId)), CALLOUT_MS);
+                }
+
+                // The chucker's reel spin only exists once confirmed (see pachinko.ts - it's
+                // decided fresh at confirm time, not predictable from the client's own seed).
+                // Each catch queues a spin; they animate one at a time so rapid chucker hits
+                // stack visually instead of clobbering each other. Capped at MAX_QUEUED_SPINS
+                // total (current + queued) - once full, further catches are silently dropped.
+                let deferAttackerUpdate = false;
+                if (outcome === "chucker" && confirmed.reelSpin) {
+                    const totalQueued = (currentReelAnimRef.current ? 1 : 0) + reelQueueRef.current.length;
+                    if (totalQueued < MAX_QUEUED_SPINS) {
+                        const isThreeMatch = confirmed.reelSpin.matchTier === "three";
+                        reelQueueRef.current.push({
+                            symbols: confirmed.reelSpin.symbols,
+                            matchTier: confirmed.reelSpin.matchTier,
+                            // The attacker only actually opens once this spin has visually landed
+                            // on the three-of-a-kind that earned it (applied by the tick loop
+                            // below) - not the instant it's queued here.
+                            attackerOpenUntil: isThreeMatch ? confirmed.attackerOpenUntil : undefined,
+                        });
+                        deferAttackerUpdate = isThreeMatch;
+                    }
+                }
+
+                // Confirms can resolve out of order under hold-to-fire - only apply this one's
+                // session state if it's actually the freshest shot to confirm so far, so a late
+                // confirm for an earlier ball can never regress ballsRemaining or stomp a more
+                // recent tulip/attacker state change.
+                if (seq > latestAppliedSeqRef.current && sessionRef.current) {
+                    latestAppliedSeqRef.current = seq;
+                    onSessionUpdate({
+                        ...sessionRef.current,
+                        ballsRemaining: confirmed.ballsRemaining!,
+                        leftTulipOpen: confirmed.leftTulipOpen!,
+                        rightTulipOpen: confirmed.rightTulipOpen!,
+                        attackerOpenUntil: deferAttackerUpdate ? sessionRef.current.attackerOpenUntil : confirmed.attackerOpenUntil!,
+                        jackpotOpenUntil: confirmed.jackpotOpenUntil!,
+                    });
+                }
+            })
+            .catch(() => {
+                if (attempt < CONFIRM_MAX_ATTEMPTS) {
+                    setTimeout(() => confirmFired(seed, seq, attempt + 1), CONFIRM_RETRY_DELAY_MS);
+                }
+                // Attempts exhausted - give up quietly rather than surfacing a scary error toast
+                // for something that's already self-healing server-side (see this function's own
+                // header).
+            });
+    };
+
     const fireOnce = () => {
         if (ballsRemainingRef.current <= 0) {
             stopFiring();
@@ -928,16 +985,39 @@ export default function PachinkoBoard({
         ballsRemainingRef.current -= 1;
         pendingLaunchesRef.current += 1;
 
-        launch(launchPowerRef.current)
-            .then((result) => {
+        launchTicket(launchPowerRef.current)
+            .then((ticket) => {
                 pendingLaunchesRef.current -= 1;
-                activeBallsRef.current.set(id, { id, phase: "falling", result, startTime: performance.now(), seq });
+
+                // Confirm runs in the background immediately, in parallel with the local preview
+                // below - it doesn't need to wait on the (purely visual) simulation to finish,
+                // and never blocks the next shot from firing.
+                confirmFired(ticket.seed, seq);
+
+                // Instant local preview - the whole point of the ticket/confirm split. Never
+                // trusted for scoring (see confirmFired above), just what the player sees fly.
+                simulate({
+                    seed: ticket.seed,
+                    launchPower: ticket.launchPower,
+                    chuckerActive: ticket.chuckerActive,
+                    attackerActive: ticket.attackerActive,
+                    jackpotActive: ticket.jackpotActive,
+                }).then(({ trajectory, outcome }) => {
+                    // The ball may have already been removed (e.g. the player closed the game)
+                    // by the time the worker responds - don't resurrect it.
+                    if (activeBallsRef.current.has(id)) {
+                        activeBallsRef.current.set(id, { id, phase: "falling", trajectory, outcome, startTime: performance.now() });
+                    }
+                });
             })
             .catch(() => {
                 pendingLaunchesRef.current -= 1;
                 activeBallsRef.current.delete(id);
                 ballsRemainingRef.current += 1;
-                stopFiring();
+                // Deliberately NOT calling stopFiring() here - a single failed ticket request
+                // (a network hiccup, a transient 409) shouldn't end the whole hold-to-fire
+                // session. The ballsRemainingRef <= 0 check at the top of this function is the
+                // only thing that should ever stop firing on its own.
             });
     };
 

@@ -47,8 +47,8 @@
  * this script's recommendation lands a touch above its target, not below - safe direction to be
  * wrong in.
  */
-import { simulateShot } from "./pachinkoPhysics";
-import { MIN_LAUNCH_POWER, MAX_LAUNCH_POWER } from "./pachinkoLayout";
+import { simulateShot } from "../../../shared/pachinko/pachinkoPhysics";
+import { MIN_LAUNCH_POWER, MAX_LAUNCH_POWER } from "../../../shared/pachinko/pachinkoLayout";
 import { spinReel } from "./pachinkoReels";
 import { BONUS_POCKET_BALLS, SIDE_TULIP_BALLS, REEL_TWO_MATCH_BALLS, REEL_THREE_MATCH_BALLS, ATTACKER_BALLS } from "./pachinkoPayouts";
 

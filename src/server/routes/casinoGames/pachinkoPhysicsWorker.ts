@@ -12,9 +12,11 @@
  * state, no Express/req/res dependency), which is exactly what makes it safe to run off-thread
  * with no modification.
  */
-import { simulateShot } from "./pachinkoPhysics";
+import { simulateShot } from "../../../shared/pachinko/pachinkoPhysics";
+import { mulberry32 } from "../../../shared/pachinko/prng";
 
 export interface PachinkoPhysicsTask {
+    seed: number; // the same seed /launch handed the client for its own local preview run
     launchPower: number;
     chuckerActive: boolean;
     attackerActive: boolean;
@@ -22,5 +24,5 @@ export interface PachinkoPhysicsTask {
 }
 
 export default function runPachinkoPhysics(task: PachinkoPhysicsTask) {
-    return simulateShot(task.launchPower, task.chuckerActive, task.attackerActive, task.jackpotActive);
+    return simulateShot(task.launchPower, task.chuckerActive, task.attackerActive, task.jackpotActive, mulberry32(task.seed));
 }

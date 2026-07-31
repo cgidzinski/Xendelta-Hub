@@ -1,6 +1,17 @@
 /**
- * Server-only Pachinko physics sim (matter-js). Never imported from src/client - the client
- * only replays the trajectory this produces, it never runs its own simulation.
+ * Isomorphic Pachinko physics sim (matter-js) - runs identically on the client (instant local
+ * preview, see PachinkoBoard.tsx's sim worker) and the server (the authoritative replay, see
+ * pachinko.ts's /launch/confirm). Both sides call this exact same function with the exact same
+ * seed, so both must get the exact same result - see prng.ts's own header for why a seeded RNG
+ * is threaded through instead of bare Math.random(), and matter-js itself has no other source of
+ * internal randomness in its collision-solving pipeline (Common.random/shuffle/choose exist but
+ * are only ever used for its own default renderer's body fill colors, never physics).
+ *
+ * The server is always the one source of truth for what a shot actually paid - the client's own
+ * run of this function is only ever a preview so the ball can start flying the instant it's
+ * fired, never something the server trusts. If the two ever disagree (engine-level floating
+ * point drift between environments is the one known risk this can't fully rule out), the
+ * server's own replay wins outright.
  *
  * There's no pre-selected target outcome here (unlike Plinko). The player's launch power is a
  * genuine physics input - it's converted to an initial rail speed, the ball is driven along the
@@ -15,10 +26,16 @@
  * the side. Priming/timer state (tulip open/closed, jackpot primed, attacker's open window)
  * never changes what's physically reachable - see pachinkoLayout.ts's own comment on that -
  * it's resolved entirely by the caller (pachinko.ts) from the outcome this returns, not by this
- * module. A small amount of honest per-shot randomness (nail jitter, a touch of launch noise)
- * means a fixed power value doesn't deterministically reproduce the same outcome.
+ * module. A small amount of honest per-shot randomness (nail jitter, a touch of launch noise),
+ * drawn from the shot's own seeded RNG, means a fixed power value doesn't deterministically
+ * reproduce the same outcome shot to shot - but the SAME seed always does, which is the whole
+ * point.
  */
-import Matter = require("matter-js");
+// Plain ESM-style import (not `import X = require(...)`) so this file compiles cleanly under
+// both the server's CommonJS-interop build and the client's pure-ESM Vite bundle - matter-js
+// ships a UMD build, so this works in both a browser bundle and Node either way.
+import * as Matter from "matter-js";
+import { Rng } from "./prng";
 import {
     CANVAS_WIDTH,
     CANVAS_HEIGHT,
@@ -139,7 +156,7 @@ function pocketsInPlay(chuckerActive: boolean, attackerActive: boolean, jackpotA
     });
 }
 
-function buildAttemptWorld(chuckerActive: boolean, attackerActive: boolean, jackpotActive: boolean): { engine: Matter.Engine; ball: Matter.Body; spinnerBodies: Matter.Body[] } {
+function buildAttemptWorld(chuckerActive: boolean, attackerActive: boolean, jackpotActive: boolean, rng: Rng): { engine: Matter.Engine; ball: Matter.Body; spinnerBodies: Matter.Body[] } {
     const engine = Matter.Engine.create({ gravity: { x: 0, y: 1, scale: 0.001 }, positionIterations: 12, velocityIterations: 10 });
 
     const bodies: Matter.Body[] = [
@@ -158,7 +175,7 @@ function buildAttemptWorld(chuckerActive: boolean, attackerActive: boolean, jack
         bodies.push(
             Matter.Bodies.circle(pin.x, pin.y, PIN_RADIUS, {
                 isStatic: true,
-                restitution: isDeflector ? 0.02 + Math.random() * 0.04 : 0.3 + Math.random() * 0.3, // per-shot jitter - what makes repeat drops look distinct
+                restitution: isDeflector ? 0.02 + rng() * 0.04 : 0.3 + rng() * 0.3, // per-shot jitter - what makes repeat drops look distinct
                 friction: isDeflector ? 0.3 : 0.05,
                 label: "pin",
             })
@@ -185,7 +202,7 @@ function buildAttemptWorld(chuckerActive: boolean, attackerActive: boolean, jack
             stiffness: 1,
         });
         // Give it an initial spin - random direction so each shot feels different
-        Matter.Body.setAngularVelocity(spinner, (Math.random() > 0.5 ? 1 : -1) * (0.03 + Math.random() * 0.04));
+        Matter.Body.setAngularVelocity(spinner, (rng() > 0.5 ? 1 : -1) * (0.03 + rng() * 0.04));
         bodies.push(spinner);
         spinnerBodies.push(spinner);
         Matter.Composite.add(engine.world, constraint);
@@ -300,17 +317,22 @@ function gutterPocketTrajectory(lastSample: TrajectorySample): TrajectorySample[
 // unprimed until both tulips are open). In every case, "inactive" means no walls at all (see
 // buildAttemptWorld) and no catch (see checkPocketHit) - a ball flies straight through that
 // space like the pocket was never there, not just an unlit/non-scoring target.
-export function simulateShot(launchPower: number, chuckerActive = true, attackerActive = false, jackpotActive = false): ShotResult {
+//
+// `rng` defaults to Math.random for every caller that doesn't care about reproducing a shot
+// (the RTP tuning script, the payout tests) - the seeded ticket/confirm flow (pachinko.ts,
+// the client sim worker) is the only caller that ever passes a real seeded one in, via
+// mulberry32(seed) (see prng.ts).
+export function simulateShot(launchPower: number, chuckerActive = true, attackerActive = false, jackpotActive = false, rng: Rng = Math.random): ShotResult {
     const { samples: railSamples } = railTrajectory(launchPower);
     const exitVelocity = launchPowerToExitVelocity(launchPower);
 
-    const { engine, ball, spinnerBodies } = buildAttemptWorld(chuckerActive, attackerActive, jackpotActive);
+    const { engine, ball, spinnerBodies } = buildAttemptWorld(chuckerActive, attackerActive, jackpotActive, rng);
     // Velocity direction is RELEASE_TANGENT - tangent to the boundary curve at the release
     // point - not a fixed straight-up vector, so the ball leaves the rail already riding the
     // same arc as the glass (see launchPowerToExitVelocity's own comment for the magnitude
     // tuning target). A small perpendicular jitter is layered on top for per-shot variety, same
     // spirit as the original board's own small x-jitter.
-    const jitter = (Math.random() - 0.5) * 1.2;
+    const jitter = (rng() - 0.5) * 1.2;
     const perpX = -RELEASE_TANGENT.y;
     const perpY = RELEASE_TANGENT.x;
     Matter.Body.setVelocity(ball, {

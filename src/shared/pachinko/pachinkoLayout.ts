@@ -1,8 +1,9 @@
 /**
- * Pure Pachinko board geometry - shared by the physics sim (pachinkoPhysics.ts, server-only)
- * and mirrored to the client via the /odds response so it draws the exact same board the
- * simulation ran against. No matter-js import here - keeps this trivially unit-testable
- * without a physics engine in the loop.
+ * Pure Pachinko board geometry - shared by the physics sim (pachinkoPhysics.ts, now isomorphic:
+ * runs on both the client and the server, see that file's own header) and mirrored to the
+ * client's rendering via the /odds response, so both draw and simulate against the exact same
+ * board. No matter-js import here - keeps this trivially unit-testable without a physics engine
+ * in the loop.
  *
  * The boundary is a true circle/ellipse hybrid, not the elongated capsule this board started
  * as: the top half is a genuine ellipse (a "slightly stretched egg, just longer than round"),
