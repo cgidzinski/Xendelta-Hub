@@ -48,7 +48,12 @@
 // the house was losing money on this board. Making the window an explicit ball count is what
 // made it measurable. 8 balls, paired with ATTACKER_BALLS, puts worst-case RTP back near the 0.9
 // target while leaving the attacker a visible, genuinely valuable bonus round.
-export const ATTACKER_OPEN_SHOTS = 8;
+// Trimmed again from 8 after the left field went in. That geometry routes a lot more balls into
+// the chucker (18% of shots at the worst-case power, up from ~9%), and since every chucker catch is
+// a chance to open this window, the window's length multiplies straight into the board's largest
+// RTP term. Shortening it is cheaper than gutting ATTACKER_BALLS, which is what makes the bonus
+// round feel worth triggering.
+export const ATTACKER_OPEN_SHOTS = 5;
 
 // How many subsequent balls the jackpot pocket pays for once both tulips are simultaneously open
 // - same window shape as the attacker, not a standing "primed" state that sits open indefinitely
@@ -57,5 +62,5 @@ export const JACKPOT_OPEN_SHOTS = 12;
 
 // Two-of-a-kind is a small top-up and opens nothing; three-of-a-kind is bigger AND opens the
 // attacker (see ATTACKER_OPEN_SHOTS above) - only the "three" tier touches the attacker at all.
-export const REEL_TWO_MATCH_BALLS = 4;
-export const REEL_THREE_MATCH_BALLS = 14;
+export const REEL_TWO_MATCH_BALLS = 2;
+export const REEL_THREE_MATCH_BALLS = 8;
