@@ -1025,22 +1025,36 @@ export default function PachinkoBoard({
             // frame instead of idling a frame first.
             drainLedger(now);
 
-            // Reel spin queue: once the current animation has fully finished (all reels landed +
-            // glow elapsed), start the next queued spin. Every queued spin now carries real
-            // symbols from the moment it's queued (derived from its shot's seed), so there's
-            // nothing to wait on and no placeholder state to skip over.
+            // Reel spin queue: once the current animation has fully finished, start the next queued
+            // spin. Every queued spin now carries real symbols from the moment it's queued (derived
+            // from its shot's seed), so there's nothing to wait on and no placeholder state to skip
+            // over.
+            //
+            // "Finished" means two different things depending on what's waiting behind it, and
+            // conflating them was a real bug. A BACKLOG (something already queued) is freed the
+            // moment the reels STOP, not when the glow fades - the glow still renders for its full
+            // REEL_RESULT_GLOW_MS when nothing cuts it short (drawReelDisplay owns that), it just no
+            // longer holds the queue hostage. That distinction is what stops a burst of chuckers from
+            // diverging the display: including the glow in the wait made it clear one spin every
+            // 2940ms against catches that can arrive every ~2694ms at the worst power - throughput
+            // below arrival rate, so the queue grew without bound and every spin shown was older than
+            // the last.
+            //
+            // But with nothing queued - the ordinary case, not a burst - there is nothing for the
+            // queue to hold hostage, and the ONLY thing "reels stopped" should do then is let the
+            // landed symbols and their glow actually play out. Checking only the stopped time here,
+            // with no fallback, cleared the display back to placeholders on the very same frame the
+            // reels landed - the match glow (gold on a three-of-a-kind, including three of the
+            // JACKPOT_ITEM 7️⃣ symbol) never had a chance to render at all.
             if (currentReelAnimRef.current) {
-                // Freed when the reels STOP, not when the glow fades. The glow still renders for its
-                // full REEL_RESULT_GLOW_MS (drawReelDisplay owns that); it just no longer holds the
-                // queue behind it. Including it here made the display clear one spin every 2940ms
-                // against chuckers arriving every ~2694ms at the worst power - throughput below
-                // arrival rate, so the queue grew without bound and every spin shown was older than
-                // the last. A glow cut short by the next catch is the correct outcome there: a
-                // second chucker landing during it is exactly when the board should move on.
-                const finishedAt = currentReelAnimRef.current.startTime + REEL_LANDED_MS;
-                if (now >= finishedAt) {
-                    const next = reelQueueRef.current.shift();
-                    currentReelAnimRef.current = next ? { symbols: next.symbols, matchTier: next.matchTier, startTime: now } : null;
+                const landedAt = currentReelAnimRef.current.startTime + REEL_LANDED_MS;
+                if (now >= landedAt) {
+                    if (reelQueueRef.current.length > 0) {
+                        const next = reelQueueRef.current.shift()!;
+                        currentReelAnimRef.current = { symbols: next.symbols, matchTier: next.matchTier, startTime: now };
+                    } else if (now >= landedAt + REEL_RESULT_GLOW_MS) {
+                        currentReelAnimRef.current = null;
+                    }
                 }
             } else if (reelQueueRef.current.length > 0) {
                 const next = reelQueueRef.current.shift()!;
