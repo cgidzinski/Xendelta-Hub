@@ -209,7 +209,7 @@ export default function Pachinko() {
                     { label: "Jackpot, primed", payout: "Pool → balls" },
                 ],
                 footnote:
-                    "Every catch pays out in balls, never cheddar directly - press Cash Out to convert your tray back to real cheddar whenever you're ready. Most balls miss, like a real pachinko board. Side tulips toggle open/closed each time they catch a ball; the jackpot pocket is nearly impossible to catch until both side tulips are open at once, then it pays the whole jackpot pool, converted to balls. The chucker doesn't pay anything itself directly, but spins the board's central reel - a real modern machine's own start-chucker-triggers-the-LCD-reel gimmick. Two matching symbols add a modest ball bonus; three matching symbols add a bigger bonus AND opens the attacker gate for a few seconds - the attacker only opens on a 3x reel match, not on every chucker catch.",
+                    "Every catch pays out in balls, never cheddar directly - press Cash Out to convert your tray back to real cheddar whenever you're ready. Most balls miss, like a real pachinko board. Side tulips toggle open/closed each time they catch a ball; the jackpot pocket is nearly impossible to catch until both side tulips are open at once, then it pays the whole jackpot pool, converted to balls. The chucker doesn't pay anything itself directly, but spins the board's central reel - a real modern machine's own start-chucker-triggers-the-LCD-reel gimmick. Two matching symbols add a modest ball bonus; three matching symbols add a bigger bonus AND opens the attacker gate for your next few balls - the attacker only opens on a 3x reel match, not on every chucker catch. Both the attacker and the jackpot stay open for a set number of BALLS rather than a number of seconds, so the window is yours to spend at your own pace and the countdown you see is exact.",
             },
         ]
         : [];
@@ -217,7 +217,7 @@ export default function Pachinko() {
     return (
         <GameWrapper
             title="Pachinko"
-            howToPlay="Buy balls with the +1000 button, then hold Launch to fire them at your own power - balls fly one every 600ms while held. Most balls miss - catches add more balls to your tray instead of paying cash. Press Cash Out whenever you're ready to convert your tray back to cheddar."
+            howToPlay="Buy balls with the +1000 button, then hold Launch to fire them at your own power - balls fly a few times a second while held. Most balls miss - catches add more balls to your tray instead of paying cash. Press Cash Out whenever you're ready to convert your tray back to cheddar."
             oddsSections={oddsSections}
             maxWin={odds?.maxPayout}
         >

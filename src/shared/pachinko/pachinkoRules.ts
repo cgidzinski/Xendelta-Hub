@@ -32,11 +32,23 @@
  */
 
 // How many subsequent balls the attacker gate stays open for after a reel three-of-a-kind.
-// Derived from the 15s window this replaced, at the ~400ms hold-to-fire cadence (see
-// PachinkoBoard.tsx's FIRE_INTERVAL_MS): 15000/400 ~= 37 balls. Queued matches (multiple chucker
-// catches landing close together under hold-to-fire) each ADD this many balls on top of whatever
-// is currently left rather than resetting it - see pachinko.ts's own chucker branch.
-export const ATTACKER_OPEN_SHOTS = 37;
+// Queued matches (multiple chucker catches landing close together under hold-to-fire) each ADD
+// this many balls on top of whatever is currently left rather than resetting it - see
+// pachinko.ts's own chucker branch.
+//
+// A literal conversion of the 15s window this replaced would be ~37 balls at the ~400ms
+// hold-to-fire cadence, and that turned out to be wildly over-generous: the attacker is caught
+// 30-50% of the time while open at the launch powers that reach it, so 37 open balls is worth
+// hundreds of balls per trigger. Measured worst-case RTP at that length was 551%, of which the
+// attacker term alone was 5.01 out of 5.52.
+//
+// That was a pre-existing balance bug this rewrite surfaced rather than caused: the RTP model
+// used to charge a single attacker attempt per three-of-a-kind (see pachinkoPayoutTuning.ts's
+// header), so the real cost of the window was never counted at all - which is very likely why
+// the house was losing money on this board. Making the window an explicit ball count is what
+// made it measurable. 8 balls, paired with ATTACKER_BALLS, puts worst-case RTP back near the 0.9
+// target while leaving the attacker a visible, genuinely valuable bonus round.
+export const ATTACKER_OPEN_SHOTS = 8;
 
 // How many subsequent balls the jackpot pocket pays for once both tulips are simultaneously open
 // - same window shape as the attacker, not a standing "primed" state that sits open indefinitely

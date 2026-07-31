@@ -45,8 +45,11 @@ export const SIDE_TULIP_BALLS = 2;
 // are re-exported from shared/pachinko/pachinkoRules.ts at the top of this file.
 
 // A big, rare payout - the attacker is a wide target, but only reachable during its short open
-// window, and only reachable AT ALL via a chucker catch that also lands a reel match.
-export const ATTACKER_BALLS = 24;
+// window, and only reachable AT ALL via a chucker catch that also lands a reel match. Cut from 24
+// alongside shortening the window itself (see ATTACKER_OPEN_SHOTS in
+// shared/pachinko/pachinkoRules.ts): the two multiply, and the pair together was carrying ~91% of
+// the board's entire worst-case RTP once the window's real cost was measured properly.
+export const ATTACKER_BALLS = 9;
 
 // Fraction of every ball's price that feeds the shared jackpot pool (fed by every ball fired,
 // not just misses - the pool is jackpot-only money, unrelated to what any individual shot pays
