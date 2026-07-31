@@ -427,6 +427,15 @@ export default function PachinkoBoard({
     const activeBallsRef = useRef<Map<number, ActiveBall>>(new Map());
     const pendingLaunchesRef = useRef(0);
     const latestAppliedSeqRef = useRef(0);
+    // Confirms now resolve over the network, independently of the RAF loop - under hold-to-fire
+    // a burst of them can land within milliseconds of each other, and calling onSessionUpdate
+    // (a setState in the parent) once per confirm would fire a separate uncoalesced React
+    // re-render for each one, competing with the launch slider's own pointer-move handling for
+    // the main thread (this is what made dragging feel unresponsive - confirms used to be
+    // implicitly rate-limited by each ball's multi-second flight animation finishing in the tick
+    // loop; now they aren't). Every session-affecting confirm merges into this ref instead, and
+    // the tick loop below flushes it to onSessionUpdate at most once per animation frame.
+    const pendingSessionPatchRef = useRef<Partial<PachinkoSession> | null>(null);
     const reelQueueRef = useRef<ReelQueueItem[]>([]);
     const currentReelAnimRef = useRef<ReelAnimState | null>(null);
     const latestSpinnerAnglesRef = useRef<number[] | undefined>(undefined);
@@ -846,9 +855,12 @@ export default function PachinkoBoard({
                     // The attacker only actually opens once ITS OWN spin has visually landed on
                     // the three-of-a-kind that earned it - apply the deferred update right as
                     // that spin's animation concludes, not the instant the catch's response
-                    // arrived (see where this is queued, above).
+                    // arrived (see where this is queued, above). Also merged into the pending
+                    // patch (see pendingSessionPatchRef) rather than applied directly, so it
+                    // can't land as a second separate re-render in the same frame as any other
+                    // confirm that happens to resolve right now.
                     if (currentReelAnimRef.current.attackerOpenUntil !== undefined && sessionRef.current) {
-                        onSessionUpdate({ ...sessionRef.current, attackerOpenUntil: currentReelAnimRef.current.attackerOpenUntil });
+                        pendingSessionPatchRef.current = { ...pendingSessionPatchRef.current, attackerOpenUntil: currentReelAnimRef.current.attackerOpenUntil };
                     }
                     if (reelQueueRef.current.length > 0) {
                         const next = reelQueueRef.current.shift()!;
@@ -860,6 +872,14 @@ export default function PachinkoBoard({
             } else if (reelQueueRef.current.length > 0) {
                 const next = reelQueueRef.current.shift()!;
                 currentReelAnimRef.current = { symbols: next.symbols, matchTier: next.matchTier, startTime: now, attackerOpenUntil: next.attackerOpenUntil };
+            }
+
+            // Flush at most once per frame - see pendingSessionPatchRef's own comment. Any
+            // number of confirms can have merged into it since the last flush; this is the one
+            // place that ever actually calls onSessionUpdate now.
+            if (pendingSessionPatchRef.current && sessionRef.current) {
+                onSessionUpdate({ ...sessionRef.current, ...pendingSessionPatchRef.current });
+                pendingSessionPatchRef.current = null;
             }
 
             draw(now, hotPockets);
@@ -945,17 +965,21 @@ export default function PachinkoBoard({
                 // Confirms can resolve out of order under hold-to-fire - only apply this one's
                 // session state if it's actually the freshest shot to confirm so far, so a late
                 // confirm for an earlier ball can never regress ballsRemaining or stomp a more
-                // recent tulip/attacker state change.
+                // recent tulip/attacker state change. Merges into the pending patch rather than
+                // calling onSessionUpdate directly - see pendingSessionPatchRef's own comment for
+                // why. attackerOpenUntil is deliberately left out of the patch when deferred, not
+                // set to the current value, so it doesn't clobber whatever an earlier still-
+                // pending patch (or the eventual reel-landing update below) is holding there.
                 if (seq > latestAppliedSeqRef.current && sessionRef.current) {
                     latestAppliedSeqRef.current = seq;
-                    onSessionUpdate({
-                        ...sessionRef.current,
+                    pendingSessionPatchRef.current = {
+                        ...pendingSessionPatchRef.current,
                         ballsRemaining: confirmed.ballsRemaining!,
                         leftTulipOpen: confirmed.leftTulipOpen!,
                         rightTulipOpen: confirmed.rightTulipOpen!,
-                        attackerOpenUntil: deferAttackerUpdate ? sessionRef.current.attackerOpenUntil : confirmed.attackerOpenUntil!,
                         jackpotOpenUntil: confirmed.jackpotOpenUntil!,
-                    });
+                        ...(deferAttackerUpdate ? {} : { attackerOpenUntil: confirmed.attackerOpenUntil! }),
+                    };
                 }
             })
             .catch(() => {
