@@ -362,6 +362,42 @@ export const LIFE_NAILS: Point[] = [
     { x: 248, y: 233 },
 ];
 
+// Guard nails - the same life-nail idea (a fixed pin sitting in the approach corridor above a
+// pocket, not blocking its mouth outright but meaning that corridor isn't wide open) applied to
+// two of the board's easier catches. Added on request to make money harder to earn WITHOUT
+// touching any payout constant in pachinkoPayouts.ts - these change catch probability, not catch
+// value.
+//
+// Placement here was measured against pachinkoReachability.ts, not derived by hand - the
+// board's own philosophy (see the file header and the LEFT_FIELD essay below) - and it mattered:
+// the symmetric, "obvious" placements tried first (a flanking pair on BOTH bonus pockets; a pair
+// at the jackpot's own mouth) were rejected by measurement, not by inspection. Right-side-only
+// bonus guards, mirrored the way the chucker's own LIFE_NAILS are, in fact drove UP the left
+// pocket's catch rate and introduced a real stuck-ball band at power 80 - it sits exactly where
+// LEFT_FIELD's own already-fragile wedge-avoidance structure hands off to the left pocket (see
+// that structure's header for how tight those margins already are), so the left pocket is
+// deliberately left untouched here rather than fought over.
+//
+// Bonus pockets (BONUS_POCKETS above) are explicitly "the easiest pocket to catch on the board" -
+// widest non-jackpot target, fed directly by road 5. Right side only, for the reason above.
+export const BONUS_POCKET_GUARDS: Point[] = [
+    { x: 349, y: 270 }, { x: 361, y: 270 },
+];
+
+// The jackpot (JACKPOT above) is already a "just fits one ball" target, but JACKPOT_GUIDES below
+// exists specifically to gather balls toward it, so it's the one pocket on the board with active
+// help getting caught. A flanking pair right at the guides' own convergence point (~y=358-366)
+// measurably broke reachability elsewhere on the board (a stuck-ball band at power 80, unrelated
+// geometry - the whole field is one coupled physics sim, not independent zones) regardless of
+// exact placement within that convergence area, so this is a single pin, centered, sitting
+// between the guides' funnel and the pocket's own mouth (top = 372 - POCKET_DEPTH/2 = 363).
+// Confirmed against pachinkoReachability.ts: no dead zones, no stuck-ball band, and jackpot
+// primeability keeps a real (if narrower - 3 usable powers instead of 6) band. Forced-open
+// jackpot reach measured 1.1% before this pin, 0.6% after - a real deterrent, not a no-op.
+export const JACKPOT_GUARDS: Point[] = [
+    { x: 230, y: 355 },
+];
+
 // --- Nail field: Branching Roads ------------------------------------------------------------
 // Instead of rings or grids, the nail field is 5 sweeping curved "roads" that branch from the
 // release area. Each road is a chain of closely-spaced nails — balls thread through the gaps
@@ -606,7 +642,7 @@ function conflictsWithAny(p: Point): boolean {
 
 export function generateNailField(): PinPosition[] {
     const pins: PinPosition[] = [];
-    for (const fixedPin of [...TOP_NAILS, ...RELEASE_DEFLECTOR, ...SECOND_ROAD, ...LEFT_FIELD, ...LIFE_NAILS]) pins.push({ x: fixedPin.x, y: fixedPin.y });
+    for (const fixedPin of [...TOP_NAILS, ...RELEASE_DEFLECTOR, ...SECOND_ROAD, ...LEFT_FIELD, ...LIFE_NAILS, ...BONUS_POCKET_GUARDS, ...JACKPOT_GUARDS]) pins.push({ x: fixedPin.x, y: fixedPin.y });
     for (const candidate of [...generateRoadNails(), ...generateFunnelRows(), ...generateJackpotGuideNails()]) {
         if (conflictsWithAny(candidate)) continue;
         pins.push({ x: candidate.x, y: candidate.y });

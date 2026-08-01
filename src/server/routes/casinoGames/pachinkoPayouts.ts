@@ -112,7 +112,12 @@ export const ATTACKER_BALLS = 25;
 // not just misses - the pool is jackpot-only money, unrelated to what any individual shot pays
 // out). Paid out (converted to balls, see jackpotBalls below) when the primed jackpot pocket is
 // caught, then reset. Same shape Slots already uses for its own pool.
-export const CONTRIBUTION_RATE = 0.5;
+//
+// Cut in half, 0.5 -> 0.25, on request: the jackpot pool builds twice as slowly, so it's smaller
+// whenever it's hit - a deliberate way to make the jackpot harder to earn without touching any
+// per-catch ball amount above (this is excluded from the worst-case RTP the tuning script
+// measures - see pachinkoPayoutTuning.ts's own header - so those numbers are unaffected).
+export const CONTRIBUTION_RATE = 0.25;
 
 export const JACKPOT_SEED = 0;
 
