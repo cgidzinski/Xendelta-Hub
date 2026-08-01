@@ -28,7 +28,11 @@ import MemoryIcon from "@mui/icons-material/Memory";
 import BoltIcon from "@mui/icons-material/Bolt";
 import AcUnitIcon from "@mui/icons-material/AcUnit";
 import VolumeOffIcon from "@mui/icons-material/VolumeOff";
-import SecurityIcon from "@mui/icons-material/Security";
+import CampaignIcon from "@mui/icons-material/Campaign";
+import WifiOffIcon from "@mui/icons-material/WifiOff";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import ShieldIcon from "@mui/icons-material/Shield";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { useSnackbar } from "notistack";
@@ -61,7 +65,11 @@ const PART_ICON: Record<string, ComponentType<SvgIconProps>> = {
     "turbo-fan": BoltIcon,
     "liquid-nitrogen": AcUnitIcon,
     "silent-case": VolumeOffIcon,
-    "faraday-cage": SecurityIcon,
+    "whistleblower": CampaignIcon,
+    "signal-jammer": WifiOffIcon,
+    "forged-documents": ReceiptLongIcon,
+    "insurance": ShieldIcon,
+    "decoy-rig": ContentCopyIcon,
 };
 
 // A single icon + one-line-of-context stat row, same pattern as Garden's seed/action
@@ -102,23 +110,31 @@ function StatTile({ label, value, color }: { label: string; value: ReactNode; co
     );
 }
 
-// A compact card for a part actually installed on the current run - just enough to see
-// what it's contributing at a glance without reopening the picker. `raidBonus` is omitted
-// for the Machine Upgrade card (it's a pure rate boost with no raid cost).
-function InstalledPartCard({ icon, label, rateBonus, raidBonus }: { icon: ReactNode; label: string; rateBonus: number; raidBonus?: number }) {
+// A compact card for a part installed on the current run. Utility parts (rateBonus===0
+// && raidBonus===0) show their description instead of rate/raid stats.
+function InstalledPartCard({ icon, label, rateBonus, raidBonus, description }: { icon: ReactNode; label: string; rateBonus: number; raidBonus?: number; description?: string }) {
+    const isUtility = rateBonus === 0 && (raidBonus === 0 || raidBonus === undefined);
     return (
         <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, p: 1, textAlign: "center" }}>
             <Box sx={{ color: "text.secondary", display: "flex", justifyContent: "center", "& svg": { fontSize: 20 } }}>{icon}</Box>
             <Typography variant="caption" sx={{ display: "block", fontWeight: 700, mt: 0.25 }}>
                 {label}
             </Typography>
-            <Typography variant="caption" sx={{ display: "block", fontSize: 11 }}>
-                Rate <SignedStat value={rateBonus} />
-            </Typography>
-            {raidBonus !== undefined && (
-                <Typography variant="caption" sx={{ display: "block", fontSize: 11 }}>
-                    Raid <SignedStat value={raidBonus} inverse />
+            {isUtility ? (
+                <Typography variant="caption" sx={{ display: "block", fontSize: 10, color: "text.secondary", mt: 0.25 }}>
+                    {description}
                 </Typography>
+            ) : (
+                <>
+                    <Typography variant="caption" sx={{ display: "block", fontSize: 11 }}>
+                        Rate <SignedStat value={rateBonus} />
+                    </Typography>
+                    {raidBonus !== undefined && (
+                        <Typography variant="caption" sx={{ display: "block", fontSize: 11 }}>
+                            Raid <SignedStat value={raidBonus} inverse />
+                        </Typography>
+                    )}
+                </>
             )}
         </Box>
     );
@@ -391,7 +407,22 @@ export default function Printer() {
                             </Button>
                         )}
 
-                        {run && (
+                        {run && run.raided && (
+                            <Box sx={{ width: "100%", maxWidth: 420, display: "flex", flexDirection: "column", gap: 2, alignItems: "center" }}>
+                                <GavelIcon sx={{ fontSize: 48, color: "error.main" }} />
+                                <Typography variant="h6" color="error.main" sx={{ fontWeight: 700 }}>
+                                    Rig Seized!
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" textAlign="center">
+                                    The authorities raided your print run. Your {formatCheddar(run.partsCost)} in parts are gone.
+                                </Typography>
+                                <Button variant="outlined" color="error" disabled={isCollecting} onClick={handleCollect}>
+                                    Clear &amp; Dismantle
+                                </Button>
+                            </Box>
+                        )}
+
+                        {run && !run.raided && (
                             <Box sx={{ width: "100%", maxWidth: 420, display: "flex", flexDirection: "column", gap: 2 }}>
                                 {run.parts.length > 0 && (
                                     <Box
@@ -410,6 +441,7 @@ export default function Printer() {
                                                     label={part.label}
                                                     rateBonus={part.rateBonus}
                                                     raidBonus={part.raidBonus}
+                                                    description={part.description}
                                                 />
                                             );
                                         })}

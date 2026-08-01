@@ -5,7 +5,9 @@ import { generateConfetti, ConfettiOverlay, RoundResultBanner, type RoundResult 
 
 const GRID_SIZE = 5;
 const CELL_COUNT = GRID_SIZE * GRID_SIZE; // 25
-const PICK_COUNT = 4;
+const PICK_COUNT = 2;
+const MAX_REVEALS = 3;
+const NO_MATCH_FLIP_BACK_MS = 350;
 
 export interface MemorySymbolGroup {
     symbol: string;
@@ -19,30 +21,32 @@ export interface MemoryStartResult {
 
 export interface MemoryRevealResult {
     picks: { position: number; symbol: string }[];
-    matchCount: number;
-    payout: number;
+    matched: boolean;
+    revealCount: number;
+    matchedPairs: number;
+    maxReveals: number;
+    isFinal: boolean;
+    finalPayout: number;
     balance?: string;
 }
 
 export interface MemoryBoardProps {
-    symbolGroups: MemorySymbolGroup[]; // the fixed deck composition - drives the peek flourish only, real per-round assignment is secret server-side
-    symbols: Record<string, string>; // symbol key -> emoji
+    symbolGroups: MemorySymbolGroup[];
+    symbols: Record<string, string>;
     betOptions: number[];
     betLabels?: string[];
     defaultBet?: number;
-    isPending: boolean; // a start()/reveal() request is in flight
+    isPending: boolean;
     start: (wager: number) => Promise<MemoryStartResult>;
-    reveal: (picks: number[]) => Promise<MemoryRevealResult>;
-    onResult?: (result: MemoryRevealResult) => void;
+    reveal: (params: { picks: number[]; revealIndex: number }) => Promise<MemoryRevealResult>;
+    onResult?: (payout: number, matchedPairs: number) => void;
 }
 
-// Every timing beat: a cosmetic shuffle flourish right after paying (the real per-round grid
-// is never sent to the client until reveal() resolves - see memory.ts's file header - so
-// this can only ever be a flourish, not a literal re-position of known data), then the
-// player picks 4 of the 25 blind cards, then a staggered flip reveals exactly those 4.
+// Timing beats: a cosmetic shuffle flourish after paying, then up to 3 rounds where the
+// player picks 2 cards. If matched, cards stay face-up and are cleared. If not, cards show
+// briefly then flip back. After the 3rd reveal (or if no pairs remain), the round resolves.
 const SHUFFLE_MS = 1550;
 const REVEAL_FLIP_MS = 450;
-const REVEAL_STAGGER_MS = 140;
 const POST_REVEAL_PAUSE_MS = 500;
 
 // One card's shuffle "flight path" - several waypoints it darts through (as % of its own
@@ -82,7 +86,7 @@ function shuffleKeyframes(path: ShufflePath): Record<string, { transform: string
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-type Phase = "idle" | "starting" | "shuffling" | "picking" | "revealing" | "done";
+type Phase = "idle" | "starting" | "shuffling" | "picking" | "revealingPair" | "done";
 
 interface SessionStats {
     rounds: number;
@@ -100,22 +104,24 @@ function buildPeekDeck(symbolGroups: MemorySymbolGroup[]): string[] {
 }
 
 /**
- * Memory's card-grid engine - a sibling to SlotMachine/SpinmaniaGrid/ScratchCard, not a
- * variant of any of them, and the first of these engines built around a genuinely two-step
- * round: start() pays and privately commits the server's secret grid, reveal() is the
- * player's real choice of which 4 of the 25 cards to flip. The idle grid shows a locally-
- * shuffled arrangement of the *public, fixed* deck composition (symbolGroups) - never real
- * per-round data, since the server never sends that before reveal() (see memory.ts). The
- * "shuffle" after Start is therefore always cosmetic, not a literal re-position of anything
- * the player just saw.
+ * Memory's card-grid engine — classic match-two mechanic. The player pays, sees a peek of
+ * all 25 cards, watches a shuffle, then gets up to 3 attempts: each attempt they pick 2
+ * face-down cards. If they match, the cards stay face-up with a green glow and are removed
+ * from play. If not, they show briefly then flip back. After 3 attempts, the round resolves
+ * with a payout based on how many pairs were matched.
  */
 export default function MemoryBoard({ symbolGroups, symbols, betOptions, betLabels, defaultBet, isPending, start, reveal, onResult }: MemoryBoardProps) {
     const [wager, setWager] = useState(defaultBet ?? betOptions[0]);
     const [phase, setPhase] = useState<Phase>("idle");
     const [peekDeck, setPeekDeck] = useState<string[]>(() => buildPeekDeck(symbolGroups));
     const [selected, setSelected] = useState<Set<number>>(new Set());
-    const [revealedSymbols, setRevealedSymbols] = useState<Map<number, string>>(new Map());
-    const [result, setResult] = useState<MemoryRevealResult | null>(null);
+    // Positions whose symbol is currently visible (peek, revealed pair, or matched+cleared).
+    const [visibleSymbols, setVisibleSymbols] = useState<Map<number, string>>(new Map());
+    // Positions permanently cleared (matched pairs).
+    const [clearedPositions, setClearedPositions] = useState<Set<number>>(new Set());
+    const [revealIndex, setRevealIndex] = useState(0);
+    const [matchedPairs, setMatchedPairs] = useState(0);
+    const [finalPayout, setFinalPayout] = useState(0);
     const [roundResult, setRoundResult] = useState<RoundResult | null>(null);
     const [stats, setStats] = useState<SessionStats>({ rounds: 0, wagered: 0, won: 0 });
     const [shuffleSeed, setShuffleSeed] = useState(0);
@@ -125,21 +131,18 @@ export default function MemoryBoard({ symbolGroups, symbols, betOptions, betLabe
 
     const shufflePaths = useMemo(() => buildShufflePaths(), [shuffleSeed]);
 
-    const matchedSymbolCounts = useMemo(() => {
-        const counts = new Map<string, number>();
-        for (const symbol of revealedSymbols.values()) counts.set(symbol, (counts.get(symbol) ?? 0) + 1);
-        return counts;
-    }, [revealedSymbols]);
-
     const canStart = phase === "idle" && !isPending && wager > 0;
 
     const handleStart = async () => {
         if (!canStart) return;
         setPhase("starting");
         setRoundResult(null);
-        setResult(null);
+        setFinalPayout(0);
         setSelected(new Set());
-        setRevealedSymbols(new Map());
+        setVisibleSymbols(new Map());
+        setClearedPositions(new Set());
+        setRevealIndex(0);
+        setMatchedPairs(0);
         setStats((prev) => ({ ...prev, rounds: prev.rounds + 1, wagered: prev.wagered + wager }));
 
         try {
@@ -156,7 +159,7 @@ export default function MemoryBoard({ symbolGroups, symbols, betOptions, betLabe
     };
 
     const toggleCard = (position: number) => {
-        if (phase !== "picking") return;
+        if (phase !== "picking" || clearedPositions.has(position)) return;
         setSelected((prev) => {
             const next = new Set(prev);
             if (next.has(position)) {
@@ -168,32 +171,72 @@ export default function MemoryBoard({ symbolGroups, symbols, betOptions, betLabe
         });
     };
 
+    // Auto-reveal as soon as both cards are picked — no manual "Flip" button needed.
+    useEffect(() => {
+        if (phase === "picking" && selected.size === PICK_COUNT) {
+            handleReveal();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selected, phase]);
+
     const handleReveal = async () => {
         if (phase !== "picking" || selected.size !== PICK_COUNT) return;
         const picks = [...selected];
-        setPhase("revealing");
+        const currentIndex = revealIndex;
+        setPhase("revealingPair");
 
         try {
-            const res = await reveal(picks);
+            const res = await reveal({ picks, revealIndex: currentIndex });
             if (!mountedRef.current) return;
-            setResult(res);
 
-            for (let i = 0; i < res.picks.length; i++) {
-                await sleep(i === 0 ? REVEAL_FLIP_MS : REVEAL_STAGGER_MS);
+            // Show both cards.
+            const newVisible = new Map(visibleSymbols);
+            for (const p of res.picks) {
+                newVisible.set(p.position, p.symbol);
+            }
+            setVisibleSymbols(newVisible);
+            await sleep(REVEAL_FLIP_MS);
+            if (!mountedRef.current) return;
+
+            if (res.matched) {
+                // Match — cards stay face-up and become cleared.
+                setClearedPositions((prev) => {
+                    const next = new Set(prev);
+                    for (const p of res.picks) next.add(p.position);
+                    return next;
+                });
+                setMatchedPairs(res.matchedPairs);
+            } else {
+                // No match — let the player see the cards briefly, then flip them back.
+                await sleep(NO_MATCH_FLIP_BACK_MS);
                 if (!mountedRef.current) return;
-                setRevealedSymbols((prev) => {
+                // Remove these positions from visible symbols (they flip back).
+                setVisibleSymbols((prev) => {
                     const next = new Map(prev);
-                    next.set(res.picks[i].position, res.picks[i].symbol);
+                    for (const p of res.picks) next.delete(p.position);
                     return next;
                 });
             }
-            await sleep(REVEAL_FLIP_MS + POST_REVEAL_PAUSE_MS);
+            await sleep(POST_REVEAL_PAUSE_MS);
             if (!mountedRef.current) return;
 
-            onResult?.(res);
-            setStats((prev) => ({ ...prev, won: prev.won + res.payout }));
-            setRoundResult({ payout: res.payout, jackpot: res.matchCount === 3, won: res.payout > 0 });
-            setPhase("done");
+            if (res.isFinal) {
+                setFinalPayout(res.finalPayout);
+                setMatchedPairs(res.matchedPairs);
+                onResult?.(res.finalPayout, res.matchedPairs);
+                setStats((prev) => ({ ...prev, won: prev.won + res.finalPayout }));
+                setRoundResult({
+                    payout: res.finalPayout,
+                    jackpot: res.matchedPairs >= 3,
+                    won: res.finalPayout > 0,
+                });
+                setPhase("done");
+            } else {
+                setRevealIndex(res.revealCount);
+                setMatchedPairs(res.matchedPairs);
+                setSelected(new Set());
+                setPhase("picking");
+            }
         } catch {
             if (mountedRef.current) setPhase("picking");
         }
@@ -203,14 +246,18 @@ export default function MemoryBoard({ symbolGroups, symbols, betOptions, betLabe
         setPeekDeck(buildPeekDeck(symbolGroups));
         setPhase("idle");
         setSelected(new Set());
-        setRevealedSymbols(new Map());
-        setResult(null);
+        setVisibleSymbols(new Map());
+        setClearedPositions(new Set());
+        setRevealIndex(0);
+        setMatchedPairs(0);
+        setFinalPayout(0);
         setRoundResult(null);
     };
 
     const confettiPieces = useMemo(() => (roundResult?.won ? generateConfetti(roundResult.jackpot) : []), [roundResult]);
     const netResult = stats.won - stats.wagered;
     const ratio = stats.wagered > 0 ? stats.won / stats.wagered : 0;
+    const roundLabel = revealIndex < MAX_REVEALS ? `${revealIndex + 1}/${MAX_REVEALS}` : `${MAX_REVEALS}/${MAX_REVEALS}`;
 
     return (
         <Box sx={{ maxWidth: 480, mx: "auto" }}>
@@ -241,12 +288,12 @@ export default function MemoryBoard({ symbolGroups, symbols, betOptions, betLabe
                     }}
                 >
                     {Array.from({ length: CELL_COUNT }, (_, position) => {
-                        const faceUp = phase === "idle" ? true : revealedSymbols.has(position);
-                        const symbol = phase === "idle" ? peekDeck[position] : revealedSymbols.get(position);
+                        const isCleared = clearedPositions.has(position);
+                        const faceUp = phase === "idle" ? true : isCleared || visibleSymbols.has(position);
+                        const symbol = phase === "idle" ? peekDeck[position] : visibleSymbols.get(position);
                         const isSelected = selected.has(position);
-                        const isMatched = !!symbol && (matchedSymbolCounts.get(symbol) ?? 0) >= 2;
                         const isShuffling = phase === "shuffling";
-                        const isClickable = phase === "picking" && (isSelected || selected.size < PICK_COUNT);
+                        const isClickable = phase === "picking" && !isCleared && (isSelected || selected.size < PICK_COUNT);
                         const path = shufflePaths[position];
 
                         return (
@@ -257,9 +304,7 @@ export default function MemoryBoard({ symbolGroups, symbols, betOptions, betLabe
                                     aspectRatio: "1",
                                     perspective: 600,
                                     cursor: isClickable ? "pointer" : "default",
-                                    // Moves the whole card around during the shuffle - a separate
-                                    // element/property from the flip below, so the two animations
-                                    // (position vs. face) never fight over `transform`.
+                                    opacity: isCleared ? 0.85 : 1,
                                     ...(isShuffling && {
                                         position: "relative",
                                         zIndex: 1,
@@ -308,10 +353,10 @@ export default function MemoryBoard({ symbolGroups, symbols, betOptions, betLabe
                                             alignItems: "center",
                                             justifyContent: "center",
                                             fontSize: phase === "idle" ? 20 : 26,
-                                            bgcolor: isMatched ? "rgba(76,175,80,0.22)" : "grey.900",
+                                            bgcolor: isCleared ? "rgba(76,175,80,0.22)" : "grey.900",
                                             border: "1px solid",
-                                            borderColor: isMatched ? "success.main" : "grey.700",
-                                            boxShadow: isMatched ? "0 0 12px 2px rgba(76,175,80,0.6)" : "none",
+                                            borderColor: isCleared ? "success.main" : "grey.700",
+                                            boxShadow: isCleared ? "0 0 12px 2px rgba(76,175,80,0.6)" : "none",
                                             opacity: phase === "idle" ? 0.85 : 1,
                                         }}
                                     >
@@ -342,7 +387,7 @@ export default function MemoryBoard({ symbolGroups, symbols, betOptions, betLabe
                 ))}
             </ToggleButtonGroup>
 
-            <Box sx={{ textAlign: "center", mt: 2.5 }}>
+            <Box sx={{ textAlign: "center", mt: 2.5, minHeight: 56, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 {phase === "idle" && (
                     <Button
                         variant="contained"
@@ -361,18 +406,13 @@ export default function MemoryBoard({ symbolGroups, symbols, betOptions, betLabe
                     </Button>
                 )}
                 {phase === "picking" && (
-                    <Button
-                        variant="contained"
-                        color="warning"
-                        size="large"
-                        onClick={handleReveal}
-                        disabled={selected.size !== PICK_COUNT}
-                        sx={{ borderRadius: 999, px: 6, py: 1.25, fontWeight: 800, fontSize: "1.05rem" }}
-                    >
-                        {`Flip ${selected.size}/${PICK_COUNT} Cards`}
-                    </Button>
+                    <Box sx={{ py: 1.25, lineHeight: 1 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                            Pick 2 cards ({roundLabel})
+                        </Typography>
+                    </Box>
                 )}
-                {phase === "revealing" && (
+                {phase === "revealingPair" && (
                     <Button variant="contained" color="warning" size="large" disabled sx={{ borderRadius: 999, px: 6, py: 1.25, fontWeight: 800, fontSize: "1.05rem" }}>
                         Flipping…
                     </Button>
@@ -394,9 +434,11 @@ export default function MemoryBoard({ symbolGroups, symbols, betOptions, betLabe
                 color="text.secondary"
                 sx={{ textAlign: "center", mt: 1, visibility: phase === "picking" ? "visible" : "hidden" }}
             >
-                Pick {PICK_COUNT} cards to flip - matches among them decide the prize.
+                Pick 2 cards — matches stay and are cleared. {MAX_REVEALS} tries total.
+                {matchedPairs > 0 && ` Matches so far: ${matchedPairs}.`}
             </Typography>
 
+            {/* Session stats — same across all games */}
             <Box
                 sx={{
                     display: "flex",

@@ -565,7 +565,7 @@ function SquareDetails({ square, onHarvested }: SquareDetailsProps) {
                         description={
                             square.protection.fungicide
                                 ? "Already applied to this crop"
-                                : "Shields against the next disease (💀)"
+                                : "Shields against disease (🦠 — doubles decay)"
                         }
                         disabled={isProtecting || square.protection.fungicide}
                         onClick={() => handleProtect("fungicide")}
@@ -625,9 +625,9 @@ export default function Garden() {
                 waterCooldownMs
             )} cooldown per plot) advances one stage at a time. A vermin (🐀) hit sets a crop back a growth stage instead of hurting it outright. A plot left completely unwatered for ${formatDuration(
                 neglectGraceMs
-            )} starts losing one growth stage per hour until it's rewatered or dies - a dead plot costs ${formatCheddar(
+            )} starts losing one growth stage per midnight if it hasn't been watered in over 24 hours — a dead plot costs ${formatCheddar(
                 cleanupFee
-            )} to clean up before replanting. Fertilizer instantly clears one growth stage still needed; bonemeal speeds up every watering cooldown on that crop by 25% from then on. Both are single-use per crop - buy them fresh on each new plant, they don't carry over.`,
+            )} to clean up before replanting. A diseased (🦠) plot loses two stages per midnight instead of one until cured with fungicide. Fertilizer instantly clears one growth stage still needed; bonemeal speeds up every watering cooldown on that crop by 25% from then on. Both are single-use per crop - buy them fresh on each new plant, they don't carry over.`,
         },
     ];
 
@@ -638,7 +638,7 @@ export default function Garden() {
                 waterCooldownMs
             )} per plot. There's no rush: a plot only starts losing progress if it goes a full ${formatDuration(
                 neglectGraceMs
-            )} with zero watering, after which it loses one growth stage every hour until it's rewatered or runs out and dies. Unprotected plots can also be struck by vermin (🐀 - sets the crop back a growth stage, shown as a counter on the plot) or disease (💀 - kills the crop outright) on any hazard check - buy pesticide/fungicide to shield against them (each stays up through any number of misses and is only used up the moment it actually blocks a hit, so it needs rebuying only once it's actually done its job), buy fertilizer to instantly clear one growth stage still needed, or buy bonemeal to speed up every watering cooldown on that crop by 25% from then on (shown as a badge on the plot). A dead plot costs ${formatCheddar(
+            )} with zero watering, after which it loses one growth stage per midnight until it's rewatered or runs out and dies. Unprotected plots can also be struck by vermin (🐀 — adds one more required growth stage, shown as a counter on the plot) or disease (🦠 — doubles the daily decay rate until cured with fungicide) on any hazard check. Buy pesticide to shield against vermin, or fungicide to block and cure disease (each stays up through any number of misses and is only used up the moment it actually blocks a hit). Buy fertilizer to instantly clear one growth stage still needed, or bonemeal to speed up every watering cooldown on that crop by 25% from then on (shown as a badge on the plot). A dead plot costs ${formatCheddar(
                 cleanupFee
             )} to clean up before you can replant it.`}
             oddsSections={oddsSections}

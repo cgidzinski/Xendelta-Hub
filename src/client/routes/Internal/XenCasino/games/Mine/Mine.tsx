@@ -170,7 +170,7 @@ export default function Mine() {
     const [confirmingReset, setConfirmingReset] = useState(false);
     const [flashTile, setFlashTile] = useState<{ x: number; y: number; kind: string } | null>(null);
 
-    const handleBuy = (item: "ladder" | "explosive" | "reinforcement") =>
+    const handleBuy = (item: "ladder" | "explosive" | "support") =>
         buyEquipment(item).catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
     const handleFlare = () =>
         useFlare()
@@ -186,27 +186,27 @@ export default function Mine() {
 
     const oddsSections: OddsSection[] = state
         ? [
-              {
-                  title: "Equipment",
-                  rows: [
-                      { label: "Dig Fee", payout: `${formatCheddar(state.prices.dig.cost)} per real dig - free to move through tunnels you've already cleared` },
-                      { label: "Ladder", payout: `${formatCheddar(state.prices.ladder.cost)} each` },
-                      { label: "Explosive", payout: `${formatCheddar(state.prices.explosive.cost)} - single-use, blasts through the daily cap, a missing ladder, and/or heavy stone` },
-                      { label: "Support", payout: `${formatCheddar(state.prices.reinforcement.cost)} - single-use shield against your next cave-in, stays armed until it actually blocks one` },
-                      { label: "Flare", payout: `${formatCheddar(state.prices.flare.cost)} - reveals a 3x3 area around you, single-use` },
-                      { label: "Reset Map", payout: `${formatCheddar(state.prices.reset.cost)} - wipes your whole map and returns you to the surface` },
-                  ],
-                  footnote: "Moving through tunnels you've already cleared is always free. Every real dig into new territory costs the flat dig fee regardless of what's found; going down also consumes a ladder and enters a riskier depth band, while sideways needs no ladder and stays at the current depth's risk level.",
-              },
-              {
-                  title: "Gem Tiers",
-                  rows: state.oreTiers.map((t) => ({
-                      label: `${t.label} (from depth ${t.minDepth})`,
-                      payout: `${t.valueMultiplier}x value`,
-                  })),
-                  footnote: "The deeper you dig, the more tiers are in play, and the rarer/richer ones start competing for the roll - so depth raises both your odds of a good find and its value.",
-              },
-          ]
+            {
+                title: "Equipment",
+                rows: [
+                    { label: "Dig Fee", payout: `${formatCheddar(state.prices.dig.cost)} per real dig - free to move through tunnels you've already cleared` },
+                    { label: "Ladder", payout: `${formatCheddar(state.prices.ladder.cost)} each` },
+                    { label: "Explosive", payout: `${formatCheddar(state.prices.explosive.cost)} - single-use, blasts through the daily cap, a missing ladder, and/or heavy stone` },
+                    { label: "Support", payout: `${formatCheddar(state.prices.support.cost)} - single-use shield against your next cave-in, stays armed until it actually blocks one` },
+                    { label: "Flare", payout: `${formatCheddar(state.prices.flare.cost)} - reveals a 3x3 area around you, single-use` },
+                    { label: "Reset Map", payout: `${formatCheddar(state.prices.reset.cost)} - wipes your whole map and returns you to the surface` },
+                ],
+                footnote: "Moving through tunnels you've already cleared is always free. Every real dig into new territory costs the flat dig fee regardless of what's found; going down also consumes a ladder and enters a riskier depth band, while sideways needs no ladder and stays at the current depth's risk level.",
+            },
+            {
+                title: "Gem Tiers",
+                rows: state.oreTiers.map((t) => ({
+                    label: `${t.label} (from depth ${t.minDepth})`,
+                    payout: `${t.valueMultiplier}x value`,
+                })),
+                footnote: "The deeper you dig, the more tiers are in play, and the rarer/richer ones start competing for the roll - so depth raises both your odds of a good find and its value.",
+            },
+        ]
         : [];
 
     if (isError) {
@@ -235,7 +235,7 @@ export default function Mine() {
         );
     }
 
-    const { position, revealedTiles, digsToday, dailyDigCap, ladderCount, explosiveCount, reinforcementCount } = state;
+    const { position, revealedTiles, digsToday, dailyDigCap, ladderCount, explosiveCount, supportCount } = state;
 
     const minX = position.x - VIEW_RADIUS;
     const minY = Math.max(0, position.y - VIEW_RADIUS); // clamp at the surface, never show y < 0
@@ -485,7 +485,7 @@ export default function Mine() {
                 />
                 <StatTile label="Ladders" value={ladderCount} color={ladderCount > 0 ? undefined : "warning.main"} />
                 <StatTile label="Explosives" value={explosiveCount} color={explosiveCount > 0 ? "warning.main" : undefined} />
-                <StatTile label="Supports" value={reinforcementCount} color={reinforcementCount > 0 ? "info.main" : undefined} />
+                <StatTile label="Supports" value={supportCount} color={supportCount > 0 ? "info.main" : undefined} />
             </Box>
 
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 3, maxWidth: 480, mx: "auto" }}>
@@ -506,11 +506,11 @@ export default function Mine() {
                 />
                 <ActionButton
                     icon={<ShieldIcon />}
-                    label={`Buy Support (${formatCheddar(state.prices.reinforcement.cost)})`}
+                    label={`Buy Support (${formatCheddar(state.prices.support.cost)})`}
                     description="Single-use shield against your next cave-in. Stays armed through any number of safe digs - only used up the moment it actually blocks one."
                     color="primary"
                     disabled={isBuying}
-                    onClick={() => handleBuy("reinforcement")}
+                    onClick={() => handleBuy("support")}
                 />
                 <ActionButton
                     icon={<FlareIcon />}

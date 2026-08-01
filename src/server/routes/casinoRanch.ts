@@ -78,7 +78,7 @@ import { randomBytes } from "crypto";
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 const { User } = require("../models/user");
-const { XenCasinoRanchCreature, XenCasinoRanchInventory, XenCasinoRanchPendingRace, XenCasinoActivity } = require("../models/xenCasino");
+const { XenCasinoRanchCreature, XenCasinoRanchInventory, XenCasinoRanchPendingRace, XenCasinoActivity, dailyQuestDateKey: todayKey } = require("../models/xenCasino");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../utils/weeabetsClient";
 import { requireGameEnabled } from "../utils/casinoStatus";
 import { recordCasinoRoundPlayed } from "../utils/dailyQuest";
@@ -156,7 +156,7 @@ function typeForSpecies(species: string): RanchType {
     return SPECIES_TYPE[species] ?? "land";
 }
 
-const FEED_COOLDOWN_MS = 30 * 60 * 1000;
+const FEED_COOLDOWN_MS = 60 * 60 * 1000;
 const FEED_GAIN_RANGE: [number, number] = [1, 4];
 const FEED_PRICE = 100; // per unit, same price for all 3 types
 const ALLOWED_FEED_BUY_QUANTITIES = [1, 5, 10];
@@ -258,8 +258,6 @@ export function pickCourse(): RaceCourse {
 export function effectiveRaceTotal(stats: RanchStats, course: RaceCourse): number {
     return STAT_KEYS.reduce((sum, key) => sum + stats[key] * course.weights[key], 0);
 }
-
-const COLLECT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 // One fixed item per species (not per rarity tier or per individual creature) - every
 // creature of a given species always produces the same item. Sell values roughly track the
@@ -737,6 +735,8 @@ function creatureView(doc: any) {
         raceLosses: doc.raceLosses,
         level: levelForStats(doc.stats),
         lastCollectedAt: doc.lastCollectedAt,
+        lastCollectDate: doc.lastCollectDate,
+        canCollect: doc.lastCollectDate !== todayKey(),
         itemKey: SPECIES_ITEM_KEY[doc.species],
         itemLabel: ITEM_DEFS[SPECIES_ITEM_KEY[doc.species]]?.label,
         collectQuantity: collectQuantityForTier(doc.rarityTier),
@@ -890,7 +890,6 @@ async function rosterView(userId: string) {
         neglectGraceMs: RANCH_NEGLECT_GRACE_MS,
         decayTickMs: RANCH_DECAY_TICK_MS,
         releaseSellValue: RELEASE_SELL_VALUE,
-        collectCooldownMs: COLLECT_COOLDOWN_MS,
     };
 }
 
@@ -1055,7 +1054,7 @@ module.exports = function (app: express.Application) {
             });
         }
 
-        const updated = await XenCasinoRanchCreature.collect(userId, id, COLLECT_COOLDOWN_MS);
+        const updated = await XenCasinoRanchCreature.collect(userId, id);
         if (!updated) {
             return res.status(400).json({ status: false, message: "Nothing ready to collect yet" });
         }

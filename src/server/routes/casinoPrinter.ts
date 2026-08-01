@@ -34,7 +34,7 @@ const MAX_EFFECTIVE_PEAK_MULTIPLIER = 15;
 // with no raid cost, unlike parts which always trade some of one for the other. Bought
 // fresh for that one run only, same as everything else here - there's no persistent
 // "rig level" to grind toward.
-const MACHINE_UPGRADE_COST = 50000;
+const MACHINE_UPGRADE_COST = 15000;
 const MACHINE_UPGRADE_RATE_BONUS = 0.5;
 
 interface PrinterPart {
@@ -56,14 +56,22 @@ const PRINTER_PARTS: Record<string, PrinterPart> = {
     "ram-upgrade": { key: "ram-upgrade", label: "RAM Upgrade", cost: 2400, rateBonus: 0.25, raidBonus: 0.15, description: "Solid boost, moderate risk." },
     "turbo-fan": { key: "turbo-fan", label: "Turbo Fan", cost: 4000, rateBonus: 0.5, raidBonus: 0.4, description: "Strong boost, but loud - raid risk climbs." },
     "liquid-nitrogen": { key: "liquid-nitrogen", label: "Liquid Nitrogen Cooler", cost: 6400, rateBonus: 1.0, raidBonus: 0.9, description: "Huge boost, huge risk - the high-roller pick." },
-    "silent-case": { key: "silent-case", label: "Silent Case", cost: 2000, rateBonus: -0.15, raidBonus: -0.3, description: "Slower and smaller, but much quieter." },
-    "faraday-cage": { key: "faraday-cage", label: "Faraday Cage", cost: 3200, rateBonus: 0.05, raidBonus: -0.45, description: "Nearly pure stealth, barely touches rate." },
+    "silent-case": { key: "silent-case", label: "Silent Case", cost: 2000, rateBonus: -0.05, raidBonus: -0.35, description: "Much quieter, slightly slower." },
+
+    // Utility parts — each is a singleton, no stacking. They change how risk/collection
+    // work rather than adding raw rate or raid numbers. Count toward the 3-part limit.
+    "whistleblower": { key: "whistleblower", label: "Whistleblower", cost: 2500, rateBonus: 0, raidBonus: 0, description: "Blocks the first raid hit — an inside tip you only get once." },
+    "signal-jammer": { key: "signal-jammer", label: "Signal Jammer", cost: 3000, rateBonus: 0, raidBonus: 0, description: "Raid checks every 10 min instead of 5." },
+    "forged-documents": { key: "forged-documents", label: "Forged Documents", cost: 3500, rateBonus: 0, raidBonus: 0, description: "Bribes cost 50% less this run." },
+    "insurance": { key: "insurance", label: "Insurance Policy", cost: 4000, rateBonus: 0, raidBonus: 0, description: "If raided, refunds 50% of your parts cost." },
+    "decoy-rig": { key: "decoy-rig", label: "Decoy Rig", cost: 4500, rateBonus: 0, raidBonus: 0, description: "If raided, lose only 50% of parts cost." },
 };
 
 // Each bribe on the same run costs more than the last, so babysitting a run to peak by
 // bribing indefinitely eventually costs more than the extra payout is worth.
 function nextBribeCost(run: any): number {
-    return Math.round(BRIBE_COST * (1 + (run.bribeCount || 0) * BRIBE_COST_STEP));
+    const base = Math.round(BRIBE_COST * (1 + (run.bribeCount || 0) * BRIBE_COST_STEP));
+    return run.hasForgedDocuments ? Math.round(base / 2) : base;
 }
 
 // Rises linearly from START_MULTIPLIER (a real loss if collected instantly) to this run's
@@ -113,10 +121,42 @@ function runView(run: any) {
         parts: partKeys.map((key) => PRINTER_PARTS[key]).filter(Boolean),
         usedMachineUpgrade: !!run.usedMachineUpgrade,
         machineUpgradeRateBonus: MACHINE_UPGRADE_RATE_BONUS,
+        hasWhistleblower: !!run.hasWhistleblower,
+        whistleblowerUsed: !run.hasWhistleblower && partKeys.includes("whistleblower"),
+        hasSignalJammer: !!run.hasSignalJammer,
+        hasForgedDocuments: !!run.hasForgedDocuments,
+        hasInsurance: !!run.hasInsurance,
+        hasDecoyRig: !!run.hasDecoyRig,
     };
 }
 
 module.exports = function (app: express.Application) {
+
+    // Sweep stale printer runs every 5 minutes — if a run is abandoned (no activity for
+    // ROUND_TTL_MS), clear it so the player can start a new one. No money moves here;
+    // if the collect payout was already sent, the transfer's idempotency key prevents
+    // double-payment. If it wasn't, the run simply forfeits.
+    const PRINTER_ROUND_TTL_MS = 30 * 60 * 1000; // 30 minutes
+    setInterval(() => {
+        sweepStalePrinterRuns().catch((err: Error) => {
+            console.error("printer: stale run sweep failed", err);
+        });
+    }, 5 * 60 * 1000).unref();
+
+    async function sweepStalePrinterRuns() {
+        const cutoff = new Date(Date.now() - PRINTER_ROUND_TTL_MS);
+        const stale = await XenCasinoPrinterState.find({ "run.startedAt": { $lt: cutoff }, "run.raidedAt": null }).exec();
+        for (const doc of stale) {
+            if (!doc.run) continue;
+            // The run has been sitting too long — clear it. If the player collected and the
+            // payout transfer went through, the idempotency key guards against double-pay.
+            // If they never collected, the run is forfeit.
+            await XenCasinoPrinterState.clearRun(doc.userId);
+        }
+        if (stale.length > 0) {
+            console.log(`printer: swept ${stale.length} stale run(s)`);
+        }
+    }
 
     app.get("/api/casino/printer", authenticateToken, async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
@@ -270,18 +310,45 @@ module.exports = function (app: express.Application) {
             return res.status(404).json({ status: false, message: "User not found" });
         }
 
-        const state = await XenCasinoPrinterState.getState(userId);
-        if (!state.run) {
+        // Read the doc directly — don't call getState (which calls resolvePrinterRun and
+        // could raid the run mid-collect, turning a payout into 0). We only check whether
+        // the run was *already* raided before the player clicked Collect.
+        const doc = await XenCasinoPrinterState.findOne({ userId }).exec();
+        const run = doc?.run ?? null;
+        if (!run) {
             return res.status(400).json({ status: false, message: "No print run going" });
         }
 
-        if (state.run.raidedAt) {
+        if (run.raidedAt) {
+            // Insurance Policy / Decoy Rig — refund 50% of parts cost if either is equipped.
+            const refundPercent = (run.hasInsurance || run.hasDecoyRig) ? 0.5 : 0;
+            let balance: string | undefined;
+            if (refundPercent > 0) {
+                try {
+                    const resolved = await resolveUserAccount(user);
+                    if (resolved.linked && resolved.account) {
+                        const refundAmount = Math.round(run.partsCost * refundPercent);
+                        const xenCasinoAccountId = await getXenCasinoAccountId();
+                        const refundResult = await transfer({
+                            fromAccountId: xenCasinoAccountId,
+                            toAccountId: resolved.account.accountId,
+                            amount: refundAmount.toFixed(10),
+                            key: `printer-refund-${userId}-${new Date(run.startedAt).getTime()}`,
+                            note: "printer_raid_refund",
+                        });
+                        balance = refundResult.toNewBalance;
+                    }
+                } catch {
+                    // Refund failed — still clear the run, don't block on it.
+                }
+            }
             await XenCasinoPrinterState.clearRun(userId);
-            await recordCasinoRoundPlayed(userId, { game: SLUG, wager: 0, payout: 0 });
-            return res.json({ status: true, data: { raided: true, payout: 0 } });
+            const activityPayout = refundPercent > 0 ? Math.round(run.partsCost * refundPercent) : 0;
+            await recordCasinoRoundPlayed(userId, { game: SLUG, wager: 0, payout: activityPayout });
+            return res.json({ status: true, data: { raided: true, payout: activityPayout, balance } });
         }
 
-        const payout = Math.round(state.run.partsCost * currentMultiplier(state.run, new Date()));
+        const payout = Math.round(run.partsCost * currentMultiplier(run, new Date()));
 
         try {
             const resolved = await resolveUserAccount(user);
@@ -294,7 +361,7 @@ module.exports = function (app: express.Application) {
                 fromAccountId: xenCasinoAccountId,
                 toAccountId: resolved.account.accountId,
                 amount: payout.toFixed(10),
-                key: `printer-collect-${userId}-${new Date(state.run.startedAt).getTime()}`,
+                key: `printer-collect-${userId}-${new Date(run.startedAt).getTime()}`,
                 note: "printer_collect",
             });
 

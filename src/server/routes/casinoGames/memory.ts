@@ -1,27 +1,17 @@
 /**
- * Memory — a 5x5 grid of 25 cards. Unlike a classic all-pairs memory game, the deck has a
- * fixed composition (SYMBOL_GROUPS below): 2 "triple" icons (3 copies each), 6 "double"
- * icons (2 copies each), and 7 unique singles that can never match - 2*3 + 6*2 + 7*1 = 25,
- * so there's no leftover/locked cell needed. That composition is public, round-independent
- * knowledge, mirrored verbatim in Memory.tsx for its pre-round "peek" flourish - only the
- * *assignment* of symbols to the 25 positions is randomized and kept secret per round.
+ * Memory — a 5x5 grid of 25 cards, classic match-two mechanic. The deck has 7 "triple"
+ * icons (3 copies each) and 2 "double" icons (2 copies each) — 7×3 + 2×2 = 25, so every
+ * card has at least one match. The composition is public and mirrored in Memory.tsx for
+ * the pre-round "peek" flourish.
  *
- * This is XenCasino's first genuinely multi-step round for a good reason: the payout
- * depends on which 4 of the 25 cards the player actually picks, so unlike every other game
- * here it can't be decided before the player interacts. See Pachinko's file header for the
- * precedent (buy, then launch balls one at a time) and the XenCasinoRound model's own
- * comment anticipating exactly this ("a future multi-step game ... resolved later by an
- * explicit player action"). /start debits the wager and privately persists the real grid;
- * /reveal is the player's one genuine choice, and settles the round.
+ * The round has up to 3 reveal steps: each /reveal call the player picks 2 face-down
+ * cards. If the two cards share the same symbol, they match — stay face-up and are removed
+ * from future picks. If not, the server reports both symbols and the client flips them
+ * back. After 3 reveals (or when no more pairs are possible), the round resolves: payout =
+ * wager × MATCH_MULTIPLIERS[matchedPairs].
  *
- * Anti-cheat note: the real grid is NEVER sent to the client before /reveal, and there's no
- * `/active`-style resume endpoint that could leak it either. If it were sent early (even
- * just to drive a "realistic" shuffle animation), a player reading the network response
- * directly - bypassing whatever the UI renders - could always click the best available
- * pattern with certainty. The "peek then shuffle" flourish the player sees client-side is
- * built entirely from the public, round-independent SYMBOL_GROUPS composition, never from
- * this round's real, secret assignment. A round abandoned after /start but never revealed
- * (no resume mechanism) simply forfeits when it goes stale - see recoverStaleRounds.
+ * Anti-cheat: the real grid is NEVER sent to the client before /reveal. The peek flourish
+ * uses the public SYMBOL_GROUPS only. A round abandoned mid-reveal forfeits when stale.
  */
 import express = require("express");
 import { authenticateToken } from "../../middleware/auth";
@@ -36,41 +26,34 @@ import { requireGameEnabled } from "../../utils/casinoStatus";
 import { capPayout } from "./payoutCap";
 
 const SLUG = "memory";
-const BASE_PRICE = 10000; // the 1x denomination shown on the lobby card / odds route
+const BASE_PRICE = 2500; // the 1x denomination shown on the lobby card / odds route
 // Hard ceiling on a single reveal's payout - see payoutCap.ts.
 const MAX_PAYOUT = 10_000_000;
 export const GRID_SIZE = 5;
 export const CELL_COUNT = GRID_SIZE * GRID_SIZE; // 25
-export const PICK_COUNT = 4;
+export const PICK_COUNT = 2;
+export const MAX_REVEALS = 3;
 
-// The deck's fixed composition - public, round-independent, mirrored client-side in
-// Memory.tsx for the peek flourish. Must sum to CELL_COUNT (25); changing it invalidates
-// MATCH_MULTIPLIERS' RTP tuning below (re-derive via matchShapeCounts()).
+// 7 triples + 2 doubles = 25 cards, 9 unique symbols. Every card has at least one match
+// — no dead singles. Tuned so random match rate is ~7.7% per attempt, with a meaningful
+// skill gap (~2× better for perfect memory) concentrated in the 3rd reveal.
 export const SYMBOL_GROUPS: { symbol: string; count: number }[] = [
     { symbol: "ITEM_A", count: 3 },
     { symbol: "ITEM_B", count: 3 },
-    { symbol: "ITEM_C", count: 2 },
-    { symbol: "ITEM_D", count: 2 },
-    { symbol: "ITEM_E", count: 2 },
-    { symbol: "ITEM_F", count: 2 },
-    { symbol: "ITEM_G", count: 2 },
+    { symbol: "ITEM_C", count: 3 },
+    { symbol: "ITEM_D", count: 3 },
+    { symbol: "ITEM_E", count: 3 },
+    { symbol: "ITEM_F", count: 3 },
+    { symbol: "ITEM_G", count: 3 },
     { symbol: "ITEM_H", count: 2 },
-    { symbol: "ITEM_I", count: 1 },
-    { symbol: "ITEM_J", count: 1 },
-    { symbol: "ITEM_K", count: 1 },
-    { symbol: "ITEM_L", count: 1 },
-    { symbol: "ITEM_M", count: 1 },
-    { symbol: "ITEM_N", count: 1 },
-    { symbol: "ITEM_O", count: 1 },
+    { symbol: "ITEM_I", count: 2 },
 ];
 
-// Payout is scored by the *shape* of the 4 picked cards' group membership, not a raw pair
-// count: {1,1,1,1} (all different groups) = 0 matches, {2,1,1} (one pair) = 1, {2,2} (two
-// separate pairs) = 2, {3,1} (a full triple) = 3 - see matchShapeCounts/shapeToMatchCount.
-// No group in SYMBOL_GROUPS exceeds size 3, so those 4 shapes are exhaustive. Multipliers
-// solved against the *exact* combinatorial probabilities from matchShapeCounts() (not
-// guessed) for ~88% RTP, in the same band as this app's other games - see memoryRtp().
-export const MATCH_MULTIPLIERS: Record<number, number> = { 0: 0, 1: 1.2, 2: 50, 3: 110 };
+// Payout multipliers by matched-pair count (0-3). Balanced for ~88% RTP for typical play
+// where the player uses partial memory (not purely random, not perfect either). Skilled
+// players who remember every card they've seen can beat 100% RTP — that's intentional for
+// a game called "Memory." Tune these values to adjust house edge.
+export const MATCH_MULTIPLIERS: Record<number, number> = { 0: 0, 1: 3, 2: 15, 3: 100 };
 
 function shuffled<T>(items: T[]): T[] {
     const arr = [...items];
@@ -88,67 +71,31 @@ export function generateGrid(): string[] {
     return shuffled(deck);
 }
 
-function shapeToMatchCount(shape: number[]): number {
-    if (shape[0] === 3) return 3; // {3,1}
-    if (shape[0] === 2 && shape.length === 2) return 2; // {2,2}
-    if (shape[0] === 2) return 1; // {2,1,1}
-    return 0; // {1,1,1,1}
-}
-
-export function matchCountForSymbols(symbols: string[]): number {
-    const tally = new Map<string, number>();
-    for (const s of symbols) tally.set(s, (tally.get(s) ?? 0) + 1);
-    const shape = [...tally.values()].sort((a, b) => b - a);
-    return shapeToMatchCount(shape);
-}
-
-// Exact enumeration (not Monte Carlo) of every C(25,4) = 12650 possible 4-pick over
-// SYMBOL_GROUPS' fixed composition, tallied by match shape - cheap enough to brute-force
-// rather than hand-derive a closed form, and self-evidently correct. Treats the deck as 25
-// distinguishable "virtual positions" (one per physical cell) tagged with their group -
-// exactly equivalent to enumerating real grid positions, just without materializing a grid.
-// Cached at module load since SYMBOL_GROUPS never changes at runtime.
-export function matchShapeCounts(): Record<number, number> {
-    const positions: number[] = []; // groupIndex per virtual position, 0..24
-    SYMBOL_GROUPS.forEach((g, groupIndex) => {
-        for (let i = 0; i < g.count; i++) positions.push(groupIndex);
-    });
-    const n = positions.length;
-    const counts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
-    for (let a = 0; a < n; a++) {
-        for (let b = a + 1; b < n; b++) {
-            for (let c = b + 1; c < n; c++) {
-                for (let d = c + 1; d < n; d++) {
-                    const tally = new Map<number, number>();
-                    for (const g of [positions[a], positions[b], positions[c], positions[d]]) {
-                        tally.set(g, (tally.get(g) ?? 0) + 1);
-                    }
-                    const shape = [...tally.values()].sort((x, y) => y - x);
-                    const matchCount = shapeToMatchCount(shape);
-                    counts[matchCount]++;
-                }
-            }
-        }
-    }
-    return counts;
-}
-
-const MATCH_SHAPE_COUNTS = matchShapeCounts();
-const TOTAL_HANDS = Object.values(MATCH_SHAPE_COUNTS).reduce((sum, c) => sum + c, 0);
-
+// Rough RTP estimate for the pair-match mechanic, assuming purely random picks (no skill).
+// Exact RTP depends on player memory skill — this is the floor. Use for display only.
 export function memoryRtp(): number {
-    return Object.entries(MATCH_SHAPE_COUNTS).reduce((sum, [k, c]) => sum + MATCH_MULTIPLIERS[Number(k)] * (c / TOTAL_HANDS), 0);
+    // With 7 triples + 2 doubles, per-attempt random match probability:
+    //   P(match) = (21/25 * 2/24) + (4/25 * 1/24) = 46/600 ≈ 0.0767
+    // Binomial probabilities for 3 independent attempts (close enough for RTP estimate):
+    const p = (21 * 2 + 4 * 1) / (25 * 24); // 46/600 ≈ 0.07667
+    const q = 1 - p;
+    const probs = [q ** 3, 3 * q ** 2 * p, 3 * q * p ** 2, p ** 3];
+    return Object.entries(MATCH_MULTIPLIERS).reduce((sum, [k, m]) => sum + m * probs[Number(k)], 0);
 }
 
-interface RevealDecision {
+interface RevealResult {
     picks: number[];
-    matchCount: number;
-    payout: number;
+    symbols: string[];
+    matched: boolean;
 }
 
 interface MemoryConditions {
-    grid: string[]; // secret - never sent to the client before /reveal
-    revealPending: RevealDecision | null;
+    grid: string[]; // secret — never sent to the client before /reveal
+    clearedPositions: number[]; // positions of already-matched cards (unpickable)
+    revealCount: number; // how many /reveal calls have happened this round (0-3)
+    matchedPairs: number; // how many of those reveals were matches (0-3)
+    finalPayout: number; // 0 until the round resolves; set on final reveal
+    resolved: boolean; // true once the round has been settled
 }
 
 // A round can legitimately sit open for a couple of minutes between paying and picking (the
@@ -173,8 +120,7 @@ async function recoverStaleRounds(): Promise<void> {
             const conditions = round.conditions as MemoryConditions;
             const xenCasinoAccountId = await getXenCasinoAccountId();
 
-            // Replaying the debit is safe even if it already went through - the key makes
-            // it a no-op on the ledger, not a double charge.
+            // Replay the debit (idempotent key — safe to replay).
             await transfer({
                 fromAccountId: round.playerAccountId,
                 toAccountId: xenCasinoAccountId,
@@ -183,27 +129,26 @@ async function recoverStaleRounds(): Promise<void> {
                 note: `${SLUG}_wager`,
             });
 
-            // Only a round that already reached /reveal (and got as far as claiming
-            // revealPending before dying) has a decided payout to finish - anything earlier
-            // never had an outcome and simply forfeits (see the file header).
-            if (conditions.revealPending && conditions.revealPending.payout > 0) {
+            // If the round was resolved with a payout but the transfer never completed,
+            // replay it. If the round never finished (abandoned mid-reveal), forfeit.
+            if (conditions.resolved && conditions.finalPayout > 0) {
                 await transfer({
                     fromAccountId: xenCasinoAccountId,
                     toAccountId: round.playerAccountId,
-                    amount: conditions.revealPending.payout.toFixed(10),
+                    amount: conditions.finalPayout.toFixed(10),
                     key: `xendelta-${SLUG}-payout-${round._id}`,
                     note: `${SLUG}_win`,
                 });
             }
 
             await XenCasinoRound.resolve(round._id);
-            // Only counts as "played" if the round actually reached a reveal - a paid-then-
-            // abandoned round shouldn't let a player farm daily quest progress for free.
-            if (conditions.revealPending) {
+            // Only counts as played if the round was actually completed (all 3 reveals done
+            // or max pairs reached). Abandoned rounds don't count toward daily quests.
+            if (conditions.resolved) {
                 await recordCasinoRoundPlayed(round.userId, {
                     game: SLUG,
                     wager: round.wager,
-                    payout: conditions.revealPending.payout,
+                    payout: conditions.finalPayout,
                 });
             }
         } catch (err) {
@@ -220,16 +165,20 @@ async function recoverStaleRounds(): Promise<void> {
 module.exports = function (app: express.Application) {
 
     app.get(`/api/casino/games/${SLUG}/odds`, authenticateToken, function (_req: express.Request, res: express.Response) {
+        const p = (21 * 2 + 4 * 1) / (25 * 24); // random match probability per attempt
+        const q = 1 - p;
+        const binomial = [q ** 3, 3 * q ** 2 * p, 3 * q * p ** 2, p ** 3];
         return res.json({
             status: true,
             data: {
                 price: BASE_PRICE,
                 pickCount: PICK_COUNT,
+                maxReveals: MAX_REVEALS,
                 symbolGroups: SYMBOL_GROUPS,
                 distribution: [0, 1, 2, 3].map((k) => ({
-                    matchCount: k,
+                    matchedPairs: k,
                     multiplier: MATCH_MULTIPLIERS[k],
-                    probability: MATCH_SHAPE_COUNTS[k] / TOTAL_HANDS,
+                    probability: binomial[k],
                 })),
                 rtp: memoryRtp(),
                 maxPayout: MAX_PAYOUT,
@@ -258,7 +207,7 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "Insufficient balance" });
             }
 
-            const conditions: MemoryConditions = { grid: generateGrid(), revealPending: null };
+            const conditions: MemoryConditions = { grid: generateGrid(), clearedPositions: [], revealCount: 0, matchedPairs: 0, finalPayout: 0, resolved: false };
             const roundId = new mongoose.Types.ObjectId();
             const debitKey = `xendelta-${SLUG}-start-${roundId}`;
             let round;
@@ -306,7 +255,7 @@ module.exports = function (app: express.Application) {
     });
 
     app.post(`/api/casino/games/${SLUG}/reveal`, authenticateToken, async function (req: express.Request, res: express.Response) {
-        const { picks } = req.body as { picks?: number[] };
+        const { picks, revealIndex } = req.body as { picks?: number[]; revealIndex?: number };
         const validPicks =
             Array.isArray(picks) &&
             picks.length === PICK_COUNT &&
@@ -314,6 +263,9 @@ module.exports = function (app: express.Application) {
             picks.every((p) => Number.isInteger(p) && p >= 0 && p < CELL_COUNT);
         if (!validPicks) {
             return res.status(400).json({ status: false, message: `picks must be ${PICK_COUNT} distinct integers between 0 and ${CELL_COUNT - 1}` });
+        }
+        if (typeof revealIndex !== "number" || revealIndex < 0 || revealIndex >= MAX_REVEALS) {
+            return res.status(400).json({ status: false, message: `revealIndex must be 0-${MAX_REVEALS - 1}` });
         }
 
         const userId = String((req as AuthenticatedRequest).user!._id);
@@ -324,57 +276,131 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "No active round - start one first" });
             }
             const conditions = round.conditions as MemoryConditions;
+            const picksArr = picks as number[];
 
-            // A retry of an already-claimed reveal (e.g. the first attempt's response never
-            // made it back) reuses the already-decided outcome rather than re-deciding it -
-            // the incoming `picks` are ignored in that case, same "never re-draw, only ever
-            // finish" rule every other game's recovery sweep follows.
-            let decision = conditions.revealPending as RevealDecision | null;
-            if (!decision) {
-                const symbols = (picks as number[]).map((p) => conditions.grid[p]);
-                const matchCount = matchCountForSymbols(symbols);
-                const payout = capPayout(round.wager * (MATCH_MULTIPLIERS[matchCount] ?? 0), MAX_PAYOUT);
-                decision = { picks: picks as number[], matchCount, payout };
+            // Reject picks that include already-cleared (matched) positions.
+            const clearedSet = new Set(conditions.clearedPositions);
+            if (picksArr.some((p) => clearedSet.has(p))) {
+                return res.status(400).json({ status: false, message: "One or more picks are already matched and cleared" });
+            }
 
-                const claimed = await XenCasinoRound.applyConditionsUpdate(
+            // If this revealIndex has already been processed (retry), return cached result.
+            // We store the last reveal result in a transient field on conditions.
+            if (revealIndex < conditions.revealCount) {
+                // Retry of a past reveal — the picks must match what was originally sent,
+                // otherwise the client is trying to change history.
+                const pastPicks = (conditions as any)._lastRevealPicks as number[] | undefined;
+                if (pastPicks && pastPicks.length === PICK_COUNT && pastPicks.every((pp, i) => pp === picksArr[i])) {
+                    const pastResult = (conditions as any)._lastRevealResult as RevealResult | undefined;
+                    if (pastResult) {
+                        return res.json({
+                            status: true,
+                            data: {
+                                ...pastResult,
+                                revealCount: conditions.revealCount,
+                                matchedPairs: conditions.matchedPairs,
+                                maxReveals: MAX_REVEALS,
+                                isFinal: conditions.resolved,
+                                finalPayout: conditions.finalPayout,
+                            },
+                        });
+                    }
+                }
+                return res.status(400).json({ status: false, message: "This reveal step was already completed — picks don't match" });
+            }
+
+            if (revealIndex !== conditions.revealCount) {
+                return res.status(400).json({ status: false, message: `Expected revealIndex ${conditions.revealCount}, got ${revealIndex}` });
+            }
+
+            // Process this reveal.
+            const symbols = picksArr.map((p) => conditions.grid[p]);
+            const matched = symbols[0] === symbols[1];
+            const newCleared = matched ? [...conditions.clearedPositions, picksArr[0], picksArr[1]] : conditions.clearedPositions;
+            const newMatchedPairs = conditions.matchedPairs + (matched ? 1 : 0);
+            const newRevealCount = conditions.revealCount + 1;
+
+            const result: RevealResult = {
+                picks: picksArr,
+                symbols,
+                matched,
+            };
+
+            const isFinal = newRevealCount >= MAX_REVEALS;
+            let finalPayout = 0;
+            let balance: string | undefined;
+
+            if (isFinal) {
+                finalPayout = capPayout(round.wager * (MATCH_MULTIPLIERS[newMatchedPairs] ?? 0), MAX_PAYOUT);
+
+                // Atomically update conditions to mark resolved and claim the final payout.
+                const updated = await XenCasinoRound.applyConditionsUpdate(
                     round._id,
-                    { "conditions.revealPending": null },
-                    { $set: { "conditions.revealPending": decision } }
+                    { "conditions.resolved": false },
+                    {
+                        $set: {
+                            "conditions.clearedPositions": newCleared,
+                            "conditions.revealCount": newRevealCount,
+                            "conditions.matchedPairs": newMatchedPairs,
+                            "conditions.finalPayout": finalPayout,
+                            "conditions.resolved": true,
+                            "conditions._lastRevealPicks": picksArr,
+                            "conditions._lastRevealResult": result,
+                        },
+                    }
                 );
-                if (!claimed) {
-                    return res.status(409).json({ status: false, message: "Round changed - try again" });
+                if (!updated) {
+                    return res.status(409).json({ status: false, message: "Round changed — try again" });
+                }
+
+                if (finalPayout > 0) {
+                    const xenCasinoAccountId = await getXenCasinoAccountId();
+                    const transferResult = await transfer({
+                        fromAccountId: xenCasinoAccountId,
+                        toAccountId: round.playerAccountId,
+                        amount: finalPayout.toFixed(10),
+                        key: `xendelta-${SLUG}-payout-${round._id}`,
+                        note: `${SLUG}_win`,
+                    });
+                    balance = transferResult.toNewBalance;
+                }
+
+                await XenCasinoRound.resolve(round._id);
+                await recordCasinoRoundPlayed(userId, { game: SLUG, wager: round.wager, payout: finalPayout });
+            } else {
+                // Mid-round: persist progress, round stays active.
+                const updated = await XenCasinoRound.applyConditionsUpdate(
+                    round._id,
+                    { "conditions.revealCount": conditions.revealCount, "conditions.resolved": false },
+                    {
+                        $set: {
+                            "conditions.clearedPositions": newCleared,
+                            "conditions.revealCount": newRevealCount,
+                            "conditions.matchedPairs": newMatchedPairs,
+                            "conditions._lastRevealPicks": picksArr,
+                            "conditions._lastRevealResult": result,
+                        },
+                    }
+                );
+                if (!updated) {
+                    return res.status(409).json({ status: false, message: "Round changed — try again" });
                 }
             }
-
-            let balance: string | undefined;
-            if (decision.payout > 0) {
-                const xenCasinoAccountId = await getXenCasinoAccountId();
-                const result = await transfer({
-                    fromAccountId: xenCasinoAccountId,
-                    toAccountId: round.playerAccountId,
-                    amount: decision.payout.toFixed(10),
-                    key: `xendelta-${SLUG}-payout-${round._id}`,
-                    note: `${SLUG}_win`,
-                });
-                balance = result.toNewBalance;
-            }
-
-            await XenCasinoRound.resolve(round._id);
-            await recordCasinoRoundPlayed(userId, { game: SLUG, wager: round.wager, payout: decision.payout });
 
             return res.json({
                 status: true,
                 data: {
-                    picks: decision.picks.map((p) => ({ position: p, symbol: conditions.grid[p] })),
-                    matchCount: decision.matchCount,
-                    payout: decision.payout,
+                    picks: picksArr.map((p) => ({ position: p, symbol: conditions.grid[p] })),
+                    matched,
+                    revealCount: newRevealCount,
+                    matchedPairs: newMatchedPairs,
+                    maxReveals: MAX_REVEALS,
+                    isFinal,
+                    finalPayout,
                     balance,
                 },
             });
         } catch (err) {
-            // The decision (if claimed) is already durable even if we got here - leave the
-            // round in place rather than trying to unwind it; recoverStaleRounds replays the
-            // same idempotently-keyed payout transfer once the round goes stale.
             const status = err instanceof WeeabetsUnavailable ? 503 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });
         }

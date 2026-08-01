@@ -3,32 +3,47 @@ import {
     GRID_SIZE,
     CELL_COUNT,
     PICK_COUNT,
+    MAX_REVEALS,
     SYMBOL_GROUPS,
     MATCH_MULTIPLIERS,
     generateGrid,
-    matchCountForSymbols,
-    matchShapeCounts,
     memoryRtp,
 } from "./memory";
 
 describe("SYMBOL_GROUPS", () => {
-    it("sums to exactly CELL_COUNT (25) with no leftover/locked cell needed", () => {
+    it("sums to exactly CELL_COUNT (25) — 7 triples + 2 doubles", () => {
         expect(GRID_SIZE * GRID_SIZE).toBe(CELL_COUNT);
         const total = SYMBOL_GROUPS.reduce((sum, g) => sum + g.count, 0);
         expect(total).toBe(CELL_COUNT);
     });
 
-    it("has exactly the documented composition - 2 triples, 6 doubles, 7 singles", () => {
+    it("has exactly the documented composition — 7 triples, 2 doubles, no singles", () => {
         const byCount = new Map<number, number>();
         for (const g of SYMBOL_GROUPS) byCount.set(g.count, (byCount.get(g.count) ?? 0) + 1);
-        expect(byCount.get(3)).toBe(2);
-        expect(byCount.get(2)).toBe(6);
-        expect(byCount.get(1)).toBe(7);
+        expect(byCount.get(3)).toBe(7);
+        expect(byCount.get(2)).toBe(2);
+        expect(byCount.get(1) ?? 0).toBe(0);
+    });
+
+    it("every symbol has at least one match — no dead singles", () => {
+        for (const g of SYMBOL_GROUPS) {
+            expect(g.count).toBeGreaterThanOrEqual(2);
+        }
+    });
+});
+
+describe("PICK_COUNT and MAX_REVEALS", () => {
+    it("PICK_COUNT is 2 (classic memory: flip 2 at a time)", () => {
+        expect(PICK_COUNT).toBe(2);
+    });
+
+    it("MAX_REVEALS is 3 (three attempts per round)", () => {
+        expect(MAX_REVEALS).toBe(3);
     });
 });
 
 describe("generateGrid", () => {
-    it("shuffles the fixed deck composition across all 25 positions every round", () => {
+    it("shuffles the deck across all 25 positions every round", () => {
         for (let i = 0; i < 200; i++) {
             const grid = generateGrid();
             expect(grid).toHaveLength(CELL_COUNT);
@@ -41,85 +56,81 @@ describe("generateGrid", () => {
     });
 });
 
-describe("matchCountForSymbols", () => {
-    it("scores by pattern shape, not raw pair count", () => {
-        expect(matchCountForSymbols(["A", "B", "C", "D"])).toBe(0); // all different
-        expect(matchCountForSymbols(["A", "A", "B", "C"])).toBe(1); // one pair
-        expect(matchCountForSymbols(["A", "A", "B", "B"])).toBe(2); // two separate pairs
-        expect(matchCountForSymbols(["A", "A", "A", "B"])).toBe(3); // a full triple
-    });
-});
-
-describe("matchShapeCounts", () => {
-    it("exactly enumerates every C(25,4) = 12650 possible 4-pick", () => {
-        const counts = matchShapeCounts();
-        const total = Object.values(counts).reduce((sum, c) => sum + c, 0);
-        expect(total).toBe(12650);
+describe("MATCH_MULTIPLIERS", () => {
+    it("covers all 0–3 matched-pair counts", () => {
+        expect(MATCH_MULTIPLIERS[0]).toBeDefined();
+        expect(MATCH_MULTIPLIERS[1]).toBeDefined();
+        expect(MATCH_MULTIPLIERS[2]).toBeDefined();
+        expect(MATCH_MULTIPLIERS[3]).toBeDefined();
     });
 
-    // Cross-checked by hand via generating-function combinatorics over the fixed composition
-    // (2 groups of 3, 6 groups of 2, 7 groups of 1) - a regression guard against an edit to
-    // SYMBOL_GROUPS or the enumeration silently drifting the real odds.
-    it("matches the hand-derived exact counts for the documented composition", () => {
-        const counts = matchShapeCounts();
-        expect(counts[0]).toBe(9762);
-        expect(counts[1]).toBe(2784);
-        expect(counts[2]).toBe(60);
-        expect(counts[3]).toBe(44);
+    it("0 matches always pays 0", () => {
+        expect(MATCH_MULTIPLIERS[0]).toBe(0);
     });
 
-    it("counts are monotonically rarer for a bigger match, matching the payout ladder", () => {
-        const counts = matchShapeCounts();
-        expect(counts[0]).toBeGreaterThan(counts[1]);
-        expect(counts[1]).toBeGreaterThan(counts[2]);
-        expect(counts[2]).toBeGreaterThan(counts[3]);
+    it("higher match counts pay progressively more", () => {
+        expect(MATCH_MULTIPLIERS[1]).toBeGreaterThan(MATCH_MULTIPLIERS[0]);
+        expect(MATCH_MULTIPLIERS[2]).toBeGreaterThan(MATCH_MULTIPLIERS[1]);
+        expect(MATCH_MULTIPLIERS[3]).toBeGreaterThan(MATCH_MULTIPLIERS[2]);
     });
 });
 
 describe("memoryRtp", () => {
-    it("matches the weighted average of MATCH_MULTIPLIERS against the exact shape probabilities", () => {
-        const counts = matchShapeCounts();
-        const total = Object.values(counts).reduce((sum, c) => sum + c, 0);
-        const expected = Object.entries(counts).reduce((sum, [k, c]) => sum + MATCH_MULTIPLIERS[Number(k)] * (c / total), 0);
-        expect(memoryRtp()).toBeCloseTo(expected);
+    it("lands in the ~85-95% RTP band for random (no-skill) play", () => {
+        const rtp = memoryRtp();
+        expect(rtp).toBeGreaterThan(0.85);
+        expect(rtp).toBeLessThan(0.95);
     });
 
-    it("lands in the same ~85-95% RTP band as this app's other games", () => {
-        expect(memoryRtp()).toBeGreaterThan(0.85);
-        expect(memoryRtp()).toBeLessThan(0.95);
+    it("matches the binomial calculation for the deck composition", () => {
+        // 7 triples + 2 doubles: P(match per random 2-card pick) = 46/600
+        const p = (21 * 2 + 4 * 1) / (25 * 24);
+        const q = 1 - p;
+        const binomial = [q ** 3, 3 * q ** 2 * p, 3 * q * p ** 2, p ** 3];
+        const expected = Object.entries(MATCH_MULTIPLIERS).reduce((sum, [k, m]) => sum + m * binomial[Number(k)], 0);
+        expect(memoryRtp()).toBeCloseTo(expected);
     });
 });
 
-// Monte Carlo sanity check that a real generateGrid() + a uniformly random 4-pick converges
-// to the exact matchShapeCounts() distribution - a regression guard that generateGrid and
-// matchCountForSymbols (the actual functions /start and /reveal call) agree with the
-// independently-derived exact combinatorics above, not just that the combinatorics are
-// internally consistent with themselves.
-describe("simulated random play converges to the exact distribution", () => {
-    it("converges match-count frequencies within tolerance of the exact probabilities", () => {
+// Monte Carlo: simulate 3 random 2-card picks (no skill) and check that the observed
+// matched-pair distribution converges to the binomial expectation.
+describe("simulated random play (no skill) converges to binomial distribution", () => {
+    it("matched-pair frequencies converge within tolerance", () => {
         const ROUNDS = 50_000;
         const TOLERANCE = 0.02;
-        const counts = matchShapeCounts();
-        const total = Object.values(counts).reduce((sum, c) => sum + c, 0);
+        const p = (21 * 2 + 4 * 1) / (25 * 24);
+        const q = 1 - p;
 
         const observed: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
         for (let i = 0; i < ROUNDS; i++) {
             const grid = generateGrid();
-            const positions = Array.from({ length: CELL_COUNT }, (_, i) => i);
-            const picks: number[] = [];
-            for (let p = 0; p < PICK_COUNT; p++) {
-                const idx = Math.floor(Math.random() * positions.length);
-                picks.push(positions.splice(idx, 1)[0]);
+            const available = Array.from({ length: CELL_COUNT }, (_, i) => i);
+            let matchedPairs = 0;
+
+            for (let r = 0; r < MAX_REVEALS; r++) {
+                // Pick 2 random positions from remaining available (not yet matched).
+                const idx1 = Math.floor(Math.random() * available.length);
+                const pos1 = available.splice(idx1, 1)[0];
+                const idx2 = Math.floor(Math.random() * available.length);
+                const pos2 = available.splice(idx2, 1)[0];
+
+                if (grid[pos1] === grid[pos2]) {
+                    matchedPairs++;
+                    // Matched cards stay out — already removed by splice above.
+                } else {
+                    // Non-match — cards go back into the pool (classic memory mechanic).
+                    available.push(pos1, pos2);
+                }
             }
-            const symbols = picks.map((pos) => grid[pos]);
-            observed[matchCountForSymbols(symbols)]++;
+            observed[Math.min(matchedPairs, 3)]++;
         }
 
+        const binomial = [q ** 3, 3 * q ** 2 * p, 3 * q * p ** 2, p ** 3];
         for (const k of [0, 1, 2, 3]) {
-            const expectedProb = counts[k] / total;
             const observedProb = observed[k] / ROUNDS;
-            expect(observedProb).toBeGreaterThan(expectedProb - TOLERANCE);
-            expect(observedProb).toBeLessThan(expectedProb + TOLERANCE);
+            expect(observedProb).toBeGreaterThan(binomial[k] - TOLERANCE);
+            expect(observedProb).toBeLessThan(binomial[k] + TOLERANCE);
         }
     });
 });
+

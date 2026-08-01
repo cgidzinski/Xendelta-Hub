@@ -22,7 +22,7 @@ import { formatCheddar } from "../../utils/currency";
 // comment above MULTIPLIERS in plinkoLayout.ts): the worst-case return across every dropX a
 // player could choose, so it's an honest number regardless of where they aim, not just an
 // average over naive play.
-const BASE_BET = 1000;
+const BASE_BET = 500;
 const BET_MULTIPLIERS = [1, 2, 5, 10, 20, 50];
 const BET_OPTIONS = BET_MULTIPLIERS.map((m) => m * BASE_BET);
 const BET_LABELS = BET_MULTIPLIERS.map((m) => `${m}x`);
@@ -79,8 +79,8 @@ export default function Plinko() {
         >
             <PlayLauncher
                 title="Plinko"
-                description="1000-cheddar base bet - drop a ball through 12 rows of pegs."
-                price={1000}
+                description="500-cheddar base bet - drop a ball through 12 rows of pegs."
+                price={500}
                 rtpLabel={odds ? `RTP ${(odds.rtp * 100).toFixed(1)}%` : undefined}
             >
                 <PlinkoBoard
