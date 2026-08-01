@@ -1221,12 +1221,12 @@ var xenCasinoRanchCreatureSchema = new mongoose.Schema({
   name: { type: String, required: true }, // a single silly nickname, rolled from CREATURE_NAMES at hatch time
   rarityTier: { type: String, required: true }, // key into RANCH_RARITY_TIERS (route-owned)
   stats: {
-    speed: { type: Number, required: true, default: 10 },
-    stamina: { type: Number, required: true, default: 10 },
-    power: { type: Number, required: true, default: 10 },
-    intelligence: { type: Number, required: true, default: 10 },
-    luck: { type: Number, required: true, default: 10 },
-    charm: { type: Number, required: true, default: 10 },
+    speed: { type: Number, required: true },
+    stamina: { type: Number, required: true },
+    power: { type: Number, required: true },
+    intelligence: { type: Number, required: true },
+    luck: { type: Number, required: true },
+    charm: { type: Number, required: true },
   },
   lastFedAt: { type: Date, default: null },
   feedCount: { type: Number, default: 0 },
@@ -1264,7 +1264,6 @@ xenCasinoRanchCreatureSchema.statics.createForUser = async function (userId, par
     species: params.species,
     name: params.name,
     rarityTier: params.rarityTier,
-    stats: params.stats,
     lastCollectedAt: new Date(),
     lastCollectDate: todayKey(),
   });
