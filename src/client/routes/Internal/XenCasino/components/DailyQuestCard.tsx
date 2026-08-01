@@ -79,23 +79,33 @@ export default function DailyQuestCard({ sx }: DailyQuestCardProps) {
                                     {quest.label}
                                 </Typography>
                                 <Box>
-                                    <Typography variant="caption" sx={{ display: "block", textAlign: "center", fontWeight: 500 }}>
-                                        🧀{quest.reward.toLocaleString()}
-                                    </Typography>
+                                    {quest.claimed && (
+                                        <Typography variant="caption" sx={{ display: "block", textAlign: "center", mb: 0.25, fontStyle: "italic", color: "text.secondary" }}>
+                                            Claimed
+                                        </Typography>
+                                    )}
+                                    {!quest.claimed && !quest.canClaim ? null : (
+                                        <Typography variant="caption" sx={{ display: "block", textAlign: "center", fontWeight: 500 }}>
+                                            🧀{quest.reward.toLocaleString()}
+                                        </Typography>
+                                    )}
                                     {quest.canClaim ? (
                                         <Typography variant="caption" sx={{ display: "block", textAlign: "center", mt: 0.5, fontWeight: 800, color: "warning.main" }}>
                                             Claim
                                         </Typography>
                                     ) : quest.claimed ? null : (
                                         <>
+                                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center" }}>
+                                                {quest.progress}/{quest.target}
+                                            </Typography>
                                             <LinearProgress
                                                 variant="determinate"
                                                 value={progress}
                                                 color="primary"
-                                                sx={{ height: 6, borderRadius: 999, mt: 0.5 }}
+                                                sx={{ height: 6, borderRadius: 999, my: 0.25 }}
                                             />
-                                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", mt: 0.25 }}>
-                                                {quest.progress}/{quest.target}
+                                            <Typography variant="caption" sx={{ display: "block", textAlign: "center", fontWeight: 500 }}>
+                                                🧀{quest.reward.toLocaleString()}
                                             </Typography>
                                         </>
                                     )}
