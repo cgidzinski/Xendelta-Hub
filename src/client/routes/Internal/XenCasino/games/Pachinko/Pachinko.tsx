@@ -8,7 +8,15 @@ import { casinoLedgerKeys } from "../../../../../hooks/casino/useCasinoLedger";
 import { casinoDailyQuestKeys } from "../../../../../hooks/casino/useCasinoDailyQuest";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import PlayLauncher from "../../components/PlayLauncher";
-import PachinkoBoard, { PachinkoLaunchResult, PachinkoLayoutData, PachinkoSession } from "../../components/PachinkoBoard";
+import PachinkoBoard, { PachinkoSession } from "../../components/PachinkoBoard";
+import {
+    QueuedShot,
+    PachinkoBatchResponse,
+    PachinkoOddsResponse,
+    PachinkoActiveResponse,
+    PachinkoBuyResponse,
+    PachinkoCashOutResponse,
+} from "../../../../../../shared/pachinko/pachinkoApi";
 import { formatCheddar } from "../../utils/currency";
 
 // Everything Pachinko needs lives in this one file, same shape as Plinko.tsx - it only imports
@@ -21,57 +29,26 @@ import { formatCheddar } from "../../utils/currency";
 // a pre-selected weighted draw. There's also no cash payout per shot: every catch adds balls to
 // the tray, and Cash Out (wired up below) is the only thing that ever converts that tray back
 // to real cheddar - see pachinko.ts's own file header for the full economy shape.
-interface PachinkoOddsResponse {
-    pricePerBall: number;
-    reupSizes: number[];
-    launchPowerRange: { min: number; max: number };
-    layout: PachinkoLayoutData;
-    sideTulipBalls: number;
-    bonusPocketBalls: number;
-    attackerBalls: number;
-    attackerOpenMs: number;
-    cashOutRate: number;
-    jackpotPool: number;
-    maxPayout: number;
-}
-
-interface ActiveBatchResponse {
-    active: boolean;
-    roundId?: string;
-    ballsTotal?: number;
-    ballsRemaining?: number;
-    pricePerBall?: number;
-    leftTulipOpen?: boolean;
-    rightTulipOpen?: boolean;
-    attackerOpenUntil?: number;
-    jackpotOpenUntil?: number;
-}
-
-interface BuyResponse {
-    roundId: string;
-    ballsTotal: number;
-    ballsRemaining: number;
-    pricePerBall: number;
-    leftTulipOpen: boolean;
-    rightTulipOpen: boolean;
-    attackerOpenUntil: number;
-    jackpotOpenUntil: number;
-    balance: string;
-}
-
-interface CashOutResponse {
-    ballsCashedOut: number;
-    amount: number;
-    balance: string;
-}
+// The wire shapes are declared once in shared/pachinko/pachinkoApi.ts and imported by both sides,
+// rather than hand-written here to match what the server happens to send. They used to be
+// redeclared locally, which is how a half-landed field rename shipped: this file promised
+// `attackerShotsRemaining` while the server sent `attackerOpenUntil` (both long since renamed
+// again, to `attackerOpenUntilMs`), and nothing compared the two. See that file's header for the
+// full story.
+type BuyResponse = PachinkoBuyResponse;
+type ActiveBatchResponse = PachinkoActiveResponse;
+type CashOutResponse = PachinkoCashOutResponse;
 
 const fetchOdds = async (): Promise<PachinkoOddsResponse> => (await apiClient.get<ApiResponse<PachinkoOddsResponse>>("/api/casino/games/pachinko/odds")).data.data!;
 const fetchActive = async (): Promise<ActiveBatchResponse> => (await apiClient.get<ApiResponse<ActiveBatchResponse>>("/api/casino/games/pachinko/active")).data.data!;
 // Same endpoint creates a fresh batch or reups an existing one - the server decides which based
 // on whether the player already has an active round (see pachinko.ts's /buy handler).
 const buyBalls = async (balls: number): Promise<BuyResponse> => (await apiClient.post<ApiResponse<BuyResponse>>("/api/casino/games/pachinko/buy", { balls })).data.data!;
-const launchBall = async (launchPower: number): Promise<PachinkoLaunchResult> =>
-    (await apiClient.post<ApiResponse<PachinkoLaunchResult>>("/api/casino/games/pachinko/launch", { launchPower })).data.data!;
+// The only endpoint firing ever touches, and never before a shot fires - PachinkoBoard fires
+// fully locally and reports batches of already-fired shots here in the background (see its own
+// file header and pachinko.ts's for the full protocol).
+const reportLaunchBatch = async (shots: QueuedShot[]): Promise<PachinkoBatchResponse> =>
+    (await apiClient.post<ApiResponse<PachinkoBatchResponse>>("/api/casino/games/pachinko/launch/batch", { shots })).data.data!;
 const cashOutBalls = async (): Promise<CashOutResponse> => (await apiClient.post<ApiResponse<CashOutResponse>>("/api/casino/games/pachinko/cashout")).data.data!;
 
 export default function Pachinko() {
@@ -89,15 +66,20 @@ export default function Pachinko() {
         queryClient.invalidateQueries({ queryKey: ["pachinkoOdds"] }); // jackpot pool moved
     };
 
-    // A reup response's gate fields (leftTulipOpen/rightTulipOpen/attackerOpenUntil/
-    // jackpotOpenUntil) are just whatever the DB happened to hold at that read - reup doesn't
-    // change any of them - and this request has no seq/staleness guard the way launch responses
-    // do (see PachinkoBoard.tsx's latestAppliedSeqRef). If a reup fired while balls were still
-    // resolving from hold-to-fire, applying it wholesale could clobber fresher gate state a
-    // just-landed launch response already applied. So: only overwrite the fields a buy/reup
-    // response actually owns, and carry forward the existing session's gate state when there
-    // already is one - a fresh buy (no prior session) still gets correct initial values from the
-    // response itself, since those start false/0 for a brand new round anyway.
+    // A reup response's gate fields (leftTulipOpen/rightTulipOpen/attackerOpenUntilMs/
+    // jackpotOpenUntilMs) are just whatever the DB happened to hold at that read - reup doesn't
+    // change any of them - and this request has no ordering guard against a batch response
+    // landing around the same time. Applying it wholesale could clobber fresher gate state a
+    // just-landed batch already applied. So: only overwrite the fields a buy/reup response
+    // actually owns, and carry forward the existing session's gate state when there already is
+    // one - a fresh buy (no prior session) falls through to the response's own values, which start
+    // false/0 for a brand new round. Note that fallback is only safe because the response is now
+    // contract-checked against a shared type: when the server briefly sent the wrong field names
+    // here, `prev` was null on a fresh buy and these silently became `undefined`, which poisoned
+    // the whole gate system (see pachinkoApi.ts's header). ballsTotal/ballsRemaining
+    // ARE always taken from the response even on a reup - PachinkoBoard's own local economy
+    // mirror picks up the same delta independently (see its own sync effect keyed off
+    // ballsTotal), so this isn't racing anything.
     const applyBuyResponse = (data: BuyResponse) => {
         setSession((prev) => ({
             roundId: data.roundId,
@@ -106,8 +88,16 @@ export default function Pachinko() {
             pricePerBall: data.pricePerBall,
             leftTulipOpen: prev?.leftTulipOpen ?? data.leftTulipOpen,
             rightTulipOpen: prev?.rightTulipOpen ?? data.rightTulipOpen,
-            attackerOpenUntil: prev?.attackerOpenUntil ?? data.attackerOpenUntil,
-            jackpotOpenUntil: prev?.jackpotOpenUntil ?? data.jackpotOpenUntil,
+            attackerOpenFromMs: prev?.attackerOpenFromMs ?? data.attackerOpenFromMs,
+            attackerOpenUntilMs: prev?.attackerOpenUntilMs ?? data.attackerOpenUntilMs,
+            jackpotOpenFromMs: prev?.jackpotOpenFromMs ?? data.jackpotOpenFromMs,
+            jackpotOpenUntilMs: prev?.jackpotOpenUntilMs ?? data.jackpotOpenUntilMs,
+            lastProcessedSeq: data.lastProcessedSeq,
+            // Always taken from the response, never carried forward from prev - unlike the gate
+            // fields above, this isn't state that a fresher batch could already have moved past. It
+            // exists purely to seed PachinkoBoard's local firing clock (see roundStartRef there),
+            // and the server's own figure is always what that clock has to agree with.
+            lastFiredAtMs: data.lastFiredAtMs,
         }));
         invalidateShared();
     };
@@ -118,11 +108,21 @@ export default function Pachinko() {
         onError: (error: Error) => enqueueSnackbar(error.message || "Failed to buy balls", { variant: "error" }),
     });
 
-    const { mutateAsync: launchAsync } = useMutation({
-        mutationFn: launchBall,
-        onSuccess: invalidateShared,
-        onError: (error: Error) => enqueueSnackbar(error.message || "Failed to launch", { variant: "error" }),
-    });
+    // A plain function, not useMutation - PachinkoBoard calls this itself on its own batching
+    // schedule (see flushBatch there), entirely decoupled from any single shot's UI state, so
+    // there's no per-call pending/error state worth surfacing here. A failed batch just means
+    // PachinkoBoard retries it on the next flush (see its own file header) - not something this
+    // component needs to react to. Only the jackpot pool (part of the odds query) ever moves as a
+    // side effect of a launch - no real cheddar changes hands on a launch (see pachinko.ts's own
+    // file header), so unlike applyBuyResponse/handleCashOut this deliberately does NOT invalidate
+    // balance/ledger/dailyQuest - doing that on every batch flush (as often as every 750ms under
+    // sustained hold-to-fire) would mean hammering Weeabets with balance refetches nobody asked
+    // for, the exact kind of avoidable network load the rest of this redesign exists to cut.
+    const reportBatchAsync = async (shots: QueuedShot[]) => {
+        const result = await reportLaunchBatch(shots);
+        queryClient.invalidateQueries({ queryKey: ["pachinkoOdds"] });
+        return result;
+    };
 
     const { mutateAsync: cashOutAsync, isPending: isCashingOut } = useMutation({
         mutationFn: cashOutBalls,
@@ -161,8 +161,12 @@ export default function Pachinko() {
                     pricePerBall: active.pricePerBall,
                     leftTulipOpen: active.leftTulipOpen ?? false,
                     rightTulipOpen: active.rightTulipOpen ?? false,
-                    attackerOpenUntil: active.attackerOpenUntil ?? 0,
-                    jackpotOpenUntil: active.jackpotOpenUntil ?? 0,
+                    attackerOpenFromMs: active.attackerOpenFromMs ?? 0,
+                    attackerOpenUntilMs: active.attackerOpenUntilMs ?? 0,
+                    jackpotOpenFromMs: active.jackpotOpenFromMs ?? 0,
+                    jackpotOpenUntilMs: active.jackpotOpenUntilMs ?? 0,
+                    lastProcessedSeq: active.lastProcessedSeq ?? 0,
+                    lastFiredAtMs: active.lastFiredAtMs ?? 0,
                 });
             } else {
                 setSession(null);
@@ -184,12 +188,12 @@ export default function Pachinko() {
                     { label: "Side tulip (left or right)", payout: `+${odds.sideTulipBalls} balls` },
                     { label: "Chucker", payout: "Spins the reel" },
                     { label: "Reel, 2 of a kind", payout: "Small ball bonus" },
-                    { label: "Reel, 3 of a kind", payout: `Bigger bonus + opens attacker (${Math.round(odds.attackerOpenMs / 1000)}s)` },
+                    { label: "Reel, 3 of a kind", payout: `Bigger bonus + opens attacker (${(odds.attackerOpenMs / 1000).toFixed(1)}s)` },
                     { label: "Attacker (while open)", payout: `+${odds.attackerBalls} balls` },
                     { label: "Jackpot, primed", payout: "Pool → balls" },
                 ],
                 footnote:
-                    "Every catch pays out in balls, never cheddar directly - press Cash Out to convert your tray back to real cheddar whenever you're ready. Most balls miss, like a real pachinko board. Side tulips toggle open/closed each time they catch a ball; the jackpot pocket is nearly impossible to catch until both side tulips are open at once, then it pays the whole jackpot pool, converted to balls. The chucker doesn't pay anything itself directly, but spins the board's central reel - a real modern machine's own start-chucker-triggers-the-LCD-reel gimmick. Two matching symbols add a modest ball bonus; three matching symbols add a bigger bonus AND opens the attacker gate for a few seconds - the attacker only opens on a 3x reel match, not on every chucker catch.",
+                    "Every catch pays out in balls, never cheddar directly - press Cash Out to convert your tray back to real cheddar whenever you're ready. Most balls miss, like a real pachinko board. Side tulips toggle open/closed each time they catch a ball; the jackpot pocket is nearly impossible to catch until both side tulips are open at once, then it pays the whole jackpot pool, converted to balls. The chucker doesn't pay anything itself directly, but spins the board's central reel - a real modern machine's own start-chucker-triggers-the-LCD-reel gimmick. Two matching symbols add a modest ball bonus; three matching symbols add a bigger bonus AND opens the attacker gate for your next few balls - the attacker only opens on a 3x reel match, not on every chucker catch. Both the attacker and the jackpot stay open for a set number of BALLS rather than a number of seconds, so the window is yours to spend at your own pace and the countdown you see is exact.",
             },
         ]
         : [];
@@ -197,7 +201,7 @@ export default function Pachinko() {
     return (
         <GameWrapper
             title="Pachinko"
-            howToPlay="Buy balls with the +1000 button, then hold Launch to fire them at your own power - balls fly one every 600ms while held. Most balls miss - catches add more balls to your tray instead of paying cash. Press Cash Out whenever you're ready to convert your tray back to cheddar."
+            howToPlay="Buy balls with the +balls button, then hold Launch to fire them at your own power - balls fly a few times a second while held. Most balls miss - catches add more balls to your tray instead of paying cash. Press Cash Out whenever you're ready to convert your tray back to cheddar."
             oddsSections={oddsSections}
             maxWin={odds?.maxPayout}
         >
@@ -218,8 +222,12 @@ export default function Pachinko() {
                     attackerBalls={odds?.attackerBalls ?? 0}
                     launchPowerRange={odds?.launchPowerRange ?? { min: 0, max: 100 }}
                     pricePerBall={odds?.pricePerBall ?? 0}
+                    // Empty until /odds answers, which just means no buy buttons render yet - far
+                    // better than guessing a size the server would reject. See the note in
+                    // PachinkoBoard.tsx where its hardcoded copy of this used to live.
+                    reupSizes={odds?.reupSizes ?? []}
                     isResuming={checkingActive}
-                    launch={launchAsync}
+                    reportBatch={reportBatchAsync}
                     reup={reupAsync}
                     isReuping={isReuping}
                     onCashOut={handleCashOut}

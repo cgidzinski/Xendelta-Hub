@@ -12,7 +12,6 @@ import {
     BONUS_POCKETS,
     CHUCKER,
     isJackpotPrimed,
-    shouldCloseLapsedTulips,
     generateNailField,
     RAIL_CLIMB_PATH,
     RAIL_OUTER_ARC,
@@ -34,6 +33,7 @@ import {
     FIELD_CY,
     FIELD_RX,
     FIELD_RY,
+    LEFT_FIELD,
 } from "./pachinkoLayout";
 
 // Same hybrid ellipse-above/circle-below shape the boundary curve itself uses (see the file
@@ -156,31 +156,6 @@ describe("scoring pockets", () => {
         expect(isJackpotPrimed(true, true)).toBe(true);
     });
 
-    describe("shouldCloseLapsedTulips", () => {
-        const now = 1_000_000;
-
-        it("does NOT close a tulip an ordinary catch just opened, when no window was ever primed", () => {
-            // Regression case for the real bug this function exists to fix: a single-tulip catch
-            // with previousJackpotOpenUntil still its default 0 must not immediately stomp the
-            // toggle that same shot just set.
-            expect(shouldCloseLapsedTulips(0, 0, now)).toBe(false);
-        });
-
-        it("closes both tulips once a previously-primed window has actually expired", () => {
-            // Tulips are held open (both true) for the whole window - this is the ordinary way
-            // the window ends without being caught, not an edge case to special-case around.
-            expect(shouldCloseLapsedTulips(now - 1, now - 1, now)).toBe(true);
-        });
-
-        it("does not close tulips while a previously-primed window is still open", () => {
-            expect(shouldCloseLapsedTulips(now - 1, now + 5000, now)).toBe(false);
-        });
-
-        it("does not close tulips on the exact shot that just primed the jackpot", () => {
-            expect(shouldCloseLapsedTulips(0, now + 10000, now)).toBe(false);
-        });
-    });
-
     it("the jackpot pocket is tiny - barely wider than the ball, even though it's always this size", () => {
         expect(JACKPOT.halfWidth).toBeLessThan(BALL_RADIUS * 3);
     });
@@ -271,5 +246,65 @@ describe("launchPowerToRailSpeed", () => {
     it("is bounded for out-of-range input", () => {
         expect(launchPowerToRailSpeed(-50)).toBe(launchPowerToRailSpeed(MIN_LAUNCH_POWER));
         expect(launchPowerToRailSpeed(500)).toBe(launchPowerToRailSpeed(MAX_LAUNCH_POWER));
+    });
+});
+
+// The left field is the one structure on this board that has been wrong in BOTH directions, and
+// neither failure was visible without measuring. Too far from the glass and wall-hugging balls
+// thread straight past it, which is the dead launch band it was built to fix; too close and it
+// stops wedging balls only in the sense that it squeezes them to a halt instead. Both are geometry
+// properties that a plausible-looking edit to the anchors can reintroduce silently, so they're
+// asserted here rather than left to the reachability sweep, which nothing runs automatically.
+//
+// See LEFT_FIELD's own header in pachinkoLayout.ts for where these numbers come from.
+describe("LEFT_FIELD kicker geometry", () => {
+    const WALL_HALF_THICKNESS = 1.5; // buildWallSegments builds the boundary 3px thick
+    const BALL_WIDTH = BALL_RADIUS * 2;
+
+    // Clear space between the glass's inner face and a pin's outer edge.
+    const gapToGlass = (p: { x: number; y: number }) => {
+        let nearest = Infinity;
+        for (let i = 0; i < BOUNDARY_LEFT_POINTS.length - 1; i++) {
+            const a = BOUNDARY_LEFT_POINTS[i];
+            const b = BOUNDARY_LEFT_POINTS[i + 1];
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const len2 = dx * dx + dy * dy;
+            const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+            nearest = Math.min(nearest, Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t)));
+        }
+        return nearest - PIN_RADIUS - WALL_HALF_THICKNESS;
+    };
+
+    it("puts no pin in the band where the gap to the glass is near a ball's width", () => {
+        // The trap: a gap fractionally under BALL_WIDTH stops the ball by interference rather than
+        // deflection, and the solver grinds it to a standstill. A pin must be clearly one side of
+        // that or the other - unenterable, or comfortably passable.
+        for (const pin of LEFT_FIELD) {
+            const gap = gapToGlass(pin);
+            expect(gap, `pin at (${pin.x.toFixed(1)}, ${pin.y.toFixed(1)}) is buried in the wall`).toBeGreaterThan(0);
+            const inTrapBand = gap > BALL_WIDTH - 1.5 && gap < BALL_WIDTH + 1.5;
+            expect(inTrapBand, `pin at (${pin.x.toFixed(1)}, ${pin.y.toFixed(1)}) has a ${gap.toFixed(2)}px gap to the glass, within a hair of the ${BALL_WIDTH}px ball`).toBe(false);
+        }
+    });
+
+    it("keeps at least one sealing pin, so wall-hugging balls cannot thread past", () => {
+        // Without one of these the ball slides the whole descent untouched and drains - the
+        // original bug. Deliberately asserted as "some exist", not "exactly N": how many kickers
+        // there are is a tuning choice, having a seal at all is not.
+        const sealing = LEFT_FIELD.filter((pin) => gapToGlass(pin) < BALL_WIDTH);
+        expect(sealing.length).toBeGreaterThan(0);
+    });
+
+    it("never places one sealing pin below another close enough to close a pocket against the glass", () => {
+        // Two near-wall pins with the ball between them is a cup with no exit; a single one has
+        // open field below it and the ball rolls off.
+        const sealing = LEFT_FIELD.filter((pin) => gapToGlass(pin) < BALL_WIDTH);
+        for (const a of sealing) {
+            for (const b of sealing) {
+                if (a === b || b.y <= a.y) continue;
+                expect(Math.hypot(a.x - b.x, a.y - b.y), `sealing pins (${a.x.toFixed(1)}, ${a.y.toFixed(1)}) and (${b.x.toFixed(1)}, ${b.y.toFixed(1)}) can trap a ball between them`).toBeGreaterThan(BALL_WIDTH + 2 * PIN_RADIUS + 2);
+            }
+        }
     });
 });

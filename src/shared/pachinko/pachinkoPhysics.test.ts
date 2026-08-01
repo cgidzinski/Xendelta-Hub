@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { simulateShot } from "./pachinkoPhysics";
 import { MIN_LAUNCH_POWER, MAX_LAUNCH_POWER, CANVAS_WIDTH } from "./pachinkoLayout";
+import { mulberry32 } from "./prng";
 
 const ALL_OUTCOMES = ["gutter", "tulipLeft", "tulipRight", "jackpot", "bonusLeft", "bonusRight", "chucker", "attacker"];
 
@@ -28,6 +29,27 @@ describe("simulateShot", () => {
         const firstXs = first.map((s) => Math.round(s.x * 10));
         const secondXs = second.map((s) => Math.round(s.x * 10));
         expect(firstXs).not.toEqual(secondXs);
+    });
+
+    // The whole ticket/confirm protocol (pachinko.ts) rests on this: the client's own local
+    // preview run and the server's later authoritative replay both call simulateShot with the
+    // exact same seed, and must get the exact same trajectory/outcome back, in this same
+    // Node/V8 environment at least - see pachinkoPhysics.ts's own header for the one residual
+    // risk (cross-engine float drift) this can't rule out, and why the server never trusts the
+    // client's own run regardless.
+    it("the same seed reproduces an identical trajectory and outcome, every time", () => {
+        const runs = [0, 1, 2].map(() => simulateShot(50, true, false, true, mulberry32(123456789)));
+        const [first, ...rest] = runs;
+        for (const run of rest) {
+            expect(run.outcome).toBe(first.outcome);
+            expect(run.trajectory).toEqual(first.trajectory);
+        }
+    });
+
+    it("different seeds (same launchPower) produce different trajectories", () => {
+        const a = simulateShot(50, true, false, true, mulberry32(1)).trajectory;
+        const b = simulateShot(50, true, false, true, mulberry32(2)).trajectory;
+        expect(a).not.toEqual(b);
     });
 
     it("the jackpot pocket is reachable when active (both tulips open) but never registers a catch when inactive (the default) - not just non-scoring, physically not there, mirroring the chucker/attacker", () => {
