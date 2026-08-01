@@ -83,20 +83,28 @@ describe("pachinko worst-case RTP", () => {
         // regression guard against a gross reopening of the exploit, not a precision check (see
         // pachinkoPayoutTuning.ts for the real, high-precision derivation).
         //
-        // The bound has had to move up repeatedly as the payout constants themselves were
-        // deliberately raised well past what tuning targets - see ATTACKER_BALLS's own comment in
-        // pachinkoPayouts.ts for the full history. It is now 3.5, well above the current measured
-        // baseline of 2.5193 (251.93%), because that baseline is itself an explicit, requested,
-        // known-costly choice, not something to alarm on.
+        // The bound had moved up repeatedly as the payout constants themselves were deliberately
+        // raised well past what tuning targets - see ATTACKER_BALLS's own comment in
+        // pachinkoPayouts.ts for that history, which produced a baseline of 2.5193 (251.93%) and a
+        // bound of 3.5 to match.
+        //
+        // Brought back down to 3.0 now that the board itself (not the payout constants, which are
+        // untouched here) got harder to earn money from: BONUS_POCKET_GUARDS/JACKPOT_GUARDS in
+        // pachinkoLayout.ts lower catch probability at the bonus and jackpot pockets, and
+        // CONTRIBUTION_RATE in pachinkoPayouts.ts was halved (jackpot-only, not reflected in this
+        // formula at all - see pachinkoPayoutTuning.ts's own header for why the jackpot term is
+        // excluded). Re-measured worst case after those changes: this test's own smaller-sample
+        // formula reports ~207% at power=50, pachinkoPayoutTuning.ts's full-precision run reports
+        // ~240%; 3.0 leaves real headroom above both while still being a tighter net than 3.5 was.
         //
         // Worth being honest about what this guard can still catch: the original exploit this test
-        // was built for measured ~300% - and the board's own DELIBERATE current baseline (252%) now
-        // sits close enough to that figure that this is no longer a meaningfully tight net for "the
-        // tulip sweet-spot reopened." Its remaining job is the coarser one - catching something far
-        // more extreme than the accepted baseline (a broken multiplier, a NaN cascading into an
-        // unbounded payout, a genuinely wrong constant) - not a subtle reopening of the original,
-        // now much smaller, exploit.
-        expect(worstRtp, `worst-case RTP ${(worstRtp * 100).toFixed(1)}% at power=${worstPower.toFixed(1)} - a future constant edit may have pushed RTP well past the current deliberate baseline (~252%)`).toBeLessThan(3.5);
+        // was built for measured ~300%, and the current baseline (~240%) is still close enough to
+        // that figure that this isn't a tight net for "the tulip sweet-spot reopened" specifically.
+        // Its remaining job is the coarser one - catching something far more extreme than the
+        // accepted baseline (a broken multiplier, a NaN cascading into an unbounded payout, a
+        // genuinely wrong constant) - not a subtle reopening of the original, now much smaller,
+        // exploit.
+        expect(worstRtp, `worst-case RTP ${(worstRtp * 100).toFixed(1)}% at power=${worstPower.toFixed(1)} - a future constant edit may have pushed RTP well past the current deliberate baseline (~240%)`).toBeLessThan(3.0);
         expect(worstRtp).toBeGreaterThan(0.2);
         // 300000, not 180000 - this is a genuinely CPU-heavy Monte Carlo run (13 power buckets x
         // 300 shots, each a real matter-js simulation, synchronous in the test process rather than
