@@ -14,10 +14,11 @@ import CloseIcon from "@mui/icons-material/Close";
 import SellIcon from "@mui/icons-material/Sell";
 import { useSnackbar } from "notistack";
 import { formatCheddar } from "../../utils/currency";
-import { RanchItem, useCasinoRanch } from "../../../../../hooks/casino/useCasinoRanch";
+import { useCasinoRanch } from "../../../../../hooks/casino/useCasinoRanch";
 import { ITEM_EMOJI } from "./shared";
 
-export default function InventoryTab({ items }: { items: RanchItem[] }) {
+export default function InventoryTab() {
+    const { items } = useCasinoRanch();
     const { sellItem, isSellingItem, useItem, isUsingItem } = useCasinoRanch();
     const { enqueueSnackbar } = useSnackbar();
     const [selectedKey, setSelectedKey] = useState<string | null>(null);

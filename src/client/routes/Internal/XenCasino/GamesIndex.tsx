@@ -9,7 +9,6 @@ import GridViewIcon from "@mui/icons-material/GridView";
 import AddIcon from "@mui/icons-material/Add";
 import LocalFloristIcon from "@mui/icons-material/LocalFlorist";
 import PrintIcon from "@mui/icons-material/Print";
-import TerrainIcon from "@mui/icons-material/Terrain";
 import PetsIcon from "@mui/icons-material/Pets";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../../config/api";
@@ -21,7 +20,6 @@ import DailyQuestCard from "./components/DailyQuestCard";
 import { useCasinoStatus } from "../../../hooks/casino/useCasinoStatus";
 import { useCasinoGarden } from "../../../hooks/casino/useCasinoGarden";
 import { useCasinoPrinter } from "../../../hooks/casino/useCasinoPrinter";
-import { useCasinoMine } from "../../../hooks/casino/useCasinoMine";
 import { useCasinoRanch } from "../../../hooks/casino/useCasinoRanch";
 
 interface SlotsOddsSummary {
@@ -83,11 +81,10 @@ const TYPE_ICON: Record<CasinoGameType, ComponentType<SvgIconProps>> = {
     memory: GridViewIcon,
     garden: LocalFloristIcon,
     printer: PrintIcon,
-    mine: TerrainIcon,
     ranch: PetsIcon,
 };
 
-const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko", "memory", "garden", "printer", "mine", "ranch"];
+const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko", "memory", "garden", "printer", "ranch"];
 
 const GHOST_COPY: Partial<Record<CasinoGameType, string>> = {
     slots: "New reel sets and jackpots land here as they ship.",
@@ -131,7 +128,6 @@ export default function GamesIndex() {
     const { disabledGames } = useCasinoStatus();
     const { squares: gardenSquares, waterCooldownMs: gardenWaterCooldownMs } = useCasinoGarden();
     const { run: printerRun } = useCasinoPrinter();
-    const { state: mineState } = useCasinoMine();
     const { creatures: ranchCreatures, feedCooldownMs: ranchFeedCooldownMs } = useCasinoRanch();
 
     const { data: easySpinOdds } = useQuery({
@@ -224,7 +220,6 @@ export default function GamesIndex() {
         const msSinceWatered = s.lastWateredAt ? Date.now() - new Date(s.lastWateredAt).getTime() : Infinity;
         return msSinceWatered >= gardenWaterCooldownMs;
     }).length;
-    const mineDigsLeft = mineState ? Math.max(0, mineState.dailyDigCap - mineState.digsToday) : null;
     const ranchReadyToFeed = ranchCreatures.filter((c) => {
         if (!c.lastFedAt) {
             return true;
@@ -242,18 +237,12 @@ export default function GamesIndex() {
         ],
         printer: printerRun
             ? [
-                  printerRun.raided
-                      ? { label: "Rig Raided", color: "error" as ChipColor }
-                      : { label: `Print Run ${printerRun.currentMultiplier.toFixed(2)}x`, color: "warning" as ChipColor },
-                  ...(printerRun.raided ? [] : [{ label: `${printerRun.raidRiskPercent}% Raid Risk`, color: "error" as ChipColor }]),
-              ]
+                printerRun.raided
+                    ? { label: "Rig Raided", color: "error" as ChipColor }
+                    : { label: `Print Run ${printerRun.currentMultiplier.toFixed(2)}x`, color: "warning" as ChipColor },
+                ...(printerRun.raided ? [] : [{ label: `${printerRun.raidRiskPercent}% Raid Risk`, color: "error" as ChipColor }]),
+            ]
             : [{ label: "No Print Run Active", color: "default" as ChipColor }],
-        mine: mineState
-            ? [
-                  { label: `Depth ${mineState.position.y}`, color: "default" as ChipColor },
-                  { label: `${mineDigsLeft}/${mineState.dailyDigCap} Digs Left`, color: mineDigsLeft ? "primary" as ChipColor : "error" as ChipColor },
-              ]
-            : [],
         "cheddar-ranch": [
             { label: `${ranchCreatures.length} Creature${ranchCreatures.length === 1 ? "" : "s"}`, color: "default" as ChipColor },
             ...(ranchReadyToFeed > 0 ? [{ label: `${ranchReadyToFeed} Ready to Feed`, color: "info" as ChipColor }] : []),

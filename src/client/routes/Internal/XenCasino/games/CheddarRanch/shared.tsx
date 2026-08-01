@@ -55,6 +55,12 @@ export const ITEM_EMOJI: Record<string, string> = {
     "wyrm-scale": "🐲",
     "solar-antler": "☀️",
     "void-ink": "🌌",
+    copper: "🟤",
+    silver: "⚪",
+    gold: "🟡",
+    emerald: "🟢",
+    ruby: "🔴",
+    diamond: "💎",
 };
 
 // Ticks once a second for as long as `targetMs` is non-null, same pattern as Garden's

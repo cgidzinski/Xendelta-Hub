@@ -1,11 +1,6 @@
 import { Card, CardActionArea, CardContent, Chip, Typography, Box } from "@mui/material";
+import { useNavigate } from "react-router-dom";
 import { useCasinoRanch } from "../../../../../hooks/casino/useCasinoRanch";
-
-export type FarmView = "ranch" | "race" | "inventory" | "shop";
-
-interface FarmHubProps {
-    onNavigate: (view: FarmView) => void;
-}
 
 interface HubBoxProps {
     emoji: string;
@@ -79,8 +74,9 @@ function HubBox({ emoji, title, subtitle, statusChip, onClick }: HubBoxProps) {
     );
 }
 
-export default function FarmHub({ onNavigate }: FarmHubProps) {
+export default function FarmHub() {
     const { creatures, feedCooldownMs } = useCasinoRanch();
+    const navigate = useNavigate();
 
     const readyToFeed = creatures.filter((c) => {
         if (!c.lastFedAt) {
@@ -99,13 +95,13 @@ export default function FarmHub({ onNavigate }: FarmHubProps) {
                     label: `${creatures.length} creature${creatures.length === 1 ? "" : "s"}${readyToFeed > 0 ? ` · ${readyToFeed} ready` : ""}`,
                     color: readyToFeed > 0 ? "info" : "default",
                 }}
-                onClick={() => onNavigate("ranch")}
+                onClick={() => navigate("ranch")}
             />
             <HubBox
                 emoji="🏁"
                 title="Racetrack"
                 subtitle="Race your creatures"
-                onClick={() => onNavigate("race")}
+                onClick={() => navigate("race")}
             />
             <HubBox
                 emoji="🌱"
@@ -115,19 +111,20 @@ export default function FarmHub({ onNavigate }: FarmHubProps) {
             <HubBox
                 emoji="⛏️"
                 title="Mines"
-                subtitle="Coming soon"
+                subtitle="Dig for treasure"
+                onClick={() => navigate("mine")}
             />
             <HubBox
                 emoji="🎒"
                 title="Inventory"
                 subtitle="View & manage items"
-                onClick={() => onNavigate("inventory")}
+                onClick={() => navigate("inventory")}
             />
             <HubBox
                 emoji="🛒"
                 title="Store"
                 subtitle="Buy feed & supplies"
-                onClick={() => onNavigate("shop")}
+                onClick={() => navigate("shop")}
             />
         </Box>
     );

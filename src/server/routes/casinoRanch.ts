@@ -44,7 +44,7 @@
  * explicitly bet on or forfeited.
  *
  * Each species also produces its own fixed item on a 24h manual-collect cooldown (see
- * XenCasinoRanchCreature.collect) - a freshly hatched creature is seeded with
+ * XenCasinoRanch.collectFromCreature) - a freshly hatched creature is seeded with
  * lastCollectedAt = now, so even the very first collect has to wait out the cooldown like
  * any other. The quantity produced per collection is a flat number for the creature's
  * rarity tier (see collectQuantityForTier), NOT its current level - level is unbounded via
@@ -78,13 +78,66 @@ import { randomBytes } from "crypto";
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 const { User } = require("../models/user");
-const { XenCasinoRanchCreature, XenCasinoRanchInventory, XenCasinoRanchPendingRace, XenCasinoActivity, dailyQuestDateKey: todayKey } = require("../models/xenCasino");
+const { XenCasinoRanchPendingRace, XenCasinoActivity, dailyQuestDateKey: todayKey } = require("../models/xenCasino");
+const { XenCasinoRanch } = require("../models/xenCasinoRanch");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../utils/weeabetsClient";
 import { requireGameEnabled } from "../utils/casinoStatus";
 import { recordCasinoRoundPlayed } from "../utils/dailyQuest";
 import { drawPrizeWeight } from "./casinoGames/prizeWeights";
 
 const SLUG = "cheddar-ranch";
+
+// ---------------------------------------------------------------------------
+// Mine economics (was casinoMine.ts)
+// ---------------------------------------------------------------------------
+
+const BASE_DAILY_DIG_CAP = 15;
+const LADDER_COST = 500;
+const LADDER_BATCH = 1;
+const DIG_COST = 250;
+const EXPLOSIVE_COST = 750;
+const SUPPORT_COST = 1000;
+const FLARE_COST = 1500;
+const MINE_FLARE_RADIUS = 1;
+const MAP_RESET_COST = 2000;
+
+const MINE_ORE_TIER_VALUE: Record<string, number> = {
+    copper: 1, silver: 2, gold: 4, emerald: 8, ruby: 14, diamond: 25,
+};
+
+function oreValueForDepth(depth: number, tier: string): number {
+    const base = 200 + depth * 60;
+    const multiplier = MINE_ORE_TIER_VALUE[tier] ?? 1;
+    return Math.round(base * multiplier * (0.7 + Math.random() * 1.1));
+}
+
+function mineStateView(doc: any) {
+    const m = doc.mine;
+    return {
+        position: { x: m.positionX, y: m.positionY },
+        actionsToday: m.actionsToday,
+        dailyDigCap: BASE_DAILY_DIG_CAP,
+        ladderCount: m.ladderCount,
+        explosiveCount: m.explosiveCount,
+        supportCount: m.reinforcementCount,
+        deepestDepthReached: m.deepestDepthReached,
+        bestGemTier: m.bestGemTier,
+        revealedTiles: m.dugTiles.map((t: any) => ({ x: t.x, y: t.y, oreTier: t.oreTier, isHeavyStone: t.isHeavyStone, status: t.status })),
+        prices: {
+            dig: { cost: DIG_COST },
+            ladder: { cost: LADDER_COST, amount: LADDER_BATCH },
+            explosive: { cost: EXPLOSIVE_COST, amount: 1 },
+            support: { cost: SUPPORT_COST, amount: 1 },
+            flare: { cost: FLARE_COST, radius: MINE_FLARE_RADIUS },
+            reset: { cost: MAP_RESET_COST },
+        },
+        oreTiers: require("../models/xenCasinoRanch").MINE_ORE_TIERS.map((t: any) => ({ key: t.key, label: t.label, minDepth: t.minDepth, valueMultiplier: MINE_ORE_TIER_VALUE[t.key] ?? 1 })),
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function txnKey(prefix: string): string {
     return `${prefix}-${randomBytes(8).toString("hex")}`;
@@ -303,7 +356,7 @@ export function collectQuantityForTier(tier: string): number {
 
 // A creature refuses to produce anything once it's been collected from this many times in
 // a row without racing - collect() resets this counter to 0, and so does every resolved
-// race (win or lose, see XenCasinoRanchCreature.recordRaceResult) - so passive item farming
+// race (win or lose, see XenCasinoRanch.recordRaceResult) - so passive item farming
 // can't fully replace actually playing the race game; the creature has to be raced at least
 // once every couple of collections to keep producing.
 export const RANCH_COLLECT_STREAK_LIMIT = 2;
@@ -794,18 +847,30 @@ async function ensureCreatureFresh(creature: any) {
     if (Object.keys(setFields).length === 0) {
         return creature;
     }
-    return XenCasinoRanchCreature.findByIdAndUpdate(creature._id, { $set: setFields }, { new: true }).exec();
+    // Apply changes directly to the sub-document (creature is embedded in XenCasinoRanch)
+    for (const key of STAT_KEYS) {
+        if (setFields["stats." + key] !== undefined) {
+            creature.stats[key] = setFields["stats." + key];
+        }
+    }
+    if (setFields.decayTicksApplied !== undefined) {
+        creature.decayTicksApplied = setFields.decayTicksApplied;
+    }
+    if (setFields.name) {
+        creature.name = setFields.name;
+    }
+    return creature;
 }
 
 async function inventoryDoc(userId: string) {
-    return XenCasinoRanchInventory.getState(userId);
+    return (await XenCasinoRanch.getState(userId));
 }
 
 async function itemsView(userId: string) {
     const doc = await inventoryDoc(userId);
     const entries: { key: string; label: string; quantity: number; sellValue: number; description: string }[] = [];
     for (const key of Object.keys(ITEM_DEFS)) {
-        const quantity: number = doc.items.get(key) || 0;
+        const quantity: number = doc.inventory.get(key) || 0;
         if (quantity > 0) {
             entries.push({ key, label: ITEM_DEFS[key].label, quantity, sellValue: ITEM_DEFS[key].sellValue, description: ITEM_DEFS[key].description });
         }
@@ -817,7 +882,7 @@ async function feedItemsView(userId: string) {
     const doc = await inventoryDoc(userId);
     return (Object.keys(FEED_ITEMS_BY_TYPE) as RanchType[]).map((type) => {
         const def = FEED_ITEMS_BY_TYPE[type];
-        return { key: def.key, label: def.label, type: def.type, price: def.price, quantity: doc.items.get(def.key) || 0 };
+        return { key: def.key, label: def.label, type: def.type, price: def.price, quantity: doc.inventory.get(def.key) || 0 };
     });
 }
 
@@ -830,7 +895,7 @@ async function shopItemsView(userId: string) {
         label: item.label,
         price: item.price,
         description: item.description,
-        quantity: doc.items.get(item.key) || 0,
+        quantity: doc.inventory.get(item.key) || 0,
     }));
 }
 
@@ -846,7 +911,7 @@ async function tonicRecipesView(userId: string) {
             materialKey: r.materialKey,
             materialLabel: ITEM_DEFS[r.materialKey]?.label ?? r.materialKey,
             quantity: r.quantity,
-            owned: doc.items.get(r.materialKey) || 0,
+            owned: doc.inventory.get(r.materialKey) || 0,
         })),
     }));
 }
@@ -860,7 +925,7 @@ async function pendingRaceView(userId: string) {
 }
 
 async function rosterView(userId: string) {
-    const rawCreatures = await XenCasinoRanchCreature.listByUser(userId);
+    const rawCreatures = await (await XenCasinoRanch.getState(userId)).creatures;
     const creatures = await Promise.all(rawCreatures.map((c: any) => ensureCreatureFresh(c)));
     const items = await itemsView(userId);
     const feedItems = await feedItemsView(userId);
@@ -926,7 +991,7 @@ module.exports = function (app: express.Application) {
             try {
                 const { tier, stats } = rollHatch();
                 const species = randomSpecies(tier.key);
-                creature = await XenCasinoRanchCreature.createForUser(userId, {
+                creature = await XenCasinoRanch.addCreature(userId, {
                     species,
                     name: rollCreatureName(),
                     rarityTier: tier.key,
@@ -958,7 +1023,7 @@ module.exports = function (app: express.Application) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const { id } = req.params;
 
-        let existing = await XenCasinoRanchCreature.getOwned(userId, id);
+        let existing = await XenCasinoRanch.getCreature(userId, id);
         if (!existing) {
             return res.status(404).json({ status: false, message: "Creature not found" });
         }
@@ -971,19 +1036,19 @@ module.exports = function (app: express.Application) {
         const units = feedUnitsRequired(level);
         const feedItem = FEED_ITEMS_BY_TYPE[typeForSpecies(existing.species)];
 
-        const consumed = await XenCasinoRanchInventory.subtractItem(userId, feedItem.key, units);
+        const consumed = await XenCasinoRanch.subtractItem(userId, feedItem.key, units);
         if (!consumed) {
             return res.status(400).json({ status: false, message: `Buy ${units}x ${feedItem.label} from the Shop first` });
         }
 
         const gains = rollFeedGains();
-        const updated = await XenCasinoRanchCreature.feed(userId, id, gains, FEED_COOLDOWN_MS);
+        const updated = await XenCasinoRanch.feedCreature(userId, id, gains, FEED_COOLDOWN_MS);
 
         if (!updated) {
             // Lost the race against the cooldown between our pre-check and the atomic
             // update above - give every consumed Feed unit back rather than eating them
             // for nothing.
-            await XenCasinoRanchInventory.addItem(userId, feedItem.key, units);
+            await XenCasinoRanch.addItem(userId, feedItem.key, units);
             return res.status(400).json({ status: false, message: "This creature is still on cooldown" });
         }
 
@@ -994,7 +1059,7 @@ module.exports = function (app: express.Application) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const { id } = req.params;
 
-        const creature = await XenCasinoRanchCreature.getOwned(userId, id);
+        const creature = await XenCasinoRanch.getCreature(userId, id);
         if (!creature) {
             return res.status(404).json({ status: false, message: "Creature not found" });
         }
@@ -1019,7 +1084,7 @@ module.exports = function (app: express.Application) {
                 note: "ranch_release",
             });
 
-            await XenCasinoRanchCreature.releaseOwned(userId, id);
+            await XenCasinoRanch.releaseCreature(userId, id);
             await XenCasinoActivity.record({ game: SLUG, userId, wager: 0, payout: sellValue });
             await XenCasinoRanchPendingRace.clearPending(userId);
 
@@ -1037,7 +1102,7 @@ module.exports = function (app: express.Application) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const { id } = req.params;
 
-        let existing = await XenCasinoRanchCreature.getOwned(userId, id);
+        let existing = await XenCasinoRanch.getCreature(userId, id);
         if (!existing) {
             return res.status(404).json({ status: false, message: "Creature not found" });
         }
@@ -1054,13 +1119,13 @@ module.exports = function (app: express.Application) {
             });
         }
 
-        const updated = await XenCasinoRanchCreature.collect(userId, id);
+        const updated = await XenCasinoRanch.collectFromCreature(userId, id);
         if (!updated) {
             return res.status(400).json({ status: false, message: "Nothing ready to collect yet" });
         }
 
         const quantity = collectQuantityForTier(updated.rarityTier);
-        await XenCasinoRanchInventory.addItem(userId, itemKey, quantity);
+        await XenCasinoRanch.addItem(userId, itemKey, quantity);
 
         return res.json({
             status: true,
@@ -1077,7 +1142,7 @@ module.exports = function (app: express.Application) {
         }
 
         const inventory = await inventoryDoc(userId);
-        const quantity: number = inventory.items.get(key) || 0;
+        const quantity: number = inventory.inventory.get(key) || 0;
         if (quantity <= 0) {
             return res.status(400).json({ status: false, message: "You don't have any of this item" });
         }
@@ -1102,7 +1167,7 @@ module.exports = function (app: express.Application) {
                 note: `ranch_sell_${key}`,
             });
 
-            await XenCasinoRanchInventory.subtractItem(userId, key, quantity);
+            await XenCasinoRanch.subtractItem(userId, key, quantity);
             await XenCasinoActivity.record({ game: SLUG, userId, wager: 0, payout: totalValue });
 
             return res.json({ status: true, data: { quantity, totalValue, balance: payoutResult.toNewBalance, items: await itemsView(userId) } });
@@ -1137,20 +1202,20 @@ module.exports = function (app: express.Application) {
 
         let creature: any = null;
         if (needsCreature) {
-            creature = await XenCasinoRanchCreature.getOwned(userId, creatureId!);
+            creature = await XenCasinoRanch.getCreature(userId, creatureId!);
             if (!creature) {
                 return res.status(404).json({ status: false, message: "Creature not found" });
             }
             creature = await ensureCreatureFresh(creature);
         }
 
-        const consumed = await XenCasinoRanchInventory.subtractItem(userId, key, 1);
+        const consumed = await XenCasinoRanch.subtractItem(userId, key, 1);
         if (!consumed) {
             return res.status(400).json({ status: false, message: "You don't have any of this item" });
         }
 
         if (tonic) {
-            const updated = await XenCasinoRanchCreature.applyTonic(userId, creatureId!, tonic.statKey, tonic.gain);
+            const updated = await XenCasinoRanch.applyTonic(userId, creatureId!, tonic.statKey, tonic.gain);
             return res.json({
                 status: true,
                 data: {
@@ -1166,7 +1231,7 @@ module.exports = function (app: express.Application) {
             const tier = RANCH_RARITY_TIERS.find((t) => t.key === creature.rarityTier) ?? RANCH_RARITY_TIERS[0];
             const options = SPECIES_BY_TIER[tier.key] ?? [];
             const nextSpecies = species && options.includes(species) ? species : options.find((s) => s !== creature.species) ?? options[0];
-            const updated = await XenCasinoRanchCreature.setSpecies(userId, creatureId!, nextSpecies);
+            const updated = await XenCasinoRanch.setCreatureSpecies(userId, creatureId!, nextSpecies);
             return res.json({
                 status: true,
                 data: { message: `${updated.name} transformed into a ${nextSpecies}!`, creature: creatureView(updated), shopItems: await shopItemsView(userId) },
@@ -1175,7 +1240,7 @@ module.exports = function (app: express.Application) {
 
         if (isDecayShield) {
             const until = new Date(Date.now() + RANCH_DECAY_SHIELD_MS);
-            const updated = await XenCasinoRanchCreature.setDecayShield(userId, creatureId!, until);
+            const updated = await XenCasinoRanch.setDecayShield(userId, creatureId!, until);
             return res.json({
                 status: true,
                 data: {
@@ -1217,7 +1282,7 @@ module.exports = function (app: express.Application) {
             });
 
             try {
-                await XenCasinoRanchInventory.addItem(userId, item.key, 1);
+                await XenCasinoRanch.addItem(userId, item.key, 1);
             } catch (creditErr) {
                 await transfer({
                     fromAccountId: xenCasinoAccountId,
@@ -1254,16 +1319,16 @@ module.exports = function (app: express.Application) {
             }
 
             const doc = await inventoryDoc(userId);
-            const usable = recipes.find((r) => (doc.items.get(r.materialKey) || 0) >= r.quantity);
+            const usable = recipes.find((r) => (doc.inventory.get(r.materialKey) || 0) >= r.quantity);
             if (!usable) {
                 return res.status(400).json({ status: false, message: `Not enough materials to craft a ${tonic.label}` });
             }
 
-            const consumed = await XenCasinoRanchInventory.subtractItem(userId, usable.materialKey, usable.quantity);
+            const consumed = await XenCasinoRanch.subtractItem(userId, usable.materialKey, usable.quantity);
             if (!consumed) {
                 return res.status(400).json({ status: false, message: `Not enough materials to craft a ${tonic.label}` });
             }
-            await XenCasinoRanchInventory.addItem(userId, tonic.key, 1);
+            await XenCasinoRanch.addItem(userId, tonic.key, 1);
 
             return res.json({
                 status: true,
@@ -1304,7 +1369,7 @@ module.exports = function (app: express.Application) {
             });
 
             try {
-                await XenCasinoRanchInventory.addItem(userId, feedItem.key, quantity);
+                await XenCasinoRanch.addItem(userId, feedItem.key, quantity);
             } catch (creditErr) {
                 await transfer({
                     fromAccountId: xenCasinoAccountId,
@@ -1341,7 +1406,7 @@ module.exports = function (app: express.Application) {
             const { id } = req.params;
             const { useCourseTicket, useDifficultyItem } = req.body as { useCourseTicket?: boolean; useDifficultyItem?: boolean };
 
-            let creature = await XenCasinoRanchCreature.getOwned(userId, id);
+            let creature = await XenCasinoRanch.getCreature(userId, id);
             if (!creature) {
                 return res.status(404).json({ status: false, message: "Creature not found" });
             }
@@ -1360,16 +1425,16 @@ module.exports = function (app: express.Application) {
             let courseTicketConsumed = false;
             let difficultyItemConsumed = false;
             if (useCourseTicket) {
-                courseTicketConsumed = !!(await XenCasinoRanchInventory.subtractItem(userId, COURSE_TICKET.key, 1));
+                courseTicketConsumed = !!(await XenCasinoRanch.subtractItem(userId, COURSE_TICKET.key, 1));
                 if (!courseTicketConsumed) {
                     return res.status(400).json({ status: false, message: "You don't have a Course Ticket" });
                 }
             }
             if (useDifficultyItem) {
-                difficultyItemConsumed = !!(await XenCasinoRanchInventory.subtractItem(userId, HARDENED_FEED.key, 1));
+                difficultyItemConsumed = !!(await XenCasinoRanch.subtractItem(userId, HARDENED_FEED.key, 1));
                 if (!difficultyItemConsumed) {
                     if (courseTicketConsumed) {
-                        await XenCasinoRanchInventory.addItem(userId, COURSE_TICKET.key, 1);
+                        await XenCasinoRanch.addItem(userId, COURSE_TICKET.key, 1);
                     }
                     return res.status(400).json({ status: false, message: "You don't have a Hardened Feed" });
                 }
@@ -1378,8 +1443,8 @@ module.exports = function (app: express.Application) {
             try {
                 const resolved = await resolveUserAccount(user);
                 if (!resolved.linked || !resolved.account) {
-                    if (courseTicketConsumed) await XenCasinoRanchInventory.addItem(userId, COURSE_TICKET.key, 1);
-                    if (difficultyItemConsumed) await XenCasinoRanchInventory.addItem(userId, HARDENED_FEED.key, 1);
+                    if (courseTicketConsumed) await XenCasinoRanch.addItem(userId, COURSE_TICKET.key, 1);
+                    if (difficultyItemConsumed) await XenCasinoRanch.addItem(userId, HARDENED_FEED.key, 1);
                     return res.status(400).json({ status: false, message: "Link your Discord account to play" });
                 }
                 const xenCasinoAccountId = await getXenCasinoAccountId();
@@ -1446,8 +1511,8 @@ module.exports = function (app: express.Application) {
                         key: txnKey("ranch-race-start-refund"),
                         note: "ranch_race_start_refund",
                     });
-                    if (courseTicketConsumed) await XenCasinoRanchInventory.addItem(userId, COURSE_TICKET.key, 1);
-                    if (difficultyItemConsumed) await XenCasinoRanchInventory.addItem(userId, HARDENED_FEED.key, 1);
+                    if (courseTicketConsumed) await XenCasinoRanch.addItem(userId, COURSE_TICKET.key, 1);
+                    if (difficultyItemConsumed) await XenCasinoRanch.addItem(userId, HARDENED_FEED.key, 1);
                     return res.status(400).json({ status: false, message: "Finish or wait out your current race attempt first" });
                 }
 
@@ -1478,7 +1543,7 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "No race attempt in progress for this creature" });
             }
 
-            const insured = !!(await XenCasinoRanchInventory.subtractItem(userId, FORFEIT_INSURANCE.key, 1));
+            const insured = !!(await XenCasinoRanch.subtractItem(userId, FORFEIT_INSURANCE.key, 1));
             if (!insured) {
                 await XenCasinoRanchPendingRace.clearPending(userId);
                 return res.json({ status: true, data: { message: "Forfeited - the entry fee was not refunded." } });
@@ -1487,14 +1552,14 @@ module.exports = function (app: express.Application) {
             const refundAmount = Math.round(RANCH_RACE_ENTRY_FEE * FORFEIT_INSURANCE_REFUND_RATE);
             const user = await User.findById(userId).exec();
             if (!user) {
-                await XenCasinoRanchInventory.addItem(userId, FORFEIT_INSURANCE.key, 1);
+                await XenCasinoRanch.addItem(userId, FORFEIT_INSURANCE.key, 1);
                 return res.status(404).json({ status: false, message: "User not found" });
             }
 
             try {
                 const resolved = await resolveUserAccount(user);
                 if (!resolved.linked || !resolved.account) {
-                    await XenCasinoRanchInventory.addItem(userId, FORFEIT_INSURANCE.key, 1);
+                    await XenCasinoRanch.addItem(userId, FORFEIT_INSURANCE.key, 1);
                     return res.status(400).json({ status: false, message: "Link your Discord account to play" });
                 }
                 const xenCasinoAccountId = await getXenCasinoAccountId();
@@ -1512,7 +1577,7 @@ module.exports = function (app: express.Application) {
                     data: { message: `Forfeited - your Forfeit Insurance refunded ${refundAmount} cheddar.`, balance: payoutResult.toNewBalance },
                 });
             } catch (err) {
-                await XenCasinoRanchInventory.addItem(userId, FORFEIT_INSURANCE.key, 1);
+                await XenCasinoRanch.addItem(userId, FORFEIT_INSURANCE.key, 1);
                 const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
                 return res.status(status).json({ status: false, message: (err as Error).message });
             }
@@ -1596,7 +1661,7 @@ module.exports = function (app: express.Application) {
                     const placeBoost = raceStatBoostForPlace(playerEntry.place);
                     const statBoost = placeBoost > 0 ? Object.fromEntries(STAT_KEYS.map((key) => [key, placeBoost])) : null;
                     await recordCasinoRoundPlayed(userId, { game: SLUG, wager: stake, payout });
-                    const updatedCreature = await XenCasinoRanchCreature.recordRaceResult(userId, id, playerPlacedFirst, statBoost);
+                    const updatedCreature = await XenCasinoRanch.recordRaceResult(userId, id, playerPlacedFirst, statBoost);
                     await XenCasinoRanchPendingRace.clearPending(userId);
 
                     return res.json({
@@ -1631,5 +1696,203 @@ module.exports = function (app: express.Application) {
             }
         }
     );
+
+    // -----------------------------------------------------------------------
+    // Mine endpoints (under /api/casino/ranch/mine)
+    // -----------------------------------------------------------------------
+
+    app.get("/api/casino/ranch/mine", authenticateToken, async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+        const doc = await XenCasinoRanch.getState(userId);
+        return res.json({ status: true, data: mineStateView(doc) });
+    });
+
+    app.post("/api/casino/ranch/mine/dig", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+        const { direction, useExplosive } = req.body as { direction: "up" | "down" | "left" | "right"; useExplosive?: boolean };
+        if (!["up", "down", "left", "right"].includes(direction)) {
+            return res.status(400).json({ status: false, message: "Invalid direction" });
+        }
+
+        const user = await User.findById(userId).exec();
+        if (!user) return res.status(404).json({ status: false, message: "User not found" });
+
+        try {
+            const resolved = await resolveUserAccount(user);
+            if (!resolved.linked || !resolved.account) {
+                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
+            }
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+
+            // Charge dig cost
+            const isFree = false; // We'll check if the target is already mined after calling applyMineDig
+            await transfer({
+                fromAccountId: resolved.account.accountId,
+                toAccountId: xenCasinoAccountId,
+                amount: DIG_COST.toFixed(10),
+                key: txnKey("ranch-mine-dig"),
+                note: "ranch_mine_dig",
+            });
+
+            try {
+                const result = await XenCasinoRanch.applyMineDig(userId, { direction, dailyDigCap: BASE_DAILY_DIG_CAP, useExplosive: !!useExplosive });
+
+                if (result.error) {
+                    // Refund on error
+                    await transfer({
+                        fromAccountId: xenCasinoAccountId,
+                        toAccountId: resolved.account.accountId,
+                        amount: DIG_COST.toFixed(10),
+                        key: txnKey("ranch-mine-dig-refund"),
+                        note: "ranch_mine_dig_refund",
+                    });
+                    return res.status(400).json({ status: false, message: result.error });
+                }
+
+                // If it was just a free move or empty outcome, return 0 payout
+                if (result.outcome !== "ore") {
+                    await XenCasinoActivity.record({ game: "mine" as any, userId, wager: DIG_COST, payout: 0 });
+                    return res.json({
+                        status: true,
+                        data: {
+                            outcome: result.outcome,
+                            usedExplosive: result.usedExplosive,
+                            state: mineStateView(result.doc),
+                        },
+                    });
+                }
+
+                // Ore struck - add to inventory instead of instant payout
+                const tier = result.oreTier!;
+                const tierLabel = require("../models/xenCasinoRanch").MINE_ORE_TIERS.find((t: any) => t.key === tier)?.label ?? tier;
+                const sellValue = oreValueForDepth(result.targetY, tier);
+                const itemKey = tier; // "copper", "silver", etc.
+
+                await XenCasinoRanch.addItem(userId, itemKey, 1);
+
+                // Store sell value metadata — we'll use a naming convention for sell values
+                // The inventory already stores the item; the sell value is computed from the tier
+
+                await recordCasinoRoundPlayed(userId, { game: "mine", wager: DIG_COST, payout: sellValue });
+
+                return res.json({
+                    status: true,
+                    data: {
+                        outcome: result.outcome,
+                        oreTier: tier,
+                        oreItem: { key: itemKey, label: tierLabel, quantity: 1 },
+                        usedExplosive: result.usedExplosive,
+                        state: mineStateView(result.doc),
+                    },
+                });
+            } catch (digErr) {
+                await transfer({
+                    fromAccountId: xenCasinoAccountId,
+                    toAccountId: resolved.account.accountId,
+                    amount: DIG_COST.toFixed(10),
+                    key: txnKey("ranch-mine-dig-refund"),
+                    note: "ranch_mine_dig_refund",
+                });
+                throw digErr;
+            }
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    app.post("/api/casino/ranch/mine/buy-equipment", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+        const { item } = req.body as { item: "ladder" | "explosive" | "support" };
+        if (!["ladder", "explosive", "support"].includes(item)) {
+            return res.status(400).json({ status: false, message: "Invalid item" });
+        }
+
+        const cost = item === "ladder" ? LADDER_COST : item === "explosive" ? EXPLOSIVE_COST : SUPPORT_COST;
+        const amount = item === "ladder" ? LADDER_BATCH : 1;
+
+        const user = await User.findById(userId).exec();
+        if (!user) return res.status(404).json({ status: false, message: "User not found" });
+
+        try {
+            const resolved = await resolveUserAccount(user);
+            if (!resolved.linked || !resolved.account) {
+                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
+            }
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+
+            await transfer({
+                fromAccountId: resolved.account.accountId,
+                toAccountId: xenCasinoAccountId,
+                amount: cost.toFixed(10),
+                key: txnKey("ranch-mine-equip"),
+                note: "ranch_mine_equipment",
+            });
+
+            const doc = await XenCasinoRanch.addMineEquipment(userId, item, amount);
+            return res.json({ status: true, data: { state: mineStateView(doc), balance: null } });
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    app.post("/api/casino/ranch/mine/flare", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+
+        const user = await User.findById(userId).exec();
+        if (!user) return res.status(404).json({ status: false, message: "User not found" });
+
+        try {
+            const resolved = await resolveUserAccount(user);
+            if (!resolved.linked || !resolved.account) {
+                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
+            }
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+
+            await transfer({
+                fromAccountId: resolved.account.accountId,
+                toAccountId: xenCasinoAccountId,
+                amount: FLARE_COST.toFixed(10),
+                key: txnKey("ranch-mine-flare"),
+                note: "ranch_mine_flare",
+            });
+
+            const doc = await XenCasinoRanch.useMineFlare(userId, MINE_FLARE_RADIUS);
+            return res.json({ status: true, data: { state: mineStateView(doc), balance: null } });
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    app.post("/api/casino/ranch/mine/reset", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+
+        const user = await User.findById(userId).exec();
+        if (!user) return res.status(404).json({ status: false, message: "User not found" });
+
+        try {
+            const resolved = await resolveUserAccount(user);
+            if (!resolved.linked || !resolved.account) {
+                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
+            }
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+
+            await transfer({
+                fromAccountId: resolved.account.accountId,
+                toAccountId: xenCasinoAccountId,
+                amount: MAP_RESET_COST.toFixed(10),
+                key: txnKey("ranch-mine-reset"),
+                note: "ranch_mine_reset",
+            });
+
+            const doc = await XenCasinoRanch.resetMineMap(userId);
+            return res.json({ status: true, data: { state: mineStateView(doc), balance: null } });
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
 
 };

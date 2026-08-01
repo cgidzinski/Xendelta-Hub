@@ -23,7 +23,6 @@ var GAME_LABELS: Record<string, string> = {
     "memory": "Memory",
     "garden": "Casino Garden",
     "printer": "Money Printer",
-    "mine": "Chip Mine",
     "cheddar-ranch": "Cheddar Ranch",
     "quest-reward": "Daily Quest Rewards",
     "admin-grant": "Admin Grants",

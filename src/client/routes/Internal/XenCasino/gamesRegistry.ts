@@ -1,4 +1,4 @@
-export type CasinoGameType = "slots" | "scratch" | "plinko" | "pachinko" | "memory" | "garden" | "printer" | "mine" | "ranch";
+export type CasinoGameType = "slots" | "scratch" | "plinko" | "pachinko" | "memory" | "garden" | "printer" | "ranch";
 
 export interface CasinoGameRegistryItem {
   key: string;
@@ -21,7 +21,6 @@ export const CASINO_GAME_TYPE_LABELS: Record<CasinoGameType, string> = {
   memory: "Memory",
   garden: "Garden",
   printer: "Printing",
-  mine: "Mining",
   ranch: "Creature Ranch",
 };
 
@@ -102,15 +101,6 @@ export const CASINO_GAMES_REGISTRY: CasinoGameRegistryItem[] = [
     description: "Install up to 3 parts and start a print run — let it age for a bigger payout, or cash out before raid risk (5%→40% over 2h, per 5-min roll) seizes your rig.",
     type: "printer",
     price: 5000, // roughly the cheapest 3-part run (3x Case Fan = 4800) - see PRINTER_PARTS in casinoPrinter.ts
-    priceFrom: true,
-  },
-  {
-    key: "mine",
-    label: "Chip Mine",
-    path: "/internal/xencasino/games/mine",
-    description: "Dig a dark shaft for ore — down is riskier, sideways stays safe. 15 digs/day, buy ladders, supports, flares, and explosives.",
-    type: "mine",
-    price: 200,
     priceFrom: true,
   },
   {

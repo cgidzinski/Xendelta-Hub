@@ -25,7 +25,7 @@ export interface MineOreTier {
 
 export interface MineState {
     position: { x: number; y: number };
-    digsToday: number;
+    actionsToday: number;
     dailyDigCap: number;
     ladderCount: number;
     explosiveCount: number;
@@ -47,9 +47,8 @@ export interface MineState {
 export interface DigResult {
     outcome: "ore" | "empty" | "cave_in" | "stone_cleared" | "move";
     oreTier?: string | null;
-    payout: number;
+    oreItem?: { key: string; label: string; quantity: number } | null;
     usedExplosive: boolean;
-    balance?: string;
     state: MineState;
 }
 
@@ -58,7 +57,7 @@ export const casinoMineKeys = {
 };
 
 const fetchMine = async (): Promise<MineState> =>
-    (await apiClient.get<ApiResponse<MineState>>("/api/casino/mine")).data.data!;
+    (await apiClient.get<ApiResponse<MineState>>("/api/casino/ranch/mine")).data.data!;
 
 export const useCasinoMine = () => {
     const { isAuthenticated } = useAuth();
@@ -78,8 +77,8 @@ export const useCasinoMine = () => {
     };
 
     const { mutateAsync: dig, isPending: isDigging } = useMutation({
-        mutationFn: async (direction: "up" | "down" | "left" | "right") =>
-            (await apiClient.post<ApiResponse<DigResult>>("/api/casino/mine/dig", { direction })).data.data!,
+        mutationFn: async (params: { direction: "up" | "down" | "left" | "right"; useExplosive?: boolean }) =>
+            (await apiClient.post<ApiResponse<DigResult>>("/api/casino/ranch/mine/dig", params)).data.data!,
         // A successful dig's response already carries the fresh state, so write it
         // straight into the cache instead of paying for a second round-trip refetch -
         // this is what makes moving feel instant. A rejected dig has no state in its
@@ -95,17 +94,17 @@ export const useCasinoMine = () => {
 
     const { mutateAsync: buyEquipment, isPending: isBuying } = useMutation({
         mutationFn: async (item: "ladder" | "explosive" | "support") =>
-            (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/mine/buy-equipment", { item })).data.data!,
+            (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/ranch/mine/buy-equipment", { item })).data.data!,
         onSuccess: invalidate,
     });
 
     const { mutateAsync: useFlare, isPending: isFlaring } = useMutation({
-        mutationFn: async () => (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/mine/flare")).data.data!,
+        mutationFn: async () => (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/ranch/mine/flare")).data.data!,
         onSuccess: invalidate,
     });
 
     const { mutateAsync: resetMap, isPending: isResetting } = useMutation({
-        mutationFn: async () => (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/mine/reset")).data.data!,
+        mutationFn: async () => (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/ranch/mine/reset")).data.data!,
         onSuccess: invalidate,
     });
 

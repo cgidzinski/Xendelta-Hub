@@ -1,5 +1,5 @@
 import { ReactNode, useState } from "react";
-import { Alert, Box, Button, Card, CardContent, Chip, IconButton, LinearProgress, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, Chip, Dialog, DialogContent, DialogTitle, IconButton, LinearProgress, Stack, Typography } from "@mui/material";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -12,7 +12,7 @@ import StairsIcon from "@mui/icons-material/Stairs";
 import BoltIcon from "@mui/icons-material/Bolt";
 import ShieldIcon from "@mui/icons-material/Shield";
 import TerrainIcon from "@mui/icons-material/Terrain";
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import CloseIcon from "@mui/icons-material/Close";
 import { useSnackbar } from "notistack";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import { formatCheddar } from "../../utils/currency";
@@ -90,6 +90,7 @@ function StatLine({ icon, children }: { icon: ReactNode; children: ReactNode }) 
     );
 }
 
+
 function StatTile({ label, value, color }: { label: string; value: ReactNode; color?: string }) {
     return (
         <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, p: 1, textAlign: "center" }}>
@@ -144,13 +145,7 @@ function ActionButton({ icon, label, description, color = "primary", disabled, o
     );
 }
 
-// Names whichever blocker(s) an Explosive would actually clear right now, so the badge
-// reads correctly whether it's the cap, the ladder, heavy stone, or some combination.
-function explosiveReadyText(explosiveCount: number, reasons: string[]): string {
-    return `${explosiveCount} Explosive${explosiveCount > 1 ? "s" : ""} ready - blasts through ${reasons.join(" and/or ")}`;
-}
-
-export default function Mine() {
+export default function MineGame() {
     const {
         state,
         isLoading,
@@ -163,12 +158,10 @@ export default function Mine() {
         isBuying,
         useFlare,
         isFlaring,
-        resetMap,
-        isResetting,
     } = useCasinoMine();
     const { enqueueSnackbar } = useSnackbar();
-    const [confirmingReset, setConfirmingReset] = useState(false);
     const [flashTile, setFlashTile] = useState<{ x: number; y: number; kind: string } | null>(null);
+    const [shopOpen, setShopOpen] = useState(false);
 
     const handleBuy = (item: "ladder" | "explosive" | "support") =>
         buyEquipment(item).catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
@@ -176,13 +169,6 @@ export default function Mine() {
         useFlare()
             .then(() => enqueueSnackbar("Flare burst - scouted the area around you.", { variant: "success" }))
             .catch((e) => enqueueSnackbar(e.message || "Failed to use flare", { variant: "error" }));
-    const handleReset = () =>
-        resetMap()
-            .then(() => {
-                setConfirmingReset(false);
-                enqueueSnackbar("Map reset - back to the surface.", { variant: "success" });
-            })
-            .catch((e) => enqueueSnackbar(e.message || "Failed to reset", { variant: "error" }));
 
     const oddsSections: OddsSection[] = state
         ? [
@@ -194,7 +180,6 @@ export default function Mine() {
                     { label: "Explosive", payout: `${formatCheddar(state.prices.explosive.cost)} - single-use, blasts through the daily cap, a missing ladder, and/or heavy stone` },
                     { label: "Support", payout: `${formatCheddar(state.prices.support.cost)} - single-use shield against your next cave-in, stays armed until it actually blocks one` },
                     { label: "Flare", payout: `${formatCheddar(state.prices.flare.cost)} - reveals a 3x3 area around you, single-use` },
-                    { label: "Reset Map", payout: `${formatCheddar(state.prices.reset.cost)} - wipes your whole map and returns you to the surface` },
                 ],
                 footnote: "Moving through tunnels you've already cleared is always free. Every real dig into new territory costs the flat dig fee regardless of what's found; going down also consumes a ladder and enters a riskier depth band, while sideways needs no ladder and stays at the current depth's risk level.",
             },
@@ -235,7 +220,7 @@ export default function Mine() {
         );
     }
 
-    const { position, revealedTiles, digsToday, dailyDigCap, ladderCount, explosiveCount, supportCount } = state;
+    const { position, revealedTiles, actionsToday, dailyDigCap, ladderCount, explosiveCount, supportCount } = state;
 
     const minX = position.x - VIEW_RADIUS;
     const minY = Math.max(0, position.y - VIEW_RADIUS); // clamp at the surface, never show y < 0
@@ -243,8 +228,8 @@ export default function Mine() {
 
     const tileAt = (x: number, y: number) => revealedTiles.find((t) => t.x === x && t.y === y);
 
-    const digsRemaining = Math.max(0, dailyDigCap - digsToday);
-    const canAffordCapBlock = digsRemaining > 0 || explosiveCount > 0;
+    const digsRemaining = Math.max(0, dailyDigCap - actionsToday);
+    const canAffordCapBlock = digsRemaining > 0;
     const canAffordLadderBlock = ladderCount > 0 || explosiveCount > 0;
 
     const targetFor = (direction: "up" | "down" | "left" | "right") => ({
@@ -254,7 +239,10 @@ export default function Mine() {
 
     const handleDig = (direction: "up" | "down" | "left" | "right") => {
         const { x: dugX, y: dugY } = targetFor(direction);
-        dig(direction)
+        const tile = tileAt(dugX, dugY);
+        const useExplosive = tile?.status === "blocked" || (!canAffordCapBlock) || (direction === "up" && tile?.status !== "mined" && (ladderCount === 0));
+
+        dig({ direction, useExplosive })
             .then((r) => {
                 if (r.outcome !== "move") {
                     setFlashTile({ x: dugX, y: dugY, kind: r.outcome });
@@ -263,16 +251,11 @@ export default function Mine() {
                 if (r.outcome === "ore") {
                     const tierLabel = r.state.oreTiers.find((t) => t.key === r.oreTier)?.label ?? "ore";
                     const emoji = (r.oreTier && TIER_EMOJI[r.oreTier]) || "💎";
-                    enqueueSnackbar(
-                        `${emoji} ${r.usedExplosive ? "Blasted through and struck" : "Struck"} ${tierLabel}! +${formatCheddar(r.payout)} cheddar`,
-                        { variant: "success" }
-                    );
+                    enqueueSnackbar(`Found ${emoji} ${tierLabel}`, { variant: "success" });
                 } else if (r.outcome === "cave_in") {
-                    enqueueSnackbar("Cave-in! You lost your remaining digs for today.", { variant: "error" });
-                } else if (r.outcome === "stone_cleared") {
-                    enqueueSnackbar("Blasted through the heavy stone - the way is clear.", { variant: "info" });
+                    enqueueSnackbar("Cave-in! No more actions today.", { variant: "error" });
                 } else if (r.usedExplosive) {
-                    enqueueSnackbar("Blasted through with an Explosive - nothing there.", { variant: "info" });
+                    enqueueSnackbar("Cleared with Explosive.", { variant: "info" });
                 }
             })
             .catch((e) => enqueueSnackbar(e.message || "Failed to dig", { variant: "error" }));
@@ -287,8 +270,8 @@ export default function Mine() {
         if (t?.status === "mined") {
             return true; // always free to walk back through cleared tunnels
         }
-        if (direction === "up") {
-            return false; // up is only ever a free move into an already-mined tile
+        if (direction === "up" || direction === "down") {
+            if (ladderCount === 0 && explosiveCount === 0) return false;
         }
         if (t?.status === "blocked" && explosiveCount === 0) {
             return false; // known heavy stone, nothing to clear it with
@@ -296,21 +279,25 @@ export default function Mine() {
         if (t?.status === "collapsed") {
             return false; // rubble from a past cave-in - permanent, nothing clears it
         }
-        const laddersOk = direction === "down" ? canAffordLadderBlock : true;
+        const laddersOk = (direction === "down" || direction === "up") ? canAffordLadderBlock : true;
         return canAffordCapBlock && laddersOk;
     }
 
-    // What an Explosive would actually clear if the player is currently stuck - drives
-    // the "ready" badge above the direction buttons.
-    const stuckReasons: string[] = [];
-    if (!canAffordCapBlock) {
-        stuckReasons.push("today's dig limit");
-    }
-    if (!canAffordLadderBlock) {
-        stuckReasons.push("the ladder requirement");
-    }
-    if (tileAt(targetFor("down").x, targetFor("down").y)?.status === "blocked") {
-        stuckReasons.push("heavy stone ahead");
+    function dirStyle(direction: "up" | "down" | "left" | "right"): { bg: string; hover: string; icon: ReactNode } {
+        const t = tileAt(targetFor(direction).x, targetFor(direction).y);
+        if (t?.status === "mined") {
+            return { bg: "primary.main", hover: "primary.dark", icon: direction === "up" ? <ArrowUpwardIcon /> : direction === "down" ? <ArrowDownwardIcon /> : direction === "left" ? <ArrowBackIcon /> : <ArrowForwardIcon /> };
+        }
+        if (digsRemaining <= 0) {
+            return { bg: "grey.600", hover: "grey.600", icon: direction === "up" ? <ArrowUpwardIcon /> : direction === "down" ? <ArrowDownwardIcon /> : direction === "left" ? <ArrowBackIcon /> : <ArrowForwardIcon /> };
+        }
+        if (t?.status === "blocked") {
+            return { bg: "error.main", hover: "error.dark", icon: <BoltIcon /> };
+        }
+        if (direction === "up" || direction === "down") {
+            return { bg: "warning.main", hover: "warning.dark", icon: <StairsIcon /> };
+        }
+        return { bg: "primary.main", hover: "primary.dark", icon: direction === "left" ? <ArrowBackIcon /> : <ArrowForwardIcon /> };
     }
 
     return (
@@ -319,187 +306,147 @@ export default function Mine() {
             howToPlay="Moving through tunnels you've already cleared is always free - no digs spent, no cheddar, no risk, walk it as much as you like (you can even head back Up). Only pushing into new, undug territory is a real dig: it spends one of today's limited digs and costs a flat cheddar fee regardless of what's found, and going down also needs a ladder. There's no way to preview a tile in advance except a Flare, which reveals a 3x3 area around you (whether a tile holds a gem, and its tier, or whether it's heavy stone) - otherwise you're digging blind, same as always for cave-in risk. Heavy stone randomly blocks some tiles and needs an Explosive to clear. A cave-in leaves rubble behind that permanently blocks that tunnel - nothing clears it, you'll have to dig around it. A Support is a single-use shield against your next cave-in - it stays armed through any number of safe digs, only used up the moment it actually blocks one. An Explosive is a universal bypass: spend one to blast through today's dig limit, a missing ladder, and/or heavy stone, any combination at once. The deeper you go, the better the gems get - both the chance of a good find and its value rise with depth. You get one free ladder every day. If you ever want a clean slate, you can wipe your whole map and start over from the surface for a fee - your equipment carries over."
             oddsSections={oddsSections}
         >
-            <Card variant="outlined" sx={{ bgcolor: "#0a0a0f", overflow: "hidden", mt: 2 }}>
-                <CardContent sx={{ p: 2 }}>
-                    <Box
-                        sx={{
-                            display: "grid",
-                            gridTemplateColumns: `${DEPTH_LABEL_COL}px repeat(${GRID_COLS}, ${CELL_SIZE}px) ${DEPTH_LABEL_COL}px`,
-                            gridAutoRows: `${CELL_SIZE}px`,
-                            gap: "2px",
-                            justifyContent: "center",
-                            mx: "auto",
-                            width: "fit-content",
-                        }}
-                    >
-                        {Array.from({ length: maxY - minY + 1 }).flatMap((_, i) => {
-                            const y = minY + i;
-                            const cells = Array.from({ length: GRID_COLS }).map((_, col) => {
-                                const x = minX + col;
-                                const isPlayer = x === position.x && y === position.y;
-                                const tile: MineTile | undefined = tileAt(x, y);
-                                const isShaftEntrance = x === 0 && y === 0;
-                                const known = !!tile || isShaftEntrance || isPlayer;
-                                const isFlashing = flashTile?.x === x && flashTile?.y === y;
+            <Card variant="outlined" sx={{ bgcolor: "#0a0a0f", overflow: "hidden", mt: 2, display: "flex", justifyContent: "center" }}>
+                <Box
+                    sx={{
+                        display: "grid",
+                        gridTemplateColumns: `${DEPTH_LABEL_COL}px repeat(${GRID_COLS}, ${CELL_SIZE}px) ${DEPTH_LABEL_COL}px`,
+                        gridAutoRows: `${CELL_SIZE}px`,
+                        gap: "2px",
+                        p: { xs: 1, sm: 2 },
+                    }}
+                >
+                    {Array.from({ length: maxY - minY + 1 }).flatMap((_, i) => {
+                        const y = minY + i;
+                        const cells = Array.from({ length: GRID_COLS }).map((_, col) => {
+                            const x = minX + col;
+                            const isPlayer = x === position.x && y === position.y;
+                            const tile: MineTile | undefined = tileAt(x, y);
+                            const isShaftEntrance = x === 0 && y === 0;
+                            const known = !!tile || isShaftEntrance || isPlayer;
+                            const isFlashing = flashTile?.x === x && flashTile?.y === y;
 
-                                // "collapsed" = cave-in marker. "blocked" = known heavy stone,
-                                // not yet cleared. "scouted" = a Flare preview, not yet dug
-                                // (dashed border, dim gem-tier glint if there's a gem - never
-                                // a hazard icon, cave-ins aren't previewable). "mined" =
-                                // actually dug and resolved, plain tunnel background
-                                // regardless of whether it held a gem (the small corner
-                                // marker below shows that instead).
-                                let bgcolor: string = ROCK_COLOR;
-                                if (tile?.status === "collapsed") {
-                                    bgcolor = "error.dark";
-                                } else if (tile?.status === "blocked") {
-                                    bgcolor = STONE_BLOCKED_COLOR;
-                                } else if (tile?.status === "scouted") {
-                                    bgcolor = "info.dark";
-                                } else if (tile?.status === "mined" || (known && !tile)) {
-                                    bgcolor = TUNNEL_COLOR;
-                                }
+                            // "collapsed" = cave-in marker. "blocked" = known heavy stone,
+                            // not yet cleared. "scouted" = a Flare preview, not yet dug
+                            // (dashed border, dim gem-tier glint if there's a gem - never
+                            // a hazard icon, cave-ins aren't previewable). "mined" =
+                            // actually dug and resolved, plain tunnel background
+                            // regardless of whether it held a gem (the small corner
+                            // marker below shows that instead).
+                            let bgcolor: string = ROCK_COLOR;
+                            if (tile?.status === "collapsed") {
+                                bgcolor = "error.dark";
+                            } else if (tile?.status === "blocked") {
+                                bgcolor = STONE_BLOCKED_COLOR;
+                            } else if (tile?.status === "scouted") {
+                                bgcolor = "warning.dark";
+                            } else if (tile?.status === "mined" || (known && !tile)) {
+                                bgcolor = TUNNEL_COLOR;
+                            }
 
-                                return (
-                                    <Box
-                                        key={`${x}-${y}`}
-                                        sx={{
-                                            width: CELL_SIZE,
-                                            height: CELL_SIZE,
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            borderRadius: 0.5,
-                                            bgcolor,
-                                            border: tile?.status === "scouted" ? "1px dashed" : "1px solid",
-                                            borderColor: tile?.status === "blocked" ? "warning.dark" : known ? "grey.700" : ROCK_COLOR,
-                                            position: "relative",
-                                            ...(isFlashing ? DIG_FLASH_SX[flashTile!.kind] ?? DIG_FLASH_SX.neutral : {}),
-                                        }}
-                                    >
-                                        {isPlayer && <PersonPinIcon sx={{ color: "info.light", fontSize: 26, position: "absolute" }} />}
-                                        {!isPlayer && tile?.status === "collapsed" && <WhatshotIcon sx={{ color: "error.main", fontSize: 20 }} />}
-                                        {!isPlayer && tile?.status === "blocked" && <TerrainIcon sx={{ color: "warning.light", fontSize: 20 }} />}
-                                        {!isPlayer && tile?.status === "scouted" && tile.oreTier && (
-                                            <DiamondIcon sx={{ color: TIER_COLOR[tile.oreTier] ?? "warning.light", fontSize: 18, opacity: 0.6 }} />
-                                        )}
-                                        {tile?.status === "mined" && tile.oreTier && (
-                                            <DiamondIcon
-                                                sx={{ color: TIER_COLOR[tile.oreTier] ?? "warning.main", fontSize: 12, position: "absolute", bottom: 3, right: 3 }}
-                                            />
-                                        )}
-                                    </Box>
-                                );
-                            });
+                            return (
+                                <Box
+                                    key={`${x}-${y}`}
+                                    sx={{
+                                        width: CELL_SIZE,
+                                        height: CELL_SIZE,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        borderRadius: 0.5,
+                                        bgcolor,
+                                        border: tile?.status === "scouted" ? "1px dashed" : "1px solid",
+                                        borderColor: tile?.status === "blocked" ? "warning.dark" : known ? "grey.700" : ROCK_COLOR,
+                                        position: "relative",
+                                        ...(isFlashing ? DIG_FLASH_SX[flashTile!.kind] ?? DIG_FLASH_SX.neutral : {}),
+                                    }}
+                                >
+                                    {isPlayer && <PersonPinIcon sx={{ color: "info.light", fontSize: 26, position: "absolute" }} />}
+                                    {!isPlayer && tile?.status === "collapsed" && <WhatshotIcon sx={{ color: "error.main", fontSize: 20 }} />}
+                                    {!isPlayer && tile?.status === "blocked" && <TerrainIcon sx={{ color: "warning.light", fontSize: 20 }} />}
+                                    {!isPlayer && tile?.status === "scouted" && tile.oreTier && (
+                                        <DiamondIcon sx={{ color: TIER_COLOR[tile.oreTier] ?? "warning.light", fontSize: 18, opacity: 0.6 }} />
+                                    )}
+                                    {tile?.status === "mined" && tile.oreTier && (
+                                        <DiamondIcon
+                                            sx={{ color: TIER_COLOR[tile.oreTier] ?? "warning.main", fontSize: 12, position: "absolute", bottom: 3, right: 3 }}
+                                        />
+                                    )}
+                                </Box>
+                            );
+                        });
 
-                            // A ruler number in the side gutters every 10 rows so the shaft's
-                            // depth reads at a glance, not just via the "Depth" stat tile.
-                            // Every row emits both gutter cells (empty except on a milestone
-                            // row) so each row has the same item count - a row with fewer
-                            // items than the rest would throw off CSS grid's auto-placement
-                            // and misalign every row after it.
-                            const isMilestone = y > 0 && y % 10 === 0;
-                            const labelSx = { display: "flex", alignItems: "center", justifyContent: "center" };
-                            return [
-                                <Box key={`depth-label-left-${y}`} sx={labelSx}>
-                                    {isMilestone && <Typography variant="caption" color="text.secondary">{y}</Typography>}
-                                </Box>,
-                                ...cells,
-                                <Box key={`depth-label-right-${y}`} sx={labelSx}>
-                                    {isMilestone && <Typography variant="caption" color="text.secondary">{y}</Typography>}
-                                </Box>,
-                            ];
-                        })}
-                    </Box>
-                </CardContent>
+                        // A ruler number in the side gutters every 10 rows so the shaft's
+                        // depth reads at a glance, not just via the "Depth" stat tile.
+                        // Every row emits both gutter cells (empty except on a milestone
+                        // row) so each row has the same item count - a row with fewer
+                        // items than the rest would throw off CSS grid's auto-placement
+                        // and misalign every row after it.
+                        const isMilestone = y > 0 && y % 10 === 0;
+                        const labelSx = { display: "flex", alignItems: "center", justifyContent: "center" };
+                        return [
+                            <Box key={`depth-label-left-${y}`} sx={labelSx}>
+                                {isMilestone && <Typography variant="caption" color="text.secondary">{y}</Typography>}
+                            </Box>,
+                            ...cells,
+                            <Box key={`depth-label-right-${y}`} sx={labelSx}>
+                                {isMilestone && <Typography variant="caption" color="text.secondary">{y}</Typography>}
+                            </Box>,
+                        ];
+                    })}
+                </Box>
             </Card>
 
-            {explosiveCount > 0 && stuckReasons.length > 0 && (
-                <Box sx={{ display: "flex", justifyContent: "center", mb: 1.5 }}>
-                    <Chip
-                        icon={<BoltIcon />}
-                        color="warning"
-                        label={explosiveReadyText(explosiveCount, stuckReasons)}
-                        sx={{ fontWeight: 700, height: "auto", py: 0.5, "& .MuiChip-label": { whiteSpace: "normal" } }}
-                    />
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mt: 2, gap: 1.5 }}>
+                {/* Stats row */}
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: "center", alignItems: "flex-start" }}>
+                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
+                        <StatTile label="Actions" value={`${digsRemaining}/${dailyDigCap}`} color={digsRemaining === 0 ? "error.main" : digsRemaining <= 2 ? "warning.main" : undefined} />
+                        <Button variant="outlined" size="small" onClick={() => setShopOpen(true)} sx={{ textTransform: "none", minWidth: 60 }}>
+                            Shop
+                        </Button>
+                    </Box>
+                    <StatTile label="Ladders" value={ladderCount} color={ladderCount > 0 ? undefined : "warning.main"} />
+                    <StatTile label="Explosives" value={explosiveCount} color={explosiveCount > 0 ? "error.main" : undefined} />
+                    <StatTile label="Supports" value={supportCount} color={supportCount > 0 ? "info.main" : undefined} />
                 </Box>
-            )}
 
-            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, mt: 2 }}>
-                <IconButton
-                    disabled={isDigging || !canGo("up")}
-                    onClick={() => handleDig("up")}
-                    aria-label="Up"
-                    sx={{ border: "1px solid", borderColor: "divider" }}
-                >
-                    <ArrowUpwardIcon />
-                </IconButton>
-                <Box sx={{ display: "flex", justifyContent: "center", gap: 1.5 }}>
-                    <IconButton
-                        disabled={isDigging || !canGo("left")}
-                        onClick={() => handleDig("left")}
-                        aria-label="Left"
-                        sx={{
-                            bgcolor: "primary.main",
-                            color: "primary.contrastText",
-                            "&:hover": { bgcolor: "primary.dark" },
-                            "&.Mui-disabled": { bgcolor: "action.disabledBackground" },
-                        }}
-                    >
-                        <ArrowBackIcon />
-                    </IconButton>
-                    <IconButton
-                        disabled={isDigging || !canGo("down")}
-                        onClick={() => handleDig("down")}
-                        aria-label="Down"
-                        sx={{
-                            bgcolor: "warning.main",
-                            color: "warning.contrastText",
-                            "&:hover": { bgcolor: "warning.dark" },
-                            "&.Mui-disabled": { bgcolor: "action.disabledBackground" },
-                        }}
-                    >
-                        <ArrowDownwardIcon />
-                    </IconButton>
-                    <IconButton
-                        disabled={isDigging || !canGo("right")}
-                        onClick={() => handleDig("right")}
-                        aria-label="Right"
-                        sx={{
-                            bgcolor: "primary.main",
-                            color: "primary.contrastText",
-                            "&:hover": { bgcolor: "primary.dark" },
-                            "&.Mui-disabled": { bgcolor: "action.disabledBackground" },
-                        }}
-                    >
-                        <ArrowForwardIcon />
-                    </IconButton>
+                {/* D-pad */}
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
+                    {(() => {
+                        const s = dirStyle("up"); return (
+                            <IconButton disabled={isDigging || !canGo("up")} onClick={() => handleDig("up")} aria-label="Up"
+                                sx={{ bgcolor: s.bg, color: "white", "&:hover": { bgcolor: s.hover }, "&.Mui-disabled": { bgcolor: "action.disabledBackground" } }}>
+                                {s.icon}
+                            </IconButton>
+                        );
+                    })()}
+                    <Box sx={{ display: "flex", gap: 1 }}>
+                        {["left", "down", "right"].map(d => {
+                            const s = dirStyle(d as "left" | "down" | "right");
+                            return (
+                                <IconButton key={d} disabled={isDigging || !canGo(d as any)} onClick={() => handleDig(d as any)} aria-label={d}
+                                    sx={{ bgcolor: s.bg, color: "white", "&:hover": { bgcolor: s.hover }, "&.Mui-disabled": { bgcolor: "action.disabledBackground" } }}>
+                                    {s.icon}
+                                </IconButton>
+                            );
+                        })}
+                    </Box>
                 </Box>
             </Box>
 
-            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(84px, 1fr))", gap: 1, mt: 2, mb: 2 }}>
-                <StatTile
-                    label="Digs Left"
-                    value={`${digsRemaining}/${dailyDigCap}`}
-                    color={digsRemaining === 0 ? "error.main" : digsRemaining <= 2 ? "warning.main" : undefined}
-                />
-                <StatTile label="Ladders" value={ladderCount} color={ladderCount > 0 ? undefined : "warning.main"} />
-                <StatTile label="Explosives" value={explosiveCount} color={explosiveCount > 0 ? "warning.main" : undefined} />
-                <StatTile label="Supports" value={supportCount} color={supportCount > 0 ? "info.main" : undefined} />
-            </Box>
-
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 3, maxWidth: 480, mx: "auto" }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 2, maxWidth: 480, mx: "auto" }}>
                 <ActionButton
                     icon={<StairsIcon />}
                     label={`Buy Ladder (${formatCheddar(state.prices.ladder.cost)})`}
-                    description="Each ladder lets you dig down once into new territory. Only new downward digs need one - sideways digs and walking back through cleared tunnels never do."
+                    description="Dig up or down into new territory. Free moves through cleared tunnels never need one."
                     disabled={isBuying}
                     onClick={() => handleBuy("ladder")}
                 />
                 <ActionButton
                     icon={<BoltIcon />}
                     label={`Buy Explosive (${formatCheddar(state.prices.explosive.cost)})`}
-                    description="Single-use. Spend it to blast through today's dig limit, a missing ladder, or heavy stone - any combination at once if you're blocked by more than one."
+                    description="Clears heavy stone blocking your path. Single-use per blast."
                     color="warning"
                     disabled={isBuying}
                     onClick={() => handleBuy("explosive")}
@@ -507,7 +454,7 @@ export default function Mine() {
                 <ActionButton
                     icon={<ShieldIcon />}
                     label={`Buy Support (${formatCheddar(state.prices.support.cost)})`}
-                    description="Single-use shield against your next cave-in. Stays armed through any number of safe digs - only used up the moment it actually blocks one."
+                    description="Blocks your next cave-in. Stays armed until actually hit."
                     color="primary"
                     disabled={isBuying}
                     onClick={() => handleBuy("support")}
@@ -515,37 +462,56 @@ export default function Mine() {
                 <ActionButton
                     icon={<FlareIcon />}
                     label={`Use Flare (${formatCheddar(state.prices.flare.cost)})`}
-                    description={`Reveals a 3x3 area around your position - gem tiers and heavy stone included. The only way to preview anything before you dig it.`}
+                    description="Reveals a 3×3 area — gem tiers and heavy stone."
                     disabled={isFlaring}
                     onClick={handleFlare}
                 />
 
-                {!confirmingReset ? (
-                    <Button
-                        variant="outlined"
-                        color="error"
-                        startIcon={<RestartAltIcon />}
-                        sx={{ mt: 1 }}
-                        onClick={() => setConfirmingReset(true)}
-                    >
-                        Reset Map ({formatCheddar(state.prices.reset.cost)})
-                    </Button>
-                ) : (
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 1, p: 1.5, border: "1px solid", borderColor: "error.main", borderRadius: 1 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Wipe your entire map and start over from the surface? Your equipment carries over.
-                        </Typography>
-                        <Box sx={{ display: "flex", gap: 1 }}>
-                            <Button variant="outlined" fullWidth disabled={isResetting} onClick={() => setConfirmingReset(false)}>
-                                Cancel
-                            </Button>
-                            <Button variant="contained" color="error" fullWidth disabled={isResetting} onClick={handleReset}>
-                                Confirm Reset ({formatCheddar(state.prices.reset.cost)})
-                            </Button>
-                        </Box>
-                    </Box>
-                )}
             </Box>
+
+            <Dialog open={shopOpen} onClose={() => setShopOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+                <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    Mine Shop
+                    <IconButton onClick={() => setShopOpen(false)} aria-label="Close">
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent sx={{ pb: 3, display: "flex", flexDirection: "column", gap: 2 }}>
+                    {[
+                        { icon: <StairsIcon />, label: "Ladder", price: state.prices.ladder.cost, desc: "Dig up or down into new territory", color: undefined as "warning" | undefined, buy: "ladder" as const },
+                        { icon: <BoltIcon />, label: "Explosive", price: state.prices.explosive.cost, desc: "Clears heavy stone blocking your path", color: "warning" as const, buy: "explosive" as const },
+                        { icon: <ShieldIcon />, label: "Support", price: state.prices.support.cost, desc: "Blocks your next cave-in", color: undefined as "primary" | undefined, buy: "support" as const },
+                        { icon: <FlareIcon />, label: "Flare", price: state.prices.flare.cost, desc: "Reveals a 3×3 area around you", color: undefined, buy: null },
+                    ].map((item) => (
+                        <Box key={item.label} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                <Box sx={{ color: item.color === "warning" ? "warning.main" : "text.secondary" }}>{item.icon}</Box>
+                                <Box sx={{ flexGrow: 1 }}>
+                                    <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{item.label}</Typography>
+                                        <Typography variant="caption" color="text.secondary">{formatCheddar(item.price)} each</Typography>
+                                    </Box>
+                                    <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+                                </Box>
+                            </Box>
+                            {item.buy ? (
+                                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
+                                    {[1, 5, 10].map((qty) => (
+                                        <Button key={qty} size="small" variant="contained" color={item.color === "warning" ? "warning" : "primary"}
+                                            disabled={isBuying} onClick={() => handleBuy(item.buy!)} sx={{ textTransform: "none" }}>
+                                            {qty}x
+                                        </Button>
+                                    ))}
+                                </Box>
+                            ) : (
+                                <Button size="small" variant="contained" fullWidth disabled={isFlaring} onClick={() => { handleFlare(); setShopOpen(false); }} sx={{ textTransform: "none" }}>
+                                    Use ({formatCheddar(item.price)})
+                                </Button>
+                            )}
+                        </Box>
+                    ))}
+                </DialogContent>
+            </Dialog>
 
             <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap sx={{ mt: 3, justifyContent: "center" }}>
                 <StatLine icon={<PersonPinIcon sx={{ color: "info.light" }} />}>You</StatLine>
@@ -555,7 +521,7 @@ export default function Mine() {
                 <StatLine icon={<Box sx={{ width: 12, height: 12, bgcolor: TUNNEL_COLOR, border: "1px solid", borderColor: "grey.700", borderRadius: 0.5 }} />}>
                     Tunnel (mined)
                 </StatLine>
-                <StatLine icon={<Box sx={{ width: 12, height: 12, bgcolor: "info.dark", border: "1px dashed", borderColor: "grey.700", borderRadius: 0.5 }} />}>
+                <StatLine icon={<Box sx={{ width: 12, height: 12, bgcolor: "warning.dark", border: "1px dashed", borderColor: "grey.700", borderRadius: 0.5 }} />}>
                     Scouted (previewed by Flare, not yet dug)
                 </StatLine>
                 <StatLine icon={<TerrainIcon sx={{ color: "warning.light" }} />}>Heavy stone</StatLine>
