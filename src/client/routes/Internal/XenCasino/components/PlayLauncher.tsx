@@ -69,11 +69,7 @@ export default function PlayLauncher({
 
     return (
         <>
-            <Card
-                sx={{
-                    my: 4,
-                }}
-            >
+            <Card>
                 <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
                     {/* Header: cost (left), jackpot (right) */}
                     <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1.5, mb: 2 }}>

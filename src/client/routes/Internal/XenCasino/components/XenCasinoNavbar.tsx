@@ -1,4 +1,5 @@
-import { Box, Tabs, Tab, Typography } from "@mui/material";
+import { Box, IconButton, Tabs, Tab, Typography } from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useXenCasinoTitlebar } from "../context/XenCasinoTitlebarContext";
 import CheddarBalanceChip from "./CheddarBalanceChip";
@@ -49,17 +50,27 @@ export default function XenCasinoNavbar() {
                     <Tab label="Ledger" />
                 </Tabs>
             ) : (
-                <Typography
-                    variant="h6"
-                    noWrap
-                    sx={{
-                        fontWeight: 700,
-                        flexShrink: 1,
-                        minWidth: 0,
-                    }}
-                >
-                    {titlebar.title}
-                </Typography>
+                <>
+                    <IconButton
+                        onClick={() => navigate("/internal/xencasino")}
+                        aria-label="Back to games"
+                        size="small"
+                        sx={{ flexShrink: 0 }}
+                    >
+                        <ArrowBackIcon />
+                    </IconButton>
+                    <Typography
+                        variant="h6"
+                        noWrap
+                        sx={{
+                            fontWeight: 700,
+                            flexShrink: 1,
+                            minWidth: 0,
+                        }}
+                    >
+                        {titlebar.title}
+                    </Typography>
+                </>
             )}
 
             <Box sx={{ flex: 1, minWidth: 0 }} />

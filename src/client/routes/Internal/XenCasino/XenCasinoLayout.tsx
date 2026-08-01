@@ -111,7 +111,7 @@ export default function XenCasinoLayout() {
         <XenCasinoTitlebarProvider>
             <Box>
                 <XenCasinoNavbar />
-                <Box sx={{ position: "relative", px: { xs: 2, sm: 3, md: 5 }, py: { xs: 3, sm: 4 }, minHeight: "calc(100vh - 56px)" }}>
+                <Box sx={{ position: "relative", px: { xs: 2, sm: 3, md: 5 }, py: { xs: 2, sm: 2 }, minHeight: "calc(100vh - 56px)" }}>
                     {statusLoading ? (
                         <LoadingSpinner />
                     ) : (

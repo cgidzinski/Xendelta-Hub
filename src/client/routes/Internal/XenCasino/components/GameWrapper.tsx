@@ -1,8 +1,7 @@
-import { ReactNode, useEffect } from "react";
-import { Box, Button, Typography, Accordion, AccordionSummary, AccordionDetails } from "@mui/material";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { useNavigate } from "react-router-dom";
+import { ReactNode, useEffect, useState } from "react";
+import { Box, Dialog, DialogContent, DialogTitle, IconButton, Typography, useMediaQuery, useTheme } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import OddsDisplay, { OddsRow } from "./OddsDisplay";
 import { useXenCasinoTitlebar } from "../context/XenCasinoTitlebarContext";
 import { formatCheddar } from "../utils/currency";
@@ -33,8 +32,10 @@ interface GameWrapperProps {
  * this chrome.
  */
 export default function GameWrapper({ title, howToPlay, oddsSections, maxWin, children }: GameWrapperProps) {
-    const navigate = useNavigate();
+    const [infoOpen, setInfoOpen] = useState(false);
     const { setTitlebar } = useXenCasinoTitlebar();
+    const theme = useTheme();
+    const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
     useEffect(() => {
         setTitlebar({ title });
@@ -42,38 +43,54 @@ export default function GameWrapper({ title, howToPlay, oddsSections, maxWin, ch
     }, [title, setTitlebar]);
 
     return (
-        <Box>
-            <Button
-                variant="outlined"
-                startIcon={<ArrowBackIcon />}
-                onClick={() => navigate("/internal/xencasino")}
-                sx={{ mb: 3 }}
-            >
-                Back to Games
-            </Button>
-
+        <Box sx={{ position: "relative" }}>
             {children}
 
-            <Accordion variant="outlined" sx={{ mt: 4 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            <IconButton
+                onClick={() => setInfoOpen(true)}
+                aria-label="How to play"
+                sx={{
+                    position: "fixed",
+                    bottom: 24,
+                    right: 24,
+                    zIndex: (t) => t.zIndex.fab,
+                    bgcolor: "background.paper",
+                    boxShadow: 3,
+                    "&:hover": { bgcolor: "action.hover" },
+                }}
+            >
+                <InfoOutlinedIcon />
+            </IconButton>
+
+            <Dialog
+                open={infoOpen}
+                onClose={() => setInfoOpen(false)}
+                fullScreen={fullScreen}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, pr: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, flex: 1 }}>
                         How to Play
                     </Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                    <Typography variant="body2" color="text.secondary">
+                    <IconButton onClick={() => setInfoOpen(false)} aria-label="Close" size="small">
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent dividers>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                         {howToPlay}
                     </Typography>
                     {maxWin !== undefined && (
-                        <Typography variant="body2" sx={{ fontWeight: 700, mt: 1, color: "success.main" }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700, mb: 2, color: "success.main" }}>
                             Max win: {formatCheddar(maxWin)}
                         </Typography>
                     )}
                     {oddsSections.map((section, i) => (
                         <OddsDisplay key={i} title={section.title} rows={section.rows} footnote={section.footnote} />
                     ))}
-                </AccordionDetails>
-            </Accordion>
+                </DialogContent>
+            </Dialog>
         </Box>
     );
 }
