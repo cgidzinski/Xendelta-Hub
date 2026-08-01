@@ -435,12 +435,16 @@ export default function PachinkoBoard({
 }: PachinkoBoardProps) {
     const [callouts, setCallouts] = useState<Callout[]>([]);
     const [launchPower, setLaunchPower] = useState(() => launchPowerRange.min);
+    const [isFlushingCashOut, setIsFlushingCashOut] = useState(false);
     const { simulate } = usePachinkoSimWorker();
 
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const rafRef = useRef<number | null>(null);
     const fireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const activeBallsRef = useRef<Map<number, ActiveBall>>(new Map());
+    // Guards the Cash Out button against re-entrant clicks during flushAllPending's own multi-
+    // request window, before cashOutAsync's isPending has anything to cover - see the button below.
+    const cashOutInFlightRef = useRef(false);
     // Session updates now come from two places that can both fire within milliseconds of each
     // other under hold-to-fire: this component's own optimistic per-shot update (fireOnce, below)
     // and a batch reconciliation (reconcileBatch). Calling onSessionUpdate (a setState in the
@@ -1595,10 +1599,19 @@ export default function PachinkoBoard({
                     variant="contained"
                     color="warning"
                     onClick={() => {
+                        if (cashOutInFlightRef.current) {
+                            return;
+                        }
+                        cashOutInFlightRef.current = true;
+                        setIsFlushingCashOut(true);
                         stopFiring();
-                        flushAllPending().finally(onCashOut);
+                        flushAllPending().finally(() => {
+                            setIsFlushingCashOut(false);
+                            cashOutInFlightRef.current = false;
+                            onCashOut();
+                        });
                     }}
-                    disabled={isCashingOut || isResuming || ballsRemaining <= 0}
+                    disabled={isCashingOut || isFlushingCashOut || isResuming || ballsRemaining <= 0}
                     sx={{ borderRadius: 999, px: 3, fontWeight: 700, textTransform: "none" }}
                 >
                     Cash Out
