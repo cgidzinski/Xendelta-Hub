@@ -132,32 +132,6 @@ function runView(run: any) {
 
 module.exports = function (app: express.Application) {
 
-    // Sweep stale printer runs every 5 minutes — if a run is abandoned (no activity for
-    // ROUND_TTL_MS), clear it so the player can start a new one. No money moves here;
-    // if the collect payout was already sent, the transfer's idempotency key prevents
-    // double-payment. If it wasn't, the run simply forfeits.
-    const PRINTER_ROUND_TTL_MS = 30 * 60 * 1000; // 30 minutes
-    setInterval(() => {
-        sweepStalePrinterRuns().catch((err: Error) => {
-            console.error("printer: stale run sweep failed", err);
-        });
-    }, 5 * 60 * 1000).unref();
-
-    async function sweepStalePrinterRuns() {
-        const cutoff = new Date(Date.now() - PRINTER_ROUND_TTL_MS);
-        const stale = await XenCasinoPrinterState.find({ "run.startedAt": { $lt: cutoff }, "run.raidedAt": null }).exec();
-        for (const doc of stale) {
-            if (!doc.run) continue;
-            // The run has been sitting too long — clear it. If the player collected and the
-            // payout transfer went through, the idempotency key guards against double-pay.
-            // If they never collected, the run is forfeit.
-            await XenCasinoPrinterState.clearRun(doc.userId);
-        }
-        if (stale.length > 0) {
-            console.log(`printer: swept ${stale.length} stale run(s)`);
-        }
-    }
-
     app.get("/api/casino/printer", authenticateToken, async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const doc = await XenCasinoPrinterState.getState(userId);
