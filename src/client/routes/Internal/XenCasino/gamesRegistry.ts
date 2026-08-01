@@ -108,7 +108,7 @@ export const CASINO_GAMES_REGISTRY: CasinoGameRegistryItem[] = [
     key: "mine",
     label: "Chip Mine",
     path: "/internal/xencasino/games/mine",
-    description: "Dig a dark shaft for ore - down is riskier, sideways stays safe. Limited digs per day, buy ladders and torches.",
+    description: "Dig a dark shaft for ore — down is riskier, sideways stays safe. 15 digs/day, buy ladders, supports, flares, and explosives.",
     type: "mine",
     price: 200,
     priceFrom: true,
