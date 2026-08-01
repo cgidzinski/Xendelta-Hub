@@ -81,19 +81,22 @@ describe("pachinko worst-case RTP", () => {
 
         // Wide tolerance - small sample per bucket and a coarse grid mean real noise, this is a
         // regression guard against a gross reopening of the exploit, not a precision check (see
-        // pachinkoPayoutTuning.ts for the real, high-precision derivation). The upper bound is
-        // the one that actually matters: it's what would have caught the original bug.
+        // pachinkoPayoutTuning.ts for the real, high-precision derivation).
         //
-        // The bound is 1.45 rather than the 1.3 it used to be, kept wide deliberately rather than
-        // retightened now that the measured worst case (currently ~1.05, see ATTACKER_OPEN_MS in
-        // shared/pachinko/pachinkoRules.ts for how it got there) sits comfortably under it again.
-        // ATTACKER_BALLS is deliberately raised to 20 above what a plain tuning-script run targets -
-        // see its own comment in pachinkoPayouts.ts - and the attacker chain that feeds is both the
-        // largest and by far the noisiest term at only 300 shots a bucket (~45 land in the chucker),
-        // so a tight bound sat close enough to the intended value to fail on an unlucky draw before.
-        // It still catches what it was built to catch by a wide margin - the bug that prompted it
-        // measured ~300%.
-        expect(worstRtp, `worst-case RTP ${(worstRtp * 100).toFixed(1)}% at power=${worstPower.toFixed(1)} - a future constant edit may have reopened a power-specific exploit (currently measured worst case is ~105%)`).toBeLessThan(1.45);
+        // The bound has had to move up repeatedly as the payout constants themselves were
+        // deliberately raised well past what tuning targets - see ATTACKER_BALLS's own comment in
+        // pachinkoPayouts.ts for the full history. It is now 3.5, well above the current measured
+        // baseline of 2.5193 (251.93%), because that baseline is itself an explicit, requested,
+        // known-costly choice, not something to alarm on.
+        //
+        // Worth being honest about what this guard can still catch: the original exploit this test
+        // was built for measured ~300% - and the board's own DELIBERATE current baseline (252%) now
+        // sits close enough to that figure that this is no longer a meaningfully tight net for "the
+        // tulip sweet-spot reopened." Its remaining job is the coarser one - catching something far
+        // more extreme than the accepted baseline (a broken multiplier, a NaN cascading into an
+        // unbounded payout, a genuinely wrong constant) - not a subtle reopening of the original,
+        // now much smaller, exploit.
+        expect(worstRtp, `worst-case RTP ${(worstRtp * 100).toFixed(1)}% at power=${worstPower.toFixed(1)} - a future constant edit may have pushed RTP well past the current deliberate baseline (~252%)`).toBeLessThan(3.5);
         expect(worstRtp).toBeGreaterThan(0.2);
         // 300000, not 180000 - this is a genuinely CPU-heavy Monte Carlo run (13 power buckets x
         // 300 shots, each a real matter-js simulation, synchronous in the test process rather than

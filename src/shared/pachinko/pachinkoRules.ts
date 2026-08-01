@@ -128,7 +128,14 @@ export const REEL_LANDED_MS = 1340;
 // a client that cannot produce sane timings is one to distrust, not to correct.
 export const MIN_SHOT_SPACING_MS = 300;
 
-// Two-of-a-kind is a small top-up and opens nothing; three-of-a-kind is bigger AND opens the
-// attacker (see ATTACKER_OPEN_MS above) - only the "three" tier touches the attacker at all.
-export const REEL_TWO_MATCH_BALLS = 2;
-export const REEL_THREE_MATCH_BALLS = 8;
+// Two-of-a-kind is a top-up and opens nothing; three-of-a-kind is bigger AND opens the attacker
+// (see ATTACKER_OPEN_MS above) - only the "three" tier touches the attacker at all.
+//
+// Raised together with BONUS_POCKET_BALLS, SIDE_TULIP_BALLS and ATTACKER_BALLS (see
+// pachinkoPayouts.ts) - a deliberate, explicitly-requested increase, not a tuning-script result.
+// These two are the biggest single driver of the resulting cost: at the board's current worst
+// case (251.93% at power 50), the reel term alone is 1.32 of the 2.5193 total, larger than every
+// other term combined. See ATTACKER_BALLS's own comment for the full breakdown and why the
+// window length can no longer compensate for it the way it has in the past.
+export const REEL_TWO_MATCH_BALLS = 10;
+export const REEL_THREE_MATCH_BALLS = 15;

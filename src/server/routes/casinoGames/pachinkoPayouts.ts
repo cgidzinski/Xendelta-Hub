@@ -8,16 +8,25 @@
  *
  * There's no weighted pocket table here (unlike Plinko's plinkoOdds.ts) - the outcome comes
  * from a real physics simulation, not a pre-selected probability, so there's no closed-form RTP
- * to derive. These WERE untuned starting values, and it showed: a Monte Carlo sweep across the
- * full launch-power range (see pachinkoPayoutTuning.ts, the repeatable tool that produced these
- * numbers) found the side tulip has a physics/nail-field sweet spot around launch power ~20-25
- * where it's caught 30-38% of the time - versus single-digit percent almost everywhere else on
- * the power range - pushing worst-case RTP as high as ~300% for a player who found that power
- * and just fired there every time. That's the mechanism behind the house losing money, not a
- * generally-too-generous board. Re-run pachinkoPayoutTuning.ts and update these constants again
- * if the board geometry (pachinkoLayout.ts), physics tuning (pachinkoPhysics.ts), or reel
- * weights (pachinkoReels.ts) ever change - none of this is derivable by hand from the geometry
- * alone, the same way Plinko's own MULTIPLIERS table isn't (see plinkoLayout.ts).
+ * to derive. Re-run pachinkoPayoutTuning.ts and re-measure if the board geometry
+ * (pachinkoLayout.ts), physics tuning (pachinkoPhysics.ts), or reel weights (pachinkoReels.ts)
+ * ever change - none of this is derivable by hand from the geometry alone, the same way
+ * Plinko's own MULTIPLIERS table isn't (see plinkoLayout.ts).
+ *
+ * These WERE untuned starting values, and it showed: an early Monte Carlo sweep found the side
+ * tulip had a physics/nail-field sweet spot around launch power ~20-25, caught 30-38% of the
+ * time versus single digits almost everywhere else, pushing worst-case RTP to ~300% for a player
+ * who found that power and just fired there. That was an EXPLOIT - a narrow, undiscovered hole
+ * a rational player could farm - and every constant here was brought down to close it.
+ *
+ * The board is no longer tuned toward that target. Every payout below was deliberately raised
+ * well past what pachinkoPayoutTuning.ts recommends, on request, values chosen directly rather
+ * than derived - see ATTACKER_BALLS's own comment for the current measured cost. That is a
+ * materially different thing from the original bug: the house now loses money across most of
+ * the power range, not narrowly at one exploitable spot, and it's a known, chosen state rather
+ * than something discovered and closed. Do not "fix" any of these back toward the tuning
+ * script's own numbers without checking with whoever owns this decision first - the script has
+ * no way to know the current values are deliberate rather than drifted.
  */
 import { capPayout } from "./payoutCap";
 
@@ -31,7 +40,10 @@ export { ATTACKER_OPEN_MS, JACKPOT_OPEN_MS, REEL_TWO_MATCH_BALLS, REEL_THREE_MAT
 // BONUS_POCKETS, the widest non-jackpot target). Cut to 1 when the left field went in: the far-left
 // descent that used to drain now lands here instead, so the bonus pockets catch a great deal more
 // than they did (27% of shots at the top of the launch range, up from ~1%).
-export const BONUS_POCKET_BALLS = 1;
+//
+// Raised to 3 alongside every other payout in this file - see ATTACKER_BALLS's own comment for the
+// measured RTP this produced and why it's accepted rather than compensated for.
+export const BONUS_POCKET_BALLS = 3;
 
 // Catching a side tulip also toggles it open/closed - both open at once primes the jackpot. Cut
 // hardest of every constant in this file (was 8, then 2) - this is the pocket with the exploitable
@@ -43,7 +55,9 @@ export const BONUS_POCKET_BALLS = 1;
 // worst-case power the tulip term is only 0.12 of a total 1.41, while the reel and attacker chain
 // together carry 1.07 of it. Tulips are no longer where this board leaks - the chucker is - so
 // paying them properly costs little and keeps the one pocket that takes actual aim worth aiming at.
-export const SIDE_TULIP_BALLS = 2;
+//
+// Raised again to 3 alongside every other payout in this file - see ATTACKER_BALLS.
+export const SIDE_TULIP_BALLS = 3;
 
 // The chucker itself never pays balls directly - it only fires the board's central reel gimmick
 // (see shared/pachinko/pachinkoReels.ts), a real modern machine's own "heso" -> LCD reel -> bonus
@@ -76,10 +90,23 @@ export const SIDE_TULIP_BALLS = 2;
 // That measurement changed again once the window became genuinely reachable (see ATTACKER_OPEN_MS
 // in shared/pachinko/pachinkoRules.ts for why "reachable" wasn't true before) - a fully usable
 // window pays out closer to its nominal value, which cost more, so ATTACKER_OPEN_MS was shortened
-// to bring the worst case back down rather than touching this number. Current measured worst case:
-// 1.0478. If it ever needs walking back further, that duration is still the cheapest lever, not
-// this constant - window length and per-catch value multiply.
-export const ATTACKER_BALLS = 20;
+// to bring the worst case back down rather than touching this number. Measured worst case at that
+// point: 1.0478.
+//
+// ## Raised again, 20 -> 25, alongside every other payout in this file - a much larger deviation
+//
+// A direct, explicit request, not a tuning result: BONUS_POCKET_BALLS 1->3, SIDE_TULIP_BALLS 2->3,
+// REEL_TWO/THREE_MATCH_BALLS 2/8 -> 10/15 (see pachinkoRules.ts) all moved up in the same pass.
+//
+// Measured worst-case RTP after: 2.5193 (251.93%) at power 50, breakdown bonus=0.36 tulip=0.40
+// reel=1.32 attacker=0.44. The reel term is now the dominant one, by a wide margin, and it's why
+// ATTACKER_OPEN_MS can no longer bring this down on its own the way it did the last two times
+// this constant rose - the attacker's whole term (0.44) is smaller than the reel term alone, so
+// trimming the window to zero wouldn't reach break-even. This was explicitly accepted anyway,
+// after being measured and reported: the house loses money across most of the launch-power
+// range, not at one narrow exploitable spot - a materially different, much larger decision than
+// the 20 -> 25 story above, made on purpose with the number in hand. See this file's own header.
+export const ATTACKER_BALLS = 25;
 
 // Fraction of every ball's price that feeds the shared jackpot pool (fed by every ball fired,
 // not just misses - the pool is jackpot-only money, unrelated to what any individual shot pays
