@@ -1,4 +1,4 @@
-import { SxProps, Theme, Box, Card, CardContent, Typography, LinearProgress, Button } from "@mui/material";
+import { SxProps, Theme, Box, Card, CardContent, Typography, LinearProgress } from "@mui/material";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import { useSnackbar } from "notistack";
 import { useCasinoDailyQuest } from "../../../../hooks/casino/useCasinoDailyQuest";
@@ -8,24 +8,23 @@ interface DailyQuestCardProps {
     sx?: SxProps<Theme>;
 }
 
-// "Play N casino rounds today" - any game counts (slots, scratch, plinko, ...), tracked
-// server-side and reset lazily at UTC midnight (see XenCasinoUserState). Sits at the top
-// of the games list since that's the natural landing spot to notice it before picking a
-// game to actually play.
+// Three daily quests stacked vertically at the top of the games list:
+// - Play 5 different games → 10k
+// - Play 10 rounds → 10k
+// - Play 20 rounds → 50k
+// Each tracks independently and can be claimed separately. Progress resets at UTC midnight.
 export default function DailyQuestCard({ sx }: DailyQuestCardProps) {
     const { enqueueSnackbar } = useSnackbar();
-    const { target, roundsPlayed, claimed, canClaim, reward, isLoading, claim, isClaiming } = useCasinoDailyQuest();
+    const { quests, isLoading, claim, isClaiming } = useCasinoDailyQuest();
 
-    if (isLoading && target === 0) {
+    if (isLoading && quests.length === 0) {
         return null;
     }
 
-    const progress = target > 0 ? Math.min(100, (roundsPlayed / target) * 100) : 0;
-
-    const handleClaim = async () => {
+    const handleClaim = async (key: string) => {
         try {
-            const result = await claim();
-            enqueueSnackbar(`Claimed! Balance: ${formatCheddar(result.balance)} cheddar`, { variant: "success" });
+            const result = await claim(key);
+            enqueueSnackbar(`Claimed! +${formatCheddar(result.reward)} cheddar`, { variant: "success" });
         } catch (error) {
             enqueueSnackbar((error as Error).message || "Failed to claim", { variant: "error" });
         }
@@ -35,49 +34,75 @@ export default function DailyQuestCard({ sx }: DailyQuestCardProps) {
         <Card
             variant="outlined"
             sx={{
-                borderColor: canClaim ? "warning.main" : "divider",
-                borderWidth: canClaim ? 2 : 1,
+                borderColor: "divider",
+                borderWidth: 1,
                 ...sx,
             }}
         >
-            <CardContent sx={{ p: "12px 16px !important" }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
-                    <EmojiEventsIcon fontSize="small" sx={{ color: "warning.main", flexShrink: 0 }} />
-
-                    <Box sx={{ flexShrink: 0 }}>
-                        <Typography variant="body2" component="span" sx={{ fontWeight: 700 }}>
-                            Daily Quest
-                        </Typography>
-                        <Typography variant="body2" component="span" color="text.secondary" sx={{ ml: 1 }}>
-                            {claimed
-                                ? "Reward claimed - come back tomorrow."
-                                : `Play ${target} rounds today for ${formatCheddar(reward)} cheddar`}
-                        </Typography>
-                    </Box>
-
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1, minWidth: 120 }}>
-                        <Box sx={{ flex: 1, minWidth: 60 }}>
-                            <LinearProgress
-                                variant="determinate"
-                                value={progress}
-                                color={canClaim ? "warning" : "primary"}
-                                sx={{ height: 6, borderRadius: 999 }}
-                            />
-                        </Box>
-                        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 40, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                            {Math.min(roundsPlayed, target)}/{target}
-                        </Typography>
-                        <Button
-                            variant="contained"
-                            color="warning"
-                            size="small"
-                            disabled={!canClaim || isClaiming}
-                            onClick={handleClaim}
-                            sx={{ borderRadius: 999, px: 2, fontWeight: 800, minWidth: 80 }}
-                        >
-                            {claimed ? "Claimed" : canClaim ? "Claim" : "Play"}
-                        </Button>
-                    </Box>
+            <CardContent sx={{ p: "6px 12px !important", "&:last-child": { pb: "6px !important" } }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
+                    <EmojiEventsIcon sx={{ fontSize: 16, color: "warning.main" }} />
+                    <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                        Daily Quests
+                    </Typography>
+                </Box>
+                <Box sx={{ display: "flex", gap: 1 }}>
+                    {quests.map((quest) => {
+                        const progress = quest.target > 0 ? Math.min(100, (quest.progress / quest.target) * 100) : 0;
+                        return (
+                            <Box
+                                key={quest.key}
+                                onClick={quest.canClaim && !isClaiming ? () => handleClaim(quest.key) : undefined}
+                                sx={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    p: 0.75,
+                                    borderRadius: 1,
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    justifyContent: "space-between",
+                                    minHeight: 120,
+                                    cursor: quest.canClaim ? "pointer" : "default",
+                                    bgcolor: quest.claimed ? "action.disabledBackground" : "action.hover",
+                                    border: quest.canClaim ? "2px solid" : "1px solid",
+                                    borderColor: quest.canClaim ? "warning.main" : "divider",
+                                    boxShadow: quest.canClaim ? "0 0 10px 1px rgba(255,193,7,0.3)" : "none",
+                                    opacity: quest.claimed ? 0.55 : 1,
+                                    transition: "box-shadow 0.2s, border-color 0.2s",
+                                    "&:hover": quest.canClaim ? {
+                                        boxShadow: "0 0 18px 3px rgba(255,193,7,0.5)",
+                                        borderColor: "warning.light",
+                                    } : {},
+                                }}
+                            >
+                                <Typography variant="caption" sx={{ fontWeight: 600, display: "block", lineHeight: 1.3, textAlign: "center" }}>
+                                    {quest.label}
+                                </Typography>
+                                <Box>
+                                    <Typography variant="caption" sx={{ display: "block", textAlign: "center", fontWeight: 500 }}>
+                                        🧀{quest.reward.toLocaleString()}
+                                    </Typography>
+                                    {quest.canClaim ? (
+                                        <Typography variant="caption" sx={{ display: "block", textAlign: "center", mt: 0.5, fontWeight: 800, color: "warning.main" }}>
+                                            Claim
+                                        </Typography>
+                                    ) : quest.claimed ? null : (
+                                        <>
+                                            <LinearProgress
+                                                variant="determinate"
+                                                value={progress}
+                                                color="primary"
+                                                sx={{ height: 6, borderRadius: 999, mt: 0.5 }}
+                                            />
+                                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", mt: 0.25 }}>
+                                                {quest.progress}/{quest.target}
+                                            </Typography>
+                                        </>
+                                    )}
+                                </Box>
+                            </Box>
+                        );
+                    })}
                 </Box>
             </CardContent>
         </Card>

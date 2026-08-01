@@ -15,9 +15,9 @@ import { formatOddsRatio } from "../../utils/odds";
 // same shape as every other game page in this app.
 const GAME = "memory";
 
-// The backend only knows generic keys (ITEM_A..ITEM_O) - this map is entirely this page's
-// own presentation choice, swappable without touching the server. Must cover every symbol
-// in memory.ts's SYMBOL_GROUPS (odds.symbolGroups mirrors it at runtime).
+// 9 unique symbols matching the server's 7-triple + 2-double deck. ITEM_A..ITEM_G are
+// triples (3 copies each), ITEM_H..ITEM_I are doubles (2 copies each). Every card has at
+// least one match — no dead singles.
 const SYMBOL_EMOJI: Record<string, string> = {
     ITEM_A: "💎",
     ITEM_B: "7️⃣",
@@ -27,15 +27,9 @@ const SYMBOL_EMOJI: Record<string, string> = {
     ITEM_F: "🍇",
     ITEM_G: "🍀",
     ITEM_H: "🎲",
-    ITEM_I: "🃏",
-    ITEM_J: "💰",
-    ITEM_K: "🦄",
-    ITEM_L: "🌟",
-    ITEM_M: "🔥",
-    ITEM_N: "🎯",
-    ITEM_O: "🎪",
+    ITEM_I: "🎪",
 };
-const BASE_BET = 10000;
+const BASE_BET = 2500;
 const BET_MULTIPLIERS = [1, 2, 5, 10, 50, 100];
 const BET_OPTIONS = BET_MULTIPLIERS.map((m) => m * BASE_BET);
 const BET_LABELS = BET_MULTIPLIERS.map((m) => `${m}x`);
@@ -43,8 +37,9 @@ const BET_LABELS = BET_MULTIPLIERS.map((m) => `${m}x`);
 interface MemoryOddsResponse {
     price: number;
     pickCount: number;
+    maxReveals: number;
     symbolGroups: { symbol: string; count: number }[];
-    distribution: { matchCount: number; multiplier: number; probability: number }[];
+    distribution: { matchedPairs: number; multiplier: number; probability: number }[];
     rtp: number;
     maxPayout: number;
 }
@@ -55,8 +50,8 @@ const fetchOdds = async (): Promise<MemoryOddsResponse> =>
 const startRound = async (wager: number): Promise<MemoryStartResult> =>
     (await apiClient.post<ApiResponse<MemoryStartResult>>(`/api/casino/games/${GAME}/start`, { wager })).data.data!;
 
-const revealRound = async (picks: number[]): Promise<MemoryRevealResult> =>
-    (await apiClient.post<ApiResponse<MemoryRevealResult>>(`/api/casino/games/${GAME}/reveal`, { picks })).data.data!;
+const revealRound = async ({ picks, revealIndex }: { picks: number[]; revealIndex: number }): Promise<MemoryRevealResult> =>
+    (await apiClient.post<ApiResponse<MemoryRevealResult>>(`/api/casino/games/${GAME}/reveal`, { picks, revealIndex })).data.data!;
 
 export default function Memory() {
     const queryClient = useQueryClient();
@@ -89,11 +84,11 @@ export default function Memory() {
             {
                 title: "Prizes",
                 rows: odds.distribution.map((d) => ({
-                    label: `${d.matchCount} match${d.matchCount === 1 ? "" : "es"}`,
+                    label: `${d.matchedPairs} pair${d.matchedPairs === 1 ? "" : "s"} matched`,
                     probability: d.probability,
                     payout: d.multiplier > 0 ? `${d.multiplier}x` : "—",
                 })),
-                footnote: `The 25-card grid always has 2 icons appearing 3 times, 6 icons appearing twice, and 7 unique singles that can never match. Flip ${odds.pickCount} cards - matches among them decide the prize.`,
+                footnote: `Flip 2 cards at a time over ${odds.maxReveals} tries. Matching pairs stay and are cleared; non-matches flip back. Remember what you've seen — the more pairs you match, the bigger the prize. ${odds.maxReveals} pairs matched is the jackpot.`,
             },
         ]
         : [];
@@ -101,13 +96,13 @@ export default function Memory() {
     return (
         <GameWrapper
             title="Memory"
-            howToPlay="A 10,000-cheddar round (with the usual bet multiplier). Start to see all 25 cards face up, then they flip and shuffle. Pick 4 cards to flip: one pair pays a small prize, two separate pairs pay bigger, and finding a full triple among your 4 is the top prize."
+            howToPlay={`A ${BASE_BET.toLocaleString()}-cheddar round (with the usual bet multipliers). Start to see all 25 cards face up, then they flip and shuffle. Flip 2 cards at a time over ${odds?.maxReveals ?? 3} tries — matching pairs stay revealed and are cleared; non-matches flip back. Remember what you've seen to improve your odds on later tries.`}
             oddsSections={oddsSections}
             maxWin={odds?.maxPayout}
         >
             <PlayLauncher
                 title="Memory"
-                description="10,000-cheddar round - peek the grid, then pick 4 cards to flip for a prize."
+                description={`${BASE_BET.toLocaleString()}-cheddar round — flip 2 cards at a time over ${odds?.maxReveals ?? 3} tries, matching pairs win prizes.`}
                 price={odds?.price ?? BASE_BET}
                 oddsLabel={oddsLabel}
                 rtpLabel={rtpLabel}

@@ -29,6 +29,8 @@ export interface RanchCreature {
     raceLosses: number;
     level: number;
     lastCollectedAt: string | null;
+    lastCollectDate: string | null;
+    canCollect: boolean;
     itemKey: string;
     itemLabel: string;
     collectQuantity: number;
@@ -132,7 +134,6 @@ export interface RanchState {
     neglectGraceMs: number;
     decayTickMs: number;
     releaseSellValue: Record<string, number>;
-    collectCooldownMs: number;
 }
 
 export interface HatchResult {
@@ -344,7 +345,6 @@ export const useCasinoRanch = () => {
         neglectGraceMs: data?.neglectGraceMs ?? 0,
         decayTickMs: data?.decayTickMs ?? 0,
         releaseSellValue: data?.releaseSellValue ?? {},
-        collectCooldownMs: data?.collectCooldownMs ?? 0,
         isLoading,
         isError,
         error: error as Error | null,

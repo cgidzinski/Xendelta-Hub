@@ -19,7 +19,7 @@ export interface PrinterRun {
     partsCost: number;
     peakAt: string;
     peakMultiplier: number;
-    parts: PrinterPart[]; // full catalog entries for the 3 parts this run was started with
+    parts: PrinterPart[];
     usedMachineUpgrade: boolean;
     machineUpgradeRateBonus: number;
     lastBribeAt: string;
@@ -28,6 +28,12 @@ export interface PrinterRun {
     raided: boolean;
     currentMultiplier: number;
     raidRiskPercent: number;
+    hasWhistleblower: boolean;
+    whistleblowerUsed: boolean;
+    hasSignalJammer: boolean;
+    hasForgedDocuments: boolean;
+    hasInsurance: boolean;
+    hasDecoyRig: boolean;
 }
 
 export interface PrinterState {

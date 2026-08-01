@@ -1,5 +1,9 @@
 var mongoose = require("mongoose");
 
+// Timezone for daily resets (quests, mine digs, etc.) — midnight in this IANA timezone.
+// Change to your local timezone. Also mirrored in src/server/constants/index.ts for reference.
+var CASINO_TIMEZONE = "America/New_York";
+
 // Persisted state shared by every XenCasino game - one singleton document,
 // not a model per game. Games call the statics below rather than touching
 // the schema directly.
@@ -222,64 +226,133 @@ xenCasinoRoundSchema.statics.recordSweepFailure = async function (roundId) {
 
 var XenCasinoRound = mongoose.model("XenCasinoRound", xenCasinoRoundSchema);
 
-var DAILY_QUEST_TARGET = 10;
+var DAILY_QUEST_DEFINITIONS = [
+  { key: "unique-games", target: 5, reward: 10000, label: "Play 5 different games" },
+  { key: "rounds-10", target: 10, reward: 10000, label: "Play 10 rounds" },
+  { key: "rounds-20", target: 20, reward: 50000, label: "Play 20 rounds" },
+];
 
-function todayKey() {
-  return new Date().toISOString().slice(0, 10); // "YYYY-MM-DD", UTC
-}
-
-// One doc per user for whatever per-user XenCasino state accumulates over time (today
-// just the daily quest; a natural home for lifetime stats/achievements/etc. later)
-// without bolting single-purpose fields onto the core User model.
-var xenCasinoUserStateSchema = new mongoose.Schema({
-  userId: { type: String, required: true, unique: true },
-  dailyQuest: {
-    date: { type: String, default: null }, // "YYYY-MM-DD" (UTC) the fields below apply to
-    roundsPlayed: { type: Number, default: 0 },
-    claimed: { type: Boolean, default: false },
-  },
+var DEFAULT_DAILY_QUESTS = DAILY_QUEST_DEFINITIONS.map(function (def) {
+  return { key: def.key, date: null, progress: 0, claimed: false };
 });
 
-function dailyQuestStatus(doc) {
-  var quest = doc.dailyQuest && doc.dailyQuest.date === todayKey() ? doc.dailyQuest : { roundsPlayed: 0, claimed: false };
-  return {
-    target: DAILY_QUEST_TARGET,
-    roundsPlayed: quest.roundsPlayed,
-    claimed: quest.claimed,
-    canClaim: quest.roundsPlayed >= DAILY_QUEST_TARGET && !quest.claimed,
-  };
+function todayKey() {
+  // Returns "YYYY-MM-DD" in the configured CASINO_TIMEZONE (not UTC). en-CA locale
+  // natively produces YYYY-MM-DD format — no manual string building needed.
+  return new Intl.DateTimeFormat("en-CA", { timeZone: CASINO_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
-// Not a single atomic $inc - this only counts activity (not money), so a rare
-// double-count under truly simultaneous cross-game rounds from one user is a low-stakes
-// edge case, not worth a conditional aggregation-pipeline update. Returns
-// { status, justCompleted } so callers can fire a one-time "quest ready" notification.
-xenCasinoUserStateSchema.statics.recordRoundPlayed = async function (userId) {
+// Same as todayKey but for an arbitrary Date — used by the garden decay logic to find
+// which midnight-zone day a timestamp (e.g. grace-period end) falls on.
+function dateKeyFromDate(date) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: CASINO_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+}
+
+// One doc per user for whatever per-user XenCasino state accumulates over time.
+var xenCasinoUserStateSchema = new mongoose.Schema({
+  userId: { type: String, required: true, unique: true },
+  dailyQuests: [
+    {
+      key: { type: String, required: true },
+      date: { type: String, default: null },
+      progress: { type: Number, default: 0 },
+      claimed: { type: Boolean, default: false },
+    },
+  ],
+  gamesPlayedToday: [{ type: String }], // deduplicated list of game slugs played today
+});
+
+// Returns status for all three daily quests. Lazy-resets any quest whose stored date
+// doesn't match today (UTC). `roundsPlayedToday` and `gamesPlayedToday` are derived
+// from the dailyQuests array directly for rounds quests, plus gamesPlayedToday for
+// the unique-games quest.
+function dailyQuestsStatus(doc) {
+  var today = todayKey();
+  var uniqueGames = doc.gamesPlayedToday || [];
+
+  // Find any rounds quest to get total rounds played today.
+  var roundsQuest = (doc.dailyQuests || []).find(function (q) {
+    return (q.key === "rounds-10" || q.key === "rounds-20") && q.date === today;
+  });
+  var roundsPlayedToday = roundsQuest ? roundsQuest.progress : 0;
+
+  return DAILY_QUEST_DEFINITIONS.map(function (def) {
+    var quest = (doc.dailyQuests || []).find(function (q) { return q.key === def.key && q.date === today; });
+    var progress = 0;
+    var claimed = false;
+
+    if (def.key === "unique-games") {
+      // Unique-games progress always comes from gamesPlayedToday length,
+      // regardless of whether the quest entry is fresh.
+      progress = uniqueGames.length;
+      claimed = quest ? quest.claimed : false;
+    } else if (quest) {
+      // Rounds quests: progress from the quest's own field.
+      progress = quest.progress;
+      claimed = quest.claimed;
+    }
+
+    return {
+      key: def.key,
+      label: def.label,
+      target: def.target,
+      reward: def.reward,
+      progress: progress,
+      claimed: claimed,
+      canClaim: progress >= def.target && !claimed,
+    };
+  });
+}
+
+// Called once per successfully settled casino round. Accepts the game slug so we can
+// track which unique games the user has played today, in addition to raw round count.
+xenCasinoUserStateSchema.statics.recordRoundPlayed = async function (userId, game) {
   var doc = await this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
   var today = todayKey();
-  var wasComplete = !!doc.dailyQuest && doc.dailyQuest.date === today && doc.dailyQuest.roundsPlayed >= DAILY_QUEST_TARGET;
-  if (!doc.dailyQuest || doc.dailyQuest.date !== today) {
-    doc.dailyQuest = { date: today, roundsPlayed: 0, claimed: false };
+
+  // Init dailyQuests if absent.
+  if (!doc.dailyQuests || doc.dailyQuests.length === 0) {
+    doc.dailyQuests = DEFAULT_DAILY_QUESTS.map(function (q) { return Object.assign({}, q); });
   }
-  doc.dailyQuest.roundsPlayed += 1;
+
+  // Lazy-reset any quest whose date doesn't match today.
+  for (var i = 0; i < doc.dailyQuests.length; i++) {
+    if (!doc.dailyQuests[i].date || doc.dailyQuests[i].date !== today) {
+      doc.dailyQuests[i].date = today;
+      doc.dailyQuests[i].progress = 0;
+      doc.dailyQuests[i].claimed = false;
+    }
+  }
+
+  // Increment progress for rounds quests.
+  for (var j = 0; j < doc.dailyQuests.length; j++) {
+    if (doc.dailyQuests[j].key === "rounds-10" || doc.dailyQuests[j].key === "rounds-20") {
+      doc.dailyQuests[j].progress += 1;
+    }
+  }
+
+  // Track unique games.
+  if (game && (!doc.gamesPlayedToday || doc.gamesPlayedToday.indexOf(game) === -1)) {
+    if (!doc.gamesPlayedToday) doc.gamesPlayedToday = [];
+    doc.gamesPlayedToday.push(game);
+  }
+
   await doc.save();
-  var status = dailyQuestStatus(doc);
-  return { status: status, justCompleted: !wasComplete && status.roundsPlayed >= DAILY_QUEST_TARGET };
+  var status = dailyQuestsStatus(doc);
+  return { status: status };
 };
 
 xenCasinoUserStateSchema.statics.getDailyQuestStatus = async function (userId) {
   var doc = await this.findOne({ userId: userId }).exec();
-  return doc ? dailyQuestStatus(doc) : dailyQuestStatus({ dailyQuest: null });
+  return doc ? dailyQuestsStatus(doc) : dailyQuestsStatus({ dailyQuests: [], gamesPlayedToday: [] });
 };
 
-// Marks today's quest claimed - called by the route only *after* the reward transfer
-// has actually succeeded. The transfer's own idempotency key (derived from userId+date)
-// is the real guard against double-payment, not this flag, so it's safe to mark this
-// after the fact rather than before attempting the transfer.
-xenCasinoUserStateSchema.statics.markDailyQuestClaimed = async function (userId, date) {
+// Marks a specific quest claimed — called only after the reward transfer succeeds.
+xenCasinoUserStateSchema.statics.markDailyQuestClaimed = async function (userId, date, questKey) {
   var doc = await this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
-  if (doc.dailyQuest && doc.dailyQuest.date === date) {
-    doc.dailyQuest.claimed = true;
+  var quest = (doc.dailyQuests || []).find(function (q) { return q.key === questKey && q.date === date; });
+  if (quest) {
+    quest.claimed = true;
     await doc.save();
   }
 };
@@ -370,6 +443,7 @@ var gardenSquareSchema = new mongoose.Schema(
     lastWateredAt: { type: Date, default: null },
     lastCareCheckAt: { type: Date, default: null }, // last vermin/disease tick processed, so a gap of any length catches up correctly rather than re-rolling
     decayTicksApplied: { type: Number, default: 0 }, // decay ticks already applied since the current neglect period started (see resolveGardenSquare) - reset whenever lastWateredAt moves
+    lastDecayDate: { type: String, default: null }, // "YYYY-MM-DD" in CASINO_TIMEZONE — last day midnight decay was applied
     // Snapshotted from the seed tier at plant time (see casinoGarden.ts SEED_TIERS) -
     // this square's own copy, immune to later tier rebalances.
     cost: { type: Number, default: 0 },
@@ -377,7 +451,8 @@ var gardenSquareSchema = new mongoose.Schema(
     waterCount: { type: Number, default: 0 }, // growth stages reached so far
     verminHits: { type: Number, default: 0 }, // how many times vermin has set this crop back a growth stage - shown to the player, not just inferred
     verminChance: { type: Number, default: 0 }, // per tick, while unprotected - adds +1 to waterAmount
-    diseaseChance: { type: Number, default: 0 }, // per tick, while unprotected - kills outright
+    diseaseChance: { type: Number, default: 0 }, // per tick, while unprotected — sets diseased (doubles decay rate), no longer kills
+    diseased: { type: Boolean, default: false }, // disease hit active — decay loses 2 waterCount/day instead of 1; fungicide cures
     baseMultiplier: { type: Number, default: 0 }, // harvest payout = cost * baseMultiplier * (1 +/- variance)
     variance: { type: Number, default: 0 },
     protection: {
@@ -399,7 +474,8 @@ var xenCasinoGardenStateSchema = new mongoose.Schema({
 // Advances one growing square against `now`: rolls vermin/disease once per completed
 // cooldown tick since planting (or the last roll) - catching up correctly across any gap,
 // same pattern as resolvePrinterRun below - then, once a full GARDEN_NEGLECT_GRACE_MS has
-// passed with zero watering, applies one decay tick per completed GARDEN_DECAY_TICK_MS
+// passed with zero watering, applies daily decay at midnight (CASINO_TIMEZONE): -1
+// waterCount per missed day, or -2 if diseased. Decay can kill once waterCount reaches 0.
 // since the grace period ended: -1 waterCount, or death if waterCount is already 0. A
 // vermin hit raises `waterAmount` by 1 (needs one more watering to mature); disease kills
 // outright, independent of decay. Pesticide/fungicide are a shield, not a per-check
@@ -422,11 +498,9 @@ function resolveGardenSquare(square, now) {
     changed = true;
     if (Math.random() < square.diseaseChance) {
       if (square.protection.fungicide) {
-        square.protection.fungicide = false; // consumed - it just blocked an actual hit
+        square.protection.fungicide = false; // consumed — it just blocked an actual hit
       } else {
-        square.status = "dead";
-        square.lastCareCheckAt = tick;
-        return true;
+        square.diseased = true; // doubles decay rate — fungicide cures, no longer instant death
       }
     }
     if (Math.random() < square.verminChance) {
@@ -442,22 +516,45 @@ function resolveGardenSquare(square, now) {
     square.lastCareCheckAt = tick;
   }
 
-  var neglectAnchor = square.lastWateredAt || square.plantedAt;
-  var elapsedSinceWatered = now.getTime() - neglectAnchor.getTime();
-  if (elapsedSinceWatered >= GARDEN_NEGLECT_GRACE_MS) {
-    var ticksDue = Math.floor((elapsedSinceWatered - GARDEN_NEGLECT_GRACE_MS) / GARDEN_DECAY_TICK_MS) + 1;
-    var newTicks = ticksDue - square.decayTicksApplied;
-    for (var i = 0; i < newTicks; i++) {
-      changed = true;
-      if (square.waterCount > 0) {
-        square.waterCount -= 1;
-      } else {
-        square.status = "dead";
-        break;
+  // Daily decay: once per midnight (CASINO_TIMEZONE). Healthy plants have a 24h grace
+  // period after their last watering before decay starts. Diseased plants have no grace —
+  // decay begins the very next midnight regardless of when they were last watered.
+  var today = todayKey();
+  if (square.lastDecayDate !== today) {
+    var lastWatered = square.lastWateredAt || square.plantedAt;
+    var msSinceWatered = now.getTime() - lastWatered.getTime();
+    var firstDecayDay = null;
+
+    if (square.diseased) {
+      // No grace — first decay is the next midnight after becoming diseased.
+      var tomorrow = new Date(now.getTime() + 86400000);
+      firstDecayDay = dateKeyFromDate(tomorrow);
+    } else if (msSinceWatered >= GARDEN_NEGLECT_GRACE_MS) {
+      var graceEndDate = new Date(lastWatered.getTime() + GARDEN_NEGLECT_GRACE_MS);
+      firstDecayDay = dateKeyFromDate(graceEndDate);
+    }
+
+    if (firstDecayDay) {
+      var startDay = square.lastDecayDate && square.lastDecayDate > firstDecayDay ? square.lastDecayDate : firstDecayDay;
+
+      // Count midnights from startDay to today (today's decay is happening now).
+      var sp = startDay.split("-").map(Number);
+      var ep = today.split("-").map(Number);
+      var sd = new Date(Date.UTC(sp[0], sp[1] - 1, sp[2]));
+      var ed = new Date(Date.UTC(ep[0], ep[1] - 1, ep[2]));
+      var daysMissed = Math.max(0, Math.floor((ed.getTime() - sd.getTime()) / 86400000));
+
+      var decayPerDay = square.diseased ? 2 : 1;
+      var totalDecay = daysMissed * decayPerDay;
+      if (totalDecay > 0) {
+        changed = true;
+        square.waterCount = Math.max(0, square.waterCount - totalDecay);
       }
     }
-    square.decayTicksApplied = ticksDue;
-    if (square.status === "dead") {
+    square.lastDecayDate = today;
+
+    if (square.waterCount <= 0) {
+      square.status = "dead";
       return true;
     }
   }
@@ -465,7 +562,7 @@ function resolveGardenSquare(square, now) {
   // Even once fully watered, the plot still needs the same cooldown to pass since that
   // final watering before it's actually ready - matches the wait between every other
   // watering rather than finishing the instant the last one lands (see statics.water).
-  if (square.waterCount >= square.waterAmount && now.getTime() - neglectAnchor.getTime() >= cooldownMs) {
+  if (square.waterCount >= square.waterAmount && now.getTime() - (square.lastWateredAt || square.plantedAt).getTime() >= cooldownMs) {
     square.status = "ready";
     changed = true;
   }
@@ -480,6 +577,8 @@ function clearGardenSquare(square) {
   square.lastWateredAt = null;
   square.lastCareCheckAt = null;
   square.decayTicksApplied = 0;
+  square.lastDecayDate = null;
+  square.diseased = false;
   square.cost = 0;
   square.waterAmount = 0;
   square.waterCount = 0;
@@ -526,6 +625,8 @@ xenCasinoGardenStateSchema.statics.plant = async function (userId, squareId, see
   square.lastWateredAt = null; // unwatered until the player actually waters it - see statics.water
   square.lastCareCheckAt = now;
   square.decayTicksApplied = 0;
+  square.lastDecayDate = null;
+  square.diseased = false;
   square.cost = tier.cost;
   square.waterAmount = tier.waterAmount;
   square.waterCount = 0; // planting does NOT count as a watering - the player must water it themselves
@@ -581,6 +682,17 @@ xenCasinoGardenStateSchema.statics.protect = async function (userId, squareId, i
   var doc = await this.getState(userId);
   var square = doc.squares.find(function (s) { return s.squareId === squareId; });
   if (!square || square.status !== "growing" || square.protection[item]) {
+    // Fungicide is special: it can be applied to a diseased square to cure it even if
+    // a fungicide shield is already active (the existing shield is still consumed to cure).
+    if (item === "fungicide" && square && square.status === "growing" && square.diseased) {
+      square.diseased = false;
+      // If no shield is active, grant one too.
+      if (!square.protection.fungicide) {
+        square.protection.fungicide = true;
+      }
+      await doc.save();
+      return square;
+    }
     return null;
   }
   if (item === "fertilizer" && square.waterAmount - square.waterCount <= 1) {
@@ -589,6 +701,10 @@ xenCasinoGardenStateSchema.statics.protect = async function (userId, squareId, i
   square.protection[item] = true;
   if (item === "fertilizer") {
     square.waterAmount -= 1;
+  }
+  // Fungicide also cures existing disease when applied (shield + cure in one purchase).
+  if (item === "fungicide" && square.diseased) {
+    square.diseased = false;
   }
   await doc.save();
   return square;
@@ -649,23 +765,29 @@ function printerRaidChance(now, run) {
   return Math.min(PRINTER_MAX_RAID_CHANCE, ramped * (run.raidMultiplier || 1));
 }
 
-// Rolls one raid check per completed PRINTER_ROLL_INTERVAL_MS tick since the run started
-// (or was last rolled) - catches up correctly across gaps of any length between reads, no
-// cron needed. Stops at the first hit. Mutates `run` in place; returns whether it changed.
+// Rolls one raid check per completed interval tick since the run started (or was last
+// rolled) - catches up correctly across gaps of any length between reads, no cron needed.
+// Signal Jammer doubles the interval (10 min instead of 5). Whistleblower blocks the
+// first hit and is consumed. Stops at the first unblocked hit. Mutates `run` in place.
 function resolvePrinterRun(run, now) {
   if (!run || run.raidedAt) {
     return false;
   }
+  var intervalMs = run.hasSignalJammer ? PRINTER_ROLL_INTERVAL_MS * 2 : PRINTER_ROLL_INTERVAL_MS;
   var lastRoll = new Date(run.lastRiskRollAt || run.startedAt);
   var initial = lastRoll.getTime();
-  while (now.getTime() - lastRoll.getTime() >= PRINTER_ROLL_INTERVAL_MS) {
-    lastRoll = new Date(lastRoll.getTime() + PRINTER_ROLL_INTERVAL_MS);
+  while (now.getTime() - lastRoll.getTime() >= intervalMs) {
+    lastRoll = new Date(lastRoll.getTime() + intervalMs);
     if (Math.random() < printerRaidChance(lastRoll, run)) {
-      run.raidedAt = lastRoll;
-      break;
+      if (run.hasWhistleblower) {
+        run.hasWhistleblower = false; // consumed — blocked the first hit
+      } else {
+        run.raidedAt = lastRoll;
+        break;
+      }
     }
   }
-  var changed = run.raidedAt || lastRoll.getTime() !== initial;
+  var changed = run.raidedAt || run.hasWhistleblower === false && lastRoll.getTime() !== initial || lastRoll.getTime() !== initial;
   if (changed) {
     run.lastRiskRollAt = lastRoll;
   }
@@ -705,11 +827,17 @@ xenCasinoPrinterStateSchema.statics.startRun = async function (userId, partsCost
     peakMultiplier: peakMultiplier,
     raidMultiplier: raidMultiplier,
     partKeys: partKeys,
-    usedMachineUpgrade: !!usedMachineUpgrade, // just for display (see runView) - already baked into peakMultiplier above
+    usedMachineUpgrade: !!usedMachineUpgrade,
+    // Utility part flags — each enables a unique mechanic (see casinoPrinter.ts).
+    hasWhistleblower: partKeys.indexOf("whistleblower") !== -1,
+    hasSignalJammer: partKeys.indexOf("signal-jammer") !== -1,
+    hasForgedDocuments: partKeys.indexOf("forged-documents") !== -1,
+    hasInsurance: partKeys.indexOf("insurance") !== -1,
+    hasDecoyRig: partKeys.indexOf("decoy-rig") !== -1,
     lastBribeAt: now,
     lastRiskRollAt: now,
     raidedAt: null,
-    bribeCount: 0, // how many times this run has been bribed - each one costs more (see casinoPrinter.ts nextBribeCost)
+    bribeCount: 0,
   };
   doc.markModified("run");
   await doc.save();
@@ -917,7 +1045,7 @@ xenCasinoMineStateSchema.statics.getState = async function (userId) {
 // this is the only path "up" ever takes, since you can never dig upward (the tile above
 // was necessarily already mined to get here). Anything else targeting a new/undug tile
 // is a real dig: heavy stone is resolved first (a pure obstacle, no ore/cave-in possible
-// on it), then - if not stone - the cave-in roll (blockable once by a Reinforcement,
+// on it), then - if not stone - the cave-in roll (blockable once by a Support,
 // which stays armed through any number of safe digs and is only consumed on an actual
 // hit, same shield semantics as Garden's pesticide/fungicide), then the gem tier. A
 // single-use Explosive is a universal blocker-buster: if the daily cap, a missing
@@ -1046,7 +1174,7 @@ xenCasinoMineStateSchema.statics.addEquipment = async function (userId, item, am
     doc.ladderCount += amount;
   } else if (item === "explosive") {
     doc.explosiveCount += amount;
-  } else if (item === "reinforcement") {
+  } else if (item === "support") {
     doc.reinforcementCount += amount;
   }
   await doc.save();
@@ -1088,66 +1216,65 @@ var XenCasinoMineState = mongoose.model("XenCasinoMineState", xenCasinoMineState
 // ---------------------------------------------------------------------------------------
 
 var xenCasinoRanchCreatureSchema = new mongoose.Schema({
-    userId: { type: String, required: true, index: true },
-    species: { type: String, required: true }, // cosmetic flavor + the key into route-owned SPECIES_TYPE/SPECIES_ITEM_KEY
-    name: { type: String, required: true }, // a single silly nickname, rolled from CREATURE_NAMES at hatch time
-    rarityTier: { type: String, required: true }, // key into RANCH_RARITY_TIERS (route-owned)
-    stats: {
-        speed: { type: Number, required: true },
-        stamina: { type: Number, required: true },
-        power: { type: Number, required: true },
-        intelligence: { type: Number, required: true },
-        luck: { type: Number, required: true },
-        charm: { type: Number, required: true },
-    },
-    lastFedAt: { type: Date, default: null },
-    feedCount: { type: Number, default: 0 },
-    raceWins: { type: Number, default: 0 },
-    raceLosses: { type: Number, default: 0 },
-    // Ticks of neglect decay already applied since the current no-feeding period started
-    // (see resolveRanchDecay in casinoRanch.ts) - reset whenever lastFedAt moves forward.
-    // Same "catch up correctly across any gap, no cron" shape as Garden's decayTicksApplied,
-    // anchored on lastFedAt (falling back to createdAt when never fed) rather than a
-    // separate timestamp field.
-    decayTicksApplied: { type: Number, default: 0 },
-    // Gates the 24h item-production cooldown (see statics.collect). createForUser seeds
-    // this to the creature's own creation time (not null) so a freshly hatched creature has
-    // to wait out the same cooldown before its very first collect too - null here only
-    // means "an older creature from before this field existed", still treated as
-    // already-ready for backward compatibility.
-    lastCollectedAt: { type: Date, default: null },
-    // How many times in a row this creature has been collected from without racing (see
-    // statics.collect) - capped at RANCH_COLLECT_STREAK_LIMIT (casinoRanch.ts), past which
-    // collect refuses to produce anything until the creature races again. Reset to 0 by
-    // statics.recordRaceResult on every resolved race, win or lose.
-    collectStreak: { type: Number, default: 0 },
-    // Set by using a Decay Shield item (casinoRanch.ts) - resolveRanchDecay short-circuits
-    // with zero decay while now < decayShieldUntil, same shape as the neglect grace period
-    // it sits alongside. Null (the default) means no active shield.
-    decayShieldUntil: { type: Date, default: null },
-    createdAt: { type: Date, default: Date.now },
+  userId: { type: String, required: true, index: true },
+  species: { type: String, required: true }, // cosmetic flavor + the key into route-owned SPECIES_TYPE/SPECIES_ITEM_KEY
+  name: { type: String, required: true }, // a single silly nickname, rolled from CREATURE_NAMES at hatch time
+  rarityTier: { type: String, required: true }, // key into RANCH_RARITY_TIERS (route-owned)
+  stats: {
+    speed: { type: Number, required: true },
+    stamina: { type: Number, required: true },
+    power: { type: Number, required: true },
+    intelligence: { type: Number, required: true },
+    luck: { type: Number, required: true },
+    charm: { type: Number, required: true },
+  },
+  lastFedAt: { type: Date, default: null },
+  feedCount: { type: Number, default: 0 },
+  raceWins: { type: Number, default: 0 },
+  raceLosses: { type: Number, default: 0 },
+  // Ticks of neglect decay already applied since the current no-feeding period started
+  // (see resolveRanchDecay in casinoRanch.ts) - reset whenever lastFedAt moves forward.
+  // Same "catch up correctly across any gap, no cron" shape as Garden's decayTicksApplied,
+  // anchored on lastFedAt (falling back to createdAt when never fed) rather than a
+  // separate timestamp field.
+  decayTicksApplied: { type: Number, default: 0 },
+  // Gates the 24h item-production cooldown (see statics.collect). createForUser seeds
+  // this to the creature's own creation time (not null) so a freshly hatched creature has
+  // to wait out the same cooldown before its very first collect too - null here only
+  // means "an older creature from before this field existed", still treated as
+  // already-ready for backward compatibility.
+  lastCollectedAt: { type: Date, default: null },
+  lastCollectDate: { type: String, default: null }, // "YYYY-MM-DD" of last collect in CASINO_TIMEZONE — midnight-based daily cap
+  // How many times in a row this creature has been collected from without racing (see
+  // statics.collect) - capped at RANCH_COLLECT_STREAK_LIMIT (casinoRanch.ts), past which
+  // collect refuses to produce anything until the creature races again. Reset to 0 by
+  // statics.recordRaceResult on every resolved race, win or lose.
+  collectStreak: { type: Number, default: 0 },
+  // Set by using a Decay Shield item (casinoRanch.ts) - resolveRanchDecay short-circuits
+  // with zero decay while now < decayShieldUntil, same shape as the neglect grace period
+  // it sits alongside. Null (the default) means no active shield.
+  decayShieldUntil: { type: Date, default: null },
+  createdAt: { type: Date, default: Date.now },
 });
 xenCasinoRanchCreatureSchema.index({ userId: 1, createdAt: 1 });
 
 xenCasinoRanchCreatureSchema.statics.createForUser = async function (userId, params) {
-    return this.create({
-        userId: userId,
-        species: params.species,
-        name: params.name,
-        rarityTier: params.rarityTier,
-        stats: params.stats,
-        // Wait out the full collect cooldown before the very first collect too, same as any
-        // later one - see the lastCollectedAt schema comment above.
-        lastCollectedAt: new Date(),
-    });
+  return this.create({
+    userId: userId,
+    species: params.species,
+    name: params.name,
+    rarityTier: params.rarityTier,
+    lastCollectedAt: new Date(),
+    lastCollectDate: todayKey(),
+  });
 };
 
 xenCasinoRanchCreatureSchema.statics.listByUser = async function (userId) {
-    return this.find({ userId: userId }).sort({ createdAt: 1 }).exec();
+  return this.find({ userId: userId }).sort({ createdAt: 1 }).exec();
 };
 
 xenCasinoRanchCreatureSchema.statics.getOwned = async function (userId, creatureId) {
-    return this.findOne({ _id: creatureId, userId: userId }).exec();
+  return this.findOne({ _id: creatureId, userId: userId }).exec();
 };
 
 // Re-reads fresh and rejects (returns null) if the creature isn't owned by userId or is
@@ -1157,28 +1284,28 @@ xenCasinoRanchCreatureSchema.statics.getOwned = async function (userId, creature
 // single atomic $inc across every key it contains, guarded on the previously-read
 // lastFedAt so a concurrent feed on the same creature can't double-apply.
 xenCasinoRanchCreatureSchema.statics.feed = async function (userId, creatureId, gains, cooldownMs) {
-    var creature = await this.findOne({ _id: creatureId, userId: userId }).exec();
-    if (!creature) {
-        return null;
-    }
-    var now = new Date();
-    if (creature.lastFedAt && now.getTime() - creature.lastFedAt.getTime() < cooldownMs) {
-        return null;
-    }
-    var inc = { feedCount: 1 };
-    Object.keys(gains).forEach(function (statKey) {
-        inc["stats." + statKey] = gains[statKey];
-    });
-    var updated = await this.findOneAndUpdate(
-        { _id: creatureId, userId: userId, lastFedAt: creature.lastFedAt },
-        // decayTicksApplied resets here because lastFedAt (the neglect anchor) is moving
-        // forward - same "watering restarts the neglect clock" reset Garden's water() does
-        // to its own decayTicksApplied, otherwise a stale tick count from before this feed
-        // would wrongly suppress decay that's genuinely due again later.
-        { $inc: inc, $set: { lastFedAt: now, decayTicksApplied: 0 } },
-        { new: true }
-    ).exec();
-    return updated;
+  var creature = await this.findOne({ _id: creatureId, userId: userId }).exec();
+  if (!creature) {
+    return null;
+  }
+  var now = new Date();
+  if (creature.lastFedAt && now.getTime() - creature.lastFedAt.getTime() < cooldownMs) {
+    return null;
+  }
+  var inc = { feedCount: 1 };
+  Object.keys(gains).forEach(function (statKey) {
+    inc["stats." + statKey] = gains[statKey];
+  });
+  var updated = await this.findOneAndUpdate(
+    { _id: creatureId, userId: userId, lastFedAt: creature.lastFedAt },
+    // decayTicksApplied resets here because lastFedAt (the neglect anchor) is moving
+    // forward - same "watering restarts the neglect clock" reset Garden's water() does
+    // to its own decayTicksApplied, otherwise a stale tick count from before this feed
+    // would wrongly suppress decay that's genuinely due again later.
+    { $inc: inc, $set: { lastFedAt: now, decayTicksApplied: 0 } },
+    { new: true }
+  ).exec();
+  return updated;
 };
 
 // Atomic $inc of raceWins/raceLosses - called only after the route has already resolved
@@ -1188,65 +1315,63 @@ xenCasinoRanchCreatureSchema.statics.feed = async function (userId, creatureId, 
 // raceStatBoostForPlace in casinoRanch.ts) folded into the same $inc so the placement
 // reward lands in the same atomic update as everything else here.
 xenCasinoRanchCreatureSchema.statics.recordRaceResult = async function (userId, creatureId, won, statBoost) {
-    var inc = won ? { raceWins: 1 } : { raceLosses: 1 };
-    if (statBoost) {
-        Object.keys(statBoost).forEach(function (key) {
-            if (statBoost[key]) {
-                inc["stats." + key] = statBoost[key];
-            }
-        });
-    }
-    return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $inc: inc, $set: { collectStreak: 0 } }, { new: true }).exec();
+  var inc = won ? { raceWins: 1 } : { raceLosses: 1 };
+  if (statBoost) {
+    Object.keys(statBoost).forEach(function (key) {
+      if (statBoost[key]) {
+        inc["stats." + key] = statBoost[key];
+      }
+    });
+  }
+  return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $inc: inc, $set: { collectStreak: 0 } }, { new: true }).exec();
 };
 
-// Same re-read-and-guard shape as statics.feed - re-validates ownership and the 24h
-// cooldown against a fresh read, then atomically stamps lastCollectedAt and bumps
-// collectStreak via findOneAndUpdate guarded on the previously-read value so a concurrent
-// collect on the same creature can't double-apply. The route checks collectStreak against
-// RANCH_COLLECT_STREAK_LIMIT before ever calling this, so this static only needs to worry
-// about the cooldown, not the streak limit.
-xenCasinoRanchCreatureSchema.statics.collect = async function (userId, creatureId, cooldownMs) {
-    var creature = await this.findOne({ _id: creatureId, userId: userId }).exec();
-    if (!creature) {
-        return null;
-    }
-    var now = new Date();
-    if (creature.lastCollectedAt && now.getTime() - creature.lastCollectedAt.getTime() < cooldownMs) {
-        return null;
-    }
-    var updated = await this.findOneAndUpdate(
-        { _id: creatureId, userId: userId, lastCollectedAt: creature.lastCollectedAt },
-        { $set: { lastCollectedAt: now }, $inc: { collectStreak: 1 } },
-        { new: true }
-    ).exec();
-    return updated;
+// Midnight-based daily collect: a creature can be collected once per CASINO_TIMEZONE day.
+// Re-validates ownership and the date guard, then atomically stamps lastCollectDate and
+// bumps collectStreak via findOneAndUpdate guarded on the previously-read value so a
+// concurrent collect on the same creature can't double-apply.
+xenCasinoRanchCreatureSchema.statics.collect = async function (userId, creatureId) {
+  var creature = await this.findOne({ _id: creatureId, userId: userId }).exec();
+  if (!creature) {
+    return null;
+  }
+  var today = todayKey();
+  if (creature.lastCollectDate === today) {
+    return null; // already collected today
+  }
+  var updated = await this.findOneAndUpdate(
+    { _id: creatureId, userId: userId, lastCollectDate: creature.lastCollectDate },
+    { $set: { lastCollectedAt: new Date(), lastCollectDate: today }, $inc: { collectStreak: 1 } },
+    { new: true }
+  ).exec();
+  return updated;
 };
 
 // Deletes only if still owned by userId - the route charges/credits the cheddar sell
 // value before calling this, same "resolve money first" order as Garden's
 // clearHarvestedSquare.
 xenCasinoRanchCreatureSchema.statics.releaseOwned = async function (userId, creatureId) {
-    return this.findOneAndDelete({ _id: creatureId, userId: userId }).exec();
+  return this.findOneAndDelete({ _id: creatureId, userId: userId }).exec();
 };
 
 // Applies a Tonic's flat, guaranteed gain to one stat (see TONIC_ITEMS in casinoRanch.ts) -
 // no cooldown/guard needed since Tonics aren't rate-limited like feed().
 xenCasinoRanchCreatureSchema.statics.applyTonic = async function (userId, creatureId, statKey, gain) {
-    var inc = {};
-    inc["stats." + statKey] = gain;
-    return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $inc: inc }, { new: true }).exec();
+  var inc = {};
+  inc["stats." + statKey] = gain;
+  return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $inc: inc }, { new: true }).exec();
 };
 
 // Used by a Type-Swap Serum (casinoRanch.ts) - only species (and therefore the derived
 // type/produced item) changes; stats and level are untouched.
 xenCasinoRanchCreatureSchema.statics.setSpecies = async function (userId, creatureId, species) {
-    return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $set: { species: species } }, { new: true }).exec();
+  return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $set: { species: species } }, { new: true }).exec();
 };
 
 // Used by a Decay Shield (casinoRanch.ts) - `until` is compared against resolveRanchDecay's
 // `now` on every subsequent read.
 xenCasinoRanchCreatureSchema.statics.setDecayShield = async function (userId, creatureId, until) {
-    return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $set: { decayShieldUntil: until } }, { new: true }).exec();
+  return this.findOneAndUpdate({ _id: creatureId, userId: userId }, { $set: { decayShieldUntil: until } }, { new: true }).exec();
 };
 
 var XenCasinoRanchCreature = mongoose.model("XenCasinoRanchCreature", xenCasinoRanchCreatureSchema);
@@ -1257,20 +1382,20 @@ var XenCasinoRanchCreature = mongoose.model("XenCasinoRanchCreature", xenCasinoR
 // interchangeable (their "power" is expressed as how many units a collection yields, via
 // the source creature's level, not as per-unit potency - see casinoRanch.ts).
 var xenCasinoRanchInventorySchema = new mongoose.Schema({
-    userId: { type: String, required: true, unique: true },
-    items: { type: Map, of: Number, default: {} },
+  userId: { type: String, required: true, unique: true },
+  items: { type: Map, of: Number, default: {} },
 });
 
 xenCasinoRanchInventorySchema.statics.getState = async function (userId) {
-    return this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
+  return this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
 };
 
 xenCasinoRanchInventorySchema.statics.addItem = async function (userId, itemKey, amount) {
-    return this.findOneAndUpdate(
-        { userId: userId },
-        { $inc: { ["items." + itemKey]: amount } },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-    ).exec();
+  return this.findOneAndUpdate(
+    { userId: userId },
+    { $inc: { ["items." + itemKey]: amount } },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  ).exec();
 };
 
 // Guarded decrement - only applies if at least `amount` is still present at update time,
@@ -1278,11 +1403,11 @@ xenCasinoRanchInventorySchema.statics.addItem = async function (userId, itemKey,
 // Returns null (rather than throwing) if the guard doesn't match, same "treat null as
 // nothing to reconcile" convention as XenCasinoRound.applyConditionsUpdate.
 xenCasinoRanchInventorySchema.statics.subtractItem = async function (userId, itemKey, amount) {
-    return this.findOneAndUpdate(
-        { userId: userId, ["items." + itemKey]: { $gte: amount } },
-        { $inc: { ["items." + itemKey]: -amount } },
-        { new: true }
-    ).exec();
+  return this.findOneAndUpdate(
+    { userId: userId, ["items." + itemKey]: { $gte: amount } },
+    { $inc: { ["items." + itemKey]: -amount } },
+    { new: true }
+  ).exec();
 };
 
 var XenCasinoRanchInventory = mongoose.model("XenCasinoRanchInventory", xenCasinoRanchInventorySchema);
@@ -1302,16 +1427,16 @@ var XenCasinoRanchInventory = mongoose.model("XenCasinoRanchInventory", xenCasin
 // moment it exists. The exact field/course/odds the player is shown is always what a later
 // bet resolves against, never anything re-rolled or client-supplied.
 var xenCasinoRanchPendingRaceSchema = new mongoose.Schema({
-    userId: { type: String, required: true, unique: true },
-    pending: { type: Object, default: null },
+  userId: { type: String, required: true, unique: true },
+  pending: { type: Object, default: null },
 });
 
 xenCasinoRanchPendingRaceSchema.statics.getState = async function (userId) {
-    return this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
+  return this.findOneAndUpdate({ userId: userId }, {}, { upsert: true, new: true, setDefaultsOnInsert: true }).exec();
 };
 
 function pendingRaceIsLive(pending) {
-    return !!pending && new Date(pending.expiresAt).getTime() >= Date.now();
+  return !!pending && new Date(pending.expiresAt).getTime() >= Date.now();
 }
 
 // Only starts if there's no live (unexpired) pending race already - unlike the old
@@ -1319,27 +1444,27 @@ function pendingRaceIsLive(pending) {
 // second start while one is already in flight must be refused (the route checks this
 // BEFORE charging) rather than silently discarding a race the player already paid for.
 xenCasinoRanchPendingRaceSchema.statics.startIfClear = async function (userId, pending) {
-    var doc = await this.getState(userId);
-    if (pendingRaceIsLive(doc.pending)) {
-        return null;
-    }
-    doc.pending = pending;
-    doc.markModified("pending");
-    await doc.save();
-    return doc.pending;
+  var doc = await this.getState(userId);
+  if (pendingRaceIsLive(doc.pending)) {
+    return null;
+  }
+  doc.pending = pending;
+  doc.markModified("pending");
+  await doc.save();
+  return doc.pending;
 };
 
 // Clears unconditionally - called once a bet has resolved (win or lose) or the player
 // forfeits, same "the caller has already decided this is done" shape as Printer's
 // clearRun.
 xenCasinoRanchPendingRaceSchema.statics.clearPending = async function (userId) {
-    var doc = await this.findOne({ userId: userId }).exec();
-    if (!doc) {
-        return null;
-    }
-    doc.pending = null;
-    await doc.save();
-    return doc;
+  var doc = await this.findOne({ userId: userId }).exec();
+  if (!doc) {
+    return null;
+  }
+  doc.pending = null;
+  await doc.save();
+  return doc;
 };
 
 var XenCasinoRanchPendingRace = mongoose.model("XenCasinoRanchPendingRace", xenCasinoRanchPendingRaceSchema);
@@ -1371,9 +1496,10 @@ module.exports = {
   XenCasinoRanchCreature,
   XenCasinoRanchInventory,
   XenCasinoRanchPendingRace,
+  CASINO_TIMEZONE: CASINO_TIMEZONE,
   dailyQuestDateKey: todayKey,
   // Exported for unit testing the lazy-reset-on-date-change logic without a live Mongo
   // connection - pure functions over plain objects, no I/O.
-  dailyQuestStatus: dailyQuestStatus,
-  DAILY_QUEST_TARGET: DAILY_QUEST_TARGET,
+  dailyQuestsStatus: dailyQuestsStatus,
+  DAILY_QUEST_DEFINITIONS: DAILY_QUEST_DEFINITIONS,
 };

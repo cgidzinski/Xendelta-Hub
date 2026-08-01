@@ -5,12 +5,18 @@ import { ApiResponse } from "../../types/api";
 import { casinoBalanceKeys } from "./useCasinoBalance";
 import { casinoLedgerKeys } from "./useCasinoLedger";
 
-export interface CasinoDailyQuestStatus {
+export interface DailyQuestItem {
+  key: string;
+  label: string;
   target: number;
-  roundsPlayed: number;
+  reward: number;
+  progress: number;
   claimed: boolean;
   canClaim: boolean;
-  reward: number;
+}
+
+export interface CasinoDailyQuestStatus {
+  quests: DailyQuestItem[];
 }
 
 export const casinoDailyQuestKeys = {
@@ -22,8 +28,8 @@ const fetchDailyQuest = async (): Promise<CasinoDailyQuestStatus> => {
   return response.data.data!;
 };
 
-const claimDailyQuest = async (): Promise<{ balance: string }> => {
-  const response = await apiClient.post<ApiResponse<{ balance: string }>>("/api/casino/daily-quest/claim");
+const claimDailyQuest = async (key: string): Promise<{ balance: string; key: string; reward: number }> => {
+  const response = await apiClient.post<ApiResponse<{ balance: string; key: string; reward: number }>>("/api/casino/daily-quest/claim", { key });
   return response.data.data!;
 };
 
@@ -37,7 +43,7 @@ export const useCasinoDailyQuest = () => {
     staleTime: 15 * 1000,
   });
 
-  const { mutateAsync: claim, isPending: isClaiming } = useMutation({
+  const { mutateAsync: claimRaw, isPending: isClaiming } = useMutation({
     mutationFn: claimDailyQuest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: casinoDailyQuestKeys.all });
@@ -46,12 +52,14 @@ export const useCasinoDailyQuest = () => {
     },
   });
 
+  const quests = data?.quests ?? [];
+
+  const claim = async (key: string) => {
+    return claimRaw(key);
+  };
+
   return {
-    target: data?.target ?? 0,
-    roundsPlayed: data?.roundsPlayed ?? 0,
-    claimed: data?.claimed ?? false,
-    canClaim: data?.canClaim ?? false,
-    reward: data?.reward ?? 0,
+    quests,
     isLoading,
     claim,
     isClaiming,

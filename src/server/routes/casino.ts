@@ -16,8 +16,13 @@ import {
 import { XENCASINO_DISCORD_ID } from "../config/weeabets";
 import { getCasinoStatus } from "../utils/casinoStatus";
 
-// Flat cheddar (display-unit) reward for completing the daily quest - tunable.
-const DAILY_QUEST_REWARD = 10000;
+// Flat cheddar (display-unit) rewards for daily quests — defined here for the claim
+// endpoint; the model also has them in DAILY_QUEST_DEFINITIONS for the GET endpoint.
+const DAILY_QUEST_REWARDS: Record<string, number> = {
+    "unique-games": 10000,
+    "rounds-10": 10000,
+    "rounds-20": 50000,
+};
 
 module.exports = function (app: express.Application) {
 
@@ -96,15 +101,21 @@ module.exports = function (app: express.Application) {
         }
     });
 
-    // Today's "play N casino rounds" progress - resets lazily the moment the stored date
-    // no longer matches today (UTC), no cron job involved.
+    // Today's daily quests — three independent challenges: play 5 different games (10k),
+    // play 10 rounds (10k), and play 20 rounds (50k). Progress resets lazily at UTC midnight.
     app.get("/api/casino/daily-quest", authenticateToken, async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
-        const questStatus = await XenCasinoUserState.getDailyQuestStatus(userId);
-        return res.json({ status: true, data: { ...questStatus, reward: DAILY_QUEST_REWARD } });
+        const quests = await XenCasinoUserState.getDailyQuestStatus(userId);
+        return res.json({ status: true, data: { quests } });
     });
 
     app.post("/api/casino/daily-quest/claim", authenticateToken, async function (req: express.Request, res: express.Response) {
+        const { key } = req.body as { key?: string };
+        if (!key || !DAILY_QUEST_REWARDS[key]) {
+            return res.status(400).json({ status: false, message: "Invalid quest key" });
+        }
+        const reward = DAILY_QUEST_REWARDS[key];
+
         const userId = String((req as AuthenticatedRequest).user!._id);
         const user = await User.findById(userId).exec();
         if (!user) {
@@ -112,9 +123,10 @@ module.exports = function (app: express.Application) {
         }
 
         try {
-            const questStatus = await XenCasinoUserState.getDailyQuestStatus(userId);
-            if (!questStatus.canClaim) {
-                return res.status(400).json({ status: false, message: "Daily quest not ready to claim" });
+            const quests = await XenCasinoUserState.getDailyQuestStatus(userId);
+            const quest = quests.find((q: any) => q.key === key);
+            if (!quest || !quest.canClaim) {
+                return res.status(400).json({ status: false, message: "Quest not ready to claim" });
             }
 
             const resolved = await resolveUserAccount(user);
@@ -122,29 +134,20 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "Link your Discord account to play" });
             }
 
-            // Idempotency key is derived from userId+date (not a random id) so a
-            // concurrent/duplicate claim can never pay out twice, regardless of any race
-            // on the local `claimed` flag below.
             const date = dailyQuestDateKey();
             const xenCasinoAccountId = await getXenCasinoAccountId();
             const result = await transfer({
                 fromAccountId: xenCasinoAccountId,
                 toAccountId: resolved.account.accountId,
-                amount: DAILY_QUEST_REWARD.toFixed(10),
-                key: `xendelta-daily-quest-${userId}-${date}`,
-                note: "daily_quest_reward",
+                amount: reward.toFixed(10),
+                key: `xdq-${userId}-${date}-${key}`,
+                note: `daily_quest_reward_${key}`,
             });
 
-            // Only recorded after the transfer actually succeeds - if it fails, the quest
-            // stays claimable and the next attempt just replays the same idempotent key.
-            await XenCasinoUserState.markDailyQuestClaimed(userId, date);
-            // Recorded directly (not via recordCasinoRoundPlayed, which also bumps quest
-            // round-progress) so admin stats/daily-stats - which aggregate over
-            // XenCasinoActivity - see this real payout instead of silently drifting from
-            // the live house balance every time a quest is claimed.
-            await XenCasinoActivity.record({ userId, game: "quest-reward", wager: 0, payout: DAILY_QUEST_REWARD });
+            await XenCasinoUserState.markDailyQuestClaimed(userId, date, key);
+            await XenCasinoActivity.record({ userId, game: `quest-reward-${key}`, wager: 0, payout: reward });
 
-            return res.json({ status: true, data: { balance: result.toNewBalance } });
+            return res.json({ status: true, data: { balance: result.toNewBalance, key, reward } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });

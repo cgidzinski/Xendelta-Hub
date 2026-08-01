@@ -6,10 +6,11 @@
  * bonemeal has been bought for that square (see effectiveWaterCooldownMs). There's no
  * penalty at all for the first 24h a square goes unwatered; past that, it loses one
  * delivered watering every hour until it's rewatered or runs out and dies. Unprotected
- * squares also roll a vermin (adds one more required watering) or disease (kills)
- * chance once per cooldown tick, countered by purchasable pesticide/fungicide - each is a
- * shield that stays up through any number of misses and is only consumed the moment it
- * actually blocks a hit, not a one-shot that expires on the very next check regardless.
+ * squares also roll a vermin (adds one more required watering) or disease (doubles the
+ * daily decay rate — fungicide cures) chance once per cooldown tick, countered by
+ * purchasable pesticide/fungicide - each is a shield that stays up through any number of
+ * misses and is only consumed the moment it actually blocks a hit, not a one-shot that
+ * expires on the very next check regardless.
  * Fertilizer instead shortens the remaining waterings needed; bonemeal speeds up every
  * watering cooldown on that square from then on. A square is ready once it's received
  * its required number of waterings. Harvest pays cost *
@@ -43,7 +44,7 @@ interface SeedTier {
     cost: number;
     growDurationMs: number; // waterAmount * GARDEN_WATER_COOLDOWN_MS - "earliest possible" display only, waterCount is the real gate
     waterAmount: number; // total waterings required to mature (a vermin hit adds +1)
-    verminChance: number; // per cooldown tick, while unprotected - adds +1 to the required waterings
+    verminChance: number; // per cooldown tick, while unprotected -— doubles decay rate (no longer kills)required waterings
     diseaseChance: number; // per cooldown tick, while unprotected - kills outright
     baseMultiplier: number; // guaranteed baseline of harvest payout = cost * baseMultiplier
     variance: number; // harvest payout swings +/- this fraction around the baseline
@@ -78,7 +79,7 @@ const PROTECTION_COST: Record<"pesticide" | "fungicide" | "fertilizer" | "boneme
     bonemeal: 1200,
 };
 
-// Charged to clear out a dead plot (from decay or disease) before it can be replanted.
+// Charged to clear out a dead plot (from decay) before it can be replanted.
 const GARDEN_CLEANUP_FEE = 1000;
 
 // Idempotency keys are capped at 64 chars by the transfer API - "fertilizer" pushed the
@@ -109,6 +110,7 @@ function squareView(square: any) {
         variance: square.variance,
         verminChance: square.verminChance,
         diseaseChance: square.diseaseChance,
+        diseased: square.diseased,
         protection: square.protection,
         status: square.status,
     };

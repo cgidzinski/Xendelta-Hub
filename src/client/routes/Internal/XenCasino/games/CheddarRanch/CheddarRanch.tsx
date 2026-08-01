@@ -116,10 +116,6 @@ function feedReadyAt(creature: RanchCreature, cooldownMs: number): number | null
     return creature.lastFedAt ? new Date(creature.lastFedAt).getTime() + cooldownMs : null;
 }
 
-function collectReadyAt(creature: RanchCreature, cooldownMs: number): number | null {
-    return creature.lastCollectedAt ? new Date(creature.lastCollectedAt).getTime() + cooldownMs : null;
-}
-
 function formatCountdown(msRemaining: number): string {
     if (msRemaining <= 0) {
         return "Ready";
@@ -365,12 +361,11 @@ interface CreatureDetailsProps {
     creature: RanchCreature;
     feedCooldownMs: number;
     releaseSellValue: Record<string, number>;
-    collectCooldownMs: number;
     onReleased: () => void;
 }
 
 // Ranch-tab dialog - feed/collect/release only. Racing lives entirely on the Race tab now.
-function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCooldownMs, onReleased }: CreatureDetailsProps) {
+function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onReleased }: CreatureDetailsProps) {
     const { feed, isFeeding, release, isReleasing, collect, isCollecting, feedItems, shopItems, speciesByTier, useItem, isUsingItem } = useCasinoRanch();
     const { enqueueSnackbar } = useSnackbar();
     const [confirmingRelease, setConfirmingRelease] = useState(false);
@@ -379,8 +374,7 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCo
 
     const cooldownRemaining = useCountdown(feedReadyAt(creature, feedCooldownMs));
     const onCooldown = cooldownRemaining > 0;
-    const collectCooldownRemaining = useCountdown(collectReadyAt(creature, collectCooldownMs));
-    const canCollect = collectCooldownRemaining <= 0 && !creature.collectBlocked;
+    const canCollect = creature.canCollect && !creature.collectBlocked;
     const sellValue = releaseSellValue[creature.rarityTier] ?? 0;
     const feedItem = feedItems.find((f: RanchFeedItem) => f.type === creature.type);
     const units = feedUnitsRequired(creature.level);
@@ -472,8 +466,8 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCo
                     creature.collectBlocked
                         ? `${creature.name} is too sad to work - race it to keep collecting`
                         : canCollect
-                          ? "Free - ready to collect"
-                          : `Ready again in ${formatCountdown(collectCooldownRemaining)}`
+                            ? "Free - ready to collect (once per day)"
+                            : "Already collected today — resets at midnight"
                 }
                 color="success"
                 disabled={isCollecting || !canCollect}
@@ -556,8 +550,8 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCo
                     shieldActive
                         ? `Protected from decay until ${new Date(creature.decayShieldUntil!).toLocaleString()}`
                         : shieldOwned > 0
-                          ? "Protects from neglect decay for 3 days"
-                          : "Buy in the Shop first"
+                            ? "Protects from neglect decay for 3 days"
+                            : "Buy in the Shop first"
                 }
                 disabled={isUsingItem || shieldOwned <= 0 || !!shieldActive}
                 onClick={handleDecayShield}
@@ -608,7 +602,7 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, collectCo
 }
 
 function RanchTab() {
-    const { creatures, hatchPrice, feedCooldownMs, releaseSellValue, collectCooldownMs, isLoading } = useCasinoRanch();
+    const { creatures, hatchPrice, feedCooldownMs, releaseSellValue, isLoading } = useCasinoRanch();
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [hatchDialogOpen, setHatchDialogOpen] = useState(false);
 
@@ -646,7 +640,6 @@ function RanchTab() {
                             creature={selectedCreature}
                             feedCooldownMs={feedCooldownMs}
                             releaseSellValue={releaseSellValue}
-                            collectCooldownMs={collectCooldownMs}
                             onReleased={() => setSelectedId(null)}
                         />
                     )}
@@ -1101,9 +1094,8 @@ function RaceTab() {
                             <ActionButton
                                 icon={<SportsScoreIcon />}
                                 label={`Race (${formatCheddar(stake)} bet)`}
-                                description={`Betting on ${pending.racers.find((r) => r.id === betRacerId)?.name}${
-                                    betRacerId === "player" ? " (your own creature)" : ""
-                                }`}
+                                description={`Betting on ${pending.racers.find((r) => r.id === betRacerId)?.name}${betRacerId === "player" ? " (your own creature)" : ""
+                                    }`}
                                 color="warning"
                                 disabled={isBettingRace}
                                 onClick={handleBet}
@@ -1127,8 +1119,8 @@ function RaceTab() {
                             <Typography variant="body2" color="text.secondary">
                                 {insuranceOwned > 0
                                     ? `Forfeit without betting? A Forfeit Insurance will be used automatically, refunding ${formatCheddar(
-                                          Math.round(entryFee * 0.5)
-                                      )} of the entry fee.`
+                                        Math.round(entryFee * 0.5)
+                                    )} of the entry fee.`
                                     : `Forfeit without betting? The ${formatCheddar(entryFee)} entry fee is already gone either way.`}
                             </Typography>
                             <Box sx={{ display: "flex", gap: 1 }}>
@@ -1501,7 +1493,7 @@ export default function CheddarRanch() {
     return (
         <GameWrapper
             title="Cheddar Ranch"
-            howToPlay="Ranch: tap the + tile to hatch a Cheddar Egg (rarity, species, and Land/Sea/Air type are randomized). Feed a creature with the Feed matching its own type to raise every stat by a random amount - higher-level creatures need more Feed per feeding, and a creature left unfed too long slowly loses stats. Collect its item every 24 hours (a fixed amount for its rarity tier, even a freshly hatched creature needs to wait out the cooldown first) - but collect from the same creature twice in a row without racing it and it'll refuse to produce again until it races, win or lose. Or release a creature for a flat cheddar payout. Race: pick a creature and pay the entry fee to randomize the course and reveal 4 rivals all at once, then bet on any of the 5 racers (including your own) and watch the race play out - or forfeit if you don't like your odds (the entry fee is gone either way). Your own creature's record and level track whether it actually placed first, regardless of who you bet on. Inventory: tap an item for details, then sell the stack for cheddar or use one (no effect yet). Shop: buy Land/Sea/Air Feed."
+            howToPlay="Ranch: tap the + tile to hatch a Cheddar Egg (rarity, species, and Land/Sea/Air type are randomized). Feed a creature with the Feed matching its own type to raise every stat by a random amount - higher-level creatures need more Feed per feeding (1h cooldown between feedings), and a creature left unfed too long slowly loses stats. Collect its item once per day (resets at midnight — a fixed amount for its rarity tier). But collect from the same creature twice in a row without racing it and it'll refuse to produce again until it races, win or lose. Or release a creature for a flat cheddar payout. Race: pick a creature and pay the entry fee to randomize the course and reveal 4 rivals all at once, then bet on any of the 5 racers (including your own) and watch the race play out - or forfeit if you don't like your odds (the entry fee is gone either way). Your own creature's record and level track whether it actually placed first, regardless of who you bet on. Inventory: tap an item for details, then sell the stack for cheddar or use one. Shop: buy Land/Sea/Air Feed."
             oddsSections={oddsSections}
         >
             <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 3 }} variant="fullWidth">

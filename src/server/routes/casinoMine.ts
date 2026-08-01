@@ -12,7 +12,7 @@
  * equipment/flare/reset prices, the gem payout $ amounts, and every money movement.
  * There's no persistent pickaxe/torch "level" to grind - the daily dig cap is flat, and
  * every boost is single-use, bought fresh each time: Explosives blast through the daily
- * cap, a missing ladder, and/or heavy stone (any combination at once); a Reinforcement is
+ * cap, a missing ladder, and/or heavy stone (any combination at once); a Support is
  * a shield that stays armed until it actually blocks a cave-in; a Flare buys one 3x3
  * scouting reveal around your current position.
  */
@@ -32,7 +32,7 @@ const LADDER_COST = 500;
 const LADDER_BATCH = 1;
 const DIG_COST = 200; // charged per real dig attempt (never for a free move through a cleared tunnel), regardless of what's found
 const EXPLOSIVE_COST = 750; // single-use - blasts through the daily dig cap, a missing ladder, and/or heavy stone, any combination at once
-const REINFORCEMENT_COST = 600; // single-use shield - stays armed until it actually blocks a cave-in
+const SUPPORT_COST = 600; // single-use shield - stays armed until it actually blocks a cave-in
 const FLARE_COST = 1000; // single-use - the only way to preview a tile before digging it, bought fresh each time
 const MINE_FLARE_RADIUS = 1; // a 3x3 area around the current position
 const MAP_RESET_COST = 2000; // deliberate "start over" fee, not a free escape hatch
@@ -69,7 +69,7 @@ function stateView(doc: any) {
         dailyDigCap: BASE_DAILY_DIG_CAP,
         ladderCount: doc.ladderCount,
         explosiveCount: doc.explosiveCount,
-        reinforcementCount: doc.reinforcementCount,
+        supportCount: doc.reinforcementCount,
         deepestDepthReached: doc.deepestDepthReached,
         bestGemTier: doc.bestGemTier,
         revealedTiles: doc.dugTiles.map((t: any) => ({ x: t.x, y: t.y, oreTier: t.oreTier, isHeavyStone: t.isHeavyStone, status: t.status })),
@@ -77,7 +77,7 @@ function stateView(doc: any) {
             dig: { cost: DIG_COST },
             ladder: { cost: LADDER_COST, amount: LADDER_BATCH },
             explosive: { cost: EXPLOSIVE_COST, amount: 1 },
-            reinforcement: { cost: REINFORCEMENT_COST, amount: 1 },
+            support: { cost: SUPPORT_COST, amount: 1 },
             flare: { cost: FLARE_COST, radius: MINE_FLARE_RADIUS },
             reset: { cost: MAP_RESET_COST },
         },
@@ -155,10 +155,10 @@ module.exports = function (app: express.Application) {
                 });
                 const message =
                     result.error === "no_digs_remaining" ? "No digs remaining today - buy an Explosive to blast through" :
-                    result.error === "no_ladders" ? "No ladders left - buy more to descend, or use an Explosive to blast through" :
-                    result.error === "blocked_by_stone" ? "Heavy duty stone blocks the way - you'll need an Explosive to clear it" :
-                    result.error === "blocked_by_collapse" ? "A cave-in has permanently blocked this tunnel - you'll have to dig around it" :
-                    "You can't go that way";
+                        result.error === "no_ladders" ? "No ladders left - buy more to descend, or use an Explosive to blast through" :
+                            result.error === "blocked_by_stone" ? "Heavy duty stone blocks the way - you'll need an Explosive to clear it" :
+                                result.error === "blocked_by_collapse" ? "A cave-in has permanently blocked this tunnel - you'll have to dig around it" :
+                                    "You can't go that way";
                 return res.status(400).json({ status: false, message });
             }
 
@@ -200,8 +200,8 @@ module.exports = function (app: express.Application) {
 
     app.post("/api/casino/mine/buy-equipment", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
-        const { item } = req.body as { item: "ladder" | "explosive" | "reinforcement" };
-        const cost = item === "ladder" ? LADDER_COST : item === "explosive" ? EXPLOSIVE_COST : item === "reinforcement" ? REINFORCEMENT_COST : null;
+        const { item } = req.body as { item: "ladder" | "explosive" | "support" };
+        const cost = item === "ladder" ? LADDER_COST : item === "explosive" ? EXPLOSIVE_COST : item === "support" ? SUPPORT_COST : null;
         if (!cost) {
             return res.status(400).json({ status: false, message: "Invalid equipment item" });
         }

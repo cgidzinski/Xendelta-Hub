@@ -29,7 +29,7 @@ export interface MineState {
     dailyDigCap: number;
     ladderCount: number;
     explosiveCount: number;
-    reinforcementCount: number;
+    supportCount: number;
     deepestDepthReached: number;
     bestGemTier: string | null;
     revealedTiles: MineTile[];
@@ -37,7 +37,7 @@ export interface MineState {
         dig: { cost: number };
         ladder: { cost: number; amount: number };
         explosive: { cost: number; amount: number };
-        reinforcement: { cost: number; amount: number };
+        support: { cost: number; amount: number };
         flare: { cost: number; radius: number };
         reset: { cost: number };
     };
@@ -94,7 +94,7 @@ export const useCasinoMine = () => {
     });
 
     const { mutateAsync: buyEquipment, isPending: isBuying } = useMutation({
-        mutationFn: async (item: "ladder" | "explosive" | "reinforcement") =>
+        mutationFn: async (item: "ladder" | "explosive" | "support") =>
             (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/mine/buy-equipment", { item })).data.data!,
         onSuccess: invalidate,
     });

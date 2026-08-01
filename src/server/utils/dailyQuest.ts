@@ -13,6 +13,6 @@ export interface CasinoRoundActivity {
 // over these rows instead of the external Weeabets ledger). No notification is sent for the
 // quest itself - the quest card on the casino page is prominent enough.
 export async function recordCasinoRoundPlayed(userId: string, activity: CasinoRoundActivity): Promise<void> {
-    await XenCasinoUserState.recordRoundPlayed(userId);
+    await XenCasinoUserState.recordRoundPlayed(userId, activity.game);
     await XenCasinoActivity.record({ userId, ...activity });
 }
