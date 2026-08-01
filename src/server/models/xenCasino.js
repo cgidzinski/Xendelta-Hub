@@ -1264,6 +1264,7 @@ xenCasinoRanchCreatureSchema.statics.createForUser = async function (userId, par
     species: params.species,
     name: params.name,
     rarityTier: params.rarityTier,
+    stats: params.stats,
     lastCollectedAt: new Date(),
     lastCollectDate: todayKey(),
   });
