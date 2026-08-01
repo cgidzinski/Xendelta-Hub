@@ -335,6 +335,12 @@ const ITEM_DEFS: Record<string, { key: string; label: string; sellValue: number;
     "wyrm-scale": { key: "wyrm-scale", label: "Wyrm Scale", sellValue: 600, description: "A shimmering scale shed by a Cheddar Wyrm." },
     "solar-antler": { key: "solar-antler", label: "Solar Antler", sellValue: 600, description: "A sun-bright antler shard from a Solar Stag." },
     "void-ink": { key: "void-ink", label: "Void Ink", sellValue: 600, description: "A vial of inky essence drawn from a Void Kraken." },
+    copper: { key: "copper", label: "Copper Ore", sellValue: 200, description: "Common ore dug from the Chip Mine. Depth improves value." },
+    silver: { key: "silver", label: "Silver Ore", sellValue: 400, description: "Uncommon ore from deeper mine shafts." },
+    gold: { key: "gold", label: "Gold Nugget", sellValue: 800, description: "Rare gold found at depth in the mine." },
+    emerald: { key: "emerald", label: "Emerald", sellValue: 1600, description: "A green gemstone from the deep earth." },
+    ruby: { key: "ruby", label: "Ruby", sellValue: 2800, description: "A deep red gem from the darkest shafts." },
+    diamond: { key: "diamond", label: "Diamond", sellValue: 5000, description: "The rarest find in the Chip Mine." },
 };
 
 // Flat, tier-based collection quantity - deliberately NOT derived from the creature's

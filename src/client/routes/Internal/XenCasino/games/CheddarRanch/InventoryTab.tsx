@@ -19,7 +19,7 @@ import { ITEM_EMOJI } from "./shared";
 
 export default function InventoryTab() {
     const { items } = useCasinoRanch();
-    const { sellItem, isSellingItem, useItem, isUsingItem } = useCasinoRanch();
+    const { sellItem, isSellingItem } = useCasinoRanch();
     const { enqueueSnackbar } = useSnackbar();
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
     const selectedItem = items.find((i) => i.key === selectedKey) ?? null;
@@ -108,11 +108,8 @@ export default function InventoryTab() {
                             You own {selectedItem.quantity} - worth {formatCheddar(selectedItem.sellValue)} each
                         </Typography>
                         <Box sx={{ display: "flex", gap: 1, width: "100%", mt: 1 }}>
-                            <Button variant="outlined" fullWidth disabled={isUsingItem} onClick={handleUse}>
-                                Use
-                            </Button>
                             <Button variant="contained" fullWidth startIcon={<SellIcon />} disabled={isSellingItem} onClick={handleSell}>
-                                Sell All ({formatCheddar(selectedItem.quantity * selectedItem.sellValue)})
+                                Sell All (🧀 {formatCheddar(selectedItem.quantity * selectedItem.sellValue)})
                             </Button>
                         </Box>
                     </DialogContent>

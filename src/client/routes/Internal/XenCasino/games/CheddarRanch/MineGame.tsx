@@ -295,6 +295,9 @@ export default function MineGame() {
             return { bg: "error.main", hover: "error.dark", icon: <BoltIcon /> };
         }
         if (direction === "up" || direction === "down") {
+            if (ladderCount <= 0) {
+                return { bg: "grey.600", hover: "grey.600", icon: direction === "up" ? <ArrowUpwardIcon /> : <ArrowDownwardIcon /> };
+            }
             return { bg: "warning.main", hover: "warning.dark", icon: <StairsIcon /> };
         }
         return { bg: "primary.main", hover: "primary.dark", icon: direction === "left" ? <ArrowBackIcon /> : <ArrowForwardIcon /> };
