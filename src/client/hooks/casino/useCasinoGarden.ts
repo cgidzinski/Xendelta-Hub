@@ -4,6 +4,7 @@ import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 import { casinoBalanceKeys } from "./useCasinoBalance";
 import { casinoLedgerKeys } from "./useCasinoLedger";
+import { casinoRanchKeys, RanchItem } from "./useCasinoRanch";
 
 export interface GardenSquare {
     squareId: number;
@@ -53,7 +54,7 @@ export const casinoGardenKeys = {
 };
 
 const fetchGarden = async (): Promise<GardenState> =>
-    (await apiClient.get<ApiResponse<GardenState>>("/api/casino/garden")).data.data!;
+    (await apiClient.get<ApiResponse<GardenState>>("/api/casino/ranch/garden")).data.data!;
 
 export const useCasinoGarden = () => {
     const { isAuthenticated } = useAuth();
@@ -75,31 +76,42 @@ export const useCasinoGarden = () => {
 
     const { mutateAsync: plant, isPending: isPlanting } = useMutation({
         mutationFn: async (params: { squareId: number; seedType: string }) =>
-            (await apiClient.post<ApiResponse<{ square: GardenSquare; balance: string }>>("/api/casino/garden/plant", params)).data.data!,
+            (await apiClient.post<ApiResponse<{ square: GardenSquare; balance: string }>>("/api/casino/ranch/garden/plant", params)).data.data!,
         onSuccess: invalidate,
     });
 
     const { mutateAsync: water, isPending: isWatering } = useMutation({
         mutationFn: async (params: { squareId: number }) =>
-            (await apiClient.post<ApiResponse<{ square: GardenSquare }>>("/api/casino/garden/water", params)).data.data!,
+            (await apiClient.post<ApiResponse<{ square: GardenSquare }>>("/api/casino/ranch/garden/water", params)).data.data!,
         onSuccess: () => queryClient.invalidateQueries({ queryKey: casinoGardenKeys.all }),
     });
 
     const { mutateAsync: protect, isPending: isProtecting } = useMutation({
         mutationFn: async (params: { squareId: number; item: "pesticide" | "fungicide" | "fertilizer" | "bonemeal" }) =>
-            (await apiClient.post<ApiResponse<{ square: GardenSquare; balance: string }>>("/api/casino/garden/protect", params)).data.data!,
+            (await apiClient.post<ApiResponse<{ square: GardenSquare; balance: string }>>("/api/casino/ranch/garden/protect", params)).data.data!,
         onSuccess: invalidate,
     });
 
+    // Harvest no longer moves cheddar - it credits a produce item to the shared ranch
+    // inventory (sold later from the Inventory tab), so there's no balance/ledger change
+    // to invalidate here, just the ranch query that holds the inventory.
     const { mutateAsync: harvest, isPending: isHarvesting } = useMutation({
         mutationFn: async (params: { squareId: number }) =>
-            (await apiClient.post<ApiResponse<{ payout: number; balance: string }>>("/api/casino/garden/harvest", params)).data.data!,
-        onSuccess: invalidate,
+            (
+                await apiClient.post<ApiResponse<{ item: { key: string; label: string; quantity: number }; items: RanchItem[] }>>(
+                    "/api/casino/ranch/garden/harvest",
+                    params
+                )
+            ).data.data!,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: casinoGardenKeys.all });
+            queryClient.invalidateQueries({ queryKey: casinoRanchKeys.all });
+        },
     });
 
     const { mutateAsync: clear, isPending: isClearing } = useMutation({
         mutationFn: async (params: { squareId: number }) =>
-            (await apiClient.post<ApiResponse<{ square: GardenSquare; balance: string }>>("/api/casino/garden/clear", params)).data.data!,
+            (await apiClient.post<ApiResponse<{ square: GardenSquare; balance: string }>>("/api/casino/ranch/garden/clear", params)).data.data!,
         onSuccess: invalidate,
     });
 

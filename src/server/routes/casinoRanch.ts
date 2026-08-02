@@ -79,7 +79,7 @@ import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 const { User } = require("../models/user");
 const { XenCasinoRanchPendingRace, XenCasinoActivity, dailyQuestDateKey: todayKey } = require("../models/xenCasino");
-const { XenCasinoRanch } = require("../models/xenCasinoRanch");
+const { XenCasinoRanch, GARDEN_WATER_COOLDOWN_MS, GARDEN_NEGLECT_GRACE_MS, effectiveWaterCooldownMs } = require("../models/xenCasinoRanch");
 import { resolveUserAccount, transfer, getXenCasinoAccountId, WeeabetsUnavailable, WeeabetsTransferError } from "../utils/weeabetsClient";
 import { requireGameEnabled } from "../utils/casinoStatus";
 import { recordCasinoRoundPlayed } from "../utils/dailyQuest";
@@ -132,6 +132,95 @@ function mineStateView(doc: any) {
             reset: { cost: MAP_RESET_COST },
         },
         oreTiers: require("../models/xenCasinoRanch").MINE_ORE_TIERS.map((t: any) => ({ key: t.key, label: t.label, minDepth: t.minDepth, valueMultiplier: MINE_ORE_TIER_VALUE[t.key] ?? 1 })),
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Garden economics (was casinoGarden.ts)
+// ---------------------------------------------------------------------------
+
+interface SeedTier {
+    key: string;
+    label: string;
+    cost: number;
+    growDurationMs: number; // waterAmount * GARDEN_WATER_COOLDOWN_MS - "earliest possible" display only, waterCount is the real gate
+    waterAmount: number; // total waterings required to mature (a vermin hit adds +1)
+    verminChance: number; // per cooldown tick, while unprotected - adds +1 required watering
+    diseaseChance: number; // per cooldown tick, while unprotected - doubles decay rate
+    baseMultiplier: number; // guaranteed baseline of harvest value = cost * baseMultiplier
+    variance: number; // harvest value swings +/- this fraction around the baseline
+}
+
+function seedTier(params: Omit<SeedTier, "growDurationMs">): SeedTier {
+    return { ...params, growDurationMs: params.waterAmount * GARDEN_WATER_COOLDOWN_MS };
+}
+
+// Four genuinely different plants, not one economy reskinned four times - see
+// PRODUCE_UNIT_VALUE below for how each tier's swing-adjusted value converts into a
+// harvested quantity of that seed's produce item (ranch inventory items are flat-priced,
+// unlike the old direct-cheddar payout, so the swing now moves quantity instead of price).
+const SEED_TIERS: Record<string, SeedTier> = {
+    sprout: seedTier({ key: "sprout", label: "Sprout", cost: 1000, waterAmount: 2, verminChance: 0.05, diseaseChance: 0.02, baseMultiplier: 1.3, variance: 0.3 }),
+    clover: seedTier({ key: "clover", label: "Lucky Clover", cost: 4000, waterAmount: 4, verminChance: 0.08, diseaseChance: 0.03, baseMultiplier: 1.6, variance: 0.6 }),
+    nightshade: seedTier({ key: "nightshade", label: "Nightshade", cost: 7000, waterAmount: 5, verminChance: 0.15, diseaseChance: 0.08, baseMultiplier: 2.2, variance: 0.4 }),
+    "golden-vine": seedTier({ key: "golden-vine", label: "Golden Vine", cost: 16000, waterAmount: 10, verminChance: 0.1, diseaseChance: 0.05, baseMultiplier: 3.0, variance: 0.9 }),
+};
+
+// "fertilizer" and "bonemeal" are handled specially by XenCasinoRanch.protectGardenSquare -
+// fertilizer reduces waterAmount by 1 instead of blocking a hazard like pesticide/fungicide
+// do, and bonemeal speeds up the square's watering cooldown from then on.
+const PROTECTION_COST: Record<"pesticide" | "fungicide" | "fertilizer" | "bonemeal", number> = {
+    pesticide: 600,
+    fungicide: 800,
+    fertilizer: 700,
+    bonemeal: 1200,
+};
+
+// Charged to clear out a dead plot (from decay) before it can be replanted.
+const GARDEN_CLEANUP_FEE = 1000;
+
+// Idempotency keys are capped at 64 chars by the transfer API - "fertilizer" pushed the
+// protect key over that limit, so every item gets a short form just for the key string.
+const PROTECT_KEY_ABBR: Record<"pesticide" | "fungicide" | "fertilizer" | "bonemeal", string> = {
+    pesticide: "pest",
+    fungicide: "fung",
+    fertilizer: "fert",
+    bonemeal: "bone",
+};
+
+// Fixed sell price per unit of each seed's harvested produce item - the swing that used to
+// move a single cheddar payout up/down now moves the *quantity* of these fixed-price units
+// instead (see the harvest route), since ranch inventory items are flat-priced like ore.
+// Tuned so a no-swing harvest yields ~5 units per seed type.
+const PRODUCE_UNIT_VALUE: Record<string, number> = {
+    sprout: 260,
+    clover: 1280,
+    nightshade: 3080,
+    "golden-vine": 9600,
+};
+
+function gardenSquareView(square: any) {
+    return {
+        squareId: square.squareId,
+        seedType: square.seedType,
+        seedLabel: square.seedType ? SEED_TIERS[square.seedType]?.label : null,
+        plantedAt: square.plantedAt,
+        readyAt: square.readyAt,
+        lastWateredAt: square.lastWateredAt,
+        waterAmount: square.waterAmount,
+        waterCount: square.waterCount,
+        verminHits: square.verminHits,
+        // Per-square, not the global base - shorter than GARDEN_WATER_COOLDOWN_MS once
+        // bonemeal has been applied to this crop.
+        waterCooldownMs: effectiveWaterCooldownMs(square),
+        cost: square.cost,
+        baseMultiplier: square.baseMultiplier,
+        variance: square.variance,
+        verminChance: square.verminChance,
+        diseaseChance: square.diseaseChance,
+        diseased: square.diseased,
+        protection: square.protection,
+        status: square.status,
     };
 }
 
@@ -341,6 +430,10 @@ const ITEM_DEFS: Record<string, { key: string; label: string; sellValue: number;
     emerald: { key: "emerald", label: "Emerald", sellValue: 1600, description: "A green gemstone from the deep earth." },
     ruby: { key: "ruby", label: "Ruby", sellValue: 2800, description: "A deep red gem from the darkest shafts." },
     diamond: { key: "diamond", label: "Diamond", sellValue: 5000, description: "The rarest find in the Chip Mine." },
+    "sprout-produce": { key: "sprout-produce", label: "Sprout Basket", sellValue: 260, description: "A basket of Sprouts harvested from the Garden." },
+    "clover-produce": { key: "clover-produce", label: "Clover Bundle", sellValue: 1280, description: "A bundle of Lucky Clover harvested from the Garden." },
+    "nightshade-produce": { key: "nightshade-produce", label: "Nightshade Bundle", sellValue: 3080, description: "A bundle of Nightshade harvested from the Garden." },
+    "golden-vine-produce": { key: "golden-vine-produce", label: "Golden Vine Basket", sellValue: 9600, description: "A basket of Golden Vine grapes harvested from the Garden." },
 };
 
 // Flat, tier-based collection quantity - deliberately NOT derived from the creature's
@@ -1895,6 +1988,222 @@ module.exports = function (app: express.Application) {
 
             const doc = await XenCasinoRanch.resetMineMap(userId);
             return res.json({ status: true, data: { state: mineStateView(doc), balance: null } });
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    // -----------------------------------------------------------------------
+    // Garden endpoints (under /api/casino/ranch/garden)
+    // -----------------------------------------------------------------------
+
+    app.get("/api/casino/ranch/garden", authenticateToken, async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+        const doc = await XenCasinoRanch.getState(userId);
+        return res.json({
+            status: true,
+            data: {
+                squares: doc.garden.squares.map(gardenSquareView),
+                seedTiers: Object.values(SEED_TIERS),
+                protectionCost: PROTECTION_COST,
+                waterCooldownMs: GARDEN_WATER_COOLDOWN_MS,
+                neglectGraceMs: GARDEN_NEGLECT_GRACE_MS,
+                cleanupFee: GARDEN_CLEANUP_FEE,
+            },
+        });
+    });
+
+    app.post("/api/casino/ranch/garden/plant", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+        const { squareId, seedType } = req.body as { squareId: number; seedType: string };
+        const tier = SEED_TIERS[seedType];
+        if (!tier || typeof squareId !== "number") {
+            return res.status(400).json({ status: false, message: "Invalid seed or square" });
+        }
+
+        const user = await User.findById(userId).exec();
+        if (!user) return res.status(404).json({ status: false, message: "User not found" });
+
+        try {
+            const resolved = await resolveUserAccount(user);
+            if (!resolved.linked || !resolved.account) {
+                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
+            }
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+            const result = await transfer({
+                fromAccountId: resolved.account.accountId,
+                toAccountId: xenCasinoAccountId,
+                amount: tier.cost.toFixed(10),
+                key: txnKey("ranch-garden-plant"),
+                note: `garden_plant_${seedType}`,
+            });
+
+            const square = await XenCasinoRanch.plantGardenSquare(userId, squareId, seedType, tier);
+            if (!square) {
+                // Debit already went through and the square turned out unavailable (raced
+                // with another plant on the same square) - refund immediately rather than
+                // leaving the player short with nothing planted.
+                await transfer({
+                    fromAccountId: xenCasinoAccountId,
+                    toAccountId: resolved.account.accountId,
+                    amount: tier.cost.toFixed(10),
+                    key: txnKey("ranch-garden-plant-rf"),
+                    note: "garden_plant_refund",
+                });
+                return res.status(400).json({ status: false, message: "Square is not available" });
+            }
+
+            await XenCasinoActivity.record({ game: "garden", userId, wager: tier.cost, payout: 0 });
+
+            return res.json({ status: true, data: { square: gardenSquareView(square), balance: result.fromNewBalance } });
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    app.post("/api/casino/ranch/garden/water", authenticateToken, async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+        const { squareId } = req.body as { squareId: number };
+
+        const state = await XenCasinoRanch.getState(userId);
+        const before = state.garden.squares.find((s: any) => s.squareId === squareId);
+        if (before && before.status === "growing" && before.lastWateredAt) {
+            const cooldownMs = effectiveWaterCooldownMs(before);
+            const msSinceWatered = Date.now() - new Date(before.lastWateredAt).getTime();
+            if (msSinceWatered < cooldownMs) {
+                return res.status(400).json({
+                    status: false,
+                    message: `Still on cooldown - wait ${Math.ceil((cooldownMs - msSinceWatered) / 60000)}m before watering again`,
+                });
+            }
+        }
+
+        const square = await XenCasinoRanch.waterGardenSquare(userId, squareId);
+        if (!square) {
+            return res.status(400).json({ status: false, message: "Nothing to water here" });
+        }
+        return res.json({ status: true, data: { square: gardenSquareView(square) } });
+    });
+
+    app.post("/api/casino/ranch/garden/protect", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+        const { squareId, item } = req.body as { squareId: number; item: "pesticide" | "fungicide" | "fertilizer" | "bonemeal" };
+        const cost = PROTECTION_COST[item];
+        if (!cost) {
+            return res.status(400).json({ status: false, message: "Invalid protection item" });
+        }
+
+        const user = await User.findById(userId).exec();
+        if (!user) return res.status(404).json({ status: false, message: "User not found" });
+
+        try {
+            const resolved = await resolveUserAccount(user);
+            if (!resolved.linked || !resolved.account) {
+                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
+            }
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+            const result = await transfer({
+                fromAccountId: resolved.account.accountId,
+                toAccountId: xenCasinoAccountId,
+                amount: cost.toFixed(10),
+                key: txnKey(`ranch-garden-${PROTECT_KEY_ABBR[item]}`),
+                note: `garden_protect_${item}`,
+            });
+
+            const square = await XenCasinoRanch.protectGardenSquare(userId, squareId, item);
+            if (!square) {
+                await transfer({
+                    fromAccountId: xenCasinoAccountId,
+                    toAccountId: resolved.account.accountId,
+                    amount: cost.toFixed(10),
+                    key: txnKey(`ranch-garden-${PROTECT_KEY_ABBR[item]}-rf`),
+                    note: "garden_protect_refund",
+                });
+                return res.status(400).json({ status: false, message: "Nothing growing here to protect" });
+            }
+
+            await XenCasinoActivity.record({ game: "garden", userId, wager: cost, payout: 0 });
+
+            return res.json({ status: true, data: { square: gardenSquareView(square), balance: result.fromNewBalance } });
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    app.post("/api/casino/ranch/garden/harvest", authenticateToken, async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+        const { squareId } = req.body as { squareId: number };
+
+        const doc = await XenCasinoRanch.getState(userId);
+        const square = doc.garden.squares.find((s: any) => s.squareId === squareId);
+        if (!square || square.status !== "ready") {
+            return res.status(400).json({ status: false, message: "Nothing ready to harvest here" });
+        }
+
+        // Uses the square's own snapshotted cost/baseMultiplier/variance (set at plant
+        // time), not a fresh SEED_TIERS lookup - a tier rebalance after planting never
+        // changes what an already-growing crop pays out. The swing that used to move a
+        // cheddar payout up/down now moves the harvested *quantity* instead, since ranch
+        // inventory items are flat-priced (see PRODUCE_UNIT_VALUE) - no money changes
+        // hands here at all, same as a mine ore strike landing in inventory.
+        const swing = (Math.random() * 2 - 1) * square.variance;
+        const totalValue = Math.round(square.cost * square.baseMultiplier * (1 + swing));
+        const itemKey = `${square.seedType}-produce`;
+        const unitValue = PRODUCE_UNIT_VALUE[square.seedType as string] ?? 1;
+        const quantity = Math.max(1, Math.round(totalValue / unitValue));
+
+        await XenCasinoRanch.addItem(userId, itemKey, quantity);
+        await XenCasinoRanch.clearHarvestedGardenSquare(userId, squareId);
+        await recordCasinoRoundPlayed(userId, { game: "garden", wager: 0, payout: totalValue });
+
+        return res.json({
+            status: true,
+            data: {
+                item: { key: itemKey, label: ITEM_DEFS[itemKey]?.label ?? itemKey, quantity },
+                items: await itemsView(userId),
+            },
+        });
+    });
+
+    app.post("/api/casino/ranch/garden/clear", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+        const { squareId } = req.body as { squareId: number };
+
+        const user = await User.findById(userId).exec();
+        if (!user) return res.status(404).json({ status: false, message: "User not found" });
+
+        try {
+            const resolved = await resolveUserAccount(user);
+            if (!resolved.linked || !resolved.account) {
+                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
+            }
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+            const result = await transfer({
+                fromAccountId: resolved.account.accountId,
+                toAccountId: xenCasinoAccountId,
+                amount: GARDEN_CLEANUP_FEE.toFixed(10),
+                key: txnKey("ranch-garden-clear"),
+                note: "garden_clear_dead",
+            });
+
+            const square = await XenCasinoRanch.clearDeadGardenSquare(userId, squareId);
+            if (!square) {
+                await transfer({
+                    fromAccountId: xenCasinoAccountId,
+                    toAccountId: resolved.account.accountId,
+                    amount: GARDEN_CLEANUP_FEE.toFixed(10),
+                    key: txnKey("ranch-garden-clear-rf"),
+                    note: "garden_clear_refund",
+                });
+                return res.status(400).json({ status: false, message: "Nothing dead to clear here" });
+            }
+
+            await XenCasinoActivity.record({ game: "garden", userId, wager: GARDEN_CLEANUP_FEE, payout: 0 });
+
+            return res.json({ status: true, data: { square: gardenSquareView(square), balance: result.fromNewBalance } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });

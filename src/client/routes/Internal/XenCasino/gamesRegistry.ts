@@ -1,4 +1,4 @@
-export type CasinoGameType = "slots" | "scratch" | "plinko" | "pachinko" | "memory" | "garden" | "printer" | "ranch";
+export type CasinoGameType = "slots" | "scratch" | "plinko" | "pachinko" | "memory" | "printer" | "ranch";
 
 export interface CasinoGameRegistryItem {
   key: string;
@@ -19,7 +19,6 @@ export const CASINO_GAME_TYPE_LABELS: Record<CasinoGameType, string> = {
   plinko: "Plinko",
   pachinko: "Pachinko",
   memory: "Memory",
-  garden: "Garden",
   printer: "Printing",
   ranch: "Creature Ranch",
 };
@@ -84,15 +83,6 @@ export const CASINO_GAMES_REGISTRY: CasinoGameRegistryItem[] = [
     description: "2,500-cheddar round — flip 2 cards at a time over 3 tries, matching pairs win prizes.",
     type: "memory",
     price: 2500,
-  },
-  {
-    key: "garden",
-    label: "Casino Garden",
-    path: "/internal/xencasino/games/garden",
-    description: "Plant seeds across a 3x3 grid - water daily, guard against vermin and disease, and harvest for a payout.",
-    type: "garden",
-    price: 1000, // cheapest seed (Sprout) - see SEED_TIERS in casinoGarden.ts
-    priceFrom: true,
   },
   {
     key: "printer",

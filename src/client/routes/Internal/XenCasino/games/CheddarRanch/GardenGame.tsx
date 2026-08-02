@@ -1,3 +1,6 @@
+/**
+ * GardenGame - renders the Casino Garden inline within Cheddar Ranch.
+ */
 import { ReactNode, useEffect, useState } from "react";
 import {
     Avatar,
@@ -110,7 +113,7 @@ function tileStatusLabel(square: GardenSquare): string {
             return "Ready to harvest";
         default:
             // Fully watered but still waiting out the final cooldown before it's ready -
-            // see resolveGardenSquare in xenCasino.js.
+            // see resolveGardenSquare in xenCasinoRanch.js.
             return square.waterCount >= square.waterAmount ? "Maturing..." : `${square.waterCount}/${square.waterAmount}`;
     }
 }
@@ -400,15 +403,15 @@ function SquareDetails({ square, onHarvested }: SquareDetailsProps) {
 
     // The same cooldown-since-last-watering target doubles as "when can I water again" and
     // (once fully watered) "when does this flip to ready" - see resolveGardenSquare in
-    // xenCasino.js, which waits out the same cooldown after the final watering too.
+    // xenCasinoRanch.js, which waits out the same cooldown after the final watering too.
     const cooldownRemaining = useCountdown(waterReadyAt(square));
     const onCooldown = cooldownRemaining > 0;
     // Fully watered but still waiting out the final cooldown before it flips to "ready" -
-    // see resolveGardenSquare in xenCasino.js. Nothing left to water at this point.
+    // see resolveGardenSquare in xenCasinoRanch.js. Nothing left to water at this point.
     const fullyWatered = square.waterCount >= square.waterAmount;
     // The last growth stage always has to be reached by an actual watering - fertilizer
     // can shorten everything before it, but never skip the final one (enforced again
-    // server-side in XenCasinoGardenState.protect).
+    // server-side in XenCasinoRanch.protectGardenSquare).
     const lastStageRemaining = square.waterAmount - square.waterCount <= 1;
 
     const handlePlant = (seedType: string) =>
@@ -419,7 +422,7 @@ function SquareDetails({ square, onHarvested }: SquareDetailsProps) {
     const handleHarvest = () =>
         harvest({ squareId: square.squareId })
             .then((r) => {
-                enqueueSnackbar(`Harvested ${formatCheddar(r.payout)} cheddar!`, { variant: "success" });
+                enqueueSnackbar(`Harvested ${r.item.quantity}x ${r.item.label}! Sell it from your Inventory.`, { variant: "success" });
                 onHarvested();
             })
             .catch((e) => enqueueSnackbar(e.message || "Failed to harvest", { variant: "error" }));
@@ -606,7 +609,7 @@ function SquareDetails({ square, onHarvested }: SquareDetailsProps) {
     );
 }
 
-export default function Garden() {
+export default function GardenGame() {
     const { squares, seedTiers, waterCooldownMs, neglectGraceMs, cleanupFee, isLoading } = useCasinoGarden();
     const [selectedSquareId, setSelectedSquareId] = useState<number | null>(null);
 
@@ -621,7 +624,7 @@ export default function Garden() {
                     t.diseaseChance * 100
                 ).toFixed(0)}% per check`,
             })),
-            footnote: `Harvest payout is cost x base multiplier, swung +/- the seed's variance by casino luck. Each seed needs a set number of growth stages to mature - watering (on a ${formatDuration(
+            footnote: `Harvest yields produce for your Inventory - the quantity is cost x base multiplier, swung +/- the seed's variance by casino luck. Each seed needs a set number of growth stages to mature - watering (on a ${formatDuration(
                 waterCooldownMs
             )} cooldown per plot) advances one stage at a time. A vermin (🐀) hit sets a crop back a growth stage instead of hurting it outright. A plot left completely unwatered for ${formatDuration(
                 neglectGraceMs
@@ -640,7 +643,7 @@ export default function Garden() {
                 neglectGraceMs
             )} with zero watering, after which it loses one growth stage per midnight until it's rewatered or runs out and dies. Unprotected plots can also be struck by vermin (🐀 — adds one more required growth stage, shown as a counter on the plot) or disease (🦠 — doubles the daily decay rate until cured with fungicide) on any hazard check. Buy pesticide to shield against vermin, or fungicide to block and cure disease (each stays up through any number of misses and is only used up the moment it actually blocks a hit). Buy fertilizer to instantly clear one growth stage still needed, or bonemeal to speed up every watering cooldown on that crop by 25% from then on (shown as a badge on the plot). A dead plot costs ${formatCheddar(
                 cleanupFee
-            )} to clean up before you can replant it.`}
+            )} to clean up before you can replant it. Harvesting doesn't pay cheddar directly - it fills your Inventory with produce you sell later.`}
             oddsSections={oddsSections}
         >
             {isLoading ? (

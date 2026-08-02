@@ -21,7 +21,6 @@ var GAME_LABELS: Record<string, string> = {
     "plinko": "Plinko",
     "pachinko": "Pachinko",
     "memory": "Memory",
-    "garden": "Casino Garden",
     "printer": "Money Printer",
     "cheddar-ranch": "Cheddar Ranch",
     "quest-reward": "Daily Quest Rewards",

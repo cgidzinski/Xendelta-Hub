@@ -106,7 +106,8 @@ export default function FarmHub() {
             <HubBox
                 emoji="🌱"
                 title="Garden"
-                subtitle="Coming soon"
+                subtitle="Plant & harvest crops"
+                onClick={() => navigate("garden")}
             />
             <HubBox
                 emoji="⛏️"
