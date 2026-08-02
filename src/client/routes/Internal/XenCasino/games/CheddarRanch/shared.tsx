@@ -78,6 +78,22 @@ export const ITEM_EMOJI: Record<string, string> = {
     emerald: "🟢",
     ruby: "🔴",
     diamond: "💎",
+    // Seeds - same emoji as SEED_EMOJI's base tiers, so a seed looks the same in Inventory as
+    // it does in the Garden's own seed-tier tiles.
+    "seed-sprout": "🌱",
+    "seed-clover": "🍀",
+    "seed-nightshade": "🍄",
+    "seed-golden-vine": "🍇",
+    // Harvested produce - distinct from the seed's own icon.
+    "sprout-produce": "🥬",
+    "clover-produce": "🌾",
+    "nightshade-produce": "🫐",
+    "golden-vine-produce": "🧺",
+    // Crop protection items
+    pesticide: "🧴",
+    fungicide: "🧪",
+    fertilizer: "🪱",
+    bonemeal: "🦴",
 };
 
 // Ticks once a second for as long as `targetMs` is non-null, same pattern as Garden's
