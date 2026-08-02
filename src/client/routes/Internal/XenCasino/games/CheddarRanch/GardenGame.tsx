@@ -31,8 +31,8 @@ import SpeedIcon from "@mui/icons-material/Speed";
 import { useSnackbar } from "notistack";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import { formatCheddar } from "../../utils/currency";
-import { GardenSquare, SeedTier, useCasinoGarden } from "../../../../../hooks/casino/useCasinoGarden";
-import { SEED_EMOJI, SeedShopList } from "./shared";
+import { GardenSquare, ProtectionItem, SeedTier, useCasinoGarden } from "../../../../../hooks/casino/useCasinoGarden";
+import { PROTECTION_ITEM_ROWS, ProtectionShopList, SEED_EMOJI, SeedShopList } from "./shared";
 
 // Ticks once a second for as long as `targetMs` is non-null, reading Date.now() fresh on
 // every tick rather than trusting a slower page-level clock - this is what makes the
@@ -387,7 +387,7 @@ interface SquareDetailsProps {
 function SquareDetails({ square, onHarvested, onCleared, onOpenShop }: SquareDetailsProps) {
     const {
         seedTiers,
-        protectionCost,
+        protectionItems,
         cleanupFee,
         plant,
         isPlanting,
@@ -416,6 +416,7 @@ function SquareDetails({ square, onHarvested, onCleared, onOpenShop }: SquareDet
     // can shorten everything before it, but never skip the final one (enforced again
     // server-side in XenCasinoRanch.protectGardenSquare).
     const lastStageRemaining = square.waterAmount - square.waterCount <= 1;
+    const ownedOf = (item: ProtectionItem["key"]) => protectionItems.find((p) => p.key === item)?.owned ?? 0;
 
     const handlePlant = (seedType: string) =>
         plant({ squareId: square.squareId, seedType }).catch((e) => enqueueSnackbar(e.message || "Failed to plant", { variant: "error" }));
@@ -576,35 +577,39 @@ function SquareDetails({ square, onHarvested, onCleared, onOpenShop }: SquareDet
                 {square.status === "growing" && (
                     <ActionButton
                         icon={<BugReportIcon />}
-                        label={`Pesticide (${formatCheddar(protectionCost.pesticide)})`}
+                        label={`Pesticide (${ownedOf("pesticide")} owned)`}
                         chance={square.protection.pesticide ? undefined : square.verminChance}
                         description={
                             square.protection.pesticide
                                 ? "Already applied to this crop"
-                                : "Shields against the next vermin (🐀)"
+                                : ownedOf("pesticide") <= 0
+                                    ? "Buy some from the Shop first"
+                                    : "Shields against the next vermin (🐀)"
                         }
-                        disabled={isProtecting || square.protection.pesticide}
+                        disabled={isProtecting || square.protection.pesticide || ownedOf("pesticide") <= 0}
                         onClick={() => handleProtect("pesticide")}
                     />
                 )}
                 {square.status === "growing" && (
                     <ActionButton
                         icon={<ScienceIcon />}
-                        label={`Fungicide (${formatCheddar(protectionCost.fungicide)})`}
+                        label={`Fungicide (${ownedOf("fungicide")} owned)`}
                         chance={square.protection.fungicide ? undefined : square.diseaseChance}
                         description={
                             square.protection.fungicide
                                 ? "Already applied to this crop"
-                                : "Shields against disease (🦠 — doubles decay)"
+                                : ownedOf("fungicide") <= 0
+                                    ? "Buy some from the Shop first"
+                                    : "Shields against disease (🦠 — doubles decay)"
                         }
-                        disabled={isProtecting || square.protection.fungicide}
+                        disabled={isProtecting || square.protection.fungicide || ownedOf("fungicide") <= 0}
                         onClick={() => handleProtect("fungicide")}
                     />
                 )}
                 {square.status === "growing" && (
                     <ActionButton
                         icon={<SpaIcon />}
-                        label={`Fertilizer (${formatCheddar(protectionCost.fertilizer)})`}
+                        label={`Fertilizer (${ownedOf("fertilizer")} owned)`}
                         description={
                             square.protection.fertilized
                                 ? "Already applied to this crop"
@@ -612,22 +617,26 @@ function SquareDetails({ square, onHarvested, onCleared, onOpenShop }: SquareDet
                                     ? "Already fully watered - nothing left to fertilize"
                                     : lastStageRemaining
                                         ? "Can't be used on the final growth stage"
-                                        : "Instantly clears one growth stage"
+                                        : ownedOf("fertilizer") <= 0
+                                            ? "Buy some from the Shop first"
+                                            : "Instantly clears one growth stage"
                         }
-                        disabled={isProtecting || square.protection.fertilized || lastStageRemaining}
+                        disabled={isProtecting || square.protection.fertilized || lastStageRemaining || ownedOf("fertilizer") <= 0}
                         onClick={() => handleProtect("fertilizer")}
                     />
                 )}
                 {square.status === "growing" && (
                     <ActionButton
                         icon={<SpeedIcon />}
-                        label={`Bonemeal (${formatCheddar(protectionCost.bonemeal)})`}
+                        label={`Bonemeal (${ownedOf("bonemeal")} owned)`}
                         description={
                             square.protection.bonemeal
                                 ? "Already applied to this crop"
-                                : "Speeds up every watering cooldown on this crop from now on - 25% faster growth"
+                                : ownedOf("bonemeal") <= 0
+                                    ? "Buy some from the Shop first"
+                                    : "Speeds up every watering cooldown on this crop from now on - 25% faster growth"
                         }
-                        disabled={isProtecting || square.protection.bonemeal}
+                        disabled={isProtecting || square.protection.bonemeal || ownedOf("bonemeal") <= 0}
                         onClick={() => handleProtect("bonemeal")}
                     />
                 )}
@@ -637,7 +646,19 @@ function SquareDetails({ square, onHarvested, onCleared, onOpenShop }: SquareDet
 }
 
 export default function GardenGame() {
-    const { squares, seedTiers, waterCooldownMs, neglectGraceMs, cleanupFee, isLoading, buySeed, isBuyingSeed } = useCasinoGarden();
+    const {
+        squares,
+        seedTiers,
+        waterCooldownMs,
+        neglectGraceMs,
+        cleanupFee,
+        isLoading,
+        buySeed,
+        isBuyingSeed,
+        protectionItems,
+        buyProtection,
+        isBuyingProtection,
+    } = useCasinoGarden();
     const { enqueueSnackbar } = useSnackbar();
     const [selectedSquareId, setSelectedSquareId] = useState<number | null>(null);
     const [shopOpen, setShopOpen] = useState(false);
@@ -646,6 +667,8 @@ export default function GardenGame() {
 
     const handleBuySeed = (seedType: string) =>
         buySeed({ seedType, quantity: 1 }).catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
+    const handleBuyProtection = (item: ProtectionItem["key"]) =>
+        buyProtection({ item, quantity: 1 }).catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
 
     const oddsSections: OddsSection[] = [
         {
@@ -722,9 +745,13 @@ export default function GardenGame() {
                 </DialogTitle>
                 <DialogContent sx={{ pb: 3, display: "flex", flexDirection: "column", gap: 2 }}>
                     <Typography variant="caption" color="text.secondary">
-                        Buy seeds one at a time here. Bulk discounts (5x/10x) are in the Store.
+                        Seeds - buy one at a time here. Bulk discounts (5x/10x) are in the Store.
                     </Typography>
                     <SeedShopList seedTiers={seedTiers} mode="single" onBuy={handleBuySeed} isBuying={isBuyingSeed} />
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                        Crop protection - buy one at a time here.
+                    </Typography>
+                    <ProtectionShopList protectionItems={protectionItems} mode="single" onBuy={handleBuyProtection} isBuying={isBuyingProtection} />
                 </DialogContent>
             </Dialog>
         </GameWrapper>

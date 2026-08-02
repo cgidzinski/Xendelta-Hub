@@ -17,9 +17,12 @@ import FavoriteIcon from "@mui/icons-material/Favorite";
 import StairsIcon from "@mui/icons-material/Stairs";
 import ShieldIcon from "@mui/icons-material/Shield";
 import FlareIcon from "@mui/icons-material/Flare";
+import BugReportIcon from "@mui/icons-material/BugReport";
+import ScienceIcon from "@mui/icons-material/Science";
+import SpaIcon from "@mui/icons-material/Spa";
 import { formatCheddar } from "../../utils/currency";
 import { RanchCreature, RanchStats, RanchType } from "../../../../../hooks/casino/useCasinoRanch";
-import { SeedTier } from "../../../../../hooks/casino/useCasinoGarden";
+import { ProtectionItem, SeedTier } from "../../../../../hooks/casino/useCasinoGarden";
 
 export const COURSE_TICKET_KEY = "course-ticket";
 export const HARDENED_FEED_KEY = "hardened-feed";
@@ -341,7 +344,67 @@ export function SeedShopList({ seedTiers, mode, onBuy, isBuying }: SeedShopListP
     );
 }
 
-const MINE_EQUIPMENT_ROWS: { key: MineEquipmentItem; icon: ReactNode; label: string; color: "warning" | "error" | "success" | "info"; desc: string }[] = [
+export const PROTECTION_ITEM_ROWS: { key: ProtectionItem["key"]; icon: ReactNode; label: string; color: "success" | "info" | "warning" | "primary"; desc: string }[] = [
+    { key: "pesticide", icon: <BugReportIcon />, label: "Pesticide", color: "success", desc: "Shields against the next vermin (🐀) hit" },
+    { key: "fungicide", icon: <ScienceIcon />, label: "Fungicide", color: "info", desc: "Shields against disease (🦠) and cures it if active" },
+    { key: "fertilizer", icon: <SpaIcon />, label: "Fertilizer", color: "warning", desc: "Instantly clears one growth stage" },
+    { key: "bonemeal", icon: <SpeedIcon />, label: "Bonemeal", color: "primary", desc: "Speeds up watering cooldown by 25%, from then on" },
+];
+
+interface ProtectionShopListProps {
+    protectionItems: ProtectionItem[];
+    // "bulk" (Store's Garden tab): 1x/5x/10x buy buttons showing the discounted total.
+    // "single" (GardenGame's own Shop dialog): one Buy-1 button per item - same split as
+    // SeedShopList/MineEquipmentList.
+    mode: "bulk" | "single";
+    onBuy: (item: ProtectionItem["key"], quantity: number) => void;
+    isBuying: boolean;
+}
+
+// Pesticide/Fungicide/Fertilizer/Bonemeal rows - shared by GardenGame's in-game Shop dialog
+// (single-buy, opened from a plant's own view) and the Store's Garden tab (bulk), so both
+// read the same live prices/owned counts and never drift.
+export function ProtectionShopList({ protectionItems, mode, onBuy, isBuying }: ProtectionShopListProps) {
+    return (
+        <>
+            {PROTECTION_ITEM_ROWS.map((row) => {
+                const item = protectionItems.find((p) => p.key === row.key);
+                if (!item) {
+                    return null;
+                }
+                return (
+                    <Box key={row.key} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <Box sx={{ color: `${row.color}.main` }}>{row.icon}</Box>
+                            <Box sx={{ flexGrow: 1 }}>
+                                <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                        {row.label} (x{item.owned})
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        {formatCheddar(item.cost)} each
+                                    </Typography>
+                                </Box>
+                                <Typography variant="caption" color="text.secondary">
+                                    {row.desc}
+                                </Typography>
+                            </Box>
+                        </Box>
+                        {mode === "bulk" ? (
+                            <BulkQuantityButtons unitCost={item.cost} color={row.color} disabled={isBuying} onBuy={(qty) => onBuy(row.key, qty)} />
+                        ) : (
+                            <Button size="small" variant="contained" fullWidth disabled={isBuying} onClick={() => onBuy(row.key, 1)} sx={{ textTransform: "none" }}>
+                                Buy 1 ({formatCheddar(item.cost)})
+                            </Button>
+                        )}
+                    </Box>
+                );
+            })}
+        </>
+    );
+}
+
+export const MINE_EQUIPMENT_ROWS: { key: MineEquipmentItem; icon: ReactNode; label: string; color: "warning" | "error" | "success" | "info"; desc: string }[] = [
     { key: "ladder", icon: <StairsIcon />, label: "Ladder", color: "warning", desc: "Dig up or down into new territory" },
     { key: "explosive", icon: <BoltIcon />, label: "Explosive", color: "error", desc: "Clears heavy stone blocking your path" },
     { key: "support", icon: <ShieldIcon />, label: "Support", color: "success", desc: "Blocks your next cave-in" },

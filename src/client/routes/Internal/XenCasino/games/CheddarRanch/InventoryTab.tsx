@@ -17,13 +17,22 @@ import SellIcon from "@mui/icons-material/Sell";
 import { useSnackbar } from "notistack";
 import { formatCheddar } from "../../utils/currency";
 import { RanchTonicRecipe, useCasinoRanch } from "../../../../../hooks/casino/useCasinoRanch";
-import { ITEM_EMOJI, STAT_ICON } from "./shared";
+import { MineEquipmentItem, useCasinoMine } from "../../../../../hooks/casino/useCasinoMine";
+import { ITEM_EMOJI, MINE_EQUIPMENT_ROWS, STAT_ICON } from "./shared";
 
 function ItemsPanel() {
     const { items, sellItem, isSellingItem } = useCasinoRanch();
+    const { state: mineState, sellEquipment, isSellingEquipment } = useCasinoMine();
     const { enqueueSnackbar } = useSnackbar();
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
+    const [selectedEquipment, setSelectedEquipment] = useState<MineEquipmentItem | null>(null);
     const selectedItem = items.find((i) => i.key === selectedKey) ?? null;
+
+    const equipmentOwned: Record<MineEquipmentItem, number> = mineState
+        ? { ladder: mineState.ladderCount, explosive: mineState.explosiveCount, support: mineState.supportCount, flare: mineState.flareCount }
+        : { ladder: 0, explosive: 0, support: 0, flare: 0 };
+    const ownedEquipment = MINE_EQUIPMENT_ROWS.filter((row) => equipmentOwned[row.key] > 0);
+    const selectedRow = ownedEquipment.find((row) => row.key === selectedEquipment) ?? null;
 
     const handleSell = () => {
         if (!selectedItem) {
@@ -37,7 +46,21 @@ function ItemsPanel() {
             .catch((e) => enqueueSnackbar(e.message || "Failed to sell", { variant: "error" }));
     };
 
-    if (items.length === 0) {
+    const handleSellEquipment = () => {
+        if (!selectedRow || !mineState) {
+            return;
+        }
+        const count = equipmentOwned[selectedRow.key];
+        const totalValue = mineState.prices[selectedRow.key].sellValue * count;
+        sellEquipment({ item: selectedRow.key, quantity: count })
+            .then(() => {
+                enqueueSnackbar(`Sold ${count}x ${selectedRow.label} for ${formatCheddar(totalValue)} cheddar.`, { variant: "success" });
+                setSelectedEquipment(null);
+            })
+            .catch((e) => enqueueSnackbar(e.message || "Failed to sell", { variant: "error" }));
+    };
+
+    if (items.length === 0 && ownedEquipment.length === 0) {
         return (
             <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 2 }}>
                 No items yet - collect from a creature in the Barn, dig ore in the Mines, or harvest the Garden.
@@ -47,35 +70,74 @@ function ItemsPanel() {
 
     return (
         <>
-            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2 }}>
-                {items.map((item) => (
-                    <CardActionArea
-                        key={item.key}
-                        onClick={() => setSelectedKey(item.key)}
-                        sx={{
-                            position: "relative",
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            gap: 0.5,
-                            p: 2,
-                            borderRadius: 2,
-                            border: "1px solid",
-                            borderColor: "divider",
-                        }}
-                    >
-                        <Chip
-                            size="small"
-                            label={`x${item.quantity}`}
-                            sx={{ position: "absolute", top: 6, right: 6, height: 20, fontSize: 11, fontWeight: 700 }}
-                        />
-                        <Typography sx={{ fontSize: 36 }}>{ITEM_EMOJI[item.key] ?? "📦"}</Typography>
-                        <Typography variant="caption" sx={{ textAlign: "center", fontWeight: 600 }}>
-                            {item.label}
-                        </Typography>
-                    </CardActionArea>
-                ))}
-            </Box>
+            {items.length > 0 && (
+                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2 }}>
+                    {items.map((item) => (
+                        <CardActionArea
+                            key={item.key}
+                            onClick={() => setSelectedKey(item.key)}
+                            sx={{
+                                position: "relative",
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                gap: 0.5,
+                                p: 2,
+                                borderRadius: 2,
+                                border: "1px solid",
+                                borderColor: "divider",
+                            }}
+                        >
+                            <Chip
+                                size="small"
+                                label={`x${item.quantity}`}
+                                sx={{ position: "absolute", top: 6, right: 6, height: 20, fontSize: 11, fontWeight: 700 }}
+                            />
+                            <Typography sx={{ fontSize: 36 }}>{ITEM_EMOJI[item.key] ?? "📦"}</Typography>
+                            <Typography variant="caption" sx={{ textAlign: "center", fontWeight: 600 }}>
+                                {item.label}
+                            </Typography>
+                        </CardActionArea>
+                    ))}
+                </Box>
+            )}
+
+            {ownedEquipment.length > 0 && (
+                <>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: items.length > 0 ? 2 : 0, mb: 1 }}>
+                        Mine Equipment
+                    </Typography>
+                    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2 }}>
+                        {ownedEquipment.map((row) => (
+                            <CardActionArea
+                                key={row.key}
+                                onClick={() => setSelectedEquipment(row.key)}
+                                sx={{
+                                    position: "relative",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    alignItems: "center",
+                                    gap: 0.5,
+                                    p: 2,
+                                    borderRadius: 2,
+                                    border: "1px solid",
+                                    borderColor: "divider",
+                                }}
+                            >
+                                <Chip
+                                    size="small"
+                                    label={`x${equipmentOwned[row.key]}`}
+                                    sx={{ position: "absolute", top: 6, right: 6, height: 20, fontSize: 11, fontWeight: 700 }}
+                                />
+                                <Box sx={{ fontSize: 36, color: `${row.color}.main`, display: "flex" }}>{row.icon}</Box>
+                                <Typography variant="caption" sx={{ textAlign: "center", fontWeight: 600 }}>
+                                    {row.label}
+                                </Typography>
+                            </CardActionArea>
+                        ))}
+                    </Box>
+                </>
+            )}
 
             <Dialog open={!!selectedItem} onClose={() => setSelectedKey(null)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
                 <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -99,6 +161,34 @@ function ItemsPanel() {
                         <Box sx={{ display: "flex", gap: 1, width: "100%", mt: 1 }}>
                             <Button variant="contained" fullWidth startIcon={<SellIcon />} disabled={isSellingItem} onClick={handleSell}>
                                 Sell All ({formatCheddar(selectedItem.quantity * selectedItem.sellValue)})
+                            </Button>
+                        </Box>
+                    </DialogContent>
+                )}
+            </Dialog>
+
+            <Dialog open={!!selectedRow} onClose={() => setSelectedEquipment(null)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+                <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    Item Details
+                    <IconButton onClick={() => setSelectedEquipment(null)} aria-label="Close">
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
+                {selectedRow && mineState && (
+                    <DialogContent sx={{ pb: 3, display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5 }}>
+                        <Box sx={{ fontSize: 48, color: `${selectedRow.color}.main`, display: "flex" }}>{selectedRow.icon}</Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                            {selectedRow.label}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>
+                            {selectedRow.desc}
+                        </Typography>
+                        <Typography variant="body2">
+                            You own {equipmentOwned[selectedRow.key]} - worth {formatCheddar(mineState.prices[selectedRow.key].sellValue)} each
+                        </Typography>
+                        <Box sx={{ display: "flex", gap: 1, width: "100%", mt: 1 }}>
+                            <Button variant="contained" fullWidth startIcon={<SellIcon />} disabled={isSellingEquipment} onClick={handleSellEquipment}>
+                                Sell All ({formatCheddar(mineState.prices[selectedRow.key].sellValue * equipmentOwned[selectedRow.key])})
                             </Button>
                         </Box>
                     </DialogContent>

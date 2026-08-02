@@ -43,10 +43,19 @@ export interface SeedTier {
     owned: number;
 }
 
+export interface ProtectionItem {
+    key: "pesticide" | "fungicide" | "fertilizer" | "bonemeal";
+    label: string;
+    cost: number;
+    // How many the player currently owns - bought in bulk from the Store (or one at a time
+    // from Garden's own Shop dialog), spent one at a time when protecting a growing plot.
+    owned: number;
+}
+
 export interface GardenState {
     squares: GardenSquare[];
     seedTiers: SeedTier[];
-    protectionCost: { pesticide: number; fungicide: number; fertilizer: number; bonemeal: number };
+    protectionItems: ProtectionItem[];
     waterCooldownMs: number;
     neglectGraceMs: number;
     cleanupFee: number;
@@ -92,15 +101,23 @@ export const useCasinoGarden = () => {
         onSuccess: invalidate,
     });
 
+    const { mutateAsync: buyProtection, isPending: isBuyingProtection } = useMutation({
+        mutationFn: async (params: { item: ProtectionItem["key"]; quantity: number }) =>
+            (await apiClient.post<ApiResponse<{ balance: string; protectionItems: ProtectionItem[] }>>("/api/casino/ranch/garden/protection/buy", params)).data.data!,
+        onSuccess: invalidate,
+    });
+
     const { mutateAsync: water, isPending: isWatering } = useMutation({
         mutationFn: async (params: { squareId: number }) =>
             (await apiClient.post<ApiResponse<{ square: GardenSquare }>>("/api/casino/ranch/garden/water", params)).data.data!,
         onSuccess: () => queryClient.invalidateQueries({ queryKey: casinoGardenKeys.all }),
     });
 
+    // No cheddar changes hands here anymore - the protection item was already paid for at
+    // buy time, so there's no balance to report, just the updated square + owned counts.
     const { mutateAsync: protect, isPending: isProtecting } = useMutation({
-        mutationFn: async (params: { squareId: number; item: "pesticide" | "fungicide" | "fertilizer" | "bonemeal" }) =>
-            (await apiClient.post<ApiResponse<{ square: GardenSquare; balance: string }>>("/api/casino/ranch/garden/protect", params)).data.data!,
+        mutationFn: async (params: { squareId: number; item: ProtectionItem["key"] }) =>
+            (await apiClient.post<ApiResponse<{ square: GardenSquare; protectionItems: ProtectionItem[] }>>("/api/casino/ranch/garden/protect", params)).data.data!,
         onSuccess: invalidate,
     });
 
@@ -134,7 +151,7 @@ export const useCasinoGarden = () => {
     return {
         squares: data?.squares ?? [],
         seedTiers: data?.seedTiers ?? [],
-        protectionCost: data?.protectionCost ?? { pesticide: 0, fungicide: 0, fertilizer: 0, bonemeal: 0 },
+        protectionItems: data?.protectionItems ?? [],
         waterCooldownMs: data?.waterCooldownMs ?? 60 * 60 * 1000,
         neglectGraceMs: data?.neglectGraceMs ?? 24 * 60 * 60 * 1000,
         cleanupFee: data?.cleanupFee ?? 0,
@@ -144,6 +161,8 @@ export const useCasinoGarden = () => {
         isPlanting,
         buySeed,
         isBuyingSeed,
+        buyProtection,
+        isBuyingProtection,
         water,
         isWatering,
         protect,

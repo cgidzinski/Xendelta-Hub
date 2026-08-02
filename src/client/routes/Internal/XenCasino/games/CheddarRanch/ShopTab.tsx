@@ -10,9 +10,9 @@ import {
 import { useSnackbar } from "notistack";
 import { formatCheddar } from "../../utils/currency";
 import { RanchFeedItem, RanchShopItem, useCasinoRanch } from "../../../../../hooks/casino/useCasinoRanch";
-import { useCasinoGarden } from "../../../../../hooks/casino/useCasinoGarden";
+import { ProtectionItem, useCasinoGarden } from "../../../../../hooks/casino/useCasinoGarden";
 import { useCasinoMine } from "../../../../../hooks/casino/useCasinoMine";
-import { BulkQuantityButtons, MineEquipmentItem, MineEquipmentList, SeedShopList, TYPE_EMOJI, TYPE_LABEL } from "./shared";
+import { BulkQuantityButtons, MineEquipmentItem, MineEquipmentList, PROTECTION_ITEM_ROWS, ProtectionShopList, SeedShopList, TYPE_EMOJI, TYPE_LABEL } from "./shared";
 
 function FeedPanel() {
     const { feedItems, buyFeed, isBuyingFeed } = useCasinoRanch();
@@ -109,13 +109,20 @@ function TonicsPanel() {
 }
 
 function GardenPanel() {
-    const { seedTiers, buySeed, isBuyingSeed } = useCasinoGarden();
+    const { seedTiers, buySeed, isBuyingSeed, protectionItems, buyProtection, isBuyingProtection } = useCasinoGarden();
     const { enqueueSnackbar } = useSnackbar();
 
     const handleBuySeed = (seedType: string, quantity: number) => {
         const tier = seedTiers.find((t) => t.key === seedType);
         buySeed({ seedType, quantity })
             .then(() => enqueueSnackbar(`Bought ${quantity}x ${tier?.label ?? "seed"}${quantity === 1 ? "" : "s"}.`, { variant: "success" }))
+            .catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
+    };
+
+    const handleBuyProtection = (item: ProtectionItem["key"], quantity: number) => {
+        const label = PROTECTION_ITEM_ROWS.find((r) => r.key === item)?.label ?? item;
+        buyProtection({ item, quantity })
+            .then(() => enqueueSnackbar(`Bought ${quantity}x ${label}.`, { variant: "success" }))
             .catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
     };
 
@@ -126,9 +133,13 @@ function GardenPanel() {
     return (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Typography variant="caption" color="text.secondary">
-                Buy seeds into your stock, then plant them from an empty Garden plot.
+                Seeds - buy into your stock, then plant them from an empty Garden plot.
             </Typography>
             <SeedShopList seedTiers={seedTiers} mode="bulk" onBuy={handleBuySeed} isBuying={isBuyingSeed} />
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                Crop protection - buy into your stock, then use them on a growing plot.
+            </Typography>
+            <ProtectionShopList protectionItems={protectionItems} mode="bulk" onBuy={handleBuyProtection} isBuying={isBuyingProtection} />
         </Box>
     );
 }

@@ -147,8 +147,6 @@ export default function MineGame() {
         isDigging,
         buyEquipment,
         isBuying,
-        sellEquipment,
-        isSellingEquipment,
         useFlare,
         isFlaring,
         resetMap,
@@ -161,8 +159,6 @@ export default function MineGame() {
 
     const handleBuy = (item: MineEquipmentItem, quantity: number) =>
         buyEquipment({ item, quantity }).catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
-    const handleSell = (item: MineEquipmentItem, quantity: number) =>
-        sellEquipment({ item, quantity }).catch((e) => enqueueSnackbar(e.message || "Failed to sell", { variant: "error" }));
     const handleFlare = () =>
         useFlare()
             .then(() => enqueueSnackbar("Flare burst - scouted the area around you.", { variant: "success" }))
@@ -460,7 +456,7 @@ export default function MineGame() {
                 </DialogTitle>
                 <DialogContent sx={{ pb: 3, display: "flex", flexDirection: "column", gap: 2 }}>
                     <Typography variant="caption" color="text.secondary">
-                        Buy one at a time here; sell one or all. Bulk discounts (5x/10x) are in the Store.
+                        Buy one at a time here. Sell equipment from your Inventory. Bulk discounts (5x/10x) are in the Store.
                     </Typography>
                     <MineEquipmentList
                         prices={state.prices}
@@ -468,8 +464,6 @@ export default function MineGame() {
                         mode="single"
                         onBuy={handleBuy}
                         isBuying={isBuying}
-                        onSell={handleSell}
-                        isSelling={isSellingEquipment}
                     />
 
                     <Box sx={{ borderTop: "1px solid", borderColor: "divider", pt: 2 }}>
