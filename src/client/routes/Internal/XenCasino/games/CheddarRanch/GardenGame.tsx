@@ -325,17 +325,20 @@ interface SeedOptionProps {
     tier: SeedTier;
     disabled: boolean;
     onSelect: () => void;
+    onBuy: () => void;
+    isBuying: boolean;
 }
 
-// One seed choice in the empty-plot picker - plants from stock if you own any. Seeds are
-// bought from the Shop (the button above this list, or the Store's Garden tab) rather than
-// inline here, so a 0-owned tier is just informational and can't be tapped.
-function SeedOption({ tier, disabled, onSelect }: SeedOptionProps) {
+// One seed choice in the empty-plot picker - the whole row is a single action: plant from
+// stock if you own any, or buy 1 if you don't. The "N owned" / "Buy {cost}" text is pure
+// decor, not its own control - no nested button, so no greyed-out disabled look for the
+// 0-owned case either. Only disabled while a plant/buy request is actually in flight.
+function SeedOption({ tier, disabled, onSelect, onBuy, isBuying }: SeedOptionProps) {
     const owned = tier.owned > 0;
     return (
         <ListItemButton
-            disabled={disabled || !owned}
-            onClick={onSelect}
+            disabled={disabled || isBuying}
+            onClick={owned ? onSelect : onBuy}
             sx={{
                 alignItems: "flex-start",
                 gap: 1.5,
@@ -356,8 +359,8 @@ function SeedOption({ tier, disabled, onSelect }: SeedOptionProps) {
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, mr: "auto" }}>
                         {tier.label}
                     </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: owned ? "success.main" : "text.disabled" }}>
-                        {owned ? `${tier.owned} owned` : "0 owned"}
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: owned ? "success.main" : "warning.main" }}>
+                        {owned ? `${tier.owned} owned` : `Buy ${formatCheddar(tier.cost)}`}
                     </Typography>
                 </Box>
                 <Stack spacing={0.5} sx={{ mt: 0.75 }}>
@@ -388,6 +391,8 @@ function SquareDetails({ square, onHarvested, onCleared, onOpenShop }: SquareDet
         cleanupFee,
         plant,
         isPlanting,
+        buySeed,
+        isBuyingSeed,
         water,
         isWatering,
         protect,
@@ -414,6 +419,8 @@ function SquareDetails({ square, onHarvested, onCleared, onOpenShop }: SquareDet
 
     const handlePlant = (seedType: string) =>
         plant({ squareId: square.squareId, seedType }).catch((e) => enqueueSnackbar(e.message || "Failed to plant", { variant: "error" }));
+    const handleBuySeed = (seedType: string) =>
+        buySeed({ seedType, quantity: 1 }).catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
     const handleWater = () => water({ squareId: square.squareId }).catch((e) => enqueueSnackbar(e.message || "Failed to water", { variant: "error" }));
     const handleProtect = (item: "pesticide" | "fungicide" | "fertilizer" | "bonemeal") =>
         protect({ squareId: square.squareId, item }).catch((e) => enqueueSnackbar(e.message || "Failed to protect", { variant: "error" }));
@@ -436,15 +443,19 @@ function SquareDetails({ square, onHarvested, onCleared, onOpenShop }: SquareDet
                 <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, mb: 2.5 }}>
                     <Avatar sx={{ width: 56, height: 56, fontSize: 28, bgcolor: "action.hover" }}>{EMPTY_EMOJI}</Avatar>
                     <Typography variant="body2" color="text.secondary">
-                        Plant from your seed stock
+                        Plant from your seed stock - buy more from the Store
                     </Typography>
-                    <Button variant="outlined" size="small" onClick={onOpenShop} sx={{ textTransform: "none" }}>
-                        Shop
-                    </Button>
                 </Box>
                 <List disablePadding>
                     {seedTiers.map((tier) => (
-                        <SeedOption key={tier.key} tier={tier} disabled={isPlanting} onSelect={() => handlePlant(tier.key)} />
+                        <SeedOption
+                            key={tier.key}
+                            tier={tier}
+                            disabled={isPlanting}
+                            onSelect={() => handlePlant(tier.key)}
+                            onBuy={() => handleBuySeed(tier.key)}
+                            isBuying={isBuyingSeed}
+                        />
                     ))}
                 </List>
             </Box>
@@ -454,6 +465,11 @@ function SquareDetails({ square, onHarvested, onCleared, onOpenShop }: SquareDet
     if (square.status === "dead") {
         return (
             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, textAlign: "center", py: 1 }}>
+                <Box sx={{ display: "flex", justifyContent: "flex-end", width: "100%" }}>
+                    <Button variant="outlined" size="small" onClick={onOpenShop} sx={{ textTransform: "none" }}>
+                        Shop
+                    </Button>
+                </Box>
                 <Avatar sx={{ width: 64, height: 64, fontSize: 34, bgcolor: "error.dark" }}>{DEAD_EMOJI}</Avatar>
                 <Typography variant="body2" color="text.secondary">
                     This plot's crop died. Clean it up before you can replant.
@@ -482,6 +498,12 @@ function SquareDetails({ square, onHarvested, onCleared, onOpenShop }: SquareDet
                     {square.seedLabel}
                 </Typography>
                 <Chip label={square.status} size="small" color={STATUS_COLOR[square.status]} sx={{ textTransform: "capitalize" }} />
+            </Box>
+
+            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                <Button variant="outlined" size="small" onClick={onOpenShop} sx={{ textTransform: "none" }}>
+                    Shop
+                </Button>
             </Box>
 
             <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
@@ -656,16 +678,10 @@ export default function GardenGame() {
             )} to clean up before you can replant it. Harvesting doesn't pay cheddar directly - it fills your Inventory with produce you sell later.`}
             oddsSections={oddsSections}
         >
-            <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 2 }}>
-                <Button variant="outlined" size="small" onClick={() => setShopOpen(true)} sx={{ textTransform: "none" }}>
-                    Shop
-                </Button>
-            </Box>
-
             {isLoading ? (
-                <LinearProgress sx={{ mt: 2 }} />
+                <LinearProgress sx={{ mt: 4 }} />
             ) : (
-                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2, mt: 1 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2, mt: 2 }}>
                     {squares.map((square) => (
                         <GardenTile key={square.squareId} square={square} onOpen={setSelectedSquareId} />
                     ))}
