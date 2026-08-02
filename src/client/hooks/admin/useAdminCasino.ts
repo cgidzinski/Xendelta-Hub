@@ -68,9 +68,18 @@ export interface AdminCasinoPlayerStats {
     net: string;
 }
 
+export interface AdminCasinoPlayerStatsTotals {
+    winAmount: string;
+    lossAmount: string;
+    roundsPlayed: number;
+    playerCount: number;
+}
+
 interface AdminCasinoPlayerStatsResponse {
     range: string;
     players: AdminCasinoPlayerStats[];
+    totals: AdminCasinoPlayerStatsTotals;
+    truncated: boolean;
 }
 
 export const adminCasinoKeys = {
@@ -238,6 +247,8 @@ export const useAdminCasinoPlayerStats = (range: StatsRange) => {
 
     return {
         players: data?.players ?? [],
+        totals: data?.totals ?? null,
+        truncated: data?.truncated ?? false,
         isLoading,
         isError,
         error: error as Error | null,

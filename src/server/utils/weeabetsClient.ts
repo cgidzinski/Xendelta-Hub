@@ -38,6 +38,29 @@ export class WeeabetsTransferError extends Error {
   }
 }
 
+// Weeabets error bodies aren't guaranteed plain text (the local mock returns plain text,
+// but the real API returns JSON) - this unwraps a JSON error body into a plain string so
+// callers never end up showing a raw JSON blob in a player-facing toast. Falls back to the
+// raw text as-is if it isn't JSON or has no recognizable message field.
+function extractErrorMessage(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return "Weeabets request failed";
+  }
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object") {
+      const candidate = parsed.message || parsed.error || parsed.error_message || parsed.detail || parsed.reason;
+      if (typeof candidate === "string" && candidate) {
+        return candidate;
+      }
+    }
+  } catch {
+    // Not JSON - the raw text is already the message (e.g. the local mock).
+  }
+  return trimmed;
+}
+
 export interface WeeabetsAccount {
   accountId: number;
   displayName: string;
@@ -120,7 +143,7 @@ export async function transfer(params: {
     }),
   });
   if (!res.ok) {
-    throw new WeeabetsTransferError(res.status, await res.text());
+    throw new WeeabetsTransferError(res.status, extractErrorMessage(await res.text()));
   }
   const body = (await res.json()) as { from_new_balance: string; to_new_balance: string };
   return { fromNewBalance: toDisplayAmount(body.from_new_balance), toNewBalance: toDisplayAmount(body.to_new_balance) };

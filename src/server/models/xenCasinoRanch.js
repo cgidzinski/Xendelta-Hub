@@ -122,6 +122,7 @@ var mineSubSchema = new mongoose.Schema({
     deepestDepthReached: { type: Number, default: 0 },
     bestGemTier: { type: String, default: null },
     reinforcementCount: { type: Number, default: 0 },
+    flareCount: { type: Number, default: 0 },
 }, { _id: false });
 
 // ---------------------------------------------------------------------------
@@ -283,14 +284,14 @@ function resolveGardenSquare(square, now) {
             if (totalDecay > 0) {
                 changed = true;
                 square.waterCount = Math.max(0, square.waterCount - totalDecay);
+                if (square.waterCount <= 0) {
+                    square.lastDecayDate = today;
+                    square.status = "dead";
+                    return true;
+                }
             }
         }
         square.lastDecayDate = today;
-
-        if (square.waterCount <= 0) {
-            square.status = "dead";
-            return true;
-        }
     }
 
     // Even once fully watered, the plot still needs the same cooldown to pass since that
@@ -657,6 +658,21 @@ xenCasinoRanchSchema.statics.addMineEquipment = async function (userId, item, am
     if (item === "ladder") doc.mine.ladderCount += amount;
     else if (item === "explosive") doc.mine.explosiveCount += amount;
     else if (item === "support") doc.mine.reinforcementCount += amount;
+    else if (item === "flare") doc.mine.flareCount += amount;
+    await doc.save();
+    return doc;
+};
+
+// Mirrors addMineEquipment but subtracts, guarding against going negative - used both for
+// selling equipment back and for spending a Flare (no cheddar refund on that path, see the
+// /mine/flare route). Returns null (no save) if the player doesn't own enough.
+xenCasinoRanchSchema.statics.removeMineEquipment = async function (userId, item, amount) {
+    var doc = await this.getState(userId);
+    var countField = item === "ladder" ? "ladderCount" : item === "explosive" ? "explosiveCount" : item === "support" ? "reinforcementCount" : "flareCount";
+    if (doc.mine[countField] < amount) {
+        return null;
+    }
+    doc.mine[countField] -= amount;
     await doc.save();
     return doc;
 };

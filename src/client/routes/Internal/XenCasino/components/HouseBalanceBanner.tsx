@@ -23,7 +23,7 @@ export default function HouseBalanceBanner() {
                 XenCasino's current funds
             </Typography>
             <Typography variant="h5" sx={{ fontWeight: 800, color: "warning.main" }}>
-                🧀 {balance !== undefined ? formatCheddar(balance) : "—"}
+                {balance !== undefined ? formatCheddar(balance) : "—"}
             </Typography>
         </Paper>
     );

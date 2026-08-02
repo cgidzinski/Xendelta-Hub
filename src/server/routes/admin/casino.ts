@@ -119,15 +119,33 @@ module.exports = function (app: express.Application) {
                 match.createdAt = { $gte: cutoff };
             }
 
-            var rows = await XenCasinoActivity.aggregate([
+            // $facet computes the capped top-100-movers list and the uncapped range
+            // totals (every player, every round) in the same pass over the same
+            // $match-filtered set, so the totals row below always reconciles with the
+            // Games tab's Totals row for the same range, even when the player list
+            // itself is truncated.
+            var facetResult = await XenCasinoActivity.aggregate([
                 { $match: match },
-                { $group: { _id: "$userId", winAmount: { $sum: "$payout" }, lossAmount: { $sum: "$wager" }, roundsPlayed: { $sum: 1 } } },
-                { $addFields: { net: { $subtract: ["$lossAmount", "$winAmount"] } } },
-                { $addFields: { absNet: { $abs: "$net" } } },
-                { $sort: { absNet: -1 } },
-                { $limit: 100 },
-                { $sort: { net: -1 } },
+                {
+                    $facet: {
+                        players: [
+                            { $group: { _id: "$userId", winAmount: { $sum: "$payout" }, lossAmount: { $sum: "$wager" }, roundsPlayed: { $sum: 1 } } },
+                            { $addFields: { net: { $subtract: ["$lossAmount", "$winAmount"] } } },
+                            { $addFields: { absNet: { $abs: "$net" } } },
+                            { $sort: { absNet: -1 } },
+                            { $limit: 100 },
+                            { $sort: { net: -1 } },
+                        ],
+                        totals: [
+                            { $group: { _id: null, winAmount: { $sum: "$payout" }, lossAmount: { $sum: "$wager" }, roundsPlayed: { $sum: 1 }, playerSet: { $addToSet: "$userId" } } },
+                            { $project: { _id: 0, winAmount: 1, lossAmount: 1, roundsPlayed: 1, playerCount: { $size: "$playerSet" } } },
+                        ],
+                    },
+                },
             ]).exec();
+
+            var rows = facetResult[0].players;
+            var totalsRow = facetResult[0].totals[0] || { winAmount: 0, lossAmount: 0, roundsPlayed: 0, playerCount: 0 };
 
             var userIds = rows.map(function (r: any) { return r._id; });
             var users = await User.find({ _id: { $in: userIds } }, "username avatar").exec();
@@ -149,7 +167,20 @@ module.exports = function (app: express.Application) {
                 };
             });
 
-            return res.json({ status: true, data: { range: range, players: players } });
+            return res.json({
+                status: true,
+                data: {
+                    range: range,
+                    players: players,
+                    totals: {
+                        winAmount: totalsRow.winAmount.toFixed(2),
+                        lossAmount: totalsRow.lossAmount.toFixed(2),
+                        roundsPlayed: totalsRow.roundsPlayed,
+                        playerCount: totalsRow.playerCount,
+                    },
+                    truncated: totalsRow.playerCount > 100,
+                },
+            });
         } catch (err) {
             return res.status(500).json({ status: false, message: (err as Error).message });
         }

@@ -9,7 +9,7 @@ export default function XenCasinoCardBody() {
 
     return (
         <Typography variant="body1" sx={{ fontWeight: 700, color: "warning.main" }}>
-            🧀 {formatCheddar(balance)}
+            {formatCheddar(balance)}
         </Typography>
     );
 }

@@ -38,6 +38,9 @@ export interface SeedTier {
     diseaseChance: number;
     baseMultiplier: number;
     variance: number;
+    // How many of this seed the player currently owns - bought in bulk from the Store,
+    // spent one at a time when planting an empty plot.
+    owned: number;
 }
 
 export interface GardenState {
@@ -74,9 +77,18 @@ export const useCasinoGarden = () => {
         queryClient.invalidateQueries({ queryKey: casinoLedgerKeys.all });
     };
 
+    // Plants from owned seed stock (bought via buySeed below) - no cheddar changes hands
+    // here anymore, so there's no balance/ledger to invalidate, just the garden query
+    // (square status + the spent seed's `owned` count).
     const { mutateAsync: plant, isPending: isPlanting } = useMutation({
         mutationFn: async (params: { squareId: number; seedType: string }) =>
-            (await apiClient.post<ApiResponse<{ square: GardenSquare; balance: string }>>("/api/casino/ranch/garden/plant", params)).data.data!,
+            (await apiClient.post<ApiResponse<{ square: GardenSquare }>>("/api/casino/ranch/garden/plant", params)).data.data!,
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: casinoGardenKeys.all }),
+    });
+
+    const { mutateAsync: buySeed, isPending: isBuyingSeed } = useMutation({
+        mutationFn: async (params: { seedType: string; quantity: number }) =>
+            (await apiClient.post<ApiResponse<{ balance: string; seedTiers: SeedTier[] }>>("/api/casino/ranch/garden/seeds/buy", params)).data.data!,
         onSuccess: invalidate,
     });
 
@@ -98,10 +110,14 @@ export const useCasinoGarden = () => {
     const { mutateAsync: harvest, isPending: isHarvesting } = useMutation({
         mutationFn: async (params: { squareId: number }) =>
             (
-                await apiClient.post<ApiResponse<{ item: { key: string; label: string; quantity: number }; items: RanchItem[] }>>(
-                    "/api/casino/ranch/garden/harvest",
-                    params
-                )
+                await apiClient.post<
+                    ApiResponse<{
+                        item: { key: string; label: string; quantity: number };
+                        bonusSeedReturned: boolean;
+                        items: RanchItem[];
+                        seedTiers: SeedTier[];
+                    }>
+                >("/api/casino/ranch/garden/harvest", params)
             ).data.data!,
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: casinoGardenKeys.all });
@@ -126,6 +142,8 @@ export const useCasinoGarden = () => {
         refetch,
         plant,
         isPlanting,
+        buySeed,
+        isBuyingSeed,
         water,
         isWatering,
         protect,

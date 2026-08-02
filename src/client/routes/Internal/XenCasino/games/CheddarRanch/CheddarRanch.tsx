@@ -10,6 +10,7 @@ import FarmHub from "./FarmHub";
 const VIEW_LABEL: Record<string, string> = {
     ranch: "Barn",
     race: "Racetrack",
+    garden: "Garden",
     inventory: "Inventory",
     shop: "Store",
     mine: "Mines",
@@ -70,7 +71,7 @@ export default function CheddarRanch() {
             label: "Inventory",
             content: (
                 <Typography variant="body2" color="text.secondary">
-                    Tap items to sell for cheddar or use them. Creature materials can be sold or crafted into Tonics. Ores from Mines appear here too.
+                    Items tab: tap anything to sell it for cheddar. Crafting tab: combine owned materials into Tonics for free. Ores from Mines and produce from the Garden appear here too.
                 </Typography>
             ),
         },
@@ -78,7 +79,7 @@ export default function CheddarRanch() {
             label: "Store",
             content: (
                 <Typography variant="body2" color="text.secondary">
-                    Buy Feed, Tonics, Type-Swap Serum, Decay Shield, Course Ticket, Hardened Feed, and Forfeit Insurance. Craft Tonics for free from materials.
+                    Feed, Buy Tonics, Garden (seeds), and Mine Equipment tabs. Type-Swap Serum and Decay Shield are bought right from a creature's own dialog in the Barn; Course Ticket, Hardened Feed, and Forfeit Insurance are bought from the Race tab.
                 </Typography>
             ),
         },
@@ -139,7 +140,7 @@ export default function CheddarRanch() {
                     </Typography>
                     {subView === "mine" && (
                         <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 700 }}>
-                            🧀 {formatCheddar(250)} / dig
+                            {formatCheddar(250)} / dig
                         </Typography>
                     )}
                 </Box>

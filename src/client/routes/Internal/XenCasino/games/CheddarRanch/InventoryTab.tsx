@@ -8,18 +8,19 @@ import {
     DialogContent,
     DialogTitle,
     IconButton,
+    Tab,
+    Tabs,
     Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import SellIcon from "@mui/icons-material/Sell";
 import { useSnackbar } from "notistack";
 import { formatCheddar } from "../../utils/currency";
-import { useCasinoRanch } from "../../../../../hooks/casino/useCasinoRanch";
-import { ITEM_EMOJI } from "./shared";
+import { RanchTonicRecipe, useCasinoRanch } from "../../../../../hooks/casino/useCasinoRanch";
+import { ITEM_EMOJI, STAT_ICON } from "./shared";
 
-export default function InventoryTab() {
-    const { items } = useCasinoRanch();
-    const { sellItem, isSellingItem } = useCasinoRanch();
+function ItemsPanel() {
+    const { items, sellItem, isSellingItem } = useCasinoRanch();
     const { enqueueSnackbar } = useSnackbar();
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
     const selectedItem = items.find((i) => i.key === selectedKey) ?? null;
@@ -36,22 +37,10 @@ export default function InventoryTab() {
             .catch((e) => enqueueSnackbar(e.message || "Failed to sell", { variant: "error" }));
     };
 
-    const handleUse = () => {
-        if (!selectedItem) {
-            return;
-        }
-        useItem({ itemKey: selectedItem.key })
-            .then((r) => {
-                enqueueSnackbar(r.message, { variant: "info" });
-                setSelectedKey(null);
-            })
-            .catch((e) => enqueueSnackbar(e.message || "Failed to use item", { variant: "error" }));
-    };
-
     if (items.length === 0) {
         return (
             <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 2 }}>
-                No items yet - collect from a creature on the Ranch tab.
+                No items yet - collect from a creature in the Barn, dig ore in the Mines, or harvest the Garden.
             </Typography>
         );
     }
@@ -109,12 +98,90 @@ export default function InventoryTab() {
                         </Typography>
                         <Box sx={{ display: "flex", gap: 1, width: "100%", mt: 1 }}>
                             <Button variant="contained" fullWidth startIcon={<SellIcon />} disabled={isSellingItem} onClick={handleSell}>
-                                Sell All (🧀 {formatCheddar(selectedItem.quantity * selectedItem.sellValue)})
+                                Sell All ({formatCheddar(selectedItem.quantity * selectedItem.sellValue)})
                             </Button>
                         </Box>
                     </DialogContent>
                 )}
             </Dialog>
         </>
+    );
+}
+
+function CraftingPanel() {
+    const { tonicRecipes, shopItems, craftTonic, isCraftingTonic } = useCasinoRanch();
+    const { enqueueSnackbar } = useSnackbar();
+
+    const handleCraft = (recipe: RanchTonicRecipe) =>
+        craftTonic(recipe.statKey)
+            .then((r) => enqueueSnackbar(r.message, { variant: "success" }))
+            .catch((e) => enqueueSnackbar(e.message || "Failed to craft", { variant: "error" }));
+
+    return (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <Typography variant="caption" color="text.secondary">
+                Combine owned materials into a Tonic - free, no cheddar needed.
+            </Typography>
+            {tonicRecipes.map((recipe) => {
+                const shopItem = shopItems.find((i) => i.key === recipe.tonicKey);
+                if (!shopItem) {
+                    return null;
+                }
+                const craftable = recipe.recipes.some((r) => r.owned >= r.quantity);
+                return (
+                    <Box
+                        key={recipe.tonicKey}
+                        sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}
+                    >
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            {STAT_ICON[recipe.statKey]}
+                            <Box sx={{ flexGrow: 1 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    {shopItem.label} (x{shopItem.quantity})
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    {shopItem.description}
+                                </Typography>
+                            </Box>
+                        </Box>
+                        <Button
+                            size="small"
+                            variant="contained"
+                            fullWidth
+                            disabled={isCraftingTonic || !craftable}
+                            onClick={() => handleCraft(recipe)}
+                            sx={{ textTransform: "none" }}
+                        >
+                            Craft (free)
+                        </Button>
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
+                            <Typography variant="caption" color="text.secondary">
+                                Craft from:
+                            </Typography>
+                            {recipe.recipes.map((r) => (
+                                <Typography key={r.materialKey} variant="caption" color="text.secondary">
+                                    {r.quantity}x {r.materialLabel} - you own {r.owned}
+                                </Typography>
+                            ))}
+                        </Box>
+                    </Box>
+                );
+            })}
+        </Box>
+    );
+}
+
+export default function InventoryTab() {
+    const [tab, setTab] = useState(0);
+
+    return (
+        <Box>
+            <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2, minHeight: 40, "& .MuiTab-root": { minHeight: 40 } }}>
+                <Tab label="Items" />
+                <Tab label="Crafting" />
+            </Tabs>
+            {tab === 0 && <ItemsPanel />}
+            {tab === 1 && <CraftingPanel />}
+        </Box>
     );
 }

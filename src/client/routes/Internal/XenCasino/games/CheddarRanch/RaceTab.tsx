@@ -170,6 +170,8 @@ export default function RaceTab() {
         entryFee,
         pendingRace,
         shopItems,
+        buyShopItem,
+        isBuyingShopItem,
         startRace,
         isStartingRace,
         forfeitRace,
@@ -190,9 +192,17 @@ export default function RaceTab() {
     const [useDifficultyItem, setUseDifficultyItem] = useState(false);
     const panelRef = useRef<HTMLDivElement | null>(null);
 
-    const courseTicketOwned = shopItems.find((i) => i.key === COURSE_TICKET_KEY)?.quantity ?? 0;
-    const hardenedFeedOwned = shopItems.find((i) => i.key === HARDENED_FEED_KEY)?.quantity ?? 0;
-    const insuranceOwned = shopItems.find((i) => i.key === FORFEIT_INSURANCE_KEY)?.quantity ?? 0;
+    const courseTicketItem = shopItems.find((i) => i.key === COURSE_TICKET_KEY);
+    const hardenedFeedItem = shopItems.find((i) => i.key === HARDENED_FEED_KEY);
+    const insuranceItem = shopItems.find((i) => i.key === FORFEIT_INSURANCE_KEY);
+    const courseTicketOwned = courseTicketItem?.quantity ?? 0;
+    const hardenedFeedOwned = hardenedFeedItem?.quantity ?? 0;
+    const insuranceOwned = insuranceItem?.quantity ?? 0;
+
+    const handleBuyRaceItem = (item: NonNullable<typeof courseTicketItem>) =>
+        buyShopItem(item.key)
+            .then(() => enqueueSnackbar(`Bought 1x ${item.label}.`, { variant: "success" }))
+            .catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
 
     const selectedCreature = creatures.find((c) => c.id === selectedId) ?? null;
     const pending: PendingRace | null = spinning
@@ -307,27 +317,65 @@ export default function RaceTab() {
                             disabled={!selectedCreature || isStartingRace}
                             onClick={handleStart}
                         />
-                        {selectedCreature && (courseTicketOwned > 0 || hardenedFeedOwned > 0) && (
-                            <Box sx={{ display: "flex", flexDirection: "column", mt: 0.5 }}>
-                                {courseTicketOwned > 0 && (
-                                    <FormControlLabel
-                                        control={<Checkbox size="small" checked={useCourseTicket} onChange={(e) => setUseCourseTicket(e.target.checked)} />}
-                                        label={
-                                            <Typography variant="caption" color="text.secondary">
-                                                Use a Course Ticket to reroll the course ({courseTicketOwned} owned)
-                                            </Typography>
-                                        }
-                                    />
+                        {selectedCreature && (
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, mt: 0.5 }}>
+                                {courseTicketItem && (
+                                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                        <FormControlLabel
+                                            sx={{ flex: 1, minWidth: 0, mr: 0 }}
+                                            control={
+                                                <Checkbox
+                                                    size="small"
+                                                    checked={useCourseTicket}
+                                                    disabled={courseTicketOwned === 0}
+                                                    onChange={(e) => setUseCourseTicket(e.target.checked)}
+                                                />
+                                            }
+                                            label={
+                                                <Typography variant="caption" color="text.secondary">
+                                                    Use a Course Ticket to reroll the course ({courseTicketOwned} owned)
+                                                </Typography>
+                                            }
+                                        />
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            disabled={isBuyingShopItem}
+                                            onClick={() => handleBuyRaceItem(courseTicketItem)}
+                                            sx={{ textTransform: "none", flexShrink: 0 }}
+                                        >
+                                            Buy ({formatCheddar(courseTicketItem.price)})
+                                        </Button>
+                                    </Box>
                                 )}
-                                {hardenedFeedOwned > 0 && (
-                                    <FormControlLabel
-                                        control={<Checkbox size="small" checked={useDifficultyItem} onChange={(e) => setUseDifficultyItem(e.target.checked)} />}
-                                        label={
-                                            <Typography variant="caption" color="text.secondary">
-                                                Use Hardened Feed for tougher, better-paying rivals ({hardenedFeedOwned} owned)
-                                            </Typography>
-                                        }
-                                    />
+                                {hardenedFeedItem && (
+                                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                        <FormControlLabel
+                                            sx={{ flex: 1, minWidth: 0, mr: 0 }}
+                                            control={
+                                                <Checkbox
+                                                    size="small"
+                                                    checked={useDifficultyItem}
+                                                    disabled={hardenedFeedOwned === 0}
+                                                    onChange={(e) => setUseDifficultyItem(e.target.checked)}
+                                                />
+                                            }
+                                            label={
+                                                <Typography variant="caption" color="text.secondary">
+                                                    Use Hardened Feed for tougher, better-paying rivals ({hardenedFeedOwned} owned)
+                                                </Typography>
+                                            }
+                                        />
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            disabled={isBuyingShopItem}
+                                            onClick={() => handleBuyRaceItem(hardenedFeedItem)}
+                                            sx={{ textTransform: "none", flexShrink: 0 }}
+                                        >
+                                            Buy ({formatCheddar(hardenedFeedItem.price)})
+                                        </Button>
+                                    </Box>
                                 )}
                             </Box>
                         )}
@@ -454,16 +502,29 @@ export default function RaceTab() {
                     )}
 
                     {!confirmingForfeit ? (
-                        <Button
-                            variant="text"
-                            color="error"
-                            fullWidth
-                            sx={{ mt: 1, textTransform: "none" }}
-                            disabled={isForfeitingRace}
-                            onClick={() => setConfirmingForfeit(true)}
-                        >
-                            {insuranceOwned > 0 ? `Forfeit (refunds ${formatCheddar(Math.round(entryFee * 0.5))} - Forfeit Insurance)` : `Forfeit (lose ${formatCheddar(entryFee)})`}
-                        </Button>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
+                            <Button
+                                variant="text"
+                                color="error"
+                                fullWidth
+                                sx={{ textTransform: "none" }}
+                                disabled={isForfeitingRace}
+                                onClick={() => setConfirmingForfeit(true)}
+                            >
+                                {insuranceOwned > 0 ? `Forfeit (refunds ${formatCheddar(Math.round(entryFee * 0.5))} - Forfeit Insurance)` : `Forfeit (lose ${formatCheddar(entryFee)})`}
+                            </Button>
+                            {insuranceItem && (
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    disabled={isBuyingShopItem}
+                                    onClick={() => handleBuyRaceItem(insuranceItem)}
+                                    sx={{ textTransform: "none", flexShrink: 0 }}
+                                >
+                                    Buy Insurance ({formatCheddar(insuranceItem.price)})
+                                </Button>
+                            )}
+                        </Box>
                     ) : (
                         <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 1, p: 1.5, border: "1px solid", borderColor: "error.main", borderRadius: 1 }}>
                             <Typography variant="body2" color="text.secondary">

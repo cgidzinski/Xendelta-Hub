@@ -32,6 +32,7 @@ import { useSnackbar } from "notistack";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import { formatCheddar } from "../../utils/currency";
 import { GardenSquare, SeedTier, useCasinoGarden } from "../../../../../hooks/casino/useCasinoGarden";
+import { SEED_EMOJI } from "./shared";
 
 // Ticks once a second for as long as `targetMs` is non-null, reading Date.now() fresh on
 // every tick rather than trusting a slower page-level clock - this is what makes the
@@ -84,12 +85,6 @@ function multiplierRange(baseMultiplier: number, variance: number): string {
     return `${low}x - ${high}x`;
 }
 
-const SEED_EMOJI: Record<string, string> = {
-    sprout: "🌱",
-    clover: "🍀",
-    nightshade: "🍄",
-    "golden-vine": "🍇",
-};
 const EMPTY_EMOJI = "➕";
 const DEAD_EMOJI = "💀";
 
@@ -330,16 +325,20 @@ interface SeedOptionProps {
     tier: SeedTier;
     disabled: boolean;
     onSelect: () => void;
+    onBuy: () => void;
+    isBuying: boolean;
 }
 
-// One seed choice in the empty-plot picker - an icon, the name + price on their own line,
-// then each stat (payout, waterings, hazard odds) broken onto its own row instead of a
-// single run-on secondary line.
-function SeedOption({ tier, disabled, onSelect }: SeedOptionProps) {
+// One seed choice in the empty-plot picker - the whole row is a single action: plant from
+// stock if you own any, or buy 1 if you don't. The "N owned" / "Buy {cost}" text is pure
+// decor, not its own control - no nested button, so no greyed-out disabled look for the
+// 0-owned case either. Only disabled while a plant/buy request is actually in flight.
+function SeedOption({ tier, disabled, onSelect, onBuy, isBuying }: SeedOptionProps) {
+    const owned = tier.owned > 0;
     return (
         <ListItemButton
-            disabled={disabled}
-            onClick={onSelect}
+            disabled={disabled || isBuying}
+            onClick={owned ? onSelect : onBuy}
             sx={{
                 alignItems: "flex-start",
                 gap: 1.5,
@@ -356,16 +355,16 @@ function SeedOption({ tier, disabled, onSelect }: SeedOptionProps) {
                 {SEED_EMOJI[tier.key] || "🌾"}
             </Avatar>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 0.75, rowGap: 0.5 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mr: "auto" }}>
                         {tier.label}
                     </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: "error.main", flexShrink: 0 }}>
-                        {formatCheddar(tier.cost)}
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: owned ? "success.main" : "warning.main" }}>
+                        {owned ? `${tier.owned} owned` : `Buy ${formatCheddar(tier.cost)}`}
                     </Typography>
                 </Box>
                 <Stack spacing={0.5} sx={{ mt: 0.75 }}>
-                    <StatLine icon={<AttachMoneyIcon />}>Pays {multiplierRange(tier.baseMultiplier, tier.variance)}</StatLine>
+                    <StatLine icon={<AttachMoneyIcon />}>Seed value {formatCheddar(tier.cost)} - pays {multiplierRange(tier.baseMultiplier, tier.variance)}</StatLine>
                     <StatLine icon={<WaterDropIcon />}>{tier.waterAmount} growth stages needed</StatLine>
                     <StatLine icon={<WarningAmberIcon />}>
                         Vermin {(tier.verminChance * 100).toFixed(0)}% / Disease {(tier.diseaseChance * 100).toFixed(0)}% per check
@@ -379,17 +378,20 @@ function SeedOption({ tier, disabled, onSelect }: SeedOptionProps) {
 interface SquareDetailsProps {
     square: GardenSquare;
     onHarvested: () => void;
+    onCleared: () => void;
 }
 
 // Full stats + every action for the selected square - rendered inside the modal, adapting
 // to status exactly like the old inline SquareCard body did.
-function SquareDetails({ square, onHarvested }: SquareDetailsProps) {
+function SquareDetails({ square, onHarvested, onCleared }: SquareDetailsProps) {
     const {
         seedTiers,
         protectionCost,
         cleanupFee,
         plant,
         isPlanting,
+        buySeed,
+        isBuyingSeed,
         water,
         isWatering,
         protect,
@@ -416,17 +418,23 @@ function SquareDetails({ square, onHarvested }: SquareDetailsProps) {
 
     const handlePlant = (seedType: string) =>
         plant({ squareId: square.squareId, seedType }).catch((e) => enqueueSnackbar(e.message || "Failed to plant", { variant: "error" }));
+    const handleBuySeed = (seedType: string) =>
+        buySeed({ seedType, quantity: 1 }).catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
     const handleWater = () => water({ squareId: square.squareId }).catch((e) => enqueueSnackbar(e.message || "Failed to water", { variant: "error" }));
     const handleProtect = (item: "pesticide" | "fungicide" | "fertilizer" | "bonemeal") =>
         protect({ squareId: square.squareId, item }).catch((e) => enqueueSnackbar(e.message || "Failed to protect", { variant: "error" }));
     const handleHarvest = () =>
         harvest({ squareId: square.squareId })
             .then((r) => {
-                enqueueSnackbar(`Harvested ${r.item.quantity}x ${r.item.label}! Sell it from your Inventory.`, { variant: "success" });
+                const bonus = r.bonusSeedReturned ? ` A ${square.seedLabel} seed dropped back into your stock too!` : "";
+                enqueueSnackbar(`Harvested ${r.item.quantity}x ${r.item.label}! Sell it from your Inventory.${bonus}`, { variant: "success" });
                 onHarvested();
             })
             .catch((e) => enqueueSnackbar(e.message || "Failed to harvest", { variant: "error" }));
-    const handleClear = () => clear({ squareId: square.squareId }).catch((e) => enqueueSnackbar(e.message || "Failed to clear", { variant: "error" }));
+    const handleClear = () =>
+        clear({ squareId: square.squareId })
+            .then(() => onCleared())
+            .catch((e) => enqueueSnackbar(e.message || "Failed to clear", { variant: "error" }));
 
     if (square.status === "empty") {
         return (
@@ -434,12 +442,19 @@ function SquareDetails({ square, onHarvested }: SquareDetailsProps) {
                 <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, mb: 2.5 }}>
                     <Avatar sx={{ width: 56, height: 56, fontSize: 28, bgcolor: "action.hover" }}>{EMPTY_EMOJI}</Avatar>
                     <Typography variant="body2" color="text.secondary">
-                        Choose a seed to plant
+                        Plant from your seed stock - buy more from the Store
                     </Typography>
                 </Box>
                 <List disablePadding>
                     {seedTiers.map((tier) => (
-                        <SeedOption key={tier.key} tier={tier} disabled={isPlanting} onSelect={() => handlePlant(tier.key)} />
+                        <SeedOption
+                            key={tier.key}
+                            tier={tier}
+                            disabled={isPlanting}
+                            onSelect={() => handlePlant(tier.key)}
+                            onBuy={() => handleBuySeed(tier.key)}
+                            isBuying={isBuyingSeed}
+                        />
                     ))}
                 </List>
             </Box>
@@ -480,7 +495,7 @@ function SquareDetails({ square, onHarvested }: SquareDetailsProps) {
             </Box>
 
             <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
-                <StatTile label="Initial Cost" value={formatCheddar(square.cost)} />
+                <StatTile label="Seed Value" value={formatCheddar(square.cost)} />
                 <StatTile label="Payout" value={multiplierRange(square.baseMultiplier, square.variance)} />
             </Box>
 
@@ -624,7 +639,7 @@ export default function GardenGame() {
                     t.diseaseChance * 100
                 ).toFixed(0)}% per check`,
             })),
-            footnote: `Harvest yields produce for your Inventory - the quantity is cost x base multiplier, swung +/- the seed's variance by casino luck. Each seed needs a set number of growth stages to mature - watering (on a ${formatDuration(
+            footnote: `Seeds are bought into your stock from the Store's Garden tab, then planted here for free - no cheddar changes hands at plant time. Harvest yields produce for your Inventory - the quantity is cost x base multiplier, swung +/- the seed's variance by casino luck - and also has a 20% chance to return one seed of that type straight back to your stock. Each seed needs a set number of growth stages to mature - watering (on a ${formatDuration(
                 waterCooldownMs
             )} cooldown per plot) advances one stage at a time. A vermin (🐀) hit sets a crop back a growth stage instead of hurting it outright. A plot left completely unwatered for ${formatDuration(
                 neglectGraceMs
@@ -637,7 +652,7 @@ export default function GardenGame() {
     return (
         <GameWrapper
             title="Casino Garden"
-            howToPlay={`Tap a plot to plant a seed, water it, or harvest it. Growth is what actually matters - each seed needs a set number of growth stages to mature, and watering is just what advances it to the next one, at most once every ${formatDuration(
+            howToPlay={`Buy seeds from the Store's Garden tab, then tap an empty plot to plant one from your stock - planting itself is free, since the seed was already paid for. Tap a growing or ready plot to water it or harvest it. Growth is what actually matters - each seed needs a set number of growth stages to mature, and watering is just what advances it to the next one, at most once every ${formatDuration(
                 waterCooldownMs
             )} per plot. There's no rush: a plot only starts losing progress if it goes a full ${formatDuration(
                 neglectGraceMs
@@ -670,7 +685,13 @@ export default function GardenGame() {
                     </IconButton>
                 </DialogTitle>
                 <DialogContent sx={{ pb: 3 }}>
-                    {selectedSquare && <SquareDetails square={selectedSquare} onHarvested={() => setSelectedSquareId(null)} />}
+                    {selectedSquare && (
+                        <SquareDetails
+                            square={selectedSquare}
+                            onHarvested={() => setSelectedSquareId(null)}
+                            onCleared={() => setSelectedSquareId(null)}
+                        />
+                    )}
                 </DialogContent>
             </Dialog>
         </GameWrapper>

@@ -30,19 +30,22 @@ export interface MineState {
     ladderCount: number;
     explosiveCount: number;
     supportCount: number;
+    flareCount: number;
     deepestDepthReached: number;
     bestGemTier: string | null;
     revealedTiles: MineTile[];
     prices: {
         dig: { cost: number };
-        ladder: { cost: number; amount: number };
-        explosive: { cost: number; amount: number };
-        support: { cost: number; amount: number };
-        flare: { cost: number; radius: number };
+        ladder: { cost: number; amount: number; sellValue: number };
+        explosive: { cost: number; amount: number; sellValue: number };
+        support: { cost: number; amount: number; sellValue: number };
+        flare: { cost: number; radius: number; sellValue: number };
         reset: { cost: number };
     };
     oreTiers: MineOreTier[];
 }
+
+export type MineEquipmentItem = "ladder" | "explosive" | "support" | "flare";
 
 export interface DigResult {
     outcome: "ore" | "empty" | "cave_in" | "stone_cleared" | "move";
@@ -93,13 +96,21 @@ export const useCasinoMine = () => {
     });
 
     const { mutateAsync: buyEquipment, isPending: isBuying } = useMutation({
-        mutationFn: async (item: "ladder" | "explosive" | "support") =>
-            (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/ranch/mine/buy-equipment", { item })).data.data!,
+        mutationFn: async (params: { item: MineEquipmentItem; quantity: number }) =>
+            (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/ranch/mine/buy-equipment", params)).data.data!,
         onSuccess: invalidate,
     });
 
+    const { mutateAsync: sellEquipment, isPending: isSellingEquipment } = useMutation({
+        mutationFn: async (params: { item: MineEquipmentItem }) =>
+            (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/ranch/mine/sell-equipment", params)).data.data!,
+        onSuccess: invalidate,
+    });
+
+    // No cheddar changes hands here anymore - the Flare was already paid for at buy time,
+    // so there's no balance in the response, just the updated (scouted) state.
     const { mutateAsync: useFlare, isPending: isFlaring } = useMutation({
-        mutationFn: async () => (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/ranch/mine/flare")).data.data!,
+        mutationFn: async () => (await apiClient.post<ApiResponse<{ state: MineState }>>("/api/casino/ranch/mine/flare")).data.data!,
         onSuccess: invalidate,
     });
 
@@ -118,6 +129,8 @@ export const useCasinoMine = () => {
         isDigging,
         buyEquipment,
         isBuying,
+        sellEquipment,
+        isSellingEquipment,
         useFlare,
         isFlaring,
         resetMap,
