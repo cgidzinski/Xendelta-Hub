@@ -7,9 +7,7 @@ import ScatterPlotIcon from "@mui/icons-material/ScatterPlot";
 import AdjustIcon from "@mui/icons-material/Adjust";
 import GridViewIcon from "@mui/icons-material/GridView";
 import AddIcon from "@mui/icons-material/Add";
-import LocalFloristIcon from "@mui/icons-material/LocalFlorist";
 import PrintIcon from "@mui/icons-material/Print";
-import TerrainIcon from "@mui/icons-material/Terrain";
 import PetsIcon from "@mui/icons-material/Pets";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../../config/api";
@@ -21,7 +19,6 @@ import DailyQuestCard from "./components/DailyQuestCard";
 import { useCasinoStatus } from "../../../hooks/casino/useCasinoStatus";
 import { useCasinoGarden } from "../../../hooks/casino/useCasinoGarden";
 import { useCasinoPrinter } from "../../../hooks/casino/useCasinoPrinter";
-import { useCasinoMine } from "../../../hooks/casino/useCasinoMine";
 import { useCasinoRanch } from "../../../hooks/casino/useCasinoRanch";
 
 interface SlotsOddsSummary {
@@ -81,13 +78,11 @@ const TYPE_ICON: Record<CasinoGameType, ComponentType<SvgIconProps>> = {
     plinko: ScatterPlotIcon,
     pachinko: AdjustIcon,
     memory: GridViewIcon,
-    garden: LocalFloristIcon,
     printer: PrintIcon,
-    mine: TerrainIcon,
     ranch: PetsIcon,
 };
 
-const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko", "memory", "garden", "printer", "mine", "ranch"];
+const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko", "memory", "printer", "ranch"];
 
 const GHOST_COPY: Partial<Record<CasinoGameType, string>> = {
     slots: "New reel sets and jackpots land here as they ship.",
@@ -131,7 +126,6 @@ export default function GamesIndex() {
     const { disabledGames } = useCasinoStatus();
     const { squares: gardenSquares, waterCooldownMs: gardenWaterCooldownMs } = useCasinoGarden();
     const { run: printerRun } = useCasinoPrinter();
-    const { state: mineState } = useCasinoMine();
     const { creatures: ranchCreatures, feedCooldownMs: ranchFeedCooldownMs } = useCasinoRanch();
 
     const { data: easySpinOdds } = useQuery({
@@ -210,13 +204,9 @@ export default function GamesIndex() {
     // the instant-resolution games do - instead their cards show a live glance at the
     // player's own state, so there's a reason to check the games list rather than always
     // clicking straight in. Keyed by game.key, same as oddsLabelByKey/rtpLabelByKey above.
-    const gardenEmpty = gardenSquares.filter((s) => s.status === "empty").length;
     const gardenReady = gardenSquares.filter((s) => s.status === "ready").length;
-    const gardenDead = gardenSquares.filter((s) => s.status === "dead").length;
-    // "Growing" here means still waiting on more waterings (i.e. not yet fully watered and
-    // just riding out the final cooldown) - that subset is what "Needs Water" further
-    // narrows down to plots whose cooldown has actually elapsed and are waterable *right now*.
-    const gardenGrowing = gardenSquares.filter((s) => s.status === "growing" && s.waterCount < s.waterAmount).length;
+    // Still waiting on more waterings (i.e. not yet fully watered) whose cooldown has
+    // actually elapsed and is waterable *right now*.
     const gardenNeedsWater = gardenSquares.filter((s) => {
         if (s.status !== "growing" || s.waterCount >= s.waterAmount) {
             return false;
@@ -224,7 +214,6 @@ export default function GamesIndex() {
         const msSinceWatered = s.lastWateredAt ? Date.now() - new Date(s.lastWateredAt).getTime() : Infinity;
         return msSinceWatered >= gardenWaterCooldownMs;
     }).length;
-    const mineDigsLeft = mineState ? Math.max(0, mineState.dailyDigCap - mineState.digsToday) : null;
     const ranchReadyToFeed = ranchCreatures.filter((c) => {
         if (!c.lastFedAt) {
             return true;
@@ -233,30 +222,19 @@ export default function GamesIndex() {
     }).length;
 
     const statusChipsByKey: Record<string, StatusChip[]> = {
-        garden: [
-            ...(gardenReady > 0 ? [{ label: `${gardenReady} Ready to Harvest`, color: "success" as ChipColor }] : []),
-            ...(gardenNeedsWater > 0 ? [{ label: `${gardenNeedsWater} Need Water`, color: "info" as ChipColor }] : []),
-            ...(gardenGrowing > 0 ? [{ label: `${gardenGrowing} Growing`, color: "default" as ChipColor }] : []),
-            ...(gardenEmpty > 0 ? [{ label: `${gardenEmpty} Empty`, color: "default" as ChipColor }] : []),
-            ...(gardenDead > 0 ? [{ label: `${gardenDead} Dead`, color: "error" as ChipColor }] : []),
-        ],
         printer: printerRun
             ? [
-                  printerRun.raided
-                      ? { label: "Rig Raided", color: "error" as ChipColor }
-                      : { label: `Print Run ${printerRun.currentMultiplier.toFixed(2)}x`, color: "warning" as ChipColor },
-                  ...(printerRun.raided ? [] : [{ label: `${printerRun.raidRiskPercent}% Raid Risk`, color: "error" as ChipColor }]),
-              ]
+                printerRun.raided
+                    ? { label: "Rig Raided", color: "error" as ChipColor }
+                    : { label: `Print Run ${printerRun.currentMultiplier.toFixed(2)}x`, color: "warning" as ChipColor },
+                ...(printerRun.raided ? [] : [{ label: `${printerRun.raidRiskPercent}% Raid Risk`, color: "error" as ChipColor }]),
+            ]
             : [{ label: "No Print Run Active", color: "default" as ChipColor }],
-        mine: mineState
-            ? [
-                  { label: `Depth ${mineState.position.y}`, color: "default" as ChipColor },
-                  { label: `${mineDigsLeft}/${mineState.dailyDigCap} Digs Left`, color: mineDigsLeft ? "primary" as ChipColor : "error" as ChipColor },
-              ]
-            : [],
         "cheddar-ranch": [
             { label: `${ranchCreatures.length} Creature${ranchCreatures.length === 1 ? "" : "s"}`, color: "default" as ChipColor },
             ...(ranchReadyToFeed > 0 ? [{ label: `${ranchReadyToFeed} Ready to Feed`, color: "info" as ChipColor }] : []),
+            ...(gardenReady > 0 ? [{ label: `${gardenReady} Ready to Harvest`, color: "success" as ChipColor }] : []),
+            ...(gardenNeedsWater > 0 ? [{ label: `${gardenNeedsWater} Need Water`, color: "info" as ChipColor }] : []),
         ],
     };
 

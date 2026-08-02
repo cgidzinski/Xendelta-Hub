@@ -12,6 +12,8 @@ import {
     LinearProgress,
     MenuItem,
     Select,
+    ToggleButton,
+    ToggleButtonGroup,
     Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
@@ -19,7 +21,10 @@ import AutorenewIcon from "@mui/icons-material/Autorenew";
 import ShieldIcon from "@mui/icons-material/Shield";
 import RestaurantIcon from "@mui/icons-material/Restaurant";
 import SellIcon from "@mui/icons-material/Sell";
+import BarChartIcon from "@mui/icons-material/BarChart";
 import GrassIcon from "@mui/icons-material/Grass";
+import Inventory2Icon from "@mui/icons-material/Inventory2";
+import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import { useSnackbar } from "notistack";
 import { formatCheddar } from "../../utils/currency";
 import {
@@ -36,7 +41,6 @@ import {
     formatCountdown,
     HatchTile,
     RanchCard,
-    RaceRecord,
     SPECIES_EMOJI,
     STAT_ICON,
     STAT_ORDER,
@@ -92,6 +96,7 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
     const [confirmingRelease, setConfirmingRelease] = useState(false);
     const [swappingSpecies, setSwappingSpecies] = useState(false);
     const [pickedSpecies, setPickedSpecies] = useState("");
+    const [tab, setTab] = useState(0);
 
     const cooldownRemaining = useCountdown(feedReadyAt(creature, feedCooldownMs));
     const onCooldown = cooldownRemaining > 0;
@@ -154,7 +159,7 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
             .catch((e) => enqueueSnackbar(e.message || "Failed to release", { variant: "error" }));
 
     return (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.75, py: 0.5 }}>
                 <Avatar sx={{ width: 64, height: 64, fontSize: 34, bgcolor: "action.hover" }}>
                     {SPECIES_EMOJI[creature.rarityTier] ?? "🐾"}
@@ -163,159 +168,101 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
                     {creature.name}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: -0.5 }}>
-                    {creature.species}
+                    {creature.species} &bull; Lv {creature.level}
                 </Typography>
                 <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: "center" }}>
-                    <Chip
-                        size="small"
-                        label={creature.rarityTier}
-                        sx={{ textTransform: "capitalize", fontWeight: 700, bgcolor: TIER_COLOR[creature.rarityTier], color: "#000" }}
-                    />
+                    <Chip size="small" label={creature.rarityTier} sx={{ textTransform: "capitalize", fontWeight: 700, bgcolor: TIER_COLOR[creature.rarityTier], color: "#000" }} />
                     <Chip size="small" label={`${TYPE_EMOJI[creature.type]} ${TYPE_LABEL[creature.type]}`} variant="outlined" />
-                    <Chip size="small" label={`Level ${creature.level}`} variant="outlined" />
                 </Box>
             </Box>
 
-            <StatsGrid stats={creature.stats} />
+            <ToggleButtonGroup exclusive size="small" value={tab} onChange={(_, v) => v !== null && setTab(v)} fullWidth
+                sx={{ mt: 1, mb: 1.5, "& .MuiToggleButtonGroup-grouped": { py: 0.75, fontWeight: 700, textTransform: "none", border: "1px solid", borderColor: "divider", "&.Mui-selected": { bgcolor: "primary.main", color: "primary.contrastText", borderColor: "primary.main" } } }}>
+                <ToggleButton value={0}><BarChartIcon fontSize="small" /></ToggleButton>
+                <ToggleButton value={1}><Inventory2Icon fontSize="small" /></ToggleButton>
+                <ToggleButton value={2}><MoreHorizIcon fontSize="small" /></ToggleButton>
+            </ToggleButtonGroup>
 
-            <RaceRecord wins={creature.raceWins} losses={creature.raceLosses} />
-
-            <ActionButton
-                icon={<GrassIcon />}
-                label={canCollect ? `Collect ${creature.collectQuantity}x ${creature.itemLabel}` : `${creature.itemLabel} - collecting`}
-                description={
-                    creature.collectBlocked
-                        ? `${creature.name} is too sad to work - race it to keep collecting`
-                        : canCollect
-                            ? "Free - ready to collect (once per day)"
-                            : "Already collected today — resets at midnight"
-                }
-                color="success"
-                disabled={isCollecting || !canCollect}
-                onClick={handleCollect}
-            />
-
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
-                <Typography variant="caption" color="text.secondary">
-                    Tonics - guaranteed, targeted stat boosts
-                </Typography>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                    {STAT_ORDER.map((statKey) => {
-                        const item = tonicItems.find((i) => i.key === `tonic-${statKey}`);
-                        if (!item) {
-                            return null;
-                        }
-                        return (
-                            <Button
-                                key={item.key}
-                                size="small"
-                                variant="outlined"
-                                disabled={isUsingItem || item.quantity <= 0}
-                                onClick={() => handleUseTonic(item)}
-                                sx={{ display: "flex", flexDirection: "column", gap: 0.25, minWidth: 56, py: 0.75, textTransform: "none" }}
-                            >
-                                {STAT_ICON[statKey]}
-                                <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                                    x{item.quantity}
-                                </Typography>
-                            </Button>
-                        );
-                    })}
-                </Box>
-            </Box>
-
-            {!swappingSpecies ? (
-                <ActionButton
-                    icon={<AutorenewIcon />}
-                    label={`Type-Swap Serum (${serumOwned} owned)`}
-                    description={serumOwned > 0 ? "Rerolls this creature's species within its own rarity tier" : "Buy in the Shop first"}
-                    disabled={isUsingItem || serumOwned <= 0 || speciesOptions.length === 0}
-                    onClick={() => setSwappingSpecies(true)}
-                />
-            ) : (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
-                    <FormControl size="small" fullWidth>
-                        <Select value={pickedSpecies} displayEmpty onChange={(e) => setPickedSpecies(e.target.value)}>
-                            <MenuItem value="" disabled>
-                                Choose a new species
-                            </MenuItem>
-                            {speciesOptions.map((s) => (
-                                <MenuItem key={s} value={s}>
-                                    {s}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                    <Box sx={{ display: "flex", gap: 1 }}>
-                        <Button
-                            variant="outlined"
-                            fullWidth
-                            onClick={() => {
-                                setSwappingSpecies(false);
-                                setPickedSpecies("");
-                            }}
-                        >
-                            Cancel
-                        </Button>
-                        <Button variant="contained" fullWidth disabled={!pickedSpecies || isUsingItem} onClick={handleTypeSwap}>
-                            Confirm Swap
-                        </Button>
-                    </Box>
-                </Box>
-            )}
-
-            <ActionButton
-                icon={<ShieldIcon />}
-                label={shieldActive ? "Decay Shield active" : `Decay Shield (${shieldOwned} owned)`}
-                description={
-                    shieldActive
-                        ? `Protected from decay until ${new Date(creature.decayShieldUntil!).toLocaleString()}`
-                        : shieldOwned > 0
-                            ? "Protects from neglect decay for 3 days"
-                            : "Buy in the Shop first"
-                }
-                disabled={isUsingItem || shieldOwned <= 0 || !!shieldActive}
-                onClick={handleDecayShield}
-            />
-
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                <ActionButton
-                    icon={<RestaurantIcon />}
-                    label={onCooldown ? "Feeding on cooldown" : `Feed (uses ${units}x ${feedItem?.label ?? TYPE_LABEL[creature.type] + " Feed"}, ${owned} owned)`}
-                    description={
-                        onCooldown
-                            ? `Available again in ${formatCountdown(cooldownRemaining)}`
-                            : owned >= units
-                                ? "Raises every stat by a random amount, no ceiling"
-                                : `Buy ${TYPE_LABEL[creature.type]} Feed in the Shop first`
-                    }
-                    disabled={isFeeding || onCooldown || owned < units}
-                    onClick={handleFeed}
-                />
-
-                {!confirmingRelease ? (
-                    <ActionButton
-                        icon={<SellIcon />}
-                        label={`Release for ${formatCheddar(sellValue)}`}
-                        description="Permanently removes this creature from your roster in exchange for a flat cheddar payout."
-                        color="error"
-                        disabled={isReleasing}
-                        onClick={() => setConfirmingRelease(true)}
-                    />
-                ) : (
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "error.main", borderRadius: 1 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Release {creature.name} for {formatCheddar(sellValue)}? This can't be undone.
-                        </Typography>
-                        <Box sx={{ display: "flex", gap: 1 }}>
-                            <Button variant="outlined" fullWidth disabled={isReleasing} onClick={() => setConfirmingRelease(false)}>
-                                Cancel
-                            </Button>
-                            <Button variant="contained" color="error" fullWidth disabled={isReleasing} onClick={handleRelease}>
-                                Confirm Release
-                            </Button>
+            <Box sx={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", gap: 2, border: "1px solid", borderColor: "divider", borderRadius: 2, p: 2, bgcolor: "background.default" }}>
+                {tab === 0 && (
+                    <>
+                        <StatsGrid stats={creature.stats} />
+                        <ActionButton icon={<GrassIcon />}
+                            label={canCollect ? `Collect ${creature.collectQuantity}x ${creature.itemLabel}` : `${creature.itemLabel} - collecting`}
+                            description={creature.collectBlocked ? `${creature.name} is too sad to work - race it to keep collecting` : canCollect ? "(once per day)" : "Already collected today"}
+                            color="success" disabled={isCollecting || !canCollect} onClick={handleCollect} />
+                        <ActionButton icon={<RestaurantIcon />}
+                            label={onCooldown ? "Feeding on cooldown" : `Feed (${units}x ${feedItem?.label ?? TYPE_LABEL[creature.type] + " Feed"})`}
+                            description={onCooldown ? `Available in ${formatCountdown(cooldownRemaining)}` : `(${owned} owned)`}
+                            disabled={isFeeding || onCooldown || owned < units} onClick={handleFeed} />
+                    </>
+                )}
+                {tab === 1 && (
+                    <>
+                        <Typography variant="caption" color="text.secondary">Tonics — guaranteed, targeted stat boosts</Typography>
+                        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
+                            {STAT_ORDER.map((statKey) => {
+                                const item = tonicItems.find((i) => i.key === `tonic-${statKey}`);
+                                if (!item) return null;
+                                return (
+                                    <Button key={item.key} size="small" variant="outlined" disabled={isUsingItem || item.quantity <= 0} onClick={() => handleUseTonic(item)}
+                                        sx={{ display: "flex", flexDirection: "column", gap: 0.25, flex: 1, minWidth: 56, py: 0.75, textTransform: "none" }}>
+                                        {STAT_ICON[statKey]}
+                                        <Typography variant="caption" sx={{ fontWeight: 700 }}>x{item.quantity}</Typography>
+                                    </Button>
+                                );
+                            })}
                         </Box>
-                    </Box>
+                        {!swappingSpecies ? (
+                            <ActionButton icon={<AutorenewIcon />} label={`Type-Swap Serum (${serumOwned} owned)`}
+                                description={serumOwned > 0 ? "Rerolls this creature's species within its own rarity tier" : "Buy in the Shop first"}
+                                disabled={isUsingItem || serumOwned <= 0 || speciesOptions.length === 0} onClick={() => setSwappingSpecies(true)} />
+                        ) : (
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
+                                <FormControl size="small" fullWidth>
+                                    <Select value={pickedSpecies} displayEmpty onChange={(e) => setPickedSpecies(e.target.value)}>
+                                        <MenuItem value="" disabled>Choose a new species</MenuItem>
+                                        {speciesOptions.map((s) => (<MenuItem key={s} value={s}>{s}</MenuItem>))}
+                                    </Select>
+                                </FormControl>
+                                <Box sx={{ display: "flex", gap: 1 }}>
+                                    <Button variant="outlined" fullWidth onClick={() => { setSwappingSpecies(false); setPickedSpecies(""); }}>Cancel</Button>
+                                    <Button variant="contained" fullWidth disabled={!pickedSpecies || isUsingItem} onClick={handleTypeSwap}>Confirm Swap</Button>
+                                </Box>
+                            </Box>
+                        )}
+                        <ActionButton icon={<ShieldIcon />} label={shieldActive ? "Decay Shield active" : `Decay Shield (${shieldOwned} owned)`}
+                            description={shieldActive ? `Protected until ${new Date(creature.decayShieldUntil!).toLocaleString()}` : shieldOwned > 0 ? "Protects from neglect decay for 3 days" : "Buy in the Shop first"}
+                            disabled={isUsingItem || shieldOwned <= 0 || !!shieldActive} onClick={handleDecayShield} />
+                    </>
+                )}
+                {tab === 2 && (
+                    <>
+                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3, py: 2 }}>
+                            <Box sx={{ textAlign: "center" }}>
+                                <Typography variant="h5" sx={{ fontWeight: 700, color: "success.main" }}>{creature.raceWins}</Typography>
+                                <Typography variant="caption" color="text.secondary">Wins</Typography>
+                            </Box>
+                            <Box sx={{ textAlign: "center" }}>
+                                <Typography variant="h5" sx={{ fontWeight: 700, color: "error.main" }}>{creature.raceLosses}</Typography>
+                                <Typography variant="caption" color="text.secondary">Losses</Typography>
+                            </Box>
+                        </Box>
+                        <Box sx={{ mt: "auto" }}>
+                            {!confirmingRelease ? (
+                                <ActionButton icon={<SellIcon />} label={`Release for ${formatCheddar(sellValue)}`}
+                                    description="" color="error" disabled={isReleasing} onClick={() => setConfirmingRelease(true)} />
+                            ) : (
+                                <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "error.main", borderRadius: 1 }}>
+                                    <Typography variant="body2" color="text.secondary">Release {creature.name} for {formatCheddar(sellValue)}?</Typography>
+                                    <Box sx={{ display: "flex", gap: 1 }}>
+                                        <Button variant="outlined" fullWidth disabled={isReleasing} onClick={() => setConfirmingRelease(false)}>Cancel</Button>
+                                        <Button variant="contained" color="error" fullWidth disabled={isReleasing} onClick={handleRelease}>Confirm</Button>
+                                    </Box>
+                                </Box>
+                            )}
+                        </Box>
+                    </>
                 )}
             </Box>
         </Box>
@@ -345,9 +292,8 @@ export default function RanchTab() {
             <Dialog
                 open={!!selectedCreature}
                 onClose={() => setSelectedId(null)}
-                maxWidth="xs"
                 fullWidth
-                PaperProps={{ sx: { borderRadius: 3 } }}
+                PaperProps={{ sx: { borderRadius: 3, height: "90vh", maxWidth: 480 } }}
             >
                 <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     Creature Details
@@ -355,7 +301,7 @@ export default function RanchTab() {
                         <CloseIcon />
                     </IconButton>
                 </DialogTitle>
-                <DialogContent sx={{ pb: 3 }}>
+                <DialogContent sx={{ pb: 3, overflow: "hidden", display: "flex", flexDirection: "column", px: 2 }}>
                     {selectedCreature && (
                         <CreatureDetails
                             creature={selectedCreature}

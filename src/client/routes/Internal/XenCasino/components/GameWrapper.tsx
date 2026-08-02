@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useState } from "react";
-import { Box, Dialog, DialogContent, DialogTitle, IconButton, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { Box, Dialog, DialogContent, DialogTitle, IconButton, Tab, Tabs, Typography, useMediaQuery, useTheme } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import OddsDisplay, { OddsRow } from "./OddsDisplay";
@@ -12,9 +12,15 @@ export interface OddsSection {
     footnote?: string;
 }
 
+export interface HelpTab {
+    label: string;
+    content: ReactNode;
+}
+
 interface GameWrapperProps {
     title: string;
     howToPlay: ReactNode;
+    helpTabs?: HelpTab[];
     oddsSections: OddsSection[];
     maxWin?: number;
     children: ReactNode;
@@ -31,8 +37,9 @@ interface GameWrapperProps {
  * slots) should be built as `children` inside this wrapper rather than reinventing any of
  * this chrome.
  */
-export default function GameWrapper({ title, howToPlay, oddsSections, maxWin, children }: GameWrapperProps) {
+export default function GameWrapper({ title, howToPlay, helpTabs, oddsSections, maxWin, children }: GameWrapperProps) {
     const [infoOpen, setInfoOpen] = useState(false);
+    const [tab, setTab] = useState(0);
     const { setTitlebar } = useXenCasinoTitlebar();
     const theme = useTheme();
     const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
@@ -78,9 +85,22 @@ export default function GameWrapper({ title, howToPlay, oddsSections, maxWin, ch
                     </IconButton>
                 </DialogTitle>
                 <DialogContent dividers>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        {howToPlay}
-                    </Typography>
+                    {helpTabs ? (
+                        <>
+                            <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" sx={{ mb: 2 }}>
+                                {helpTabs.map((t, i) => (
+                                    <Tab key={i} label={t.label} />
+                                ))}
+                            </Tabs>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                {helpTabs[tab]?.content}
+                            </Typography>
+                        </>
+                    ) : (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                            {howToPlay}
+                        </Typography>
+                    )}
                     {maxWin !== undefined && (
                         <Typography variant="body2" sx={{ fontWeight: 700, mb: 2, color: "success.main" }}>
                             Max win: {formatCheddar(maxWin)}

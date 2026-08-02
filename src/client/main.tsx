@@ -59,10 +59,14 @@ import Crossword from "./routes/Internal/XenCasino/games/Crossword/Crossword";
 import Plinko from "./routes/Internal/XenCasino/games/Plinko/Plinko";
 import Pachinko from "./routes/Internal/XenCasino/games/Pachinko/Pachinko";
 import Memory from "./routes/Internal/XenCasino/games/Memory/Memory";
-import Garden from "./routes/Internal/XenCasino/games/Garden/Garden";
 import Printer from "./routes/Internal/XenCasino/games/Printer/Printer";
-import Mine from "./routes/Internal/XenCasino/games/Mine/Mine";
 import CheddarRanch from "./routes/Internal/XenCasino/games/CheddarRanch/CheddarRanch";
+import RanchTab from "./routes/Internal/XenCasino/games/CheddarRanch/RanchTab";
+import RaceTab from "./routes/Internal/XenCasino/games/CheddarRanch/RaceTab";
+import InventoryTab from "./routes/Internal/XenCasino/games/CheddarRanch/InventoryTab";
+import ShopTab from "./routes/Internal/XenCasino/games/CheddarRanch/ShopTab";
+import MineTab from "./routes/Internal/XenCasino/games/CheddarRanch/MineTab";
+import GardenTab from "./routes/Internal/XenCasino/games/CheddarRanch/GardenTab";
 // Routes - Xensplit
 import XensplitGroupsList from "./routes/Internal/Xensplit/GroupsList";
 import XensplitGroupDetail from "./routes/Internal/Xensplit/GroupDetail";
@@ -187,10 +191,16 @@ const router = createBrowserRouter(
           <Route path="games/plinko" element={<Plinko />} />
           <Route path="games/pachinko" element={<Pachinko />} />
           <Route path="games/memory" element={<Memory />} />
-          <Route path="games/garden" element={<Garden />} />
           <Route path="games/printer" element={<Printer />} />
-          <Route path="games/mine" element={<Mine />} />
-          <Route path="games/cheddar-ranch" element={<CheddarRanch />} />
+          <Route path="games/cheddar-ranch" element={<CheddarRanch />}>
+            <Route index element={null} />
+            <Route path="ranch" element={<RanchTab />} />
+            <Route path="race" element={<RaceTab />} />
+            <Route path="inventory" element={<InventoryTab />} />
+            <Route path="shop" element={<ShopTab />} />
+            <Route path="mine" element={<MineTab />} />
+            <Route path="garden" element={<GardenTab />} />
+          </Route>
         </Route>
         <Route path="xensplit" index element={<Navigate to="groups" replace />} />
         <Route path="xensplit/groups" element={<XensplitGroupsList />} />
