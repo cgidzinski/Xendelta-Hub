@@ -102,7 +102,7 @@ export const useCasinoMine = () => {
     });
 
     const { mutateAsync: sellEquipment, isPending: isSellingEquipment } = useMutation({
-        mutationFn: async (params: { item: MineEquipmentItem }) =>
+        mutationFn: async (params: { item: MineEquipmentItem; quantity: number }) =>
             (await apiClient.post<ApiResponse<{ state: MineState; balance: string }>>("/api/casino/ranch/mine/sell-equipment", params)).data.data!,
         onSuccess: invalidate,
     });

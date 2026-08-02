@@ -151,19 +151,29 @@ export default function MineGame() {
         isSellingEquipment,
         useFlare,
         isFlaring,
+        resetMap,
+        isResetting,
     } = useCasinoMine();
     const { enqueueSnackbar } = useSnackbar();
     const [flashTile, setFlashTile] = useState<{ x: number; y: number; kind: string } | null>(null);
     const [shopOpen, setShopOpen] = useState(false);
+    const [confirmingReset, setConfirmingReset] = useState(false);
 
     const handleBuy = (item: MineEquipmentItem, quantity: number) =>
         buyEquipment({ item, quantity }).catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
-    const handleSell = (item: MineEquipmentItem) =>
-        sellEquipment({ item }).catch((e) => enqueueSnackbar(e.message || "Failed to sell", { variant: "error" }));
+    const handleSell = (item: MineEquipmentItem, quantity: number) =>
+        sellEquipment({ item, quantity }).catch((e) => enqueueSnackbar(e.message || "Failed to sell", { variant: "error" }));
     const handleFlare = () =>
         useFlare()
             .then(() => enqueueSnackbar("Flare burst - scouted the area around you.", { variant: "success" }))
             .catch((e) => enqueueSnackbar(e.message || "Failed to use flare", { variant: "error" }));
+    const handleResetMap = () =>
+        resetMap()
+            .then(() => {
+                enqueueSnackbar("Map reset - back to the surface.", { variant: "success" });
+                setConfirmingReset(false);
+            })
+            .catch((e) => enqueueSnackbar(e.message || "Failed to reset", { variant: "error" }));
 
     const oddsSections: OddsSection[] = state
         ? [
@@ -435,16 +445,22 @@ export default function MineGame() {
                 </Box>
             </Box>
 
-            <Dialog open={shopOpen} onClose={() => setShopOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+            <Dialog
+                open={shopOpen}
+                onClose={() => { setShopOpen(false); setConfirmingReset(false); }}
+                maxWidth="xs"
+                fullWidth
+                PaperProps={{ sx: { borderRadius: 3 } }}
+            >
                 <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     Mine Shop
-                    <IconButton onClick={() => setShopOpen(false)} aria-label="Close">
+                    <IconButton onClick={() => { setShopOpen(false); setConfirmingReset(false); }} aria-label="Close">
                         <CloseIcon />
                     </IconButton>
                 </DialogTitle>
                 <DialogContent sx={{ pb: 3, display: "flex", flexDirection: "column", gap: 2 }}>
                     <Typography variant="caption" color="text.secondary">
-                        Buy or sell one at a time here. Bulk discounts (5x/10x) are in the Store.
+                        Buy one at a time here; sell one or all. Bulk discounts (5x/10x) are in the Store.
                     </Typography>
                     <MineEquipmentList
                         prices={state.prices}
@@ -455,6 +471,37 @@ export default function MineGame() {
                         onSell={handleSell}
                         isSelling={isSellingEquipment}
                     />
+
+                    <Box sx={{ borderTop: "1px solid", borderColor: "divider", pt: 2 }}>
+                        {!confirmingReset ? (
+                            <Button
+                                variant="outlined"
+                                color="error"
+                                fullWidth
+                                disabled={isResetting}
+                                onClick={() => setConfirmingReset(true)}
+                                sx={{ textTransform: "none" }}
+                            >
+                                Reset Map ({formatCheddar(state.prices.reset.cost)})
+                            </Button>
+                        ) : (
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "error.main", borderRadius: 1 }}>
+                                <Typography variant="body2" color="text.secondary">
+                                    Wipes your explored map and walks you back to the surface for {formatCheddar(state.prices.reset.cost)}.
+                                    Equipment, deepest depth ({state.deepestDepthReached}), and best find (
+                                    {state.oreTiers.find((t) => t.key === state.bestGemTier)?.label ?? "none yet"}) are all kept.
+                                </Typography>
+                                <Box sx={{ display: "flex", gap: 1 }}>
+                                    <Button variant="outlined" fullWidth disabled={isResetting} onClick={() => setConfirmingReset(false)}>
+                                        Cancel
+                                    </Button>
+                                    <Button variant="contained" color="error" fullWidth disabled={isResetting} onClick={handleResetMap}>
+                                        Confirm
+                                    </Button>
+                                </Box>
+                            </Box>
+                        )}
+                    </Box>
                 </DialogContent>
             </Dialog>
 

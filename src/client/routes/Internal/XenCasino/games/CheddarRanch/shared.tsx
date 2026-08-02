@@ -4,6 +4,7 @@ import {
     Button,
     CardActionArea,
     Chip,
+    LinearProgress,
     Typography,
 } from "@mui/material";
 import RestaurantIcon from "@mui/icons-material/Restaurant";
@@ -351,12 +352,13 @@ interface MineEquipmentListProps {
     prices: MineEquipmentPrices;
     owned: Record<MineEquipmentItem, number>;
     // "bulk" (Store's Mine Equipment tab): 1x/5x/10x buy buttons showing the discounted
-    // total. "single" (MineGame's own Shop dialog): one Buy-1 button, plus a Sell-1 button
-    // once any are owned - buying/selling equipment there is deliberately single-quantity.
+    // total. "single" (MineGame's own Shop dialog): one Buy-1 button, plus Sell-1/Sell-All
+    // once any are owned - buying there is deliberately single-quantity, though selling can
+    // clear a whole stack at once.
     mode: "bulk" | "single";
     onBuy: (item: MineEquipmentItem, quantity: number) => void;
     isBuying: boolean;
-    onSell?: (item: MineEquipmentItem) => void;
+    onSell?: (item: MineEquipmentItem, quantity: number) => void;
     isSelling?: boolean;
 }
 
@@ -384,15 +386,23 @@ export function MineEquipmentList({ prices, owned, mode, onBuy, isBuying, onSell
                         {mode === "bulk" ? (
                             <BulkQuantityButtons unitCost={price} color={item.color} disabled={isBuying} onBuy={(qty) => onBuy(item.key, qty)} />
                         ) : (
-                            <Box sx={{ display: "flex", gap: 1 }}>
-                                <Button size="small" variant="contained" color={item.color} fullWidth
-                                    disabled={isBuying} onClick={() => onBuy(item.key, 1)} sx={{ textTransform: "none" }}>
-                                    Buy 1
-                                </Button>
-                                {onSell && ownedCount > 0 && (
-                                    <Button size="small" variant="outlined" color={item.color} fullWidth
-                                        disabled={!!isSelling} onClick={() => onSell(item.key)} sx={{ textTransform: "none" }}>
-                                        Sell 1 ({formatCheddar(sellValue)})
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                                <Box sx={{ display: "flex", gap: 1 }}>
+                                    <Button size="small" variant="contained" color={item.color} fullWidth
+                                        disabled={isBuying} onClick={() => onBuy(item.key, 1)} sx={{ textTransform: "none" }}>
+                                        Buy 1
+                                    </Button>
+                                    {onSell && ownedCount > 0 && (
+                                        <Button size="small" variant="outlined" color={item.color} fullWidth
+                                            disabled={!!isSelling} onClick={() => onSell(item.key, 1)} sx={{ textTransform: "none" }}>
+                                            Sell 1 ({formatCheddar(sellValue)})
+                                        </Button>
+                                    )}
+                                </Box>
+                                {onSell && ownedCount > 1 && (
+                                    <Button size="small" variant="text" color={item.color} fullWidth
+                                        disabled={!!isSelling} onClick={() => onSell(item.key, ownedCount)} sx={{ textTransform: "none" }}>
+                                        Sell All {ownedCount} ({formatCheddar(sellValue * ownedCount)})
                                     </Button>
                                 )}
                             </Box>
@@ -417,6 +427,7 @@ interface RanchCardProps {
 export function RanchCard({ creature, feedCooldownMs, selected, onClick }: RanchCardProps) {
     const cooldownRemaining = useCountdown(feedReadyAt(creature, feedCooldownMs));
     const canFeed = cooldownRemaining <= 0;
+    const feedProgress = canFeed ? 100 : Math.max(0, 100 - (cooldownRemaining / feedCooldownMs) * 100);
 
     return (
         <CardActionArea
@@ -433,6 +444,12 @@ export function RanchCard({ creature, feedCooldownMs, selected, onClick }: Ranch
             }}
         >
             <Typography sx={{ fontSize: 40, lineHeight: 1 }}>{SPECIES_EMOJI[creature.rarityTier] ?? "🐾"}</Typography>
+            <LinearProgress
+                variant="determinate"
+                value={feedProgress}
+                color={canFeed ? "info" : "warning"}
+                sx={{ width: "100%", height: 4, borderRadius: 999 }}
+            />
             <Typography variant="body2" sx={{ fontWeight: 700, textAlign: "center" }}>
                 {creature.name}
             </Typography>

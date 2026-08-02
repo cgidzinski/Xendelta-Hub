@@ -114,6 +114,7 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
 
     const cooldownRemaining = useCountdown(feedReadyAt(creature, feedCooldownMs));
     const onCooldown = cooldownRemaining > 0;
+    const feedProgress = onCooldown ? Math.max(0, 100 - (cooldownRemaining / feedCooldownMs) * 100) : 100;
     const canCollect = creature.canCollect && !creature.collectBlocked;
     const sellValue = releaseSellValue[creature.rarityTier] ?? 0;
     const feedItem = feedItems.find((f: RanchFeedItem) => f.type === creature.type);
@@ -212,6 +213,12 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
                             label={canCollect ? `Collect ${creature.collectQuantity}x ${creature.itemLabel}` : `${creature.itemLabel} - collecting`}
                             description={creature.collectBlocked ? `${creature.name} is too sad to work - race it to keep collecting` : canCollect ? "(once per day)" : "Already collected today"}
                             color="success" disabled={isCollecting || !canCollect} onClick={handleCollect} />
+                        <LinearProgress
+                            variant="determinate"
+                            value={feedProgress}
+                            color={onCooldown ? "warning" : "info"}
+                            sx={{ height: 6, borderRadius: 999 }}
+                        />
                         <ActionButton icon={<RestaurantIcon />}
                             label={onCooldown ? "Feeding on cooldown" : `Feed (${units}x ${feedItem?.label ?? TYPE_LABEL[creature.type] + " Feed"})`}
                             description={onCooldown ? `Available in ${formatCountdown(cooldownRemaining)}` : `(${owned} owned)`}

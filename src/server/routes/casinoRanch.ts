@@ -1988,14 +1988,19 @@ module.exports = function (app: express.Application) {
         }
     });
 
-    // Single-quantity only - selling mirrors the Mine Shop's single-buy flow, no bulk sell.
-    // Decrements first (removeMineEquipment guards against selling more than owned) and only
-    // pays out once that succeeds, so a failed/insufficient sell never touches cheddar.
+    // Selling mirrors the Mine Shop's single-buy flow by default, but also supports a
+    // "Sell All" quantity (any owned count, not just 1/5/10 like buying) so players don't
+    // have to click one at a time to liquidate a stack. Decrements first
+    // (removeMineEquipment guards against selling more than owned) and only pays out once
+    // that succeeds, so a failed/insufficient sell never touches cheddar.
     app.post("/api/casino/ranch/mine/sell-equipment", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
-        const { item } = req.body as { item?: "ladder" | "explosive" | "support" | "flare" };
+        const { item, quantity = 1 } = req.body as { item?: "ladder" | "explosive" | "support" | "flare"; quantity?: number };
         if (!item || !["ladder", "explosive", "support", "flare"].includes(item)) {
             return res.status(400).json({ status: false, message: "Invalid item" });
+        }
+        if (!Number.isInteger(quantity) || quantity < 1) {
+            return res.status(400).json({ status: false, message: "Invalid quantity" });
         }
 
         const user = await User.findById(userId).exec();
@@ -2007,13 +2012,13 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "Link your Discord account to play" });
             }
 
-            const doc = await XenCasinoRanch.removeMineEquipment(userId, item, 1);
+            const doc = await XenCasinoRanch.removeMineEquipment(userId, item, quantity);
             if (!doc) {
                 return res.status(400).json({ status: false, message: "You don't have any of that to sell" });
             }
 
             const xenCasinoAccountId = await getXenCasinoAccountId();
-            const sellValue = MINE_EQUIPMENT_SELL_VALUE[item];
+            const sellValue = MINE_EQUIPMENT_SELL_VALUE[item] * quantity;
             const payoutResult = await transfer({
                 fromAccountId: xenCasinoAccountId,
                 toAccountId: resolved.account.accountId,
