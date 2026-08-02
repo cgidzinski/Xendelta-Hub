@@ -2,7 +2,7 @@
  * Migrate existing data from 4 separate XenCasino collections into the unified
  * XenCasinoRanch collection.
  *
- * Run: npx ts-node scripts/migrate-to-unified-ranch.ts
+ * Run: npx tsx scripts/migrate-to-unified-ranch.ts
  *
  * Collections migrated:
  *   XenCasinoRanchCreature  → XenCasinoRanch.creatures[]
@@ -14,6 +14,8 @@
  * into the new unified model. Old collections are NOT deleted - verify the new
  * data first, then drop manually.
  */
+
+require("dotenv").config({ quiet: true });
 
 import mongoose from "mongoose";
 
