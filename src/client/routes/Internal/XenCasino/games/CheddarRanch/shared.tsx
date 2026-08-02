@@ -18,6 +18,7 @@ import ShieldIcon from "@mui/icons-material/Shield";
 import FlareIcon from "@mui/icons-material/Flare";
 import { formatCheddar } from "../../utils/currency";
 import { RanchCreature, RanchStats, RanchType } from "../../../../../hooks/casino/useCasinoRanch";
+import { SeedTier } from "../../../../../hooks/casino/useCasinoGarden";
 
 export const COURSE_TICKET_KEY = "course-ticket";
 export const HARDENED_FEED_KEY = "hardened-feed";
@@ -248,6 +249,97 @@ export function bulkPrice(unitCost: number, quantity: number): number {
     return Math.round(unitCost * quantity * (1 - discount));
 }
 
+interface BulkQuantityButtonsProps {
+    unitCost: number;
+    color: "primary" | "warning" | "error" | "success" | "info";
+    disabled: boolean;
+    onBuy: (quantity: number) => void;
+}
+
+// The 1x/5x/10x bulk-buy grid, shared by Feed, Garden (Store's Garden tab), and Mine
+// Equipment's bulk buttons - shows the struck-through full price plus a "-5%/-10%" badge
+// whenever bulkPrice actually discounts the quantity, so the saving reads at a glance
+// instead of just landing on a smaller number.
+export function BulkQuantityButtons({ unitCost, color, disabled, onBuy }: BulkQuantityButtonsProps) {
+    return (
+        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
+            {[1, 5, 10].map((qty) => {
+                const pctOff = qty >= 10 ? 10 : qty >= 5 ? 5 : 0;
+                const discounted = bulkPrice(unitCost, qty);
+                return (
+                    <Button
+                        key={qty}
+                        size="small"
+                        variant="contained"
+                        color={color}
+                        disabled={disabled}
+                        onClick={() => onBuy(qty)}
+                        sx={{ textTransform: "none", flexDirection: "column", lineHeight: 1.2, py: 0.75 }}
+                    >
+                        <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2, color: "inherit" }}>
+                            {qty}x{pctOff > 0 && ` −${pctOff}%`}
+                        </Typography>
+                        {pctOff > 0 && (
+                            <Typography sx={{ fontSize: 9, lineHeight: 1.2, textDecoration: "line-through", opacity: 0.6, color: "inherit" }}>
+                                {formatCheddar(unitCost * qty)}
+                            </Typography>
+                        )}
+                        <Typography sx={{ fontSize: 10, lineHeight: 1.2, opacity: 0.85, color: "inherit" }}>
+                            {formatCheddar(discounted)}
+                        </Typography>
+                    </Button>
+                );
+            })}
+        </Box>
+    );
+}
+
+interface SeedShopListProps {
+    seedTiers: SeedTier[];
+    // "bulk" (Store's Garden tab): 1x/5x/10x buy buttons showing the discounted total.
+    // "single" (GardenGame's own Shop dialog): one Buy-1 button per seed - buying there is
+    // deliberately single-quantity, same split as MineEquipmentList below.
+    mode: "bulk" | "single";
+    onBuy: (seedType: string, quantity: number) => void;
+    isBuying: boolean;
+}
+
+// Seed rows - shared by GardenGame's in-game Shop dialog and the Store's Garden tab, so
+// both read the same live prices/owned counts and never drift.
+export function SeedShopList({ seedTiers, mode, onBuy, isBuying }: SeedShopListProps) {
+    return (
+        <>
+            {seedTiers.map((tier) => (
+                <Box key={tier.key} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Typography sx={{ fontSize: 24 }}>{SEED_EMOJI[tier.key] ?? "🌾"}</Typography>
+                        <Box sx={{ flexGrow: 1 }}>
+                            <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    {tier.label} (x{tier.owned})
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    {formatCheddar(tier.cost)} each
+                                </Typography>
+                            </Box>
+                            <Typography variant="caption" color="text.secondary">
+                                {tier.waterAmount} growth stages to mature
+                            </Typography>
+                        </Box>
+                    </Box>
+                    {mode === "bulk" ? (
+                        <BulkQuantityButtons unitCost={tier.cost} color="primary" disabled={isBuying} onBuy={(qty) => onBuy(tier.key, qty)} />
+                    ) : (
+                        <Button size="small" variant="contained" fullWidth disabled={isBuying} onClick={() => onBuy(tier.key, 1)} sx={{ textTransform: "none" }}>
+                            Buy 1 ({formatCheddar(tier.cost)})
+                        </Button>
+                    )}
+                </Box>
+            ))}
+        </>
+    );
+}
+
 const MINE_EQUIPMENT_ROWS: { key: MineEquipmentItem; icon: ReactNode; label: string; color: "warning" | "error" | "success" | "info"; desc: string }[] = [
     { key: "ladder", icon: <StairsIcon />, label: "Ladder", color: "warning", desc: "Dig up or down into new territory" },
     { key: "explosive", icon: <BoltIcon />, label: "Explosive", color: "error", desc: "Clears heavy stone blocking your path" },
@@ -290,18 +382,7 @@ export function MineEquipmentList({ prices, owned, mode, onBuy, isBuying, onSell
                             </Box>
                         </Box>
                         {mode === "bulk" ? (
-                            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
-                                {[1, 5, 10].map((qty) => (
-                                    <Button key={qty} size="small" variant="contained" color={item.color}
-                                        disabled={isBuying} onClick={() => onBuy(item.key, qty)}
-                                        sx={{ textTransform: "none", flexDirection: "column", lineHeight: 1.2, py: 0.75 }}>
-                                        <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2, color: "inherit" }}>{qty}x</Typography>
-                                        <Typography variant="caption" sx={{ fontSize: 10, opacity: 0.85, lineHeight: 1.2, color: "inherit" }}>
-                                            {formatCheddar(bulkPrice(price, qty))}
-                                        </Typography>
-                                    </Button>
-                                ))}
-                            </Box>
+                            <BulkQuantityButtons unitCost={price} color={item.color} disabled={isBuying} onBuy={(qty) => onBuy(item.key, qty)} />
                         ) : (
                             <Box sx={{ display: "flex", gap: 1 }}>
                                 <Button size="small" variant="contained" color={item.color} fullWidth

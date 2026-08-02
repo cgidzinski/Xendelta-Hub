@@ -10,11 +10,9 @@ import {
 import { useSnackbar } from "notistack";
 import { formatCheddar } from "../../utils/currency";
 import { RanchFeedItem, RanchShopItem, useCasinoRanch } from "../../../../../hooks/casino/useCasinoRanch";
-import { SeedTier, useCasinoGarden } from "../../../../../hooks/casino/useCasinoGarden";
+import { useCasinoGarden } from "../../../../../hooks/casino/useCasinoGarden";
 import { useCasinoMine } from "../../../../../hooks/casino/useCasinoMine";
-import { bulkPrice, MineEquipmentItem, MineEquipmentList, SEED_EMOJI, TYPE_EMOJI, TYPE_LABEL } from "./shared";
-
-const BUY_QUANTITIES = [1, 5, 10];
+import { BulkQuantityButtons, MineEquipmentItem, MineEquipmentList, SeedShopList, TYPE_EMOJI, TYPE_LABEL } from "./shared";
 
 function FeedPanel() {
     const { feedItems, buyFeed, isBuyingFeed } = useCasinoRanch();
@@ -52,23 +50,7 @@ function FeedPanel() {
                             </Typography>
                         </Box>
                     </Box>
-                    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
-                        {BUY_QUANTITIES.map((quantity) => (
-                            <Button
-                                key={quantity}
-                                size="small"
-                                variant="contained"
-                                disabled={isBuyingFeed}
-                                onClick={() => handleBuyFeed(item, quantity)}
-                                sx={{ textTransform: "none", flexDirection: "column", lineHeight: 1.2, py: 0.75 }}
-                            >
-                                <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2, color: "inherit" }}>{quantity}x</Typography>
-                                <Typography variant="caption" sx={{ fontSize: 10, opacity: 0.85, lineHeight: 1.2, color: "inherit" }}>
-                                    {formatCheddar(bulkPrice(item.price, quantity))}
-                                </Typography>
-                            </Button>
-                        ))}
-                    </Box>
+                    <BulkQuantityButtons unitCost={item.price} color="primary" disabled={isBuyingFeed} onBuy={(quantity) => handleBuyFeed(item, quantity)} />
                 </Box>
             ))}
         </Box>
@@ -130,10 +112,12 @@ function GardenPanel() {
     const { seedTiers, buySeed, isBuyingSeed } = useCasinoGarden();
     const { enqueueSnackbar } = useSnackbar();
 
-    const handleBuySeed = (tier: SeedTier, quantity: number) =>
-        buySeed({ seedType: tier.key, quantity })
-            .then(() => enqueueSnackbar(`Bought ${quantity}x ${tier.label} seed${quantity === 1 ? "" : "s"}.`, { variant: "success" }))
+    const handleBuySeed = (seedType: string, quantity: number) => {
+        const tier = seedTiers.find((t) => t.key === seedType);
+        buySeed({ seedType, quantity })
+            .then(() => enqueueSnackbar(`Bought ${quantity}x ${tier?.label ?? "seed"}${quantity === 1 ? "" : "s"}.`, { variant: "success" }))
             .catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
+    };
 
     if (seedTiers.length === 0) {
         return <LinearProgress sx={{ mt: 2 }} />;
@@ -144,46 +128,7 @@ function GardenPanel() {
             <Typography variant="caption" color="text.secondary">
                 Buy seeds into your stock, then plant them from an empty Garden plot.
             </Typography>
-            {Object.values(seedTiers).map((tier) => (
-                <Box
-                    key={tier.key}
-                    sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}
-                >
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <Typography sx={{ fontSize: 24 }}>{SEED_EMOJI[tier.key] ?? "🌾"}</Typography>
-                        <Box sx={{ flexGrow: 1 }}>
-                            <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                    {tier.label} (x{tier.owned})
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    {formatCheddar(tier.cost)} each
-                                </Typography>
-                            </Box>
-                            <Typography variant="caption" color="text.secondary">
-                                {tier.waterAmount} growth stages to mature
-                            </Typography>
-                        </Box>
-                    </Box>
-                    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
-                        {BUY_QUANTITIES.map((quantity) => (
-                            <Button
-                                key={quantity}
-                                size="small"
-                                variant="contained"
-                                disabled={isBuyingSeed}
-                                onClick={() => handleBuySeed(tier, quantity)}
-                                sx={{ textTransform: "none", flexDirection: "column", lineHeight: 1.2, py: 0.75 }}
-                            >
-                                <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2, color: "inherit" }}>{quantity}x</Typography>
-                                <Typography variant="caption" sx={{ fontSize: 10, opacity: 0.85, lineHeight: 1.2, color: "inherit" }}>
-                                    {formatCheddar(bulkPrice(tier.cost, quantity))}
-                                </Typography>
-                            </Button>
-                        ))}
-                    </Box>
-                </Box>
-            ))}
+            <SeedShopList seedTiers={seedTiers} mode="bulk" onBuy={handleBuySeed} isBuying={isBuyingSeed} />
         </Box>
     );
 }

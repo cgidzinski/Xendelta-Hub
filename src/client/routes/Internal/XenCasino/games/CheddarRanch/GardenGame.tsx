@@ -32,7 +32,7 @@ import { useSnackbar } from "notistack";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import { formatCheddar } from "../../utils/currency";
 import { GardenSquare, SeedTier, useCasinoGarden } from "../../../../../hooks/casino/useCasinoGarden";
-import { SEED_EMOJI } from "./shared";
+import { SEED_EMOJI, SeedShopList } from "./shared";
 
 // Ticks once a second for as long as `targetMs` is non-null, reading Date.now() fresh on
 // every tick rather than trusting a slower page-level clock - this is what makes the
@@ -325,20 +325,17 @@ interface SeedOptionProps {
     tier: SeedTier;
     disabled: boolean;
     onSelect: () => void;
-    onBuy: () => void;
-    isBuying: boolean;
 }
 
-// One seed choice in the empty-plot picker - the whole row is a single action: plant from
-// stock if you own any, or buy 1 if you don't. The "N owned" / "Buy {cost}" text is pure
-// decor, not its own control - no nested button, so no greyed-out disabled look for the
-// 0-owned case either. Only disabled while a plant/buy request is actually in flight.
-function SeedOption({ tier, disabled, onSelect, onBuy, isBuying }: SeedOptionProps) {
+// One seed choice in the empty-plot picker - plants from stock if you own any. Seeds are
+// bought from the Shop (the button above this list, or the Store's Garden tab) rather than
+// inline here, so a 0-owned tier is just informational and can't be tapped.
+function SeedOption({ tier, disabled, onSelect }: SeedOptionProps) {
     const owned = tier.owned > 0;
     return (
         <ListItemButton
-            disabled={disabled || isBuying}
-            onClick={owned ? onSelect : onBuy}
+            disabled={disabled || !owned}
+            onClick={onSelect}
             sx={{
                 alignItems: "flex-start",
                 gap: 1.5,
@@ -359,8 +356,8 @@ function SeedOption({ tier, disabled, onSelect, onBuy, isBuying }: SeedOptionPro
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, mr: "auto" }}>
                         {tier.label}
                     </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: owned ? "success.main" : "warning.main" }}>
-                        {owned ? `${tier.owned} owned` : `Buy ${formatCheddar(tier.cost)}`}
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: owned ? "success.main" : "text.disabled" }}>
+                        {owned ? `${tier.owned} owned` : "0 owned"}
                     </Typography>
                 </Box>
                 <Stack spacing={0.5} sx={{ mt: 0.75 }}>
@@ -379,19 +376,18 @@ interface SquareDetailsProps {
     square: GardenSquare;
     onHarvested: () => void;
     onCleared: () => void;
+    onOpenShop: () => void;
 }
 
 // Full stats + every action for the selected square - rendered inside the modal, adapting
 // to status exactly like the old inline SquareCard body did.
-function SquareDetails({ square, onHarvested, onCleared }: SquareDetailsProps) {
+function SquareDetails({ square, onHarvested, onCleared, onOpenShop }: SquareDetailsProps) {
     const {
         seedTiers,
         protectionCost,
         cleanupFee,
         plant,
         isPlanting,
-        buySeed,
-        isBuyingSeed,
         water,
         isWatering,
         protect,
@@ -418,8 +414,6 @@ function SquareDetails({ square, onHarvested, onCleared }: SquareDetailsProps) {
 
     const handlePlant = (seedType: string) =>
         plant({ squareId: square.squareId, seedType }).catch((e) => enqueueSnackbar(e.message || "Failed to plant", { variant: "error" }));
-    const handleBuySeed = (seedType: string) =>
-        buySeed({ seedType, quantity: 1 }).catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
     const handleWater = () => water({ squareId: square.squareId }).catch((e) => enqueueSnackbar(e.message || "Failed to water", { variant: "error" }));
     const handleProtect = (item: "pesticide" | "fungicide" | "fertilizer" | "bonemeal") =>
         protect({ squareId: square.squareId, item }).catch((e) => enqueueSnackbar(e.message || "Failed to protect", { variant: "error" }));
@@ -442,19 +436,15 @@ function SquareDetails({ square, onHarvested, onCleared }: SquareDetailsProps) {
                 <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, mb: 2.5 }}>
                     <Avatar sx={{ width: 56, height: 56, fontSize: 28, bgcolor: "action.hover" }}>{EMPTY_EMOJI}</Avatar>
                     <Typography variant="body2" color="text.secondary">
-                        Plant from your seed stock - buy more from the Store
+                        Plant from your seed stock
                     </Typography>
+                    <Button variant="outlined" size="small" onClick={onOpenShop} sx={{ textTransform: "none" }}>
+                        Shop
+                    </Button>
                 </Box>
                 <List disablePadding>
                     {seedTiers.map((tier) => (
-                        <SeedOption
-                            key={tier.key}
-                            tier={tier}
-                            disabled={isPlanting}
-                            onSelect={() => handlePlant(tier.key)}
-                            onBuy={() => handleBuySeed(tier.key)}
-                            isBuying={isBuyingSeed}
-                        />
+                        <SeedOption key={tier.key} tier={tier} disabled={isPlanting} onSelect={() => handlePlant(tier.key)} />
                     ))}
                 </List>
             </Box>
@@ -625,10 +615,15 @@ function SquareDetails({ square, onHarvested, onCleared }: SquareDetailsProps) {
 }
 
 export default function GardenGame() {
-    const { squares, seedTiers, waterCooldownMs, neglectGraceMs, cleanupFee, isLoading } = useCasinoGarden();
+    const { squares, seedTiers, waterCooldownMs, neglectGraceMs, cleanupFee, isLoading, buySeed, isBuyingSeed } = useCasinoGarden();
+    const { enqueueSnackbar } = useSnackbar();
     const [selectedSquareId, setSelectedSquareId] = useState<number | null>(null);
+    const [shopOpen, setShopOpen] = useState(false);
 
     const selectedSquare = squares.find((s) => s.squareId === selectedSquareId) ?? null;
+
+    const handleBuySeed = (seedType: string) =>
+        buySeed({ seedType, quantity: 1 }).catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
 
     const oddsSections: OddsSection[] = [
         {
@@ -661,10 +656,16 @@ export default function GardenGame() {
             )} to clean up before you can replant it. Harvesting doesn't pay cheddar directly - it fills your Inventory with produce you sell later.`}
             oddsSections={oddsSections}
         >
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 2 }}>
+                <Button variant="outlined" size="small" onClick={() => setShopOpen(true)} sx={{ textTransform: "none" }}>
+                    Shop
+                </Button>
+            </Box>
+
             {isLoading ? (
-                <LinearProgress sx={{ mt: 4 }} />
+                <LinearProgress sx={{ mt: 2 }} />
             ) : (
-                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2, mt: 2 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2, mt: 1 }}>
                     {squares.map((square) => (
                         <GardenTile key={square.squareId} square={square} onOpen={setSelectedSquareId} />
                     ))}
@@ -690,8 +691,24 @@ export default function GardenGame() {
                             square={selectedSquare}
                             onHarvested={() => setSelectedSquareId(null)}
                             onCleared={() => setSelectedSquareId(null)}
+                            onOpenShop={() => setShopOpen(true)}
                         />
                     )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={shopOpen} onClose={() => setShopOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+                <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    Garden Shop
+                    <IconButton onClick={() => setShopOpen(false)} aria-label="Close">
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent sx={{ pb: 3, display: "flex", flexDirection: "column", gap: 2 }}>
+                    <Typography variant="caption" color="text.secondary">
+                        Buy seeds one at a time here. Bulk discounts (5x/10x) are in the Store.
+                    </Typography>
+                    <SeedShopList seedTiers={seedTiers} mode="single" onBuy={handleBuySeed} isBuying={isBuyingSeed} />
                 </DialogContent>
             </Dialog>
         </GameWrapper>
