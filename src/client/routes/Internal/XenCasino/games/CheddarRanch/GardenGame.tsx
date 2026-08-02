@@ -32,7 +32,7 @@ import { useSnackbar } from "notistack";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import { formatCheddar } from "../../utils/currency";
 import { GardenSquare, ProtectionItem, SeedTier, useCasinoGarden } from "../../../../../hooks/casino/useCasinoGarden";
-import { PROTECTION_ITEM_ROWS, ProtectionShopList, SEED_EMOJI, SeedShopList } from "./shared";
+import { ProtectionShopList, SEED_EMOJI } from "./shared";
 
 // Ticks once a second for as long as `targetMs` is non-null, reading Date.now() fresh on
 // every tick rather than trusting a slower page-level clock - this is what makes the
@@ -653,8 +653,6 @@ export default function GardenGame() {
         neglectGraceMs,
         cleanupFee,
         isLoading,
-        buySeed,
-        isBuyingSeed,
         protectionItems,
         buyProtection,
         isBuyingProtection,
@@ -665,8 +663,6 @@ export default function GardenGame() {
 
     const selectedSquare = squares.find((s) => s.squareId === selectedSquareId) ?? null;
 
-    const handleBuySeed = (seedType: string) =>
-        buySeed({ seedType, quantity: 1 }).catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
     const handleBuyProtection = (item: ProtectionItem["key"]) =>
         buyProtection({ item, quantity: 1 }).catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
 
@@ -745,11 +741,7 @@ export default function GardenGame() {
                 </DialogTitle>
                 <DialogContent sx={{ pb: 3, display: "flex", flexDirection: "column", gap: 2 }}>
                     <Typography variant="caption" color="text.secondary">
-                        Seeds - buy one at a time here. Bulk discounts (5x/10x) are in the Store.
-                    </Typography>
-                    <SeedShopList seedTiers={seedTiers} mode="single" onBuy={handleBuySeed} isBuying={isBuyingSeed} />
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-                        Crop protection - buy one at a time here.
+                        Crop protection - buy one at a time here. Seeds are bought from an empty plot or the Store.
                     </Typography>
                     <ProtectionShopList protectionItems={protectionItems} mode="single" onBuy={handleBuyProtection} isBuying={isBuyingProtection} />
                 </DialogContent>
