@@ -99,6 +99,8 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
         collect,
         isCollecting,
         feedItems,
+        buyFeed,
+        isBuyingFeed,
         shopItems,
         speciesByTier,
         useItem,
@@ -111,6 +113,7 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
     const [swappingSpecies, setSwappingSpecies] = useState(false);
     const [pickedSpecies, setPickedSpecies] = useState("");
     const [tab, setTab] = useState(0);
+    const [shopOpen, setShopOpen] = useState(false);
 
     const cooldownRemaining = useCountdown(feedReadyAt(creature, feedCooldownMs));
     const onCooldown = cooldownRemaining > 0;
@@ -138,6 +141,15 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
         buyShopItem(item.key)
             .then(() => enqueueSnackbar(`Bought 1x ${item.label}.`, { variant: "success" }))
             .catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
+
+    const handleBuyFeed = () => {
+        if (!feedItem) {
+            return;
+        }
+        buyFeed({ type: creature.type, quantity: 1 })
+            .then(() => enqueueSnackbar(`Bought 1x ${feedItem.label}.`, { variant: "success" }))
+            .catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
+    };
 
     const handleTypeSwap = () => {
         if (!pickedSpecies) {
@@ -198,12 +210,17 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
                 </Box>
             </Box>
 
-            <ToggleButtonGroup exclusive size="small" value={tab} onChange={(_, v) => v !== null && setTab(v)} fullWidth
-                sx={{ mt: 1, mb: 1.5, "& .MuiToggleButtonGroup-grouped": { py: 0.75, fontWeight: 700, textTransform: "none", border: "1px solid", borderColor: "divider", "&.Mui-selected": { bgcolor: "primary.main", color: "primary.contrastText", borderColor: "primary.main" } } }}>
-                <ToggleButton value={0}><BarChartIcon fontSize="small" /></ToggleButton>
-                <ToggleButton value={1}><Inventory2Icon fontSize="small" /></ToggleButton>
-                <ToggleButton value={2}><MoreHorizIcon fontSize="small" /></ToggleButton>
-            </ToggleButtonGroup>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1, mb: 1.5 }}>
+                <ToggleButtonGroup exclusive size="small" value={tab} onChange={(_, v) => v !== null && setTab(v)} fullWidth
+                    sx={{ flex: 1, "& .MuiToggleButtonGroup-grouped": { py: 0.75, fontWeight: 700, textTransform: "none", border: "1px solid", borderColor: "divider", "&.Mui-selected": { bgcolor: "primary.main", color: "primary.contrastText", borderColor: "primary.main" } } }}>
+                    <ToggleButton value={0}><BarChartIcon fontSize="small" /></ToggleButton>
+                    <ToggleButton value={1}><Inventory2Icon fontSize="small" /></ToggleButton>
+                    <ToggleButton value={2}><MoreHorizIcon fontSize="small" /></ToggleButton>
+                </ToggleButtonGroup>
+                <Button variant="outlined" size="small" onClick={() => setShopOpen(true)} sx={{ textTransform: "none", flexShrink: 0 }}>
+                    Shop
+                </Button>
+            </Box>
 
             <Box sx={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", gap: 2, border: "1px solid", borderColor: "divider", borderRadius: 2, p: 2, bgcolor: "background.default" }}>
                 {tab === 0 && (
@@ -242,19 +259,9 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
                             })}
                         </Box>
                         {!swappingSpecies ? (
-                            <Box sx={{ display: "flex", gap: 1 }}>
-                                <Box sx={{ flex: 1, minWidth: 0 }}>
-                                    <ActionButton icon={<AutorenewIcon />} label={`Type-Swap Serum (${serumOwned} owned)`}
-                                        description="Rerolls this creature's species within its own rarity tier"
-                                        disabled={isUsingItem || serumOwned <= 0 || speciesOptions.length === 0} onClick={() => setSwappingSpecies(true)} />
-                                </Box>
-                                {serumItem && (
-                                    <Button size="small" variant="outlined" disabled={isBuyingShopItem} onClick={() => handleBuyItem(serumItem)}
-                                        sx={{ textTransform: "none", flexShrink: 0, alignSelf: "flex-start" }}>
-                                        Buy ({formatCheddar(serumItem.price)})
-                                    </Button>
-                                )}
-                            </Box>
+                            <ActionButton icon={<AutorenewIcon />} label={`Type-Swap Serum (${serumOwned} owned)`}
+                                description="Rerolls this creature's species within its own rarity tier"
+                                disabled={isUsingItem || serumOwned <= 0 || speciesOptions.length === 0} onClick={() => setSwappingSpecies(true)} />
                         ) : (
                             <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
                                 <FormControl size="small" fullWidth>
@@ -269,19 +276,9 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
                                 </Box>
                             </Box>
                         )}
-                        <Box sx={{ display: "flex", gap: 1 }}>
-                            <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <ActionButton icon={<ShieldIcon />} label={shieldActive ? "Decay Shield active" : `Decay Shield (${shieldOwned} owned)`}
-                                    description={shieldActive ? `Protected until ${new Date(creature.decayShieldUntil!).toLocaleString()}` : "Protects from neglect decay for 3 days"}
-                                    disabled={isUsingItem || shieldOwned <= 0 || !!shieldActive} onClick={handleDecayShield} />
-                            </Box>
-                            {shieldItem && (
-                                <Button size="small" variant="outlined" disabled={isBuyingShopItem || !!shieldActive} onClick={() => handleBuyItem(shieldItem)}
-                                    sx={{ textTransform: "none", flexShrink: 0, alignSelf: "flex-start" }}>
-                                    Buy ({formatCheddar(shieldItem.price)})
-                                </Button>
-                            )}
-                        </Box>
+                        <ActionButton icon={<ShieldIcon />} label={shieldActive ? "Decay Shield active" : `Decay Shield (${shieldOwned} owned)`}
+                            description={shieldActive ? `Protected until ${new Date(creature.decayShieldUntil!).toLocaleString()}` : "Protects from neglect decay for 3 days"}
+                            disabled={isUsingItem || shieldOwned <= 0 || !!shieldActive} onClick={handleDecayShield} />
                     </>
                 )}
                 {tab === 2 && (
@@ -313,6 +310,71 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
                     </>
                 )}
             </Box>
+
+            <Dialog open={shopOpen} onClose={() => setShopOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+                <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    Ranch Shop
+                    <IconButton onClick={() => setShopOpen(false)} aria-label="Close">
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent sx={{ pb: 3, display: "flex", flexDirection: "column", gap: 2 }}>
+                    <Typography variant="caption" color="text.secondary">
+                        Buy one at a time here. Bulk discounts (5x/10x) for Feed are in the Store.
+                    </Typography>
+                    {feedItem && (
+                        <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                <Box sx={{ color: "primary.main" }}><RestaurantIcon /></Box>
+                                <Box sx={{ flexGrow: 1 }}>
+                                    <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{feedItem.label} (x{owned})</Typography>
+                                        <Typography variant="caption" color="text.secondary">{formatCheddar(feedItem.price)} each</Typography>
+                                    </Box>
+                                    <Typography variant="caption" color="text.secondary">Feeds {TYPE_LABEL[creature.type]} creatures</Typography>
+                                </Box>
+                            </Box>
+                            <Button size="small" variant="contained" fullWidth disabled={isBuyingFeed} onClick={handleBuyFeed} sx={{ textTransform: "none" }}>
+                                Buy 1 ({formatCheddar(feedItem.price)})
+                            </Button>
+                        </Box>
+                    )}
+                    {serumItem && (
+                        <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                <Box sx={{ color: "primary.main" }}><AutorenewIcon /></Box>
+                                <Box sx={{ flexGrow: 1 }}>
+                                    <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{serumItem.label} (x{serumOwned})</Typography>
+                                        <Typography variant="caption" color="text.secondary">{formatCheddar(serumItem.price)} each</Typography>
+                                    </Box>
+                                    <Typography variant="caption" color="text.secondary">{serumItem.description}</Typography>
+                                </Box>
+                            </Box>
+                            <Button size="small" variant="contained" fullWidth disabled={isBuyingShopItem} onClick={() => handleBuyItem(serumItem)} sx={{ textTransform: "none" }}>
+                                Buy 1 ({formatCheddar(serumItem.price)})
+                            </Button>
+                        </Box>
+                    )}
+                    {shieldItem && (
+                        <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                <Box sx={{ color: "primary.main" }}><ShieldIcon /></Box>
+                                <Box sx={{ flexGrow: 1 }}>
+                                    <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{shieldItem.label} (x{shieldOwned})</Typography>
+                                        <Typography variant="caption" color="text.secondary">{formatCheddar(shieldItem.price)} each</Typography>
+                                    </Box>
+                                    <Typography variant="caption" color="text.secondary">{shieldItem.description}</Typography>
+                                </Box>
+                            </Box>
+                            <Button size="small" variant="contained" fullWidth disabled={isBuyingShopItem} onClick={() => handleBuyItem(shieldItem)} sx={{ textTransform: "none" }}>
+                                Buy 1 ({formatCheddar(shieldItem.price)})
+                            </Button>
+                        </Box>
+                    )}
+                </DialogContent>
+            </Dialog>
         </Box>
     );
 }

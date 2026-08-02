@@ -414,8 +414,9 @@ xenCasinoRanchSchema.statics.addCreature = async function (userId, params) {
         name: params.name,
         rarityTier: params.rarityTier,
         stats: params.stats || { speed: 0, stamina: 0, power: 0, intelligence: 0, luck: 0, charm: 0 },
-        lastCollectedAt: new Date(),
-        lastCollectDate: todayKey(),
+        // lastCollectedAt/lastCollectDate deliberately left unset (schema default null) - a
+        // brand-new creature has never been collected, so canCollect (computed in
+        // creatureView as lastCollectDate !== todayKey()) should read true immediately.
         createdAt: new Date(),
         feedCount: 0,
         raceWins: 0,
