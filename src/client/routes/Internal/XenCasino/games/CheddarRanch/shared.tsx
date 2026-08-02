@@ -13,6 +13,9 @@ import BoltIcon from "@mui/icons-material/Bolt";
 import PsychologyIcon from "@mui/icons-material/Psychology";
 import CasinoIcon from "@mui/icons-material/Casino";
 import FavoriteIcon from "@mui/icons-material/Favorite";
+import StairsIcon from "@mui/icons-material/Stairs";
+import ShieldIcon from "@mui/icons-material/Shield";
+import FlareIcon from "@mui/icons-material/Flare";
 import { formatCheddar } from "../../utils/currency";
 import { RanchCreature, RanchStats, RanchType } from "../../../../../hooks/casino/useCasinoRanch";
 
@@ -38,6 +41,15 @@ export function feedUnitsRequired(level: number): number {
 
 export const TYPE_EMOJI: Record<RanchType, string> = { land: "🌾", sea: "🌊", air: "🪽" };
 export const TYPE_LABEL: Record<RanchType, string> = { land: "Land", sea: "Sea", air: "Air" };
+
+// Shared between the Garden game itself and the Store's Garden (buy seeds) tab, so both
+// surfaces render the same icon per seed type without drifting.
+export const SEED_EMOJI: Record<string, string> = {
+    sprout: "🌱",
+    clover: "🍀",
+    nightshade: "🍄",
+    "golden-vine": "🍇",
+};
 
 export const ITEM_EMOJI: Record<string, string> = {
     "down-feather": "🪶",
@@ -216,6 +228,98 @@ export function ActionButton({ icon, label, description, color = "primary", disa
                 </Typography>
             </Box>
         </Button>
+    );
+}
+
+export type MineEquipmentItem = "ladder" | "explosive" | "support" | "flare";
+
+export interface MineEquipmentPrices {
+    ladder: { cost: number; sellValue: number };
+    explosive: { cost: number; sellValue: number };
+    support: { cost: number; sellValue: number };
+    flare: { cost: number; sellValue: number };
+}
+
+// Mirrors bulkPrice in casinoRanch.ts - 5% off at 5x, 10% off at 10x, otherwise full price.
+// Duplicated here for display only (so a bulk button can show what it'll actually charge
+// before tapping) - the server is still the sole source of truth for what's charged.
+export function bulkPrice(unitCost: number, quantity: number): number {
+    const discount = quantity >= 10 ? 0.1 : quantity >= 5 ? 0.05 : 0;
+    return Math.round(unitCost * quantity * (1 - discount));
+}
+
+const MINE_EQUIPMENT_ROWS: { key: MineEquipmentItem; icon: ReactNode; label: string; color: "warning" | "error" | "success" | "info"; desc: string }[] = [
+    { key: "ladder", icon: <StairsIcon />, label: "Ladder", color: "warning", desc: "Dig up or down into new territory" },
+    { key: "explosive", icon: <BoltIcon />, label: "Explosive", color: "error", desc: "Clears heavy stone blocking your path" },
+    { key: "support", icon: <ShieldIcon />, label: "Support", color: "success", desc: "Blocks your next cave-in" },
+    { key: "flare", icon: <FlareIcon />, label: "Flare", color: "info", desc: "Reveals a 3×3 area around you" },
+];
+
+interface MineEquipmentListProps {
+    prices: MineEquipmentPrices;
+    owned: Record<MineEquipmentItem, number>;
+    // "bulk" (Store's Mine Equipment tab): 1x/5x/10x buy buttons showing the discounted
+    // total. "single" (MineGame's own Shop dialog): one Buy-1 button, plus a Sell-1 button
+    // once any are owned - buying/selling equipment there is deliberately single-quantity.
+    mode: "bulk" | "single";
+    onBuy: (item: MineEquipmentItem, quantity: number) => void;
+    isBuying: boolean;
+    onSell?: (item: MineEquipmentItem) => void;
+    isSelling?: boolean;
+}
+
+// Ladder/Explosive/Support/Flare rows - shared by MineGame's in-game Mine Shop dialog and
+// the Store's Mine Equipment tab, so both read the same live prices/colors and never drift.
+export function MineEquipmentList({ prices, owned, mode, onBuy, isBuying, onSell, isSelling }: MineEquipmentListProps) {
+    return (
+        <>
+            {MINE_EQUIPMENT_ROWS.map((item) => {
+                const price = prices[item.key].cost;
+                const sellValue = prices[item.key].sellValue;
+                const ownedCount = owned[item.key];
+                return (
+                    <Box key={item.key} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <Box sx={{ color: `${item.color}.main` }}>{item.icon}</Box>
+                            <Box sx={{ flexGrow: 1 }}>
+                                <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{item.label} (x{ownedCount})</Typography>
+                                    <Typography variant="caption" color="text.secondary">{formatCheddar(price)} each</Typography>
+                                </Box>
+                                <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+                            </Box>
+                        </Box>
+                        {mode === "bulk" ? (
+                            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
+                                {[1, 5, 10].map((qty) => (
+                                    <Button key={qty} size="small" variant="contained" color={item.color}
+                                        disabled={isBuying} onClick={() => onBuy(item.key, qty)}
+                                        sx={{ textTransform: "none", flexDirection: "column", lineHeight: 1.2, py: 0.75 }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2, color: "inherit" }}>{qty}x</Typography>
+                                        <Typography variant="caption" sx={{ fontSize: 10, opacity: 0.85, lineHeight: 1.2, color: "inherit" }}>
+                                            {formatCheddar(bulkPrice(price, qty))}
+                                        </Typography>
+                                    </Button>
+                                ))}
+                            </Box>
+                        ) : (
+                            <Box sx={{ display: "flex", gap: 1 }}>
+                                <Button size="small" variant="contained" color={item.color} fullWidth
+                                    disabled={isBuying} onClick={() => onBuy(item.key, 1)} sx={{ textTransform: "none" }}>
+                                    Buy 1
+                                </Button>
+                                {onSell && ownedCount > 0 && (
+                                    <Button size="small" variant="outlined" color={item.color} fullWidth
+                                        disabled={!!isSelling} onClick={() => onSell(item.key)} sx={{ textTransform: "none" }}>
+                                        Sell 1 ({formatCheddar(sellValue)})
+                                    </Button>
+                                )}
+                            </Box>
+                        )}
+                    </Box>
+                );
+            })}
+        </>
     );
 }
 

@@ -280,7 +280,7 @@ ReactDOM.createRoot(rootElement).render(
               <SnackbarProvider
                 maxSnack={10}
                 autoHideDuration={6000}
-                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                anchorOrigin={{ vertical: "top", horizontal: "right" }}
               >
                 <RouterProvider router={router} />
                 <PWA />

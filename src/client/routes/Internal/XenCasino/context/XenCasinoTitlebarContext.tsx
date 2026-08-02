@@ -2,6 +2,9 @@ import { createContext, useContext, useState, ReactNode } from "react";
 
 export interface XenCasinoTitlebar {
     title: string;
+    // Renders the "How to play" info button right next to the title in the navbar when
+    // set - GameWrapper passes this so the dialog it owns can be triggered from there.
+    onInfoClick?: () => void;
 }
 
 interface XenCasinoTitlebarContextValue {

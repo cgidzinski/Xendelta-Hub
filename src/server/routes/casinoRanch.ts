@@ -101,6 +101,23 @@ const FLARE_COST = 1500;
 const MINE_FLARE_RADIUS = 1;
 const MAP_RESET_COST = 2000;
 
+// Sell-back value for owned equipment - 70% of buy cost, same ratio used for seeds (see
+// ITEM_DEFS' seed-* entries), so selling one back is never a wash against buying it.
+const MINE_EQUIPMENT_SELL_VALUE: Record<"ladder" | "explosive" | "support" | "flare", number> = {
+    ladder: 350,
+    explosive: 525,
+    support: 700,
+    flare: 1050,
+};
+
+// Bulk-buy discount shared by every quantity-selectable purchase (Feed, Garden seeds, Mine
+// equipment) - 5% off at 5x, 10% off at 10x, otherwise full price. A single source so all
+// three flows discount identically instead of drifting apart.
+function bulkPrice(unitCost: number, quantity: number): number {
+    const discount = quantity >= 10 ? 0.1 : quantity >= 5 ? 0.05 : 0;
+    return Math.round(unitCost * quantity * (1 - discount));
+}
+
 const MINE_ORE_TIER_VALUE: Record<string, number> = {
     copper: 1, silver: 2, gold: 4, emerald: 8, ruby: 14, diamond: 25,
 };
@@ -120,15 +137,16 @@ function mineStateView(doc: any) {
         ladderCount: m.ladderCount,
         explosiveCount: m.explosiveCount,
         supportCount: m.reinforcementCount,
+        flareCount: m.flareCount,
         deepestDepthReached: m.deepestDepthReached,
         bestGemTier: m.bestGemTier,
         revealedTiles: m.dugTiles.map((t: any) => ({ x: t.x, y: t.y, oreTier: t.oreTier, isHeavyStone: t.isHeavyStone, status: t.status })),
         prices: {
             dig: { cost: DIG_COST },
-            ladder: { cost: LADDER_COST, amount: LADDER_BATCH },
-            explosive: { cost: EXPLOSIVE_COST, amount: 1 },
-            support: { cost: SUPPORT_COST, amount: 1 },
-            flare: { cost: FLARE_COST, radius: MINE_FLARE_RADIUS },
+            ladder: { cost: LADDER_COST, amount: LADDER_BATCH, sellValue: MINE_EQUIPMENT_SELL_VALUE.ladder },
+            explosive: { cost: EXPLOSIVE_COST, amount: 1, sellValue: MINE_EQUIPMENT_SELL_VALUE.explosive },
+            support: { cost: SUPPORT_COST, amount: 1, sellValue: MINE_EQUIPMENT_SELL_VALUE.support },
+            flare: { cost: FLARE_COST, radius: MINE_FLARE_RADIUS, sellValue: MINE_EQUIPMENT_SELL_VALUE.flare },
             reset: { cost: MAP_RESET_COST },
         },
         oreTiers: require("../models/xenCasinoRanch").MINE_ORE_TIERS.map((t: any) => ({ key: t.key, label: t.label, minDepth: t.minDepth, valueMultiplier: MINE_ORE_TIER_VALUE[t.key] ?? 1 })),
@@ -165,6 +183,19 @@ const SEED_TIERS: Record<string, SeedTier> = {
     nightshade: seedTier({ key: "nightshade", label: "Nightshade", cost: 7000, waterAmount: 5, verminChance: 0.15, diseaseChance: 0.08, baseMultiplier: 2.2, variance: 0.4 }),
     "golden-vine": seedTier({ key: "golden-vine", label: "Golden Vine", cost: 16000, waterAmount: 10, verminChance: 0.1, diseaseChance: 0.05, baseMultiplier: 3.0, variance: 0.9 }),
 };
+
+// Seeds are bought into inventory (like Feed) rather than paid-for atomically at plant
+// time - tracked via the same generic addItem/subtractItem inventory Map under this key,
+// but deliberately NOT registered in ITEM_DEFS so they never show up in the generic
+// sellable Items grid or become sellable (no buy-then-sell arbitrage surface).
+function seedItemKey(seedType: string): string {
+    return `seed-${seedType}`;
+}
+
+// Flat chance a harvest also returns one free seed of the same type to inventory, on top
+// of the produce payout - keeps a run of good harvests self-sustaining without making
+// buying seeds pointless. Easy to retune per-tier later if needed.
+const GARDEN_SEED_RETURN_CHANCE = 0.2;
 
 // "fertilizer" and "bonemeal" are handled specially by XenCasinoRanch.protectGardenSquare -
 // fertilizer reduces waterAmount by 1 instead of blocking a hazard like pesticide/fungicide
@@ -434,6 +465,13 @@ const ITEM_DEFS: Record<string, { key: string; label: string; sellValue: number;
     "clover-produce": { key: "clover-produce", label: "Clover Bundle", sellValue: 1280, description: "A bundle of Lucky Clover harvested from the Garden." },
     "nightshade-produce": { key: "nightshade-produce", label: "Nightshade Bundle", sellValue: 3080, description: "A bundle of Nightshade harvested from the Garden." },
     "golden-vine-produce": { key: "golden-vine-produce", label: "Golden Vine Basket", sellValue: 9600, description: "A basket of Golden Vine grapes harvested from the Garden." },
+    // Seeds themselves (bought from the Store's Garden tab, planted from stock) - sellable
+    // at 70% of their Store buy price, same ratio as Mine equipment (see
+    // MINE_EQUIPMENT_SELL_VALUE), so selling one back is never a wash against buying it.
+    "seed-sprout": { key: "seed-sprout", label: "Sprout Seed", sellValue: 700, description: "A Sprout seed, ready to plant in the Garden." },
+    "seed-clover": { key: "seed-clover", label: "Lucky Clover Seed", sellValue: 2800, description: "A Lucky Clover seed, ready to plant in the Garden." },
+    "seed-nightshade": { key: "seed-nightshade", label: "Nightshade Seed", sellValue: 4900, description: "A Nightshade seed, ready to plant in the Garden." },
+    "seed-golden-vine": { key: "seed-golden-vine", label: "Golden Vine Seed", sellValue: 11200, description: "A Golden Vine seed, ready to plant in the Garden." },
 };
 
 // Flat, tier-based collection quantity - deliberately NOT derived from the creature's
@@ -1015,6 +1053,16 @@ async function tonicRecipesView(userId: string) {
     }));
 }
 
+// Same shape as tonicRecipesView's per-material `owned` counts - lets the Garden/Store UI
+// show what's already in stock without cross-referencing the raw items list.
+async function seedTiersView(userId: string) {
+    const doc = await inventoryDoc(userId);
+    return Object.values(SEED_TIERS).map((tier) => ({
+        ...tier,
+        owned: doc.inventory.get(seedItemKey(tier.key)) || 0,
+    }));
+}
+
 async function pendingRaceView(userId: string) {
     const doc = await XenCasinoRanchPendingRace.getState(userId);
     if (!doc.pending || new Date(doc.pending.expiresAt).getTime() < Date.now()) {
@@ -1446,7 +1494,7 @@ module.exports = function (app: express.Application) {
         if (!quantity || !ALLOWED_FEED_BUY_QUANTITIES.includes(quantity)) {
             return res.status(400).json({ status: false, message: "Invalid quantity" });
         }
-        const totalPrice = feedItem.price * quantity;
+        const totalPrice = bulkPrice(feedItem.price, quantity);
 
         const user = await User.findById(userId).exec();
         if (!user) {
@@ -1902,13 +1950,17 @@ module.exports = function (app: express.Application) {
 
     app.post("/api/casino/ranch/mine/buy-equipment", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
-        const { item } = req.body as { item: "ladder" | "explosive" | "support" };
-        if (!["ladder", "explosive", "support"].includes(item)) {
+        const { item, quantity } = req.body as { item?: "ladder" | "explosive" | "support" | "flare"; quantity?: number };
+        if (!item || !["ladder", "explosive", "support", "flare"].includes(item)) {
             return res.status(400).json({ status: false, message: "Invalid item" });
         }
+        if (!quantity || !ALLOWED_FEED_BUY_QUANTITIES.includes(quantity)) {
+            return res.status(400).json({ status: false, message: "Invalid quantity" });
+        }
 
-        const cost = item === "ladder" ? LADDER_COST : item === "explosive" ? EXPLOSIVE_COST : SUPPORT_COST;
-        const amount = item === "ladder" ? LADDER_BATCH : 1;
+        const unitCost = item === "ladder" ? LADDER_COST : item === "explosive" ? EXPLOSIVE_COST : item === "support" ? SUPPORT_COST : FLARE_COST;
+        const unitAmount = item === "ladder" ? LADDER_BATCH : 1;
+        const totalCost = bulkPrice(unitCost, quantity);
 
         const user = await User.findById(userId).exec();
         if (!user) return res.status(404).json({ status: false, message: "User not found" });
@@ -1920,24 +1972,31 @@ module.exports = function (app: express.Application) {
             }
             const xenCasinoAccountId = await getXenCasinoAccountId();
 
-            await transfer({
+            const payoutResult = await transfer({
                 fromAccountId: resolved.account.accountId,
                 toAccountId: xenCasinoAccountId,
-                amount: cost.toFixed(10),
+                amount: totalCost.toFixed(10),
                 key: txnKey("ranch-mine-equip"),
-                note: "ranch_mine_equipment",
+                note: `ranch_mine_equipment_${item}`,
             });
 
-            const doc = await XenCasinoRanch.addMineEquipment(userId, item, amount);
-            return res.json({ status: true, data: { state: mineStateView(doc), balance: null } });
+            const doc = await XenCasinoRanch.addMineEquipment(userId, item, unitAmount * quantity);
+            return res.json({ status: true, data: { state: mineStateView(doc), balance: payoutResult.fromNewBalance } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });
         }
     });
 
-    app.post("/api/casino/ranch/mine/flare", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
+    // Single-quantity only - selling mirrors the Mine Shop's single-buy flow, no bulk sell.
+    // Decrements first (removeMineEquipment guards against selling more than owned) and only
+    // pays out once that succeeds, so a failed/insufficient sell never touches cheddar.
+    app.post("/api/casino/ranch/mine/sell-equipment", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
+        const { item } = req.body as { item?: "ladder" | "explosive" | "support" | "flare" };
+        if (!item || !["ladder", "explosive", "support", "flare"].includes(item)) {
+            return res.status(400).json({ status: false, message: "Invalid item" });
+        }
 
         const user = await User.findById(userId).exec();
         if (!user) return res.status(404).json({ status: false, message: "User not found" });
@@ -1947,22 +2006,41 @@ module.exports = function (app: express.Application) {
             if (!resolved.linked || !resolved.account) {
                 return res.status(400).json({ status: false, message: "Link your Discord account to play" });
             }
-            const xenCasinoAccountId = await getXenCasinoAccountId();
 
-            await transfer({
-                fromAccountId: resolved.account.accountId,
-                toAccountId: xenCasinoAccountId,
-                amount: FLARE_COST.toFixed(10),
-                key: txnKey("ranch-mine-flare"),
-                note: "ranch_mine_flare",
+            const doc = await XenCasinoRanch.removeMineEquipment(userId, item, 1);
+            if (!doc) {
+                return res.status(400).json({ status: false, message: "You don't have any of that to sell" });
+            }
+
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+            const sellValue = MINE_EQUIPMENT_SELL_VALUE[item];
+            const payoutResult = await transfer({
+                fromAccountId: xenCasinoAccountId,
+                toAccountId: resolved.account.accountId,
+                amount: sellValue.toFixed(10),
+                key: txnKey("ranch-mine-sell"),
+                note: `ranch_mine_sell_${item}`,
             });
 
-            const doc = await XenCasinoRanch.useMineFlare(userId, MINE_FLARE_RADIUS);
-            return res.json({ status: true, data: { state: mineStateView(doc), balance: null } });
+            return res.json({ status: true, data: { state: mineStateView(doc), balance: payoutResult.toNewBalance } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });
         }
+    });
+
+    // No cheddar changes hands here anymore - the Flare was already paid for at buy time
+    // (see buy-equipment above). This just spends one from stock and scouts.
+    app.post("/api/casino/ranch/mine/flare", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+
+        const consumed = await XenCasinoRanch.removeMineEquipment(userId, "flare", 1);
+        if (!consumed) {
+            return res.status(400).json({ status: false, message: "No Flares owned - buy one from the Shop first." });
+        }
+
+        const doc = await XenCasinoRanch.useMineFlare(userId, MINE_FLARE_RADIUS);
+        return res.json({ status: true, data: { state: mineStateView(doc) } });
     });
 
     app.post("/api/casino/ranch/mine/reset", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
@@ -2005,7 +2083,7 @@ module.exports = function (app: express.Application) {
             status: true,
             data: {
                 squares: doc.garden.squares.map(gardenSquareView),
-                seedTiers: Object.values(SEED_TIERS),
+                seedTiers: await seedTiersView(userId),
                 protectionCost: PROTECTION_COST,
                 waterCooldownMs: GARDEN_WATER_COOLDOWN_MS,
                 neglectGraceMs: GARDEN_NEGLECT_GRACE_MS,
@@ -2014,6 +2092,63 @@ module.exports = function (app: express.Application) {
         });
     });
 
+    // Seeds are bought into inventory here - planting (below) then just spends one of the
+    // owned count, same two-step shape as Feed (buy in bulk, spend one at a time later).
+    app.post("/api/casino/ranch/garden/seeds/buy", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+        const { seedType, quantity } = req.body as { seedType?: string; quantity?: number };
+        const tier = seedType ? SEED_TIERS[seedType] : undefined;
+        if (!tier) {
+            return res.status(400).json({ status: false, message: "Invalid seed type" });
+        }
+        if (!quantity || !ALLOWED_FEED_BUY_QUANTITIES.includes(quantity)) {
+            return res.status(400).json({ status: false, message: "Invalid quantity" });
+        }
+        const totalPrice = bulkPrice(tier.cost, quantity);
+
+        const user = await User.findById(userId).exec();
+        if (!user) {
+            return res.status(404).json({ status: false, message: "User not found" });
+        }
+
+        try {
+            const resolved = await resolveUserAccount(user);
+            if (!resolved.linked || !resolved.account) {
+                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
+            }
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+            const payoutResult = await transfer({
+                fromAccountId: resolved.account.accountId,
+                toAccountId: xenCasinoAccountId,
+                amount: totalPrice.toFixed(10),
+                key: txnKey("ranch-buy-seed"),
+                note: `ranch_buy_${seedItemKey(seedType!)}`,
+            });
+
+            try {
+                await XenCasinoRanch.addItem(userId, seedItemKey(seedType!), quantity);
+            } catch (creditErr) {
+                await transfer({
+                    fromAccountId: xenCasinoAccountId,
+                    toAccountId: resolved.account.accountId,
+                    amount: totalPrice.toFixed(10),
+                    key: txnKey("ranch-buy-seed-refund"),
+                    note: `ranch_buy_${seedItemKey(seedType!)}_refund`,
+                });
+                throw creditErr;
+            }
+
+            await XenCasinoActivity.record({ game: "garden", userId, wager: totalPrice, payout: 0 });
+            return res.json({ status: true, data: { balance: payoutResult.fromNewBalance, seedTiers: await seedTiersView(userId) } });
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    // Plants from owned seed stock (bought above) - no cheddar changes hands here anymore,
+    // the spend already happened at buy time. Failing to own any of that seed is a normal
+    // 400, not an account/balance error.
     app.post("/api/casino/ranch/garden/plant", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const { squareId, seedType } = req.body as { squareId: number; seedType: string };
@@ -2022,45 +2157,21 @@ module.exports = function (app: express.Application) {
             return res.status(400).json({ status: false, message: "Invalid seed or square" });
         }
 
-        const user = await User.findById(userId).exec();
-        if (!user) return res.status(404).json({ status: false, message: "User not found" });
-
-        try {
-            const resolved = await resolveUserAccount(user);
-            if (!resolved.linked || !resolved.account) {
-                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
-            }
-            const xenCasinoAccountId = await getXenCasinoAccountId();
-            const result = await transfer({
-                fromAccountId: resolved.account.accountId,
-                toAccountId: xenCasinoAccountId,
-                amount: tier.cost.toFixed(10),
-                key: txnKey("ranch-garden-plant"),
-                note: `garden_plant_${seedType}`,
-            });
-
-            const square = await XenCasinoRanch.plantGardenSquare(userId, squareId, seedType, tier);
-            if (!square) {
-                // Debit already went through and the square turned out unavailable (raced
-                // with another plant on the same square) - refund immediately rather than
-                // leaving the player short with nothing planted.
-                await transfer({
-                    fromAccountId: xenCasinoAccountId,
-                    toAccountId: resolved.account.accountId,
-                    amount: tier.cost.toFixed(10),
-                    key: txnKey("ranch-garden-plant-rf"),
-                    note: "garden_plant_refund",
-                });
-                return res.status(400).json({ status: false, message: "Square is not available" });
-            }
-
-            await XenCasinoActivity.record({ game: "garden", userId, wager: tier.cost, payout: 0 });
-
-            return res.json({ status: true, data: { square: gardenSquareView(square), balance: result.fromNewBalance } });
-        } catch (err) {
-            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
-            return res.status(status).json({ status: false, message: (err as Error).message });
+        const consumed = await XenCasinoRanch.subtractItem(userId, seedItemKey(seedType), 1);
+        if (!consumed) {
+            return res.status(400).json({ status: false, message: `You don't have any ${tier.label} seeds - buy some from the Store first.` });
         }
+
+        const square = await XenCasinoRanch.plantGardenSquare(userId, squareId, seedType, tier);
+        if (!square) {
+            // The seed was already spent and the square turned out unavailable (raced with
+            // another plant on the same square) - refund the seed rather than leaving the
+            // player short with nothing planted.
+            await XenCasinoRanch.addItem(userId, seedItemKey(seedType), 1);
+            return res.status(400).json({ status: false, message: "Square is not available" });
+        }
+
+        return res.json({ status: true, data: { square: gardenSquareView(square) } });
     });
 
     app.post("/api/casino/ranch/garden/water", authenticateToken, async function (req: express.Request, res: express.Response) {
@@ -2156,6 +2267,15 @@ module.exports = function (app: express.Application) {
         const quantity = Math.max(1, Math.round(totalValue / unitValue));
 
         await XenCasinoRanch.addItem(userId, itemKey, quantity);
+
+        // A harvest has a flat chance of also returning one free seed of the same type to
+        // inventory, on top of the produce payout - rolled and applied before the square's
+        // seedType is cleared below.
+        const bonusSeedReturned = Math.random() < GARDEN_SEED_RETURN_CHANCE;
+        if (bonusSeedReturned) {
+            await XenCasinoRanch.addItem(userId, seedItemKey(square.seedType), 1);
+        }
+
         await XenCasinoRanch.clearHarvestedGardenSquare(userId, squareId);
         await recordCasinoRoundPlayed(userId, { game: "garden", wager: 0, payout: totalValue });
 
@@ -2163,7 +2283,9 @@ module.exports = function (app: express.Application) {
             status: true,
             data: {
                 item: { key: itemKey, label: ITEM_DEFS[itemKey]?.label ?? itemKey, quantity },
+                bonusSeedReturned,
                 items: await itemsView(userId),
+                seedTiers: await seedTiersView(userId),
             },
         });
     });

@@ -1,7 +1,6 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Box, Dialog, DialogContent, DialogTitle, IconButton, Tab, Tabs, Typography, useMediaQuery, useTheme } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import OddsDisplay, { OddsRow } from "./OddsDisplay";
 import { useXenCasinoTitlebar } from "../context/XenCasinoTitlebarContext";
 import { formatCheddar } from "../utils/currency";
@@ -45,29 +44,13 @@ export default function GameWrapper({ title, howToPlay, helpTabs, oddsSections, 
     const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
     useEffect(() => {
-        setTitlebar({ title });
+        setTitlebar({ title, onInfoClick: () => setInfoOpen(true) });
         return () => setTitlebar(null);
     }, [title, setTitlebar]);
 
     return (
         <Box sx={{ position: "relative" }}>
             {children}
-
-            <IconButton
-                onClick={() => setInfoOpen(true)}
-                aria-label="How to play"
-                sx={{
-                    position: "fixed",
-                    bottom: 24,
-                    right: 24,
-                    zIndex: (t) => t.zIndex.fab,
-                    bgcolor: "background.paper",
-                    boxShadow: 3,
-                    "&:hover": { bgcolor: "action.hover" },
-                }}
-            >
-                <InfoOutlinedIcon />
-            </IconButton>
 
             <Dialog
                 open={infoOpen}

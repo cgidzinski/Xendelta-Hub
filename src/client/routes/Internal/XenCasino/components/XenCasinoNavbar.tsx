@@ -1,5 +1,6 @@
 import { Box, IconButton, Tabs, Tab, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useXenCasinoTitlebar } from "../context/XenCasinoTitlebarContext";
 import CheddarBalanceChip from "./CheddarBalanceChip";
@@ -70,6 +71,11 @@ export default function XenCasinoNavbar() {
                     >
                         {titlebar.title}
                     </Typography>
+                    {titlebar.onInfoClick && (
+                        <IconButton onClick={titlebar.onInfoClick} aria-label="How to play" size="small" sx={{ flexShrink: 0 }}>
+                            <InfoOutlinedIcon fontSize="small" />
+                        </IconButton>
+                    )}
                 </>
             )}
 

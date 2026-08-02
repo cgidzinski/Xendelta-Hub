@@ -1523,7 +1523,7 @@ export default function PachinkoBoard({
                             Jackpot
                         </Typography>
                         <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "warning.light", fontVariantNumeric: "tabular-nums" }}>
-                            🧀{formatCheddar(jackpotPool)}
+                            {formatCheddar(jackpotPool)}
                         </Typography>
                     </Box>
 
@@ -1587,7 +1587,7 @@ export default function PachinkoBoard({
                         disabled={isReuping || isResuming}
                         sx={{ borderRadius: 999, px: 3, fontWeight: 700, textTransform: "none" }}
                     >
-                        +{amount}🔴 (🧀{formatCheddar(amount * pricePerBall)})
+                        +{amount}🔴 ({formatCheddar(amount * pricePerBall)})
                     </Button>
                 ))}
                 {/* The only way a tray ever converts back to real cheddar - deliberate, not

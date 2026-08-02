@@ -1,18 +1,10 @@
-import { ComponentType } from "react";
+import { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Box, Card, CardActionArea, CardContent, Typography, Chip, Avatar, SvgIconProps } from "@mui/material";
-import CasinoIcon from "@mui/icons-material/Casino";
-import ConfirmationNumberIcon from "@mui/icons-material/ConfirmationNumber";
-import ScatterPlotIcon from "@mui/icons-material/ScatterPlot";
-import AdjustIcon from "@mui/icons-material/Adjust";
-import GridViewIcon from "@mui/icons-material/GridView";
-import AddIcon from "@mui/icons-material/Add";
-import PrintIcon from "@mui/icons-material/Print";
-import PetsIcon from "@mui/icons-material/Pets";
+import { Box, Typography, Chip, Avatar, ButtonBase } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../../config/api";
 import { ApiResponse } from "../../../types/api";
-import { CASINO_GAMES_REGISTRY, CASINO_GAME_TYPE_LABELS, CasinoGameType } from "./gamesRegistry";
+import { CASINO_GAMES_REGISTRY, CasinoGameRegistryItem } from "./gamesRegistry";
 import { formatOddsRatio } from "./utils/odds";
 import { formatCheddar } from "./utils/currency";
 import DailyQuestCard from "./components/DailyQuestCard";
@@ -20,6 +12,8 @@ import { useCasinoStatus } from "../../../hooks/casino/useCasinoStatus";
 import { useCasinoGarden } from "../../../hooks/casino/useCasinoGarden";
 import { useCasinoPrinter } from "../../../hooks/casino/useCasinoPrinter";
 import { useCasinoRanch } from "../../../hooks/casino/useCasinoRanch";
+import { useCasinoMine } from "../../../hooks/casino/useCasinoMine";
+import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
 
 interface SlotsOddsSummary {
     paytable: { probability: number }[];
@@ -72,23 +66,6 @@ const fetchSpinmaniaOdds = async (): Promise<SlotsOddsSummary> =>
 const fetchMemoryOdds = async (): Promise<MemoryOddsSummary> =>
     (await apiClient.get<ApiResponse<MemoryOddsSummary>>(`/api/casino/games/memory/odds`)).data.data!;
 
-const TYPE_ICON: Record<CasinoGameType, ComponentType<SvgIconProps>> = {
-    slots: CasinoIcon,
-    scratch: ConfirmationNumberIcon,
-    plinko: ScatterPlotIcon,
-    pachinko: AdjustIcon,
-    memory: GridViewIcon,
-    printer: PrintIcon,
-    ranch: PetsIcon,
-};
-
-const TYPE_ORDER: CasinoGameType[] = ["slots", "scratch", "plinko", "pachinko", "memory", "printer", "ranch"];
-
-const GHOST_COPY: Partial<Record<CasinoGameType, string>> = {
-    slots: "New reel sets and jackpots land here as they ship.",
-    scratch: "New ticket variants land here as they ship.",
-};
-
 const ODDS_CHIP_SX = {
     alignSelf: "flex-start",
     color: "info.main",
@@ -121,12 +98,23 @@ interface StatusChip {
     color: ChipColor;
 }
 
+// Fallback shown in the icon avatar on the rare chance a game's image fails to load -
+// MUI's Avatar swaps to these children automatically on an img error.
+function getInitials(label: string): string {
+    const words = label.split(" ").filter(Boolean);
+    if (words.length === 1) {
+        return words[0].slice(0, 2).toUpperCase();
+    }
+    return (words[0][0] + words[1][0]).toUpperCase();
+}
+
 export default function GamesIndex() {
     const navigate = useNavigate();
     const { disabledGames } = useCasinoStatus();
-    const { squares: gardenSquares, waterCooldownMs: gardenWaterCooldownMs } = useCasinoGarden();
+    const { squares: gardenSquares } = useCasinoGarden();
     const { run: printerRun } = useCasinoPrinter();
     const { creatures: ranchCreatures, feedCooldownMs: ranchFeedCooldownMs } = useCasinoRanch();
+    const { state: mineState } = useCasinoMine();
 
     const { data: easySpinOdds } = useQuery({
         queryKey: ["slotsOdds", "easy-spin"],
@@ -177,7 +165,7 @@ export default function GamesIndex() {
         ),
         crossword: formatOddsRatio(crosswordOdds?.distribution.filter((d) => d.payout > 0).reduce((sum, d) => sum + d.probability, 0)),
         memory: formatOddsRatio(memoryOdds?.distribution.filter((d) => d.multiplier > 0).reduce((sum, d) => sum + d.probability, 0)),
-        // plinko has an RTP (below) but no per-slot probability table to turn into a "1 in N"
+        // plinko has an RTP (below) but no per-slot probability table to turn into a "1:X"
         // odds ratio the way the weighted-draw games do; pachinko still has neither.
     };
 
@@ -194,32 +182,24 @@ export default function GamesIndex() {
         Object.entries(rtpByKey).map(([key, rtp]) => [key, rtp !== undefined ? `RTP ${(rtp * 100).toFixed(1)}%` : undefined])
     );
 
-    const jackpotLabelByKey: Record<string, string | undefined> = {
-        "easy-spin": easySpinOdds ? `🎰 ${formatCheddar(easySpinOdds.jackpotPool)}` : undefined,
-        spinmania: spinmaniaOdds ? `🎰 ${formatCheddar(spinmaniaOdds.jackpotPool)}` : undefined,
-        pachinko: pachinkoOdds ? `🎰 ${formatCheddar(pachinkoOdds.jackpotPool)}` : undefined,
+    const jackpotAmountByKey: Record<string, string | undefined> = {
+        "easy-spin": easySpinOdds ? formatCheddar(easySpinOdds.jackpotPool) : undefined,
+        spinmania: spinmaniaOdds ? formatCheddar(spinmaniaOdds.jackpotPool) : undefined,
+        pachinko: pachinkoOdds ? formatCheddar(pachinkoOdds.jackpotPool) : undefined,
     };
 
     // The persistent games (Garden/Printer/Mine) have no odds/RTP table to summarize the way
     // the instant-resolution games do - instead their cards show a live glance at the
     // player's own state, so there's a reason to check the games list rather than always
     // clicking straight in. Keyed by game.key, same as oddsLabelByKey/rtpLabelByKey above.
-    const gardenReady = gardenSquares.filter((s) => s.status === "ready").length;
-    // Still waiting on more waterings (i.e. not yet fully watered) whose cooldown has
-    // actually elapsed and is waterable *right now*.
-    const gardenNeedsWater = gardenSquares.filter((s) => {
-        if (s.status !== "growing" || s.waterCount >= s.waterAmount) {
-            return false;
-        }
-        const msSinceWatered = s.lastWateredAt ? Date.now() - new Date(s.lastWateredAt).getTime() : Infinity;
-        return msSinceWatered >= gardenWaterCooldownMs;
-    }).length;
-    const ranchReadyToFeed = ranchCreatures.filter((c) => {
+    const gardenEmpty = gardenSquares.filter((s) => s.status === "empty").length;
+    const ranchHungry = ranchCreatures.filter((c) => {
         if (!c.lastFedAt) {
             return true;
         }
         return Date.now() - new Date(c.lastFedAt).getTime() >= ranchFeedCooldownMs;
     }).length;
+    const mineDigsLeft = mineState ? Math.max(0, mineState.dailyDigCap - mineState.actionsToday) : 0;
 
     const statusChipsByKey: Record<string, StatusChip[]> = {
         printer: printerRun
@@ -230,164 +210,130 @@ export default function GamesIndex() {
                 ...(printerRun.raided ? [] : [{ label: `${printerRun.raidRiskPercent}% Raid Risk`, color: "error" as ChipColor }]),
             ]
             : [{ label: "No Print Run Active", color: "default" as ChipColor }],
+        // Three things worth checking the ranch for - hungry animals (they decay if
+        // neglected), empty plots (an earning opportunity going unused), and digs still
+        // available today. Each chip only shows up when it's actually true.
         "cheddar-ranch": [
-            { label: `${ranchCreatures.length} Creature${ranchCreatures.length === 1 ? "" : "s"}`, color: "default" as ChipColor },
-            ...(ranchReadyToFeed > 0 ? [{ label: `${ranchReadyToFeed} Ready to Feed`, color: "info" as ChipColor }] : []),
-            ...(gardenReady > 0 ? [{ label: `${gardenReady} Ready to Harvest`, color: "success" as ChipColor }] : []),
-            ...(gardenNeedsWater > 0 ? [{ label: `${gardenNeedsWater} Need Water`, color: "info" as ChipColor }] : []),
+            ...(ranchHungry > 0 ? [{ label: `${ranchHungry} Hungry Animal${ranchHungry === 1 ? "" : "s"}`, color: "warning" as ChipColor }] : []),
+            ...(gardenEmpty > 0 ? [{ label: `${gardenEmpty} Empty Plot${gardenEmpty === 1 ? "" : "s"}`, color: "default" as ChipColor }] : []),
+            ...(mineState && mineDigsLeft > 0 ? [{ label: `${mineDigsLeft} Dig${mineDigsLeft === 1 ? "" : "s"} Left`, color: "default" as ChipColor }] : []),
         ],
     };
 
-    const groups = TYPE_ORDER.map((type) => ({
-        type,
-        games: CASINO_GAMES_REGISTRY.filter((g) => g.type === type),
-    })).filter((g) => g.games.length > 0);
+    const dailyGames = CASINO_GAMES_REGISTRY.filter((g) => g.dailyGame);
+    const casinoGames = CASINO_GAMES_REGISTRY.filter((g) => !g.dailyGame);
+
+    function renderGameRow(game: CasinoGameRegistryItem, isLast: boolean, showPrice: boolean) {
+        const oddsLabel = oddsLabelByKey[game.key];
+        const rtpLabel = rtpLabelByKey[game.key];
+        const jackpotAmount = jackpotAmountByKey[game.key];
+        const statusChips = statusChipsByKey[game.key];
+        const disabled = disabledGames.includes(game.key);
+
+        return (
+            <ButtonBase
+                key={game.key}
+                focusRipple
+                disabled={disabled}
+                onClick={() => navigate(game.path)}
+                sx={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 1.5,
+                    p: 1.5,
+                    textAlign: "left",
+                    borderBottom: isLast ? "none" : "1px solid",
+                    borderColor: "divider",
+                    opacity: disabled ? 0.5 : 1,
+                    "&:hover": disabled ? undefined : { bgcolor: "action.hover" },
+                }}
+            >
+                <Avatar src={game.icon} variant="rounded" sx={{ width: 40, height: 40, borderRadius: 1.5, flexShrink: 0 }}>
+                    {getInitials(game.label)}
+                </Avatar>
+
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Box sx={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 1 }}>
+                        <Typography variant="body2" component="h2" sx={{ fontWeight: 700, fontSize: "0.9rem" }}>
+                            {game.label}
+                        </Typography>
+                        {showPrice && (
+                            <Typography variant="body2" sx={{ fontSize: "0.78rem", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                                <Typography component="span" variant="body2" color="error.main" sx={{ fontWeight: 700, fontSize: "inherit", fontVariantNumeric: "tabular-nums" }}>
+                                    {formatCheddar(game.price)}
+                                    {game.priceFrom ? "+" : ""}
+                                </Typography>
+                                <Typography component="span" variant="body2" color="text.disabled" sx={{ fontSize: "inherit" }}>
+                                    {" "}
+                                    / play
+                                </Typography>
+                            </Typography>
+                        )}
+                    </Box>
+
+                    <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{
+                            fontSize: "0.78rem",
+                            lineHeight: 1.4,
+                            mt: 0.25,
+                            mb: 0.75,
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                        }}
+                    >
+                        {game.description}
+                    </Typography>
+
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                        {disabled && <Chip label="Unavailable" size="small" color="default" sx={{ fontWeight: 700 }} />}
+                        {!disabled && jackpotAmount !== undefined && (
+                            <Chip label={`Jackpot: ${jackpotAmount}`} size="small" sx={JACKPOT_CHIP_SX} />
+                        )}
+                        {statusChips
+                            ? statusChips.map((chip, idx) => (
+                                  <Chip key={idx} label={chip.label} size="small" color={chip.color} sx={{ fontWeight: 700 }} />
+                              ))
+                            : (
+                                <>
+                                    {oddsLabel !== undefined && <Chip label={`Odds ${oddsLabel}`} size="small" sx={ODDS_CHIP_SX} />}
+                                    {rtpLabel !== undefined && <Chip label={rtpLabel} size="small" sx={RTP_CHIP_SX} />}
+                                </>
+                            )}
+                    </Box>
+                </Box>
+            </ButtonBase>
+        );
+    }
+
+    function renderGroup(title: string, games: CasinoGameRegistryItem[], showPrice: boolean): ReactNode {
+        if (games.length === 0) {
+            return null;
+        }
+        return (
+            <Box sx={{ mb: 4 }}>
+                <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mb: 1 }}>
+                    <Typography sx={sectionLabelSx}>{title}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                        {games.length}
+                    </Typography>
+                </Box>
+                <Box sx={{ ...cardSx, overflow: "hidden" }}>
+                    {games.map((game, i) => renderGameRow(game, i === games.length - 1, showPrice))}
+                </Box>
+            </Box>
+        );
+    }
 
     return (
         <Box>
-            <DailyQuestCard sx={{ mb: 4 }} />
-
-            {groups.map((group, i) => {
-                const Icon = TYPE_ICON[group.type];
-                const ghostCopy = GHOST_COPY[group.type];
-                return (
-                    <Box key={group.type} sx={{ mt: i === 0 ? 0 : 5 }}>
-                        <Box
-                            sx={{
-                                display: "flex",
-                                alignItems: "baseline",
-                                gap: 1.5,
-                                mb: 2,
-                                pb: 1,
-                                borderBottom: "1px solid",
-                                borderColor: "divider",
-                            }}
-                        >
-                            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                {CASINO_GAME_TYPE_LABELS[group.type]}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                {group.games.length} variant{group.games.length === 1 ? "" : "s"}
-                            </Typography>
-                        </Box>
-
-                        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 2.5 }}>
-                            {group.games.map((game) => {
-                                const oddsLabel = oddsLabelByKey[game.key];
-                                const rtpLabel = rtpLabelByKey[game.key];
-                                const jackpotLabel = jackpotLabelByKey[game.key];
-                                const statusChips = statusChipsByKey[game.key];
-                                const disabled = disabledGames.includes(game.key);
-                                return (
-                                    <Card
-                                        key={game.key}
-                                        sx={{
-                                            height: "100%",
-                                            transition: "transform 0.2s, box-shadow 0.2s",
-                                            ...(disabled
-                                                ? { opacity: 0.5 }
-                                                : { "&:hover": { transform: "translateY(-4px)", boxShadow: 6 } }),
-                                        }}
-                                    >
-                                        <CardActionArea
-                                            onClick={() => navigate(game.path)}
-                                            disabled={disabled}
-                                            sx={{ height: "100%" }}
-                                        >
-                                            <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", p: 2.5, "&:last-child": { pb: 2.5 } }}>
-                                                {/* Header: icon + label, jackpot top-right */}
-                                                <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, mb: 1.5 }}>
-                                                    <Avatar sx={{ bgcolor: "action.hover", color: "primary.light", width: 40, height: 40, flexShrink: 0 }}>
-                                                        <Icon fontSize="small" />
-                                                    </Avatar>
-                                                    <Box sx={{ minWidth: 0, flex: 1 }}>
-                                                        <Typography variant="h6" component="h2" sx={{ fontWeight: 600, fontSize: "1.05rem", lineHeight: 1.3 }}>
-                                                            {game.label}
-                                                        </Typography>
-                                                        <Typography variant="body2" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                                                            <Typography component="span" variant="body2" color="error.main" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                                                                {formatCheddar(game.price)}
-                                                                {game.priceFrom ? "+" : ""}
-                                                            </Typography>
-                                                            {" / play"}
-                                                        </Typography>
-                                                    </Box>
-                                                    {disabled ? (
-                                                        <Chip label="Unavailable" size="small" color="default" sx={{ flexShrink: 0, fontWeight: 700 }} />
-                                                    ) : (
-                                                        jackpotLabel && (
-                                                            <Chip label={jackpotLabel} size="small" sx={{ ...JACKPOT_CHIP_SX, flexShrink: 0 }} />
-                                                        )
-                                                    )}
-                                                </Box>
-
-                                                {/* Description */}
-                                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                                                    {game.description}
-                                                </Typography>
-
-                                                {/* Stats footer: odds + RTP for instant games, or a live status
-                                                    glance (own state, not a fixed table) for the persistent ones */}
-                                                <Box
-                                                    sx={{
-                                                        display: "flex",
-                                                        flexWrap: "wrap",
-                                                        justifyContent: statusChips ? "flex-start" : "space-between",
-                                                        gap: 0.75,
-                                                        mt: "auto",
-                                                        pt: 1.5,
-                                                        borderTop: "1px solid",
-                                                        borderColor: "divider",
-                                                    }}
-                                                >
-                                                    {statusChips ? (
-                                                        statusChips.map((chip, idx) => (
-                                                            <Chip key={idx} label={chip.label} size="small" color={chip.color} sx={{ fontWeight: 700 }} />
-                                                        ))
-                                                    ) : (
-                                                        <>
-                                                            <Chip label={oddsLabel ?? "???"} size="small" sx={ODDS_CHIP_SX} />
-                                                            <Chip label={rtpLabel ?? "???"} size="small" sx={RTP_CHIP_SX} />
-                                                        </>
-                                                    )}
-                                                </Box>
-                                            </CardContent>
-                                        </CardActionArea>
-                                    </Card>
-                                );
-                            })}
-
-                            {ghostCopy && (
-                                <Card
-                                    variant="outlined"
-                                    sx={{ height: "100%", borderStyle: "dashed", display: "flex", alignItems: "flex-start", justifyContent: "center" }}
-                                >
-                                    <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
-                                        <Avatar
-                                            sx={{
-                                                bgcolor: "transparent",
-                                                border: "1px dashed",
-                                                borderColor: "divider",
-                                                color: "text.disabled",
-                                                width: 40,
-                                                height: 40,
-                                            }}
-                                        >
-                                            <AddIcon fontSize="small" />
-                                        </Avatar>
-                                        <Typography variant="body1" sx={{ fontWeight: 500, color: "text.secondary" }}>
-                                            More {CASINO_GAME_TYPE_LABELS[group.type].toLowerCase()} soon
-                                        </Typography>
-                                        <Typography variant="body2" color="text.secondary">
-                                            {ghostCopy}
-                                        </Typography>
-                                    </CardContent>
-                                </Card>
-                            )}
-                        </Box>
-                    </Box>
-                );
-            })}
+            <DailyQuestCard sx={{ mb: 3 }} />
+            {renderGroup("Daily Games", dailyGames, false)}
+            {renderGroup("Casino Games", casinoGames, true)}
         </Box>
     );
 }

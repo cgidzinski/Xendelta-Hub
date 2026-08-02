@@ -115,7 +115,7 @@ export default function Casino() {
     const [clearStatsOpen, setClearStatsOpen] = useState(false);
     const [closeCasinoOpen, setCloseCasinoOpen] = useState(false);
     const { games, isLoading, isError, error, clearJackpots, isClearingJackpots, clearStats, isClearingStats } = useAdminCasino(range);
-    const { players, isLoading: playersLoading, isError: playersIsError, error: playersError } = useAdminCasinoPlayerStats(range);
+    const { players, totals: playerTotals, truncated: playersTruncated, isLoading: playersLoading, isError: playersIsError, error: playersError } = useAdminCasinoPlayerStats(range);
     const [playerSort, setPlayerSort] = useState<{ key: "net" | "roundsPlayed" | "lossAmount" | "winAmount"; dir: "asc" | "desc" }>({ key: "net", dir: "desc" });
     const { dailyStats, isLoading: chartLoading } = useAdminCasinoDailyStats(5);
     const {
@@ -610,6 +610,11 @@ export default function Casino() {
 
                     {!playersLoading && !playersIsError && (
                         <Paper variant="outlined">
+                            {playersTruncated && playerTotals && (
+                                <Typography variant="caption" color="text.secondary" sx={{ display: "block", px: 2, pt: 1.5 }}>
+                                    Showing top 100 of {playerTotals.playerCount} players by net movement — totals below cover all players in this range.
+                                </Typography>
+                            )}
                             <Table>
                                 <TableHead>
                                     <TableRow>
@@ -676,6 +681,37 @@ export default function Casino() {
                                         );
                                     })}
                                 </TableBody>
+                                {playerTotals && (
+                                    <TableHead>
+                                        <TableRow sx={{ "& > td, & > th": { borderBottom: "none" } }}>
+                                            <TableCell sx={{ fontWeight: 700 }}>Totals</TableCell>
+                                            <TableCell align="right" sx={{ fontWeight: 700 }}>
+                                                {playerTotals.roundsPlayed.toLocaleString()}
+                                            </TableCell>
+                                            <TableCell align="right" sx={{ fontWeight: 700 }}>
+                                                {formatCheddar(playerTotals.lossAmount)}
+                                            </TableCell>
+                                            <TableCell align="right" sx={{ fontWeight: 700 }}>
+                                                {formatCheddar(playerTotals.winAmount)}
+                                            </TableCell>
+                                            <TableCell
+                                                align="right"
+                                                sx={{
+                                                    fontWeight: 700,
+                                                    color:
+                                                        parseFloat(playerTotals.lossAmount) - parseFloat(playerTotals.winAmount) > 0
+                                                            ? "success.main"
+                                                            : parseFloat(playerTotals.lossAmount) - parseFloat(playerTotals.winAmount) < 0
+                                                                ? "error.main"
+                                                                : "text.secondary",
+                                                }}
+                                            >
+                                                {parseFloat(playerTotals.lossAmount) - parseFloat(playerTotals.winAmount) > 0 ? "+" : ""}
+                                                {formatCheddar((parseFloat(playerTotals.lossAmount) - parseFloat(playerTotals.winAmount)).toFixed(2))}
+                                            </TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                )}
                             </Table>
                         </Paper>
                     )}
