@@ -47,6 +47,7 @@ async function migrate() {
         const uid = String(c.userId);
         if (!byUser[uid]) byUser[uid] = { creatures: [], inventory: {}, mine: null, garden: null };
         byUser[uid].creatures.push({
+            _id: c._id,
             species: c.species,
             name: c.name,
             rarityTier: c.rarityTier,
