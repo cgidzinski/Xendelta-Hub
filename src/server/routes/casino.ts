@@ -15,6 +15,28 @@ import {
 } from "../utils/weeabetsClient";
 import { XENCASINO_DISCORD_ID } from "../config/weeabets";
 import { getCasinoStatus } from "../utils/casinoStatus";
+import { rangeCutoff } from "../utils/statsRange";
+
+// Non-gameplay XenCasinoActivity rows that must never surface on the player-facing
+// leaderboard - daily quest rewards and admin grants are free cheddar, not skill/luck.
+const NON_GAMEPLAY_ACTIVITY_MATCH = { game: { $not: /^quest-reward-/, $ne: "admin-grant" } };
+
+interface LeaderboardPlayerRow {
+    _id: string;
+    totalWagered: number;
+    totalPayout: number;
+    roundsPlayed: number;
+    netWinnings: number;
+}
+
+async function resolveLeaderboardUsers(userIds: string[]): Promise<Map<string, { username: string; avatar: string | null }>> {
+    const users = await User.find({ _id: { $in: userIds } }, "username avatar").exec();
+    const userMap = new Map<string, { username: string; avatar: string | null }>();
+    for (const u of users) {
+        userMap.set(String(u._id), { username: u.username, avatar: u.avatar || null });
+    }
+    return userMap;
+}
 
 // Flat cheddar (display-unit) rewards for daily quests — defined here for the claim
 // endpoint; the model also has them in DAILY_QUEST_DEFINITIONS for the GET endpoint.
@@ -98,6 +120,99 @@ module.exports = function (app: express.Application) {
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : 500;
             return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
+    // Four "hall of fame" top-3 boards sourced entirely from the local XenCasinoActivity
+    // collection (never the external Weeabets ledger - this is read-only reporting over
+    // rounds already recorded locally, same source as admin's /player-stats). Open to any
+    // logged-in player, not admin-gated - everyone in the friend group can see everyone
+    // else's stats. Quest rewards and admin grants are excluded everywhere below since
+    // they're free cheddar, not something anyone actually won at a game.
+    app.get("/api/casino/leaderboard", authenticateToken, async function (req: express.Request, res: express.Response) {
+        try {
+            const range = (req.query.range as string) || "all";
+            const cutoff = rangeCutoff(range);
+
+            const match: Record<string, unknown> = { ...NON_GAMEPLAY_ACTIVITY_MATCH };
+            if (cutoff) {
+                match.createdAt = { $gte: cutoff };
+            }
+
+            // netWinnings is intentionally payout-minus-wager (positive = the player is up) -
+            // the OPPOSITE sign convention from admin/casino.ts's player-stats `net`, which is
+            // house-centric (wager-minus-payout, positive = house profit). Do not swap these.
+            const facetResult = await XenCasinoActivity.aggregate([
+                { $match: match },
+                { $group: { _id: "$userId", totalWagered: { $sum: "$wager" }, totalPayout: { $sum: "$payout" }, roundsPlayed: { $sum: 1 } } },
+                { $addFields: { netWinnings: { $subtract: ["$totalPayout", "$totalWagered"] } } },
+                {
+                    $facet: {
+                        netWinners: [{ $sort: { netWinnings: -1 } }, { $limit: 3 }],
+                        netLosers: [{ $sort: { netWinnings: 1 } }, { $limit: 3 }],
+                        mostRounds: [{ $sort: { roundsPlayed: -1 } }, { $limit: 3 }],
+                    },
+                },
+            ]).exec();
+
+            // Biggest single-round wins - hall-of-fame moments, not per-player totals, so the
+            // same player can appear more than once if they had multiple huge rounds. Queried
+            // separately from the raw (ungrouped) activity rows.
+            const biggestWinRows = await XenCasinoActivity.aggregate([
+                { $match: match },
+                { $addFields: { roundNet: { $subtract: ["$payout", "$wager"] } } },
+                { $sort: { roundNet: -1 } },
+                { $limit: 3 },
+                { $project: { _id: 0, userId: 1, game: 1, roundNet: 1, createdAt: 1 } },
+            ]).exec();
+
+            const facet = facetResult[0] || { netWinners: [], netLosers: [], mostRounds: [] };
+            const allUserIds = [
+                ...facet.netWinners.map((r: LeaderboardPlayerRow) => r._id),
+                ...facet.netLosers.map((r: LeaderboardPlayerRow) => r._id),
+                ...facet.mostRounds.map((r: LeaderboardPlayerRow) => r._id),
+                ...biggestWinRows.map((r: any) => r.userId),
+            ];
+            const userMap = await resolveLeaderboardUsers([...new Set(allUserIds)]);
+
+            const formatPlayerRow = (r: LeaderboardPlayerRow, rank: number) => {
+                const info = userMap.get(r._id);
+                return {
+                    rank,
+                    userId: r._id,
+                    username: info ? info.username : "Unknown",
+                    avatar: info ? info.avatar : null,
+                    netWinnings: r.netWinnings.toFixed(2),
+                    totalWagered: r.totalWagered.toFixed(2),
+                    roundsPlayed: r.roundsPlayed,
+                };
+            };
+
+            const biggestWins = biggestWinRows.map((r: any, i: number) => {
+                const info = userMap.get(r.userId);
+                return {
+                    rank: i + 1,
+                    userId: r.userId,
+                    username: info ? info.username : "Unknown",
+                    avatar: info ? info.avatar : null,
+                    game: r.game,
+                    amount: r.roundNet.toFixed(2),
+                    createdAt: r.createdAt,
+                };
+            });
+
+            return res.json({
+                status: true,
+                data: {
+                    range,
+                    netWinners: facet.netWinners.map((r: LeaderboardPlayerRow, i: number) => formatPlayerRow(r, i + 1)),
+                    netLosers: facet.netLosers.map((r: LeaderboardPlayerRow, i: number) => formatPlayerRow(r, i + 1)),
+                    mostRounds: facet.mostRounds.map((r: LeaderboardPlayerRow, i: number) => formatPlayerRow(r, i + 1)),
+                    biggestWins,
+                },
+            });
+        } catch (err) {
+            return res.status(500).json({ status: false, message: (err as Error).message });
         }
     });
 

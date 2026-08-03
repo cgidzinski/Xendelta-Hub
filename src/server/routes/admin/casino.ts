@@ -6,6 +6,7 @@ import { XENCASINO_DISCORD_ID } from "../../config/weeabets";
 import { getCasinoStatus } from "../../utils/casinoStatus";
 import { AuthenticatedRequest } from "../../types/AuthenticatedRequest";
 import { randomUUID } from "crypto";
+import { rangeCutoff } from "../../utils/statsRange";
 const { XenCasino, XenCasinoActivity } = require("../../models/xenCasino");
 const { User } = require("../../models/user");
 
@@ -31,18 +32,6 @@ var GAME_LABELS: Record<string, string> = {
 // show "—" in the jackpot column.
 var JACKPOT_MACHINES = ["easy-spin", "spinmania"];
 var PACHINKO_SLUG = "pachinko";
-
-// Shared by /stats and /player-stats - both aggregate the same XenCasinoActivity collection
-// over the same today/week/all window, just grouped by a different field.
-function rangeCutoff(range: string): Date | null {
-    var now = new Date();
-    if (range === "today") {
-        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    } else if (range === "week") {
-        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - 7 * 24 * 60 * 60 * 1000);
-    }
-    return null;
-}
 
 module.exports = function (app: express.Application) {
 
