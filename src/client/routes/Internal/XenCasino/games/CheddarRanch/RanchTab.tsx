@@ -36,11 +36,14 @@ import {
 import {
     ActionButton,
     DECAY_SHIELD_KEY,
+    FeedShopList,
     feedReadyAt,
     feedUnitsRequired,
     formatCountdown,
     HatchTile,
     RanchCard,
+    RanchShopItemList,
+    ShopModal,
     SPECIES_EMOJI,
     STAT_ICON,
     STAT_ORDER,
@@ -99,6 +102,8 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
         collect,
         isCollecting,
         feedItems,
+        buyFeed,
+        isBuyingFeed,
         shopItems,
         speciesByTier,
         useItem,
@@ -111,9 +116,11 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
     const [swappingSpecies, setSwappingSpecies] = useState(false);
     const [pickedSpecies, setPickedSpecies] = useState("");
     const [tab, setTab] = useState(0);
+    const [shopOpen, setShopOpen] = useState(false);
 
     const cooldownRemaining = useCountdown(feedReadyAt(creature, feedCooldownMs));
     const onCooldown = cooldownRemaining > 0;
+    const feedProgress = onCooldown ? Math.max(0, 100 - (cooldownRemaining / feedCooldownMs) * 100) : 100;
     const canCollect = creature.canCollect && !creature.collectBlocked;
     const sellValue = releaseSellValue[creature.rarityTier] ?? 0;
     const feedItem = feedItems.find((f: RanchFeedItem) => f.type === creature.type);
@@ -137,6 +144,15 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
         buyShopItem(item.key)
             .then(() => enqueueSnackbar(`Bought 1x ${item.label}.`, { variant: "success" }))
             .catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
+
+    const handleBuyFeed = () => {
+        if (!feedItem) {
+            return;
+        }
+        buyFeed({ type: creature.type, quantity: 1 })
+            .then(() => enqueueSnackbar(`Bought 1x ${feedItem.label}.`, { variant: "success" }))
+            .catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
+    };
 
     const handleTypeSwap = () => {
         if (!pickedSpecies) {
@@ -197,12 +213,17 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
                 </Box>
             </Box>
 
-            <ToggleButtonGroup exclusive size="small" value={tab} onChange={(_, v) => v !== null && setTab(v)} fullWidth
-                sx={{ mt: 1, mb: 1.5, "& .MuiToggleButtonGroup-grouped": { py: 0.75, fontWeight: 700, textTransform: "none", border: "1px solid", borderColor: "divider", "&.Mui-selected": { bgcolor: "primary.main", color: "primary.contrastText", borderColor: "primary.main" } } }}>
-                <ToggleButton value={0}><BarChartIcon fontSize="small" /></ToggleButton>
-                <ToggleButton value={1}><Inventory2Icon fontSize="small" /></ToggleButton>
-                <ToggleButton value={2}><MoreHorizIcon fontSize="small" /></ToggleButton>
-            </ToggleButtonGroup>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1, mb: 1.5 }}>
+                <ToggleButtonGroup exclusive size="small" value={tab} onChange={(_, v) => v !== null && setTab(v)} fullWidth
+                    sx={{ flex: 1, "& .MuiToggleButtonGroup-grouped": { py: 0.75, fontWeight: 700, textTransform: "none", border: "1px solid", borderColor: "divider", "&.Mui-selected": { bgcolor: "primary.main", color: "primary.contrastText", borderColor: "primary.main" } } }}>
+                    <ToggleButton value={0}><BarChartIcon fontSize="small" /></ToggleButton>
+                    <ToggleButton value={1}><Inventory2Icon fontSize="small" /></ToggleButton>
+                    <ToggleButton value={2}><MoreHorizIcon fontSize="small" /></ToggleButton>
+                </ToggleButtonGroup>
+                <Button variant="outlined" size="small" onClick={() => setShopOpen(true)} sx={{ textTransform: "none", flexShrink: 0 }}>
+                    Shop
+                </Button>
+            </Box>
 
             <Box sx={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", gap: 2, border: "1px solid", borderColor: "divider", borderRadius: 2, p: 2, bgcolor: "background.default" }}>
                 {tab === 0 && (
@@ -212,6 +233,12 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
                             label={canCollect ? `Collect ${creature.collectQuantity}x ${creature.itemLabel}` : `${creature.itemLabel} - collecting`}
                             description={creature.collectBlocked ? `${creature.name} is too sad to work - race it to keep collecting` : canCollect ? "(once per day)" : "Already collected today"}
                             color="success" disabled={isCollecting || !canCollect} onClick={handleCollect} />
+                        <LinearProgress
+                            variant="determinate"
+                            value={feedProgress}
+                            color={onCooldown ? "warning" : "info"}
+                            sx={{ height: 6, borderRadius: 999 }}
+                        />
                         <ActionButton icon={<RestaurantIcon />}
                             label={onCooldown ? "Feeding on cooldown" : `Feed (${units}x ${feedItem?.label ?? TYPE_LABEL[creature.type] + " Feed"})`}
                             description={onCooldown ? `Available in ${formatCountdown(cooldownRemaining)}` : `(${owned} owned)`}
@@ -235,19 +262,9 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
                             })}
                         </Box>
                         {!swappingSpecies ? (
-                            <Box sx={{ display: "flex", gap: 1 }}>
-                                <Box sx={{ flex: 1, minWidth: 0 }}>
-                                    <ActionButton icon={<AutorenewIcon />} label={`Type-Swap Serum (${serumOwned} owned)`}
-                                        description="Rerolls this creature's species within its own rarity tier"
-                                        disabled={isUsingItem || serumOwned <= 0 || speciesOptions.length === 0} onClick={() => setSwappingSpecies(true)} />
-                                </Box>
-                                {serumItem && (
-                                    <Button size="small" variant="outlined" disabled={isBuyingShopItem} onClick={() => handleBuyItem(serumItem)}
-                                        sx={{ textTransform: "none", flexShrink: 0, alignSelf: "flex-start" }}>
-                                        Buy ({formatCheddar(serumItem.price)})
-                                    </Button>
-                                )}
-                            </Box>
+                            <ActionButton icon={<AutorenewIcon />} label={`Type-Swap Serum (${serumOwned} owned)`}
+                                description="Rerolls this creature's species within its own rarity tier"
+                                disabled={isUsingItem || serumOwned <= 0 || speciesOptions.length === 0} onClick={() => setSwappingSpecies(true)} />
                         ) : (
                             <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
                                 <FormControl size="small" fullWidth>
@@ -262,19 +279,9 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
                                 </Box>
                             </Box>
                         )}
-                        <Box sx={{ display: "flex", gap: 1 }}>
-                            <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <ActionButton icon={<ShieldIcon />} label={shieldActive ? "Decay Shield active" : `Decay Shield (${shieldOwned} owned)`}
-                                    description={shieldActive ? `Protected until ${new Date(creature.decayShieldUntil!).toLocaleString()}` : "Protects from neglect decay for 3 days"}
-                                    disabled={isUsingItem || shieldOwned <= 0 || !!shieldActive} onClick={handleDecayShield} />
-                            </Box>
-                            {shieldItem && (
-                                <Button size="small" variant="outlined" disabled={isBuyingShopItem || !!shieldActive} onClick={() => handleBuyItem(shieldItem)}
-                                    sx={{ textTransform: "none", flexShrink: 0, alignSelf: "flex-start" }}>
-                                    Buy ({formatCheddar(shieldItem.price)})
-                                </Button>
-                            )}
-                        </Box>
+                        <ActionButton icon={<ShieldIcon />} label={shieldActive ? "Decay Shield active" : `Decay Shield (${shieldOwned} owned)`}
+                            description={shieldActive ? `Protected until ${new Date(creature.decayShieldUntil!).toLocaleString()}` : "Protects from neglect decay for 3 days"}
+                            disabled={isUsingItem || shieldOwned <= 0 || !!shieldActive} onClick={handleDecayShield} />
                     </>
                 )}
                 {tab === 2 && (
@@ -306,6 +313,24 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
                     </>
                 )}
             </Box>
+
+            <ShopModal open={shopOpen} onClose={() => setShopOpen(false)} title="Ranch Shop">
+                <Typography variant="caption" color="text.secondary">
+                    Buy one at a time here. Bulk discounts (5x/10x) for Feed are in the Store.
+                </Typography>
+                <FeedShopList feedItems={feedItem ? [feedItem] : []} mode="single" onBuy={handleBuyFeed} isBuying={isBuyingFeed} />
+                <RanchShopItemList
+                    items={[serumItem, shieldItem].filter((i): i is RanchShopItem => !!i)}
+                    icon={(item) => (item.key === TYPE_SWAP_SERUM_KEY ? <AutorenewIcon /> : <ShieldIcon />)}
+                    onBuy={(key) => {
+                        const item = shopItems.find((i) => i.key === key);
+                        if (item) {
+                            handleBuyItem(item);
+                        }
+                    }}
+                    isBuying={isBuyingShopItem}
+                />
+            </ShopModal>
         </Box>
     );
 }

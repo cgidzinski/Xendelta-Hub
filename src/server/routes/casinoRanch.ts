@@ -210,15 +210,6 @@ const PROTECTION_COST: Record<"pesticide" | "fungicide" | "fertilizer" | "boneme
 // Charged to clear out a dead plot (from decay) before it can be replanted.
 const GARDEN_CLEANUP_FEE = 1000;
 
-// Idempotency keys are capped at 64 chars by the transfer API - "fertilizer" pushed the
-// protect key over that limit, so every item gets a short form just for the key string.
-const PROTECT_KEY_ABBR: Record<"pesticide" | "fungicide" | "fertilizer" | "bonemeal", string> = {
-    pesticide: "pest",
-    fungicide: "fung",
-    fertilizer: "fert",
-    bonemeal: "bone",
-};
-
 // Fixed sell price per unit of each seed's harvested produce item - the swing that used to
 // move a single cheddar payout up/down now moves the *quantity* of these fixed-price units
 // instead (see the harvest route), since ranch inventory items are flat-priced like ore.
@@ -472,6 +463,12 @@ const ITEM_DEFS: Record<string, { key: string; label: string; sellValue: number;
     "seed-clover": { key: "seed-clover", label: "Lucky Clover Seed", sellValue: 2800, description: "A Lucky Clover seed, ready to plant in the Garden." },
     "seed-nightshade": { key: "seed-nightshade", label: "Nightshade Seed", sellValue: 4900, description: "A Nightshade seed, ready to plant in the Garden." },
     "seed-golden-vine": { key: "seed-golden-vine", label: "Golden Vine Seed", sellValue: 11200, description: "A Golden Vine seed, ready to plant in the Garden." },
+    // Crop protection items (bought from the Garden Shop, spent one at a time to protect a
+    // growing plot) - sellable at 70% of Store buy price, same ratio as seeds/Mine equipment.
+    pesticide: { key: "pesticide", label: "Pesticide", sellValue: 420, description: "Shields a growing crop against the next vermin (🐀) hit." },
+    fungicide: { key: "fungicide", label: "Fungicide", sellValue: 560, description: "Shields against disease (🦠) and cures it if already active." },
+    fertilizer: { key: "fertilizer", label: "Fertilizer", sellValue: 490, description: "Instantly clears one growth stage still needed." },
+    bonemeal: { key: "bonemeal", label: "Bonemeal", sellValue: 840, description: "Speeds up a crop's watering cooldown by 25%, from then on." },
 };
 
 // Flat, tier-based collection quantity - deliberately NOT derived from the creature's
@@ -1060,6 +1057,18 @@ async function seedTiersView(userId: string) {
     return Object.values(SEED_TIERS).map((tier) => ({
         ...tier,
         owned: doc.inventory.get(seedItemKey(tier.key)) || 0,
+    }));
+}
+
+// Same shape/purpose as seedTiersView, for the 4 crop-protection items - lets the Garden/Store
+// UI show owned stock without cross-referencing the raw items list.
+async function protectionItemsView(userId: string) {
+    const doc = await inventoryDoc(userId);
+    return (Object.keys(PROTECTION_COST) as (keyof typeof PROTECTION_COST)[]).map((key) => ({
+        key,
+        label: ITEM_DEFS[key].label,
+        cost: PROTECTION_COST[key],
+        owned: doc.inventory.get(key) || 0,
     }));
 }
 
@@ -1988,14 +1997,19 @@ module.exports = function (app: express.Application) {
         }
     });
 
-    // Single-quantity only - selling mirrors the Mine Shop's single-buy flow, no bulk sell.
-    // Decrements first (removeMineEquipment guards against selling more than owned) and only
-    // pays out once that succeeds, so a failed/insufficient sell never touches cheddar.
+    // Selling mirrors the Mine Shop's single-buy flow by default, but also supports a
+    // "Sell All" quantity (any owned count, not just 1/5/10 like buying) so players don't
+    // have to click one at a time to liquidate a stack. Decrements first
+    // (removeMineEquipment guards against selling more than owned) and only pays out once
+    // that succeeds, so a failed/insufficient sell never touches cheddar.
     app.post("/api/casino/ranch/mine/sell-equipment", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
-        const { item } = req.body as { item?: "ladder" | "explosive" | "support" | "flare" };
+        const { item, quantity = 1 } = req.body as { item?: "ladder" | "explosive" | "support" | "flare"; quantity?: number };
         if (!item || !["ladder", "explosive", "support", "flare"].includes(item)) {
             return res.status(400).json({ status: false, message: "Invalid item" });
+        }
+        if (!Number.isInteger(quantity) || quantity < 1) {
+            return res.status(400).json({ status: false, message: "Invalid quantity" });
         }
 
         const user = await User.findById(userId).exec();
@@ -2007,13 +2021,13 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "Link your Discord account to play" });
             }
 
-            const doc = await XenCasinoRanch.removeMineEquipment(userId, item, 1);
+            const doc = await XenCasinoRanch.removeMineEquipment(userId, item, quantity);
             if (!doc) {
                 return res.status(400).json({ status: false, message: "You don't have any of that to sell" });
             }
 
             const xenCasinoAccountId = await getXenCasinoAccountId();
-            const sellValue = MINE_EQUIPMENT_SELL_VALUE[item];
+            const sellValue = MINE_EQUIPMENT_SELL_VALUE[item] * quantity;
             const payoutResult = await transfer({
                 fromAccountId: xenCasinoAccountId,
                 toAccountId: resolved.account.accountId,
@@ -2084,7 +2098,7 @@ module.exports = function (app: express.Application) {
             data: {
                 squares: doc.garden.squares.map(gardenSquareView),
                 seedTiers: await seedTiersView(userId),
-                protectionCost: PROTECTION_COST,
+                protectionItems: await protectionItemsView(userId),
                 waterCooldownMs: GARDEN_WATER_COOLDOWN_MS,
                 neglectGraceMs: GARDEN_NEGLECT_GRACE_MS,
                 cleanupFee: GARDEN_CLEANUP_FEE,
@@ -2146,6 +2160,60 @@ module.exports = function (app: express.Application) {
         }
     });
 
+    // Crop protection items are bought into inventory here, same two-step shape as seeds -
+    // /garden/protect (below) then just spends one of the owned count.
+    app.post("/api/casino/ranch/garden/protection/buy", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
+        const userId = String((req as AuthenticatedRequest).user!._id);
+        const { item, quantity } = req.body as { item?: keyof typeof PROTECTION_COST; quantity?: number };
+        const unitCost = item ? PROTECTION_COST[item] : undefined;
+        if (!item || !unitCost) {
+            return res.status(400).json({ status: false, message: "Invalid protection item" });
+        }
+        if (!quantity || !ALLOWED_FEED_BUY_QUANTITIES.includes(quantity)) {
+            return res.status(400).json({ status: false, message: "Invalid quantity" });
+        }
+        const totalPrice = bulkPrice(unitCost, quantity);
+
+        const user = await User.findById(userId).exec();
+        if (!user) {
+            return res.status(404).json({ status: false, message: "User not found" });
+        }
+
+        try {
+            const resolved = await resolveUserAccount(user);
+            if (!resolved.linked || !resolved.account) {
+                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
+            }
+            const xenCasinoAccountId = await getXenCasinoAccountId();
+            const payoutResult = await transfer({
+                fromAccountId: resolved.account.accountId,
+                toAccountId: xenCasinoAccountId,
+                amount: totalPrice.toFixed(10),
+                key: txnKey("ranch-buy-protection"),
+                note: `ranch_buy_${item}`,
+            });
+
+            try {
+                await XenCasinoRanch.addItem(userId, item, quantity);
+            } catch (creditErr) {
+                await transfer({
+                    fromAccountId: xenCasinoAccountId,
+                    toAccountId: resolved.account.accountId,
+                    amount: totalPrice.toFixed(10),
+                    key: txnKey("ranch-buy-protection-refund"),
+                    note: `ranch_buy_${item}_refund`,
+                });
+                throw creditErr;
+            }
+
+            await XenCasinoActivity.record({ game: "garden", userId, wager: totalPrice, payout: 0 });
+            return res.json({ status: true, data: { balance: payoutResult.fromNewBalance, protectionItems: await protectionItemsView(userId) } });
+        } catch (err) {
+            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
+            return res.status(status).json({ status: false, message: (err as Error).message });
+        }
+    });
+
     // Plants from owned seed stock (bought above) - no cheddar changes hands here anymore,
     // the spend already happened at buy time. Failing to own any of that seed is a normal
     // 400, not an account/balance error.
@@ -2198,50 +2266,27 @@ module.exports = function (app: express.Application) {
         return res.json({ status: true, data: { square: gardenSquareView(square) } });
     });
 
+    // Spends one owned unit of the protection item (bought earlier via /garden/protection/buy)
+    // rather than charging cheddar directly - no transfer/balance involved here at all.
     app.post("/api/casino/ranch/garden/protect", authenticateToken, requireGameEnabled(SLUG), async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
-        const { squareId, item } = req.body as { squareId: number; item: "pesticide" | "fungicide" | "fertilizer" | "bonemeal" };
-        const cost = PROTECTION_COST[item];
-        if (!cost) {
+        const { squareId, item } = req.body as { squareId: number; item: keyof typeof PROTECTION_COST };
+        if (!item || !PROTECTION_COST[item]) {
             return res.status(400).json({ status: false, message: "Invalid protection item" });
         }
 
-        const user = await User.findById(userId).exec();
-        if (!user) return res.status(404).json({ status: false, message: "User not found" });
-
-        try {
-            const resolved = await resolveUserAccount(user);
-            if (!resolved.linked || !resolved.account) {
-                return res.status(400).json({ status: false, message: "Link your Discord account to play" });
-            }
-            const xenCasinoAccountId = await getXenCasinoAccountId();
-            const result = await transfer({
-                fromAccountId: resolved.account.accountId,
-                toAccountId: xenCasinoAccountId,
-                amount: cost.toFixed(10),
-                key: txnKey(`ranch-garden-${PROTECT_KEY_ABBR[item]}`),
-                note: `garden_protect_${item}`,
-            });
-
-            const square = await XenCasinoRanch.protectGardenSquare(userId, squareId, item);
-            if (!square) {
-                await transfer({
-                    fromAccountId: xenCasinoAccountId,
-                    toAccountId: resolved.account.accountId,
-                    amount: cost.toFixed(10),
-                    key: txnKey(`ranch-garden-${PROTECT_KEY_ABBR[item]}-rf`),
-                    note: "garden_protect_refund",
-                });
-                return res.status(400).json({ status: false, message: "Nothing growing here to protect" });
-            }
-
-            await XenCasinoActivity.record({ game: "garden", userId, wager: cost, payout: 0 });
-
-            return res.json({ status: true, data: { square: gardenSquareView(square), balance: result.fromNewBalance } });
-        } catch (err) {
-            const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
-            return res.status(status).json({ status: false, message: (err as Error).message });
+        const consumed = await XenCasinoRanch.subtractItem(userId, item, 1);
+        if (!consumed) {
+            return res.status(400).json({ status: false, message: `You don't have any ${ITEM_DEFS[item].label} - buy some from the Shop first.` });
         }
+
+        const square = await XenCasinoRanch.protectGardenSquare(userId, squareId, item);
+        if (!square) {
+            await XenCasinoRanch.addItem(userId, item, 1); // refund the consumed stock
+            return res.status(400).json({ status: false, message: "Nothing growing here to protect" });
+        }
+
+        return res.json({ status: true, data: { square: gardenSquareView(square), protectionItems: await protectionItemsView(userId) } });
     });
 
     app.post("/api/casino/ranch/garden/harvest", authenticateToken, async function (req: express.Request, res: express.Response) {

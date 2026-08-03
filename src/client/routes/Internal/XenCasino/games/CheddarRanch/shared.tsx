@@ -4,8 +4,14 @@ import {
     Button,
     CardActionArea,
     Chip,
+    Dialog,
+    DialogContent,
+    DialogTitle,
+    IconButton,
+    LinearProgress,
     Typography,
 } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import RestaurantIcon from "@mui/icons-material/Restaurant";
 import SpeedIcon from "@mui/icons-material/Speed";
 import BatteryChargingFullIcon from "@mui/icons-material/BatteryChargingFull";
@@ -16,8 +22,12 @@ import FavoriteIcon from "@mui/icons-material/Favorite";
 import StairsIcon from "@mui/icons-material/Stairs";
 import ShieldIcon from "@mui/icons-material/Shield";
 import FlareIcon from "@mui/icons-material/Flare";
+import BugReportIcon from "@mui/icons-material/BugReport";
+import ScienceIcon from "@mui/icons-material/Science";
+import SpaIcon from "@mui/icons-material/Spa";
 import { formatCheddar } from "../../utils/currency";
-import { RanchCreature, RanchStats, RanchType } from "../../../../../hooks/casino/useCasinoRanch";
+import { RanchCreature, RanchFeedItem, RanchShopItem, RanchStats, RanchType } from "../../../../../hooks/casino/useCasinoRanch";
+import { ProtectionItem, SeedTier } from "../../../../../hooks/casino/useCasinoGarden";
 
 export const COURSE_TICKET_KEY = "course-ticket";
 export const HARDENED_FEED_KEY = "hardened-feed";
@@ -73,6 +83,22 @@ export const ITEM_EMOJI: Record<string, string> = {
     emerald: "🟢",
     ruby: "🔴",
     diamond: "💎",
+    // Seeds - same emoji as SEED_EMOJI's base tiers, so a seed looks the same in Inventory as
+    // it does in the Garden's own seed-tier tiles.
+    "seed-sprout": "🌱",
+    "seed-clover": "🍀",
+    "seed-nightshade": "🍄",
+    "seed-golden-vine": "🍇",
+    // Harvested produce - distinct from the seed's own icon.
+    "sprout-produce": "🥬",
+    "clover-produce": "🌾",
+    "nightshade-produce": "🫐",
+    "golden-vine-produce": "🧺",
+    // Crop protection items
+    pesticide: "🧴",
+    fungicide: "🧪",
+    fertilizer: "🪱",
+    bonemeal: "🦴",
 };
 
 // Ticks once a second for as long as `targetMs` is non-null, same pattern as Garden's
@@ -248,7 +274,276 @@ export function bulkPrice(unitCost: number, quantity: number): number {
     return Math.round(unitCost * quantity * (1 - discount));
 }
 
-const MINE_EQUIPMENT_ROWS: { key: MineEquipmentItem; icon: ReactNode; label: string; color: "warning" | "error" | "success" | "info"; desc: string }[] = [
+interface BulkQuantityButtonsProps {
+    unitCost: number;
+    color: "primary" | "warning" | "error" | "success" | "info";
+    disabled: boolean;
+    onBuy: (quantity: number) => void;
+}
+
+// The 1x/5x/10x bulk-buy grid, shared by Feed, Garden (Store's Garden tab), and Mine
+// Equipment's bulk buttons. Layout: quantity top-left, discount top-right, final price
+// centred at the bottom — clean two-line scan per button.
+export function BulkQuantityButtons({ unitCost, color, disabled, onBuy }: BulkQuantityButtonsProps) {
+    return (
+        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
+            {[1, 5, 10].map((qty) => {
+                const pctOff = qty >= 10 ? 10 : qty >= 5 ? 5 : 0;
+                const discounted = bulkPrice(unitCost, qty);
+                return (
+                    <Button
+                        key={qty}
+                        size="small"
+                        variant="contained"
+                        color={color}
+                        disabled={disabled}
+                        onClick={() => onBuy(qty)}
+                        sx={{ textTransform: "none", flexDirection: "column", justifyContent: "space-between", gap: 1, py: 0.75, px: 1 }}
+                    >
+                        <Box sx={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2, color: "inherit" }}>
+                                {qty}x
+                            </Typography>
+                            {pctOff > 0 && (
+                                <Typography sx={{ fontSize: 9, fontWeight: 700, lineHeight: 1.2, opacity: 0.8, color: "inherit" }}>
+                                    −{pctOff}%
+                                </Typography>
+                            )}
+                        </Box>
+                        <Typography sx={{ fontSize: 11, fontWeight: 700, lineHeight: 1.2, textAlign: "center", color: "inherit" }}>
+                            {formatCheddar(discounted)}
+                        </Typography>
+                    </Button>
+                );
+            })}
+        </Box>
+    );
+}
+
+interface ShopModalProps {
+    open: boolean;
+    onClose: () => void;
+    title: string;
+    children: ReactNode;
+}
+
+// The generic "buy stuff" popup shell - shared by every in-game Shop dialog (Ranch, Garden,
+// Mine) and the Store's category dialogs, so they all get the same look with one place to
+// change it. Content (item lists, captions, extra actions like Mine's Reset Map) is entirely
+// up to the caller via `children`.
+export function ShopModal({ open, onClose, title, children }: ShopModalProps) {
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+            <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                {title}
+                <IconButton onClick={onClose} aria-label="Close">
+                    <CloseIcon />
+                </IconButton>
+            </DialogTitle>
+            <DialogContent sx={{ pb: 3, display: "flex", flexDirection: "column", gap: 2 }}>
+                {children}
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+interface FeedShopListProps {
+    feedItems: RanchFeedItem[];
+    // "bulk" (Store's Feed tab): 1x/5x/10x buy buttons showing the discounted total.
+    // "single" (Ranch's own Shop dialog): one Buy-1 button per feed type - same split as
+    // SeedShopList/ProtectionShopList/MineEquipmentList.
+    mode: "bulk" | "single";
+    onBuy: (type: RanchType, quantity: number) => void;
+    isBuying: boolean;
+}
+
+// Feed rows - shared by RanchTab's in-game Shop dialog (single-buy, scoped to the selected
+// creature's type) and the Store's Feed tab (bulk, every type at once), so both read the
+// same live prices/owned counts and never drift.
+export function FeedShopList({ feedItems, mode, onBuy, isBuying }: FeedShopListProps) {
+    return (
+        <>
+            {feedItems.map((item) => (
+                <Box key={item.key} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Typography sx={{ fontSize: 24 }}>{TYPE_EMOJI[item.type]}</Typography>
+                        <Box sx={{ flexGrow: 1 }}>
+                            <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    {item.label} (x{item.quantity})
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    {formatCheddar(item.price)} each
+                                </Typography>
+                            </Box>
+                            <Typography variant="caption" color="text.secondary">
+                                Feeds {TYPE_LABEL[item.type]} creatures
+                            </Typography>
+                        </Box>
+                    </Box>
+                    {mode === "bulk" ? (
+                        <BulkQuantityButtons unitCost={item.price} color="primary" disabled={isBuying} onBuy={(qty) => onBuy(item.type, qty)} />
+                    ) : (
+                        <Button size="small" variant="contained" fullWidth disabled={isBuying} onClick={() => onBuy(item.type, 1)} sx={{ textTransform: "none" }}>
+                            Buy 1 ({formatCheddar(item.price)})
+                        </Button>
+                    )}
+                </Box>
+            ))}
+        </>
+    );
+}
+
+interface RanchShopItemListProps {
+    items: RanchShopItem[];
+    icon: (item: RanchShopItem) => ReactNode;
+    color?: "primary" | "success" | "warning" | "error" | "info";
+    onBuy: (key: string) => void;
+    isBuying: boolean;
+}
+
+// Serum/Shield/Tonic rows - always single-buy, since /shop/:key/buy (the endpoint backing
+// every RanchShopItem) has no quantity param and always charges/grants exactly 1, unlike
+// Feed/Seed/Protection/Equipment which all support server-side bulk pricing. Shared by
+// RanchTab's in-game Shop dialog and the Store's Tonics tab, so both read the same live
+// prices/owned counts and never drift.
+export function RanchShopItemList({ items, icon, color = "primary", onBuy, isBuying }: RanchShopItemListProps) {
+    return (
+        <>
+            {items.map((item) => (
+                <Box key={item.key} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Box sx={{ color: `${color}.main` }}>{icon(item)}</Box>
+                        <Box sx={{ flexGrow: 1 }}>
+                            <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    {item.label} (x{item.quantity})
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    {formatCheddar(item.price)} each
+                                </Typography>
+                            </Box>
+                            <Typography variant="caption" color="text.secondary">
+                                {item.description}
+                            </Typography>
+                        </Box>
+                    </Box>
+                    <Button size="small" variant="contained" fullWidth disabled={isBuying} onClick={() => onBuy(item.key)} sx={{ textTransform: "none" }}>
+                        Buy 1 ({formatCheddar(item.price)})
+                    </Button>
+                </Box>
+            ))}
+        </>
+    );
+}
+
+interface SeedShopListProps {
+    seedTiers: SeedTier[];
+    // "bulk" (Store's Garden tab): 1x/5x/10x buy buttons showing the discounted total.
+    // "single" (GardenGame's own Shop dialog): one Buy-1 button per seed - buying there is
+    // deliberately single-quantity, same split as MineEquipmentList below.
+    mode: "bulk" | "single";
+    onBuy: (seedType: string, quantity: number) => void;
+    isBuying: boolean;
+}
+
+// Seed rows - shared by GardenGame's in-game Shop dialog and the Store's Garden tab, so
+// both read the same live prices/owned counts and never drift.
+export function SeedShopList({ seedTiers, mode, onBuy, isBuying }: SeedShopListProps) {
+    return (
+        <>
+            {seedTiers.map((tier) => (
+                <Box key={tier.key} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Typography sx={{ fontSize: 24 }}>{SEED_EMOJI[tier.key] ?? "🌾"}</Typography>
+                        <Box sx={{ flexGrow: 1 }}>
+                            <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    {tier.label} (x{tier.owned})
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    {formatCheddar(tier.cost)} each
+                                </Typography>
+                            </Box>
+                            <Typography variant="caption" color="text.secondary">
+                                {tier.waterAmount} growth stages to mature
+                            </Typography>
+                        </Box>
+                    </Box>
+                    {mode === "bulk" ? (
+                        <BulkQuantityButtons unitCost={tier.cost} color="primary" disabled={isBuying} onBuy={(qty) => onBuy(tier.key, qty)} />
+                    ) : (
+                        <Button size="small" variant="contained" fullWidth disabled={isBuying} onClick={() => onBuy(tier.key, 1)} sx={{ textTransform: "none" }}>
+                            Buy 1 ({formatCheddar(tier.cost)})
+                        </Button>
+                    )}
+                </Box>
+            ))}
+        </>
+    );
+}
+
+export const PROTECTION_ITEM_ROWS: { key: ProtectionItem["key"]; icon: ReactNode; label: string; color: "success" | "info" | "warning" | "primary"; desc: string }[] = [
+    { key: "pesticide", icon: <BugReportIcon />, label: "Pesticide", color: "success", desc: "Shields against the next vermin (🐀) hit" },
+    { key: "fungicide", icon: <ScienceIcon />, label: "Fungicide", color: "info", desc: "Shields against disease (🦠) and cures it if active" },
+    { key: "fertilizer", icon: <SpaIcon />, label: "Fertilizer", color: "warning", desc: "Instantly clears one growth stage" },
+    { key: "bonemeal", icon: <SpeedIcon />, label: "Bonemeal", color: "primary", desc: "Speeds up watering cooldown by 25%, from then on" },
+];
+
+interface ProtectionShopListProps {
+    protectionItems: ProtectionItem[];
+    // "bulk" (Store's Garden tab): 1x/5x/10x buy buttons showing the discounted total.
+    // "single" (GardenGame's own Shop dialog): one Buy-1 button per item - same split as
+    // SeedShopList/MineEquipmentList.
+    mode: "bulk" | "single";
+    onBuy: (item: ProtectionItem["key"], quantity: number) => void;
+    isBuying: boolean;
+}
+
+// Pesticide/Fungicide/Fertilizer/Bonemeal rows - shared by GardenGame's in-game Shop dialog
+// (single-buy, opened from a plant's own view) and the Store's Garden tab (bulk), so both
+// read the same live prices/owned counts and never drift.
+export function ProtectionShopList({ protectionItems, mode, onBuy, isBuying }: ProtectionShopListProps) {
+    return (
+        <>
+            {PROTECTION_ITEM_ROWS.map((row) => {
+                const item = protectionItems.find((p) => p.key === row.key);
+                if (!item) {
+                    return null;
+                }
+                return (
+                    <Box key={row.key} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <Box sx={{ color: `${row.color}.main` }}>{row.icon}</Box>
+                            <Box sx={{ flexGrow: 1 }}>
+                                <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                        {row.label} (x{item.owned})
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        {formatCheddar(item.cost)} each
+                                    </Typography>
+                                </Box>
+                                <Typography variant="caption" color="text.secondary">
+                                    {row.desc}
+                                </Typography>
+                            </Box>
+                        </Box>
+                        {mode === "bulk" ? (
+                            <BulkQuantityButtons unitCost={item.cost} color={row.color} disabled={isBuying} onBuy={(qty) => onBuy(row.key, qty)} />
+                        ) : (
+                            <Button size="small" variant="contained" fullWidth disabled={isBuying} onClick={() => onBuy(row.key, 1)} sx={{ textTransform: "none" }}>
+                                Buy 1 ({formatCheddar(item.cost)})
+                            </Button>
+                        )}
+                    </Box>
+                );
+            })}
+        </>
+    );
+}
+
+export const MINE_EQUIPMENT_ROWS: { key: MineEquipmentItem; icon: ReactNode; label: string; color: "warning" | "error" | "success" | "info"; desc: string }[] = [
     { key: "ladder", icon: <StairsIcon />, label: "Ladder", color: "warning", desc: "Dig up or down into new territory" },
     { key: "explosive", icon: <BoltIcon />, label: "Explosive", color: "error", desc: "Clears heavy stone blocking your path" },
     { key: "support", icon: <ShieldIcon />, label: "Support", color: "success", desc: "Blocks your next cave-in" },
@@ -259,12 +554,13 @@ interface MineEquipmentListProps {
     prices: MineEquipmentPrices;
     owned: Record<MineEquipmentItem, number>;
     // "bulk" (Store's Mine Equipment tab): 1x/5x/10x buy buttons showing the discounted
-    // total. "single" (MineGame's own Shop dialog): one Buy-1 button, plus a Sell-1 button
-    // once any are owned - buying/selling equipment there is deliberately single-quantity.
+    // total. "single" (MineGame's own Shop dialog): one Buy-1 button, plus Sell-1/Sell-All
+    // once any are owned - buying there is deliberately single-quantity, though selling can
+    // clear a whole stack at once.
     mode: "bulk" | "single";
     onBuy: (item: MineEquipmentItem, quantity: number) => void;
     isBuying: boolean;
-    onSell?: (item: MineEquipmentItem) => void;
+    onSell?: (item: MineEquipmentItem, quantity: number) => void;
     isSelling?: boolean;
 }
 
@@ -290,28 +586,25 @@ export function MineEquipmentList({ prices, owned, mode, onBuy, isBuying, onSell
                             </Box>
                         </Box>
                         {mode === "bulk" ? (
-                            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
-                                {[1, 5, 10].map((qty) => (
-                                    <Button key={qty} size="small" variant="contained" color={item.color}
-                                        disabled={isBuying} onClick={() => onBuy(item.key, qty)}
-                                        sx={{ textTransform: "none", flexDirection: "column", lineHeight: 1.2, py: 0.75 }}>
-                                        <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2, color: "inherit" }}>{qty}x</Typography>
-                                        <Typography variant="caption" sx={{ fontSize: 10, opacity: 0.85, lineHeight: 1.2, color: "inherit" }}>
-                                            {formatCheddar(bulkPrice(price, qty))}
-                                        </Typography>
-                                    </Button>
-                                ))}
-                            </Box>
+                            <BulkQuantityButtons unitCost={price} color={item.color} disabled={isBuying} onBuy={(qty) => onBuy(item.key, qty)} />
                         ) : (
-                            <Box sx={{ display: "flex", gap: 1 }}>
-                                <Button size="small" variant="contained" color={item.color} fullWidth
-                                    disabled={isBuying} onClick={() => onBuy(item.key, 1)} sx={{ textTransform: "none" }}>
-                                    Buy 1
-                                </Button>
-                                {onSell && ownedCount > 0 && (
-                                    <Button size="small" variant="outlined" color={item.color} fullWidth
-                                        disabled={!!isSelling} onClick={() => onSell(item.key)} sx={{ textTransform: "none" }}>
-                                        Sell 1 ({formatCheddar(sellValue)})
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                                <Box sx={{ display: "flex", gap: 1 }}>
+                                    <Button size="small" variant="contained" color={item.color} fullWidth
+                                        disabled={isBuying} onClick={() => onBuy(item.key, 1)} sx={{ textTransform: "none" }}>
+                                        Buy 1
+                                    </Button>
+                                    {onSell && ownedCount > 0 && (
+                                        <Button size="small" variant="outlined" color={item.color} fullWidth
+                                            disabled={!!isSelling} onClick={() => onSell(item.key, 1)} sx={{ textTransform: "none" }}>
+                                            Sell 1 ({formatCheddar(sellValue)})
+                                        </Button>
+                                    )}
+                                </Box>
+                                {onSell && ownedCount > 1 && (
+                                    <Button size="small" variant="text" color={item.color} fullWidth
+                                        disabled={!!isSelling} onClick={() => onSell(item.key, ownedCount)} sx={{ textTransform: "none" }}>
+                                        Sell All {ownedCount} ({formatCheddar(sellValue * ownedCount)})
                                     </Button>
                                 )}
                             </Box>
@@ -336,6 +629,7 @@ interface RanchCardProps {
 export function RanchCard({ creature, feedCooldownMs, selected, onClick }: RanchCardProps) {
     const cooldownRemaining = useCountdown(feedReadyAt(creature, feedCooldownMs));
     const canFeed = cooldownRemaining <= 0;
+    const feedProgress = canFeed ? 100 : Math.max(0, 100 - (cooldownRemaining / feedCooldownMs) * 100);
 
     return (
         <CardActionArea
@@ -352,6 +646,12 @@ export function RanchCard({ creature, feedCooldownMs, selected, onClick }: Ranch
             }}
         >
             <Typography sx={{ fontSize: 40, lineHeight: 1 }}>{SPECIES_EMOJI[creature.rarityTier] ?? "🐾"}</Typography>
+            <LinearProgress
+                variant="determinate"
+                value={feedProgress}
+                color={canFeed ? "info" : "warning"}
+                sx={{ width: "100%", height: 4, borderRadius: 999 }}
+            />
             <Typography variant="body2" sx={{ fontWeight: 700, textAlign: "center" }}>
                 {creature.name}
             </Typography>

@@ -1,139 +1,86 @@
 import { useState } from "react";
 import {
     Box,
-    Button,
+    Card,
+    CardActionArea,
+    CardContent,
     LinearProgress,
-    Tab,
-    Tabs,
     Typography,
 } from "@mui/material";
 import { useSnackbar } from "notistack";
-import { formatCheddar } from "../../utils/currency";
-import { RanchFeedItem, RanchShopItem, useCasinoRanch } from "../../../../../hooks/casino/useCasinoRanch";
-import { SeedTier, useCasinoGarden } from "../../../../../hooks/casino/useCasinoGarden";
+import { RanchShopItem, RanchType, useCasinoRanch } from "../../../../../hooks/casino/useCasinoRanch";
+import { ProtectionItem, useCasinoGarden } from "../../../../../hooks/casino/useCasinoGarden";
 import { useCasinoMine } from "../../../../../hooks/casino/useCasinoMine";
-import { bulkPrice, MineEquipmentItem, MineEquipmentList, SEED_EMOJI, TYPE_EMOJI, TYPE_LABEL } from "./shared";
-
-const BUY_QUANTITIES = [1, 5, 10];
+import { FeedShopList, MineEquipmentItem, MineEquipmentList, PROTECTION_ITEM_ROWS, ProtectionShopList, RanchShopItemList, SeedShopList, ShopModal, STAT_ICON } from "./shared";
 
 function FeedPanel() {
     const { feedItems, buyFeed, isBuyingFeed } = useCasinoRanch();
     const { enqueueSnackbar } = useSnackbar();
 
-    const handleBuyFeed = (item: RanchFeedItem, quantity: number) =>
-        buyFeed({ type: item.type, quantity })
-            .then(() => enqueueSnackbar(`Bought ${quantity}x ${item.label}.`, { variant: "success" }))
+    const handleBuyFeed = (type: RanchType, quantity: number) => {
+        const item = feedItems.find((f) => f.type === type);
+        buyFeed({ type, quantity })
+            .then(() => enqueueSnackbar(`Bought ${quantity}x ${item?.label ?? "feed"}.`, { variant: "success" }))
             .catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
+    };
 
     if (feedItems.length === 0) {
         return <LinearProgress sx={{ mt: 2 }} />;
     }
 
-    return (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            {feedItems.map((item) => (
-                <Box
-                    key={item.key}
-                    sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}
-                >
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <Typography sx={{ fontSize: 24 }}>{TYPE_EMOJI[item.type]}</Typography>
-                        <Box sx={{ flexGrow: 1 }}>
-                            <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                    {item.label} (x{item.quantity})
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    {formatCheddar(item.price)} each
-                                </Typography>
-                            </Box>
-                            <Typography variant="caption" color="text.secondary">
-                                Feeds {TYPE_LABEL[item.type]} creatures
-                            </Typography>
-                        </Box>
-                    </Box>
-                    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
-                        {BUY_QUANTITIES.map((quantity) => (
-                            <Button
-                                key={quantity}
-                                size="small"
-                                variant="contained"
-                                disabled={isBuyingFeed}
-                                onClick={() => handleBuyFeed(item, quantity)}
-                                sx={{ textTransform: "none", flexDirection: "column", lineHeight: 1.2, py: 0.75 }}
-                            >
-                                <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2, color: "inherit" }}>{quantity}x</Typography>
-                                <Typography variant="caption" sx={{ fontSize: 10, opacity: 0.85, lineHeight: 1.2, color: "inherit" }}>
-                                    {formatCheddar(bulkPrice(item.price, quantity))}
-                                </Typography>
-                            </Button>
-                        ))}
-                    </Box>
-                </Box>
-            ))}
-        </Box>
-    );
+    return <FeedShopList feedItems={feedItems} mode="bulk" onBuy={handleBuyFeed} isBuying={isBuyingFeed} />;
 }
 
 function TonicsPanel() {
     const { tonicRecipes, shopItems, buyShopItem, isBuyingShopItem } = useCasinoRanch();
     const { enqueueSnackbar } = useSnackbar();
 
-    const handleBuyShopItem = (item: RanchShopItem) =>
+    const tonicItems = tonicRecipes
+        .map((recipe) => shopItems.find((i) => i.key === recipe.tonicKey))
+        .filter((item): item is RanchShopItem => !!item);
+
+    const handleBuyShopItem = (key: string) => {
+        const item = shopItems.find((i) => i.key === key);
+        if (!item) {
+            return;
+        }
         buyShopItem(item.key)
             .then(() => enqueueSnackbar(`Bought 1x ${item.label}.`, { variant: "success" }))
             .catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
+    };
 
     return (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Typography variant="caption" color="text.secondary">
                 Buy a Tonic outright, or craft one for free from owned materials in Inventory.
             </Typography>
-            {tonicRecipes.map((recipe) => {
-                const shopItem = shopItems.find((i) => i.key === recipe.tonicKey);
-                if (!shopItem) {
-                    return null;
-                }
-                return (
-                    <Box
-                        key={recipe.tonicKey}
-                        sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}
-                    >
-                        <Box>
-                            <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                    {shopItem.label} (x{shopItem.quantity})
-                                </Typography>
-                            </Box>
-                            <Typography variant="caption" color="text.secondary">
-                                {shopItem.description}
-                            </Typography>
-                        </Box>
-                        <Button
-                            size="small"
-                            variant="contained"
-                            fullWidth
-                            disabled={isBuyingShopItem}
-                            onClick={() => handleBuyShopItem(shopItem)}
-                            sx={{ textTransform: "none" }}
-                        >
-                            Buy ({formatCheddar(shopItem.price)})
-                        </Button>
-                    </Box>
-                );
-            })}
+            <RanchShopItemList
+                items={tonicItems}
+                icon={(item) => STAT_ICON[item.key.replace("tonic-", "") as keyof typeof STAT_ICON] ?? null}
+                onBuy={handleBuyShopItem}
+                isBuying={isBuyingShopItem}
+            />
         </Box>
     );
 }
 
 function GardenPanel() {
-    const { seedTiers, buySeed, isBuyingSeed } = useCasinoGarden();
+    const { seedTiers, buySeed, isBuyingSeed, protectionItems, buyProtection, isBuyingProtection } = useCasinoGarden();
     const { enqueueSnackbar } = useSnackbar();
 
-    const handleBuySeed = (tier: SeedTier, quantity: number) =>
-        buySeed({ seedType: tier.key, quantity })
-            .then(() => enqueueSnackbar(`Bought ${quantity}x ${tier.label} seed${quantity === 1 ? "" : "s"}.`, { variant: "success" }))
+    const handleBuySeed = (seedType: string, quantity: number) => {
+        const tier = seedTiers.find((t) => t.key === seedType);
+        buySeed({ seedType, quantity })
+            .then(() => enqueueSnackbar(`Bought ${quantity}x ${tier?.label ?? "seed"}${quantity === 1 ? "" : "s"}.`, { variant: "success" }))
             .catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
+    };
+
+    const handleBuyProtection = (item: ProtectionItem["key"], quantity: number) => {
+        const label = PROTECTION_ITEM_ROWS.find((r) => r.key === item)?.label ?? item;
+        buyProtection({ item, quantity })
+            .then(() => enqueueSnackbar(`Bought ${quantity}x ${label}.`, { variant: "success" }))
+            .catch((e) => enqueueSnackbar(e.message || "Failed to buy", { variant: "error" }));
+    };
 
     if (seedTiers.length === 0) {
         return <LinearProgress sx={{ mt: 2 }} />;
@@ -142,48 +89,13 @@ function GardenPanel() {
     return (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Typography variant="caption" color="text.secondary">
-                Buy seeds into your stock, then plant them from an empty Garden plot.
+                Seeds - buy into your stock, then plant them from an empty Garden plot.
             </Typography>
-            {Object.values(seedTiers).map((tier) => (
-                <Box
-                    key={tier.key}
-                    sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}
-                >
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <Typography sx={{ fontSize: 24 }}>{SEED_EMOJI[tier.key] ?? "🌾"}</Typography>
-                        <Box sx={{ flexGrow: 1 }}>
-                            <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                    {tier.label} (x{tier.owned})
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    {formatCheddar(tier.cost)} each
-                                </Typography>
-                            </Box>
-                            <Typography variant="caption" color="text.secondary">
-                                {tier.waterAmount} growth stages to mature
-                            </Typography>
-                        </Box>
-                    </Box>
-                    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
-                        {BUY_QUANTITIES.map((quantity) => (
-                            <Button
-                                key={quantity}
-                                size="small"
-                                variant="contained"
-                                disabled={isBuyingSeed}
-                                onClick={() => handleBuySeed(tier, quantity)}
-                                sx={{ textTransform: "none", flexDirection: "column", lineHeight: 1.2, py: 0.75 }}
-                            >
-                                <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2, color: "inherit" }}>{quantity}x</Typography>
-                                <Typography variant="caption" sx={{ fontSize: 10, opacity: 0.85, lineHeight: 1.2, color: "inherit" }}>
-                                    {formatCheddar(bulkPrice(tier.cost, quantity))}
-                                </Typography>
-                            </Button>
-                        ))}
-                    </Box>
-                </Box>
-            ))}
+            <SeedShopList seedTiers={seedTiers} mode="bulk" onBuy={handleBuySeed} isBuying={isBuyingSeed} />
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                Crop protection - buy into your stock, then use them on a growing plot.
+            </Typography>
+            <ProtectionShopList protectionItems={protectionItems} mode="bulk" onBuy={handleBuyProtection} isBuying={isBuyingProtection} />
         </Box>
     );
 }
@@ -215,27 +127,62 @@ function MineEquipmentPanel() {
     );
 }
 
+type ShopCategory = "feed" | "tonics" | "garden" | "mine";
+
+const SHOP_CATEGORIES: { key: ShopCategory; label: string; emoji: string; description: string }[] = [
+    { key: "feed", label: "Feed", emoji: "🍖", description: "Stock up for your Ranch creatures" },
+    { key: "tonics", label: "Buy Tonics", emoji: "🧪", description: "Guaranteed, targeted stat boosts" },
+    { key: "garden", label: "Garden", emoji: "🌱", description: "Seeds & crop protection" },
+    { key: "mine", label: "Mine Equipment", emoji: "⛏️", description: "Ladders, explosives, supports, flares" },
+];
+
+function ShopCategoryTile({ emoji, label, description, onClick }: { emoji: string; label: string; description: string; onClick: () => void }) {
+    return (
+        <Card sx={{ height: "100%", transition: "transform 0.2s, box-shadow 0.2s", "&:hover": { transform: "translateY(-4px)", boxShadow: 6 } }}>
+            <CardActionArea onClick={onClick} sx={{ height: "100%" }}>
+                <CardContent sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.75, p: 1.75, "&:last-child": { pb: 1.75 }, height: "100%" }}>
+                    <Typography sx={{ fontSize: 32, lineHeight: 1 }}>{emoji}</Typography>
+                    <Typography variant="subtitle2" component="h3" sx={{ fontWeight: 700, textAlign: "center" }}>
+                        {label}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+                        {description}
+                    </Typography>
+                </CardContent>
+            </CardActionArea>
+        </Card>
+    );
+}
+
 export default function ShopTab() {
-    const [tab, setTab] = useState(0);
+    const [openCategory, setOpenCategory] = useState<ShopCategory | null>(null);
 
     return (
         <Box>
-            <Tabs
-                value={tab}
-                onChange={(_, v) => setTab(v)}
-                variant="scrollable"
-                scrollButtons="auto"
-                sx={{ mb: 2, minHeight: 40, "& .MuiTab-root": { minHeight: 40 } }}
-            >
-                <Tab label="Feed" />
-                <Tab label="Buy Tonics" />
-                <Tab label="Garden" />
-                <Tab label="Mine Equipment" />
-            </Tabs>
-            {tab === 0 && <FeedPanel />}
-            {tab === 1 && <TonicsPanel />}
-            {tab === 2 && <GardenPanel />}
-            {tab === 3 && <MineEquipmentPanel />}
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, mt: 1 }}>
+                {SHOP_CATEGORIES.map((cat) => (
+                    <ShopCategoryTile
+                        key={cat.key}
+                        emoji={cat.emoji}
+                        label={cat.label}
+                        description={cat.description}
+                        onClick={() => setOpenCategory(cat.key)}
+                    />
+                ))}
+            </Box>
+
+            <ShopModal open={openCategory === "feed"} onClose={() => setOpenCategory(null)} title="Feed">
+                <FeedPanel />
+            </ShopModal>
+            <ShopModal open={openCategory === "tonics"} onClose={() => setOpenCategory(null)} title="Buy Tonics">
+                <TonicsPanel />
+            </ShopModal>
+            <ShopModal open={openCategory === "garden"} onClose={() => setOpenCategory(null)} title="Garden">
+                <GardenPanel />
+            </ShopModal>
+            <ShopModal open={openCategory === "mine"} onClose={() => setOpenCategory(null)} title="Mine Equipment">
+                <MineEquipmentPanel />
+            </ShopModal>
         </Box>
     );
 }

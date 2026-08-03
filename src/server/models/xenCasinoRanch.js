@@ -414,8 +414,9 @@ xenCasinoRanchSchema.statics.addCreature = async function (userId, params) {
         name: params.name,
         rarityTier: params.rarityTier,
         stats: params.stats || { speed: 0, stamina: 0, power: 0, intelligence: 0, luck: 0, charm: 0 },
-        lastCollectedAt: new Date(),
-        lastCollectDate: todayKey(),
+        // lastCollectedAt/lastCollectDate deliberately left unset (schema default null) - a
+        // brand-new creature has never been collected, so canCollect (computed in
+        // creatureView as lastCollectDate !== todayKey()) should read true immediately.
         createdAt: new Date(),
         feedCount: 0,
         raceWins: 0,
@@ -772,7 +773,10 @@ xenCasinoRanchSchema.statics.waterGardenSquare = async function (userId, squareI
 xenCasinoRanchSchema.statics.protectGardenSquare = async function (userId, squareId, item) {
     var doc = await this.getState(userId);
     var square = doc.garden.squares.find(function (s) { return s.squareId === squareId; });
-    if (!square || square.status !== "growing" || square.protection[item]) {
+    // "fertilizer" is the item key everywhere else, but the schema field is "fertilized" -
+    // map it here so the applied-flag actually gets read/written against a real path.
+    var protectionKey = item === "fertilizer" ? "fertilized" : item;
+    if (!square || square.status !== "growing" || square.protection[protectionKey]) {
         // Fungicide is special: it can be applied to a diseased square to cure it even if
         // a fungicide shield is already active (the existing shield is still consumed to cure).
         if (item === "fungicide" && square && square.status === "growing" && square.diseased) {
@@ -789,7 +793,7 @@ xenCasinoRanchSchema.statics.protectGardenSquare = async function (userId, squar
     if (item === "fertilizer" && square.waterAmount - square.waterCount <= 1) {
         return null;
     }
-    square.protection[item] = true;
+    square.protection[protectionKey] = true;
     if (item === "fertilizer") {
         square.waterAmount -= 1;
     }
