@@ -1907,7 +1907,7 @@ module.exports = function (app: express.Application) {
 
                 // If it was just a free move or empty outcome, return 0 payout
                 if (result.outcome !== "ore") {
-                    await XenCasinoActivity.record({ game: "mine" as any, userId, wager: DIG_COST, payout: 0 });
+                    await XenCasinoActivity.record({ game: SLUG, userId, wager: DIG_COST, payout: 0 });
                     return res.json({
                         status: true,
                         data: {
@@ -1929,7 +1929,7 @@ module.exports = function (app: express.Application) {
                 // Store sell value metadata — we'll use a naming convention for sell values
                 // The inventory already stores the item; the sell value is computed from the tier
 
-                await recordCasinoRoundPlayed(userId, { game: "mine", wager: DIG_COST, payout: sellValue });
+                await recordCasinoRoundPlayed(userId, { game: SLUG, wager: DIG_COST, payout: sellValue });
 
                 return res.json({
                     status: true,
@@ -2152,7 +2152,7 @@ module.exports = function (app: express.Application) {
                 throw creditErr;
             }
 
-            await XenCasinoActivity.record({ game: "garden", userId, wager: totalPrice, payout: 0 });
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: totalPrice, payout: 0 });
             return res.json({ status: true, data: { balance: payoutResult.fromNewBalance, seedTiers: await seedTiersView(userId) } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
@@ -2206,7 +2206,7 @@ module.exports = function (app: express.Application) {
                 throw creditErr;
             }
 
-            await XenCasinoActivity.record({ game: "garden", userId, wager: totalPrice, payout: 0 });
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: totalPrice, payout: 0 });
             return res.json({ status: true, data: { balance: payoutResult.fromNewBalance, protectionItems: await protectionItemsView(userId) } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
@@ -2322,7 +2322,7 @@ module.exports = function (app: express.Application) {
         }
 
         await XenCasinoRanch.clearHarvestedGardenSquare(userId, squareId);
-        await recordCasinoRoundPlayed(userId, { game: "garden", wager: 0, payout: totalValue });
+        await recordCasinoRoundPlayed(userId, { game: SLUG, wager: 0, payout: totalValue });
 
         return res.json({
             status: true,
@@ -2368,7 +2368,7 @@ module.exports = function (app: express.Application) {
                 return res.status(400).json({ status: false, message: "Nothing dead to clear here" });
             }
 
-            await XenCasinoActivity.record({ game: "garden", userId, wager: GARDEN_CLEANUP_FEE, payout: 0 });
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: GARDEN_CLEANUP_FEE, payout: 0 });
 
             return res.json({ status: true, data: { square: gardenSquareView(square), balance: result.fromNewBalance } });
         } catch (err) {

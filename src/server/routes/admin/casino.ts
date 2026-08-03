@@ -70,6 +70,35 @@ module.exports = function (app: express.Application) {
                 games.set(rows[i]._id, { winAmount: rows[i].winAmount, lossAmount: rows[i].lossAmount, roundsPlayed: rows[i].roundsPlayed });
             }
 
+            // Normalize quest-reward-<key> records (written by daily-quest claims in
+            // casino.ts as `quest-reward-${key}`) into the single "quest-reward" bucket
+            // so they show up in the Games tab instead of being silently dropped.
+            // Without this, GAME_LABELS' "quest-reward" lookup never matches any of the
+            // suffixed keys produced by the $group above.
+            var questNorm = { winAmount: 0, lossAmount: 0, roundsPlayed: 0 };
+            var keysToDelete: string[] = [];
+            games.forEach(function (val, key) {
+                if (key.startsWith("quest-reward-")) {
+                    questNorm.winAmount += val.winAmount;
+                    questNorm.lossAmount += val.lossAmount;
+                    questNorm.roundsPlayed += val.roundsPlayed;
+                    keysToDelete.push(key);
+                }
+            });
+            for (var d = 0; d < keysToDelete.length; d++) {
+                games.delete(keysToDelete[d]);
+            }
+            if (questNorm.roundsPlayed > 0) {
+                var existingQuest = games.get("quest-reward");
+                if (existingQuest) {
+                    existingQuest.winAmount += questNorm.winAmount;
+                    existingQuest.lossAmount += questNorm.lossAmount;
+                    existingQuest.roundsPlayed += questNorm.roundsPlayed;
+                } else {
+                    games.set("quest-reward", questNorm);
+                }
+            }
+
             // Fetch jackpot pools from the singleton.
             var casinoState = await XenCasino.getSingleton();
             var jackpots: Record<string, number> = {};
