@@ -414,9 +414,7 @@ xenCasinoRanchSchema.statics.addCreature = async function (userId, params) {
         name: params.name,
         rarityTier: params.rarityTier,
         stats: params.stats || { speed: 0, stamina: 0, power: 0, intelligence: 0, luck: 0, charm: 0 },
-        // lastCollectedAt/lastCollectDate deliberately left unset (schema default null) - a
-        // brand-new creature has never been collected, so canCollect (computed in
-        // creatureView as lastCollectDate !== todayKey()) should read true immediately.
+        lastCollectDate: todayKey(),
         createdAt: new Date(),
         feedCount: 0,
         raceWins: 0,
@@ -431,8 +429,9 @@ xenCasinoRanchSchema.statics.addCreature = async function (userId, params) {
 
 xenCasinoRanchSchema.statics.getCreature = async function (userId, creatureId) {
     var doc = await this.findOne({ userId: userId }).exec();
-    if (!doc) return null;
-    return doc.creatures.id(creatureId) || null;
+    if (!doc) return { doc: null, creature: null };
+    var creature = doc.creatures.id(creatureId);
+    return { doc: doc, creature: creature || null };
 };
 
 xenCasinoRanchSchema.statics.feedCreature = async function (userId, creatureId, gains, cooldownMs) {
@@ -488,7 +487,7 @@ xenCasinoRanchSchema.statics.releaseCreature = async function (userId, creatureI
     if (!doc) return null;
     var creature = doc.creatures.id(creatureId);
     if (!creature) return null;
-    creature.remove();
+    doc.creatures.pull(creatureId);
     await doc.save();
     return creature;
 };
