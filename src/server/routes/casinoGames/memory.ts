@@ -49,11 +49,10 @@ export const SYMBOL_GROUPS: { symbol: string; count: number }[] = [
     { symbol: "ITEM_I", count: 2 },
 ];
 
-// Payout multipliers by matched-pair count (0-3). Balanced for ~88% RTP for typical play
-// where the player uses partial memory (not purely random, not perfect either). Skilled
-// players who remember every card they've seen can beat 100% RTP — that's intentional for
-// a game called "Memory." Tune these values to adjust house edge.
-export const MATCH_MULTIPLIERS: Record<number, number> = { 0: 0, 1: 3, 2: 15, 3: 100 };
+// Payout multipliers by matched-pair count (0-3). With the 3-triple + 8-double deck this
+// lands at ~40% RTP for random play. Skilled players (~2× better than random) can still
+// profit but the house edge is solid. Tune these values to adjust house edge.
+export const MATCH_MULTIPLIERS: Record<number, number> = { 0: 0, 1: 2, 2: 10, 3: 35 };
 
 function shuffled<T>(items: T[]): T[] {
     const arr = [...items];
