@@ -938,9 +938,9 @@ function creatureView(doc: any) {
 // is the established pattern here), and resolves neglect decay. findByIdAndUpdate does not
 // run full-document validators, so this is safe even though the schema paths are
 // `required`.
-async function ensureCreatureFresh(creature: any) {
+async function ensureCreatureFresh(creature: any): Promise<{ creature: any; changed: boolean }> {
     if (!creature) {
-        return creature;
+        return { creature, changed: false };
     }
     const tier = RANCH_RARITY_TIERS.find((t) => t.key === creature.rarityTier) ?? RANCH_RARITY_TIERS[0];
     const setFields: Record<string, any> = {};
@@ -979,7 +979,7 @@ async function ensureCreatureFresh(creature: any) {
     }
 
     if (Object.keys(setFields).length === 0) {
-        return creature;
+        return { creature, changed: false };
     }
     // Apply changes directly to the sub-document (creature is embedded in XenCasinoRanch)
     for (const key of STAT_KEYS) {
@@ -993,7 +993,7 @@ async function ensureCreatureFresh(creature: any) {
     if (setFields.name) {
         creature.name = setFields.name;
     }
-    return creature;
+    return { creature, changed: true };
 }
 
 async function inventoryDoc(userId: string) {
@@ -1081,8 +1081,18 @@ async function pendingRaceView(userId: string) {
 }
 
 async function rosterView(userId: string) {
-    const rawCreatures = await (await XenCasinoRanch.getState(userId)).creatures;
-    const creatures = await Promise.all(rawCreatures.map((c: any) => ensureCreatureFresh(c)));
+    const doc = await XenCasinoRanch.getState(userId);
+    const rawCreatures = doc.creatures;
+    let dirty = false;
+    const creatures: any[] = [];
+    for (const c of rawCreatures) {
+        const result = await ensureCreatureFresh(c);
+        creatures.push(result.creature);
+        if (result.changed) dirty = true;
+    }
+    if (dirty) {
+        await doc.save();
+    }
     const items = await itemsView(userId);
     const feedItems = await feedItemsView(userId);
     const shopItems = await shopItemsView(userId);
@@ -1179,18 +1189,21 @@ module.exports = function (app: express.Application) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const { id } = req.params;
 
-        let existing = await XenCasinoRanch.getCreature(userId, id);
+        const { doc, creature: existing } = await XenCasinoRanch.getCreature(userId, id);
         if (!existing) {
             return res.status(404).json({ status: false, message: "Creature not found" });
         }
-        existing = await ensureCreatureFresh(existing);
-        if (existing.lastFedAt && Date.now() - new Date(existing.lastFedAt).getTime() < FEED_COOLDOWN_MS) {
+        const healed = await ensureCreatureFresh(existing);
+        if (healed.changed) {
+            await doc!.save();
+        }
+        if (healed.creature.lastFedAt && Date.now() - new Date(healed.creature.lastFedAt).getTime() < FEED_COOLDOWN_MS) {
             return res.status(400).json({ status: false, message: "This creature is still on cooldown" });
         }
 
-        const level = levelForStats(existing.stats);
+        const level = levelForStats(healed.creature.stats);
         const units = feedUnitsRequired(level);
-        const feedItem = FEED_ITEMS_BY_TYPE[typeForSpecies(existing.species)];
+        const feedItem = FEED_ITEMS_BY_TYPE[typeForSpecies(healed.creature.species)];
 
         const consumed = await XenCasinoRanch.subtractItem(userId, feedItem.key, units);
         if (!consumed) {
@@ -1215,7 +1228,7 @@ module.exports = function (app: express.Application) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const { id } = req.params;
 
-        const creature = await XenCasinoRanch.getCreature(userId, id);
+        const { creature } = await XenCasinoRanch.getCreature(userId, id);
         if (!creature) {
             return res.status(404).json({ status: false, message: "Creature not found" });
         }
@@ -1258,20 +1271,23 @@ module.exports = function (app: express.Application) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const { id } = req.params;
 
-        let existing = await XenCasinoRanch.getCreature(userId, id);
+        const { doc, creature: existing } = await XenCasinoRanch.getCreature(userId, id);
         if (!existing) {
             return res.status(404).json({ status: false, message: "Creature not found" });
         }
-        existing = await ensureCreatureFresh(existing);
-        const itemKey = SPECIES_ITEM_KEY[existing.species];
+        const healed = await ensureCreatureFresh(existing);
+        if (healed.changed) {
+            await doc!.save();
+        }
+        const itemKey = SPECIES_ITEM_KEY[healed.creature.species];
         const itemDef = itemKey ? ITEM_DEFS[itemKey] : undefined;
         if (!itemDef) {
             return res.status(400).json({ status: false, message: "This creature doesn't produce anything" });
         }
-        if ((existing.collectStreak ?? 0) >= RANCH_COLLECT_STREAK_LIMIT) {
+        if ((healed.creature.collectStreak ?? 0) >= RANCH_COLLECT_STREAK_LIMIT) {
             return res.status(400).json({
                 status: false,
-                message: `${existing.name} is too sad to work - it wants to race, not farm materials! Race it before collecting again.`,
+                message: `${healed.creature.name} is too sad to work - it wants to race, not farm materials! Race it before collecting again.`,
             });
         }
 
@@ -1358,11 +1374,15 @@ module.exports = function (app: express.Application) {
 
         let creature: any = null;
         if (needsCreature) {
-            creature = await XenCasinoRanch.getCreature(userId, creatureId!);
-            if (!creature) {
+            const result = await XenCasinoRanch.getCreature(userId, creatureId!);
+            if (!result.creature) {
                 return res.status(404).json({ status: false, message: "Creature not found" });
             }
-            creature = await ensureCreatureFresh(creature);
+            const healed = await ensureCreatureFresh(result.creature);
+            if (healed.changed) {
+                await result.doc!.save();
+            }
+            creature = healed.creature;
         }
 
         const consumed = await XenCasinoRanch.subtractItem(userId, key, 1);
@@ -1562,11 +1582,15 @@ module.exports = function (app: express.Application) {
             const { id } = req.params;
             const { useCourseTicket, useDifficultyItem } = req.body as { useCourseTicket?: boolean; useDifficultyItem?: boolean };
 
-            let creature = await XenCasinoRanch.getCreature(userId, id);
-            if (!creature) {
+            const { doc, creature: rawCreature } = await XenCasinoRanch.getCreature(userId, id);
+            if (!rawCreature) {
                 return res.status(404).json({ status: false, message: "Creature not found" });
             }
-            creature = await ensureCreatureFresh(creature);
+            const healed = await ensureCreatureFresh(rawCreature);
+            if (healed.changed) {
+                await doc!.save();
+            }
+            let creature = healed.creature;
 
             const existingState = await XenCasinoRanchPendingRace.getState(userId);
             if (existingState.pending && new Date(existingState.pending.expiresAt).getTime() >= Date.now()) {
