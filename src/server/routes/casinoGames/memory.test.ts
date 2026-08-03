@@ -11,17 +11,17 @@ import {
 } from "./memory";
 
 describe("SYMBOL_GROUPS", () => {
-    it("sums to exactly CELL_COUNT (25) — 7 triples + 2 doubles", () => {
+    it("sums to exactly CELL_COUNT (25) — 3 triples + 8 doubles", () => {
         expect(GRID_SIZE * GRID_SIZE).toBe(CELL_COUNT);
         const total = SYMBOL_GROUPS.reduce((sum, g) => sum + g.count, 0);
         expect(total).toBe(CELL_COUNT);
     });
 
-    it("has exactly the documented composition — 7 triples, 2 doubles, no singles", () => {
+    it("has exactly the documented composition — 3 triples, 8 doubles, no singles", () => {
         const byCount = new Map<number, number>();
         for (const g of SYMBOL_GROUPS) byCount.set(g.count, (byCount.get(g.count) ?? 0) + 1);
-        expect(byCount.get(3)).toBe(7);
-        expect(byCount.get(2)).toBe(2);
+        expect(byCount.get(3)).toBe(3);
+        expect(byCount.get(2)).toBe(8);
         expect(byCount.get(1) ?? 0).toBe(0);
     });
 
@@ -76,15 +76,15 @@ describe("MATCH_MULTIPLIERS", () => {
 });
 
 describe("memoryRtp", () => {
-    it("lands in the ~85-95% RTP band for random (no-skill) play", () => {
+    it("lands in the ~35-50% RTP band for random (no-skill) play", () => {
         const rtp = memoryRtp();
-        expect(rtp).toBeGreaterThan(0.85);
-        expect(rtp).toBeLessThan(0.95);
+        expect(rtp).toBeGreaterThan(0.35);
+        expect(rtp).toBeLessThan(0.50);
     });
 
     it("matches the binomial calculation for the deck composition", () => {
-        // 7 triples + 2 doubles: P(match per random 2-card pick) = 46/600
-        const p = (21 * 2 + 4 * 1) / (25 * 24);
+        // 3 triples + 8 doubles: P(match per random 2-card pick) = 34/600
+        const p = (9 * 2 + 16 * 1) / (25 * 24);
         const q = 1 - p;
         const binomial = [q ** 3, 3 * q ** 2 * p, 3 * q * p ** 2, p ** 3];
         const expected = Object.entries(MATCH_MULTIPLIERS).reduce((sum, [k, m]) => sum + m * binomial[Number(k)], 0);
@@ -98,7 +98,7 @@ describe("simulated random play (no skill) converges to binomial distribution", 
     it("matched-pair frequencies converge within tolerance", () => {
         const ROUNDS = 50_000;
         const TOLERANCE = 0.02;
-        const p = (21 * 2 + 4 * 1) / (25 * 24);
+        const p = (9 * 2 + 16 * 1) / (25 * 24);
         const q = 1 - p;
 
         const observed: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };

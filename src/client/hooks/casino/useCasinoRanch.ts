@@ -235,39 +235,67 @@ export const useCasinoRanch = () => {
         staleTime: 5 * 1000,
     });
 
-    const invalidate = () => {
-        queryClient.invalidateQueries({ queryKey: casinoRanchKeys.all });
+    const invalidateSideEffects = () => {
         queryClient.invalidateQueries({ queryKey: casinoBalanceKeys.all });
         queryClient.invalidateQueries({ queryKey: casinoLedgerKeys.all });
     };
 
+    const updateRanchCache = (updater: (old: RanchState) => RanchState) => {
+        queryClient.setQueryData<RanchState>(casinoRanchKeys.all, (old) => (old ? updater(old) : old));
+    };
+
     const { mutateAsync: hatch, isPending: isHatching } = useMutation({
         mutationFn: async () => (await apiClient.post<ApiResponse<HatchResult>>("/api/casino/ranch/hatch")).data.data!,
-        onSuccess: invalidate,
+        onSuccess: (data) => {
+            queryClient.setQueryData(casinoRanchKeys.all, data.roster);
+            invalidateSideEffects();
+        },
     });
 
     const { mutateAsync: feed, isPending: isFeeding } = useMutation({
         mutationFn: async (creatureId: string) =>
             (await apiClient.post<ApiResponse<FeedResult>>(`/api/casino/ranch/${creatureId}/feed`)).data.data!,
-        onSuccess: invalidate,
+        onSuccess: (data) => {
+            updateRanchCache((old) => ({
+                ...old,
+                creatures: old.creatures.map((c) => (c.id === data.creature.id ? data.creature : c)),
+            }));
+            invalidateSideEffects();
+        },
     });
 
     const { mutateAsync: release, isPending: isReleasing } = useMutation({
         mutationFn: async (creatureId: string) =>
             (await apiClient.post<ApiResponse<ReleaseResult>>(`/api/casino/ranch/${creatureId}/release`)).data.data!,
-        onSuccess: invalidate,
+        onSuccess: (_data, creatureId) => {
+            updateRanchCache((old) => ({
+                ...old,
+                creatures: old.creatures.filter((c) => c.id !== creatureId),
+            }));
+            invalidateSideEffects();
+        },
     });
 
     const { mutateAsync: collect, isPending: isCollecting } = useMutation({
         mutationFn: async (creatureId: string) =>
             (await apiClient.post<ApiResponse<CollectResult>>(`/api/casino/ranch/${creatureId}/collect`)).data.data!,
-        onSuccess: invalidate,
+        onSuccess: (data) => {
+            updateRanchCache((old) => ({
+                ...old,
+                creatures: old.creatures.map((c) => (c.id === data.creature.id ? data.creature : c)),
+                items: data.items,
+            }));
+            invalidateSideEffects();
+        },
     });
 
     const { mutateAsync: sellItem, isPending: isSellingItem } = useMutation({
         mutationFn: async (itemKey: string) =>
             (await apiClient.post<ApiResponse<SellItemResult>>(`/api/casino/ranch/items/${itemKey}/sell`)).data.data!,
-        onSuccess: invalidate,
+        onSuccess: (data) => {
+            updateRanchCache((old) => ({ ...old, items: data.items }));
+            invalidateSideEffects();
+        },
     });
 
     const { mutateAsync: useItem, isPending: isUsingItem } = useMutation({
@@ -278,25 +306,45 @@ export const useCasinoRanch = () => {
                     species: params.species,
                 })
             ).data.data!,
-        onSuccess: invalidate,
+        onSuccess: (data, variables) => {
+            updateRanchCache((old) => {
+                let next = { ...old };
+                if (data.creature && variables.creatureId) {
+                    next.creatures = next.creatures.map((c) => (c.id === data.creature!.id ? data.creature! : c));
+                }
+                if (data.items) next.items = data.items;
+                if (data.shopItems) next.shopItems = data.shopItems;
+                return next;
+            });
+            invalidateSideEffects();
+        },
     });
 
     const { mutateAsync: buyFeed, isPending: isBuyingFeed } = useMutation({
         mutationFn: async (params: { type: RanchType; quantity: number }) =>
             (await apiClient.post<ApiResponse<BuyFeedResult>>("/api/casino/ranch/feed/buy", params)).data.data!,
-        onSuccess: invalidate,
+        onSuccess: (data) => {
+            updateRanchCache((old) => ({ ...old, feedItems: data.feedItems }));
+            invalidateSideEffects();
+        },
     });
 
     const { mutateAsync: buyShopItem, isPending: isBuyingShopItem } = useMutation({
         mutationFn: async (itemKey: string) =>
             (await apiClient.post<ApiResponse<BuyShopItemResult>>(`/api/casino/ranch/shop/${itemKey}/buy`)).data.data!,
-        onSuccess: invalidate,
+        onSuccess: (data) => {
+            updateRanchCache((old) => ({ ...old, shopItems: data.shopItems }));
+            invalidateSideEffects();
+        },
     });
 
     const { mutateAsync: craftTonic, isPending: isCraftingTonic } = useMutation({
         mutationFn: async (statKey: keyof RanchStats) =>
             (await apiClient.post<ApiResponse<CraftTonicResult>>(`/api/casino/ranch/tonics/${statKey}/craft`)).data.data!,
-        onSuccess: invalidate,
+        onSuccess: (data) => {
+            updateRanchCache((old) => ({ ...old, items: data.items, shopItems: data.shopItems }));
+            invalidateSideEffects();
+        },
     });
 
     const { mutateAsync: startRace, isPending: isStartingRace } = useMutation({
@@ -307,13 +355,19 @@ export const useCasinoRanch = () => {
                     useDifficultyItem: params.useDifficultyItem,
                 })
             ).data.data!,
-        onSuccess: invalidate,
+        onSuccess: (data) => {
+            updateRanchCache((old) => ({ ...old, pendingRace: data.pending }));
+            invalidateSideEffects();
+        },
     });
 
     const { mutateAsync: forfeitRace, isPending: isForfeitingRace } = useMutation({
         mutationFn: async (creatureId: string) =>
             (await apiClient.post<ApiResponse<ForfeitRaceResult>>(`/api/casino/ranch/${creatureId}/race/forfeit`)).data.data!,
-        onSuccess: invalidate,
+        onSuccess: () => {
+            updateRanchCache((old) => ({ ...old, pendingRace: null }));
+            invalidateSideEffects();
+        },
     });
 
     const { mutateAsync: betRace, isPending: isBettingRace } = useMutation({
@@ -324,7 +378,14 @@ export const useCasinoRanch = () => {
                     stake: params.stake,
                 })
             ).data.data!,
-        onSuccess: invalidate,
+        onSuccess: (data) => {
+            updateRanchCache((old) => ({
+                ...old,
+                creatures: old.creatures.map((c) => (c.id === data.creature.id ? data.creature : c)),
+                pendingRace: null,
+            }));
+            invalidateSideEffects();
+        },
     });
 
     return {

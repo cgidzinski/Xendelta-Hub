@@ -15,8 +15,8 @@ import { formatOddsRatio } from "../../utils/odds";
 // same shape as every other game page in this app.
 const GAME = "memory";
 
-// 9 unique symbols matching the server's 7-triple + 2-double deck. ITEM_A..ITEM_G are
-// triples (3 copies each), ITEM_H..ITEM_I are doubles (2 copies each). Every card has at
+// 11 unique symbols matching the server's 3-triple + 8-double deck. ITEM_A..ITEM_C are
+// triples (3 copies each), ITEM_D..ITEM_K are doubles (2 copies each). Every card has at
 // least one match — no dead singles.
 const SYMBOL_EMOJI: Record<string, string> = {
     ITEM_A: "💎",
@@ -28,6 +28,8 @@ const SYMBOL_EMOJI: Record<string, string> = {
     ITEM_G: "🍀",
     ITEM_H: "🎲",
     ITEM_I: "🎪",
+    ITEM_J: "🎯",
+    ITEM_K: "⭐",
 };
 const BASE_BET = 2500;
 const BET_MULTIPLIERS = [1, 2, 5, 10, 50, 100];
