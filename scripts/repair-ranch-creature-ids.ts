@@ -17,6 +17,9 @@
 
 require("dotenv").config({ quiet: true });
 
+// Register the Mongoose model schema before use
+require("../src/server/models/xenCasinoRanch");
+
 import mongoose from "mongoose";
 
 const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/xendelta";
@@ -25,29 +28,46 @@ async function repair() {
     await mongoose.connect(MONGO_URI);
     console.log("Connected to MongoDB");
 
-    const XenCasinoRanch = mongoose.model("XenCasinoRanch");
+    const db = mongoose.connection.db;
+    if (!db) throw new Error("No db connection");
 
-    const allDocs = await XenCasinoRanch.find({}).exec();
+    const coll = db.collection("xencasinoranches");
+    const allDocs = await coll.find({}).toArray();
+
     console.log(`Found ${allDocs.length} ranch documents`);
 
     let repaired = 0;
     let totalCreatures = 0;
 
-    for (const doc of allDocs) {
-        const creatureCount = doc.creatures?.length ?? 0;
-        totalCreatures += creatureCount;
-        if (creatureCount === 0) continue;
+    for (const raw of allDocs) {
+        const creatures: any[] = raw.creatures || [];
+        totalCreatures += creatures.length;
+        if (creatures.length === 0) continue;
 
-        // Check if any creature sub-doc lacks _id
-        const needsRepair = doc.creatures.some((c: any) => !c._id);
-        if (!needsRepair) continue;
+        let needsFix = false;
+        const fixed = creatures.map((c: any, i: number) => {
+            if (!c._id) {
+                console.log(`  Doc ${raw.userId} creature[${i}] "${c.name}" (${c.species}): missing _id, generating one`);
+                needsFix = true;
+                return { ...c, _id: new mongoose.Types.ObjectId() };
+            }
+            return c;
+        });
 
-        // Mongoose already generated _id during hydration — just save to persist it
-        await doc.save();
+        if (!needsFix) {
+            console.log(`  Doc ${raw.userId}: all ${creatures.length} creatures OK`);
+            continue;
+        }
+
+        const result = await coll.updateOne(
+            { userId: raw.userId },
+            { $set: { creatures: fixed } }
+        );
+        console.log(`  → Updated: matched=${result.matchedCount}, modified=${result.modifiedCount}`);
         repaired++;
     }
 
-    console.log(`Repaired ${repaired} documents (${totalCreatures} total creatures across all docs)`);
+    console.log(`\nRepaired ${repaired} documents (${totalCreatures} total creatures across all docs)`);
     console.log("Done. Creature sub-documents now have stable _id fields.");
 
     await mongoose.disconnect();

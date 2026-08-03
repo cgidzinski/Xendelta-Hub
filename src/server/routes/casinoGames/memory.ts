@@ -1,6 +1,6 @@
 /**
- * Memory — a 5x5 grid of 25 cards, classic match-two mechanic. The deck has 7 "triple"
- * icons (3 copies each) and 2 "double" icons (2 copies each) — 7×3 + 2×2 = 25, so every
+ * Memory — a 5x5 grid of 25 cards, classic match-two mechanic. The deck has 3 "triple"
+ * icons (3 copies each) and 8 "double" icons (2 copies each) — 3×3 + 8×2 = 25, so every
  * card has at least one match. The composition is public and mirrored in Memory.tsx for
  * the pre-round "peek" flourish.
  *
@@ -34,26 +34,28 @@ export const CELL_COUNT = GRID_SIZE * GRID_SIZE; // 25
 export const PICK_COUNT = 2;
 export const MAX_REVEALS = 3;
 
-// 7 triples + 2 doubles = 25 cards, 9 unique symbols. Every card has at least one match
-// — no dead singles. Tuned so random match rate is ~7.7% per attempt, with a meaningful
+// 3 triples + 8 doubles = 25 cards, 11 unique symbols. Every card has at least one match
+// — no dead singles. Tuned so random match rate is ~5.7% per attempt, with a meaningful
 // skill gap (~2× better for perfect memory) concentrated in the 3rd reveal.
 export const SYMBOL_GROUPS: { symbol: string; count: number }[] = [
     { symbol: "ITEM_A", count: 3 },
     { symbol: "ITEM_B", count: 3 },
     { symbol: "ITEM_C", count: 3 },
-    { symbol: "ITEM_D", count: 3 },
-    { symbol: "ITEM_E", count: 3 },
-    { symbol: "ITEM_F", count: 3 },
-    { symbol: "ITEM_G", count: 3 },
+    { symbol: "ITEM_D", count: 2 },
+    { symbol: "ITEM_E", count: 2 },
+    { symbol: "ITEM_F", count: 2 },
+    { symbol: "ITEM_G", count: 2 },
     { symbol: "ITEM_H", count: 2 },
     { symbol: "ITEM_I", count: 2 },
+    { symbol: "ITEM_J", count: 2 },
+    { symbol: "ITEM_K", count: 2 },
 ];
 
-// Payout multipliers by matched-pair count (0-3). Balanced for ~88% RTP for typical play
-// where the player uses partial memory (not purely random, not perfect either). Skilled
-// players who remember every card they've seen can beat 100% RTP — that's intentional for
-// a game called "Memory." Tune these values to adjust house edge.
-export const MATCH_MULTIPLIERS: Record<number, number> = { 0: 0, 1: 3, 2: 15, 3: 100 };
+// Payout multipliers by matched-pair count (0-3). Balanced for ~57% RTP for random play,
+// so skilled players need to be ~1.75× better than random to break even. The game still
+// rewards memory skill but the house edge is substantial for all but the sharpest players.
+// Tune these values to adjust house edge.
+export const MATCH_MULTIPLIERS: Record<number, number> = { 0: 0, 1: 2, 2: 10, 3: 35 };
 
 function shuffled<T>(items: T[]): T[] {
     const arr = [...items];
@@ -74,10 +76,10 @@ export function generateGrid(): string[] {
 // Rough RTP estimate for the pair-match mechanic, assuming purely random picks (no skill).
 // Exact RTP depends on player memory skill — this is the floor. Use for display only.
 export function memoryRtp(): number {
-    // With 7 triples + 2 doubles, per-attempt random match probability:
-    //   P(match) = (21/25 * 2/24) + (4/25 * 1/24) = 46/600 ≈ 0.0767
+    // With 3 triples + 8 doubles, per-attempt random match probability:
+    //   P(match) = (9/25 * 2/24) + (16/25 * 1/24) = 34/600 ≈ 0.0567
     // Binomial probabilities for 3 independent attempts (close enough for RTP estimate):
-    const p = (21 * 2 + 4 * 1) / (25 * 24); // 46/600 ≈ 0.07667
+    const p = (9 * 2 + 16 * 1) / (25 * 24); // 34/600 ≈ 0.05667
     const q = 1 - p;
     const probs = [q ** 3, 3 * q ** 2 * p, 3 * q * p ** 2, p ** 3];
     return Object.entries(MATCH_MULTIPLIERS).reduce((sum, [k, m]) => sum + m * probs[Number(k)], 0);
@@ -165,7 +167,7 @@ async function recoverStaleRounds(): Promise<void> {
 module.exports = function (app: express.Application) {
 
     app.get(`/api/casino/games/${SLUG}/odds`, authenticateToken, function (_req: express.Request, res: express.Response) {
-        const p = (21 * 2 + 4 * 1) / (25 * 24); // random match probability per attempt
+        const p = (9 * 2 + 16 * 1) / (25 * 24); // random match probability per attempt
         const q = 1 - p;
         const binomial = [q ** 3, 3 * q ** 2 * p, 3 * q * p ** 2, p ** 3];
         return res.json({
