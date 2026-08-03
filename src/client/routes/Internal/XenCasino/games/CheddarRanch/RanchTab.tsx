@@ -36,11 +36,14 @@ import {
 import {
     ActionButton,
     DECAY_SHIELD_KEY,
+    FeedShopList,
     feedReadyAt,
     feedUnitsRequired,
     formatCountdown,
     HatchTile,
     RanchCard,
+    RanchShopItemList,
+    ShopModal,
     SPECIES_EMOJI,
     STAT_ICON,
     STAT_ORDER,
@@ -311,70 +314,23 @@ function CreatureDetails({ creature, feedCooldownMs, releaseSellValue, onRelease
                 )}
             </Box>
 
-            <Dialog open={shopOpen} onClose={() => setShopOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-                <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    Ranch Shop
-                    <IconButton onClick={() => setShopOpen(false)} aria-label="Close">
-                        <CloseIcon />
-                    </IconButton>
-                </DialogTitle>
-                <DialogContent sx={{ pb: 3, display: "flex", flexDirection: "column", gap: 2 }}>
-                    <Typography variant="caption" color="text.secondary">
-                        Buy one at a time here. Bulk discounts (5x/10x) for Feed are in the Store.
-                    </Typography>
-                    {feedItem && (
-                        <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                                <Box sx={{ color: "primary.main" }}><RestaurantIcon /></Box>
-                                <Box sx={{ flexGrow: 1 }}>
-                                    <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
-                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{feedItem.label} (x{owned})</Typography>
-                                        <Typography variant="caption" color="text.secondary">{formatCheddar(feedItem.price)} each</Typography>
-                                    </Box>
-                                    <Typography variant="caption" color="text.secondary">Feeds {TYPE_LABEL[creature.type]} creatures</Typography>
-                                </Box>
-                            </Box>
-                            <Button size="small" variant="contained" fullWidth disabled={isBuyingFeed} onClick={handleBuyFeed} sx={{ textTransform: "none" }}>
-                                Buy 1 ({formatCheddar(feedItem.price)})
-                            </Button>
-                        </Box>
-                    )}
-                    {serumItem && (
-                        <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                                <Box sx={{ color: "primary.main" }}><AutorenewIcon /></Box>
-                                <Box sx={{ flexGrow: 1 }}>
-                                    <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
-                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{serumItem.label} (x{serumOwned})</Typography>
-                                        <Typography variant="caption" color="text.secondary">{formatCheddar(serumItem.price)} each</Typography>
-                                    </Box>
-                                    <Typography variant="caption" color="text.secondary">{serumItem.description}</Typography>
-                                </Box>
-                            </Box>
-                            <Button size="small" variant="contained" fullWidth disabled={isBuyingShopItem} onClick={() => handleBuyItem(serumItem)} sx={{ textTransform: "none" }}>
-                                Buy 1 ({formatCheddar(serumItem.price)})
-                            </Button>
-                        </Box>
-                    )}
-                    {shieldItem && (
-                        <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                                <Box sx={{ color: "primary.main" }}><ShieldIcon /></Box>
-                                <Box sx={{ flexGrow: 1 }}>
-                                    <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
-                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{shieldItem.label} (x{shieldOwned})</Typography>
-                                        <Typography variant="caption" color="text.secondary">{formatCheddar(shieldItem.price)} each</Typography>
-                                    </Box>
-                                    <Typography variant="caption" color="text.secondary">{shieldItem.description}</Typography>
-                                </Box>
-                            </Box>
-                            <Button size="small" variant="contained" fullWidth disabled={isBuyingShopItem} onClick={() => handleBuyItem(shieldItem)} sx={{ textTransform: "none" }}>
-                                Buy 1 ({formatCheddar(shieldItem.price)})
-                            </Button>
-                        </Box>
-                    )}
-                </DialogContent>
-            </Dialog>
+            <ShopModal open={shopOpen} onClose={() => setShopOpen(false)} title="Ranch Shop">
+                <Typography variant="caption" color="text.secondary">
+                    Buy one at a time here. Bulk discounts (5x/10x) for Feed are in the Store.
+                </Typography>
+                <FeedShopList feedItems={feedItem ? [feedItem] : []} mode="single" onBuy={handleBuyFeed} isBuying={isBuyingFeed} />
+                <RanchShopItemList
+                    items={[serumItem, shieldItem].filter((i): i is RanchShopItem => !!i)}
+                    icon={(item) => (item.key === TYPE_SWAP_SERUM_KEY ? <AutorenewIcon /> : <ShieldIcon />)}
+                    onBuy={(key) => {
+                        const item = shopItems.find((i) => i.key === key);
+                        if (item) {
+                            handleBuyItem(item);
+                        }
+                    }}
+                    isBuying={isBuyingShopItem}
+                />
+            </ShopModal>
         </Box>
     );
 }

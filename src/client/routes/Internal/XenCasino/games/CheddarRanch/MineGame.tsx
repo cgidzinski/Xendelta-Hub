@@ -1,5 +1,5 @@
 import { ReactNode, useState } from "react";
-import { Alert, Box, Button, Card, CardActionArea, Chip, Dialog, DialogContent, DialogTitle, IconButton, LinearProgress, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, Chip, IconButton, LinearProgress, Stack, Typography } from "@mui/material";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -7,16 +7,14 @@ import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import DiamondIcon from "@mui/icons-material/Diamond";
 import WarningIcon from '@mui/icons-material/Warning';
 import PersonPinIcon from "@mui/icons-material/PersonPin";
-import FlareIcon from "@mui/icons-material/Flare";
 import StairsIcon from "@mui/icons-material/Stairs";
 import BoltIcon from "@mui/icons-material/Bolt";
 import TerrainIcon from "@mui/icons-material/Terrain";
-import CloseIcon from "@mui/icons-material/Close";
 import { useSnackbar } from "notistack";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import { formatCheddar } from "../../utils/currency";
 import { MineTile, useCasinoMine } from "../../../../../hooks/casino/useCasinoMine";
-import { MineEquipmentItem, MineEquipmentList } from "./shared";
+import { MineEquipmentItem, MineEquipmentList, ShopModal } from "./shared";
 
 const VIEW_RADIUS = 3; // tiles visible in every direction around the player
 const GRID_COLS = VIEW_RADIUS * 2 + 1; // fixed viewport width, keeps the page from growing
@@ -91,48 +89,28 @@ function StatLine({ icon, children }: { icon: ReactNode; children: ReactNode }) 
 }
 
 
-function StatTile({ label, value, color }: { label: string; value: ReactNode; color?: string }) {
+function StatTile({ label, value, color, onClick, filled }: { label: string; value: ReactNode; color?: string; onClick?: () => void; filled?: boolean }) {
     return (
-        <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, p: 1, textAlign: "center" }}>
+        <Box
+            onClick={onClick}
+            sx={{
+                border: "1px solid",
+                borderColor: filled ? color : "divider",
+                borderRadius: 1.5,
+                p: 1,
+                textAlign: "center",
+                bgcolor: filled ? `${color}1A` : undefined,
+                transition: "bgcolor 0.15s",
+                ...(onClick && { cursor: "pointer", "&:hover": { bgcolor: filled ? `${color}33` : "action.hover" } }),
+            }}
+        >
             <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                 {label}
             </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 700, color }}>
+            <Typography variant="body2" sx={{ fontWeight: 700, color: filled ? color : color }}>
                 {value}
             </Typography>
         </Box>
-    );
-}
-
-// Same footprint as StatTile, but a real tappable control - a colored border + tinted
-// background + hover glow set it apart from the plain, non-interactive tiles beside it, so
-// "this one does something" reads at a glance.
-function FlareTile({ count, disabled, onClick }: { count: number; disabled: boolean; onClick: () => void }) {
-    return (
-        <CardActionArea
-            onClick={onClick}
-            disabled={disabled}
-            sx={{
-                border: "2px solid",
-                borderColor: "info.main",
-                borderRadius: 1.5,
-                p: "7px",
-                textAlign: "center",
-                bgcolor: "rgba(41, 182, 246, 0.08)",
-                transition: "box-shadow 0.15s ease, transform 0.1s ease",
-                "&:hover": { boxShadow: "0 0 10px 1px rgba(41, 182, 246, 0.4)" },
-                "&:active": { transform: "scale(0.96)" },
-                "&.Mui-disabled": { borderColor: "divider", bgcolor: "transparent", opacity: 0.5 },
-            }}
-        >
-            <FlareIcon sx={{ fontSize: 16, color: "info.main", display: "block", mx: "auto" }} />
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                Flare
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 700, color: "info.main" }}>
-                {count}
-            </Typography>
-        </CardActionArea>
     );
 }
 
@@ -403,18 +381,25 @@ export default function MineGame() {
             </Card>
 
             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mt: 2, gap: 1.5 }}>
+                {/* Actions counter */}
+                <Typography variant="caption" color="text.secondary">
+                    Actions:{" "}
+                    <Box component="span" sx={{ fontWeight: 700, color: digsRemaining > 10 ? "info.main" : digsRemaining > 5 ? "warning.main" : "error.main" }}>
+                        {digsRemaining}/{dailyDigCap}
+                    </Box>
+                </Typography>
+
                 {/* Stats row */}
                 <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: "center", alignItems: "flex-start" }}>
                     <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
-                        <StatTile label="Actions" value={`${digsRemaining}/${dailyDigCap}`} color="primary.main" />
+                        <StatTile label="Ladders" value={ladderCount} color="warning.main" />
                         <Button variant="outlined" size="small" onClick={() => setShopOpen(true)} sx={{ textTransform: "none", minWidth: 60 }}>
                             Shop
                         </Button>
                     </Box>
-                    <StatTile label="Ladders" value={ladderCount} color="warning.main" />
                     <StatTile label="Explosives" value={explosiveCount} color="error.main" />
                     <StatTile label="Supports" value={supportCount} color="success.main" />
-                    <FlareTile count={flareCount} disabled={flareCount <= 0 || isFlaring} onClick={handleFlare} />
+                    <StatTile label="Flare" value={flareCount} color="info.main" filled={flareCount > 0} onClick={flareCount > 0 && !isFlaring ? handleFlare : undefined} />
                 </Box>
 
                 {/* D-pad */}
@@ -441,63 +426,49 @@ export default function MineGame() {
                 </Box>
             </Box>
 
-            <Dialog
-                open={shopOpen}
-                onClose={() => { setShopOpen(false); setConfirmingReset(false); }}
-                maxWidth="xs"
-                fullWidth
-                PaperProps={{ sx: { borderRadius: 3 } }}
-            >
-                <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    Mine Shop
-                    <IconButton onClick={() => { setShopOpen(false); setConfirmingReset(false); }} aria-label="Close">
-                        <CloseIcon />
-                    </IconButton>
-                </DialogTitle>
-                <DialogContent sx={{ pb: 3, display: "flex", flexDirection: "column", gap: 2 }}>
-                    <Typography variant="caption" color="text.secondary">
-                        Buy one at a time here. Sell equipment from your Inventory. Bulk discounts (5x/10x) are in the Store.
-                    </Typography>
-                    <MineEquipmentList
-                        prices={state.prices}
-                        owned={equipmentOwned}
-                        mode="single"
-                        onBuy={handleBuy}
-                        isBuying={isBuying}
-                    />
+            <ShopModal open={shopOpen} onClose={() => { setShopOpen(false); setConfirmingReset(false); }} title="Mine Shop">
+                <Typography variant="caption" color="text.secondary">
+                    Buy one at a time here. Sell equipment from your Inventory. Bulk discounts (5x/10x) are in the Store.
+                </Typography>
+                <MineEquipmentList
+                    prices={state.prices}
+                    owned={equipmentOwned}
+                    mode="single"
+                    onBuy={handleBuy}
+                    isBuying={isBuying}
+                />
 
-                    <Box sx={{ borderTop: "1px solid", borderColor: "divider", pt: 2 }}>
-                        {!confirmingReset ? (
-                            <Button
-                                variant="outlined"
-                                color="error"
-                                fullWidth
-                                disabled={isResetting}
-                                onClick={() => setConfirmingReset(true)}
-                                sx={{ textTransform: "none" }}
-                            >
-                                Reset Map ({formatCheddar(state.prices.reset.cost)})
-                            </Button>
-                        ) : (
-                            <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "error.main", borderRadius: 1 }}>
-                                <Typography variant="body2" color="text.secondary">
-                                    Wipes your explored map and walks you back to the surface for {formatCheddar(state.prices.reset.cost)}.
-                                    Equipment, deepest depth ({state.deepestDepthReached}), and best find (
-                                    {state.oreTiers.find((t) => t.key === state.bestGemTier)?.label ?? "none yet"}) are all kept.
-                                </Typography>
-                                <Box sx={{ display: "flex", gap: 1 }}>
-                                    <Button variant="outlined" fullWidth disabled={isResetting} onClick={() => setConfirmingReset(false)}>
-                                        Cancel
-                                    </Button>
-                                    <Button variant="contained" color="error" fullWidth disabled={isResetting} onClick={handleResetMap}>
-                                        Confirm
-                                    </Button>
-                                </Box>
+                <Box sx={{ borderTop: "1px solid", borderColor: "divider", pt: 2 }}>
+                    {!confirmingReset ? (
+                        <Button
+                            variant="outlined"
+                            color="error"
+                            fullWidth
+                            disabled={isResetting}
+                            onClick={() => setConfirmingReset(true)}
+                            sx={{ textTransform: "none" }}
+                        >
+                            Reset Map ({formatCheddar(state.prices.reset.cost)})
+                        </Button>
+                    ) : (
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 1.5, border: "1px solid", borderColor: "error.main", borderRadius: 1 }}>
+                            <Typography variant="body2" color="text.secondary">
+                                Wipes your explored map and walks you back to the surface for {formatCheddar(state.prices.reset.cost)}.
+                                Equipment, deepest depth ({state.deepestDepthReached}), and best find (
+                                {state.oreTiers.find((t) => t.key === state.bestGemTier)?.label ?? "none yet"}) are all kept.
+                            </Typography>
+                            <Box sx={{ display: "flex", gap: 1 }}>
+                                <Button variant="outlined" fullWidth disabled={isResetting} onClick={() => setConfirmingReset(false)}>
+                                    Cancel
+                                </Button>
+                                <Button variant="contained" color="error" fullWidth disabled={isResetting} onClick={handleResetMap}>
+                                    Confirm
+                                </Button>
                             </Box>
-                        )}
-                    </Box>
-                </DialogContent>
-            </Dialog>
+                        </Box>
+                    )}
+                </Box>
+            </ShopModal>
 
             <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap sx={{ mt: 3, justifyContent: "center" }}>
                 <StatLine icon={<PersonPinIcon sx={{ color: "info.light" }} />}>You</StatLine>

@@ -32,7 +32,7 @@ import { useSnackbar } from "notistack";
 import GameWrapper, { OddsSection } from "../../components/GameWrapper";
 import { formatCheddar } from "../../utils/currency";
 import { GardenSquare, ProtectionItem, SeedTier, useCasinoGarden } from "../../../../../hooks/casino/useCasinoGarden";
-import { ProtectionShopList, SEED_EMOJI } from "./shared";
+import { ProtectionShopList, SEED_EMOJI, ShopModal } from "./shared";
 
 // Ticks once a second for as long as `targetMs` is non-null, reading Date.now() fresh on
 // every tick rather than trusting a slower page-level clock - this is what makes the
@@ -732,20 +732,12 @@ export default function GardenGame() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={shopOpen} onClose={() => setShopOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-                <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    Garden Shop
-                    <IconButton onClick={() => setShopOpen(false)} aria-label="Close">
-                        <CloseIcon />
-                    </IconButton>
-                </DialogTitle>
-                <DialogContent sx={{ pb: 3, display: "flex", flexDirection: "column", gap: 2 }}>
-                    <Typography variant="caption" color="text.secondary">
-                        Crop protection - buy one at a time here. Seeds are bought from an empty plot or the Store.
-                    </Typography>
-                    <ProtectionShopList protectionItems={protectionItems} mode="single" onBuy={handleBuyProtection} isBuying={isBuyingProtection} />
-                </DialogContent>
-            </Dialog>
+            <ShopModal open={shopOpen} onClose={() => setShopOpen(false)} title="Garden Shop">
+                <Typography variant="caption" color="text.secondary">
+                    Crop protection - buy one at a time here. Seeds are bought from an empty plot or the Store.
+                </Typography>
+                <ProtectionShopList protectionItems={protectionItems} mode="single" onBuy={handleBuyProtection} isBuying={isBuyingProtection} />
+            </ShopModal>
         </GameWrapper>
     );
 }

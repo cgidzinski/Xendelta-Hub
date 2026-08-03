@@ -4,9 +4,14 @@ import {
     Button,
     CardActionArea,
     Chip,
+    Dialog,
+    DialogContent,
+    DialogTitle,
+    IconButton,
     LinearProgress,
     Typography,
 } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import RestaurantIcon from "@mui/icons-material/Restaurant";
 import SpeedIcon from "@mui/icons-material/Speed";
 import BatteryChargingFullIcon from "@mui/icons-material/BatteryChargingFull";
@@ -21,7 +26,7 @@ import BugReportIcon from "@mui/icons-material/BugReport";
 import ScienceIcon from "@mui/icons-material/Science";
 import SpaIcon from "@mui/icons-material/Spa";
 import { formatCheddar } from "../../utils/currency";
-import { RanchCreature, RanchStats, RanchType } from "../../../../../hooks/casino/useCasinoRanch";
+import { RanchCreature, RanchFeedItem, RanchShopItem, RanchStats, RanchType } from "../../../../../hooks/casino/useCasinoRanch";
 import { ProtectionItem, SeedTier } from "../../../../../hooks/casino/useCasinoGarden";
 
 export const COURSE_TICKET_KEY = "course-ticket";
@@ -277,9 +282,8 @@ interface BulkQuantityButtonsProps {
 }
 
 // The 1x/5x/10x bulk-buy grid, shared by Feed, Garden (Store's Garden tab), and Mine
-// Equipment's bulk buttons - shows the struck-through full price plus a "-5%/-10%" badge
-// whenever bulkPrice actually discounts the quantity, so the saving reads at a glance
-// instead of just landing on a smaller number.
+// Equipment's bulk buttons. Layout: quantity top-left, discount top-right, final price
+// centred at the bottom — clean two-line scan per button.
 export function BulkQuantityButtons({ unitCost, color, disabled, onBuy }: BulkQuantityButtonsProps) {
     return (
         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
@@ -294,23 +298,142 @@ export function BulkQuantityButtons({ unitCost, color, disabled, onBuy }: BulkQu
                         color={color}
                         disabled={disabled}
                         onClick={() => onBuy(qty)}
-                        sx={{ textTransform: "none", flexDirection: "column", lineHeight: 1.2, py: 0.75 }}
+                        sx={{ textTransform: "none", flexDirection: "column", justifyContent: "space-between", gap: 1, py: 0.75, px: 1 }}
                     >
-                        <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2, color: "inherit" }}>
-                            {qty}x{pctOff > 0 && ` −${pctOff}%`}
-                        </Typography>
-                        {pctOff > 0 && (
-                            <Typography sx={{ fontSize: 9, lineHeight: 1.2, textDecoration: "line-through", opacity: 0.6, color: "inherit" }}>
-                                {formatCheddar(unitCost * qty)}
+                        <Box sx={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2, color: "inherit" }}>
+                                {qty}x
                             </Typography>
-                        )}
-                        <Typography sx={{ fontSize: 10, lineHeight: 1.2, opacity: 0.85, color: "inherit" }}>
+                            {pctOff > 0 && (
+                                <Typography sx={{ fontSize: 9, fontWeight: 700, lineHeight: 1.2, opacity: 0.8, color: "inherit" }}>
+                                    −{pctOff}%
+                                </Typography>
+                            )}
+                        </Box>
+                        <Typography sx={{ fontSize: 11, fontWeight: 700, lineHeight: 1.2, textAlign: "center", color: "inherit" }}>
                             {formatCheddar(discounted)}
                         </Typography>
                     </Button>
                 );
             })}
         </Box>
+    );
+}
+
+interface ShopModalProps {
+    open: boolean;
+    onClose: () => void;
+    title: string;
+    children: ReactNode;
+}
+
+// The generic "buy stuff" popup shell - shared by every in-game Shop dialog (Ranch, Garden,
+// Mine) and the Store's category dialogs, so they all get the same look with one place to
+// change it. Content (item lists, captions, extra actions like Mine's Reset Map) is entirely
+// up to the caller via `children`.
+export function ShopModal({ open, onClose, title, children }: ShopModalProps) {
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+            <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                {title}
+                <IconButton onClick={onClose} aria-label="Close">
+                    <CloseIcon />
+                </IconButton>
+            </DialogTitle>
+            <DialogContent sx={{ pb: 3, display: "flex", flexDirection: "column", gap: 2 }}>
+                {children}
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+interface FeedShopListProps {
+    feedItems: RanchFeedItem[];
+    // "bulk" (Store's Feed tab): 1x/5x/10x buy buttons showing the discounted total.
+    // "single" (Ranch's own Shop dialog): one Buy-1 button per feed type - same split as
+    // SeedShopList/ProtectionShopList/MineEquipmentList.
+    mode: "bulk" | "single";
+    onBuy: (type: RanchType, quantity: number) => void;
+    isBuying: boolean;
+}
+
+// Feed rows - shared by RanchTab's in-game Shop dialog (single-buy, scoped to the selected
+// creature's type) and the Store's Feed tab (bulk, every type at once), so both read the
+// same live prices/owned counts and never drift.
+export function FeedShopList({ feedItems, mode, onBuy, isBuying }: FeedShopListProps) {
+    return (
+        <>
+            {feedItems.map((item) => (
+                <Box key={item.key} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Typography sx={{ fontSize: 24 }}>{TYPE_EMOJI[item.type]}</Typography>
+                        <Box sx={{ flexGrow: 1 }}>
+                            <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    {item.label} (x{item.quantity})
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    {formatCheddar(item.price)} each
+                                </Typography>
+                            </Box>
+                            <Typography variant="caption" color="text.secondary">
+                                Feeds {TYPE_LABEL[item.type]} creatures
+                            </Typography>
+                        </Box>
+                    </Box>
+                    {mode === "bulk" ? (
+                        <BulkQuantityButtons unitCost={item.price} color="primary" disabled={isBuying} onBuy={(qty) => onBuy(item.type, qty)} />
+                    ) : (
+                        <Button size="small" variant="contained" fullWidth disabled={isBuying} onClick={() => onBuy(item.type, 1)} sx={{ textTransform: "none" }}>
+                            Buy 1 ({formatCheddar(item.price)})
+                        </Button>
+                    )}
+                </Box>
+            ))}
+        </>
+    );
+}
+
+interface RanchShopItemListProps {
+    items: RanchShopItem[];
+    icon: (item: RanchShopItem) => ReactNode;
+    color?: "primary" | "success" | "warning" | "error" | "info";
+    onBuy: (key: string) => void;
+    isBuying: boolean;
+}
+
+// Serum/Shield/Tonic rows - always single-buy, since /shop/:key/buy (the endpoint backing
+// every RanchShopItem) has no quantity param and always charges/grants exactly 1, unlike
+// Feed/Seed/Protection/Equipment which all support server-side bulk pricing. Shared by
+// RanchTab's in-game Shop dialog and the Store's Tonics tab, so both read the same live
+// prices/owned counts and never drift.
+export function RanchShopItemList({ items, icon, color = "primary", onBuy, isBuying }: RanchShopItemListProps) {
+    return (
+        <>
+            {items.map((item) => (
+                <Box key={item.key} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Box sx={{ color: `${color}.main` }}>{icon(item)}</Box>
+                        <Box sx={{ flexGrow: 1 }}>
+                            <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    {item.label} (x{item.quantity})
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    {formatCheddar(item.price)} each
+                                </Typography>
+                            </Box>
+                            <Typography variant="caption" color="text.secondary">
+                                {item.description}
+                            </Typography>
+                        </Box>
+                    </Box>
+                    <Button size="small" variant="contained" fullWidth disabled={isBuying} onClick={() => onBuy(item.key)} sx={{ textTransform: "none" }}>
+                        Buy 1 ({formatCheddar(item.price)})
+                    </Button>
+                </Box>
+            ))}
+        </>
     );
 }
 

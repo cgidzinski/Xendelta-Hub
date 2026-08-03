@@ -18,7 +18,7 @@ import { useSnackbar } from "notistack";
 import { formatCheddar } from "../../utils/currency";
 import { RanchTonicRecipe, useCasinoRanch } from "../../../../../hooks/casino/useCasinoRanch";
 import { MineEquipmentItem, useCasinoMine } from "../../../../../hooks/casino/useCasinoMine";
-import { ITEM_EMOJI, MINE_EQUIPMENT_ROWS, STAT_ICON } from "./shared";
+import { ITEM_EMOJI, MINE_EQUIPMENT_ROWS, PROTECTION_ITEM_ROWS, STAT_ICON } from "./shared";
 
 function ItemsPanel() {
     const { items, sellItem, isSellingItem } = useCasinoRanch();
@@ -33,6 +33,16 @@ function ItemsPanel() {
         : { ladder: 0, explosive: 0, support: 0, flare: 0 };
     const ownedEquipment = MINE_EQUIPMENT_ROWS.filter((row) => equipmentOwned[row.key] > 0);
     const selectedRow = ownedEquipment.find((row) => row.key === selectedEquipment) ?? null;
+
+    function itemIcon(key: string) {
+        const row = PROTECTION_ITEM_ROWS.find((r) => r.key === key);
+        return row ? row.icon : (ITEM_EMOJI[key] ?? "📦");
+    }
+
+    function itemColor(key: string): string {
+        const row = PROTECTION_ITEM_ROWS.find((r) => r.key === key);
+        return row ? `${row.color}.main` : "text.primary";
+    }
 
     const handleSell = () => {
         if (!selectedItem) {
@@ -93,7 +103,7 @@ function ItemsPanel() {
                                 label={`x${item.quantity}`}
                                 sx={{ position: "absolute", top: 6, right: 6, height: 20, fontSize: 11, fontWeight: 700 }}
                             />
-                            <Typography sx={{ fontSize: 36 }}>{ITEM_EMOJI[item.key] ?? "📦"}</Typography>
+                            <Box sx={{ fontSize: 36, lineHeight: 1, color: itemColor(item.key) }}>{itemIcon(item.key)}</Box>
                             <Typography variant="caption" sx={{ textAlign: "center", fontWeight: 600 }}>
                                 {item.label}
                             </Typography>
@@ -148,7 +158,7 @@ function ItemsPanel() {
                 </DialogTitle>
                 {selectedItem && (
                     <DialogContent sx={{ pb: 3, display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5 }}>
-                        <Typography sx={{ fontSize: 48 }}>{ITEM_EMOJI[selectedItem.key] ?? "📦"}</Typography>
+                        <Box sx={{ fontSize: 48, lineHeight: 1, color: "text.primary" }}>{itemIcon(selectedItem.key)}</Box>
                         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                             {selectedItem.label}
                         </Typography>
