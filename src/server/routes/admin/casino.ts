@@ -6,8 +6,8 @@ import { XENCASINO_DISCORD_ID } from "../../config/weeabets";
 import { getCasinoStatus } from "../../utils/casinoStatus";
 import { AuthenticatedRequest } from "../../types/AuthenticatedRequest";
 import { randomUUID } from "crypto";
-import { rangeCutoff } from "../../utils/statsRange";
-const { XenCasino, XenCasinoActivity } = require("../../models/xenCasino");
+import { rangeCutoff, tzMidnightUtc, tzDayKey } from "../../utils/statsRange";
+const { XenCasino, XenCasinoActivity, CASINO_TIMEZONE } = require("../../models/xenCasino");
 const { User } = require("../../models/user");
 
 // Mirrors the client-side CASINO_GAMES_REGISTRY order - stats are returned in this
@@ -244,15 +244,15 @@ module.exports = function (app: express.Application) {
         try {
             var days = Math.min(Math.max(parseInt(req.query.days as string) || 5, 1), 30);
 
-            var now = new Date();
-            var cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - (days - 1) * 24 * 60 * 60 * 1000);
+            var cutoff = tzMidnightUtc(days - 1);
 
             var dayMap = new Map<string, { amountIn: number; amountOut: number; roundsPlayed: number }>();
 
-            // Seed all days so zero-activity days still appear.
+            // Seed all days (in CASINO_TIMEZONE, matching the $dateToString grouping below) so
+            // zero-activity days still appear.
             for (var d = 0; d < days; d++) {
-                var date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - d * 24 * 60 * 60 * 1000);
-                var key = date.toISOString().slice(0, 10);
+                var date = new Date(Date.now() - d * 24 * 60 * 60 * 1000);
+                var key = tzDayKey(date);
                 dayMap.set(key, { amountIn: 0, amountOut: 0, roundsPlayed: 0 });
             }
 
@@ -260,7 +260,7 @@ module.exports = function (app: express.Application) {
                 { $match: { createdAt: { $gte: cutoff } } },
                 {
                     $group: {
-                        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "UTC" } },
+                        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: CASINO_TIMEZONE } },
                         amountIn: { $sum: "$wager" },
                         amountOut: { $sum: "$payout" },
                         roundsPlayed: { $sum: 1 },
