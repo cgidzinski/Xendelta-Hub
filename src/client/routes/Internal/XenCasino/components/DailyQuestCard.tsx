@@ -9,10 +9,10 @@ interface DailyQuestCardProps {
 }
 
 // Three daily quests stacked vertically at the top of the games list:
-// - Play 5 different games → 10k
-// - Play 10 rounds → 10k
-// - Play 20 rounds → 50k
-// Each tracks independently and can be claimed separately. Progress resets at UTC midnight.
+// - Play 5 rounds → 10k
+// - Play 10 rounds across 3+ games → 10k
+// - Play 20 rounds across 5+ games → 50k
+// Each tracks independently and can be claimed separately. Progress resets at midnight in CASINO_TIMEZONE.
 export default function DailyQuestCard({ sx }: DailyQuestCardProps) {
     const { enqueueSnackbar } = useSnackbar();
     const { quests, isLoading, claim, isClaiming } = useCasinoDailyQuest();

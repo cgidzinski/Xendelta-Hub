@@ -226,10 +226,12 @@ xenCasinoRoundSchema.statics.recordSweepFailure = async function (roundId) {
 
 var XenCasinoRound = mongoose.model("XenCasinoRound", xenCasinoRoundSchema);
 
+// rounds-10/rounds-20 additionally require `minGames` distinct games played that day
+// (see dailyQuestsStatus's canClaim) - stops farming the quest by spamming one cheap game.
 var DAILY_QUEST_DEFINITIONS = [
-  { key: "unique-games", target: 5, reward: 10000, label: "Play 5 different games" },
-  { key: "rounds-10", target: 10, reward: 10000, label: "Play 10 rounds" },
-  { key: "rounds-20", target: 20, reward: 50000, label: "Play 20 rounds" },
+  { key: "rounds-5", target: 5, reward: 10000, label: "Play 5 rounds" },
+  { key: "rounds-10", target: 10, reward: 10000, label: "Play 10 rounds (3+ games)", minGames: 3 },
+  { key: "rounds-20", target: 20, reward: 50000, label: "Play 20 rounds (5+ games)", minGames: 5 },
 ];
 
 var DEFAULT_DAILY_QUESTS = DAILY_QUEST_DEFINITIONS.map(function (def) {
@@ -254,37 +256,20 @@ var xenCasinoUserStateSchema = new mongoose.Schema({
     },
   ],
   gamesPlayedToday: [{ type: String }], // deduplicated list of game slugs played today
+  gamesPlayedTodayDate: { type: String, default: null }, // "YYYY-MM-DD" gamesPlayedToday was last touched - lazy-reset key
 });
 
 // Returns status for all three daily quests. Lazy-resets any quest whose stored date
-// doesn't match today (UTC). `roundsPlayedToday` and `gamesPlayedToday` are derived
-// from the dailyQuests array directly for rounds quests, plus gamesPlayedToday for
-// the unique-games quest.
+// doesn't match today, and treats gamesPlayedToday as empty if it's stale, without
+// persisting anything (the actual reset is written back next time recordRoundPlayed runs).
 function dailyQuestsStatus(doc) {
   var today = todayKey();
-  var uniqueGames = doc.gamesPlayedToday || [];
-
-  // Find any rounds quest to get total rounds played today.
-  var roundsQuest = (doc.dailyQuests || []).find(function (q) {
-    return (q.key === "rounds-10" || q.key === "rounds-20") && q.date === today;
-  });
-  var roundsPlayedToday = roundsQuest ? roundsQuest.progress : 0;
+  var uniqueGames = (doc.gamesPlayedTodayDate === today) ? (doc.gamesPlayedToday || []) : [];
 
   return DAILY_QUEST_DEFINITIONS.map(function (def) {
     var quest = (doc.dailyQuests || []).find(function (q) { return q.key === def.key && q.date === today; });
-    var progress = 0;
-    var claimed = false;
-
-    if (def.key === "unique-games") {
-      // Unique-games progress always comes from gamesPlayedToday length,
-      // regardless of whether the quest entry is fresh.
-      progress = uniqueGames.length;
-      claimed = quest ? quest.claimed : false;
-    } else if (quest) {
-      // Rounds quests: progress from the quest's own field.
-      progress = quest.progress;
-      claimed = quest.claimed;
-    }
+    var progress = quest ? quest.progress : 0;
+    var claimed = quest ? quest.claimed : false;
 
     return {
       key: def.key,
@@ -293,7 +278,7 @@ function dailyQuestsStatus(doc) {
       reward: def.reward,
       progress: progress,
       claimed: claimed,
-      canClaim: progress >= def.target && !claimed,
+      canClaim: progress >= def.target && !claimed && uniqueGames.length >= (def.minGames || 0),
     };
   });
 }
@@ -318,16 +303,18 @@ xenCasinoUserStateSchema.statics.recordRoundPlayed = async function (userId, gam
     }
   }
 
-  // Increment progress for rounds quests.
+  // Every daily quest is round-based - increment them all.
   for (var j = 0; j < doc.dailyQuests.length; j++) {
-    if (doc.dailyQuests[j].key === "rounds-10" || doc.dailyQuests[j].key === "rounds-20") {
-      doc.dailyQuests[j].progress += 1;
-    }
+    doc.dailyQuests[j].progress += 1;
   }
 
-  // Track unique games.
-  if (game && (!doc.gamesPlayedToday || doc.gamesPlayedToday.indexOf(game) === -1)) {
-    if (!doc.gamesPlayedToday) doc.gamesPlayedToday = [];
+  // Track distinct games played today (gates rounds-10/rounds-20 claiming) - lazy-reset
+  // on date change, same pattern as the dailyQuests loop above.
+  if (doc.gamesPlayedTodayDate !== today) {
+    doc.gamesPlayedToday = [];
+    doc.gamesPlayedTodayDate = today;
+  }
+  if (game && doc.gamesPlayedToday.indexOf(game) === -1) {
     doc.gamesPlayedToday.push(game);
   }
 
