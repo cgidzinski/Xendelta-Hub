@@ -41,7 +41,7 @@ async function resolveLeaderboardUsers(userIds: string[]): Promise<Map<string, {
 // Flat cheddar (display-unit) rewards for daily quests — defined here for the claim
 // endpoint; the model also has them in DAILY_QUEST_DEFINITIONS for the GET endpoint.
 const DAILY_QUEST_REWARDS: Record<string, number> = {
-    "unique-games": 10000,
+    "rounds-5": 10000,
     "rounds-10": 10000,
     "rounds-20": 50000,
 };
@@ -216,8 +216,9 @@ module.exports = function (app: express.Application) {
         }
     });
 
-    // Today's daily quests — three independent challenges: play 5 different games (10k),
-    // play 10 rounds (10k), and play 20 rounds (50k). Progress resets lazily at UTC midnight.
+    // Today's daily quests — three independent challenges: play 5 rounds (10k), play 10
+    // rounds across 3+ games (10k), and play 20 rounds across 5+ games (50k). Progress
+    // resets lazily at midnight in CASINO_TIMEZONE.
     app.get("/api/casino/daily-quest", authenticateToken, async function (req: express.Request, res: express.Response) {
         const userId = String((req as AuthenticatedRequest).user!._id);
         const quests = await XenCasinoUserState.getDailyQuestStatus(userId);
