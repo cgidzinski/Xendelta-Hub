@@ -122,12 +122,6 @@ const MINE_ORE_TIER_VALUE: Record<string, number> = {
     copper: 1, silver: 2, gold: 4, emerald: 8, ruby: 14, diamond: 25,
 };
 
-function oreValueForDepth(depth: number, tier: string): number {
-    const base = 200 + depth * 60;
-    const multiplier = MINE_ORE_TIER_VALUE[tier] ?? 1;
-    return Math.round(base * multiplier * (0.7 + Math.random() * 1.1));
-}
-
 function mineStateView(doc: any) {
     const m = doc.mine;
     return {
@@ -1945,15 +1939,14 @@ module.exports = function (app: express.Application) {
                 // Ore struck - add to inventory instead of instant payout
                 const tier = result.oreTier!;
                 const tierLabel = require("../models/xenCasinoRanch").MINE_ORE_TIERS.find((t: any) => t.key === tier)?.label ?? tier;
-                const sellValue = oreValueForDepth(result.targetY, tier);
                 const itemKey = tier; // "copper", "silver", etc.
 
                 await XenCasinoRanch.addItem(userId, itemKey, 1);
 
-                // Store sell value metadata — we'll use a naming convention for sell values
-                // The inventory already stores the item; the sell value is computed from the tier
-
-                await recordCasinoRoundPlayed(userId, { game: SLUG, wager: DIG_COST, payout: sellValue });
+                // payout is 0 here - the ore just lands in inventory, no cheddar moves yet.
+                // The real payout gets recorded by items/:key/sell when it's actually sold, so
+                // recording a sell-value payout here too would double-count it in daily-stats.
+                await recordCasinoRoundPlayed(userId, { game: SLUG, wager: DIG_COST, payout: 0 });
 
                 return res.json({
                     status: true,
@@ -2014,6 +2007,7 @@ module.exports = function (app: express.Application) {
             });
 
             const doc = await XenCasinoRanch.addMineEquipment(userId, item, unitAmount * quantity);
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: totalCost, payout: 0 });
             return res.json({ status: true, data: { state: mineStateView(doc), balance: payoutResult.fromNewBalance } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
@@ -2060,6 +2054,7 @@ module.exports = function (app: express.Application) {
                 note: `ranch_mine_sell_${item}`,
             });
 
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: 0, payout: sellValue });
             return res.json({ status: true, data: { state: mineStateView(doc), balance: payoutResult.toNewBalance } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
@@ -2103,6 +2098,7 @@ module.exports = function (app: express.Application) {
             });
 
             const doc = await XenCasinoRanch.resetMineMap(userId);
+            await XenCasinoActivity.record({ game: SLUG, userId, wager: MAP_RESET_COST, payout: 0 });
             return res.json({ status: true, data: { state: mineStateView(doc), balance: null } });
         } catch (err) {
             const status = err instanceof WeeabetsUnavailable ? 503 : err instanceof WeeabetsTransferError ? 400 : 500;
@@ -2346,7 +2342,10 @@ module.exports = function (app: express.Application) {
         }
 
         await XenCasinoRanch.clearHarvestedGardenSquare(userId, squareId);
-        await recordCasinoRoundPlayed(userId, { game: SLUG, wager: 0, payout: totalValue });
+        // payout is 0 here - the produce just lands in inventory, no cheddar moves yet. The
+        // real payout gets recorded by items/:key/sell when it's actually sold, so recording
+        // totalValue here too would double-count it in daily-stats.
+        await recordCasinoRoundPlayed(userId, { game: SLUG, wager: 0, payout: 0 });
 
         return res.json({
             status: true,
