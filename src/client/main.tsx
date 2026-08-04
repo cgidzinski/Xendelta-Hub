@@ -52,6 +52,7 @@ import XenLinkRedirect from "./routes/External/XenLinkRedirect/XenLinkRedirect";
 import XenCasinoLayout from "./routes/Internal/XenCasino/XenCasinoLayout";
 import GamesIndex from "./routes/Internal/XenCasino/GamesIndex";
 import Ledger from "./routes/Internal/XenCasino/Ledger";
+import Leaderboard from "./routes/Internal/XenCasino/Leaderboard";
 import EasySpin from "./routes/Internal/XenCasino/games/EasySpin/EasySpin";
 import Spinmania from "./routes/Internal/XenCasino/games/Spinmania/Spinmania";
 import KittyScratch from "./routes/Internal/XenCasino/games/KittyScratch/KittyScratch";
@@ -184,6 +185,7 @@ const router = createBrowserRouter(
         <Route path="xencasino" element={<XenCasinoLayout />}>
           <Route index element={<GamesIndex />} />
           <Route path="ledger" element={<Ledger />} />
+          <Route path="leaderboard" element={<Leaderboard />} />
           <Route path="games/easy-spin" element={<EasySpin />} />
           <Route path="games/spinmania" element={<Spinmania />} />
           <Route path="games/kitty-scratch" element={<KittyScratch />} />
