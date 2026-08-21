@@ -14,12 +14,17 @@ import {
   updateXenBudgetItemSchema,
   createXenBudgetTagSchema,
   updateXenBudgetTagSchema,
+  createXenBudgetBudgetSchema,
+  updateXenBudgetBudgetSchema,
   xenBudgetBookIdParamSchema,
   xenBudgetItemParamSchema,
   xenBudgetMemberParamSchema,
   xenBudgetTagParamSchema,
+  xenBudgetBudgetParamSchema,
 } from "../utils/validation";
-import { resolveShares, computeImportHash, roundMoney, seedPeriods } from "../utils/xenBudgetUtils";
+import {
+  resolveShares, computeImportHash, roundMoney, seedPeriods, budgetPeriodRange,
+} from "../utils/xenBudgetUtils";
 import { tzMonthKey, zonedWallToUtc } from "../utils/statsRange";
 import { serializeBookFor, serializeBooksFor, serializeItem, serializeItems } from "../utils/xenBudgetSerializer";
 import { notify } from "../utils/notificationUtils";
@@ -92,6 +97,28 @@ function baseItemMatch(bookId: any, q: Record<string, string>): Record<string, a
   else if (q.excluded !== "all") filter.excluded = { $ne: true };
 
   return filter;
+}
+
+// A budget's target has to exist in this book, or it would silently never match: a
+// person who isn't a member has no shares here, and a misspelled tag is on no item.
+function validateBudgetTarget(body: any, book: any): string | null {
+  if (body.scope === "person" && !isMember(book, body.person_id)) {
+    return "That person is not a member of this book";
+  }
+  return null;
+}
+
+function toBudgetFields(body: any): Record<string, any> {
+  return {
+    scope: body.scope,
+    tag: body.scope === "tag" ? body.tag : undefined,
+    person_id: body.scope === "person" ? body.person_id : undefined,
+    period: body.period,
+    amount: roundMoney(body.amount),
+    start_date: body.start_date ? new Date(body.start_date) : undefined,
+    end_date: body.end_date ? new Date(body.end_date) : undefined,
+    active: body.active !== false,
+  };
 }
 
 function broadcastBook(book: any) {
@@ -436,6 +463,174 @@ module.exports = function (app: any) {
       } catch (error) {
         console.error("Error deleting tag:", error);
         res.status(500).json({ status: false, message: "Failed to delete tag" });
+      }
+    });
+
+  // --- Budgets -------------------------------------------------------------
+
+  app.post("/api/xenbudget/books/:bookId/budgets",
+    validateParams(xenBudgetBookIdParamSchema), validate(createXenBudgetBudgetSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const error = validateBudgetTarget(req.body, book);
+        if (error) return res.status(400).json({ status: false, message: error });
+
+        book.budgets.push(toBudgetFields(req.body));
+        await book.save();
+        await book.populate("members", "username avatar");
+        broadcastBook(book);
+        res.json({ status: true, message: "Budget created", data: serializeBookFor(book, callerId(req)) });
+      } catch (error) {
+        console.error("Error creating budget:", error);
+        res.status(500).json({ status: false, message: "Failed to create budget" });
+      }
+    });
+
+  app.put("/api/xenbudget/books/:bookId/budgets/:budgetId",
+    validateParams(xenBudgetBudgetParamSchema), validate(updateXenBudgetBudgetSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const budget = book.budgets.id(req.params.budgetId);
+        if (!budget) return res.status(404).json({ status: false, message: "Budget not found" });
+        const error = validateBudgetTarget(req.body, book);
+        if (error) return res.status(400).json({ status: false, message: error });
+
+        Object.assign(budget, toBudgetFields(req.body));
+        await book.save();
+        await book.populate("members", "username avatar");
+        broadcastBook(book);
+        res.json({ status: true, message: "Budget updated", data: serializeBookFor(book, callerId(req)) });
+      } catch (error) {
+        console.error("Error updating budget:", error);
+        res.status(500).json({ status: false, message: "Failed to update budget" });
+      }
+    });
+
+  app.delete("/api/xenbudget/books/:bookId/budgets/:budgetId",
+    validateParams(xenBudgetBudgetParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const budget = book.budgets.id(req.params.budgetId);
+        if (!budget) return res.status(404).json({ status: false, message: "Budget not found" });
+        book.budgets.pull({ _id: budget._id });
+        await book.save();
+        await book.populate("members", "username avatar");
+        broadcastBook(book);
+        res.json({ status: true, message: "Budget deleted", data: serializeBookFor(book, callerId(req)) });
+      } catch (error) {
+        console.error("Error deleting budget:", error);
+        res.status(500).json({ status: false, message: "Failed to delete budget" });
+      }
+    });
+
+  // GET /api/xenbudget/books/:bookId/budget-status?as_of&currency
+  //
+  // What each active budget has spent in the period it is *currently* in. Every budget
+  // carries its own anchor and period length, so their windows differ; they're all
+  // resolved up front and then measured in one $facet pass over the union range rather
+  // than one query per budget.
+  app.get("/api/xenbudget/books/:bookId/budget-status",
+    validateParams(xenBudgetBookIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const q = req.query as Record<string, string>;
+        const tz = book.timezone || "UTC";
+        const asOf = q.as_of ? new Date(q.as_of) : new Date();
+        const currency = q.currency || book.default_currency;
+
+        const budgets = book.budgets.filter((b: any) => b.active !== false);
+        if (budgets.length === 0) {
+          return res.json({ status: true, message: "No budgets", data: { as_of: asOf.toISOString(), currency, budgets: [] } });
+        }
+
+        const ranges = budgets.map((b: any) => budgetPeriodRange(b, asOf, tz));
+        const unionFrom = new Date(Math.min(...ranges.map((r: any) => r.from.getTime())));
+        const unionTo = new Date(Math.max(...ranges.map((r: any) => r.to.getTime())));
+
+        // Budgets cap spending, so income never counts against them.
+        const base = {
+          book_id: book._id,
+          currency,
+          type: "expense",
+          excluded: { $ne: true },
+          date: { $gte: unionFrom, $lt: unionTo },
+        };
+
+        const facet: Record<string, any[]> = {};
+        budgets.forEach((b: any, i: number) => {
+          const r = ranges[i];
+          // `to` is exclusive: the instant a period ends is the instant the next begins,
+          // so $lt (not $lte) keeps a boundary item from being counted twice.
+          const inPeriod = { date: { $gte: r.from, $lt: r.to } };
+          if (b.scope === "person") {
+            facet[`b${i}`] = [
+              { $match: inPeriod },
+              { $unwind: "$shares" },
+              { $match: { "shares.user_id": b.person_id } },
+              { $group: { _id: null, total: { $sum: "$shares.amount" }, count: { $sum: 1 } } },
+            ];
+          } else if (b.scope === "tag") {
+            facet[`b${i}`] = [
+              { $match: { ...inPeriod, tags: b.tag } },
+              { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } },
+            ];
+          } else {
+            facet[`b${i}`] = [
+              { $match: inPeriod },
+              { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } },
+            ];
+          }
+        });
+
+        const [results] = await XenBudgetItem.aggregate([{ $match: base }, { $facet: facet }]);
+
+        const memberById = new Map<string, any>();
+        (book.members as any[]).forEach((m: any) => {
+          if (m._id) memberById.set(m._id.toString(), m);
+        });
+
+        res.json({
+          status: true,
+          message: "Budget status retrieved",
+          data: {
+            as_of: asOf.toISOString(),
+            currency,
+            timezone: tz,
+            budgets: budgets.map((b: any, i: number) => {
+              const row = results?.[`b${i}`]?.[0];
+              const spent = roundMoney(row?.total || 0);
+              const amount = roundMoney(b.amount);
+              return {
+                _id: b._id.toString(),
+                scope: b.scope,
+                tag: b.tag,
+                person_id: b.person_id,
+                person_name: b.person_id ? (memberById.get(b.person_id)?.username || "Unknown") : undefined,
+                period: b.period,
+                amount,
+                spent,
+                remaining: roundMoney(amount - spent),
+                // Uncapped rather than clamped, so the bar can show how far over it went.
+                percent: amount > 0 ? Math.round((spent / amount) * 100) : 0,
+                over: spent > amount,
+                item_count: row?.count || 0,
+                period_from: ranges[i].from.toISOString(),
+                period_to: ranges[i].to.toISOString(),
+              };
+            }),
+          },
+        });
+      } catch (error) {
+        console.error("Error building budget status:", error);
+        res.status(500).json({ status: false, message: "Failed to build budget status" });
       }
     });
 

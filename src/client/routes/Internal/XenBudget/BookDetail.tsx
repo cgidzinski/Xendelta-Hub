@@ -4,6 +4,7 @@ import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import InsightsIcon from "@mui/icons-material/Insights";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import SavingsIcon from "@mui/icons-material/Savings";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTitle } from "../../../hooks/useTitle";
@@ -45,7 +46,7 @@ export interface BookDetailContext {
 
 // Tab order must match the <Tab> order below; the active tab is derived from the URL
 // rather than stored, so a deep link or a back button lands on the right tab.
-const TAB_PATHS = ["overview", "items", "settings"];
+const TAB_PATHS = ["overview", "items", "budgets", "settings"];
 
 export default function BookDetail() {
     const { bookId = "" } = useParams();
@@ -126,6 +127,7 @@ export default function BookDetail() {
                 >
                     <Tab icon={<InsightsIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Overview" />
                     <Tab icon={<ReceiptLongIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Items" />
+                    <Tab icon={<SavingsIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Budgets" />
                     <Tab icon={<SettingsIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Settings" />
                 </Tabs>
             </Box>

@@ -6,7 +6,9 @@ import {
 import InsightsIcon from "@mui/icons-material/Insights";
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
+import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
 import TagChip, { resolveTagColor } from "./components/TagChip";
+import BudgetProgressBar from "./components/BudgetProgressBar";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { formatCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
@@ -24,6 +26,8 @@ export default function BookOverview() {
     const { book, currency, onCurrencyChange } = useOutletContext<BookDetailContext>();
     const navigate = useNavigate();
     const { summary, isLoading, isError, error } = useXenBudgetSummary(book._id, { currency });
+    const { budgets: budgetStatus } = useXenBudgetStatus(book._id, currency);
+    const overBudgetCount = budgetStatus.filter((b) => b.over).length;
 
     const tagRows = useMemo(() => {
         if (!summary) return [];
@@ -67,6 +71,30 @@ export default function BookOverview() {
                     color={totals.net < 0 ? "error.main" : "success.main"} signed
                 />
             </Stack>
+
+            {budgetStatus.length > 0 && (
+                <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+                        <Typography variant="caption" sx={sectionLabelSx}>Budgets</Typography>
+                        {overBudgetCount > 0 && (
+                            <Typography variant="caption" color="error.main">
+                                {overBudgetCount} over
+                            </Typography>
+                        )}
+                    </Stack>
+                    <Stack spacing={2}>
+                        {budgetStatus.map((budget) => (
+                            <BudgetProgressBar
+                                key={budget._id}
+                                budget={budget}
+                                currency={summary.currency}
+                                tagRegistry={book.tags}
+                                onClick={() => navigate(`/internal/xenbudget/books/${book._id}/budgets`)}
+                            />
+                        ))}
+                    </Stack>
+                </Card>
+            )}
 
             {nothingYet ? (
                 <Box sx={emptyStateSx}>

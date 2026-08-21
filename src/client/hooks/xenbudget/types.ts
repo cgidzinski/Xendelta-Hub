@@ -160,6 +160,42 @@ export type UpdateItemInput = Partial<CreateItemInput> & {
     flagged?: boolean;
 };
 
+export interface BudgetStatus {
+    _id: string;
+    scope: BudgetScope;
+    tag?: string;
+    person_id?: string;
+    person_name?: string;
+    period: BudgetPeriod;
+    amount: number;
+    spent: number;
+    remaining: number;
+    /** Uncapped, so the bar can show how far past the limit it went. */
+    percent: number;
+    over: boolean;
+    item_count: number;
+    period_from: string;
+    period_to: string;
+}
+
+export interface BudgetStatusResponse {
+    as_of: string;
+    currency: string;
+    timezone: string;
+    budgets: BudgetStatus[];
+}
+
+export interface BudgetInput {
+    scope: BudgetScope;
+    tag?: string;
+    person_id?: string;
+    period: BudgetPeriod;
+    amount: number;
+    start_date?: string;
+    end_date?: string;
+    active?: boolean;
+}
+
 export interface SummaryPeriod {
     /** "2026-08" | "2026-W34" | "2026-08-21", matching the requested group_by. */
     key: string;
