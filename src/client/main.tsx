@@ -83,10 +83,16 @@ import XenBudgetBooksList from "./routes/Internal/XenBudget/BooksList";
 import XenBudgetBookDetail from "./routes/Internal/XenBudget/BookDetail";
 import XenBudgetBookOverview from "./routes/Internal/XenBudget/BookOverview";
 import XenBudgetBookItems from "./routes/Internal/XenBudget/BookItems";
-import XenBudgetBookBudgets from "./routes/Internal/XenBudget/BookBudgets";
-import XenBudgetBookRules from "./routes/Internal/XenBudget/BookRules";
 import XenBudgetBookReport from "./routes/Internal/XenBudget/BookReport";
 import XenBudgetBookSettings from "./routes/Internal/XenBudget/BookSettings";
+import XenBudgetBookSection from "./routes/Internal/XenBudget/settings/BookSection";
+import XenBudgetCategoriesSection from "./routes/Internal/XenBudget/settings/CategoriesSection";
+import XenBudgetTagsSection from "./routes/Internal/XenBudget/settings/TagsSection";
+import XenBudgetPeopleSection from "./routes/Internal/XenBudget/settings/PeopleSection";
+import XenBudgetBudgetsSection from "./routes/Internal/XenBudget/settings/BudgetsSection";
+import XenBudgetRulesSection from "./routes/Internal/XenBudget/settings/RulesSection";
+import XenBudgetImportsSection from "./routes/Internal/XenBudget/settings/ImportsSection";
+import XenBudgetBackupSection from "./routes/Internal/XenBudget/settings/BackupSection";
 // Routes - Admin
 import Admin from "./routes/Admin/Admin";
 import Users from "./routes/Admin/Users";
@@ -232,10 +238,22 @@ const router = createBrowserRouter(
             <Route index element={<Navigate to="overview" replace />} />
             <Route path="overview" element={<XenBudgetBookOverview />} />
             <Route path="items" element={<XenBudgetBookItems />} />
-            <Route path="budgets" element={<XenBudgetBookBudgets />} />
-            <Route path="rules" element={<XenBudgetBookRules />} />
             <Route path="report" element={<XenBudgetBookReport />} />
-            <Route path="settings" element={<XenBudgetBookSettings />} />
+            <Route path="settings" element={<XenBudgetBookSettings />}>
+              <Route index element={<Navigate to="book" replace />} />
+              <Route path="book" element={<XenBudgetBookSection />} />
+              <Route path="categories" element={<XenBudgetCategoriesSection />} />
+              <Route path="tags" element={<XenBudgetTagsSection />} />
+              <Route path="people" element={<XenBudgetPeopleSection />} />
+              <Route path="budgets" element={<XenBudgetBudgetsSection />} />
+              <Route path="rules" element={<XenBudgetRulesSection />} />
+              <Route path="imports" element={<XenBudgetImportsSection />} />
+              <Route path="backup" element={<XenBudgetBackupSection />} />
+            </Route>
+            {/* Budgets and Rules used to be top-level tabs. Redirect rather than blank,
+                for a tab left open across the change. Safe to drop once this ships. */}
+            <Route path="budgets" element={<Navigate to="../settings/budgets" replace />} />
+            <Route path="rules" element={<Navigate to="../settings/rules" replace />} />
           </Route>
         </Route>
       </Route>

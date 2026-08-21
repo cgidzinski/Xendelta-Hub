@@ -2,11 +2,9 @@ import { useState } from "react";
 import { Box, Button, Chip, IconButton, Stack, Tab, Tabs, Tooltip, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import InsightsIcon from "@mui/icons-material/Insights";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-import SavingsIcon from "@mui/icons-material/Savings";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTitle } from "../../../hooks/useTitle";
@@ -17,6 +15,7 @@ import type {
     XenBudgetBook, XenBudgetItem, CreateItemInput, UpdateBookInput,
 } from "../../../hooks/xenbudget/types";
 import ItemForm from "./components/ItemForm";
+import { TAB_PATHS, activeIndex } from "./navigation";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 
@@ -46,10 +45,6 @@ export interface BookDetailContext {
     isDeletingBook: boolean;
 }
 
-// Tab order must match the <Tab> order below; the active tab is derived from the URL
-// rather than stored, so a deep link or a back button lands on the right tab.
-const TAB_PATHS = ["overview", "items", "budgets", "rules", "report", "settings"];
-
 export default function BookDetail() {
     const { bookId = "" } = useParams();
     const navigate = useNavigate();
@@ -76,8 +71,10 @@ export default function BookDetail() {
     // choosing from the switcher pins it for this session.
     const [currency, setCurrency] = useState<string | undefined>(undefined);
 
-    const tabIndex = TAB_PATHS.findIndex((p) => location.pathname.endsWith(`/${p}`));
-    const activeTab = tabIndex === -1 ? false : tabIndex;
+    // Tab order matches the <Tab> order below; the active tab comes from the URL rather
+    // than being stored, so a deep link or the back button lands on the right one. See
+    // navigation.ts for why this is a segment match and not a suffix.
+    const activeTab = activeIndex(location.pathname, TAB_PATHS);
 
     if (isLoading && !book) return <LoadingSpinner message="Loading book..." />;
     if (isError) return <ErrorDisplay error={error} />;
@@ -129,8 +126,6 @@ export default function BookDetail() {
                 >
                     <Tab icon={<InsightsIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Overview" />
                     <Tab icon={<ReceiptLongIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Items" />
-                    <Tab icon={<SavingsIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Budgets" />
-                    <Tab icon={<AutoFixHighIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Rules" />
                     <Tab icon={<BarChartIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Report" />
                     <Tab icon={<SettingsIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Settings" />
                 </Tabs>

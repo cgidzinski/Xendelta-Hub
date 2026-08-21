@@ -92,7 +92,7 @@ export default function BookOverview() {
                                 budget={budget}
                                 currency={summary.currency}
                                 categoryRegistry={book.categories}
-                                onClick={() => navigate(`/internal/xenbudget/books/${book._id}/budgets`)}
+                                onClick={() => navigate(`/internal/xenbudget/books/${book._id}/settings/budgets`)}
                             />
                         ))}
                     </Stack>

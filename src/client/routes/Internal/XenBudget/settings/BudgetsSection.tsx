@@ -3,14 +3,14 @@ import { useOutletContext } from "react-router-dom";
 import { Box, Button, Card, Stack, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import SavingsIcon from "@mui/icons-material/Savings";
-import type { BookDetailContext } from "./BookDetail";
-import type { BudgetStatus } from "../../../hooks/xenbudget/types";
-import { useXenBudgetStatus, useXenBudgetBudgets } from "../../../hooks/xenbudget/useBudgets";
-import BudgetProgressBar from "./components/BudgetProgressBar";
-import BudgetForm from "./components/BudgetForm";
-import LoadingSpinner from "../../../components/LoadingSpinner";
-import ErrorDisplay from "../../../components/ErrorDisplay";
-import { cardSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
+import type { BookDetailContext } from "../BookDetail";
+import type { BudgetStatus } from "../../../../hooks/xenbudget/types";
+import { useXenBudgetStatus, useXenBudgetBudgets } from "../../../../hooks/xenbudget/useBudgets";
+import BudgetProgressBar from "../components/BudgetProgressBar";
+import BudgetForm from "../components/BudgetForm";
+import LoadingSpinner from "../../../../components/LoadingSpinner";
+import ErrorDisplay from "../../../../components/ErrorDisplay";
+import { cardSx, emptyStateSx, emptyStateIconCircleSx } from "../../../../components/ui/surfaceStyles";
 
 export default function BookBudgets() {
     const { book, currency } = useOutletContext<BookDetailContext>();
@@ -26,7 +26,7 @@ export default function BookBudgets() {
     if (isError) return <ErrorDisplay error={error} />;
 
     return (
-        <Box sx={{ p: 2 }}>
+        <Box>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
                 <Typography variant="subtitle1">Budgets</Typography>
                 <Button

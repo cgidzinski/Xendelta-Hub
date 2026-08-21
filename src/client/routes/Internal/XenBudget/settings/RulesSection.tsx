@@ -6,13 +6,13 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
 import ReplayIcon from "@mui/icons-material/Replay";
-import type { BookDetailContext } from "./BookDetail";
-import type { XenBudgetRule } from "../../../hooks/xenbudget/types";
-import { useXenBudgetRules } from "../../../hooks/xenbudget/useRules";
-import RuleForm from "./components/RuleForm";
-import ReapplyRulesDialog from "./components/ReapplyRulesDialog";
-import { CategoryChip, TagChip } from "./components/LabelChip";
-import { cardSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
+import type { BookDetailContext } from "../BookDetail";
+import type { XenBudgetRule } from "../../../../hooks/xenbudget/types";
+import { useXenBudgetRules } from "../../../../hooks/xenbudget/useRules";
+import RuleForm from "../components/RuleForm";
+import ReapplyRulesDialog from "../components/ReapplyRulesDialog";
+import { CategoryChip, TagChip } from "../components/LabelChip";
+import { cardSx, emptyStateSx, emptyStateIconCircleSx } from "../../../../components/ui/surfaceStyles";
 
 export default function BookRules() {
     const { book } = useOutletContext<BookDetailContext>();
@@ -30,7 +30,7 @@ export default function BookRules() {
     const rules = [...book.rules].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
 
     return (
-        <Box sx={{ p: 2 }}>
+        <Box>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
                 <Typography variant="subtitle1">Rules</Typography>
                 <Stack direction="row" spacing={1}>
