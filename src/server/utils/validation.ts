@@ -427,6 +427,66 @@ const itemBodyShape = {
 
 export const createXenBudgetItemSchema = z.object(itemBodyShape);
 
+export const xenBudgetPresetParamSchema = z.object({
+  bookId: objectIdSchema,
+  presetId: objectIdSchema,
+});
+
+export const xenBudgetBatchParamSchema = z.object({
+  bookId: objectIdSchema,
+  batchId: objectIdSchema,
+});
+
+// One import request's worth of rows. Mirrors MAX_BULK_ROWS in routes/xenbudget.ts.
+const MAX_IMPORT_ROWS = 2000;
+
+// A candidate row from the CSV wizard. Looser than createXenBudgetItemSchema because the
+// rules engine still gets to set type, tags and description before anything is stored.
+const importRowSchema = z.object({
+  type: z.enum(["expense", "income"]).optional(),
+  amount: z.number().positive("Amount must be positive"),
+  currency: z.string().max(10).optional(),
+  date: z.string().datetime().optional(),
+  description: z.string().min(1, "Description required").max(500),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  people: z.array(objectIdSchema).optional(),
+});
+
+export const xenBudgetBulkItemsSchema = z.object({
+  items: z.array(importRowSchema).min(1, "Nothing to import").max(MAX_IMPORT_ROWS, `At most ${MAX_IMPORT_ROWS} rows at a time`),
+  /** Rows the user ticked past the duplicate warning. */
+  allow_duplicates: z.boolean().optional(),
+});
+
+export const xenBudgetCheckDuplicatesSchema = z.object({
+  items: z.array(z.object({
+    amount: z.number(),
+    date: z.string().datetime().optional(),
+    description: z.string().max(500),
+  })).min(1).max(MAX_IMPORT_ROWS),
+});
+
+const importPresetShape = {
+  name: z.string().min(1, "Name is required").max(100),
+  column_map: z.object({
+    date: z.string().max(200).optional(),
+    description: z.string().max(200).optional(),
+    amount: z.string().max(200).optional(),
+    debit: z.string().max(200).optional(),
+    credit: z.string().max(200).optional(),
+    tags: z.string().max(200).optional(),
+    people: z.string().max(200).optional(),
+  }),
+  amount_mode: z.enum(["signed", "debit_credit"]).optional(),
+  sign_convention: z.enum(["negative_is_expense", "positive_is_expense"]).optional(),
+  date_format: z.string().max(40).optional(),
+  skip_rows: z.number().int().min(0).max(100).optional(),
+  default_tags: z.array(z.string().max(50)).max(20).optional(),
+};
+
+export const createXenBudgetPresetSchema = z.object(importPresetShape);
+export const updateXenBudgetPresetSchema = z.object(importPresetShape);
+
 export const xenBudgetRuleParamSchema = z.object({
   bookId: objectIdSchema,
   ruleId: objectIdSchema,

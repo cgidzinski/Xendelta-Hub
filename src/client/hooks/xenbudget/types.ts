@@ -197,6 +197,48 @@ export interface ReapplyResult {
     sample: ReapplyChange[];
 }
 
+export interface ImportPreviewRow {
+    index: number;
+    skipped: boolean;
+    skipped_by?: string;
+    original: { description: string; tags: string[]; type: ItemType; amount: number };
+    item: {
+        type: ItemType; amount: number; date: string; description: string; tags: string[];
+        excluded: boolean; excluded_reason?: string; flagged: boolean; flag_reason?: string;
+    };
+}
+
+export interface ImportPreviewResult {
+    previews: ImportPreviewRow[];
+    skipped: number;
+    excluded: number;
+    flagged: number;
+}
+
+export interface DuplicateMatch {
+    index: number;
+    existing: { _id: string; description: string; date: string; amount: number };
+}
+
+export interface BulkImportResult {
+    batch_id: string;
+    created: number;
+    excluded: number;
+    flagged: number;
+    skipped: { index: number; rule: string }[];
+    failed: { index: number; reason: string }[];
+}
+
+export interface PresetInput {
+    name: string;
+    column_map: XenBudgetImportPreset["column_map"];
+    amount_mode?: "signed" | "debit_credit";
+    sign_convention?: "negative_is_expense" | "positive_is_expense";
+    date_format?: string;
+    skip_rows?: number;
+    default_tags?: string[];
+}
+
 export interface BudgetStatus {
     _id: string;
     scope: BudgetScope;

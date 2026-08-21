@@ -25,6 +25,12 @@ import {
   updateXenBudgetRuleSchema,
   xenBudgetRuleParamSchema,
   reapplyXenBudgetRulesSchema,
+  xenBudgetBulkItemsSchema,
+  xenBudgetCheckDuplicatesSchema,
+  createXenBudgetPresetSchema,
+  updateXenBudgetPresetSchema,
+  xenBudgetPresetParamSchema,
+  xenBudgetBatchParamSchema,
 } from "../utils/validation";
 import {
   resolveShares, computeImportHash, roundMoney, seedPeriods, budgetPeriodRange,
@@ -780,6 +786,215 @@ module.exports = function (app: any) {
       } catch (error) {
         console.error("Error previewing items:", error);
         res.status(500).json({ status: false, message: "Failed to preview items" });
+      }
+    });
+
+  // --- CSV import ----------------------------------------------------------
+
+  // POST /api/xenbudget/books/:bookId/items/check-duplicates
+  //
+  // Flags rows that look like transactions the book already has. Deliberately advisory:
+  // two identical $4 coffees on the same day are both real, so this is never enforced as
+  // a constraint — the user decides row by row.
+  app.post("/api/xenbudget/books/:bookId/items/check-duplicates",
+    validateParams(xenBudgetBookIdParamSchema), validate(xenBudgetCheckDuplicatesSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const rows = req.body.items;
+        const hashes = rows.map((r: any) => computeImportHash(r.date || new Date(), r.amount, r.description));
+
+        const existing = await XenBudgetItem.find({
+          book_id: book._id,
+          import_hash: { $in: hashes },
+        }).select("import_hash description date amount").lean();
+
+        const byHash = new Map<string, any>();
+        existing.forEach((e: any) => { if (!byHash.has(e.import_hash)) byHash.set(e.import_hash, e); });
+
+        res.json({
+          status: true,
+          message: "Duplicate check complete",
+          data: {
+            duplicates: rows.map((_: any, i: number) => {
+              const match = byHash.get(hashes[i]);
+              return match
+                ? { index: i, existing: { _id: match._id.toString(), description: match.description, date: match.date, amount: match.amount } }
+                : null;
+            }).filter(Boolean),
+          },
+        });
+      } catch (error) {
+        console.error("Error checking duplicates:", error);
+        res.status(500).json({ status: false, message: "Failed to check duplicates" });
+      }
+    });
+
+  // POST /api/xenbudget/books/:bookId/items/bulk
+  //
+  // The CSV import itself. Every row goes through the same rules engine the preview used,
+  // so what the user approved is what gets written. Rows a rule skips are counted and
+  // named rather than silently dropped.
+  app.post("/api/xenbudget/books/:bookId/items/bulk",
+    validateParams(xenBudgetBookIdParamSchema), validate(xenBudgetBulkItemsSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const userId = callerId(req);
+        const rules = plainRules(book);
+        // One id for the whole import, so the entire batch can be undone as a unit.
+        const batchId = new mongoose.Types.ObjectId();
+
+        const docs: any[] = [];
+        const skipped: { index: number; rule: string }[] = [];
+        const failed: { index: number; reason: string }[] = [];
+
+        req.body.items.forEach((row: any, index: number) => {
+          const { item: ruled, skipped: wasSkipped, skippedByRuleName } = applyRules(
+            draftFromRow({ ...row, source: "csv" }, book),
+            rules,
+          );
+          if (wasSkipped) {
+            skipped.push({ index, rule: skippedByRuleName || "a rule" });
+            return;
+          }
+          let shares;
+          try {
+            const people = ruled.people && ruled.people.length > 0 ? ruled.people : row.people;
+            shares = buildShares(
+              people && people.length > 0
+                ? { amount: ruled.amount, share_type: "equal", shares: people.map((u: string) => ({ user_id: u })) }
+                : { amount: ruled.amount, share_type: "equal", shares: [] },
+              book,
+            );
+          } catch (e: any) {
+            failed.push({ index, reason: e.message });
+            return;
+          }
+          docs.push({
+            book_id: book._id,
+            type: ruled.type,
+            amount: ruled.amount,
+            currency: row.currency || book.default_currency,
+            date: ruled.date,
+            description: ruled.description,
+            original_description: ruled.original_description || row.description,
+            tags: ruled.tags,
+            rule_tags: ruled.rule_tags,
+            applied_rule_ids: ruled.applied_rule_ids,
+            excluded: ruled.excluded,
+            excluded_reason: ruled.excluded_reason,
+            flagged: ruled.flagged,
+            flag_reason: ruled.flag_reason,
+            share_type: shares.share_type,
+            shares: shares.shares,
+            source: "csv",
+            import_batch_id: batchId,
+            import_hash: computeImportHash(ruled.date, ruled.amount, ruled.description),
+            created_by: userId,
+          });
+        });
+
+        if (docs.length > 0) await XenBudgetItem.insertMany(docs);
+        broadcastBook(book);
+
+        res.json({
+          status: true,
+          message: `Imported ${docs.length} item${docs.length === 1 ? "" : "s"}`,
+          data: {
+            batch_id: batchId.toString(),
+            created: docs.length,
+            excluded: docs.filter((d) => d.excluded).length,
+            flagged: docs.filter((d) => d.flagged).length,
+            skipped,
+            failed,
+          },
+        });
+      } catch (error) {
+        console.error("Error importing items:", error);
+        res.status(500).json({ status: false, message: "Failed to import items" });
+      }
+    });
+
+  // DELETE /api/xenbudget/books/:bookId/imports/:batchId - undo one import wholesale
+  app.delete("/api/xenbudget/books/:bookId/imports/:batchId",
+    validateParams(xenBudgetBatchParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const result = await XenBudgetItem.deleteMany({
+          book_id: book._id,
+          import_batch_id: new mongoose.Types.ObjectId(req.params.batchId),
+        });
+        broadcastBook(book);
+        res.json({
+          status: true,
+          message: `Removed ${result.deletedCount} imported item${result.deletedCount === 1 ? "" : "s"}`,
+          data: { deleted: result.deletedCount },
+        });
+      } catch (error) {
+        console.error("Error undoing import:", error);
+        res.status(500).json({ status: false, message: "Failed to undo import" });
+      }
+    });
+
+  // --- Import presets ------------------------------------------------------
+
+  app.post("/api/xenbudget/books/:bookId/import-presets",
+    validateParams(xenBudgetBookIdParamSchema), validate(createXenBudgetPresetSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        book.import_presets.push(req.body);
+        await book.save();
+        await book.populate("members", "username avatar");
+        broadcastBook(book);
+        res.json({ status: true, message: "Preset saved", data: serializeBookFor(book, callerId(req)) });
+      } catch (error) {
+        console.error("Error saving preset:", error);
+        res.status(500).json({ status: false, message: "Failed to save preset" });
+      }
+    });
+
+  app.put("/api/xenbudget/books/:bookId/import-presets/:presetId",
+    validateParams(xenBudgetPresetParamSchema), validate(updateXenBudgetPresetSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const preset = book.import_presets.id(req.params.presetId);
+        if (!preset) return res.status(404).json({ status: false, message: "Preset not found" });
+        Object.assign(preset, req.body);
+        await book.save();
+        await book.populate("members", "username avatar");
+        broadcastBook(book);
+        res.json({ status: true, message: "Preset updated", data: serializeBookFor(book, callerId(req)) });
+      } catch (error) {
+        console.error("Error updating preset:", error);
+        res.status(500).json({ status: false, message: "Failed to update preset" });
+      }
+    });
+
+  app.delete("/api/xenbudget/books/:bookId/import-presets/:presetId",
+    validateParams(xenBudgetPresetParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const preset = book.import_presets.id(req.params.presetId);
+        if (!preset) return res.status(404).json({ status: false, message: "Preset not found" });
+        book.import_presets.pull({ _id: preset._id });
+        await book.save();
+        await book.populate("members", "username avatar");
+        broadcastBook(book);
+        res.json({ status: true, message: "Preset deleted", data: serializeBookFor(book, callerId(req)) });
+      } catch (error) {
+        console.error("Error deleting preset:", error);
+        res.status(500).json({ status: false, message: "Failed to delete preset" });
       }
     });
 

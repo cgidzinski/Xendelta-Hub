@@ -6,11 +6,13 @@ import {
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { startOfMonth, startOfWeek, startOfYear, subMonths } from "date-fns";
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetItems, type ItemFilters } from "../../../hooks/xenbudget/useItems";
 import ItemListItem from "./components/ItemListItem";
 import TagChip from "./components/TagChip";
+import ImportWizard from "./components/ImportWizard";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { groupByDay } from "../../../utils/dateGrouping";
@@ -56,6 +58,7 @@ export default function BookItems() {
     const [dateFilter, setDateFilter] = useState<DateFilter>("all");
     const [quick, setQuick] = useState<Quick>("all");
     const [activeTags, setActiveTags] = useState<string[]>([]);
+    const [importOpen, setImportOpen] = useState(false);
 
     const toggleTag = (tag: string) => setActiveTags((prev) =>
         prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]);
@@ -80,17 +83,25 @@ export default function BookItems() {
     return (
         <Box sx={{ p: 2 }}>
             <Stack spacing={1.5} sx={{ mb: 2 }}>
-                <TextField
-                    size="small" fullWidth placeholder="Search descriptions"
-                    value={search} onChange={(e) => setSearch(e.target.value)}
-                    slotProps={{
-                        input: {
-                            startAdornment: (
-                                <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
-                            ),
-                        },
-                    }}
-                />
+                <Stack direction="row" spacing={1}>
+                    <TextField
+                        size="small" fullWidth placeholder="Search descriptions"
+                        value={search} onChange={(e) => setSearch(e.target.value)}
+                        slotProps={{
+                            input: {
+                                startAdornment: (
+                                    <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
+                                ),
+                            },
+                        }}
+                    />
+                    <Button
+                        size="small" variant="outlined" startIcon={<UploadFileIcon />}
+                        onClick={() => setImportOpen(true)} sx={{ flexShrink: 0 }}
+                    >
+                        Import
+                    </Button>
+                </Stack>
                 <Box sx={{ overflowX: "auto", pb: 0.5 }}>
                     <ToggleButtonGroup
                         size="small" exclusive value={dateFilter}
@@ -144,7 +155,7 @@ export default function BookItems() {
                     <Typography variant="body2" color="text.secondary">
                         {search || quick !== "all" || dateFilter !== "all" || activeTags.length > 0
                             ? "No items match those filters."
-                            : "Add your first item to start tracking."}
+                            : "Add your first item, or import a CSV from your bank."}
                     </Typography>
                 </Box>
             ) : (
@@ -174,6 +185,8 @@ export default function BookItems() {
                     )}
                 </Stack>
             )}
+
+            <ImportWizard open={importOpen} onClose={() => setImportOpen(false)} book={book} />
         </Box>
     );
 }
