@@ -42,7 +42,7 @@ export default function BookBudgets() {
                     <Box sx={emptyStateIconCircleSx}><SavingsIcon color="disabled" /></Box>
                     <Typography variant="subtitle1">No budgets yet</Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Set a limit on a tag, a person, or everything in the book.
+                        Set a limit on a category, a person, or everything in the book.
                     </Typography>
                 </Box>
             ) : (

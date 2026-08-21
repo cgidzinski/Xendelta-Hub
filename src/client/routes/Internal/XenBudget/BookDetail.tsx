@@ -124,10 +124,10 @@ export default function BookDetail() {
                     onChange={(_, v) => navigate(`/internal/xenbudget/books/${bookId}/${TAB_PATHS[v]}`)}
                     variant="fullWidth"
                 >
-                    <Tab icon={<InsightsIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Overview" />
-                    <Tab icon={<ReceiptLongIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Items" />
-                    <Tab icon={<BarChartIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Report" />
-                    <Tab icon={<SettingsIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Settings" />
+                    <Tab icon={<InsightsIcon sx={{ fontSize: 20 }} />} label="Overview" />
+                    <Tab icon={<ReceiptLongIcon sx={{ fontSize: 20 }} />} label="Items" />
+                    <Tab icon={<BarChartIcon sx={{ fontSize: 20 }} />} label="Report" />
+                    <Tab icon={<SettingsIcon sx={{ fontSize: 20 }} />} label="Settings" />
                 </Tabs>
             </Box>
 

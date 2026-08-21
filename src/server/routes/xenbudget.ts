@@ -153,7 +153,7 @@ function validateBudgetTarget(body: any, book: any): string | null {
 function toBudgetFields(body: any): Record<string, any> {
   return {
     scope: body.scope,
-    tag: body.scope === "tag" ? body.tag : undefined,
+    category: body.scope === "category" ? body.category : undefined,
     person_id: body.scope === "person" ? body.person_id : undefined,
     period: body.period,
     amount: roundMoney(body.amount),

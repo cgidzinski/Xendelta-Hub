@@ -1,9 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import {
-    Avatar, Box, Card, LinearProgress, MenuItem, Stack, TextField, Typography, alpha,
+    Avatar, Box, Card, IconButton, LinearProgress, MenuItem, Stack, TextField, Typography, alpha,
 } from "@mui/material";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import InsightsIcon from "@mui/icons-material/Insights";
+import { endOfMonth, startOfMonth, subMonths } from "date-fns";
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
@@ -26,7 +29,17 @@ function monthLabel(from: string, timezone: string): string {
 export default function BookOverview() {
     const { book, currency, onCurrencyChange } = useOutletContext<BookDetailContext>();
     const navigate = useNavigate();
-    const { summary, isLoading, isError, error } = useXenBudgetSummary(book._id, { currency });
+
+    // 0 = this month, 1 = one month back, etc. Only the current month has a "now" to
+    // measure a live budget against, so budgets stay tied to offset 0 further down.
+    const [monthOffset, setMonthOffset] = useState(0);
+    const monthDate = useMemo(() => subMonths(new Date(), monthOffset), [monthOffset]);
+    const from = useMemo(() => startOfMonth(monthDate), [monthDate]);
+    const to = useMemo(() => endOfMonth(monthDate), [monthDate]);
+
+    const { summary, isLoading, isError, error } = useXenBudgetSummary(book._id, {
+        currency, from: from.toISOString(), to: to.toISOString(),
+    });
     const { budgets: budgetStatus } = useXenBudgetStatus(book._id, currency);
     const overBudgetCount = budgetStatus.filter((b) => b.over).length;
 
@@ -53,7 +66,18 @@ export default function BookOverview() {
     return (
         <Box sx={{ p: 2 }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
-                <Typography variant="subtitle1">{monthLabel(summary.from, summary.timezone)}</Typography>
+                <Stack direction="row" alignItems="center" spacing={0.5}>
+                    <IconButton size="small" onClick={() => setMonthOffset((o) => o + 1)} aria-label="Previous month">
+                        <ChevronLeftIcon fontSize="small" />
+                    </IconButton>
+                    <Typography variant="subtitle1">{monthLabel(summary.from, summary.timezone)}</Typography>
+                    <IconButton
+                        size="small" onClick={() => setMonthOffset((o) => Math.max(0, o - 1))}
+                        disabled={monthOffset === 0} aria-label="Next month"
+                    >
+                        <ChevronRightIcon fontSize="small" />
+                    </IconButton>
+                </Stack>
                 {summary.currencies.length > 1 && (
                     <TextField
                         select size="small" value={summary.currency}
@@ -66,16 +90,18 @@ export default function BookOverview() {
                 )}
             </Stack>
 
-            <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-                <StatTile label="In" value={totals.income} currency={summary.currency} color="success.main" />
-                <StatTile label="Out" value={totals.expense} currency={summary.currency} color="text.primary" />
-                <StatTile
-                    label="Net" value={totals.net} currency={summary.currency}
-                    color={totals.net < 0 ? "error.main" : "success.main"} signed
-                />
-            </Stack>
+            <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
+                <Stack spacing={1}>
+                    <StatRow label="In" value={totals.income} currency={summary.currency} color="success.main" />
+                    <StatRow label="Out" value={totals.expense} currency={summary.currency} color="text.primary" />
+                    <StatRow
+                        label="Net" value={totals.net} currency={summary.currency}
+                        color={totals.net < 0 ? "error.main" : "success.main"} signed
+                    />
+                </Stack>
+            </Card>
 
-            {budgetStatus.length > 0 && (
+            {monthOffset === 0 && budgetStatus.length > 0 && (
                 <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
                     <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
                         <Typography variant="caption" sx={sectionLabelSx}>Budgets</Typography>
@@ -187,15 +213,15 @@ export default function BookOverview() {
     );
 }
 
-function StatTile({ label, value, currency, color, signed }: {
+function StatRow({ label, value, currency, color, signed }: {
     label: string; value: number; currency: string; color: string; signed?: boolean;
 }) {
     return (
-        <Card variant="outlined" sx={{ ...cardSx, p: 1.5, flex: 1, minWidth: 0 }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
             <Typography variant="caption" sx={sectionLabelSx}>{label}</Typography>
-            <Typography variant="h6" sx={{ color, mt: 0.5 }} noWrap>
+            <Typography variant="h6" sx={{ color }} noWrap>
                 {signed && value > 0 ? "+" : ""}{formatCurrency(value, currency)}
             </Typography>
-        </Card>
+        </Stack>
     );
 }
