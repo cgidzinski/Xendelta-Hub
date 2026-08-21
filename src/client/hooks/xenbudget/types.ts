@@ -160,6 +160,43 @@ export type UpdateItemInput = Partial<CreateItemInput> & {
     flagged?: boolean;
 };
 
+export type RuleDisposition = "keep" | "exclude" | "skip";
+
+export interface RuleActions {
+    add_tags: string[];
+    remove_tags: string[];
+    set_type: "expense" | "income" | null;
+    set_people: string[];
+    set_description?: string;
+    flag: boolean;
+    flag_reason?: string;
+    disposition: RuleDisposition;
+}
+
+export interface RuleInput {
+    name: string;
+    enabled?: boolean;
+    priority?: number;
+    match: { mode: "all" | "any"; conditions: XenBudgetRuleCondition[] };
+    actions: Partial<RuleActions>;
+    stop_on_match?: boolean;
+}
+
+export interface ReapplyChange {
+    _id: string;
+    description: string;
+    before: { tags: string[]; excluded: boolean; flagged: boolean; description: string; type: ItemType };
+    after: { tags: string[]; excluded: boolean; flagged: boolean; description: string; type: ItemType };
+}
+
+export interface ReapplyResult {
+    dry_run: boolean;
+    examined: number;
+    changed: number;
+    skipped_manually_edited: number;
+    sample: ReapplyChange[];
+}
+
 export interface BudgetStatus {
     _id: string;
     scope: BudgetScope;

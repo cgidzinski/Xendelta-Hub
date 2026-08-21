@@ -21,16 +21,27 @@ import {
   xenBudgetMemberParamSchema,
   xenBudgetTagParamSchema,
   xenBudgetBudgetParamSchema,
+  createXenBudgetRuleSchema,
+  updateXenBudgetRuleSchema,
+  xenBudgetRuleParamSchema,
+  reapplyXenBudgetRulesSchema,
 } from "../utils/validation";
 import {
   resolveShares, computeImportHash, roundMoney, seedPeriods, budgetPeriodRange,
 } from "../utils/xenBudgetUtils";
+import {
+  applyRules, stripRuleEffects, type DraftItem, type Rule,
+} from "../utils/xenBudgetRules";
 import { tzMonthKey, zonedWallToUtc } from "../utils/statsRange";
 import { serializeBookFor, serializeBooksFor, serializeItem, serializeItems } from "../utils/xenBudgetSerializer";
 import { notify } from "../utils/notificationUtils";
 const mongoose = require("mongoose");
 
 const MAX_ITEMS_PAGE = 200;
+// One import request's worth of rows. Bank exports are far smaller than this; the cap
+// exists so a malformed or hostile request can't ask the server to build an unbounded
+// number of documents in memory.
+const MAX_BULK_ROWS = 2000;
 
 function callerId(req: Request): string {
   return (req.user as any)._id.toString();
@@ -144,6 +155,107 @@ function buildShares(body: any, book: any): { share_type: string; shares: any[] 
   return {
     share_type: shareType,
     shares: resolveShares(shareType, roundMoney(body.amount), requested, bookMembers),
+  };
+}
+
+// A rule that attributes items to someone who isn't in the book would silently produce
+// shares nobody can see, so the pairing is checked when the rule is saved.
+function validateRulePeople(body: any, book: any): string | null {
+  const people: string[] = body?.actions?.set_people || [];
+  for (const id of people) {
+    if (!isMember(book, id)) return "A rule can only attribute items to members of the book";
+  }
+  return null;
+}
+
+/** The book's rules as plain objects the (pure) engine can work with. */
+function plainRules(book: any): Rule[] {
+  return (book.rules || []).map((r: any) => ({
+    _id: r._id.toString(),
+    name: r.name,
+    enabled: r.enabled,
+    priority: r.priority,
+    match: {
+      mode: r.match?.mode,
+      conditions: (r.match?.conditions || []).map((c: any) => ({
+        field: c.field, op: c.op, value: c.value, value2: c.value2, case_sensitive: c.case_sensitive,
+      })),
+    },
+    actions: {
+      add_tags: r.actions?.add_tags || [],
+      remove_tags: r.actions?.remove_tags || [],
+      set_type: r.actions?.set_type ?? null,
+      set_people: r.actions?.set_people || [],
+      set_description: r.actions?.set_description,
+      flag: r.actions?.flag,
+      flag_reason: r.actions?.flag_reason,
+      disposition: r.actions?.disposition,
+    },
+    stop_on_match: r.stop_on_match,
+  }));
+}
+
+/** A stored item as the engine sees it. */
+function toDraft(item: any): DraftItem {
+  return {
+    type: item.type,
+    amount: item.amount,
+    date: item.date,
+    description: item.description,
+    original_description: item.original_description,
+    tags: [...(item.tags || [])],
+    excluded: !!item.excluded,
+    excluded_reason: item.excluded_reason,
+    flagged: !!item.flagged,
+    flag_reason: item.flag_reason,
+    applied_rule_ids: (item.applied_rule_ids || []).map((id: any) => id.toString()),
+    rule_tags: [...(item.rule_tags || [])],
+    source: item.source,
+  };
+}
+
+/** A candidate row (a mapped CSV line, or a manual add) as the engine sees it. */
+function draftFromRow(row: any, book: any): DraftItem {
+  return {
+    type: row.type === "income" ? "income" : "expense",
+    amount: roundMoney(Number(row.amount) || 0),
+    date: row.date ? new Date(row.date) : new Date(),
+    description: String(row.description || "").slice(0, 500),
+    tags: Array.isArray(row.tags) ? [...row.tags] : [],
+    excluded: false,
+    flagged: false,
+    applied_rule_ids: [],
+    rule_tags: [],
+    source: row.source || "csv",
+  };
+}
+
+function sameTags(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((t, i) => t === b[i]);
+}
+
+/**
+ * What a sweep would change about one item, or null if nothing. Only the rule-derived
+ * fields are compared — a sweep never touches amount, date, currency or notes.
+ */
+function describeChange(item: any, before: DraftItem, after: DraftItem): any | null {
+  const changed = !sameTags(before.tags, after.tags)
+    || before.excluded !== after.excluded
+    || before.flagged !== after.flagged
+    || before.description !== after.description
+    || before.type !== after.type;
+  if (!changed) return null;
+  return {
+    _id: item._id.toString(),
+    description: after.description,
+    before: {
+      tags: before.tags, excluded: before.excluded, flagged: before.flagged,
+      description: before.description, type: before.type,
+    },
+    after: {
+      tags: after.tags, excluded: after.excluded, flagged: after.flagged,
+      description: after.description, type: after.type,
+    },
   };
 }
 
@@ -463,6 +575,211 @@ module.exports = function (app: any) {
       } catch (error) {
         console.error("Error deleting tag:", error);
         res.status(500).json({ status: false, message: "Failed to delete tag" });
+      }
+    });
+
+  // --- Rules ---------------------------------------------------------------
+
+  app.post("/api/xenbudget/books/:bookId/rules",
+    validateParams(xenBudgetBookIdParamSchema), validate(createXenBudgetRuleSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const error = validateRulePeople(req.body, book);
+        if (error) return res.status(400).json({ status: false, message: error });
+        // New rules land at the end of the chain unless they say otherwise.
+        const priority = req.body.priority ?? (book.rules.length
+          ? Math.max(...book.rules.map((r: any) => r.priority ?? 0)) + 1
+          : 0);
+        book.rules.push({ ...req.body, priority });
+        await book.save();
+        await book.populate("members", "username avatar");
+        broadcastBook(book);
+        res.json({ status: true, message: "Rule created", data: serializeBookFor(book, callerId(req)) });
+      } catch (error) {
+        console.error("Error creating rule:", error);
+        res.status(500).json({ status: false, message: "Failed to create rule" });
+      }
+    });
+
+  app.put("/api/xenbudget/books/:bookId/rules/:ruleId",
+    validateParams(xenBudgetRuleParamSchema), validate(updateXenBudgetRuleSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const rule = book.rules.id(req.params.ruleId);
+        if (!rule) return res.status(404).json({ status: false, message: "Rule not found" });
+        const error = validateRulePeople(req.body, book);
+        if (error) return res.status(400).json({ status: false, message: error });
+        Object.assign(rule, req.body);
+        await book.save();
+        await book.populate("members", "username avatar");
+        broadcastBook(book);
+        res.json({ status: true, message: "Rule updated", data: serializeBookFor(book, callerId(req)) });
+      } catch (error) {
+        console.error("Error updating rule:", error);
+        res.status(500).json({ status: false, message: "Failed to update rule" });
+      }
+    });
+
+  app.delete("/api/xenbudget/books/:bookId/rules/:ruleId",
+    validateParams(xenBudgetRuleParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const rule = book.rules.id(req.params.ruleId);
+        if (!rule) return res.status(404).json({ status: false, message: "Rule not found" });
+        book.rules.pull({ _id: rule._id });
+        await book.save();
+        await book.populate("members", "username avatar");
+        broadcastBook(book);
+        // Deleting a rule doesn't undo what it already did — that takes a re-apply sweep,
+        // which the client offers next. Say so rather than implying it's been reversed.
+        res.json({
+          status: true,
+          message: "Rule deleted. Re-apply rules to undo its effects on existing items.",
+          data: serializeBookFor(book, callerId(req)),
+        });
+      } catch (error) {
+        console.error("Error deleting rule:", error);
+        res.status(500).json({ status: false, message: "Failed to delete rule" });
+      }
+    });
+
+  // POST /api/xenbudget/books/:bookId/rules/reapply
+  //
+  // Sweeps the current rule set over existing items. Every item is first stripped of what
+  // rules previously did to it and then re-evaluated, so the result is identical to
+  // importing it fresh — which is what makes deleting a rule actually reverse its effects.
+  app.post("/api/xenbudget/books/:bookId/rules/reapply",
+    validateParams(xenBudgetBookIdParamSchema), validate(reapplyXenBudgetRulesSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const dryRun = req.body.dry_run === true;
+        const includeManual = req.body.include_manually_edited === true;
+
+        const filter: Record<string, any> = { book_id: book._id };
+        if (!includeManual) filter.manually_edited = { $ne: true };
+
+        const items = await XenBudgetItem.find(filter);
+        const rules = plainRules(book);
+        const changes: any[] = [];
+
+        for (const item of items) {
+          const before = toDraft(item);
+          // skipBecomesExclude: a "skip" rule can't retroactively delete an item that
+          // already exists, so on a sweep it excludes instead. Nothing is destroyed.
+          const { item: after } = applyRules(stripRuleEffects(before), rules, { skipBecomesExclude: true });
+          const diff = describeChange(item, before, after);
+          if (!diff) continue;
+          changes.push(diff);
+          if (!dryRun) {
+            item.tags = after.tags;
+            item.rule_tags = after.rule_tags;
+            item.applied_rule_ids = after.applied_rule_ids;
+            item.excluded = after.excluded;
+            item.excluded_reason = after.excluded_reason;
+            item.flagged = after.flagged;
+            item.flag_reason = after.flag_reason;
+            item.description = after.description;
+            item.original_description = after.original_description;
+            item.type = after.type;
+            if (after.people && after.people.length > 0) {
+              try {
+                const resolved = buildShares(
+                  { amount: item.amount, share_type: "equal", shares: after.people.map((p) => ({ user_id: p })) },
+                  book,
+                );
+                item.share_type = resolved.share_type;
+                item.shares = resolved.shares;
+              } catch {
+                // A rule naming someone who has since left the book shouldn't fail the
+                // whole sweep; leave that item's existing shares alone.
+              }
+            }
+            await item.save();
+          }
+        }
+
+        if (!dryRun && changes.length > 0) broadcastBook(book);
+        res.json({
+          status: true,
+          message: dryRun ? "Preview ready" : "Rules re-applied",
+          data: {
+            dry_run: dryRun,
+            examined: items.length,
+            changed: changes.length,
+            skipped_manually_edited: includeManual
+              ? 0
+              : await XenBudgetItem.countDocuments({ book_id: book._id, manually_edited: true }),
+            sample: changes.slice(0, 20),
+          },
+        });
+      } catch (error) {
+        console.error("Error re-applying rules:", error);
+        res.status(500).json({ status: false, message: "Failed to re-apply rules" });
+      }
+    });
+
+  // POST /api/xenbudget/books/:bookId/items/preview
+  //
+  // Runs the rule set over candidate rows and writes nothing. The CSV wizard's preview
+  // step calls this so what it shows is produced by exactly the same code as the import.
+  app.post("/api/xenbudget/books/:bookId/items/preview",
+    validateParams(xenBudgetBookIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const rows = Array.isArray(req.body?.items) ? req.body.items : [];
+        if (rows.length === 0) {
+          return res.status(400).json({ status: false, message: "No rows to preview" });
+        }
+        if (rows.length > MAX_BULK_ROWS) {
+          return res.status(400).json({ status: false, message: `At most ${MAX_BULK_ROWS} rows at a time` });
+        }
+
+        const rules = plainRules(book);
+        const previews = rows.map((row: any, index: number) => {
+          const draft = draftFromRow(row, book);
+          const result = applyRules(draft, rules);
+          return {
+            index,
+            skipped: result.skipped,
+            skipped_by: result.skippedByRuleName,
+            original: { description: draft.description, tags: draft.tags, type: draft.type, amount: draft.amount },
+            item: {
+              type: result.item.type,
+              amount: result.item.amount,
+              date: result.item.date,
+              description: result.item.description,
+              tags: result.item.tags,
+              excluded: result.item.excluded,
+              excluded_reason: result.item.excluded_reason,
+              flagged: result.item.flagged,
+              flag_reason: result.item.flag_reason,
+            },
+          };
+        });
+
+        res.json({
+          status: true,
+          message: "Preview ready",
+          data: {
+            previews,
+            skipped: previews.filter((p: any) => p.skipped).length,
+            excluded: previews.filter((p: any) => !p.skipped && p.item.excluded).length,
+            flagged: previews.filter((p: any) => !p.skipped && p.item.flagged).length,
+          },
+        });
+      } catch (error) {
+        console.error("Error previewing items:", error);
+        res.status(500).json({ status: false, message: "Failed to preview items" });
       }
     });
 
@@ -827,29 +1144,53 @@ module.exports = function (app: any) {
         const userId = callerId(req);
         const body = req.body;
 
+        // Rules run on hand-entered items too, not just imports — otherwise the same
+        // transaction would be tagged one way through a CSV and another way by hand.
+        const { item: ruled, skipped, skippedByRuleName } = applyRules(
+          draftFromRow({ ...body, source: "manual" }, book),
+          plainRules(book),
+        );
+        if (skipped) {
+          // A manual add is a deliberate act, so a "skip" rule refuses it by name rather
+          // than accepting the item and silently dropping it.
+          return res.status(400).json({
+            status: false,
+            message: `Rule "${skippedByRuleName}" is set to skip items like this. Edit the rule, or change the item.`,
+          });
+        }
+
         let shares;
         try {
-          shares = buildShares(body, book);
+          // A rule's set_people overrides what the form asked for.
+          shares = ruled.people && ruled.people.length > 0
+            ? buildShares({ amount: ruled.amount, share_type: "equal", shares: ruled.people.map((u) => ({ user_id: u })) }, book)
+            : buildShares(body, book);
         } catch (e: any) {
           return res.status(400).json({ status: false, message: e.message });
         }
 
-        const amount = roundMoney(body.amount);
-        const date = body.date ? new Date(body.date) : new Date();
+        const amount = ruled.amount;
+        const date = ruled.date;
         const item = new XenBudgetItem({
           book_id: book._id,
-          type: body.type || "expense",
+          type: ruled.type,
           amount,
           currency: body.currency || book.default_currency,
           date,
-          description: body.description,
-          original_description: body.description,
+          description: ruled.description,
+          original_description: ruled.original_description || body.description,
           notes: body.notes,
-          tags: body.tags || [],
+          tags: ruled.tags,
+          rule_tags: ruled.rule_tags,
+          applied_rule_ids: ruled.applied_rule_ids,
+          excluded: ruled.excluded,
+          excluded_reason: ruled.excluded_reason,
+          flagged: ruled.flagged,
+          flag_reason: ruled.flag_reason,
           share_type: shares.share_type,
           shares: shares.shares,
           source: "manual",
-          import_hash: computeImportHash(date, amount, body.description),
+          import_hash: computeImportHash(date, amount, ruled.description),
           created_by: userId,
         });
         await item.save();

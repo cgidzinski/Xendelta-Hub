@@ -159,9 +159,13 @@ var itemSchema = new Schema({
   excluded_reason: { type: String, maxlength: 200 },
   flagged: { type: Boolean, default: false },
   flag_reason: { type: String, maxlength: 200 },
-  // Which rules touched this item. Re-apply uses this to undo a rule's effects before
-  // re-evaluating, which is what makes deleting a rule actually reverse it.
+  // Which rules touched this item, for provenance in the UI.
   applied_rule_ids: [{ type: Schema.Types.ObjectId }],
+  // Exactly the tags rules contributed. Re-apply removes these before re-evaluating,
+  // which is what makes deleting a rule actually reverse its effects — and because it
+  // records the tags themselves rather than the rules, it stays correct even once the
+  // rule responsible has been deleted. Tags the user added by hand are untouched.
+  rule_tags: { type: [String], default: [] },
   // Set by any user PUT. Re-apply skips these by default so a sweep never silently
   // overwrites a hand correction.
   manually_edited: { type: Boolean, default: false },

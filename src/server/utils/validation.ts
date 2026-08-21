@@ -427,6 +427,74 @@ const itemBodyShape = {
 
 export const createXenBudgetItemSchema = z.object(itemBodyShape);
 
+export const xenBudgetRuleParamSchema = z.object({
+  bookId: objectIdSchema,
+  ruleId: objectIdSchema,
+});
+
+// Mirrors MAX_REGEX_LENGTH in utils/xenBudgetRules.ts. Validating the pattern here means
+// a bad one is reported in the rule form rather than silently never matching mid-import.
+const MAX_RULE_REGEX_LENGTH = 200;
+
+const ruleConditionSchema = z.object({
+  field: z.enum(["description", "amount", "tags", "type", "date", "source"]),
+  op: z.enum([
+    "contains", "not_contains", "equals", "starts_with", "ends_with", "regex",
+    "gt", "gte", "lt", "lte", "between", "is_empty",
+  ]),
+  value: z.string().max(500).optional(),
+  value2: z.string().max(500).optional(),
+  case_sensitive: z.boolean().optional(),
+}).refine((c) => c.op === "is_empty" || (c.value !== undefined && c.value !== ""), {
+  message: "This condition needs a value", path: ["value"],
+}).refine((c) => c.op !== "between" || (c.value2 !== undefined && c.value2 !== ""), {
+  message: "A between condition needs both values", path: ["value2"],
+}).refine((c) => {
+  if (c.op !== "regex") return true;
+  if (!c.value || c.value.length > MAX_RULE_REGEX_LENGTH) return false;
+  try {
+    new RegExp(c.value);
+    return true;
+  } catch {
+    return false;
+  }
+}, { message: `Not a valid regular expression (max ${MAX_RULE_REGEX_LENGTH} characters)`, path: ["value"] });
+
+const ruleShape = {
+  name: z.string().min(1, "Name is required").max(100, "Name too long"),
+  enabled: z.boolean().optional(),
+  priority: z.number().int().optional(),
+  match: z.object({
+    mode: z.enum(["all", "any"]).optional(),
+    // A rule with no conditions would match every item, which is destructive when its
+    // action is exclude or skip. The engine refuses to match one; reject it here too.
+    conditions: z.array(ruleConditionSchema).min(1, "Add at least one condition"),
+  }),
+  actions: z.object({
+    add_tags: z.array(z.string().max(50)).max(20).optional(),
+    remove_tags: z.array(z.string().max(50)).max(20).optional(),
+    set_type: z.enum(["expense", "income"]).nullish(),
+    set_people: z.array(objectIdSchema).optional(),
+    set_description: z.string().max(500).optional(),
+    flag: z.boolean().optional(),
+    flag_reason: z.string().max(200).optional(),
+    disposition: z.enum(["keep", "exclude", "skip"]).optional(),
+  }),
+  stop_on_match: z.boolean().optional(),
+};
+
+export const createXenBudgetRuleSchema = z.object(ruleShape);
+export const updateXenBudgetRuleSchema = z.object(ruleShape);
+
+export const reapplyXenBudgetRulesSchema = z.object({
+  dry_run: z.boolean().optional(),
+  /**
+   * Re-apply leaves hand-corrected items alone by default; a sweep silently overwriting
+   * a manual fix is the surprising, destructive outcome.
+   */
+  include_manually_edited: z.boolean().optional(),
+});
+
 export const xenBudgetBudgetParamSchema = z.object({
   bookId: objectIdSchema,
   budgetId: objectIdSchema,
