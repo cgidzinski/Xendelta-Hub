@@ -1,14 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
+import { useTimezone } from "../useTimezone";
 import type { XenBudgetBook, BudgetInput, BudgetStatusResponse } from "./types";
 
 /** What each active budget has spent in the period it is currently in. */
 export function useXenBudgetStatus(bookId: string, currency?: string) {
+    // A budget period's boundaries are the viewer's, so the zone belongs in the key.
+    const tz = useTimezone();
+
     const { data, isLoading, isError, error } = useQuery({
-        queryKey: ["xenbudget", "budget-status", bookId, currency],
+        queryKey: ["xenbudget", "budget-status", bookId, currency, tz],
         queryFn: async () => {
             const res = await apiClient.get(`/api/xenbudget/books/${bookId}/budget-status`, {
-                params: currency ? { currency } : {},
+                params: { tz, ...(currency ? { currency } : {}) },
             });
             return res.data.data as BudgetStatusResponse;
         },

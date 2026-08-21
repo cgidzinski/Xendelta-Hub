@@ -16,14 +16,6 @@ import type { SearchedUser } from "../../../hooks/useUserSearch";
 import { ALL_CURRENCIES, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
 import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
 
-// Intl.supportedValuesOf gives the full IANA list; a short curated set keeps the picker
-// usable, and any value already on the book is appended so it never disappears.
-const COMMON_TIMEZONES = [
-    "America/Toronto", "America/Vancouver", "America/New_York", "America/Chicago",
-    "America/Denver", "America/Los_Angeles", "Europe/London", "Europe/Paris",
-    "Europe/Berlin", "Asia/Tokyo", "Australia/Sydney", "UTC",
-];
-
 export default function BookSettings() {
     const {
         book, isCreator, updateBook, isUpdating,
@@ -36,10 +28,6 @@ export default function BookSettings() {
     const [addOpen, setAddOpen] = useState(false);
     const [selected, setSelected] = useState<SearchedUser[]>([]);
     const [confirmDelete, setConfirmDelete] = useState(false);
-
-    const timezones = COMMON_TIMEZONES.includes(book.timezone)
-        ? COMMON_TIMEZONES
-        : [book.timezone, ...COMMON_TIMEZONES];
 
     const handleAdd = async () => {
         try {
@@ -83,15 +71,10 @@ export default function BookSettings() {
                         >
                             {ALL_CURRENCIES.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
                         </TextField>
-                        <TextField
-                            select fullWidth label="Timezone" value={book.timezone}
-                            onChange={(e) => updateBook({ timezone: e.target.value })}
-                            disabled={isUpdating}
-                            helperText="Decides where each month starts and ends for tallies and budgets."
-                            slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
-                        >
-                            {timezones.map((tz) => <MenuItem key={tz} value={tz}>{tz}</MenuItem>)}
-                        </TextField>
+                        <Typography variant="caption" color="text.secondary">
+                            Months and budget periods follow each viewer's own timezone, set on your
+                            profile — so this book reads in your local time and in everyone else's.
+                        </Typography>
                     </Stack>
                 </Card>
 

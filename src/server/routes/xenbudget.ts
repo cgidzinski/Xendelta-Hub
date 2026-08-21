@@ -50,6 +50,24 @@ const MAX_ITEMS_PAGE = 200;
 // number of documents in memory.
 const MAX_BULK_ROWS = 2000;
 
+/**
+ * The timezone to bucket this request's tallies in.
+ *
+ * Books deliberately have no timezone of their own: months follow whoever is looking,
+ * resolved client-side from their profile or their browser and sent as ?tz=. An
+ * unresolvable value falls back to UTC rather than throwing - a bad zone should not take
+ * out the whole summary.
+ */
+function requestTimezone(q: Record<string, string>): string {
+  if (!q.tz) return "UTC";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: q.tz });
+    return q.tz;
+  } catch {
+    return "UTC";
+  }
+}
+
 function callerId(req: Request): string {
   return (req.user as any)._id.toString();
 }
@@ -445,7 +463,7 @@ module.exports = function (app: any) {
   app.post("/api/xenbudget/books", validate(createXenBudgetBookSchema), async (req: Request, res: Response) => {
     try {
       const userId = callerId(req);
-      const { name, memberIds: requestedMemberIds, default_currency, timezone } = req.body;
+      const { name, memberIds: requestedMemberIds, default_currency } = req.body;
 
       const members: string[] = [userId];
       if (requestedMemberIds && requestedMemberIds.length > 0) {
@@ -460,7 +478,6 @@ module.exports = function (app: any) {
       const book = new XenBudgetBook({
         name,
         default_currency: default_currency || "CAD",
-        timezone: timezone || "America/Toronto",
         created_by: userId,
         members,
       });
@@ -502,10 +519,9 @@ module.exports = function (app: any) {
       try {
         const book = await loadBookForMember(req, res);
         if (!book) return;
-        const { name, default_currency, timezone, archived } = req.body;
+        const { name, default_currency, archived } = req.body;
         if (name !== undefined) book.name = name;
         if (default_currency !== undefined) book.default_currency = default_currency;
-        if (timezone !== undefined) book.timezone = timezone;
         if (archived !== undefined) book.archived = archived;
         await book.save();
         await book.populate("members", "username avatar");
@@ -956,7 +972,6 @@ module.exports = function (app: any) {
         res.write(`  "exported_at": ${JSON.stringify(new Date().toISOString())},\n`);
         res.write(`  "book": ${JSON.stringify({
           name: book.name,
-          timezone: book.timezone,
           default_currency: book.default_currency,
           tags: book.tags,
           budgets: book.budgets,
@@ -1001,7 +1016,6 @@ module.exports = function (app: any) {
 
         const book = new XenBudgetBook({
           name: payload.book.name,
-          timezone: payload.book.timezone || "America/Toronto",
           default_currency: payload.book.default_currency || "CAD",
           created_by: userId,
           members,
@@ -1359,7 +1373,7 @@ module.exports = function (app: any) {
         const book = await loadBookForMember(req, res);
         if (!book) return;
         const q = req.query as Record<string, string>;
-        const tz = book.timezone || "UTC";
+        const tz = requestTimezone(q);
         const asOf = q.as_of ? new Date(q.as_of) : new Date();
         const currency = q.currency || book.default_currency;
 
@@ -1465,7 +1479,7 @@ module.exports = function (app: any) {
         const book = await loadBookForMember(req, res);
         if (!book) return;
         const q = req.query as Record<string, string>;
-        const tz = book.timezone || "UTC";
+        const tz = requestTimezone(q);
 
         // Amounts in different currencies can't be added together, so a summary is always
         // scoped to one - the same thing XenSplit's analytics does. The full list of
@@ -1479,7 +1493,7 @@ module.exports = function (app: any) {
         const groupBy = q.group_by === "day" ? "day" : q.group_by === "week" ? "week" : "month";
         const format = groupBy === "day" ? "%Y-%m-%d" : groupBy === "week" ? "%G-W%V" : "%Y-%m";
 
-        // Default window: the current month in the book's timezone.
+        // Default window: the current month in the *viewer's* timezone.
         const now = new Date();
         const from = q.from ? new Date(q.from) : zonedWallToUtc(`${tzMonthKey(now, tz)}-01`, tz);
         const to = q.to ? new Date(q.to) : now;

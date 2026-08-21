@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
+import { useTimezone } from "../useTimezone";
 import type { XenBudgetSummary } from "./types";
 
 export interface SummaryParams {
@@ -14,14 +15,19 @@ export interface SummaryParams {
 /**
  * The tallies behind the Overview and the report page. The server computes every figure
  * in one $facet pass, so the per-tag, per-person and top-line numbers always reconcile.
- * Defaults to the current month in the book's own timezone.
+ * Defaults to the current month in the viewer's own timezone.
  */
 export function useXenBudgetSummary(bookId: string, params: SummaryParams = {}) {
+    // Months follow whoever is looking, so the viewer's zone is part of the key — change
+    // it in your profile and the tally refetches rather than serving the old buckets.
+    const tz = useTimezone();
+
     const { data, isLoading, isError, error, isFetching } = useQuery({
-        queryKey: ["xenbudget", "summary", bookId, params],
+        queryKey: ["xenbudget", "summary", bookId, params, tz],
         queryFn: async () => {
             const res = await apiClient.get(`/api/xenbudget/books/${bookId}/summary`, {
                 params: {
+                    tz,
                     ...(params.from ? { from: params.from } : {}),
                     ...(params.to ? { to: params.to } : {}),
                     ...(params.group_by ? { group_by: params.group_by } : {}),

@@ -109,9 +109,9 @@ var importPresetSchema = new Schema({
 
 var bookSchema = new Schema({
   name: { type: String, required: true, maxlength: 100 },
-  // Drives every month/week boundary in /summary and /budget-status. Bucketing on UTC
-  // silently misfiles anything near midnight - see src/server/utils/statsRange.ts.
-  timezone: { type: String, default: "America/Toronto" },
+  // No timezone here: month and week boundaries follow whoever is *looking*, resolved
+  // from their own profile (or their browser) and sent with each request. See
+  // requestTimezone() in routes/xenbudget.ts.
   default_currency: { type: String, default: "CAD" },
   // The owner / main admin: the only one who may add or remove members, transfer the
   // book, delete it, or restore over it. Every other member can do everything else.

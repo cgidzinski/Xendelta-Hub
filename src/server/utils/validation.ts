@@ -8,6 +8,18 @@ const objectIdSchema = z.string().refine(
   { message: "Invalid ObjectId format" }
 );
 
+// Rejects a timezone the runtime can't actually resolve. Every month boundary in
+// /summary and /budget-status is computed from this, so an unusable value would silently
+// misfile items rather than fail loudly.
+const timezoneSchema = z.string().refine((tz) => {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}, { message: "Unknown timezone" });
+
 // User validation schemas
 export const signupSchema = z.object({
   email: z.string().email("Invalid email format").toLowerCase().max(VALIDATION_LIMITS.EMAIL_MAX, "Email too long"),
@@ -30,6 +42,8 @@ export const loginSchema = z.object({
 
 export const updateProfileSchema = z.object({
   avatar: z.string().url("Invalid avatar URL").optional(),
+  // "" clears the preference and falls back to the browser's zone.
+  timezone: z.union([timezoneSchema, z.literal("")]).optional(),
   username: z.string()
     .min(3, "Username must be at least 3 characters")
     .max(50, "Username too long")
@@ -357,18 +371,6 @@ export const xenSplitExchangeParamSchema = z.object({
 
 // XenBudget validation schemas
 
-// Rejects a timezone the runtime can't actually resolve. Every month boundary in
-// /summary and /budget-status is computed from this, so an unusable value would silently
-// misfile items rather than fail loudly.
-const timezoneSchema = z.string().refine((tz) => {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: tz });
-    return true;
-  } catch {
-    return false;
-  }
-}, { message: "Unknown timezone" });
-
 export const xenBudgetBookIdParamSchema = z.object({
   bookId: objectIdSchema,
 });
@@ -387,13 +389,11 @@ export const createXenBudgetBookSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name too long"),
   memberIds: z.array(objectIdSchema).optional(),
   default_currency: z.string().max(10).optional(),
-  timezone: timezoneSchema.optional(),
 });
 
 export const updateXenBudgetBookSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   default_currency: z.string().max(10).optional(),
-  timezone: timezoneSchema.optional(),
   archived: z.boolean().optional(),
 });
 
@@ -434,6 +434,8 @@ export const xenBudgetRestoreSchema = z.object({
   format_version: z.number().int().min(1).max(1, "That backup was made by a newer version of XenBudget"),
   book: z.object({
     name: z.string().min(1).max(100),
+    // Accepted but ignored: books no longer carry a timezone, and an older backup
+    // shouldn't fail to restore just because it has one.
     timezone: z.string().max(64).optional(),
     default_currency: z.string().max(10).optional(),
     tags: z.array(z.any()).max(500).optional(),

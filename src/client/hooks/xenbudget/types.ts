@@ -78,7 +78,6 @@ export interface XenBudgetImportPreset {
 export interface XenBudgetBook {
     _id: string;
     name: string;
-    timezone: string;
     default_currency: string;
     created_by: string;
     /** True when the caller owns the book — gates member management and deletion. */
@@ -133,13 +132,11 @@ export interface CreateBookInput {
     name: string;
     memberIds?: string[];
     default_currency?: string;
-    timezone?: string;
 }
 
 export interface UpdateBookInput {
     name?: string;
     default_currency?: string;
-    timezone?: string;
     archived?: boolean;
 }
 

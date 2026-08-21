@@ -14,8 +14,9 @@ import ErrorDisplay from "../../../components/ErrorDisplay";
 import { formatCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
 import { cardSx, sectionLabelSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
 
-// The current month in the book's own timezone is what the server defaults to, so the
-// month label here has to be derived the same way rather than from the browser's clock.
+// The server buckets in the viewer's zone and echoes it back, so the label is derived
+// from the response rather than from the browser's clock — the two agree, and a stored
+// profile preference that differs from the browser still labels correctly.
 function monthLabel(from: string, timezone: string): string {
     return new Date(from).toLocaleDateString(undefined, {
         month: "long", year: "numeric", timeZone: timezone,
