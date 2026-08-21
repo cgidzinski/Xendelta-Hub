@@ -115,6 +115,19 @@ var importPresetSchema = new Schema({
   created_at: { type: Date, default: Date.now },
 }, { _id: true });
 
+// A record of one CSV import. The _id is the import_batch_id stamped on every item it
+// created, so this only gives that id a name and a date - which is the whole point: a
+// bad file has to be findable and removable weeks later, not only in the wizard that
+// just closed.
+var importBatchSchema = new Schema({
+  source_label: { type: String, maxlength: 100 },  // "Chase Visa" - which card
+  filename: { type: String, maxlength: 200 },
+  imported_at: { type: Date, default: Date.now },
+  imported_by: { type: String },
+  row_count: { type: Number, default: 0 },
+  preset_id: { type: Schema.Types.ObjectId },
+}, { _id: true });
+
 // --- Book -------------------------------------------------------------------
 
 var bookSchema = new Schema({
@@ -132,6 +145,7 @@ var bookSchema = new Schema({
   budgets: [budgetSchema],
   rules: [ruleSchema],
   import_presets: [importPresetSchema],
+  import_batches: [importBatchSchema],
   archived: { type: Boolean, default: false },
   created_at: { type: Date, default: Date.now },
 });

@@ -25,6 +25,12 @@ interface WeightedSplitEditorProps {
      */
     mode: { kind: "people"; members: XenBudgetMember[] }
     | { kind: "categories"; registry: XenBudgetLabel[] };
+    /**
+     * For pickers with no single amount to divide — the CSV import's default owners apply
+     * to every row at once. The split-type toggle and the per-part money are suppressed,
+     * since neither means anything without an amount.
+     */
+    amountless?: boolean;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -39,6 +45,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  */
 export default function WeightedSplitEditor({
     splitType, onSplitTypeChange, selected, onSelectedChange, amount, currency, mode,
+    amountless = false,
 }: WeightedSplitEditorProps) {
     const keys = selected.map((s) => s.key);
 
@@ -58,6 +65,13 @@ export default function WeightedSplitEditor({
 
     const noun = mode.kind === "people" ? "person" : "category";
     const summary = (() => {
+        if (amountless) {
+            if (selected.length === 0) return { text: "Pick at least one person", error: true };
+            return {
+                text: selected.length === 1 ? "All rows attributed to them" : `Split evenly between ${selected.length}`,
+                error: false,
+            };
+        }
         if (selected.length === 0) {
             return mode.kind === "people"
                 ? { text: "Pick at least one person", error: true }
@@ -96,15 +110,17 @@ export default function WeightedSplitEditor({
 
     return (
         <Box>
-            <ToggleButtonGroup
-                size="small" exclusive fullWidth value={splitType}
-                onChange={(_, v) => v && onSplitTypeChange(v)}
-                sx={{ mb: 1 }}
-            >
-                <ToggleButton value="equal">Split evenly</ToggleButton>
-                <ToggleButton value="exact">Exact amounts</ToggleButton>
-                <ToggleButton value="percent">Percentages</ToggleButton>
-            </ToggleButtonGroup>
+            {!amountless && (
+                <ToggleButtonGroup
+                    size="small" exclusive fullWidth value={splitType}
+                    onChange={(_, v) => v && onSplitTypeChange(v)}
+                    sx={{ mb: 1 }}
+                >
+                    <ToggleButton value="equal">Split evenly</ToggleButton>
+                    <ToggleButton value="exact">Exact amounts</ToggleButton>
+                    <ToggleButton value="percent">Percentages</ToggleButton>
+                </ToggleButtonGroup>
+            )}
 
             {mode.kind === "people" ? (
                 <Stack spacing={0.5}>
@@ -119,12 +135,12 @@ export default function WeightedSplitEditor({
                                 <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
                                     {m.username}
                                 </Typography>
-                                {draft && splitType === "equal" && (
+                                {draft && !amountless && splitType === "equal" && (
                                     <Typography variant="body2" color="text.secondary">
                                         {formatCurrency(round2(perPart), currency)}
                                     </Typography>
                                 )}
-                                {draft && splitType !== "equal" && valueField(draft)}
+                                {draft && !amountless && splitType !== "equal" && valueField(draft)}
                             </Stack>
                         );
                     })}

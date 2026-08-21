@@ -494,8 +494,15 @@ const importRowSchema = z.object({
 
 export const xenBudgetBulkItemsSchema = z.object({
   items: z.array(importRowSchema).min(1, "Nothing to import").max(MAX_IMPORT_ROWS, `At most ${MAX_IMPORT_ROWS} rows at a time`),
-  /** Rows the user ticked past the duplicate warning. */
-  allow_duplicates: z.boolean().optional(),
+  /**
+   * Who these rows belong to. Defaults to the importing user — a card statement is
+   * usually one person's, not the whole book's.
+   */
+  default_people: z.array(objectIdSchema).max(50).optional(),
+  /** Which card this came from, and the file it came in, so it can be found later. */
+  source_label: z.string().max(100).optional(),
+  filename: z.string().max(200).optional(),
+  preset_id: objectIdSchema.optional(),
 });
 
 export const xenBudgetCheckDuplicatesSchema = z.object({

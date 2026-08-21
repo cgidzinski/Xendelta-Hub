@@ -10,13 +10,16 @@ import type {
     XenBudgetBook, ImportPreviewRow, DuplicateMatch, BulkImportResult,
 } from "../../../../../hooks/xenbudget/types";
 import { useXenBudgetImport, type ImportCandidate } from "../../../../../hooks/xenbudget/useImport";
+import { useAuth } from "../../../../../contexts/AuthContext";
 import {
     applyMapping, detectDateFormat, type MappingConfig, type MappingError, type CsvRow,
 } from "../../../../../utils/csvMapping";
 import MapStep from "./MapStep";
 import PreviewStep from "./PreviewStep";
+import WeightedSplitEditor, { type SplitDraft } from "../WeightedSplitEditor";
 import LoadingSpinner from "../../../../../components/LoadingSpinner";
 import { STABLE_CURRENCY_MENU_PROPS } from "../../../../../utils/currencyUtils";
+import { sectionLabelSx } from "../../../../../components/ui/surfaceStyles";
 
 const STEPS = ["Upload", "Map columns", "Review", "Done"];
 
@@ -59,6 +62,17 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
     const [result, setResult] = useState<BulkImportResult | null>(null);
     const [savePresetName, setSavePresetName] = useState("");
     const [presetId, setPresetId] = useState("");
+    const [sourceLabel, setSourceLabel] = useState("");
+    // Whose card this is. Defaults to you: a statement is usually one person's, not the
+    // whole book's — which is what an empty list used to mean.
+    const [owners, setOwners] = useState<SplitDraft[]>([]);
+
+    const { user } = useAuth();
+
+    useEffect(() => {
+        if (!open) return;
+        setOwners(user?.id ? [{ key: user.id, value: "" }] : []);
+    }, [open, user?.id]);
 
     useEffect(() => {
         if (open) return;
@@ -73,6 +87,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
         setResult(null);
         setSavePresetName("");
         setPresetId("");
+        setSourceLabel("");
     }, [open]);
 
     const mapped = useMemo(
@@ -120,6 +135,9 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
         setPresetId(id);
         const preset = book.import_presets.find((p) => p._id === id);
         if (!preset) return;
+        // A saved mapping names its source ("Chase Visa"), which is a better label than
+        // whatever the bank called the file.
+        setSourceLabel(preset.name);
         setConfig({
             column_map: { ...preset.column_map },
             amount_mode: preset.amount_mode,
@@ -171,7 +189,12 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
             // `index` is the row's position in the mapped list, which is what the preview
             // and duplicate results are keyed by.
             const chosen = candidates.filter((_, i) => selected.has(mapped.rows[i].index));
-            const imported = await importAsync(chosen);
+            const imported = await importAsync({
+                items: chosen,
+                default_people: owners.map((o) => o.key),
+                source_label: sourceLabel.trim() || undefined,
+                filename: fileName || undefined,
+            });
             setResult(imported);
             setStep(3);
             if (savePresetName.trim()) {
@@ -267,6 +290,29 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                                 return next;
                             })}
                         />
+                        <TextField
+                            size="small" label="Which card is this?" value={sourceLabel}
+                            onChange={(e) => setSourceLabel(e.target.value)}
+                            placeholder="Chase Visa"
+                            helperText="Shown in the import history, so a bad file can be found and removed later."
+                        />
+
+                        <Box>
+                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
+                                Whose spending is this?
+                            </Typography>
+                            <WeightedSplitEditor
+                                mode={{ kind: "people", members: book.members }}
+                                splitType="equal"
+                                onSplitTypeChange={() => { /* an import is always an even split */ }}
+                                selected={owners}
+                                onSelectedChange={setOwners}
+                                amount={0}
+                                currency={book.default_currency}
+                                amountless
+                            />
+                        </Box>
+
                         <FormControlLabel
                             control={
                                 <Checkbox

@@ -1281,6 +1281,14 @@ module.exports = function (app: any) {
         // One id for the whole import, so the entire batch can be undone as a unit.
         const batchId = new mongoose.Types.ObjectId();
 
+        // Anyone named must be a member, or the item would carry shares nobody can see.
+        const requested: string[] = req.body.default_people || [];
+        const invalid = requested.find((id) => !isMember(book, id));
+        if (invalid) {
+          return res.status(400).json({ status: false, message: "Every owner must be a member of the book" });
+        }
+        const defaultPeople = requested.length > 0 ? requested : [userId];
+
         const docs: any[] = [];
         const skipped: { index: number; rule: string }[] = [];
         const failed: { index: number; reason: string }[] = [];
@@ -1307,11 +1315,14 @@ module.exports = function (app: any) {
           }
           let shares;
           try {
-            const people = ruled.people && ruled.people.length > 0 ? ruled.people : row.people;
+            // A rule's set_people wins, then the row's own, then the import's default
+            // owners. Falling back to an even split across every member - what an empty
+            // list would do - is rarely right for a personal card statement.
+            const people = (ruled.people && ruled.people.length > 0 && ruled.people)
+              || (row.people && row.people.length > 0 && row.people)
+              || defaultPeople;
             shares = buildShares(
-              people && people.length > 0
-                ? { amount: ruled.amount, share_type: "equal", shares: people.map((u: string) => ({ user_id: u })) }
-                : { amount: ruled.amount, share_type: "equal", shares: [] },
+              { amount: ruled.amount, share_type: "equal", shares: people.map((u: string) => ({ user_id: u })) },
               book,
             );
           } catch (e: any) {
@@ -1355,7 +1366,20 @@ module.exports = function (app: any) {
           });
         });
 
-        if (docs.length > 0) await XenBudgetItem.insertMany(docs);
+        if (docs.length > 0) {
+          await XenBudgetItem.insertMany(docs);
+          // Recorded only when something was actually written - an import that produced
+          // nothing shouldn't leave a row in the history to puzzle over later.
+          book.import_batches.push({
+            _id: batchId,
+            source_label: (req.body.source_label || "").trim() || req.body.filename || "Import",
+            filename: req.body.filename,
+            imported_by: userId,
+            row_count: docs.length,
+            preset_id: req.body.preset_id,
+          });
+          await book.save();
+        }
         broadcastBook(book);
 
         res.json({
@@ -1377,6 +1401,48 @@ module.exports = function (app: any) {
       }
     });
 
+  // GET /api/xenbudget/books/:bookId/imports - what has been imported, newest first
+  app.get("/api/xenbudget/books/:bookId/imports",
+    validateParams(xenBudgetBookIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        await book.populate("members", "username avatar");
+
+        // A live count rather than the recorded row_count: items may have been deleted
+        // individually since, and a history that overstates what is still there would
+        // make "delete this import" look more destructive than it is.
+        const counts = new Map<string, number>();
+        const rows = await XenBudgetItem.aggregate([
+          { $match: { book_id: book._id, import_batch_id: { $ne: null } } },
+          { $group: { _id: "$import_batch_id", count: { $sum: 1 } } },
+        ]);
+        rows.forEach((r: any) => counts.set(r._id.toString(), r.count));
+
+        const memberById = new Map<string, any>();
+        (book.members as any[]).forEach((m: any) => { if (m._id) memberById.set(m._id.toString(), m); });
+
+        const batches = [...book.import_batches]
+          .sort((a: any, b: any) => new Date(b.imported_at).getTime() - new Date(a.imported_at).getTime())
+          .map((b: any) => ({
+            _id: b._id.toString(),
+            source_label: b.source_label,
+            filename: b.filename,
+            imported_at: b.imported_at,
+            imported_by: b.imported_by,
+            imported_by_name: memberById.get(b.imported_by)?.username || "Unknown",
+            row_count: b.row_count,
+            remaining: counts.get(b._id.toString()) || 0,
+          }));
+
+        res.json({ status: true, message: "Imports retrieved", data: { imports: batches } });
+      } catch (error) {
+        console.error("Error listing imports:", error);
+        res.status(500).json({ status: false, message: "Failed to list imports" });
+      }
+    });
+
   // DELETE /api/xenbudget/books/:bookId/imports/:batchId - undo one import wholesale
   app.delete("/api/xenbudget/books/:bookId/imports/:batchId",
     validateParams(xenBudgetBatchParamSchema),
@@ -1384,10 +1450,12 @@ module.exports = function (app: any) {
       try {
         const book = await loadBookForMember(req, res);
         if (!book) return;
-        const result = await XenBudgetItem.deleteMany({
-          book_id: book._id,
-          import_batch_id: new mongoose.Types.ObjectId(req.params.batchId),
-        });
+        const batchId = new mongoose.Types.ObjectId(req.params.batchId);
+        const result = await XenBudgetItem.deleteMany({ book_id: book._id, import_batch_id: batchId });
+        if (book.import_batches.id(batchId)) {
+          book.import_batches.pull({ _id: batchId });
+          await book.save();
+        }
         broadcastBook(book);
         res.json({
           status: true,

@@ -238,6 +238,19 @@ export interface DuplicateMatch {
     existing: { _id: string; description: string; date: string; amount: number };
 }
 
+export interface XenBudgetImportBatch {
+    _id: string;
+    source_label: string;
+    filename?: string;
+    imported_at: string;
+    imported_by: string;
+    imported_by_name: string;
+    /** Rows written at import time. */
+    row_count: number;
+    /** How many of them are still here — items may have been deleted individually since. */
+    remaining: number;
+}
+
 export interface BulkImportResult {
     batch_id: string;
     created: number;

@@ -11,6 +11,7 @@ import { useSnackbar } from "notistack";
 import type { BookDetailContext } from "./BookDetail";
 import LabelManager from "./components/LabelManager";
 import BookBackupSection from "./components/BookBackupSection";
+import ImportHistory from "./components/ImportHistory";
 import { UserSelect } from "../../../components/UserSelect";
 import type { SearchedUser } from "../../../hooks/useUserSearch";
 import { ALL_CURRENCIES, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
@@ -134,6 +135,14 @@ export default function BookSettings() {
                             Only the book owner can add or remove people.
                         </Typography>
                     )}
+                </Card>
+
+                <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
+                    <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.5 }}>Imports</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                        Every CSV you&rsquo;ve brought in. Delete one to remove everything it added.
+                    </Typography>
+                    <ImportHistory bookId={book._id} />
                 </Card>
 
                 <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
