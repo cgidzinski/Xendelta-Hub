@@ -20,6 +20,7 @@ This guide walks you through setting up a production server for Xendelta Hub on 
 7. [PM2 Startup Configuration](#pm2-startup-configuration)
 8. [SSH Key Setup (Optional)](#ssh-key-setup-optional)
 9. [Adding Additional Subdomains](#adding-additional-subdomains)
+10. [Push Notifications](#push-notifications)
 
 ---
 
@@ -87,6 +88,14 @@ MONGODB_URI=mongodb://localhost:27017/xendelta-hub
 
 # Email Service Configuration
 RESEND_API_KEY=your_resend_api_key_here
+
+# Web Push (VAPID) Configuration
+# Generate ONCE with: npx web-push generate-vapid-keys
+# Rotating these keys invalidates every existing device subscription and silently
+# stops push for all users, so back them up and keep them stable.
+VAPID_PUBLIC_KEY=your_vapid_public_key
+VAPID_PRIVATE_KEY=your_vapid_private_key
+VAPID_SUBJECT=mailto:admin@xendelta.com
 
 # JWT Configuration
 JWT_SECRET=your_very_secure_random_jwt_secret_here
@@ -515,6 +524,54 @@ pm2 save
 ```
 
 > **Note:** Each subdomain can run on a different port. Make sure to make the `PORT` environment variable in the .env and the Nginx `proxy_pass` directive to match.
+
+---
+
+## Push Notifications
+
+Push uses the **VAPID Web Push standard** through the PWA's service worker, so one
+implementation covers both platforms — no native apps and no Firebase project.
+
+Each browser routes through its own push service (Chrome/Android → FCM, Safari/iOS → Apple,
+Firefox → Mozilla); the endpoint stored with each subscription already points at the right
+one, so the server just POSTs to it.
+
+### Generate VAPID keys
+
+Run this **once** and paste the result into `.env` (see the environment block above):
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Rotating these keys invalidates every existing device subscription and silently stops push
+for all users. Back them up.
+
+### Requirements
+
+- **HTTPS** — already covered by the Nginx + Certbot setup above. Push will not work over
+  plain HTTP.
+- **Outbound port 443** from the VM to `fcm.googleapis.com` and `web.push.apple.com`. Push is
+  an outbound call from your server; no inbound firewall or Nginx change is needed.
+
+### Enabling it as a user
+
+Users turn push on per device under **Profile → Settings → Notifications**.
+
+- **Android (Chrome):** works in the browser or installed.
+- **iPhone (Safari 16.4+):** the site **must** be added to the Home Screen first
+  (Share → Add to Home Screen) and opened from that icon. Push is unavailable in plain
+  mobile Safari — the settings toggle explains this when it detects that case.
+
+### Verifying
+
+```bash
+# Should return the public key (503 means the VAPID env vars aren't loaded)
+curl https://xendelta.com/api/push/public-key
+```
+
+Dead subscriptions are pruned automatically: a `404`/`410` from the push service means the
+browser dropped it, and the row is deleted.
 
 ---
 

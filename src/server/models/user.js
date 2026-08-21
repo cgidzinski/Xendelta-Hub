@@ -58,6 +58,11 @@ var userSchema = new mongoose.Schema({
   timezone: { type: String },
   inventory: [inventoryItemSchema],
   notificationsLastCheckedAt: { type: Date },
+  notificationPrefs: {
+    // Opt-in. Push has no equivalent flag: it is governed by whether the user has any
+    // subscribed devices (see models/pushSubscription.js).
+    email: { type: Boolean, default: false },
+  },
 });
 userSchema.methods.generateHash = function (password) {
   return bcrypt.hashSync(password, bcrypt.genSaltSync(8), null);

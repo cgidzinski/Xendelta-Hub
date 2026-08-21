@@ -677,3 +677,16 @@ export const updateXenBudgetItemSchema = z.object({
   excluded: z.boolean().optional(),
 });
 
+
+// Web Push subscription schemas
+export const pushSubscribeSchema = z.object({
+  endpoint: z.string().url("Endpoint must be a valid URL").max(2000, "Endpoint too long"),
+  keys: z.object({
+    p256dh: z.string().min(1, "p256dh key is required").max(500),
+    auth: z.string().min(1, "auth key is required").max(500),
+  }),
+});
+
+export const pushUnsubscribeSchema = z.object({
+  endpoint: z.string().url("Endpoint must be a valid URL").max(2000, "Endpoint too long"),
+});

@@ -5,6 +5,7 @@ import { authenticateToken } from "../middleware/auth";
 import { requireAdmin } from "../middleware/admin";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { validate, createNotificationSchema } from "../utils/validation";
+import { notify } from "../utils/notificationUtils";
 import { TIMEOUTS } from "../constants";
 import { AuthenticatedRequest } from "../types";
 
@@ -153,26 +154,22 @@ module.exports = function (app: express.Application) {
         });
       }
 
-      const allUsers = await User.find({}).exec();
+      const allUsers = await User.find({}).select("_id").exec();
       let successCount = 0;
       let errorCount = 0;
-      const socketManager = SocketManager.getInstance();
-      const time = new Date().toISOString();
+      let pushCount = 0;
 
       for (const targetUser of allUsers) {
         try {
-          const newNotification = new Notification({
-            userId: targetUser._id,
+          const result = await notify(targetUser._id.toString(), {
             title,
             message,
-            time,
             icon: icon || "announcement",
-            unread: true,
           });
 
-          await newNotification.save();
-          socketManager.sendNotification(targetUser._id.toString(), newNotification);
-          successCount++;
+          if (result.inapp) successCount++;
+          else errorCount++;
+          pushCount += result.push.sent;
         } catch (err) {
           errorCount++;
         }
@@ -180,10 +177,11 @@ module.exports = function (app: express.Application) {
 
       return res.json({
         status: true,
-        message: `Notification sent to ${successCount} users${errorCount > 0 ? `, ${errorCount} errors` : ""}`,
+        message: `Notification sent to ${successCount} users${pushCount > 0 ? ` (${pushCount} push)` : ""}${errorCount > 0 ? `, ${errorCount} errors` : ""}`,
         data: {
           successCount,
           errorCount,
+          pushCount,
         },
       });
     }

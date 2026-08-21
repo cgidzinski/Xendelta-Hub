@@ -42,6 +42,7 @@ import ProfileHeader from "./components/ProfileHeader";
 import AvatarUploadSection from "./components/AvatarUploadSection";
 import TimezoneSection from "./components/TimezoneSection";
 import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
+import { usePushNotifications } from "../../../pwa/hooks/usePushNotifications";
 
 function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
@@ -66,7 +67,15 @@ export default function Profile() {
   const [isSavingUsername, setIsSavingUsername] = useState(false);
 
   // Settings state
-  const [notifications, setNotifications] = useState(true);
+  const {
+    supported: pushSupported,
+    needsInstall: pushNeedsInstall,
+    subscribed: pushSubscribed,
+    isBusy: pushBusy,
+    error: pushError,
+    subscribe: subscribePush,
+    unsubscribe: unsubscribePush,
+  } = usePushNotifications();
   const [darkMode, setDarkMode] = useState(true);
   const [autoSave, setAutoSave] = useState(true);
   const [volume, setVolume] = useState(70);
@@ -96,6 +105,18 @@ export default function Profile() {
   useEffect(() => {
     if (profile?.username && !editUsername) setEditUsername(profile.username);
   }, [profile?.username]);
+
+  // Runs from the switch's onChange so the permission request stays inside a user gesture —
+  // browsers reject Notification.requestPermission() called any other way.
+  const handlePushToggle = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.checked) {
+      const ok = await subscribePush();
+      if (ok) enqueueSnackbar("Push notifications enabled on this device", { variant: "success" });
+    } else {
+      const ok = await unsubscribePush();
+      if (ok) enqueueSnackbar("Push notifications disabled on this device", { variant: "info" });
+    }
+  };
 
   const handleSaveUsername = async () => {
     const trimmed = editUsername.trim();
@@ -270,15 +291,34 @@ export default function Profile() {
                 <CardContent sx={{ p: 3 }}>
                   <SectionHeader icon={<Notifications fontSize="small" />} label="Notifications" />
                   <FormControlLabel
-                    control={<Switch checked={notifications} onChange={(e) => setNotifications(e.target.checked)} disabled />}
-                    label="Enable notifications"
+                    control={
+                      <Switch
+                        checked={pushSubscribed}
+                        onChange={handlePushToggle}
+                        disabled={!pushSupported || pushNeedsInstall || pushBusy}
+                      />
+                    }
+                    label="Push notifications on this device"
                   />
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    Receive updates about your projects and activities
+                    Get alerts on your phone or desktop even when Xendelta Hub is closed
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, fontStyle: "italic" }}>
-                    Coming soon
-                  </Typography>
+                  {pushNeedsInstall && (
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+                      On iPhone, tap Share → Add to Home Screen, then open Xendelta Hub from
+                      that icon to turn on notifications.
+                    </Typography>
+                  )}
+                  {!pushSupported && !pushNeedsInstall && (
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+                      This browser does not support push notifications.
+                    </Typography>
+                  )}
+                  {pushError && (
+                    <Typography variant="caption" color="error" sx={{ mt: 1, display: "block" }}>
+                      {pushError}
+                    </Typography>
+                  )}
                 </CardContent>
               </Card>
             </Grid>

@@ -111,7 +111,7 @@ async function generate(task: any, dueDates: Date[]): Promise<TaskRunResult> {
     );
     for (const mid of memberIds) {
       if (mid !== source.created_by && involved.has(mid)) {
-        await notify(mid, "Recurring Expense", message, `/internal/xensplit/groups/${groupId}/expenses`);
+        await notify(mid, { title: "Recurring Expense", message, link: `/internal/xensplit/groups/${groupId}/expenses` });
       }
     }
     SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
