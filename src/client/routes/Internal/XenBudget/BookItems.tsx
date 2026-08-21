@@ -10,6 +10,7 @@ import { startOfMonth, startOfWeek, startOfYear, subMonths } from "date-fns";
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetItems, type ItemFilters } from "../../../hooks/xenbudget/useItems";
 import ItemListItem from "./components/ItemListItem";
+import TagChip from "./components/TagChip";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { groupByDay } from "../../../utils/dateGrouping";
@@ -54,16 +55,21 @@ export default function BookItems() {
     const [search, setSearch] = useState("");
     const [dateFilter, setDateFilter] = useState<DateFilter>("all");
     const [quick, setQuick] = useState<Quick>("all");
+    const [activeTags, setActiveTags] = useState<string[]>([]);
+
+    const toggleTag = (tag: string) => setActiveTags((prev) =>
+        prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]);
 
     // Filtering happens server-side (the list is paginated), so the filter object is part
     // of the query key rather than a useMemo over an already-loaded array.
     const filters: ItemFilters = useMemo(() => ({
         ...dateRange(dateFilter),
         q: search.trim() || undefined,
+        tags: activeTags.length ? activeTags : undefined,
         type: quick === "expense" || quick === "income" ? quick : undefined,
         flagged: quick === "flagged" || undefined,
         excluded: quick === "excluded" ? "only" : "hidden",
-    }), [dateFilter, search, quick]);
+    }), [dateFilter, search, quick, activeTags]);
 
     const {
         items, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
@@ -105,6 +111,24 @@ export default function BookItems() {
                         ))}
                     </ToggleButtonGroup>
                 </Box>
+                {book.tags.length > 0 && (
+                    <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>
+                        {book.tags.map((tag) => (
+                            <TagChip
+                                key={tag._id}
+                                tag={tag.name}
+                                registry={book.tags}
+                                onClick={() => toggleTag(tag.name)}
+                                sx={{
+                                    cursor: "pointer",
+                                    // A selected tag reads as pressed rather than merely present.
+                                    opacity: activeTags.length === 0 || activeTags.includes(tag.name) ? 1 : 0.4,
+                                    fontWeight: activeTags.includes(tag.name) ? 700 : 400,
+                                }}
+                            />
+                        ))}
+                    </Stack>
+                )}
             </Stack>
 
             {isError ? (
@@ -118,7 +142,7 @@ export default function BookItems() {
                     </Box>
                     <Typography variant="subtitle1">Nothing here</Typography>
                     <Typography variant="body2" color="text.secondary">
-                        {search || quick !== "all" || dateFilter !== "all"
+                        {search || quick !== "all" || dateFilter !== "all" || activeTags.length > 0
                             ? "No items match those filters."
                             : "Add your first item to start tracking."}
                     </Typography>
@@ -136,6 +160,7 @@ export default function BookItems() {
                                         key={item._id}
                                         item={item}
                                         members={book.members}
+                                        tagRegistry={book.tags}
                                         onClick={onEditItem}
                                     />
                                 ))}

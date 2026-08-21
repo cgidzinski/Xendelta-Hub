@@ -81,6 +81,7 @@ import GroupSettings from "./routes/Internal/Xensplit/GroupSettings";
 // Routes - XenBudget
 import XenBudgetBooksList from "./routes/Internal/XenBudget/BooksList";
 import XenBudgetBookDetail from "./routes/Internal/XenBudget/BookDetail";
+import XenBudgetBookOverview from "./routes/Internal/XenBudget/BookOverview";
 import XenBudgetBookItems from "./routes/Internal/XenBudget/BookItems";
 import XenBudgetBookSettings from "./routes/Internal/XenBudget/BookSettings";
 // Routes - Admin
@@ -225,7 +226,8 @@ const router = createBrowserRouter(
           <Route index element={<Navigate to="books" replace />} />
           <Route path="books" element={<XenBudgetBooksList />} />
           <Route path="books/:bookId" element={<XenBudgetBookDetail />}>
-            <Route index element={<Navigate to="items" replace />} />
+            <Route index element={<Navigate to="overview" replace />} />
+            <Route path="overview" element={<XenBudgetBookOverview />} />
             <Route path="items" element={<XenBudgetBookItems />} />
             <Route path="settings" element={<XenBudgetBookSettings />} />
           </Route>

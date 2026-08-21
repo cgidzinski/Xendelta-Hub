@@ -12,11 +12,15 @@ import {
   transferXenBudgetBookSchema,
   createXenBudgetItemSchema,
   updateXenBudgetItemSchema,
+  createXenBudgetTagSchema,
+  updateXenBudgetTagSchema,
   xenBudgetBookIdParamSchema,
   xenBudgetItemParamSchema,
   xenBudgetMemberParamSchema,
+  xenBudgetTagParamSchema,
 } from "../utils/validation";
-import { resolveShares, computeImportHash, roundMoney } from "../utils/xenBudgetUtils";
+import { resolveShares, computeImportHash, roundMoney, seedPeriods } from "../utils/xenBudgetUtils";
+import { tzMonthKey, zonedWallToUtc } from "../utils/statsRange";
 import { serializeBookFor, serializeBooksFor, serializeItem, serializeItems } from "../utils/xenBudgetSerializer";
 import { notify } from "../utils/notificationUtils";
 const mongoose = require("mongoose");
@@ -60,6 +64,34 @@ async function loadBookForCreator(req: Request, res: Response): Promise<any | nu
     return null;
   }
   return book;
+}
+
+/**
+ * The one place the shared item filters are built. Every list, tally and chart goes
+ * through here, so "an excluded item never reaches a total" is stated once rather than
+ * repeated in each pipeline — get that wrong in a single place and the per-tag,
+ * per-person and top-line numbers silently stop reconciling.
+ *
+ * `excluded` is tri-state: hidden (default), "true" for only-excluded, "all" for both.
+ */
+function baseItemMatch(bookId: any, q: Record<string, string>): Record<string, any> {
+  const filter: Record<string, any> = { book_id: bookId };
+
+  if (q.from || q.to) {
+    filter.date = {};
+    if (q.from) filter.date.$gte = new Date(q.from);
+    if (q.to) filter.date.$lte = new Date(q.to);
+  }
+  if (q.tags) filter.tags = { $in: q.tags.split(",").filter(Boolean) };
+  if (q.people) filter["shares.user_id"] = { $in: q.people.split(",").filter(Boolean) };
+  if (q.type === "expense" || q.type === "income") filter.type = q.type;
+  if (q.currency) filter.currency = q.currency;
+  if (q.flagged === "true") filter.flagged = true;
+
+  if (q.excluded === "true") filter.excluded = true;
+  else if (q.excluded !== "all") filter.excluded = { $ne: true };
+
+  return filter;
 }
 
 function broadcastBook(book: any) {
@@ -315,6 +347,236 @@ module.exports = function (app: any) {
       }
     });
 
+  // --- Tags ----------------------------------------------------------------
+  //
+  // Items store tag NAMES rather than ids, so a CSV import can name a tag without a
+  // lookup and an unregistered tag still renders. The registry exists to give tags a
+  // stable colour and to make renaming possible.
+
+  app.post("/api/xenbudget/books/:bookId/tags",
+    validateParams(xenBudgetBookIdParamSchema), validate(createXenBudgetTagSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const name = req.body.name.trim();
+        if (book.tags.some((t: any) => t.name.toLowerCase() === name.toLowerCase())) {
+          return res.status(400).json({ status: false, message: "That tag already exists" });
+        }
+        book.tags.push({ name, color: req.body.color });
+        await book.save();
+        await book.populate("members", "username avatar");
+        broadcastBook(book);
+        res.json({ status: true, message: "Tag created", data: serializeBookFor(book, callerId(req)) });
+      } catch (error) {
+        console.error("Error creating tag:", error);
+        res.status(500).json({ status: false, message: "Failed to create tag" });
+      }
+    });
+
+  app.put("/api/xenbudget/books/:bookId/tags/:tagId",
+    validateParams(xenBudgetTagParamSchema), validate(updateXenBudgetTagSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const tag = book.tags.id(req.params.tagId);
+        if (!tag) return res.status(404).json({ status: false, message: "Tag not found" });
+
+        const oldName = tag.name;
+        if (req.body.name !== undefined) {
+          const name = req.body.name.trim();
+          if (book.tags.some((t: any) => t._id.toString() !== tag._id.toString()
+            && t.name.toLowerCase() === name.toLowerCase())) {
+            return res.status(400).json({ status: false, message: "That tag already exists" });
+          }
+          tag.name = name;
+        }
+        if (req.body.color !== undefined) tag.color = req.body.color;
+        await book.save();
+
+        // Items reference tags by name, so a rename has to carry across every item that
+        // used the old one or they'd silently fall out of the tag's budget and reports.
+        if (tag.name !== oldName) {
+          await XenBudgetItem.updateMany(
+            { book_id: book._id, tags: oldName },
+            { $set: { "tags.$[element]": tag.name } },
+            { arrayFilters: [{ element: oldName }] },
+          );
+        }
+
+        await book.populate("members", "username avatar");
+        broadcastBook(book);
+        res.json({ status: true, message: "Tag updated", data: serializeBookFor(book, callerId(req)) });
+      } catch (error) {
+        console.error("Error updating tag:", error);
+        res.status(500).json({ status: false, message: "Failed to update tag" });
+      }
+    });
+
+  // Removing a tag from the registry also strips it from every item, so a deleted tag
+  // can't linger as an uncoloured ghost on rows that still carry it.
+  app.delete("/api/xenbudget/books/:bookId/tags/:tagId",
+    validateParams(xenBudgetTagParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const tag = book.tags.id(req.params.tagId);
+        if (!tag) return res.status(404).json({ status: false, message: "Tag not found" });
+
+        const name = tag.name;
+        book.tags.pull({ _id: tag._id });
+        await book.save();
+        await XenBudgetItem.updateMany({ book_id: book._id, tags: name }, { $pull: { tags: name } });
+
+        await book.populate("members", "username avatar");
+        broadcastBook(book);
+        res.json({ status: true, message: "Tag deleted", data: serializeBookFor(book, callerId(req)) });
+      } catch (error) {
+        console.error("Error deleting tag:", error);
+        res.status(500).json({ status: false, message: "Failed to delete tag" });
+      }
+    });
+
+  // --- Summary -------------------------------------------------------------
+
+  // GET /api/xenbudget/books/:bookId/summary?from&to&group_by=month|week|day&currency
+  //
+  // The engine behind both the live tally and the report page. One $facet pass, so the
+  // per-period, per-tag, per-person and top-line numbers are computed over exactly the
+  // same set of items and always reconcile with each other.
+  app.get("/api/xenbudget/books/:bookId/summary",
+    validateParams(xenBudgetBookIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const q = req.query as Record<string, string>;
+        const tz = book.timezone || "UTC";
+
+        // Amounts in different currencies can't be added together, so a summary is always
+        // scoped to one - the same thing XenSplit's analytics does. The full list of
+        // currencies present comes back too, so the UI can offer a switcher rather than
+        // silently hiding money.
+        const currencies: string[] = await XenBudgetItem.distinct("currency", { book_id: book._id });
+        const currency = q.currency && currencies.includes(q.currency)
+          ? q.currency
+          : (currencies.includes(book.default_currency) ? book.default_currency : currencies[0]);
+
+        const groupBy = q.group_by === "day" ? "day" : q.group_by === "week" ? "week" : "month";
+        const format = groupBy === "day" ? "%Y-%m-%d" : groupBy === "week" ? "%G-W%V" : "%Y-%m";
+
+        // Default window: the current month in the book's timezone.
+        const now = new Date();
+        const from = q.from ? new Date(q.from) : zonedWallToUtc(`${tzMonthKey(now, tz)}-01`, tz);
+        const to = q.to ? new Date(q.to) : now;
+
+        const match = baseItemMatch(book._id, { ...q, currency, from: from.toISOString(), to: to.toISOString() });
+
+        const expenseOnly = { $match: { type: "expense" } };
+        const [facets] = currency ? await XenBudgetItem.aggregate([
+          { $match: match },
+          {
+            $facet: {
+              byPeriod: [
+                {
+                  $group: {
+                    _id: { $dateToString: { format, date: "$date", timezone: tz } },
+                    expense: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] } },
+                    income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] } },
+                    count: { $sum: 1 },
+                  },
+                },
+                { $sort: { _id: 1 } },
+              ],
+              byTag: [
+                expenseOnly,
+                { $unwind: "$tags" },
+                { $group: { _id: "$tags", total: { $sum: "$amount" }, count: { $sum: 1 } } },
+                { $sort: { total: -1 } },
+              ],
+              byPerson: [
+                expenseOnly,
+                { $unwind: "$shares" },
+                { $group: { _id: "$shares.user_id", total: { $sum: "$shares.amount" }, count: { $sum: 1 } } },
+                { $sort: { total: -1 } },
+              ],
+              untagged: [
+                expenseOnly,
+                { $match: { $or: [{ tags: { $size: 0 } }, { tags: { $exists: false } }] } },
+                { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } },
+              ],
+              totals: [
+                {
+                  $group: {
+                    _id: null,
+                    expense: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] } },
+                    income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] } },
+                    count: { $sum: 1 },
+                  },
+                },
+              ],
+            },
+          },
+        ]) : [null];
+
+        const byPeriodRaw: any[] = facets?.byPeriod ?? [];
+        const byTag: any[] = facets?.byTag ?? [];
+        const byPersonRaw: any[] = facets?.byPerson ?? [];
+        const totalsRow = facets?.totals?.[0];
+        const untaggedRow = facets?.untagged?.[0];
+
+        // Resolve usernames in JS with one batched query rather than a $lookup, matching
+        // the casino leaderboard's approach.
+        const personIds = byPersonRaw.map((r: any) => r._id).filter(Boolean);
+        const userMap = new Map<string, any>();
+        if (personIds.length > 0) {
+          const users = await User.find({
+            _id: { $in: personIds.filter((id: string) => mongoose.Types.ObjectId.isValid(id)) },
+          }).select("username avatar").lean();
+          users.forEach((u: any) => userMap.set(u._id.toString(), u));
+        }
+
+        res.json({
+          status: true,
+          message: "Summary retrieved",
+          data: {
+            from: from.toISOString(),
+            to: to.toISOString(),
+            group_by: groupBy,
+            timezone: tz,
+            currency: currency ?? book.default_currency,
+            currencies,
+            by_period: seedPeriods(from, to, groupBy, tz).map((key) => {
+              const row = byPeriodRaw.find((r: any) => r._id === key);
+              const expense = roundMoney(row?.expense || 0);
+              const income = roundMoney(row?.income || 0);
+              return { key, expense, income, net: roundMoney(income - expense), count: row?.count || 0 };
+            }),
+            by_tag: byTag.map((r: any) => ({ tag: r._id, total: roundMoney(r.total), count: r.count })),
+            by_person: byPersonRaw.map((r: any) => ({
+              user_id: r._id,
+              username: userMap.get(r._id)?.username || "Unknown",
+              avatar: userMap.get(r._id)?.avatar || null,
+              total: roundMoney(r.total),
+              count: r.count,
+            })),
+            untagged: { total: roundMoney(untaggedRow?.total || 0), count: untaggedRow?.count || 0 },
+            totals: {
+              expense: roundMoney(totalsRow?.expense || 0),
+              income: roundMoney(totalsRow?.income || 0),
+              net: roundMoney((totalsRow?.income || 0) - (totalsRow?.expense || 0)),
+              count: totalsRow?.count || 0,
+            },
+          },
+        });
+      } catch (error) {
+        console.error("Error building summary:", error);
+        res.status(500).json({ status: false, message: "Failed to build summary" });
+      }
+    });
+
   // --- Items ---------------------------------------------------------------
 
   // GET /api/xenbudget/books/:bookId/items
@@ -325,21 +587,8 @@ module.exports = function (app: any) {
       if (!book) return;
 
       const q = req.query as Record<string, string>;
-      const filter: Record<string, any> = { book_id: book._id };
+      const filter = baseItemMatch(book._id, q);
 
-      if (q.from || q.to) {
-        filter.date = {};
-        if (q.from) filter.date.$gte = new Date(q.from);
-        if (q.to) filter.date.$lte = new Date(q.to);
-      }
-      if (q.tags) filter.tags = { $in: q.tags.split(",").filter(Boolean) };
-      if (q.people) filter["shares.user_id"] = { $in: q.people.split(",").filter(Boolean) };
-      if (q.type === "expense" || q.type === "income") filter.type = q.type;
-      if (q.flagged === "true") filter.flagged = true;
-      // Excluded items are hidden by default so the list matches the totals; the items
-      // tab opts in explicitly to show what the rules caught.
-      if (q.excluded === "true") filter.excluded = true;
-      else if (q.excluded !== "all") filter.excluded = { $ne: true };
       if (q.q) filter.description = { $regex: escapeRegex(q.q), $options: "i" };
 
       // Keyset pagination on the (date, _id) sort, so a page boundary can't drop or

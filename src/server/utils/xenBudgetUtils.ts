@@ -154,6 +154,57 @@ export function budgetPeriodRange(
   };
 }
 
+// --- Period bucket seeding --------------------------------------------------
+
+export type GroupBy = "day" | "week" | "month";
+
+// ISO-8601 week key, matching Mongo's $dateToString "%G-W%V" exactly. The ISO year is
+// the year of the week's Thursday, which is not always the calendar year of the date -
+// 2027-01-01 is a Friday and belongs to week 2026-W53.
+export function isoWeekKey(year: number, month: number, day: number): string {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const dayNum = (date.getUTCDay() + 6) % 7;  // Monday = 0
+  date.setUTCDate(date.getUTCDate() - dayNum + 3);  // the Thursday of this week
+  const isoYear = date.getUTCFullYear();
+  const firstThursday = new Date(Date.UTC(isoYear, 0, 4));
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - ((firstThursday.getUTCDay() + 6) % 7) + 3);
+  const week = 1 + Math.round((date.getTime() - firstThursday.getTime()) / (7 * 86400000));
+  return `${isoYear}-W${week < 10 ? "0" + week : week}`;
+}
+
+// A range longer than this in the requested granularity is almost certainly a mistake,
+// and seeding it would build a uselessly huge response.
+const MAX_SEEDED_PERIODS = 3000;
+
+// The ordered bucket keys covering [from, to] in `timeZone`, so a month with no spending
+// still renders as a zero rather than vanishing from the chart.
+//
+// These keys MUST match what Mongo's $dateToString produces for the same grouping and
+// timezone; if the two drift apart the buckets never join and every period reads empty.
+export function seedPeriods(from: Date, to: Date, groupBy: GroupBy, timeZone: string): string[] {
+  const keys: string[] = [];
+  if (to < from) return keys;
+
+  const startKey = tzDayKey(from, timeZone);
+  const endKey = tzDayKey(to, timeZone);
+  let cursor = new Date(`${startKey}T00:00:00Z`);
+  const end = new Date(`${endKey}T00:00:00Z`);
+
+  while (cursor <= end && keys.length < MAX_SEEDED_PERIODS) {
+    const y = cursor.getUTCFullYear();
+    const m = cursor.getUTCMonth() + 1;
+    const d = cursor.getUTCDate();
+    const key = groupBy === "day"
+      ? `${y}-${pad(m)}-${pad(d)}`
+      : groupBy === "week"
+        ? isoWeekKey(y, m, d)
+        : `${y}-${pad(m)}`;
+    if (keys[keys.length - 1] !== key) keys.push(key);
+    cursor = new Date(cursor.getTime() + 86400000);
+  }
+  return keys;
+}
+
 // --- Import de-duplication --------------------------------------------------
 
 // Bank exports are noisy about whitespace, case and internal padding, so normalize

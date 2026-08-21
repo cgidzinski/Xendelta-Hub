@@ -5,6 +5,8 @@ import {
   computeImportHash,
   normalizeDescription,
   roundMoney,
+  seedPeriods,
+  isoWeekKey,
 } from "./xenBudgetUtils";
 import { tzMonthKey, tzDayKey, tzMonthStartUtc, zonedWallToUtc } from "./statsRange";
 
@@ -178,6 +180,83 @@ describe("timezone keys", () => {
     // December is UTC-5 in Toronto.
     expect(utc.toISOString()).toBe("2026-12-25T05:00:00.000Z");
     expect(tzDayKey(utc, TZ)).toBe("2026-12-25");
+  });
+});
+
+describe("seedPeriods", () => {
+  const TZ = "America/Toronto";
+
+  it("emits every month in the range, including ones with no spending", () => {
+    const keys = seedPeriods(
+      new Date("2026-06-01T04:00:00.000Z"),
+      new Date("2026-09-15T12:00:00.000Z"),
+      "month",
+      TZ,
+    );
+    expect(keys).toEqual(["2026-06", "2026-07", "2026-08", "2026-09"]);
+  });
+
+  it("emits days without duplicating any", () => {
+    const keys = seedPeriods(
+      new Date("2026-08-01T04:00:00.000Z"),
+      new Date("2026-08-04T12:00:00.000Z"),
+      "day",
+      TZ,
+    );
+    expect(keys).toEqual(["2026-08-01", "2026-08-02", "2026-08-03", "2026-08-04"]);
+  });
+
+  it("collapses a week's days into one week key", () => {
+    const keys = seedPeriods(
+      new Date("2026-08-17T04:00:00.000Z"),
+      new Date("2026-08-30T12:00:00.000Z"),
+      "week",
+      TZ,
+    );
+    expect(keys).toEqual(["2026-W34", "2026-W35"]);
+  });
+
+  it("buckets by the local month, so a late-night instant doesn't start a new one", () => {
+    // 2026-09-01T02:00Z is 22:00 on Aug 31 in Toronto — still August.
+    const keys = seedPeriods(
+      new Date("2026-08-30T04:00:00.000Z"),
+      new Date("2026-09-01T02:00:00.000Z"),
+      "month",
+      TZ,
+    );
+    expect(keys).toEqual(["2026-08"]);
+  });
+
+  it("returns nothing for an inverted range", () => {
+    expect(seedPeriods(new Date("2026-09-01"), new Date("2026-08-01"), "month", TZ)).toEqual([]);
+  });
+
+  it("covers a single-instant range with one bucket", () => {
+    const d = new Date("2026-08-21T12:00:00.000Z");
+    expect(seedPeriods(d, d, "month", TZ)).toEqual(["2026-08"]);
+  });
+});
+
+describe("isoWeekKey", () => {
+  // These must agree with Mongo's $dateToString "%G-W%V" or the seeded buckets never
+  // join the aggregated ones and every period renders empty.
+  it("pads the week number to two digits", () => {
+    expect(isoWeekKey(2026, 1, 5)).toBe("2026-W02");
+  });
+
+  it("uses the ISO year of the week's Thursday, not the calendar year", () => {
+    // 2027-01-01 is a Friday, in the week whose Thursday is 2026-12-31.
+    expect(isoWeekKey(2027, 1, 1)).toBe("2026-W53");
+  });
+
+  it("puts a late-December date in week 1 of the next ISO year when it belongs there", () => {
+    // 2024-12-30 is a Monday, in the week whose Thursday is 2025-01-02.
+    expect(isoWeekKey(2024, 12, 30)).toBe("2025-W01");
+  });
+
+  it("starts the week on Monday", () => {
+    expect(isoWeekKey(2026, 8, 17)).toBe(isoWeekKey(2026, 8, 23));   // Mon..Sun
+    expect(isoWeekKey(2026, 8, 24)).not.toBe(isoWeekKey(2026, 8, 23));
   });
 });
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Box, Button, Chip, IconButton, Stack, Tab, Tabs, Tooltip, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import InsightsIcon from "@mui/icons-material/Insights";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
@@ -25,6 +26,12 @@ export interface BookDetailContext {
     book: XenBudgetBook;
     /** True when the signed-in user owns the book: gates people management and deletion. */
     isCreator: boolean;
+    /**
+     * Which currency the tallies are scoped to. Amounts in different currencies can't be
+     * added together, so every summary is for one currency at a time.
+     */
+    currency: string;
+    onCurrencyChange: (currency: string) => void;
     onAddItem: () => void;
     onEditItem: (item: XenBudgetItem) => void;
     updateBook: (input: UpdateBookInput) => void;
@@ -36,9 +43,9 @@ export interface BookDetailContext {
     isDeletingBook: boolean;
 }
 
-// Tab order must match TAB_PATHS; the active tab is derived from the URL rather than
-// stored, so a deep link or a back button lands on the right tab.
-const TAB_PATHS = ["items", "settings"];
+// Tab order must match the <Tab> order below; the active tab is derived from the URL
+// rather than stored, so a deep link or a back button lands on the right tab.
+const TAB_PATHS = ["overview", "items", "settings"];
 
 export default function BookDetail() {
     const { bookId = "" } = useParams();
@@ -62,6 +69,9 @@ export default function BookDetail() {
 
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState<XenBudgetItem | null>(null);
+    // Undefined lets the server pick (the book's default, or the only one present);
+    // choosing from the switcher pins it for this session.
+    const [currency, setCurrency] = useState<string | undefined>(undefined);
 
     const tabIndex = TAB_PATHS.findIndex((p) => location.pathname.endsWith(`/${p}`));
     const activeTab = tabIndex === -1 ? false : tabIndex;
@@ -73,6 +83,8 @@ export default function BookDetail() {
     const outletContext: BookDetailContext = {
         book,
         isCreator: book.is_creator,
+        currency: currency ?? book.default_currency,
+        onCurrencyChange: setCurrency,
         onAddItem: () => { setEditing(null); setFormOpen(true); },
         onEditItem: (item) => { setEditing(item); setFormOpen(true); },
         updateBook,
@@ -112,6 +124,7 @@ export default function BookDetail() {
                     onChange={(_, v) => navigate(`/internal/xenbudget/books/${bookId}/${TAB_PATHS[v]}`)}
                     variant="fullWidth"
                 >
+                    <Tab icon={<InsightsIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Overview" />
                     <Tab icon={<ReceiptLongIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Items" />
                     <Tab icon={<SettingsIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Settings" />
                 </Tabs>

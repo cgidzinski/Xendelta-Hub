@@ -1,19 +1,21 @@
-import { Avatar, AvatarGroup, Box, Chip, Stack, Tooltip, Typography, alpha } from "@mui/material";
+import { Avatar, AvatarGroup, Box, Stack, Tooltip, Typography, alpha } from "@mui/material";
 import BlockIcon from "@mui/icons-material/Block";
 import FlagIcon from "@mui/icons-material/Flag";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import type { XenBudgetItem, XenBudgetMember } from "../../../../hooks/xenbudget/types";
+import type { XenBudgetItem, XenBudgetMember, XenBudgetTag } from "../../../../hooks/xenbudget/types";
 import { formatCurrency } from "../../../../utils/currencyUtils";
+import TagChip from "./TagChip";
 import { xbCardSx, xbBadgeSx, xbExcludedRowSx } from "./rowStyles";
 
 interface ItemListItemProps {
     item: XenBudgetItem;
     members: XenBudgetMember[];
+    tagRegistry: XenBudgetTag[];
     onClick: (item: XenBudgetItem) => void;
 }
 
-export default function ItemListItem({ item, members, onClick }: ItemListItemProps) {
+export default function ItemListItem({ item, members, tagRegistry, onClick }: ItemListItemProps) {
     const isIncome = item.type === "income";
     const people = item.shares
         .map((s) => members.find((m) => m.user_id === s.user_id))
@@ -63,7 +65,7 @@ export default function ItemListItem({ item, members, onClick }: ItemListItemPro
                 {item.tags.length > 0 && (
                     <Stack direction="row" spacing={0.5} sx={{ mt: 0.25, flexWrap: "wrap", gap: 0.5 }}>
                         {item.tags.map((t) => (
-                            <Chip key={t} size="small" label={t} sx={{ height: 18, fontSize: 11 }} />
+                            <TagChip key={t} tag={t} registry={tagRegistry} sx={{ height: 18 }} />
                         ))}
                     </Stack>
                 )}

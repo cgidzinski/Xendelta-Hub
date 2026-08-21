@@ -427,6 +427,21 @@ const itemBodyShape = {
 
 export const createXenBudgetItemSchema = z.object(itemBodyShape);
 
+export const xenBudgetTagParamSchema = z.object({
+  bookId: objectIdSchema,
+  tagId: objectIdSchema,
+});
+
+export const createXenBudgetTagSchema = z.object({
+  name: z.string().min(1, "Tag name is required").max(50, "Tag name too long"),
+  color: z.string().max(32).optional(),
+});
+
+export const updateXenBudgetTagSchema = z.object({
+  name: z.string().min(1).max(50).optional(),
+  color: z.string().max(32).optional(),
+});
+
 export const updateXenBudgetItemSchema = z.object({
   ...itemBodyShape,
   amount: z.number().positive("Amount must be positive").optional(),

@@ -9,6 +9,7 @@ import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import CloseIcon from "@mui/icons-material/Close";
 import { useSnackbar } from "notistack";
 import type { BookDetailContext } from "./BookDetail";
+import TagManager from "./components/TagManager";
 import { UserSelect } from "../../../components/UserSelect";
 import type { SearchedUser } from "../../../hooks/useUserSearch";
 import { ALL_CURRENCIES, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
@@ -91,6 +92,11 @@ export default function BookSettings() {
                             {timezones.map((tz) => <MenuItem key={tz} value={tz}>{tz}</MenuItem>)}
                         </TextField>
                     </Stack>
+                </Card>
+
+                <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
+                    <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>Tags</Typography>
+                    <TagManager book={book} />
                 </Card>
 
                 <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>

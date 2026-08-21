@@ -160,6 +160,45 @@ export type UpdateItemInput = Partial<CreateItemInput> & {
     flagged?: boolean;
 };
 
+export interface SummaryPeriod {
+    /** "2026-08" | "2026-W34" | "2026-08-21", matching the requested group_by. */
+    key: string;
+    expense: number;
+    income: number;
+    net: number;
+    count: number;
+}
+
+export interface SummaryTag {
+    tag: string;
+    total: number;
+    count: number;
+}
+
+export interface SummaryPerson {
+    user_id: string;
+    username: string;
+    avatar: string | null;
+    total: number;
+    count: number;
+}
+
+export interface XenBudgetSummary {
+    from: string;
+    to: string;
+    group_by: "day" | "week" | "month";
+    timezone: string;
+    /** Summaries are scoped to one currency — amounts in different ones can't be added. */
+    currency: string;
+    /** Every currency present in the book, so the UI can offer a switcher. */
+    currencies: string[];
+    by_period: SummaryPeriod[];
+    by_tag: SummaryTag[];
+    by_person: SummaryPerson[];
+    untagged: { total: number; count: number };
+    totals: { expense: number; income: number; net: number; count: number };
+}
+
 export interface ItemsPage {
     items: XenBudgetItem[];
     next_cursor: string | null;
