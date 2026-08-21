@@ -1,111 +1,136 @@
 import { useState } from "react";
-import {
-    Avatar, Box, Button, Card, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-    IconButton, List, ListItem, ListItemAvatar, ListItemText, Stack, Typography,
-} from "@mui/material";
-import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import CloseIcon from "@mui/icons-material/Close";
-import { useParams } from "react-router-dom";
-import { useSnackbar } from "notistack";
+import { Box, Button, Chip, IconButton, Stack, Tab, Tabs, Tooltip, Typography } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import SettingsIcon from "@mui/icons-material/Settings";
+import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTitle } from "../../../hooks/useTitle";
 import { useXenBudgetBook } from "../../../hooks/xenbudget/useBook";
 import { useXenBudgetSocket } from "../../../hooks/xenbudget/useXenBudgetSocket";
-import { UserSelect } from "../../../components/UserSelect";
-import type { SearchedUser } from "../../../hooks/useUserSearch";
+import { useXenBudgetItemMutations } from "../../../hooks/xenbudget/useItems";
+import type {
+    XenBudgetBook, XenBudgetItem, CreateItemInput, UpdateBookInput,
+} from "../../../hooks/xenbudget/types";
+import ItemForm from "./components/ItemForm";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
-import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
+
+/**
+ * Everything the child tabs need. BookDetail is a "fat" layout route in the same shape as
+ * Xensplit's GroupDetail: it owns the book query, every dialog, and all the mutations,
+ * and the tabs stay presentational and never fetch for themselves.
+ */
+export interface BookDetailContext {
+    book: XenBudgetBook;
+    /** True when the signed-in user owns the book: gates people management and deletion. */
+    isCreator: boolean;
+    onAddItem: () => void;
+    onEditItem: (item: XenBudgetItem) => void;
+    updateBook: (input: UpdateBookInput) => void;
+    isUpdating: boolean;
+    addMembersAsync: (memberIds: string[]) => Promise<unknown>;
+    isAddingMembers: boolean;
+    removeMember: (userId: string) => void;
+    deleteBookAsync: () => Promise<unknown>;
+    isDeletingBook: boolean;
+}
+
+// Tab order must match TAB_PATHS; the active tab is derived from the URL rather than
+// stored, so a deep link or a back button lands on the right tab.
+const TAB_PATHS = ["items", "settings"];
 
 export default function BookDetail() {
     const { bookId = "" } = useParams();
+    const navigate = useNavigate();
+    const location = useLocation();
     useXenBudgetSocket(bookId);
-    const { enqueueSnackbar } = useSnackbar();
+
     const {
         book, isLoading, isError, error,
+        updateBook, isUpdating,
         addMembersAsync, isAddingMembers, removeMember,
+        deleteBookAsync, isDeletingBook,
     } = useXenBudgetBook(bookId);
+
+    const {
+        createItemAsync, isCreating, updateItemAsync, isUpdating: isUpdatingItem,
+        deleteItemAsync, isDeleting,
+    } = useXenBudgetItemMutations(bookId);
 
     useTitle(book?.name || "XenBudget");
 
-    const [addOpen, setAddOpen] = useState(false);
-    const [selected, setSelected] = useState<SearchedUser[]>([]);
+    const [formOpen, setFormOpen] = useState(false);
+    const [editing, setEditing] = useState<XenBudgetItem | null>(null);
 
-    const handleAdd = async () => {
-        try {
-            await addMembersAsync(selected.map((u) => u._id));
-            setAddOpen(false);
-            setSelected([]);
-        } catch (e) {
-            enqueueSnackbar(e instanceof Error ? e.message : "Failed to add people", { variant: "error" });
-        }
-    };
+    const tabIndex = TAB_PATHS.findIndex((p) => location.pathname.endsWith(`/${p}`));
+    const activeTab = tabIndex === -1 ? false : tabIndex;
 
     if (isLoading && !book) return <LoadingSpinner message="Loading book..." />;
     if (isError) return <ErrorDisplay error={error} />;
     if (!book) return null;
 
+    const outletContext: BookDetailContext = {
+        book,
+        isCreator: book.is_creator,
+        onAddItem: () => { setEditing(null); setFormOpen(true); },
+        onEditItem: (item) => { setEditing(item); setFormOpen(true); },
+        updateBook,
+        isUpdating,
+        addMembersAsync,
+        isAddingMembers,
+        removeMember,
+        deleteBookAsync,
+        isDeletingBook,
+    };
+
+    const handleSubmit = async (input: CreateItemInput) => {
+        if (editing) await updateItemAsync({ itemId: editing._id, input });
+        else await createItemAsync(input);
+    };
+
     return (
-        <Box sx={{ p: 2, maxWidth: 900, mx: "auto" }}>
-            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                <Typography variant="h6" sx={{ flexGrow: 1 }} noWrap>{book.name}</Typography>
-                <Chip size="small" label={book.default_currency} />
-                <Chip size="small" variant="outlined" label={`${book.item_count ?? 0} items`} />
-            </Stack>
-
-            <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                    <Typography variant="caption" sx={sectionLabelSx}>People</Typography>
-                    {book.is_creator && (
-                        <Button size="small" startIcon={<PersonAddIcon />} onClick={() => setAddOpen(true)}>
-                            Add
-                        </Button>
-                    )}
-                </Stack>
-                <List dense>
-                    {book.members.map((m) => (
-                        <ListItem
-                            key={m.user_id}
-                            secondaryAction={
-                                book.is_creator && m.user_id !== book.created_by ? (
-                                    <IconButton edge="end" size="small" onClick={() => removeMember(m.user_id)}>
-                                        <CloseIcon fontSize="small" />
-                                    </IconButton>
-                                ) : null
-                            }
-                        >
-                            <ListItemAvatar>
-                                <Avatar src={m.avatar || undefined} sx={{ width: 32, height: 32 }}>
-                                    {m.username[0]?.toUpperCase()}
-                                </Avatar>
-                            </ListItemAvatar>
-                            <ListItemText
-                                primary={m.username}
-                                secondary={m.user_id === book.created_by ? "Owner" : undefined}
-                            />
-                        </ListItem>
-                    ))}
-                </List>
-            </Card>
-
-            <Dialog open={addOpen} onClose={() => setAddOpen(false)} fullWidth maxWidth="xs">
-                <DialogTitle>Add people</DialogTitle>
-                <DialogContent>
-                    <Box sx={{ pt: 1 }}>
-                        <UserSelect
-                            value={selected}
-                            onChange={setSelected}
-                            label="People"
-                            excludeUserIds={book.members.map((m) => m.user_id)}
-                        />
-                    </Box>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setAddOpen(false)}>Cancel</Button>
-                    <Button variant="contained" disabled={selected.length === 0 || isAddingMembers} onClick={handleAdd}>
+        <Box>
+            <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+                <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, pt: 1.5, pb: 1 }}>
+                    <Tooltip title="All books">
+                        <IconButton size="small" onClick={() => navigate("/internal/xenbudget/books")}>
+                            <ArrowBackIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                    <Typography variant="h6" noWrap sx={{ flexGrow: 1, minWidth: 0 }}>{book.name}</Typography>
+                    <Chip size="small" label={book.default_currency} />
+                    <Button
+                        size="small" variant="contained" startIcon={<AddIcon />}
+                        onClick={outletContext.onAddItem}
+                    >
                         Add
                     </Button>
-                </DialogActions>
-            </Dialog>
+                </Stack>
+                <Tabs
+                    value={activeTab}
+                    onChange={(_, v) => navigate(`/internal/xenbudget/books/${bookId}/${TAB_PATHS[v]}`)}
+                    variant="fullWidth"
+                >
+                    <Tab icon={<ReceiptLongIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Items" />
+                    <Tab icon={<SettingsIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Settings" />
+                </Tabs>
+            </Box>
+
+            <Box sx={{ maxWidth: 900, mx: "auto" }}>
+                <Outlet context={outletContext} />
+            </Box>
+
+            <ItemForm
+                open={formOpen}
+                onClose={() => setFormOpen(false)}
+                book={book}
+                item={editing}
+                onSubmit={handleSubmit}
+                isSubmitting={isCreating || isUpdatingItem}
+                onDelete={editing ? () => deleteItemAsync(editing._id) : undefined}
+                isDeleting={isDeleting}
+            />
         </Box>
     );
 }

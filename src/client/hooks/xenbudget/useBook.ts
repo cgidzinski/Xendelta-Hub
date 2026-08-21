@@ -47,11 +47,23 @@ export function useXenBudgetBook(bookId: string) {
         onSuccess: invalidate,
     });
 
+    const deleteMutation = useMutation({
+        mutationFn: async () => {
+            await apiClient.delete(`/api/xenbudget/books/${bookId}`);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["xenbudget", "books"] });
+            queryClient.removeQueries({ queryKey: ["xenbudget", "book", bookId] });
+        },
+    });
+
     return {
         book: data,
         isLoading,
         isError,
         error,
+        deleteBookAsync: deleteMutation.mutateAsync,
+        isDeletingBook: deleteMutation.isPending,
         updateBook: updateMutation.mutate,
         isUpdating: updateMutation.isPending,
         addMembers: addMembersMutation.mutate,
