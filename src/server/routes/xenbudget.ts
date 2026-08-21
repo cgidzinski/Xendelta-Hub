@@ -31,6 +31,7 @@ import {
   updateXenBudgetPresetSchema,
   xenBudgetPresetParamSchema,
   xenBudgetBatchParamSchema,
+  xenBudgetRestoreSchema,
 } from "../utils/validation";
 import {
   resolveShares, computeImportHash, roundMoney, seedPeriods, budgetPeriodRange,
@@ -136,6 +137,146 @@ function toBudgetFields(body: any): Record<string, any> {
     end_date: body.end_date ? new Date(body.end_date) : undefined,
     active: body.active !== false,
   };
+}
+
+// Subdocument _ids from another book would collide on restore, so they're dropped and
+// mongoose assigns fresh ones.
+function stripIds(list: any[] | undefined): any[] {
+  return (list || []).map((entry: any) => {
+    const { _id, ...rest } = entry || {};
+    return rest;
+  });
+}
+
+/**
+ * Works out who the exported members are on *this* deployment.
+ *
+ * Matches by user id first (exact when the same users still exist), then by username (so
+ * a backup restored elsewhere still finds the right people). Anyone who matches neither
+ * is reported rather than silently dropped — their shares are left pointing at the old id
+ * so the money still adds up, and the restore says how many people it couldn't place.
+ */
+async function resolveRestoreMembers(
+  exported: { user_id?: string; username?: string }[],
+  importerId: string,
+): Promise<{ members: any[]; idMap: Map<string, string>; unmatched: string[] }> {
+  const idMap = new Map<string, string>();
+  const unmatched: string[] = [];
+  const members: string[] = [importerId];
+
+  const ids = exported.map((m) => m.user_id).filter((id): id is string =>
+    !!id && mongoose.Types.ObjectId.isValid(id));
+  const usernames = exported.map((m) => m.username).filter(Boolean) as string[];
+
+  const found = await User.find({
+    $or: [
+      ...(ids.length ? [{ _id: { $in: ids.map((id) => new mongoose.Types.ObjectId(id)) } }] : []),
+      ...(usernames.length ? [{ username: { $in: usernames } }] : []),
+    ],
+  }).select("_id username").lean();
+
+  const byId = new Map<string, any>();
+  const byUsername = new Map<string, any>();
+  found.forEach((u: any) => {
+    byId.set(u._id.toString(), u);
+    if (u.username) byUsername.set(u.username, u);
+  });
+
+  for (const entry of exported) {
+    const match = (entry.user_id && byId.get(entry.user_id))
+      || (entry.username && byUsername.get(entry.username));
+    if (!match) {
+      unmatched.push(entry.username || entry.user_id || "unknown");
+      continue;
+    }
+    const newId = match._id.toString();
+    if (entry.user_id && entry.user_id !== newId) idMap.set(entry.user_id, newId);
+    if (!members.includes(newId)) members.push(newId);
+  }
+
+  return { members, idMap, unmatched };
+}
+
+function remapUser(id: string | undefined, idMap: Map<string, string>): string | undefined {
+  if (!id) return id;
+  return idMap.get(id) || id;
+}
+
+function remapBudgets(budgets: any[], idMap: Map<string, string>): any[] {
+  return budgets.map((b: any) => ({ ...b, person_id: remapUser(b.person_id, idMap) }));
+}
+
+function remapRules(rules: any[], idMap: Map<string, string>): any[] {
+  return rules.map((r: any) => ({
+    ...r,
+    actions: {
+      ...(r.actions || {}),
+      set_people: ((r.actions?.set_people) || []).map((id: string) => remapUser(id, idMap)),
+    },
+  }));
+}
+
+/**
+ * Writes restored items. In merge mode, anything whose import_hash already exists in the
+ * book is skipped, so restoring over live data doesn't double every item.
+ */
+async function insertRestoredItems(
+  book: any,
+  items: any[],
+  idMap: Map<string, string>,
+  userId: string,
+  mode: "merge" | "replace",
+): Promise<number> {
+  if (!items || items.length === 0) return 0;
+
+  let existingHashes = new Set<string>();
+  if (mode === "merge") {
+    const rows = await XenBudgetItem.find({ book_id: book._id }).select("import_hash").lean();
+    existingHashes = new Set(rows.map((r: any) => r.import_hash).filter(Boolean));
+  }
+
+  const docs: any[] = [];
+  for (const raw of items) {
+    const amount = roundMoney(Number(raw.amount) || 0);
+    if (!(amount > 0) || !raw.description) continue;
+    const date = raw.date ? new Date(raw.date) : new Date();
+    const hash = raw.import_hash || computeImportHash(date, amount, raw.description);
+    if (mode === "merge" && existingHashes.has(hash)) continue;
+    existingHashes.add(hash);
+
+    docs.push({
+      book_id: book._id,
+      type: raw.type === "income" ? "income" : "expense",
+      amount,
+      currency: raw.currency || book.default_currency,
+      date,
+      description: String(raw.description).slice(0, 500),
+      original_description: raw.original_description,
+      notes: raw.notes,
+      tags: Array.isArray(raw.tags) ? raw.tags : [],
+      rule_tags: Array.isArray(raw.rule_tags) ? raw.rule_tags : [],
+      share_type: raw.share_type || "equal",
+      // Share user ids are remapped where a person resolved to a different account, so
+      // per-person totals still attribute to the right people after a restore.
+      shares: (raw.shares || []).map((s: any) => ({
+        user_id: remapUser(s.user_id, idMap),
+        amount: s.amount,
+        percentage: s.percentage,
+      })),
+      excluded: !!raw.excluded,
+      excluded_reason: raw.excluded_reason,
+      flagged: !!raw.flagged,
+      flag_reason: raw.flag_reason,
+      manually_edited: !!raw.manually_edited,
+      source: "restore",
+      import_hash: hash,
+      created_by: raw.created_by || userId,
+      created_at: raw.created_at ? new Date(raw.created_at) : new Date(),
+    });
+  }
+
+  if (docs.length > 0) await XenBudgetItem.insertMany(docs);
+  return docs.length;
 }
 
 function broadcastBook(book: any) {
@@ -786,6 +927,150 @@ module.exports = function (app: any) {
       } catch (error) {
         console.error("Error previewing items:", error);
         res.status(500).json({ status: false, message: "Failed to preview items" });
+      }
+    });
+
+  // --- Backup: export and restore ------------------------------------------
+  //
+  // Per-book, user-facing backup. scripts/db-backup.ts already does whole-database
+  // NDJSON.gz backup/restore, but that is an operator tool that wipes every collection.
+  // This is deliberately a different format: plain, inspectable JSON, one book.
+
+  // GET /api/xenbudget/books/:bookId/export
+  app.get("/api/xenbudget/books/:bookId/export",
+    validateParams(xenBudgetBookIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        await book.populate("members", "username avatar");
+
+        const safeName = book.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.setHeader("Content-Disposition",
+          `attachment; filename="xenbudget-${safeName}-${new Date().toISOString().slice(0, 10)}.json"`);
+
+        // format_version is carried from day one so a future schema change can migrate an
+        // older file rather than reject it.
+        res.write('{\n  "format_version": 1,\n');
+        res.write(`  "exported_at": ${JSON.stringify(new Date().toISOString())},\n`);
+        res.write(`  "book": ${JSON.stringify({
+          name: book.name,
+          timezone: book.timezone,
+          default_currency: book.default_currency,
+          tags: book.tags,
+          budgets: book.budgets,
+          rules: book.rules,
+          import_presets: book.import_presets,
+          // Both id and username: the id is exact when the same users still exist, and
+          // the username lets a restore re-match people on a different deployment.
+          members: (book.members as any[]).map((m: any) => ({
+            user_id: m._id ? m._id.toString() : m.toString(),
+            username: m.username || undefined,
+          })),
+        }, null, 2)},\n`);
+        res.write('  "items": [');
+
+        // Streamed from a cursor rather than loaded whole: a well-used book is tens of
+        // thousands of items, and buffering them all would spike memory per request.
+        let first = true;
+        const cursor = XenBudgetItem.find({ book_id: book._id }).sort({ date: 1 }).lean().cursor();
+        for await (const item of cursor) {
+          const { _id, book_id, __v, ...rest } = item as any;
+          res.write((first ? "\n    " : ",\n    ") + JSON.stringify(rest));
+          first = false;
+        }
+        res.write("\n  ]\n}\n");
+        res.end();
+      } catch (error) {
+        console.error("Error exporting book:", error);
+        // The response may already be streaming, in which case headers are long gone and
+        // the only honest signal left is an abrupt end.
+        if (res.headersSent) res.end();
+        else res.status(500).json({ status: false, message: "Failed to export book" });
+      }
+    });
+
+  // POST /api/xenbudget/books/import - restore as a NEW book
+  app.post("/api/xenbudget/books/import", validate(xenBudgetRestoreSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = callerId(req);
+        const payload = req.body;
+        const { members, idMap, unmatched } = await resolveRestoreMembers(payload.book.members || [], userId);
+
+        const book = new XenBudgetBook({
+          name: payload.book.name,
+          timezone: payload.book.timezone || "America/Toronto",
+          default_currency: payload.book.default_currency || "CAD",
+          created_by: userId,
+          members,
+          tags: stripIds(payload.book.tags),
+          budgets: remapBudgets(stripIds(payload.book.budgets), idMap),
+          rules: remapRules(stripIds(payload.book.rules), idMap),
+          import_presets: stripIds(payload.book.import_presets),
+        });
+        await book.save();
+
+        const inserted = await insertRestoredItems(book, payload.items, idMap, userId, "merge");
+        await book.populate("members", "username avatar");
+        SocketManager.getInstance().notifyXenBudgetBooksUpdated(members.map(String));
+
+        res.json({
+          status: true,
+          message: `Restored ${inserted} item${inserted === 1 ? "" : "s"}`,
+          data: { book: serializeBookFor(book, userId, inserted), restored: inserted, unmatched_people: unmatched },
+        });
+      } catch (error) {
+        console.error("Error restoring book:", error);
+        res.status(500).json({ status: false, message: "Failed to restore book" });
+      }
+    });
+
+  // POST /api/xenbudget/books/:bookId/import - restore INTO this book
+  app.post("/api/xenbudget/books/:bookId/import",
+    validateParams(xenBudgetBookIdParamSchema), validate(xenBudgetRestoreSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const mode = req.body.mode === "replace" ? "replace" : "merge";
+        // Replacing destroys everything already in the book, so it is the owner's call.
+        const book = mode === "replace"
+          ? await loadBookForCreator(req, res)
+          : await loadBookForMember(req, res);
+        if (!book) return;
+
+        const userId = callerId(req);
+        const { idMap, unmatched } = await resolveRestoreMembers(req.body.book.members || [], userId);
+
+        let removed = 0;
+        if (mode === "replace") {
+          const result = await XenBudgetItem.deleteMany({ book_id: book._id });
+          removed = result.deletedCount || 0;
+          book.tags = stripIds(req.body.book.tags);
+          book.budgets = remapBudgets(stripIds(req.body.book.budgets), idMap);
+          book.rules = remapRules(stripIds(req.body.book.rules), idMap);
+          book.import_presets = stripIds(req.body.book.import_presets);
+          await book.save();
+        }
+
+        const inserted = await insertRestoredItems(book, req.body.items, idMap, userId, mode);
+        await book.populate("members", "username avatar");
+        broadcastBook(book);
+
+        res.json({
+          status: true,
+          message: mode === "replace"
+            ? `Replaced ${removed} item${removed === 1 ? "" : "s"} with ${inserted}`
+            : `Added ${inserted} item${inserted === 1 ? "" : "s"}`,
+          data: {
+            mode, restored: inserted, removed,
+            skipped_duplicates: req.body.items.length - inserted,
+            unmatched_people: unmatched,
+          },
+        });
+      } catch (error) {
+        console.error("Error restoring into book:", error);
+        res.status(500).json({ status: false, message: "Failed to restore into book" });
       }
     });
 

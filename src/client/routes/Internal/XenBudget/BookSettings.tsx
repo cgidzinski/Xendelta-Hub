@@ -10,6 +10,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import { useSnackbar } from "notistack";
 import type { BookDetailContext } from "./BookDetail";
 import TagManager from "./components/TagManager";
+import BookBackupSection from "./components/BookBackupSection";
 import { UserSelect } from "../../../components/UserSelect";
 import type { SearchedUser } from "../../../hooks/useUserSearch";
 import { ALL_CURRENCIES, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
@@ -137,6 +138,11 @@ export default function BookSettings() {
                             Only the book owner can add or remove people.
                         </Typography>
                     )}
+                </Card>
+
+                <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
+                    <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>Backup</Typography>
+                    <BookBackupSection book={book} isCreator={isCreator} />
                 </Card>
 
                 {isCreator && (

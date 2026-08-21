@@ -427,6 +427,32 @@ const itemBodyShape = {
 
 export const createXenBudgetItemSchema = z.object(itemBodyShape);
 
+// A restore payload. Items are validated loosely — a backup is our own format, and being
+// strict about every legacy field would make an older export unrestorable, which defeats
+// the point of having a backup.
+export const xenBudgetRestoreSchema = z.object({
+  format_version: z.number().int().min(1).max(1, "That backup was made by a newer version of XenBudget"),
+  book: z.object({
+    name: z.string().min(1).max(100),
+    timezone: z.string().max(64).optional(),
+    default_currency: z.string().max(10).optional(),
+    tags: z.array(z.any()).max(500).optional(),
+    budgets: z.array(z.any()).max(500).optional(),
+    rules: z.array(z.any()).max(500).optional(),
+    import_presets: z.array(z.any()).max(200).optional(),
+    members: z.array(z.object({
+      user_id: z.string().optional(),
+      username: z.string().optional(),
+    })).max(200).optional(),
+  }),
+  items: z.array(z.any()).max(50000, "That backup is too large to restore in one go"),
+  /**
+   * merge  - add to what's already here, skipping items that already exist
+   * replace - wipe this book's items first (creator only, and confirmed client-side)
+   */
+  mode: z.enum(["merge", "replace"]).optional(),
+});
+
 export const xenBudgetPresetParamSchema = z.object({
   bookId: objectIdSchema,
   presetId: objectIdSchema,
