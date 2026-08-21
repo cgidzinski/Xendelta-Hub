@@ -1,3 +1,4 @@
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import BrushIcon from "@mui/icons-material/Brush";
 import FolderIcon from "@mui/icons-material/Folder";
 import LinkIcon from "@mui/icons-material/Link";
@@ -45,6 +46,13 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
         icon: ReceiptLongIcon,
         path: "/internal/xensplit",
         description: "Split expenses with friends",
+    },
+    {
+        key: "xenbudget",
+        label: "XenBudget",
+        icon: AccountBalanceWalletIcon,
+        path: "/internal/xenbudget",
+        description: "Track spending and set budgets",
     },
     // XenCasino hidden from side nav
     {

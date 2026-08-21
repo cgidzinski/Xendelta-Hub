@@ -78,6 +78,9 @@ import GroupBalances from "./routes/Internal/Xensplit/GroupBalances";
 import GroupSettlements from "./routes/Internal/Xensplit/GroupSettlements";
 import GroupExplain from "./routes/Internal/Xensplit/GroupExplain";
 import GroupSettings from "./routes/Internal/Xensplit/GroupSettings";
+// Routes - XenBudget
+import XenBudgetBooksList from "./routes/Internal/XenBudget/BooksList";
+import XenBudgetBookDetail from "./routes/Internal/XenBudget/BookDetail";
 // Routes - Admin
 import Admin from "./routes/Admin/Admin";
 import Users from "./routes/Admin/Users";
@@ -215,6 +218,11 @@ const router = createBrowserRouter(
           <Route path="analytics" element={<GroupAnalytics />} />
           <Route path="explain" element={<GroupExplain />} />
           <Route path="settings" element={<GroupSettings />} />
+        </Route>
+        <Route path="xenbudget">
+          <Route index element={<Navigate to="books" replace />} />
+          <Route path="books" element={<XenBudgetBooksList />} />
+          <Route path="books/:bookId" element={<XenBudgetBookDetail />} />
         </Route>
       </Route>
       {/* Admin routes - require admin role and use AdminNavBar */}

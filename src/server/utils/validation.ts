@@ -355,3 +355,83 @@ export const xenSplitExchangeParamSchema = z.object({
   exchangeId: objectIdSchema,
 });
 
+// XenBudget validation schemas
+
+// Rejects a timezone the runtime can't actually resolve. Every month boundary in
+// /summary and /budget-status is computed from this, so an unusable value would silently
+// misfile items rather than fail loudly.
+const timezoneSchema = z.string().refine((tz) => {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}, { message: "Unknown timezone" });
+
+export const xenBudgetBookIdParamSchema = z.object({
+  bookId: objectIdSchema,
+});
+
+export const xenBudgetItemParamSchema = z.object({
+  bookId: objectIdSchema,
+  itemId: objectIdSchema,
+});
+
+export const xenBudgetMemberParamSchema = z.object({
+  bookId: objectIdSchema,
+  userId: objectIdSchema,
+});
+
+export const createXenBudgetBookSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100, "Name too long"),
+  memberIds: z.array(objectIdSchema).optional(),
+  default_currency: z.string().max(10).optional(),
+  timezone: timezoneSchema.optional(),
+});
+
+export const updateXenBudgetBookSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  default_currency: z.string().max(10).optional(),
+  timezone: timezoneSchema.optional(),
+  archived: z.boolean().optional(),
+});
+
+export const addXenBudgetMembersSchema = z.object({
+  memberIds: z.array(objectIdSchema).min(1, "At least one member required"),
+});
+
+export const transferXenBudgetBookSchema = z.object({
+  userId: objectIdSchema,
+});
+
+const xenBudgetShareSchema = z.object({
+  user_id: objectIdSchema,
+  amount: z.number().optional(),
+  percentage: z.number().optional(),
+});
+
+// Shared by create and (partially) update. Amount is always positive - `type` carries the
+// sign - so a negative amount is a mapping bug rather than an income row.
+const itemBodyShape = {
+  type: z.enum(["expense", "income"]).optional(),
+  amount: z.number("Amount must be a number").positive("Amount must be positive"),
+  currency: z.string().max(10).optional(),
+  date: z.string().datetime().optional(),
+  description: z.string().min(1, "Description required").max(500),
+  notes: z.string().max(1000).optional(),
+  tags: z.array(z.string().max(50)).max(20, "Too many tags").optional(),
+  share_type: z.enum(["equal", "exact", "percent"]).optional(),
+  shares: z.array(xenBudgetShareSchema).optional(),
+};
+
+export const createXenBudgetItemSchema = z.object(itemBodyShape);
+
+export const updateXenBudgetItemSchema = z.object({
+  ...itemBodyShape,
+  amount: z.number().positive("Amount must be positive").optional(),
+  description: z.string().min(1).max(500).optional(),
+  excluded: z.boolean().optional(),
+  flagged: z.boolean().optional(),
+});
+

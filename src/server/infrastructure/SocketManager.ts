@@ -234,4 +234,19 @@ export class SocketManager {
       this.io.to(`user:${userId}`).emit("xensplit:groups_updated");
     });
   }
+
+  // Notify book members that a XenBudget book changed. This is what keeps the monthly
+  // tally live: every member's open Overview re-fetches its summary on receipt.
+  notifyXenBudgetBookUpdate(bookId: string, memberIds: string[]) {
+    memberIds.forEach((userId) => {
+      this.io.to(`user:${userId}`).emit("xenbudget:book_update", { bookId });
+    });
+  }
+
+  // Notify users that their books list has changed (e.g. added to a new book)
+  notifyXenBudgetBooksUpdated(memberIds: string[]) {
+    memberIds.forEach((userId) => {
+      this.io.to(`user:${userId}`).emit("xenbudget:books_updated");
+    });
+  }
 }
