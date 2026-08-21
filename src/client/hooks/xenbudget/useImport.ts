@@ -10,7 +10,7 @@ export interface ImportCandidate {
     currency?: string;
     date?: string;
     description: string;
-    tags?: string[];
+    categories?: string[];
     people?: string[];
 }
 

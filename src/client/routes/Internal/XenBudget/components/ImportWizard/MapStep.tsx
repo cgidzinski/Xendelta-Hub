@@ -97,7 +97,7 @@ export default function MapStep({
                 <MenuItem value="mdy">{ORDER_LABELS.mdy}</MenuItem>
             </TextField>
 
-            {columnSelect("tags", "Tags (optional)")}
+            {columnSelect("categories", "Category (optional)")}
 
             {errorCount > 0 && (
                 <Alert severity="warning">

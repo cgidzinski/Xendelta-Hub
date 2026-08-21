@@ -9,7 +9,7 @@ import { useSnackbar } from "notistack";
 import type {
     XenBudgetBook, XenBudgetItem, ShareType, ItemType, CreateItemInput,
 } from "../../../../hooks/xenbudget/types";
-import ShareEditor, { type ShareDraft } from "./ShareEditor";
+import WeightedSplitEditor, { type SplitDraft } from "./WeightedSplitEditor";
 import {
     getGroupCurrencies, getCurrencySymbol, sanitizeAmount, STABLE_CURRENCY_MENU_PROPS,
 } from "../../../../utils/currencyUtils";
@@ -38,8 +38,10 @@ export default function ItemForm({
     const [description, setDescription] = useState("");
     const [notes, setNotes] = useState("");
     const [tags, setTags] = useState<string[]>([]);
+    const [categorySplitType, setCategorySplitType] = useState<ShareType>("equal");
+    const [categories, setCategories] = useState<SplitDraft[]>([]);
     const [shareType, setShareType] = useState<ShareType>("equal");
-    const [shares, setShares] = useState<ShareDraft[]>([]);
+    const [shares, setShares] = useState<SplitDraft[]>([]);
 
     // Re-seed whenever the dialog opens, so a cancelled edit doesn't leak into the next one.
     useEffect(() => {
@@ -52,9 +54,14 @@ export default function ItemForm({
             setDescription(item.description);
             setNotes(item.notes || "");
             setTags(item.tags || []);
+            setCategorySplitType(item.category_split_type || "equal");
+            setCategories((item.categories || []).map((c) => ({
+                key: c.name,
+                value: item.category_split_type === "percent" ? String(c.percentage ?? "") : String(c.amount ?? ""),
+            })));
             setShareType(item.share_type);
             setShares(item.shares.map((s) => ({
-                user_id: s.user_id,
+                key: s.user_id,
                 value: item.share_type === "percent" ? String(s.percentage ?? "") : String(s.amount ?? ""),
             })));
         } else {
@@ -65,9 +72,11 @@ export default function ItemForm({
             setDescription("");
             setNotes("");
             setTags([]);
+            setCategorySplitType("equal");
+            setCategories([]);
             setShareType("equal");
             // Default to everyone: the common case is a shared household expense.
-            setShares(book.members.map((m) => ({ user_id: m.user_id, value: "" })));
+            setShares(book.members.map((m) => ({ key: m.user_id, value: "" })));
         }
     }, [open, item, book]);
 
@@ -83,9 +92,15 @@ export default function ItemForm({
             description: description.trim(),
             notes: notes.trim() || undefined,
             tags,
+            category_split_type: categorySplitType,
+            categories: categories.map((c) => ({
+                name: c.key,
+                ...(categorySplitType === "exact" ? { amount: parseFloat(c.value) || 0 } : {}),
+                ...(categorySplitType === "percent" ? { percentage: parseFloat(c.value) || 0 } : {}),
+            })),
             share_type: shareType,
             shares: shares.map((s) => ({
-                user_id: s.user_id,
+                user_id: s.key,
                 ...(shareType === "exact" ? { amount: parseFloat(s.value) || 0 } : {}),
                 ...(shareType === "percent" ? { percentage: parseFloat(s.value) || 0 } : {}),
             })),
@@ -148,6 +163,23 @@ export default function ItemForm({
 
                     <DatePicker label="Date" value={date} onChange={setDate} />
 
+                    <Divider />
+
+                    <Box>
+                        <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
+                            What was it?
+                        </Typography>
+                        <WeightedSplitEditor
+                            mode={{ kind: "categories", registry: book.categories }}
+                            splitType={categorySplitType}
+                            onSplitTypeChange={setCategorySplitType}
+                            selected={categories}
+                            onSelectedChange={setCategories}
+                            amount={numericAmount}
+                            currency={currency}
+                        />
+                    </Box>
+
                     <Autocomplete
                         multiple freeSolo
                         options={book.tags.map((t) => t.name)}
@@ -156,11 +188,14 @@ export default function ItemForm({
                         renderTags={(value, getTagProps) =>
                             value.map((option, index) => {
                                 const { key, ...rest } = getTagProps({ index });
-                                return <Chip key={key} size="small" label={option} {...rest} />;
+                                return <Chip key={key} size="small" variant="outlined" label={option} {...rest} />;
                             })
                         }
                         renderInput={(params) => (
-                            <TextField {...params} label="Tags" placeholder="Add a tag" />
+                            <TextField
+                                {...params} label="Tags" placeholder="Anything needing attention?"
+                                helperText="For things to come back to — not what the purchase was."
+                            />
                         )}
                     />
 
@@ -175,10 +210,10 @@ export default function ItemForm({
                         <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
                             Attributed to
                         </Typography>
-                        <ShareEditor
-                            members={book.members}
-                            shareType={shareType}
-                            onShareTypeChange={setShareType}
+                        <WeightedSplitEditor
+                            mode={{ kind: "people", members: book.members }}
+                            splitType={shareType}
+                            onSplitTypeChange={setShareType}
                             selected={shares}
                             onSelectedChange={setShares}
                             amount={numericAmount}

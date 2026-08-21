@@ -179,26 +179,26 @@ describe("applyMapping", () => {
         expect(mapped[0].index).toBe(1);
     });
 
-    it("splits a tag column and merges the preset's default tags", () => {
+    it("splits a category column and merges the preset's defaults", () => {
         const { rows: mapped } = applyMapping(
-            [{ Date: "2026-08-01", Payee: "X", Amount: "-5", Tags: "food; coffee" }],
+            [{ Date: "2026-08-01", Payee: "X", Amount: "-5", Cat: "food; coffee" }],
             signed({
-                column_map: { date: "Date", description: "Payee", amount: "Amount", tags: "Tags" },
-                default_tags: ["imported"],
+                column_map: { date: "Date", description: "Payee", amount: "Amount", categories: "Cat" },
+                default_categories: ["imported"],
             }),
         );
-        expect(mapped[0].tags).toEqual(["imported", "food", "coffee"]);
+        expect(mapped[0].categories).toEqual(["imported", "food", "coffee"]);
     });
 
-    it("does not duplicate a default tag the row already carries", () => {
+    it("does not duplicate a default category the row already carries", () => {
         const { rows: mapped } = applyMapping(
-            [{ Date: "2026-08-01", Payee: "X", Amount: "-5", Tags: "Imported" }],
+            [{ Date: "2026-08-01", Payee: "X", Amount: "-5", Cat: "Imported" }],
             signed({
-                column_map: { date: "Date", description: "Payee", amount: "Amount", tags: "Tags" },
-                default_tags: ["imported"],
+                column_map: { date: "Date", description: "Payee", amount: "Amount", categories: "Cat" },
+                default_categories: ["imported"],
             }),
         );
-        expect(mapped[0].tags).toEqual(["imported"]);
+        expect(mapped[0].categories).toEqual(["imported"]);
     });
 
     it("applies one detected date order across the whole file", () => {

@@ -9,17 +9,26 @@ var Schema = mongoose.Schema;
 
 // --- Book sub-schemas -------------------------------------------------------
 
-// The tag registry. Items store tag NAMES (see itemSchema.tags), not ids, so a CSV
-// import can name a tag without a lookup; this collection only supplies the color.
-var tagSchema = new Schema({
+// One shape for both registries a book carries. Items reference labels by NAME rather
+// than id, so a CSV import or a rule can name one that isn't registered yet without a
+// lookup; the registry supplies the colour and makes renaming possible.
+//
+//   categories - what a purchase WAS (Groceries, Rent). Budgets and reports run on these,
+//                and one purchase can split across several by weight.
+//   tags       - what needs ATTENTION ("check receipt"). Unweighted: a tag applies or it
+//                doesn't. These replaced the old flagged/flag_reason pair.
+var labelSchema = new Schema({
   name: { type: String, required: true, maxlength: 50 },
   color: { type: String, maxlength: 32 },
+  // Built-in tags the importer and the rules engine reference by name (see
+  // constants/xenbudget.ts). Cannot be deleted or renamed; the colour stays editable.
+  system: { type: Boolean, default: false },
 }, { _id: true });
 
 var budgetSchema = new Schema({
-  scope: { type: String, enum: ["all", "tag", "person"], required: true },
-  tag: { type: String, maxlength: 50 },   // scope === "tag"
-  person_id: { type: String },            // scope === "person"
+  scope: { type: String, enum: ["all", "category", "person"], required: true },
+  category: { type: String, maxlength: 50 },  // scope === "category"
+  person_id: { type: String },                // scope === "person"
   period: {
     type: String,
     enum: ["weekly", "monthly", "quarterly", "yearly", "custom"],
@@ -37,7 +46,7 @@ var budgetSchema = new Schema({
 var ruleConditionSchema = new Schema({
   field: {
     type: String,
-    enum: ["description", "amount", "tags", "type", "date", "source"],
+    enum: ["description", "amount", "tags", "category", "type", "date", "source"],
     required: true,
   },
   op: {
@@ -54,13 +63,14 @@ var ruleConditionSchema = new Schema({
 }, { _id: false });
 
 var ruleActionsSchema = new Schema({
+  // What the purchase was. Assigned an even split, so one category means 100%.
+  set_categories: { type: [String], default: [] },
+  // What needs attention. This is what the old `flag` action became.
   add_tags: { type: [String], default: [] },
   remove_tags: { type: [String], default: [] },
   set_type: { type: String, enum: ["expense", "income", null], default: null },
   set_people: { type: [String], default: [] },
   set_description: { type: String, maxlength: 500 },
-  flag: { type: Boolean, default: false },
-  flag_reason: { type: String, maxlength: 200 },
   // keep    - store normally
   // exclude - store, but with excluded:true so it never reaches a total (reversible)
   // skip    - never store at all; only reachable via import, and always reported
@@ -90,7 +100,7 @@ var importPresetSchema = new Schema({
     amount: { type: String },   // amount_mode === "signed"
     debit: { type: String },    // amount_mode === "debit_credit"
     credit: { type: String },
-    tags: { type: String },
+    categories: { type: String },
     people: { type: String },
   },
   amount_mode: { type: String, enum: ["signed", "debit_credit"], default: "signed" },
@@ -101,7 +111,7 @@ var importPresetSchema = new Schema({
   },
   date_format: { type: String, default: "auto" },  // date-fns pattern, or "auto"
   skip_rows: { type: Number, default: 0 },
-  default_tags: { type: [String], default: [] },
+  default_categories: { type: [String], default: [] },
   created_at: { type: Date, default: Date.now },
 }, { _id: true });
 
@@ -117,7 +127,8 @@ var bookSchema = new Schema({
   // book, delete it, or restore over it. Every other member can do everything else.
   created_by: { type: String, required: true },
   members: [{ type: Schema.Types.ObjectId, ref: "User" }],
-  tags: [tagSchema],
+  categories: [labelSchema],
+  tags: [labelSchema],
   budgets: [budgetSchema],
   rules: [ruleSchema],
   import_presets: [importPresetSchema],
@@ -132,9 +143,19 @@ bookSchema.index({ members: 1 });
 // --- Item -------------------------------------------------------------------
 
 // Resolved per-person amounts, not just a person list - this is what makes per-person
-// budgets reconcile with the book total. Populated by resolveSplits().
+// budgets reconcile with the book total. Populated by resolveShares().
 var shareSchema = new Schema({
   user_id: { type: String, required: true },
+  amount: { type: Number },
+  percentage: { type: Number },
+}, { _id: false });
+
+// The same idea for categories: a resolved weight, not a bare name. Storing the amount is
+// what lets the per-category rollup sum to the item's amount. Summing the item's full
+// amount once per category - which is what the old `tags` array did - double-counts every
+// item carrying more than one.
+var itemCategorySchema = new Schema({
+  name: { type: String, required: true, maxlength: 50 },
   amount: { type: Number },
   percentage: { type: Number },
 }, { _id: false });
@@ -150,21 +171,26 @@ var itemSchema = new Schema({
   // Pre-rule text, kept so a rule's set_description rewrite stays auditable.
   original_description: { type: String, maxlength: 500 },
   notes: { type: String, maxlength: 1000 },
+
+  // What the purchase was, weighted. An item with no categories is uncategorised.
+  categories: [itemCategorySchema],
+  category_split_type: { type: String, enum: ["equal", "exact", "percent"], default: "equal" },
+  // What needs attention, by name. Replaced the old flagged/flag_reason pair.
   tags: { type: [String], default: [] },
+
   share_type: { type: String, enum: ["equal", "exact", "percent"], default: "equal" },
   shares: [shareSchema],
 
   // --- rules engine output ---
   excluded: { type: Boolean, default: false },
   excluded_reason: { type: String, maxlength: 200 },
-  flagged: { type: Boolean, default: false },
-  flag_reason: { type: String, maxlength: 200 },
   // Which rules touched this item, for provenance in the UI.
   applied_rule_ids: [{ type: Schema.Types.ObjectId }],
-  // Exactly the tags rules contributed. Re-apply removes these before re-evaluating,
-  // which is what makes deleting a rule actually reverse its effects — and because it
-  // records the tags themselves rather than the rules, it stays correct even once the
-  // rule responsible has been deleted. Tags the user added by hand are untouched.
+  // Exactly what rules contributed, tracked separately so a re-apply can reverse each
+  // independently — deleting a categorising rule must not strip a hand-added attention
+  // tag. Recording the names rather than the rules keeps this correct even once the rule
+  // responsible has been deleted. Anything the user added by hand is untouched.
+  rule_categories: { type: [String], default: [] },
   rule_tags: { type: [String], default: [] },
   // Set by any user PUT. Re-apply skips these by default so a sweep never silently
   // overwrites a hand correction.
@@ -178,9 +204,9 @@ var itemSchema = new Schema({
 });
 
 itemSchema.index({ book_id: 1, date: -1 });
+itemSchema.index({ book_id: 1, "categories.name": 1 });
 itemSchema.index({ book_id: 1, tags: 1 });
 itemSchema.index({ book_id: 1, import_hash: 1 });
-itemSchema.index({ book_id: 1, flagged: 1 });
 itemSchema.index({ book_id: 1, import_batch_id: 1 });
 
 var XenBudgetBook = mongoose.model("XenBudgetBook", bookSchema);

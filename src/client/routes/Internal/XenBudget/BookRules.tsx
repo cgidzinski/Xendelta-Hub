@@ -11,7 +11,7 @@ import type { XenBudgetRule } from "../../../hooks/xenbudget/types";
 import { useXenBudgetRules } from "../../../hooks/xenbudget/useRules";
 import RuleForm from "./components/RuleForm";
 import ReapplyRulesDialog from "./components/ReapplyRulesDialog";
-import TagChip from "./components/TagChip";
+import { CategoryChip, TagChip } from "./components/LabelChip";
 import { cardSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
 
 export default function BookRules() {
@@ -78,10 +78,12 @@ export default function BookRules() {
                                     </Typography>
                                 </Box>
                                 <Stack direction="row" spacing={0.5} alignItems="center">
-                                    {(rule.actions.add_tags || []).map((t) => (
-                                        <TagChip key={t} tag={t} registry={book.tags} />
+                                    {(rule.actions.set_categories || []).map((c) => (
+                                        <CategoryChip key={c} name={c} registry={book.categories} />
                                     ))}
-                                    {rule.actions.flag && <Chip size="small" color="warning" variant="outlined" label="flag" sx={{ height: 20, fontSize: 11 }} />}
+                                    {(rule.actions.add_tags || []).map((t) => (
+                                        <TagChip key={t} name={t} registry={book.tags} />
+                                    ))}
                                     {rule.actions.disposition === "exclude" && <Chip size="small" variant="outlined" label="exclude" sx={{ height: 20, fontSize: 11 }} />}
                                     {rule.actions.disposition === "skip" && <Chip size="small" color="error" variant="outlined" label="never import" sx={{ height: 20, fontSize: 11 }} />}
                                 </Stack>

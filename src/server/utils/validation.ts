@@ -413,6 +413,12 @@ const xenBudgetShareSchema = z.object({
 
 // Shared by create and (partially) update. Amount is always positive - `type` carries the
 // sign - so a negative amount is a mapping bug rather than an income row.
+const xenBudgetCategoryWeightSchema = z.object({
+  name: z.string().min(1).max(50),
+  amount: z.number().optional(),
+  percentage: z.number().optional(),
+});
+
 const itemBodyShape = {
   type: z.enum(["expense", "income"]).optional(),
   amount: z.number("Amount must be a number").positive("Amount must be positive"),
@@ -420,6 +426,10 @@ const itemBodyShape = {
   date: z.string().datetime().optional(),
   description: z.string().min(1, "Description required").max(500),
   notes: z.string().max(1000).optional(),
+  // What the purchase was, weighted.
+  categories: z.array(xenBudgetCategoryWeightSchema).max(20, "Too many categories").optional(),
+  category_split_type: z.enum(["equal", "exact", "percent"]).optional(),
+  // What needs attention.
   tags: z.array(z.string().max(50)).max(20, "Too many tags").optional(),
   share_type: z.enum(["equal", "exact", "percent"]).optional(),
   shares: z.array(xenBudgetShareSchema).optional(),
@@ -438,6 +448,7 @@ export const xenBudgetRestoreSchema = z.object({
     // shouldn't fail to restore just because it has one.
     timezone: z.string().max(64).optional(),
     default_currency: z.string().max(10).optional(),
+    categories: z.array(z.any()).max(500).optional(),
     tags: z.array(z.any()).max(500).optional(),
     budgets: z.array(z.any()).max(500).optional(),
     rules: z.array(z.any()).max(500).optional(),
@@ -476,6 +487,7 @@ const importRowSchema = z.object({
   currency: z.string().max(10).optional(),
   date: z.string().datetime().optional(),
   description: z.string().min(1, "Description required").max(500),
+  categories: z.array(z.string().max(50)).max(20).optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
   people: z.array(objectIdSchema).optional(),
 });
@@ -502,14 +514,14 @@ const importPresetShape = {
     amount: z.string().max(200).optional(),
     debit: z.string().max(200).optional(),
     credit: z.string().max(200).optional(),
-    tags: z.string().max(200).optional(),
+    categories: z.string().max(200).optional(),
     people: z.string().max(200).optional(),
   }),
   amount_mode: z.enum(["signed", "debit_credit"]).optional(),
   sign_convention: z.enum(["negative_is_expense", "positive_is_expense"]).optional(),
   date_format: z.string().max(40).optional(),
   skip_rows: z.number().int().min(0).max(100).optional(),
-  default_tags: z.array(z.string().max(50)).max(20).optional(),
+  default_categories: z.array(z.string().max(50)).max(20).optional(),
 };
 
 export const createXenBudgetPresetSchema = z.object(importPresetShape);
@@ -525,7 +537,7 @@ export const xenBudgetRuleParamSchema = z.object({
 const MAX_RULE_REGEX_LENGTH = 200;
 
 const ruleConditionSchema = z.object({
-  field: z.enum(["description", "amount", "tags", "type", "date", "source"]),
+  field: z.enum(["description", "amount", "tags", "category", "type", "date", "source"]),
   op: z.enum([
     "contains", "not_contains", "equals", "starts_with", "ends_with", "regex",
     "gt", "gte", "lt", "lte", "between", "is_empty",
@@ -559,13 +571,12 @@ const ruleShape = {
     conditions: z.array(ruleConditionSchema).min(1, "Add at least one condition"),
   }),
   actions: z.object({
+    set_categories: z.array(z.string().max(50)).max(20).optional(),
     add_tags: z.array(z.string().max(50)).max(20).optional(),
     remove_tags: z.array(z.string().max(50)).max(20).optional(),
     set_type: z.enum(["expense", "income"]).nullish(),
     set_people: z.array(objectIdSchema).optional(),
     set_description: z.string().max(500).optional(),
-    flag: z.boolean().optional(),
-    flag_reason: z.string().max(200).optional(),
     disposition: z.enum(["keep", "exclude", "skip"]).optional(),
   }),
   stop_on_match: z.boolean().optional(),
@@ -589,8 +600,8 @@ export const xenBudgetBudgetParamSchema = z.object({
 });
 
 const budgetShape = {
-  scope: z.enum(["all", "tag", "person"]),
-  tag: z.string().max(50).optional(),
+  scope: z.enum(["all", "category", "person"]),
+  category: z.string().max(50).optional(),
   person_id: objectIdSchema.optional(),
   period: z.enum(["weekly", "monthly", "quarterly", "yearly", "custom"]),
   amount: z.number("Amount must be a number").positive("Amount must be positive"),
@@ -602,8 +613,8 @@ const budgetShape = {
 // A budget whose scope doesn't carry its target is meaningless — it would silently
 // match everything — so the pairing is enforced here rather than left to the handler.
 const budgetRefinements = (schema: z.ZodType<any>) => schema
-  .refine((d: any) => d.scope !== "tag" || !!d.tag, {
-    message: "A tag budget needs a tag", path: ["tag"],
+  .refine((d: any) => d.scope !== "category" || !!d.category, {
+    message: "A category budget needs a category", path: ["category"],
   })
   .refine((d: any) => d.scope !== "person" || !!d.person_id, {
     message: "A person budget needs a person", path: ["person_id"],
@@ -619,17 +630,18 @@ export const createXenBudgetBudgetSchema = budgetRefinements(z.object(budgetShap
 
 export const updateXenBudgetBudgetSchema = budgetRefinements(z.object(budgetShape));
 
-export const xenBudgetTagParamSchema = z.object({
+// One shape for both label registries — categories and tags differ in meaning, not form.
+export const xenBudgetLabelParamSchema = z.object({
   bookId: objectIdSchema,
-  tagId: objectIdSchema,
+  labelId: objectIdSchema,
 });
 
-export const createXenBudgetTagSchema = z.object({
-  name: z.string().min(1, "Tag name is required").max(50, "Tag name too long"),
+export const createXenBudgetLabelSchema = z.object({
+  name: z.string().min(1, "A name is required").max(50, "Name too long"),
   color: z.string().max(32).optional(),
 });
 
-export const updateXenBudgetTagSchema = z.object({
+export const updateXenBudgetLabelSchema = z.object({
   name: z.string().min(1).max(50).optional(),
   color: z.string().max(32).optional(),
 });
@@ -639,6 +651,5 @@ export const updateXenBudgetItemSchema = z.object({
   amount: z.number().positive("Amount must be positive").optional(),
   description: z.string().min(1).max(500).optional(),
   excluded: z.boolean().optional(),
-  flagged: z.boolean().optional(),
 });
 

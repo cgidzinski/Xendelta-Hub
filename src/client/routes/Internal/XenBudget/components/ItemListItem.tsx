@@ -1,21 +1,21 @@
 import { Avatar, AvatarGroup, Box, Stack, Tooltip, Typography, alpha } from "@mui/material";
 import BlockIcon from "@mui/icons-material/Block";
-import FlagIcon from "@mui/icons-material/Flag";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import type { XenBudgetItem, XenBudgetMember, XenBudgetTag } from "../../../../hooks/xenbudget/types";
+import type { XenBudgetItem, XenBudgetMember, XenBudgetLabel } from "../../../../hooks/xenbudget/types";
 import { formatCurrency } from "../../../../utils/currencyUtils";
-import TagChip from "./TagChip";
+import { CategoryChip, TagChip } from "./LabelChip";
 import { xbCardSx, xbBadgeSx, xbExcludedRowSx } from "./rowStyles";
 
 interface ItemListItemProps {
     item: XenBudgetItem;
     members: XenBudgetMember[];
-    tagRegistry: XenBudgetTag[];
+    categoryRegistry: XenBudgetLabel[];
+    tagRegistry: XenBudgetLabel[];
     onClick: (item: XenBudgetItem) => void;
 }
 
-export default function ItemListItem({ item, members, tagRegistry, onClick }: ItemListItemProps) {
+export default function ItemListItem({ item, members, categoryRegistry, tagRegistry, onClick }: ItemListItemProps) {
     const isIncome = item.type === "income";
     const people = item.shares
         .map((s) => members.find((m) => m.user_id === s.user_id))
@@ -51,21 +51,25 @@ export default function ItemListItem({ item, members, tagRegistry, onClick }: It
                     <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>
                         {item.description}
                     </Typography>
-                    {item.flagged && (
-                        <Tooltip title={item.flag_reason || "Flagged for review"}>
-                            <FlagIcon sx={{ fontSize: 15 }} color="warning" />
-                        </Tooltip>
-                    )}
                     {item.excluded && (
                         <Tooltip title={item.excluded_reason || "Excluded from totals"}>
                             <BlockIcon sx={{ fontSize: 15 }} color="disabled" />
                         </Tooltip>
                     )}
                 </Stack>
-                {item.tags.length > 0 && (
+                {(item.categories.length > 0 || item.tags.length > 0) && (
                     <Stack direction="row" spacing={0.5} sx={{ mt: 0.25, flexWrap: "wrap", gap: 0.5 }}>
+                        {item.categories.map((c) => (
+                            <CategoryChip
+                                key={c.name} name={c.name} registry={categoryRegistry} sx={{ height: 18 }}
+                                // Only worth showing when the purchase was actually divided.
+                                weight={item.categories.length > 1 && item.amount > 0
+                                    ? `${Math.round((c.amount / item.amount) * 100)}%`
+                                    : undefined}
+                            />
+                        ))}
                         {item.tags.map((t) => (
-                            <TagChip key={t} tag={t} registry={tagRegistry} sx={{ height: 18 }} />
+                            <TagChip key={t} name={t} registry={tagRegistry} sx={{ height: 18 }} />
                         ))}
                     </Stack>
                 )}

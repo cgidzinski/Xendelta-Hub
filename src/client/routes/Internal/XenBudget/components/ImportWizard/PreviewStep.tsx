@@ -3,12 +3,11 @@ import {
     Tooltip, Typography,
 } from "@mui/material";
 import BlockIcon from "@mui/icons-material/Block";
-import FlagIcon from "@mui/icons-material/Flag";
 import type {
-    ImportPreviewRow, DuplicateMatch, XenBudgetTag,
+    ImportPreviewRow, DuplicateMatch, XenBudgetLabel,
 } from "../../../../../hooks/xenbudget/types";
 import type { MappingError } from "../../../../../utils/csvMapping";
-import TagChip from "../TagChip";
+import { CategoryChip, TagChip } from "../LabelChip";
 import { formatCurrency } from "../../../../../utils/currencyUtils";
 import { cardSx } from "../../../../../components/ui/surfaceStyles";
 
@@ -16,7 +15,8 @@ interface PreviewStepProps {
     previews: ImportPreviewRow[];
     duplicates: DuplicateMatch[];
     errors: MappingError[];
-    tagRegistry: XenBudgetTag[];
+    categoryRegistry: XenBudgetLabel[];
+    tagRegistry: XenBudgetLabel[];
     currency: string;
     /** Row indices (into `previews`) the user has chosen to import. */
     selected: Set<number>;
@@ -24,7 +24,7 @@ interface PreviewStepProps {
 }
 
 export default function PreviewStep({
-    previews, duplicates, errors, tagRegistry, currency, selected, onToggle,
+    previews, duplicates, errors, categoryRegistry, tagRegistry, currency, selected, onToggle,
 }: PreviewStepProps) {
     const duplicateIndices = new Set(duplicates.map((d) => d.index));
     const skipped = previews.filter((p) => p.skipped);
@@ -61,7 +61,7 @@ export default function PreviewStep({
                             <TableCell padding="checkbox" />
                             <TableCell>Date</TableCell>
                             <TableCell>Description</TableCell>
-                            <TableCell>Tags</TableCell>
+                            <TableCell>Category</TableCell>
                             <TableCell align="right">Amount</TableCell>
                         </TableRow>
                     </TableHead>
@@ -83,11 +83,6 @@ export default function PreviewStep({
                                     <TableCell>
                                         <Stack direction="row" alignItems="center" spacing={0.5}>
                                             <Typography variant="body2" noWrap>{row.item.description}</Typography>
-                                            {row.item.flagged && (
-                                                <Tooltip title={row.item.flag_reason || "Flagged"}>
-                                                    <FlagIcon sx={{ fontSize: 14 }} color="warning" />
-                                                </Tooltip>
-                                            )}
                                             {row.item.excluded && (
                                                 <Tooltip title={`Excluded from totals by "${row.item.excluded_reason}"`}>
                                                     <BlockIcon sx={{ fontSize: 14 }} color="disabled" />
@@ -103,8 +98,11 @@ export default function PreviewStep({
                                     </TableCell>
                                     <TableCell>
                                         <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>
+                                            {row.item.categories.map((c) => (
+                                                <CategoryChip key={c} name={c} registry={categoryRegistry} sx={{ height: 16, fontSize: 10 }} />
+                                            ))}
                                             {row.item.tags.map((t) => (
-                                                <TagChip key={t} tag={t} registry={tagRegistry} sx={{ height: 16, fontSize: 10 }} />
+                                                <TagChip key={t} name={t} registry={tagRegistry} sx={{ height: 16, fontSize: 10 }} />
                                             ))}
                                         </Stack>
                                     </TableCell>

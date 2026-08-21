@@ -5,10 +5,12 @@ import type { XenBudgetItem, ItemsPage, CreateItemInput, UpdateItemInput } from 
 export interface ItemFilters {
     from?: string;
     to?: string;
+    categories?: string[];
     tags?: string[];
     people?: string[];
     type?: "expense" | "income";
-    flagged?: boolean;
+    /** Items with no category at all — the worklist an import leaves behind. */
+    uncategorised?: boolean;
     /** hidden (default, matches the totals) | only | all */
     excluded?: "hidden" | "only" | "all";
     q?: string;
@@ -18,10 +20,11 @@ function toParams(filters: ItemFilters): Record<string, string> {
     const params: Record<string, string> = {};
     if (filters.from) params.from = filters.from;
     if (filters.to) params.to = filters.to;
+    if (filters.categories?.length) params.categories = filters.categories.join(",");
     if (filters.tags?.length) params.tags = filters.tags.join(",");
     if (filters.people?.length) params.people = filters.people.join(",");
     if (filters.type) params.type = filters.type;
-    if (filters.flagged) params.flagged = "true";
+    if (filters.uncategorised) params.uncategorised = "true";
     if (filters.excluded === "only") params.excluded = "true";
     else if (filters.excluded === "all") params.excluded = "all";
     if (filters.q) params.q = filters.q;

@@ -9,7 +9,8 @@
 // an endpoint rather than shipping a second copy of this to the browser, so what the
 // preview shows and what the import writes can never drift apart.
 
-export type RuleField = "description" | "amount" | "tags" | "type" | "date" | "source";
+export type RuleField =
+  | "description" | "amount" | "tags" | "category" | "type" | "date" | "source";
 
 export type RuleOp =
   | "contains" | "not_contains" | "equals" | "starts_with" | "ends_with" | "regex"
@@ -26,13 +27,14 @@ export interface RuleCondition {
 }
 
 export interface RuleActions {
+  /** What the purchase was. Assigned an even split, so one category means 100%. */
+  set_categories?: string[];
+  /** What needs attention. This is what the old `flag` action became. */
   add_tags?: string[];
   remove_tags?: string[];
   set_type?: "expense" | "income" | null;
   set_people?: string[];
   set_description?: string;
-  flag?: boolean;
-  flag_reason?: string;
   disposition?: Disposition;
 }
 
@@ -52,16 +54,21 @@ export interface DraftItem {
   date: Date;
   description: string;
   original_description?: string;
+  /** What the purchase was, by name. The caller turns these into resolved weights. */
+  categories: string[];
+  /** What needs attention, by name. */
   tags: string[];
   /** Set by a rule's set_people; the caller turns it into resolved shares. */
   people?: string[];
   excluded: boolean;
   excluded_reason?: string;
-  flagged: boolean;
-  flag_reason?: string;
   /** Which rules touched this item. */
   applied_rule_ids: string[];
-  /** Exactly the tags rules contributed, so a re-apply can undo them precisely. */
+  /**
+   * Exactly what rules contributed, tracked separately so a re-apply can undo each
+   * independently — deleting a categorising rule must not strip a hand-added tag.
+   */
+  rule_categories: string[];
   rule_tags: string[];
   source?: string;
 }
@@ -135,6 +142,17 @@ function matchNumber(op: RuleOp, subject: number, cond: RuleCondition): boolean 
   }
 }
 
+// Shared by the `tags` and `category` fields: both are lists of names where the only
+// sensible questions are "has this one" and "has none".
+function matchNameList(names: string[], cond: RuleCondition): boolean {
+  if (cond.op === "is_empty") return names.length === 0;
+  const v = norm(cond.value ?? "", cond.case_sensitive);
+  const has = names.some((n) => norm(n, cond.case_sensitive) === v);
+  if (cond.op === "not_contains") return !has;
+  // "contains" and "equals" both read naturally as "has this one".
+  return has;
+}
+
 function matchCondition(cond: RuleCondition, item: DraftItem): boolean {
   switch (cond.field) {
     case "description":
@@ -149,15 +167,11 @@ function matchCondition(cond: RuleCondition, item: DraftItem): boolean {
     case "source":
       return cond.op === "equals" && norm(item.source || "", false) === norm(cond.value ?? "", false);
 
-    case "tags": {
-      const tags = item.tags || [];
-      if (cond.op === "is_empty") return tags.length === 0;
-      const v = norm(cond.value ?? "", cond.case_sensitive);
-      const has = tags.some((t) => norm(t, cond.case_sensitive) === v);
-      if (cond.op === "not_contains") return !has;
-      // "contains" and "equals" both read naturally as "has this tag".
-      return has;
-    }
+    case "tags":
+      return matchNameList(item.tags || [], cond);
+
+    case "category":
+      return matchNameList(item.categories || [], cond);
 
     case "date": {
       const subject = item.date instanceof Date ? item.date.getTime() : new Date(item.date).getTime();
@@ -187,15 +201,15 @@ export function ruleMatches(rule: Rule, item: DraftItem): boolean {
     : conditions.every((c) => matchCondition(c, item));
 }
 
+function addUnique(list: string[], name: string) {
+  if (!list.some((n) => n.toLowerCase() === name.toLowerCase())) list.push(name);
+}
+
 function addTag(item: DraftItem, tag: string, fromRule: boolean) {
   const clean = tag.trim();
   if (!clean) return;
-  if (!item.tags.some((t) => t.toLowerCase() === clean.toLowerCase())) {
-    item.tags.push(clean);
-  }
-  if (fromRule && !item.rule_tags.some((t) => t.toLowerCase() === clean.toLowerCase())) {
-    item.rule_tags.push(clean);
-  }
+  addUnique(item.tags, clean);
+  if (fromRule) addUnique(item.rule_tags, clean);
 }
 
 function removeTag(item: DraftItem, tag: string) {
@@ -226,7 +240,9 @@ export interface ApplyOptions {
 export function applyRules(draft: DraftItem, rules: Rule[], options: ApplyOptions = {}): ApplyResult {
   const item: DraftItem = {
     ...draft,
+    categories: [...(draft.categories || [])],
     tags: [...(draft.tags || [])],
+    rule_categories: [...(draft.rule_categories || [])],
     rule_tags: [...(draft.rule_tags || [])],
     applied_rule_ids: [...(draft.applied_rule_ids || [])],
     people: draft.people ? [...draft.people] : undefined,
@@ -257,6 +273,18 @@ export function applyRules(draft: DraftItem, rules: Rule[], options: ApplyOption
     (actions.remove_tags || []).forEach((t) => removeTag(item, t));
     (actions.add_tags || []).forEach((t) => addTag(item, t, true));
 
+    // set_categories replaces rather than appends: "this is a grocery run" is a statement
+    // about what the purchase was, not one more label to pile on.
+    const setCategories = (actions.set_categories || []).map((c) => c.trim()).filter(Boolean);
+    if (setCategories.length > 0) {
+      item.categories = [];
+      item.rule_categories = [];
+      setCategories.forEach((c) => {
+        addUnique(item.categories, c);
+        addUnique(item.rule_categories, c);
+      });
+    }
+
     if (actions.set_type === "expense" || actions.set_type === "income") {
       item.type = actions.set_type;
     }
@@ -269,11 +297,6 @@ export function applyRules(draft: DraftItem, rules: Rule[], options: ApplyOption
       if (item.original_description === undefined) item.original_description = draft.description;
       item.description = actions.set_description.trim();
     }
-    if (actions.flag) {
-      item.flagged = true;
-      item.flag_reason = actions.flag_reason || rule.name;
-    }
-
     if (rule.stop_on_match) break;
   }
 
@@ -289,18 +312,18 @@ export function applyRules(draft: DraftItem, rules: Rule[], options: ApplyOption
  * when the rule responsible has since been deleted.
  */
 export function stripRuleEffects(item: DraftItem): DraftItem {
-  const ruleTags = item.rule_tags || [];
+  const without = (list: string[] | undefined, contributed: string[] | undefined) =>
+    (list || []).filter((n) => !(contributed || []).some((c) => c.toLowerCase() === n.toLowerCase()));
+
   return {
     ...item,
-    tags: (item.tags || []).filter(
-      (t) => !ruleTags.some((rt) => rt.toLowerCase() === t.toLowerCase()),
-    ),
+    categories: without(item.categories, item.rule_categories),
+    tags: without(item.tags, item.rule_tags),
+    rule_categories: [],
     rule_tags: [],
     applied_rule_ids: [],
     excluded: false,
     excluded_reason: undefined,
-    flagged: false,
-    flag_reason: undefined,
     description: item.original_description || item.description,
     original_description: item.original_description,
   };

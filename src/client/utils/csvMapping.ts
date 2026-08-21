@@ -17,7 +17,7 @@ export interface ColumnMap {
     amount?: string;
     debit?: string;
     credit?: string;
-    tags?: string;
+    categories?: string;
     people?: string;
 }
 
@@ -27,7 +27,7 @@ export interface MappingConfig {
     sign_convention: SignConvention;
     /** A date-fns-ish pattern, or "auto" to infer from the data. */
     date_format: string;
-    default_tags?: string[];
+    default_categories?: string[];
 }
 
 export interface MappedRow {
@@ -36,7 +36,7 @@ export interface MappedRow {
     amount: number;
     date: string;
     description: string;
-    tags: string[];
+    categories: string[];
 }
 
 export interface MappingError {
@@ -228,8 +228,10 @@ export function applyMapping(rows: CsvRow[], config: MappingConfig): MappingResu
             amount: Math.round(Math.abs(signedAmount) * 100) / 100,
             date: date.toISOString(),
             description: description.slice(0, 500),
-            tags: [...(config.default_tags || []), ...splitList(map.tags ? row[map.tags] : undefined)]
-                .filter((t, i, arr) => arr.findIndex((x) => x.toLowerCase() === t.toLowerCase()) === i),
+            categories: [
+                ...(config.default_categories || []),
+                ...splitList(map.categories ? row[map.categories] : undefined),
+            ].filter((c, i, arr) => arr.findIndex((x) => x.toLowerCase() === c.toLowerCase()) === i),
         });
     });
 

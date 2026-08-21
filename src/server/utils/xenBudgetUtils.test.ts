@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   resolveShares,
+  resolveCategories,
   budgetPeriodRange,
   computeImportHash,
   normalizeDescription,
@@ -68,6 +69,46 @@ describe("resolveShares", () => {
 
   it("returns nothing for an item with no participants", () => {
     expect(resolveShares("equal", 25, [], [])).toEqual([]);
+  });
+});
+
+describe("resolveCategories", () => {
+  it("gives a lone category the whole amount", () => {
+    const cats = resolveCategories("equal", 312.4, [{ name: "Groceries" }]);
+    expect(cats).toEqual([{ name: "Groceries", amount: 312.4, percentage: undefined }]);
+  });
+
+  it("splits a purchase across categories by percentage", () => {
+    const cats = resolveCategories("percent", 312.4, [
+      { name: "Groceries", percentage: 70 },
+      { name: "Household", percentage: 30 },
+    ]);
+    expect(cats.map((c) => c.amount)).toEqual([218.68, 93.72]);
+    expect(sum(cats)).toBe(312.4);
+  });
+
+  it("puts the rounding residual on the last category, exactly as it does for people", () => {
+    // The per-category rollup sums these independently, so they must reconcile with the
+    // item to the penny or the report stops adding up.
+    const cats = resolveCategories("equal", 10, [
+      { name: "A" }, { name: "B" }, { name: "C" },
+    ]);
+    expect(cats.map((c) => c.amount)).toEqual([3.33, 3.33, 3.34]);
+    expect(sum(cats)).toBe(10);
+  });
+
+  it("honours exact amounts and absorbs the shortfall", () => {
+    const cats = resolveCategories("exact", 100, [
+      { name: "A", amount: 70 }, { name: "B", amount: 25 },
+    ]);
+    expect(cats.map((c) => c.amount)).toEqual([70, 30]);
+    expect(sum(cats)).toBe(100);
+  });
+
+  it("leaves an item with no categories uncategorised rather than spreading it", () => {
+    // Unlike shares there is no sensible fallback set: nobody said what this purchase
+    // was, and inventing an answer would put money in categories the user never chose.
+    expect(resolveCategories("equal", 50, [])).toEqual([]);
   });
 });
 

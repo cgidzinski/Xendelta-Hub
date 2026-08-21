@@ -7,7 +7,7 @@ import InsightsIcon from "@mui/icons-material/Insights";
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
-import TagChip, { resolveTagColor } from "./components/TagChip";
+import { CategoryChip, resolveLabelColor } from "./components/LabelChip";
 import BudgetProgressBar from "./components/BudgetProgressBar";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -30,11 +30,13 @@ export default function BookOverview() {
     const { budgets: budgetStatus } = useXenBudgetStatus(book._id, currency);
     const overBudgetCount = budgetStatus.filter((b) => b.over).length;
 
-    const tagRows = useMemo(() => {
+    const categoryRows = useMemo(() => {
         if (!summary) return [];
-        const rows = summary.by_tag.map((t) => ({ label: t.tag, total: t.total, tag: t.tag }));
-        if (summary.untagged.count > 0) {
-            rows.push({ label: "Untagged", total: summary.untagged.total, tag: "" });
+        const rows = summary.by_category.map((c) => ({
+            label: c.category, total: c.total, category: c.category,
+        }));
+        if (summary.uncategorised.count > 0) {
+            rows.push({ label: "Uncategorised", total: summary.uncategorised.total, category: "" });
         }
         return rows;
     }, [summary]);
@@ -44,7 +46,7 @@ export default function BookOverview() {
     if (!summary) return null;
 
     const { totals } = summary;
-    const biggestTag = Math.max(...tagRows.map((r) => r.total), 0);
+    const biggestCategory = Math.max(...categoryRows.map((r) => r.total), 0);
     const biggestPerson = Math.max(...summary.by_person.map((p) => p.total), 0);
     const nothingYet = totals.count === 0;
 
@@ -89,7 +91,7 @@ export default function BookOverview() {
                                 key={budget._id}
                                 budget={budget}
                                 currency={summary.currency}
-                                tagRegistry={book.tags}
+                                categoryRegistry={book.categories}
                                 onClick={() => navigate(`/internal/xenbudget/books/${book._id}/budgets`)}
                             />
                         ))}
@@ -107,36 +109,36 @@ export default function BookOverview() {
                 </Box>
             ) : (
                 <Stack spacing={2}>
-                    {tagRows.length > 0 && (
+                    {categoryRows.length > 0 && (
                         <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
                             <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>
-                                Spending by tag
+                                Spending by category
                             </Typography>
                             <Stack spacing={1.25}>
-                                {tagRows.map((row) => (
+                                {categoryRows.map((row) => (
                                     <Box
                                         key={row.label}
-                                        onClick={() => row.tag && navigate(
+                                        onClick={() => row.category && navigate(
                                             `/internal/xenbudget/books/${book._id}/items`,
                                         )}
-                                        sx={{ cursor: row.tag ? "pointer" : "default" }}
+                                        sx={{ cursor: row.category ? "pointer" : "default" }}
                                     >
                                         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                                            {row.tag
-                                                ? <TagChip tag={row.tag} registry={book.tags} />
-                                                : <Typography variant="caption" color="text.secondary">Untagged</Typography>}
+                                            {row.category
+                                                ? <CategoryChip name={row.category} registry={book.categories} />
+                                                : <Typography variant="caption" color="text.secondary">Uncategorised</Typography>}
                                             <Typography variant="body2">
                                                 {formatCurrency(row.total, summary.currency)}
                                             </Typography>
                                         </Stack>
                                         <LinearProgress
                                             variant="determinate"
-                                            value={biggestTag > 0 ? (row.total / biggestTag) * 100 : 0}
+                                            value={biggestCategory > 0 ? (row.total / biggestCategory) * 100 : 0}
                                             sx={{
                                                 height: 5, borderRadius: 1,
                                                 bgcolor: (theme) => alpha(theme.palette.text.primary, 0.08),
                                                 "& .MuiLinearProgress-bar": {
-                                                    bgcolor: row.tag ? resolveTagColor(row.tag, book.tags) : "text.disabled",
+                                                    bgcolor: row.category ? resolveLabelColor(row.category, book.categories) : "text.disabled",
                                                     borderRadius: 1,
                                                 },
                                             }}

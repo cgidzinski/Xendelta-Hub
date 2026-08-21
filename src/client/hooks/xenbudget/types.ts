@@ -8,19 +8,27 @@ export interface XenBudgetMember {
     avatar: string | null;
 }
 
-export interface XenBudgetTag {
+/**
+ * One entry in either of a book's two registries. Same shape, different meaning:
+ *   categories - what a purchase WAS. Budgets and reports run on these, and one purchase
+ *                can split across several by weight.
+ *   tags       - what needs ATTENTION. Unweighted; replaced the old flagged boolean.
+ */
+export interface XenBudgetLabel {
     _id: string;
     name: string;
     color?: string;
+    /** Built-in tags the importer and rules refer to by name: no delete, no rename. */
+    system?: boolean;
 }
 
-export type BudgetScope = "all" | "tag" | "person";
+export type BudgetScope = "all" | "category" | "person";
 export type BudgetPeriod = "weekly" | "monthly" | "quarterly" | "yearly" | "custom";
 
 export interface XenBudgetBudget {
     _id: string;
     scope: BudgetScope;
-    tag?: string;
+    category?: string;
     person_id?: string;
     period: BudgetPeriod;
     amount: number;
@@ -29,7 +37,8 @@ export interface XenBudgetBudget {
     active: boolean;
 }
 
-export type RuleField = "description" | "amount" | "tags" | "type" | "date" | "source";
+export type RuleField =
+    | "description" | "amount" | "tags" | "category" | "type" | "date" | "source";
 export type RuleOp =
     | "contains" | "not_contains" | "equals" | "starts_with" | "ends_with" | "regex"
     | "gt" | "gte" | "lt" | "lte" | "between" | "is_empty";
@@ -48,16 +57,7 @@ export interface XenBudgetRule {
     enabled: boolean;
     priority: number;
     match: { mode: "all" | "any"; conditions: XenBudgetRuleCondition[] };
-    actions: {
-        add_tags: string[];
-        remove_tags: string[];
-        set_type: "expense" | "income" | null;
-        set_people: string[];
-        set_description?: string;
-        flag: boolean;
-        flag_reason?: string;
-        disposition: "keep" | "exclude" | "skip";
-    };
+    actions: RuleActions;
     stop_on_match: boolean;
 }
 
@@ -72,7 +72,7 @@ export interface XenBudgetImportPreset {
     sign_convention: "negative_is_expense" | "positive_is_expense";
     date_format: string;
     skip_rows: number;
-    default_tags: string[];
+    default_categories: string[];
 }
 
 export interface XenBudgetBook {
@@ -83,7 +83,8 @@ export interface XenBudgetBook {
     /** True when the caller owns the book — gates member management and deletion. */
     is_creator: boolean;
     members: XenBudgetMember[];
-    tags: XenBudgetTag[];
+    categories: XenBudgetLabel[];
+    tags: XenBudgetLabel[];
     budgets: XenBudgetBudget[];
     rules: XenBudgetRule[];
     import_presets: XenBudgetImportPreset[];
@@ -102,6 +103,13 @@ export interface XenBudgetShare {
 export type ItemType = "expense" | "income";
 export type ShareType = "equal" | "exact" | "percent";
 
+/** A category's resolved weight on one item. These sum to the item's amount. */
+export interface XenBudgetCategoryWeight {
+    name: string;
+    amount: number;
+    percentage?: number;
+}
+
 export interface XenBudgetItem {
     _id: string;
     book_id: string;
@@ -113,13 +121,15 @@ export interface XenBudgetItem {
     description: string;
     original_description?: string;
     notes?: string;
+    /** What the purchase was, weighted. Empty means uncategorised. */
+    categories: XenBudgetCategoryWeight[];
+    category_split_type: ShareType;
+    /** What needs attention. */
     tags: string[];
     share_type: ShareType;
     shares: XenBudgetShare[];
     excluded: boolean;
     excluded_reason?: string;
-    flagged: boolean;
-    flag_reason?: string;
     applied_rule_ids: string[];
     manually_edited: boolean;
     source: "manual" | "csv" | "restore";
@@ -147,6 +157,8 @@ export interface CreateItemInput {
     date?: string;
     description: string;
     notes?: string;
+    categories?: { name: string; amount?: number; percentage?: number }[];
+    category_split_type?: ShareType;
     tags?: string[];
     share_type?: ShareType;
     shares?: { user_id: string; amount?: number; percentage?: number }[];
@@ -154,19 +166,19 @@ export interface CreateItemInput {
 
 export type UpdateItemInput = Partial<CreateItemInput> & {
     excluded?: boolean;
-    flagged?: boolean;
 };
 
 export type RuleDisposition = "keep" | "exclude" | "skip";
 
 export interface RuleActions {
+    /** What the purchase was. Assigned an even split, so one category means 100%. */
+    set_categories: string[];
+    /** What needs attention. This is what the old flag action became. */
     add_tags: string[];
     remove_tags: string[];
     set_type: "expense" | "income" | null;
     set_people: string[];
     set_description?: string;
-    flag: boolean;
-    flag_reason?: string;
     disposition: RuleDisposition;
 }
 
@@ -179,11 +191,19 @@ export interface RuleInput {
     stop_on_match?: boolean;
 }
 
+interface ReapplySide {
+    categories: string[];
+    tags: string[];
+    excluded: boolean;
+    description: string;
+    type: ItemType;
+}
+
 export interface ReapplyChange {
     _id: string;
     description: string;
-    before: { tags: string[]; excluded: boolean; flagged: boolean; description: string; type: ItemType };
-    after: { tags: string[]; excluded: boolean; flagged: boolean; description: string; type: ItemType };
+    before: ReapplySide;
+    after: ReapplySide;
 }
 
 export interface ReapplyResult {
@@ -198,10 +218,11 @@ export interface ImportPreviewRow {
     index: number;
     skipped: boolean;
     skipped_by?: string;
-    original: { description: string; tags: string[]; type: ItemType; amount: number };
+    original: { description: string; categories: string[]; type: ItemType; amount: number };
     item: {
-        type: ItemType; amount: number; date: string; description: string; tags: string[];
-        excluded: boolean; excluded_reason?: string; flagged: boolean; flag_reason?: string;
+        type: ItemType; amount: number; date: string; description: string;
+        categories: string[]; tags: string[];
+        excluded: boolean; excluded_reason?: string;
     };
 }
 
@@ -209,7 +230,7 @@ export interface ImportPreviewResult {
     previews: ImportPreviewRow[];
     skipped: number;
     excluded: number;
-    flagged: number;
+    tagged: number;
 }
 
 export interface DuplicateMatch {
@@ -221,7 +242,8 @@ export interface BulkImportResult {
     batch_id: string;
     created: number;
     excluded: number;
-    flagged: number;
+    uncategorised: number;
+    duplicates: number;
     skipped: { index: number; rule: string }[];
     failed: { index: number; reason: string }[];
 }
@@ -233,13 +255,13 @@ export interface PresetInput {
     sign_convention?: "negative_is_expense" | "positive_is_expense";
     date_format?: string;
     skip_rows?: number;
-    default_tags?: string[];
+    default_categories?: string[];
 }
 
 export interface BudgetStatus {
     _id: string;
     scope: BudgetScope;
-    tag?: string;
+    category?: string;
     person_id?: string;
     person_name?: string;
     period: BudgetPeriod;
@@ -263,7 +285,7 @@ export interface BudgetStatusResponse {
 
 export interface BudgetInput {
     scope: BudgetScope;
-    tag?: string;
+    category?: string;
     person_id?: string;
     period: BudgetPeriod;
     amount: number;
@@ -281,8 +303,8 @@ export interface SummaryPeriod {
     count: number;
 }
 
-export interface SummaryTag {
-    tag: string;
+export interface SummaryCategory {
+    category: string;
     total: number;
     count: number;
 }
@@ -305,9 +327,9 @@ export interface XenBudgetSummary {
     /** Every currency present in the book, so the UI can offer a switcher. */
     currencies: string[];
     by_period: SummaryPeriod[];
-    by_tag: SummaryTag[];
+    by_category: SummaryCategory[];
     by_person: SummaryPerson[];
-    untagged: { total: number; count: number };
+    uncategorised: { total: number; count: number };
     totals: { expense: number; income: number; net: number; count: number };
 }
 

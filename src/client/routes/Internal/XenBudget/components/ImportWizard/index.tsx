@@ -125,7 +125,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
             amount_mode: preset.amount_mode,
             sign_convention: preset.sign_convention,
             date_format: preset.date_format || "auto",
-            default_tags: preset.default_tags,
+            default_categories: preset.default_categories,
         });
     };
 
@@ -134,7 +134,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
         amount: r.amount,
         date: r.date,
         description: r.description,
-        tags: r.tags,
+        categories: r.categories,
         currency: book.default_currency,
     }));
 
@@ -181,7 +181,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                     amount_mode: config.amount_mode,
                     sign_convention: config.sign_convention,
                     date_format: config.date_format,
-                    default_tags: config.default_tags,
+                    default_categories: config.default_categories,
                 }).catch(() => enqueueSnackbar("Imported, but the preset could not be saved", { variant: "warning" }));
             }
         } catch (e) {
@@ -257,6 +257,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                             previews={previews}
                             duplicates={duplicates}
                             errors={mapped.errors}
+                            categoryRegistry={book.categories}
                             tagRegistry={book.tags}
                             currency={book.default_currency}
                             selected={selected}
@@ -296,10 +297,17 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                                 listed, greyed out, on the items tab.
                             </Typography>
                         )}
-                        {result.flagged > 0 && (
+                        {result.uncategorised > 0 && (
                             <Typography variant="body2" color="text.secondary">
-                                {result.flagged} were flagged for review. Find them under &ldquo;Needs
-                                review&rdquo; on the items tab.
+                                {result.uncategorised} couldn&rsquo;t be categorised and were tagged
+                                &ldquo;Uncategorised&rdquo;. Filter by that on the items tab to work
+                                through them.
+                            </Typography>
+                        )}
+                        {result.duplicates > 0 && (
+                            <Typography variant="body2" color="text.secondary">
+                                {result.duplicates} matched something already in this book and were
+                                tagged &ldquo;Possible duplicate&rdquo;.
                             </Typography>
                         )}
                         {result.skipped.length > 0 && (

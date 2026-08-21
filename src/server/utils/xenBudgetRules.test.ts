@@ -10,10 +10,11 @@ function draft(over: Partial<DraftItem> = {}): DraftItem {
     amount: 42.1,
     date: new Date("2026-08-21T12:00:00.000Z"),
     description: "STARBUCKS #1234",
+    categories: [],
     tags: [],
     excluded: false,
-    flagged: false,
     applied_rule_ids: [],
+    rule_categories: [],
     rule_tags: [],
     source: "csv",
     ...over,
@@ -83,6 +84,14 @@ describe("condition matching", () => {
     expect(ruleMatches(rule({ match: cond({ field: "tags", op: "not_contains", value: "car" }) }), draft({ tags: ["food"] }))).toBe(true);
   });
 
+  it("matches on category the same way it matches on tags", () => {
+    const d = draft({ categories: ["Groceries"] });
+    expect(ruleMatches(rule({ match: cond({ field: "category", op: "contains", value: "groceries" }) }), d)).toBe(true);
+    expect(ruleMatches(rule({ match: cond({ field: "category", op: "not_contains", value: "rent" }) }), d)).toBe(true);
+    expect(ruleMatches(rule({ match: cond({ field: "category", op: "is_empty" }) }), d)).toBe(false);
+    expect(ruleMatches(rule({ match: cond({ field: "category", op: "is_empty" }) }), draft())).toBe(true);
+  });
+
   it("matches on type, source and date", () => {
     expect(ruleMatches(rule({ match: cond({ field: "type", op: "equals", value: "expense" }) }), draft())).toBe(true);
     expect(ruleMatches(rule({ match: cond({ field: "source", op: "equals", value: "csv" }) }), draft())).toBe(true);
@@ -143,10 +152,29 @@ describe("actions", () => {
     expect(item.tags).toEqual(["coffee"]);
   });
 
-  it("flags with the rule name when no reason is given", () => {
-    const { item } = applyRules(draft(), [rule({ name: "Big charges", actions: { flag: true } })]);
-    expect(item.flagged).toBe(true);
-    expect(item.flag_reason).toBe("Big charges");
+  it("adds an attention tag, which is what the old flag action became", () => {
+    const { item } = applyRules(draft(), [rule({ name: "Big charges", actions: { add_tags: ["Needs review"] } })]);
+    expect(item.tags).toEqual(["Needs review"]);
+    expect(item.rule_tags).toEqual(["Needs review"]);
+  });
+
+  it("sets categories, replacing rather than appending", () => {
+    // "this is a grocery run" is a statement about what the purchase was, not one more
+    // label to pile on top of whatever was there.
+    const { item } = applyRules(
+      draft({ categories: ["Misc"] }),
+      [rule({ actions: { set_categories: ["Groceries", "Household"] } })],
+    );
+    expect(item.categories).toEqual(["Groceries", "Household"]);
+    expect(item.rule_categories).toEqual(["Groceries", "Household"]);
+  });
+
+  it("keeps categories and tags apart", () => {
+    const { item } = applyRules(draft(), [rule({
+      actions: { set_categories: ["Dining"], add_tags: ["check receipt"] },
+    })]);
+    expect(item.categories).toEqual(["Dining"]);
+    expect(item.tags).toEqual(["check receipt"]);
   });
 
   it("sets type and people", () => {
@@ -177,9 +205,9 @@ describe("actions", () => {
 
   it("does not mutate the input draft", () => {
     const original = draft();
-    applyRules(original, [rule({ actions: { add_tags: ["Coffee"], flag: true } })]);
+    applyRules(original, [rule({ actions: { set_categories: ["Dining"], add_tags: ["Coffee"] } })]);
     expect(original.tags).toEqual([]);
-    expect(original.flagged).toBe(false);
+    expect(original.categories).toEqual([]);
   });
 });
 
@@ -263,25 +291,45 @@ describe("ordering", () => {
 });
 
 describe("re-apply semantics", () => {
-  const tagger = rule({ _id: "r1", name: "Coffee", actions: { add_tags: ["Coffee"], flag: true } });
+  const tagger = rule({
+    _id: "r1", name: "Coffee",
+    actions: { set_categories: ["Dining"], add_tags: ["check receipt"] },
+  });
 
   it("is idempotent — running twice equals running once", () => {
     const once = applyRules(draft(), [tagger]).item;
     const twice = applyRules(stripRuleEffects(once), [tagger]).item;
+    expect(twice.categories).toEqual(once.categories);
     expect(twice.tags).toEqual(once.tags);
+    expect(twice.rule_categories).toEqual(once.rule_categories);
     expect(twice.rule_tags).toEqual(once.rule_tags);
     expect(twice.applied_rule_ids).toEqual(once.applied_rule_ids);
-    expect(twice.flagged).toBe(once.flagged);
   });
 
   it("reverses a deleted rule's effects", () => {
     const tagged = applyRules(draft(), [tagger]).item;
-    expect(tagged.tags).toEqual(["Coffee"]);
+    expect(tagged.categories).toEqual(["Dining"]);
+    expect(tagged.tags).toEqual(["check receipt"]);
     // The rule is gone; a sweep re-applies an empty rule set.
     const swept = applyRules(stripRuleEffects(tagged), []).item;
+    expect(swept.categories).toEqual([]);
     expect(swept.tags).toEqual([]);
-    expect(swept.flagged).toBe(false);
     expect(swept.applied_rule_ids).toEqual([]);
+  });
+
+  it("reverses categories and tags independently", () => {
+    // Deleting a categorising rule must not strip an attention tag another rule added,
+    // and vice versa — which is why the two are tracked separately.
+    const categoriser = rule({ _id: "cat", priority: 1, actions: { set_categories: ["Dining"] } });
+    const attention = rule({ _id: "att", priority: 2, actions: { add_tags: ["check receipt"] } });
+    const both = applyRules(draft(), [categoriser, attention]).item;
+    expect(both.categories).toEqual(["Dining"]);
+    expect(both.tags).toEqual(["check receipt"]);
+
+    // The categorising rule is deleted; the attention one survives.
+    const swept = applyRules(stripRuleEffects(both), [attention]).item;
+    expect(swept.categories).toEqual([]);
+    expect(swept.tags).toEqual(["check receipt"]);
   });
 
   it("reverses effects even when the responsible rule can no longer be looked up", () => {
@@ -295,7 +343,7 @@ describe("re-apply semantics", () => {
   it("keeps tags the user added by hand while removing the rule's", () => {
     const manual = draft({ tags: ["mine"] });
     const tagged = applyRules(manual, [tagger]).item;
-    expect(tagged.tags).toEqual(["mine", "Coffee"]);
+    expect(tagged.tags).toEqual(["mine", "check receipt"]);
     expect(stripRuleEffects(tagged).tags).toEqual(["mine"]);
   });
 

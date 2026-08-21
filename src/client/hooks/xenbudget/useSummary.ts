@@ -8,13 +8,14 @@ export interface SummaryParams {
     to?: string;
     group_by?: "day" | "week" | "month";
     currency?: string;
+    categories?: string[];
     tags?: string[];
     people?: string[];
 }
 
 /**
  * The tallies behind the Overview and the report page. The server computes every figure
- * in one $facet pass, so the per-tag, per-person and top-line numbers always reconcile.
+ * in one $facet pass, so the per-category, per-person and top-line numbers always reconcile.
  * Defaults to the current month in the viewer's own timezone.
  */
 export function useXenBudgetSummary(bookId: string, params: SummaryParams = {}) {
@@ -32,6 +33,7 @@ export function useXenBudgetSummary(bookId: string, params: SummaryParams = {}) 
                     ...(params.to ? { to: params.to } : {}),
                     ...(params.group_by ? { group_by: params.group_by } : {}),
                     ...(params.currency ? { currency: params.currency } : {}),
+                    ...(params.categories?.length ? { categories: params.categories.join(",") } : {}),
                     ...(params.tags?.length ? { tags: params.tags.join(",") } : {}),
                     ...(params.people?.length ? { people: params.people.join(",") } : {}),
                 },

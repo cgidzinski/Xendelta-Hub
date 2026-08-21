@@ -12,7 +12,7 @@ import { getCurrencySymbol, sanitizeAmount, STABLE_CURRENCY_MENU_PROPS } from ".
 
 const SCOPES: { value: BudgetScope; label: string }[] = [
     { value: "all", label: "Everything in the book" },
-    { value: "tag", label: "A tag" },
+    { value: "category", label: "A category" },
     { value: "person", label: "A person" },
 ];
 
@@ -39,7 +39,7 @@ export default function BudgetForm({
 }: BudgetFormProps) {
     const { enqueueSnackbar } = useSnackbar();
     const [scope, setScope] = useState<BudgetScope>("all");
-    const [tag, setTag] = useState("");
+    const [category, setCategory] = useState("");
     const [personId, setPersonId] = useState("");
     const [period, setPeriod] = useState<BudgetPeriod>("monthly");
     const [amount, setAmount] = useState("");
@@ -50,7 +50,7 @@ export default function BudgetForm({
         if (!open) return;
         if (budget) {
             setScope(budget.scope);
-            setTag(budget.tag || "");
+            setCategory(budget.category || "");
             setPersonId(budget.person_id || "");
             setPeriod(budget.period);
             setAmount(String(budget.amount));
@@ -58,7 +58,7 @@ export default function BudgetForm({
             setEndDate(budget.period === "custom" ? new Date(budget.period_to) : null);
         } else {
             setScope("all");
-            setTag("");
+            setCategory("");
             setPersonId("");
             setPeriod("monthly");
             setAmount("");
@@ -69,7 +69,7 @@ export default function BudgetForm({
 
     const numericAmount = parseFloat(amount) || 0;
     const canSubmit = numericAmount > 0
-        && (scope !== "tag" || !!tag.trim())
+        && (scope !== "category" || !!category.trim())
         && (scope !== "person" || !!personId)
         && (period !== "custom" || (!!startDate && !!endDate && endDate > startDate));
 
@@ -77,7 +77,7 @@ export default function BudgetForm({
         try {
             await onSubmit({
                 scope,
-                tag: scope === "tag" ? tag.trim() : undefined,
+                category: scope === "category" ? category.trim() : undefined,
                 person_id: scope === "person" ? personId : undefined,
                 period,
                 amount: numericAmount,
@@ -103,13 +103,13 @@ export default function BudgetForm({
                         {SCOPES.map((s) => <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>)}
                     </TextField>
 
-                    {scope === "tag" && (
+                    {scope === "category" && (
                         <Autocomplete
                             freeSolo
-                            options={book.tags.map((t) => t.name)}
-                            value={tag}
-                            onInputChange={(_, v) => setTag(v)}
-                            renderInput={(params) => <TextField {...params} label="Tag" />}
+                            options={book.categories.map((c) => c.name)}
+                            value={category}
+                            onInputChange={(_, v) => setCategory(v)}
+                            renderInput={(params) => <TextField {...params} label="Category" />}
                         />
                     )}
 

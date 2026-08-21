@@ -9,7 +9,7 @@ import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import CloseIcon from "@mui/icons-material/Close";
 import { useSnackbar } from "notistack";
 import type { BookDetailContext } from "./BookDetail";
-import TagManager from "./components/TagManager";
+import LabelManager from "./components/LabelManager";
 import BookBackupSection from "./components/BookBackupSection";
 import { UserSelect } from "../../../components/UserSelect";
 import type { SearchedUser } from "../../../hooks/useUserSearch";
@@ -79,8 +79,21 @@ export default function BookSettings() {
                 </Card>
 
                 <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
-                    <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>Tags</Typography>
-                    <TagManager book={book} />
+                    <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.5 }}>Categories</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                        What a purchase was. Budgets and reports run on these, and one purchase can
+                        split across several.
+                    </Typography>
+                    <LabelManager book={book} kind="categories" />
+                </Card>
+
+                <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
+                    <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.5 }}>Tags</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                        Things needing attention. The built-in ones are used by imports and rules, so
+                        they can&rsquo;t be renamed or removed — but their colours are yours.
+                    </Typography>
+                    <LabelManager book={book} kind="tags" />
                 </Card>
 
                 <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>

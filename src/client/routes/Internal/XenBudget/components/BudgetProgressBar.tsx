@@ -1,6 +1,6 @@
 import { Box, LinearProgress, Stack, Typography, alpha } from "@mui/material";
-import type { BudgetStatus, XenBudgetTag } from "../../../../hooks/xenbudget/types";
-import TagChip, { resolveTagColor } from "./TagChip";
+import type { BudgetStatus, XenBudgetLabel } from "../../../../hooks/xenbudget/types";
+import { CategoryChip, resolveLabelColor } from "./LabelChip";
 import { formatCurrency } from "../../../../utils/currencyUtils";
 
 const PERIOD_LABELS: Record<string, string> = {
@@ -14,13 +14,13 @@ const PERIOD_LABELS: Record<string, string> = {
 interface BudgetProgressBarProps {
     budget: BudgetStatus;
     currency: string;
-    tagRegistry: XenBudgetTag[];
+    categoryRegistry: XenBudgetLabel[];
     onClick?: () => void;
 }
 
-export default function BudgetProgressBar({ budget, currency, tagRegistry, onClick }: BudgetProgressBarProps) {
-    const label = budget.scope === "tag"
-        ? budget.tag
+export default function BudgetProgressBar({ budget, currency, categoryRegistry, onClick }: BudgetProgressBarProps) {
+    const label = budget.scope === "category"
+        ? budget.category
         : budget.scope === "person"
             ? budget.person_name
             : "Everything";
@@ -33,8 +33,8 @@ export default function BudgetProgressBar({ budget, currency, tagRegistry, onCli
     return (
         <Box onClick={onClick} sx={{ cursor: onClick ? "pointer" : "default" }}>
             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
-                {budget.scope === "tag" && budget.tag
-                    ? <TagChip tag={budget.tag} registry={tagRegistry} />
+                {budget.scope === "category" && budget.category
+                    ? <CategoryChip name={budget.category} registry={categoryRegistry} />
                     : <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>{label}</Typography>}
                 <Typography variant="caption" color="text.secondary" sx={{ flexGrow: 1 }} noWrap>
                     {PERIOD_LABELS[budget.period] || "this period"}
@@ -57,8 +57,8 @@ export default function BudgetProgressBar({ budget, currency, tagRegistry, onCli
                         borderRadius: 1,
                         ...(barColor
                             ? { bgcolor: barColor }
-                            : budget.scope === "tag" && budget.tag
-                                ? { bgcolor: resolveTagColor(budget.tag, tagRegistry) }
+                            : budget.scope === "category" && budget.category
+                                ? { bgcolor: resolveLabelColor(budget.category, categoryRegistry) }
                                 : {}),
                     },
                 }}

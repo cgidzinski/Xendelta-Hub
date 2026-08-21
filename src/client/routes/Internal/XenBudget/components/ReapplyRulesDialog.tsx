@@ -129,15 +129,16 @@ export default function ReapplyRulesDialog({ open, onClose, reapply, isReapplyin
 
 function describe(change: ReapplyResult["sample"][number]): string {
     const parts: string[] = [];
-    const added = change.after.tags.filter((t) => !change.before.tags.includes(t));
-    const removed = change.before.tags.filter((t) => !change.after.tags.includes(t));
-    if (added.length) parts.push(`+${added.join(", ")}`);
-    if (removed.length) parts.push(`−${removed.join(", ")}`);
+    const diff = (before: string[], after: string[], label: string) => {
+        const added = after.filter((n) => !before.includes(n));
+        const removed = before.filter((n) => !after.includes(n));
+        if (added.length) parts.push(`+${label}${added.join(", ")}`);
+        if (removed.length) parts.push(`−${label}${removed.join(", ")}`);
+    };
+    diff(change.before.categories, change.after.categories, "");
+    diff(change.before.tags, change.after.tags, "tag ");
     if (change.before.excluded !== change.after.excluded) {
         parts.push(change.after.excluded ? "excluded from totals" : "back in totals");
-    }
-    if (change.before.flagged !== change.after.flagged) {
-        parts.push(change.after.flagged ? "flagged" : "unflagged");
     }
     if (change.before.type !== change.after.type) parts.push(`now ${change.after.type}`);
     if (change.before.description !== change.after.description) {

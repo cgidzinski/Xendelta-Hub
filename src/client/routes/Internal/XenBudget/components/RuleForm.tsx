@@ -17,6 +17,7 @@ import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 const FIELDS: { value: RuleField; label: string }[] = [
     { value: "description", label: "Description" },
     { value: "amount", label: "Amount" },
+    { value: "category", label: "Category" },
     { value: "tags", label: "Tags" },
     { value: "type", label: "Type" },
     { value: "date", label: "Date" },
@@ -46,6 +47,11 @@ const OPS_BY_FIELD: Record<RuleField, { value: RuleOp; label: string }[]> = {
     tags: [
         { value: "contains", label: "includes" },
         { value: "not_contains", label: "does not include" },
+        { value: "is_empty", label: "is empty" },
+    ],
+    category: [
+        { value: "contains", label: "is" },
+        { value: "not_contains", label: "is not" },
         { value: "is_empty", label: "is empty" },
     ],
     type: [{ value: "equals", label: "is" }],
@@ -82,11 +88,10 @@ export default function RuleForm({
     const [name, setName] = useState("");
     const [mode, setMode] = useState<"all" | "any">("all");
     const [conditions, setConditions] = useState<XenBudgetRuleCondition[]>([emptyCondition()]);
+    const [setCategories, setSetCategories] = useState<string[]>([]);
     const [addTags, setAddTags] = useState<string[]>([]);
     const [setType, setSetType] = useState<"" | "expense" | "income">("");
     const [setDescription, setSetDescription] = useState("");
-    const [flag, setFlag] = useState(false);
-    const [flagReason, setFlagReason] = useState("");
     const [disposition, setDisposition] = useState<RuleDisposition>("keep");
     const [stopOnMatch, setStopOnMatch] = useState(false);
     const [enabled, setEnabled] = useState(true);
@@ -97,11 +102,10 @@ export default function RuleForm({
             setName(rule.name);
             setMode(rule.match.mode || "all");
             setConditions(rule.match.conditions.length ? rule.match.conditions : [emptyCondition()]);
+            setSetCategories(rule.actions.set_categories || []);
             setAddTags(rule.actions.add_tags || []);
             setSetType(rule.actions.set_type || "");
             setSetDescription(rule.actions.set_description || "");
-            setFlag(!!rule.actions.flag);
-            setFlagReason(rule.actions.flag_reason || "");
             setDisposition(rule.actions.disposition || "keep");
             setStopOnMatch(!!rule.stop_on_match);
             setEnabled(rule.enabled !== false);
@@ -109,11 +113,10 @@ export default function RuleForm({
             setName("");
             setMode("all");
             setConditions([emptyCondition()]);
+            setSetCategories([]);
             setAddTags([]);
             setSetType("");
             setSetDescription("");
-            setFlag(false);
-            setFlagReason("");
             setDisposition("keep");
             setStopOnMatch(false);
             setEnabled(true);
@@ -135,8 +138,8 @@ export default function RuleForm({
     const conditionsValid = conditions.every(
         (c) => c.op === "is_empty" || ((c.value ?? "") !== "" && (c.op !== "between" || (c.value2 ?? "") !== "")),
     );
-    const doesSomething = addTags.length > 0 || !!setType || !!setDescription.trim()
-        || flag || disposition !== "keep";
+    const doesSomething = setCategories.length > 0 || addTags.length > 0 || !!setType
+        || !!setDescription.trim() || disposition !== "keep";
     const canSubmit = !!name.trim() && conditions.length > 0 && conditionsValid && doesSomething;
 
     const handleSubmit = async () => {
@@ -146,11 +149,10 @@ export default function RuleForm({
                 enabled,
                 match: { mode, conditions },
                 actions: {
+                    set_categories: setCategories,
                     add_tags: addTags,
                     set_type: setType || null,
                     set_description: setDescription.trim() || undefined,
-                    flag,
-                    flag_reason: flagReason.trim() || undefined,
                     disposition,
                 },
                 stop_on_match: stopOnMatch,
@@ -245,16 +247,40 @@ export default function RuleForm({
                         <Stack spacing={2}>
                             <Autocomplete
                                 multiple freeSolo
-                                options={book.tags.map((t) => t.name)}
-                                value={addTags}
-                                onChange={(_, v) => setAddTags(v as string[])}
+                                options={book.categories.map((c) => c.name)}
+                                value={setCategories}
+                                onChange={(_, v) => setSetCategories(v as string[])}
                                 renderTags={(value, getTagProps) =>
                                     value.map((option, index) => {
                                         const { key, ...rest } = getTagProps({ index });
                                         return <Chip key={key} size="small" label={option} {...rest} />;
                                     })
                                 }
-                                renderInput={(params) => <TextField {...params} size="small" label="Add tags" />}
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params} size="small" label="Set category"
+                                        helperText="Replaces whatever the item had. Two categories split it evenly."
+                                    />
+                                )}
+                            />
+
+                            <Autocomplete
+                                multiple freeSolo
+                                options={book.tags.map((t) => t.name)}
+                                value={addTags}
+                                onChange={(_, v) => setAddTags(v as string[])}
+                                renderTags={(value, getTagProps) =>
+                                    value.map((option, index) => {
+                                        const { key, ...rest } = getTagProps({ index });
+                                        return <Chip key={key} size="small" variant="outlined" label={option} {...rest} />;
+                                    })
+                                }
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params} size="small" label="Add tags"
+                                        helperText="For attention, e.g. Needs review."
+                                    />
+                                )}
                             />
 
                             <Stack direction="row" spacing={1}>
@@ -274,20 +300,6 @@ export default function RuleForm({
                                     placeholder="Leave blank to keep"
                                     sx={{ flexGrow: 1 }}
                                 />
-                            </Stack>
-
-                            <Stack direction="row" spacing={1} alignItems="center">
-                                <FormControlLabel
-                                    control={<Checkbox size="small" checked={flag} onChange={(e) => setFlag(e.target.checked)} />}
-                                    label="Flag for review"
-                                />
-                                {flag && (
-                                    <TextField
-                                        size="small" label="Reason" value={flagReason}
-                                        onChange={(e) => setFlagReason(e.target.value)}
-                                        sx={{ flexGrow: 1 }}
-                                    />
-                                )}
                             </Stack>
 
                             <TextField
@@ -316,7 +328,7 @@ export default function RuleForm({
 
                     {!doesSomething && (
                         <Typography variant="caption" color="warning.main">
-                            This rule doesn&rsquo;t do anything yet — add a tag, a flag, or a disposition.
+                            This rule doesn&rsquo;t do anything yet — set a category, add a tag, or pick a disposition.
                         </Typography>
                     )}
                 </Stack>

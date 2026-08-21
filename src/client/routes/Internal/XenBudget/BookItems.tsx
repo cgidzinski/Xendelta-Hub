@@ -11,7 +11,7 @@ import { startOfMonth, startOfWeek, startOfYear, subMonths } from "date-fns";
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetItems, type ItemFilters } from "../../../hooks/xenbudget/useItems";
 import ItemListItem from "./components/ItemListItem";
-import TagChip from "./components/TagChip";
+import { CategoryChip, TagChip } from "./components/LabelChip";
 import ImportWizard from "./components/ImportWizard";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -28,15 +28,19 @@ const DATE_FILTERS: { label: string; value: DateFilter }[] = [
     { label: "This year", value: "thisYear" },
 ];
 
-type Quick = "all" | "expense" | "income" | "flagged" | "excluded";
+type Quick = "all" | "expense" | "income" | "review" | "uncategorised" | "excluded";
 
 const QUICK_FILTERS: { label: string; value: Quick }[] = [
     { label: "All", value: "all" },
     { label: "Expenses", value: "expense" },
     { label: "Income", value: "income" },
-    { label: "Needs review", value: "flagged" },
+    { label: "Needs review", value: "review" },
+    { label: "Uncategorised", value: "uncategorised" },
     { label: "Excluded", value: "excluded" },
 ];
+
+// The built-in tag the importer and rules use to say "a human should look at this".
+const TAG_NEEDS_REVIEW = "Needs review";
 
 function dateRange(filter: DateFilter): { from?: string; to?: string } {
     const now = new Date();
@@ -57,22 +61,29 @@ export default function BookItems() {
     const [search, setSearch] = useState("");
     const [dateFilter, setDateFilter] = useState<DateFilter>("all");
     const [quick, setQuick] = useState<Quick>("all");
+    const [activeCategories, setActiveCategories] = useState<string[]>([]);
     const [activeTags, setActiveTags] = useState<string[]>([]);
     const [importOpen, setImportOpen] = useState(false);
 
-    const toggleTag = (tag: string) => setActiveTags((prev) =>
-        prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]);
+    const toggle = (list: string[], set: (v: string[]) => void, name: string) =>
+        set(list.includes(name) ? list.filter((n) => n !== name) : [...list, name]);
 
     // Filtering happens server-side (the list is paginated), so the filter object is part
     // of the query key rather than a useMemo over an already-loaded array.
     const filters: ItemFilters = useMemo(() => ({
         ...dateRange(dateFilter),
         q: search.trim() || undefined,
-        tags: activeTags.length ? activeTags : undefined,
+        categories: activeCategories.length ? activeCategories : undefined,
+        // "Needs review" is that specific built-in tag; a chip row filters by any tag.
+        tags: quick === "review"
+            ? [TAG_NEEDS_REVIEW, ...activeTags]
+            : (activeTags.length ? activeTags : undefined),
         type: quick === "expense" || quick === "income" ? quick : undefined,
-        flagged: quick === "flagged" || undefined,
+        // The *state* of having no category, not the tag — so an item leaves this filter
+        // the moment it's categorised, whether or not anyone cleared the tag.
+        uncategorised: quick === "uncategorised" || undefined,
         excluded: quick === "excluded" ? "only" : "hidden",
-    }), [dateFilter, search, quick, activeTags]);
+    }), [dateFilter, search, quick, activeCategories, activeTags]);
 
     const {
         items, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
@@ -122,17 +133,30 @@ export default function BookItems() {
                         ))}
                     </ToggleButtonGroup>
                 </Box>
+                {book.categories.length > 0 && (
+                    <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>
+                        {book.categories.map((c) => (
+                            <CategoryChip
+                                key={c._id} name={c.name} registry={book.categories}
+                                onClick={() => toggle(activeCategories, setActiveCategories, c.name)}
+                                sx={{
+                                    cursor: "pointer",
+                                    // A selected chip reads as pressed rather than merely present.
+                                    opacity: activeCategories.length === 0 || activeCategories.includes(c.name) ? 1 : 0.4,
+                                    fontWeight: activeCategories.includes(c.name) ? 700 : 400,
+                                }}
+                            />
+                        ))}
+                    </Stack>
+                )}
                 {book.tags.length > 0 && (
                     <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>
                         {book.tags.map((tag) => (
                             <TagChip
-                                key={tag._id}
-                                tag={tag.name}
-                                registry={book.tags}
-                                onClick={() => toggleTag(tag.name)}
+                                key={tag._id} name={tag.name} registry={book.tags}
+                                onClick={() => toggle(activeTags, setActiveTags, tag.name)}
                                 sx={{
                                     cursor: "pointer",
-                                    // A selected tag reads as pressed rather than merely present.
                                     opacity: activeTags.length === 0 || activeTags.includes(tag.name) ? 1 : 0.4,
                                     fontWeight: activeTags.includes(tag.name) ? 700 : 400,
                                 }}
@@ -153,7 +177,8 @@ export default function BookItems() {
                     </Box>
                     <Typography variant="subtitle1">Nothing here</Typography>
                     <Typography variant="body2" color="text.secondary">
-                        {search || quick !== "all" || dateFilter !== "all" || activeTags.length > 0
+                        {search || quick !== "all" || dateFilter !== "all"
+                            || activeTags.length > 0 || activeCategories.length > 0
                             ? "No items match those filters."
                             : "Add your first item, or import a CSV from your bank."}
                     </Typography>
@@ -171,6 +196,7 @@ export default function BookItems() {
                                         key={item._id}
                                         item={item}
                                         members={book.members}
+                                        categoryRegistry={book.categories}
                                         tagRegistry={book.tags}
                                         onClick={onEditItem}
                                     />

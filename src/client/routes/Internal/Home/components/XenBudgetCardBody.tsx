@@ -62,7 +62,7 @@ export default function XenBudgetCardBody() {
                             key={budget._id}
                             budget={budget}
                             currency={currency}
-                            tagRegistry={book.tags}
+                            categoryRegistry={book.categories}
                         />
                     ))}
                 </Stack>

@@ -53,7 +53,7 @@ export default function BookBudgets() {
                                 key={budget._id}
                                 budget={budget}
                                 currency={currency}
-                                tagRegistry={book.tags}
+                                categoryRegistry={book.categories}
                                 onClick={() => { setEditing(budget); setFormOpen(true); }}
                             />
                         ))}

@@ -11,6 +11,12 @@ export interface Share {
   percentage?: number;
 }
 
+export interface CategoryWeight {
+  name: string;
+  amount: number;
+  percentage?: number;
+}
+
 export interface BudgetLike {
   period: BudgetPeriod;
   start_date?: Date | string | null;
@@ -22,20 +28,35 @@ export interface PeriodRange {
   to: Date;  // exclusive
 }
 
-// --- Shares -----------------------------------------------------------------
+// --- Weighted splitting -----------------------------------------------------
 
-// Rounds every share to cents and puts the whole residual on the last one, so the shares
-// sum to exactly `amount`.
-//
-// This pass is why resolveSplits' output isn't used directly: its "equal" branch returns
-// the raw quotient (10/3 -> 3.3333333333333335 three times), which is correct for
-// XenSplit's balance netting but leaves sub-cent dust in XenBudget, where per-person
-// shares are summed independently by an aggregation and are expected to reconcile with
-// the book total to the penny.
-function settleSharesToCents(shares: Share[], amount: number): Share[] {
-  if (shares.length === 0) return shares;
-  const rounded = shares.map((s) => ({ ...s, amount: roundMoney(s.amount || 0) }));
-  const residual = roundMoney(amount - rounded.reduce((acc, s) => acc + s.amount, 0));
+interface WeightedPart {
+  key: string;
+  amount?: number;
+  percentage?: number;
+}
+
+/** What comes back out: settleToCents guarantees every part has a resolved amount. */
+export interface ResolvedPart {
+  key: string;
+  amount: number;
+  percentage?: number;
+}
+
+/**
+ * Rounds every part to cents and puts the whole residual on the last one, so the parts
+ * sum to exactly `amount`.
+ *
+ * This pass is why resolveSplits' output isn't used directly: its "equal" branch returns
+ * the raw quotient (10/3 -> 3.3333333333333335 three times), which is correct for
+ * XenSplit's balance netting but leaves sub-cent dust in XenBudget, where the parts are
+ * summed independently by an aggregation and are expected to reconcile with the item
+ * total to the penny.
+ */
+function settleToCents<T extends { amount: number }>(parts: T[], amount: number): T[] {
+  if (parts.length === 0) return parts;
+  const rounded = parts.map((p) => ({ ...p, amount: roundMoney(p.amount || 0) }));
+  const residual = roundMoney(amount - rounded.reduce((acc, p) => acc + p.amount, 0));
   if (residual !== 0) {
     const last = rounded[rounded.length - 1];
     last.amount = roundMoney(last.amount + residual);
@@ -43,27 +64,64 @@ function settleSharesToCents(shares: Share[], amount: number): Share[] {
   return rounded;
 }
 
-// Resolves the per-person shares to store for an item. Delegates the split-type semantics
-// to XenSplit's resolveSplits so that logic lives in one tested place, then pins the
-// result to cents. Only the field name differs between the two: XenBudget calls it
-// `amount` rather than `amount_owed`.
+/**
+ * Divides `amount` across `parts` by even split, exact amounts or percentages.
+ *
+ * Key-agnostic on purpose: owners and categories are the same problem, so they share one
+ * implementation and one set of rounding tests rather than drifting apart. The split-type
+ * semantics come from XenSplit's resolveSplits; this adds the cent-settling pass.
+ */
+export function resolveWeighted(
+  splitType: ShareType,
+  amount: number,
+  parts: WeightedPart[],
+  allKeys: string[],
+): ResolvedPart[] {
+  const asSplits = parts.map((p) => ({
+    user_id: p.key,
+    amount_owed: p.amount,
+    percentage: p.percentage,
+  }));
+  const resolved = resolveSplits(splitType, amount, asSplits, allKeys).map((s) => ({
+    key: s.user_id,
+    amount: s.amount_owed ?? 0,
+    percentage: s.percentage,
+  }));
+  return settleToCents(resolved, amount);
+}
+
+/** Per-person shares. Falls back to an even split across everyone when nobody is named. */
 export function resolveShares(
   shareType: ShareType,
   amount: number,
   shares: { user_id: string; amount?: number; percentage?: number }[],
   allMemberIds: string[],
 ): Share[] {
-  const asSplits = shares.map((s) => ({
-    user_id: s.user_id,
-    amount_owed: s.amount,
-    percentage: s.percentage,
-  }));
-  const resolved = resolveSplits(shareType, amount, asSplits, allMemberIds).map((s) => ({
-    user_id: s.user_id,
-    amount: s.amount_owed,
-    percentage: s.percentage,
-  }));
-  return settleSharesToCents(resolved, amount);
+  return resolveWeighted(
+    shareType,
+    amount,
+    shares.map((s) => ({ key: s.user_id, amount: s.amount, percentage: s.percentage })),
+    allMemberIds,
+  ).map((p) => ({ user_id: p.key, amount: p.amount, percentage: p.percentage }));
+}
+
+/**
+ * Per-category weights. Unlike shares there is no sensible fallback set — an item nobody
+ * categorised is uncategorised, not spread across every category in the book — so an
+ * empty input returns empty.
+ */
+export function resolveCategories(
+  splitType: ShareType,
+  amount: number,
+  categories: { name: string; amount?: number; percentage?: number }[],
+): CategoryWeight[] {
+  if (!categories || categories.length === 0) return [];
+  return resolveWeighted(
+    splitType,
+    amount,
+    categories.map((c) => ({ key: c.name, amount: c.amount, percentage: c.percentage })),
+    [],
+  ).map((p) => ({ name: p.key, amount: p.amount, percentage: p.percentage }));
 }
 
 // --- Budget periods ---------------------------------------------------------

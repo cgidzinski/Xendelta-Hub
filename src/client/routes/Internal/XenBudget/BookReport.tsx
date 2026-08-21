@@ -72,11 +72,13 @@ export default function BookReport() {
         return [...head, { name: `Other (${sorted.length - MAX_BARS + 1})`, total: Math.round(rest * 100) / 100 }];
     };
 
-    const tagData = useMemo(() => {
+    const categoryData = useMemo(() => {
         if (!summary) return [];
-        const rows = summary.by_tag.map((t) => ({ total: t.total, tag: t.tag }));
-        if (summary.untagged.count > 0) rows.push({ total: summary.untagged.total, tag: "Untagged" });
-        return foldTail(rows, (r) => r.tag);
+        const rows = summary.by_category.map((c) => ({ total: c.total, category: c.category }));
+        if (summary.uncategorised.count > 0) {
+            rows.push({ total: summary.uncategorised.total, category: "Uncategorised" });
+        }
+        return foldTail(rows, (r) => r.category);
     }, [summary]);
 
     const personData = useMemo(
@@ -93,9 +95,9 @@ export default function BookReport() {
             ["Period", "In", "Out", "Net"],
             ...summary.by_period.map((p) => [p.key, p.income, p.expense, p.net]),
             [],
-            ["Tag", "Spent"],
-            ...summary.by_tag.map((t) => [t.tag, t.total]),
-            ["Untagged", summary.untagged.total],
+            ["Category", "Spent"],
+            ...summary.by_category.map((c) => [c.category, c.total]),
+            ["Uncategorised", summary.uncategorised.total],
             [],
             ["Person", "Spent"],
             ...summary.by_person.map((p) => [p.username, p.total]),
@@ -207,9 +209,9 @@ export default function BookReport() {
                                 </ResponsiveContainer>
                             </ChartCard>
 
-                            {tagData.length > 0 && (
-                                <ChartCard title="Spending by tag">
-                                    <MagnitudeBars data={tagData} money={money} compact={compact} />
+                            {categoryData.length > 0 && (
+                                <ChartCard title="Spending by category">
+                                    <MagnitudeBars data={categoryData} money={money} compact={compact} />
                                 </ChartCard>
                             )}
 
@@ -233,7 +235,7 @@ export default function BookReport() {
                                 {budgets.map((budget) => (
                                     <BudgetProgressBar
                                         key={budget._id} budget={budget}
-                                        currency={currency} tagRegistry={book.tags}
+                                        currency={currency} categoryRegistry={book.categories}
                                     />
                                 ))}
                             </Stack>
