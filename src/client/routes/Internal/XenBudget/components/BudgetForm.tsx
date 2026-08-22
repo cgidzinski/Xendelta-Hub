@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import {
     Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,
-    IconButton, InputAdornment, MenuItem, Stack, TextField, Typography, useMediaQuery,
+    IconButton, InputAdornment, MenuItem, Stack, TextField, ToggleButton,
+    ToggleButtonGroup, Typography, useMediaQuery,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { useSnackbar } from "notistack";
 import type {
-    XenBudgetBook, BudgetInput, BudgetPeriod, BudgetStatus,
+    XenBudgetBook, BudgetInput, BudgetKind, BudgetPeriod, BudgetStatus,
 } from "../../../../hooks/xenbudget/types";
 import { formatCurrency, getCurrencySymbol, sanitizeAmount, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
@@ -52,6 +53,7 @@ export default function BudgetForm({
 }: BudgetFormProps) {
     const { enqueueSnackbar } = useSnackbar();
     const isMobile = useMediaQuery("(max-width:600px)");
+    const [kind, setKind] = useState<BudgetKind>("cap");
     const [categories, setCategories] = useState<string[]>([]);
     const [period, setPeriod] = useState<BudgetPeriod>("monthly");
     const [amount, setAmount] = useState("");
@@ -62,6 +64,7 @@ export default function BudgetForm({
     useEffect(() => {
         if (!open) return;
         if (budget) {
+            setKind(budget.kind);
             setCategories(budget.categories || []);
             setPeriod(budget.period);
             setAmount(budget.amount === undefined ? "" : String(budget.amount));
@@ -69,6 +72,7 @@ export default function BudgetForm({
             setStartDate(budget.period === "custom" ? new Date(budget.period_from) : new Date());
             setEndDate(budget.period === "custom" ? new Date(budget.period_to) : null);
         } else {
+            setKind("cap");
             setCategories([]);
             setPeriod("monthly");
             setAmount("");
@@ -87,7 +91,10 @@ export default function BudgetForm({
         [subs],
     );
     const allocated = validSubs.reduce((sum, s) => sum + parseFloat(s.amount), 0);
-    const overAllocated = numericAmount > 0 && allocated > numericAmount;
+    // Only a worry on a cap. Per-person targets adding up past a savings goal just means
+    // the household would save more than it set out to, which is not a mistake.
+    const overAllocated = kind === "cap" && numericAmount > 0 && allocated > numericAmount;
+    const isGoal = kind === "goal";
 
     // A member can hold at most one limit per budget, so the picker only offers the ones
     // not already listed.
@@ -106,6 +113,7 @@ export default function BudgetForm({
         try {
             await onSubmit({
                 categories,
+                kind,
                 period,
                 amount: numericAmount > 0 ? numericAmount : undefined,
                 sub_budgets: validSubs.map((s) => ({
@@ -126,6 +134,23 @@ export default function BudgetForm({
             <DialogTitle>{budget ? "Edit budget" : "New budget"}</DialogTitle>
             <DialogContent>
                 <Stack spacing={2} sx={{ pt: 1 }}>
+                    {/* Direction first: it changes what every field below means, so
+                    picking it after filling them in would read backwards. */}
+                    <Box>
+                        <ToggleButtonGroup
+                            size="small" exclusive fullWidth value={kind}
+                            onChange={(_, v) => v && setKind(v as BudgetKind)}
+                        >
+                            <ToggleButton value="cap">Spending cap</ToggleButton>
+                            <ToggleButton value="goal">Savings goal</ToggleButton>
+                        </ToggleButtonGroup>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>
+                            {isGoal
+                                ? "Money going into these categories counts toward the target. Reaching it is the point — going past it is better."
+                                : "Spending in these categories counts against the limit. Going past it is flagged."}
+                        </Typography>
+                    </Box>
+
                     <Autocomplete
                         multiple freeSolo
                         options={book.categories.map((c) => c.name)}
@@ -140,12 +165,14 @@ export default function BudgetForm({
                     />
 
                     <TextField
-                        fullWidth label="Overall amount" value={amount}
+                        fullWidth label={isGoal ? "Overall target" : "Overall amount"} value={amount}
                         onChange={(e) => {
                             const clean = sanitizeAmount(e.target.value);
                             if (clean !== null) setAmount(clean);
                         }}
-                        helperText="The limit for everyone together. Leave empty to cap only the people below."
+                        helperText={isGoal
+                            ? "The target for everyone together. Leave empty to set targets only for the people below."
+                            : "The limit for everyone together. Leave empty to cap only the people below."}
                         slotProps={{
                             input: {
                                 startAdornment: (
@@ -159,7 +186,7 @@ export default function BudgetForm({
 
                     <Box>
                         <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-                            Per-person limits
+                            {isGoal ? "Per-person targets" : "Per-person limits"}
                         </Typography>
                         <Stack spacing={1.5}>
                             {subs.map((sub, index) => (
@@ -224,7 +251,7 @@ export default function BudgetForm({
                                 >
                                     {overAllocated
                                         ? `${formatCurrency(allocated, currency)} of personal limits exceeds the ${formatCurrency(numericAmount, currency)} overall limit.`
-                                        : `${formatCurrency(allocated, currency)} of ${formatCurrency(numericAmount, currency)} allocated · ${formatCurrency(numericAmount - allocated, currency)} unassigned.`}
+                                        : `${formatCurrency(allocated, currency)} of ${formatCurrency(numericAmount, currency)} allocated · ${formatCurrency(Math.max(0, numericAmount - allocated), currency)} unassigned.`}
                                 </Typography>
                             )}
                         </Stack>
@@ -233,7 +260,9 @@ export default function BudgetForm({
                     <TextField
                         select fullWidth label="Period" value={period}
                         onChange={(e) => setPeriod(e.target.value as BudgetPeriod)}
-                        helperText="Per-person limits use this same period."
+                        helperText={isGoal
+                            ? "Per-person targets use this same period."
+                            : "Per-person limits use this same period."}
                         slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
                     >
                         {PERIODS.map((p) => <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>)}

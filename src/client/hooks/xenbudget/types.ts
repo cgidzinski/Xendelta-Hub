@@ -24,6 +24,15 @@ export interface XenBudgetLabel {
 
 export type BudgetPeriod = "weekly" | "monthly" | "quarterly" | "yearly" | "custom";
 
+/**
+ * Which way a budget's amount points.
+ *
+ * `cap` is a ceiling on spending - passing it is the failure. `goal` is a floor: money
+ * moved into a savings category, where reaching the amount is the point and passing it is
+ * better still. Both are measured identically; only the comparison and the colours differ.
+ */
+export type BudgetKind = "cap" | "goal";
+
 /** One person's limit nested inside a budget, sharing its categories, period and window. */
 export interface XenBudgetSubBudget {
     _id: string;
@@ -35,6 +44,7 @@ export interface XenBudgetBudget {
     _id: string;
     /** Empty = every category. */
     categories: string[];
+    kind: BudgetKind;
     period: BudgetPeriod;
     /** The overall limit. Unset when the budget caps only the people in `sub_budgets`. */
     amount?: number;
@@ -310,6 +320,7 @@ export interface BudgetStatus {
     _id: string;
     /** Empty = every category. */
     categories: string[];
+    kind: BudgetKind;
     period: BudgetPeriod;
     /** What the scope spent this period, whether or not there is an overall limit. */
     spent: number;
@@ -321,8 +332,9 @@ export interface BudgetStatus {
      */
     amount?: number;
     remaining?: number;
-    /** Uncapped, so the bar can show how far past the limit it went. */
+    /** Uncapped, so the bar can show how far past the amount it went. */
     percent?: number;
+    /** Literally `spent > amount`. Good on a goal, bad on a cap - see `kind`. */
     over?: boolean;
     /** Who spent it, biggest first. Empty when nothing was spent. */
     by_person: BudgetPersonSpend[];
@@ -340,6 +352,8 @@ export interface BudgetStatusResponse {
 
 export interface BudgetInput {
     categories?: string[];
+    /** Omit for a spending cap. */
+    kind?: BudgetKind;
     period: BudgetPeriod;
     /** Omit to cap only the people in `sub_budgets`; one of the two is required. */
     amount?: number;

@@ -14,7 +14,7 @@ function sub(personId: string, name: string): SubBudgetStatus {
 
 function budget(patch: Partial<BudgetStatus> = {}): BudgetStatus {
     return {
-        _id: "b1", categories: ["Groceries"], period: "monthly",
+        _id: "b1", categories: ["Groceries"], kind: "cap", period: "monthly",
         spent: 500, item_count: 9, amount: 800, remaining: 300, percent: 63, over: false,
         by_person: [
             { user_id: ALICE, username: "Alice", amount: 310 },

@@ -13,6 +13,7 @@ import BudgetLimitLine from "./BudgetLimitLine";
 import BudgetDetails from "./BudgetDetails";
 import BudgetTarget from "./BudgetTarget";
 import { memberColor, scopeColor } from "./budgetColors";
+import { limitNoun } from "./budgetKind";
 import { personShare } from "./budgetPersonView";
 import { budgetPace } from "./budgetPace";
 
@@ -118,7 +119,8 @@ export default function BudgetCard({
                                     variant="caption" color="text.secondary" noWrap
                                     sx={{ flexShrink: 0 }}
                                 >
-                                    {formatCurrency(budget.spent, currency)} · {suffix}
+                                    {formatCurrency(budget.spent, currency)}
+                                    {budget.kind === "goal" ? " saved" : ""} · {suffix}
                                 </Typography>
                             </Stack>
                         ) : (
@@ -128,6 +130,7 @@ export default function BudgetCard({
                                 spent={budget.spent}
                                 percent={budget.percent ?? 0}
                                 over={budget.over ?? false}
+                                kind={budget.kind}
                                 currency={currency}
                                 color={color}
                                 height={8}
@@ -135,7 +138,8 @@ export default function BudgetCard({
                                 suffix={suffix}
                                 barLabel={`${budget.categories.join(", ") || "Everything"}: ${
                                     formatCurrency(budget.spent, currency)
-                                } of ${formatCurrency(budget.amount, currency)}, ${budget.percent ?? 0}% of the limit`}
+                                } of ${formatCurrency(budget.amount, currency)}, ${
+                                    budget.percent ?? 0}% of the ${limitNoun(budget.kind)}`}
                             />
                         )}
                         {/* Narrowed to one member: the bar above is still the household
@@ -168,7 +172,9 @@ export default function BudgetCard({
             {budget.sub_budgets.length > 0 && (
                 <Box sx={{ mt: 1.5 }}>
                     <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-                        {budget.amount === undefined ? "Per-person limits" : "Personal limits"}
+                        {budget.kind === "goal"
+                            ? (budget.amount === undefined ? "Per-person targets" : "Personal targets")
+                            : (budget.amount === undefined ? "Per-person limits" : "Personal limits")}
                     </Typography>
                     <Stack spacing={1.25}>
                         {budget.sub_budgets.map((sub) => (
@@ -193,13 +199,15 @@ export default function BudgetCard({
                                         spent={sub.spent}
                                         percent={sub.percent}
                                         over={sub.over}
+                                        kind={budget.kind}
                                         currency={currency}
                                         color={memberColor(sub.person_id, members)}
                                         height={6}
                                         pace={pace.elapsed}
                                         barLabel={`${sub.person_name}: ${
                                             formatCurrency(sub.spent, currency)
-                                        } of ${formatCurrency(sub.amount, currency)}, ${sub.percent}% of their limit`}
+                                        } of ${formatCurrency(sub.amount, currency)}, ${
+                                            sub.percent}% of their ${limitNoun(budget.kind)}`}
                                     />
                                 </ButtonBase>
                                 <Collapse in={open === sub._id} unmountOnExit>

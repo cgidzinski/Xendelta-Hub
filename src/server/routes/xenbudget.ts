@@ -163,6 +163,7 @@ function validateBudgetTarget(body: any, book: any): string | null {
 function toBudgetFields(body: any): Record<string, any> {
   return {
     categories: Array.isArray(body.categories) ? body.categories : [],
+    kind: body.kind === "goal" ? "goal" : "cap",
     period: body.period,
     // Left undefined rather than 0 when unset: a budget with only per-person limits has
     // no overall cap, which is a different thing from a cap of nothing.
@@ -1750,6 +1751,10 @@ module.exports = function (app: any) {
               return {
                 _id: b._id.toString(),
                 categories: b.categories || [],
+                // The numbers below are the same either way - `over` means literally
+                // "past the amount". Whether that is a failure or the point of the
+                // budget is the client's call, and this is what it decides on.
+                kind: b.kind === "goal" ? "goal" : "cap",
                 period: b.period,
                 spent,
                 item_count: row?.count || 0,

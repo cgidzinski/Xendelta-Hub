@@ -157,15 +157,19 @@ export default function BookReport() {
                 ...categoryReport.spanning.map(categoryCsvRow),
             ] : []),
             [],
-            ...(categoryReport.hasBudgets
-                ? [summaryCsvRow("Budgeted", categoryReport.summary.budgeted)] : []),
+            ...(categoryReport.summary.capped.total > 0 ? [
+                summaryCsvRow("Spending caps", categoryReport.summary.capped),
+                summaryCsvRow("Caps left", categoryReport.summary.capsLeft),
+            ] : []),
+            ...(categoryReport.hasGoals ? [
+                summaryCsvRow("Savings goals", categoryReport.summary.goals),
+                summaryCsvRow("Saved", categoryReport.summary.saved),
+            ] : []),
             summaryCsvRow("Spent", categoryReport.summary.spent),
-            ...(categoryReport.hasBudgets
-                ? [summaryCsvRow("Budget net", categoryReport.summary.budgetNet)] : []),
             summaryCsvRow("Income", categoryReport.summary.income),
             summaryCsvRow("Net", categoryReport.summary.net),
             ...(categoryReport.wholeBook > 0
-                ? [["Of which capping the whole book", categoryReport.wholeBook]] : []),
+                ? [["Of which budgeted across the whole book", categoryReport.wholeBook]] : []),
             [],
             ["Person", "Spent", "Income"],
             ...summary.by_person.map((p) => [p.username, p.total, p.income]),

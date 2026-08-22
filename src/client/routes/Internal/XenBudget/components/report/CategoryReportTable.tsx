@@ -4,6 +4,7 @@ import {
 import type { SxProps, Theme } from "@mui/material";
 import type { CategoryReport, CategoryReportRow, PeriodTotals } from "./categoryReportRows";
 import { periodColumnLabels } from "./periodColumns";
+import { limitState, limitColor } from "../budget/budgetKind";
 import { CategoryChip } from "../LabelChip";
 import type { XenBudgetLabel } from "../../../../../hooks/xenbudget/types";
 import { cardSx, sectionLabelSx } from "../../../../../components/ui/surfaceStyles";
@@ -35,7 +36,7 @@ interface CategoryReportTableProps {
 export default function CategoryReportTable({
     report, money, round, categoryRegistry, rangeLabel,
 }: CategoryReportTableProps) {
-    const { rows, spanning, wholeBook, hasBudgets, periodKeys, summary } = report;
+    const { rows, spanning, wholeBook, hasBudgets, hasGoals, periodKeys, summary } = report;
     const pivoted = periodKeys.length > 0;
     const columnLabels = periodColumnLabels(periodKeys);
 
@@ -56,8 +57,12 @@ export default function CategoryReportTable({
             return <TableCell align="right" sx={{ color: "text.disabled" }}>—</TableCell>;
         }
         const left = row.budgeted - row.spent;
+        // Same arithmetic, opposite news: a cap in deficit has been overspent, a goal in
+        // deficit has been oversaved. The colour comes from the state, not the sign.
+        const percent = row.budgeted > 0 ? (row.spent / row.budgeted) * 100 : 0;
+        const state = limitState(row.kind ?? "cap", percent);
         return (
-            <TableCell align="right" sx={{ color: left < 0 ? "error.main" : "text.secondary" }}>
+            <TableCell align="right" sx={{ color: limitColor(state) ?? "text.secondary" }}>
                 {left < 0 ? `−${round(-left)}` : round(left)}
             </TableCell>
         );
@@ -188,7 +193,7 @@ export default function CategoryReportTable({
                             ))}
                             <TableCell align="right">{pivoted ? "Total" : "Spent"}</TableCell>
                             {hasBudgets && <TableCell align="right">Budgeted</TableCell>}
-                            {hasBudgets && <TableCell align="right">Left</TableCell>}
+                            {hasBudgets && <TableCell align="right">{hasGoals ? "Left / to go" : "Left"}</TableCell>}
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -219,29 +224,30 @@ export default function CategoryReportTable({
                         {/* The bottom line, carried across the same columns as everything
                         above it - a year's spending is worth reading month by month, and
                         so is what it left over. */}
-                        {hasBudgets && (
+                        {/* Caps and goals never share a line: adding a spending ceiling
+                        to a savings floor produces a number that means nothing. */}
+                        {summary.capped.total > 0 && (
                             <>
-                                {totalRow("Budgeted", summary.budgeted, { first: true })}
-                                {totalRow("Spent", summary.spent)}
-                                {totalRow("Budget net", summary.budgetNet, { signed: true })}
-                                {totalRow("Income", summary.income, { color: INCOME_COLOR })}
-                                {totalRow("Net", summary.net, { signed: true, strong: true })}
+                                {totalRow("Spending caps", summary.capped, { first: true })}
+                                {totalRow("Caps left", summary.capsLeft, { signed: true })}
                             </>
                         )}
-                        {!hasBudgets && (
+                        {hasGoals && (
                             <>
-                                {totalRow("Spent", summary.spent, { first: true })}
-                                {totalRow("Income", summary.income, { color: INCOME_COLOR })}
-                                {totalRow("Net", summary.net, { signed: true, strong: true })}
+                                {totalRow("Savings goals", summary.goals, { first: summary.capped.total <= 0 })}
+                                {totalRow("Saved", summary.saved, { color: INCOME_COLOR })}
                             </>
                         )}
+                        {totalRow("Spent", summary.spent, { first: !hasBudgets })}
+                        {totalRow("Income", summary.income, { color: INCOME_COLOR })}
+                        {totalRow("Net", summary.net, { signed: true, strong: true })}
                     </TableBody>
                 </Table>
             </Box>
 
             {wholeBook > 0 && (
                 <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 1 }}>
-                    Budgeted includes {money(wholeBook)} capping the whole book rather than any
+                    Includes {money(wholeBook)} budgeted across the whole book rather than any
                     one category.
                 </Typography>
             )}

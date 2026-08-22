@@ -6,9 +6,11 @@ import type {
 import { CategoryChip } from "../LabelChip";
 import { cardSx } from "../../../../../components/ui/surfaceStyles";
 import { formatCurrency } from "../../../../../utils/currencyUtils";
+import { INCOME_COLOR } from "../../../../../components/ui/chartColors";
 import BudgetLimitLine from "./BudgetLimitLine";
 import BudgetTarget from "./BudgetTarget";
 import { memberColor, scopeColor } from "./budgetColors";
+import { limitNoun } from "./budgetKind";
 
 const PERIOD_SUFFIX: Record<string, string> = {
     weekly: "weekly", monthly: "monthly", quarterly: "quarterly",
@@ -53,6 +55,13 @@ export default function BudgetRow({
                             <CategoryChip key={c} name={c} registry={categoryRegistry} />
                         ))}
                     <Chip size="small" label={suffix} sx={{ height: 20, fontSize: 11 }} />
+                    {budget.kind === "goal" && (
+                        <Chip
+                            size="small" label="Savings goal"
+                            sx={{ height: 20, fontSize: 11, color: INCOME_COLOR, borderColor: INCOME_COLOR }}
+                            variant="outlined"
+                        />
+                    )}
                 </Stack>
                 <IconButton
                     size="small"
@@ -66,7 +75,9 @@ export default function BudgetRow({
 
             {budget.amount === undefined ? (
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-                    No overall limit — {formatCurrency(budget.spent, currency)} spent this period
+                    {budget.kind === "goal"
+                        ? `No overall target — ${formatCurrency(budget.spent, currency)} saved this period`
+                        : `No overall limit — ${formatCurrency(budget.spent, currency)} spent this period`}
                 </Typography>
             ) : (
                 <BudgetLimitLine
@@ -75,12 +86,14 @@ export default function BudgetRow({
                     spent={budget.spent}
                     percent={budget.percent ?? 0}
                     over={budget.over ?? false}
+                    kind={budget.kind}
                     currency={currency}
                     color={color}
                     height={6}
                     barLabel={`${budget.categories.join(", ") || "Everything"}: ${
                         formatCurrency(budget.spent, currency)
-                    } of ${formatCurrency(budget.amount, currency)}, ${budget.percent ?? 0}% of the limit`}
+                    } of ${formatCurrency(budget.amount, currency)}, ${
+                        budget.percent ?? 0}% of the ${limitNoun(budget.kind)}`}
                 />
             )}
 
@@ -101,12 +114,14 @@ export default function BudgetRow({
                                 spent={sub.spent}
                                 percent={sub.percent}
                                 over={sub.over}
+                                kind={budget.kind}
                                 currency={currency}
                                 color={memberColor(sub.person_id, members)}
                                 height={5}
                                 barLabel={`${sub.person_name}: ${
                                     formatCurrency(sub.spent, currency)
-                                } of ${formatCurrency(sub.amount, currency)}, ${sub.percent}% of their limit`}
+                                } of ${formatCurrency(sub.amount, currency)}, ${
+                                    sub.percent}% of their ${limitNoun(budget.kind)}`}
                             />
                         </Box>
                     ))}

@@ -36,6 +36,12 @@ var subBudgetSchema = new Schema({
 
 var budgetSchema = new Schema({
   categories: { type: [String], default: [] },    // empty = every category
+  // Which way the amount points. A cap is a ceiling - passing it is the failure. A goal
+  // is a floor: money moved into a savings category, where reaching the amount is the
+  // whole point and passing it is better still. The measurement is identical either way;
+  // only the comparison and the colours differ, which is why this is one field and not a
+  // second kind of budget.
+  kind: { type: String, enum: ["cap", "goal"], default: "cap" },
   period: {
     type: String,
     enum: ["weekly", "monthly", "quarterly", "yearly", "custom"],

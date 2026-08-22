@@ -9,7 +9,7 @@ import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
 import { CategoryChip, resolveLabelColor } from "./components/LabelChip";
 import BudgetCard from "./components/budget/BudgetCard";
-import { sortBudgets, overCount } from "./components/budget/sortBudgets";
+import { sortBudgets, overCount, metCount } from "./components/budget/sortBudgets";
 import { budgetsForPerson } from "./components/budget/budgetPersonView";
 import TimePeriodFilter, { defaultMonthMode, resolvePeriod, type PeriodMode } from "./components/TimePeriodFilter";
 import TotalsSummary from "./components/TotalsSummary";
@@ -42,7 +42,9 @@ export default function BookOverview() {
     );
     // Counts every limit past its cap, the shared one and each person's, so the header
     // agrees with the red bars actually on screen rather than with the unfiltered book.
+    // Savings goals are counted separately and the other way up: passing one is the point.
     const overBudgetCount = visibleBudgets.reduce((sum, b) => sum + overCount(b), 0);
+    const goalsMetCount = visibleBudgets.reduce((sum, b) => sum + metCount(b), 0);
     const asOf = budgetStatusResponse?.as_of ?? new Date().toISOString();
     // The figures were measured in whatever currency /budget-status used, which is not
     // necessarily the one the summary settled on - label them with the one they're in.
@@ -159,11 +161,18 @@ export default function BookOverview() {
                     <Box sx={{ mb: 2 }}>
                         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
                             <Typography variant="caption" sx={sectionLabelSx}>Budgets</Typography>
-                            {overBudgetCount > 0 && (
-                                <Typography variant="caption" color="error.main">
-                                    {overBudgetCount} over
-                                </Typography>
-                            )}
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                {goalsMetCount > 0 && (
+                                    <Typography variant="caption" sx={{ color: INCOME_COLOR }}>
+                                        {goalsMetCount} saved
+                                    </Typography>
+                                )}
+                                {overBudgetCount > 0 && (
+                                    <Typography variant="caption" color="error.main">
+                                        {overBudgetCount} over
+                                    </Typography>
+                                )}
+                            </Stack>
                         </Stack>
                         <Stack spacing={1}>
                             {visibleBudgets.map((budget) => (

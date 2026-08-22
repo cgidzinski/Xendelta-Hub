@@ -8,6 +8,7 @@ import type {
 import { formatCurrency } from "../../../../../utils/currencyUtils";
 import { sectionLabelSx } from "../../../../../components/ui/surfaceStyles";
 import { budgetPace } from "./budgetPace";
+import { aheadIsGood } from "./budgetKind";
 import { memberColor } from "./budgetColors";
 import BudgetTarget from "./BudgetTarget";
 
@@ -69,29 +70,34 @@ export default function BudgetDetails({
             {amount !== undefined && amount > 0 && (
                 <Typography variant="caption" color="text.secondary">
                     {pace.finished
-                        ? `Period closed — ${money(spent)} of ${money(amount)} used`
+                        ? `Period closed — ${money(spent)} of ${money(amount)} ${
+                            budget.kind === "goal" ? "saved" : "used"}`
                         : `Day ${pace.dayOf} of ${pace.totalDays} — ${
                             Math.abs(pace.ahead) < 0.01
                                 ? "exactly on pace"
                                 : pace.ahead > 0
-                                    ? `${money(pace.ahead)} ahead of pace`
-                                    : `${money(-pace.ahead)} under pace`
+                                    // Outrunning an even pace empties a cap early and
+                                    // fills a goal early - the same number, opposite news.
+                                    ? `${money(pace.ahead)} ${aheadIsGood(budget.kind) ? "ahead of pace" : "over pace"}`
+                                    : `${money(-pace.ahead)} ${aheadIsGood(budget.kind) ? "behind pace" : "under pace"}`
                         }, projected ${money(pace.projected)}`}
                 </Typography>
             )}
 
             {focus && budget.amount !== undefined && (
                 <Typography variant="caption" color="text.secondary">
-                    {`Inside the ${money(budget.amount)} shared limit, which is ${
-                        budget.percent ?? 0
-                    }% used.`}
+                    {budget.kind === "goal"
+                        ? `Part of the ${money(budget.amount)} shared goal, which is ${
+                            budget.percent ?? 0}% funded.`
+                        : `Inside the ${money(budget.amount)} shared limit, which is ${
+                            budget.percent ?? 0}% used.`}
                 </Typography>
             )}
 
             {breakdown.length > 0 && (
                 <Box>
                     <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.75 }}>
-                        Who spent it
+                        {budget.kind === "goal" ? "Who put it in" : "Who spent it"}
                     </Typography>
                     <Stack spacing={1}>
                         {breakdown.map((person) => {
@@ -134,7 +140,7 @@ export default function BudgetDetails({
                                     />
                                     {cappedIds.has(person.user_id) && (
                                         <Typography variant="caption" color="text.disabled">
-                                            has their own limit above
+                                            has their own {budget.kind === "goal" ? "target" : "limit"} above
                                         </Typography>
                                     )}
                                 </Box>

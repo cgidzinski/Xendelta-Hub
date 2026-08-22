@@ -1,5 +1,5 @@
 import type {
-    BudgetStatus, SummaryCategory, SummaryCategoryPeriod, SummaryPeriod,
+    BudgetKind, BudgetStatus, SummaryCategory, SummaryCategoryPeriod, SummaryPeriod,
 } from "../../../../../hooks/xenbudget/types";
 import { budgetedForRange } from "../budget/budgetForRange";
 import { budgetsForPerson } from "../budget/budgetPersonView";
@@ -15,6 +15,12 @@ export interface CategoryReportRow {
     spent: number;
     /** Absent when no budget covers this line, which is different from a budget of zero. */
     budgeted?: number;
+    /**
+     * Which way `budgeted` points. A row can only be one or the other: a category with
+     * both a cap and a goal on it would be contradictory, so the first budget seen wins
+     * and the other is left out of the column rather than silently added to it.
+     */
+    kind?: BudgetKind;
     /** Spend per period bucket, keyed as `by_period` is. Empty when the table isn't pivoted. */
     byPeriod: Record<string, number>;
 }
@@ -31,10 +37,19 @@ export interface CategoryReport {
     spanning: CategoryReportRow[];
     /** Budgets with no categories at all: a cap on the whole book. */
     wholeBook: number;
-    /** Every kept budget scaled to the range, each counted exactly once. */
-    totalBudgeted: number;
+    /**
+     * Caps and goals scaled to the range, kept apart. Adding a $9,600 spending cap to a
+     * $6,000 savings target produces a number that means nothing, so they never are.
+     */
+    totalCapped: number;
+    totalGoal: number;
+    /** Spending inside categories that actually carry a cap - what `totalCapped` measures. */
+    cappedSpend: number;
+    /** Money that landed in categories carrying a savings goal. */
+    goalSaved: number;
     /** True once anything at all is budgeted, so the column can be dropped when nothing is. */
     hasBudgets: boolean;
+    hasGoals: boolean;
     /**
      * The period columns to render, in order. Empty when the range has only one bucket or
      * too many to read, in which case the table falls back to a single Spent column.
@@ -51,10 +66,20 @@ export interface PeriodTotals {
 }
 
 export interface ReportSummaryRows {
-    budgeted: PeriodTotals;
+    /** Spending caps, restated for the range. */
+    capped: PeriodTotals;
+    /** Savings targets, restated for the range. Kept apart from caps deliberately. */
+    goals: PeriodTotals;
+    /** What actually landed in the categories carrying those targets. */
+    saved: PeriodTotals;
+    /** Every outgoing, capped or not. */
     spent: PeriodTotals;
-    /** budgeted - spent: what the caps left over, column by column. */
-    budgetNet: PeriodTotals;
+    /**
+     * Caps minus the spending inside CAPPED categories - a like-for-like comparison.
+     * Measuring partial coverage against the book's entire outgoings, as this used to,
+     * produced a number that looked alarming whenever anything was left unbudgeted.
+     */
+    capsLeft: PeriodTotals;
     income: PeriodTotals;
     /** income - spent, the book's actual bottom line. */
     net: PeriodTotals;
@@ -122,11 +147,16 @@ export function buildCategoryReport({
         }
     }
 
-    const budgetedByCategory = new Map<string, { label: string; budgeted: number }>();
+    const budgetedByCategory = new Map<string, { label: string; budgeted: number; kind: BudgetKind }>();
     const spanning: CategoryReportRow[] = [];
+    // Which categories carry a cap and which carry a goal, so the totals below can compare
+    // each against the spending that actually belongs to it.
+    const cappedNames = new Set<string>();
+    const goalNames = new Set<string>();
     let wholeBook = 0;
-    let totalBudgeted = 0;
-    let hasBudgets = false;
+    let totalCapped = 0;
+    let totalGoal = 0;
+    let hasGoals = false;
 
     for (const budget of kept) {
         const budgeted = budgetedForRange(
@@ -139,17 +169,28 @@ export function buildCategoryReport({
             rangeFrom, rangeTo,
         );
         if (budgeted <= 0) continue;
-        hasBudgets = true;
-        totalBudgeted += budgeted;
+        if (budget.kind === "goal") {
+            hasGoals = true;
+            totalGoal += budgeted;
+        } else {
+            totalCapped += budgeted;
+        }
+        for (const name of budget.categories) {
+            (budget.kind === "goal" ? goalNames : cappedNames).add(key(name));
+        }
 
         if (budget.categories.length === 0) {
             wholeBook += budgeted;
         } else if (budget.categories.length === 1) {
             const name = budget.categories[0];
             const existing = budgetedByCategory.get(key(name));
+            // Two budgets of the same direction on one category add up; opposing ones
+            // can't, so the first direction seen holds the cell.
+            const sameKind = !existing || existing.kind === budget.kind;
             budgetedByCategory.set(key(name), {
                 label: existing?.label ?? name,
-                budgeted: (existing?.budgeted ?? 0) + budgeted,
+                budgeted: sameKind ? (existing?.budgeted ?? 0) + budgeted : (existing?.budgeted ?? 0),
+                kind: existing?.kind ?? budget.kind,
             });
         } else {
             spanning.push({
@@ -163,6 +204,7 @@ export function buildCategoryReport({
                 ),
                 byPeriod: sumCells(budget.categories.map((name) => cellsByCategory.get(key(name)))),
                 budgeted,
+                kind: budget.kind,
             });
         }
     }
@@ -186,6 +228,7 @@ export function buildCategoryReport({
             spent: spend?.spent ?? 0,
             byPeriod: cellsByCategory.get(name) ?? {},
             budgeted: budget?.budgeted,
+            kind: budget?.kind,
         };
     });
 
@@ -211,21 +254,27 @@ export function buildCategoryReport({
     // What each column allows. A bucket is clamped to the range before it is measured:
     // "last 3 months" ends mid-month, and counting that whole month here would leave the
     // columns adding up to more than the total beside them.
-    const budgetedByPeriod: Record<string, number> = {};
+    const cappedByPeriod: Record<string, number> = {};
+    const goalByPeriod: Record<string, number> = {};
     for (const periodKey of columns) {
         const bucket = periodKeyRange(periodKey);
         if (!bucket) continue;
         const from = new Date(Math.max(bucket.from.getTime(), rangeFrom.getTime()));
         const to = new Date(Math.min(bucket.to.getTime(), rangeTo.getTime()));
-        budgetedByPeriod[periodKey] = kept.reduce((sum, budget) => sum + budgetedForRange(
-            {
-                period: budget.period,
-                amount: limitFor(budget, personId),
-                period_from: budget.period_from,
-                period_to: budget.period_to,
-            },
-            from, to,
-        ), 0);
+        for (const budget of kept) {
+            const value = budgetedForRange(
+                {
+                    period: budget.period,
+                    amount: limitFor(budget, personId),
+                    period_from: budget.period_from,
+                    period_to: budget.period_to,
+                },
+                from, to,
+            );
+            if (value <= 0) continue;
+            const target = budget.kind === "goal" ? goalByPeriod : cappedByPeriod;
+            target[periodKey] = (target[periodKey] ?? 0) + value;
+        }
     }
 
     const spentByPeriod = fromPeriods(byPeriod, columns, (p) => p.expense);
@@ -236,15 +285,36 @@ export function buildCategoryReport({
         { expense: 0, income: 0 },
     );
 
+    // Spending that belongs to each direction, so "Caps left" compares like with like
+    // instead of measuring partial coverage against the book's entire outgoings. A
+    // whole-book cap covers everything, so it brings all the spending with it.
+    const sumOver = (names: Set<string>, all: boolean) => (all
+        ? totals.expense
+        : [...names].reduce((sum, n) => sum + (spentByCategory.get(n)?.spent ?? 0), 0));
+    const cappedSpend = sumOver(cappedNames, wholeBook > 0);
+    const goalSaved = sumOver(goalNames, false);
+
+    const cappedSpendByPeriod = wholeBook > 0
+        ? spentByPeriod
+        : cellsFor(cappedNames, cellsByCategory, columns);
+
     return {
-        rows, spanning, wholeBook, totalBudgeted, hasBudgets,
+        rows, spanning, wholeBook,
+        totalCapped, totalGoal, cappedSpend, goalSaved,
+        hasBudgets: totalCapped > 0 || totalGoal > 0,
+        hasGoals,
         periodKeys: columns,
         summary: {
-            budgeted: { byPeriod: budgetedByPeriod, total: totalBudgeted },
+            capped: { byPeriod: cappedByPeriod, total: totalCapped },
+            goals: { byPeriod: goalByPeriod, total: totalGoal },
+            saved: {
+                byPeriod: cellsFor(goalNames, cellsByCategory, columns),
+                total: goalSaved,
+            },
             spent: { byPeriod: spentByPeriod, total: totals.expense },
-            budgetNet: {
-                byPeriod: subtract(budgetedByPeriod, spentByPeriod, columns),
-                total: totalBudgeted - totals.expense,
+            capsLeft: {
+                byPeriod: subtract(cappedByPeriod, cappedSpendByPeriod, columns),
+                total: totalCapped - cappedSpend,
             },
             income: { byPeriod: incomeByPeriod, total: totals.income },
             net: {
@@ -253,6 +323,19 @@ export function buildCategoryReport({
             },
         },
     };
+}
+
+/** Per-column spend across a set of categories. */
+function cellsFor(
+    names: Set<string>,
+    cellsByCategory: Map<string, Record<string, number>>,
+    columns: string[],
+): Record<string, number> {
+    if (columns.length === 0) return {};
+    return Object.fromEntries(columns.map((periodKey) => [
+        periodKey,
+        [...names].reduce((sum, n) => sum + (cellsByCategory.get(n)?.[periodKey] ?? 0), 0),
+    ]));
 }
 
 function fromPeriods(

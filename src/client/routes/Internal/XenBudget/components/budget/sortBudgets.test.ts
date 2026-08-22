@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import type { BudgetStatus, SubBudgetStatus } from "../../../../../hooks/xenbudget/types";
-import { sortBudgets, worstPercent, isOver, overCount, budgetLabel } from "./sortBudgets";
+import {
+    sortBudgets, worstPercent, troublePercent, isOverCap, overCount, metCount, budgetLabel,
+} from "./sortBudgets";
 
 function sub(percent: number, over = false): SubBudgetStatus {
     return {
@@ -11,7 +13,7 @@ function sub(percent: number, over = false): SubBudgetStatus {
 
 function budget(over: Partial<BudgetStatus> = {}): BudgetStatus {
     return {
-        _id: "b1", categories: ["Groceries"], period: "monthly",
+        _id: "b1", categories: ["Groceries"], kind: "cap", period: "monthly",
         spent: 50, item_count: 3, amount: 100, remaining: 50, percent: 50, over: false,
         by_person: [], sub_budgets: [],
         period_from: "2026-08-01T00:00:00.000Z", period_to: "2026-09-01T00:00:00.000Z",
@@ -43,10 +45,10 @@ describe("worstPercent", () => {
     });
 });
 
-describe("isOver / overCount", () => {
+describe("isOverCap / overCount", () => {
     it("counts a person past their limit even when the overall one is fine", () => {
         const b = budget({ over: false, sub_budgets: [sub(120, true), sub(30)] });
-        expect(isOver(b)).toBe(true);
+        expect(isOverCap(b)).toBe(true);
         expect(overCount(b)).toBe(1);
     });
 
@@ -56,7 +58,7 @@ describe("isOver / overCount", () => {
     });
 
     it("is false when everything is inside its cap", () => {
-        expect(isOver(budget({ sub_budgets: [sub(50)] }))).toBe(false);
+        expect(isOverCap(budget({ sub_budgets: [sub(50)] }))).toBe(false);
     });
 });
 
@@ -93,5 +95,53 @@ describe("sortBudgets", () => {
         const list = [budget({ _id: "b" , categories: ["B"] }), budget({ _id: "a", categories: ["A"] })];
         sortBudgets(list);
         expect(list.map((b) => b._id)).toEqual(["b", "a"]);
+    });
+});
+
+describe("savings goals", () => {
+    const goal = (patch: Partial<BudgetStatus> = {}) =>
+        budget({ kind: "goal", categories: ["Savings"], ...patch });
+
+    it("reads a goal's trouble upside down from a cap's", () => {
+        // 20% of a cap is comfortable; 20% of a savings goal is the one to worry about.
+        expect(troublePercent(budget({ percent: 20 }))).toBe(20);
+        expect(troublePercent(goal({ percent: 20 }))).toBe(80);
+    });
+
+    it("treats a funded goal as the safest state", () => {
+        expect(troublePercent(goal({ percent: 100 }))).toBe(0);
+        expect(troublePercent(goal({ percent: 140, over: true }))).toBe(0);
+    });
+
+    it("takes the least-funded person as a goal's worry", () => {
+        const g = goal({ percent: 90, sub_budgets: [sub(80), sub(15)] });
+        expect(troublePercent(g)).toBe(85);
+    });
+
+    it("never counts a goal past its target as over budget", () => {
+        const g = goal({ percent: 140, over: true, sub_budgets: [sub(200, true)] });
+        expect(isOverCap(g)).toBe(false);
+        expect(overCount(g)).toBe(0);
+    });
+
+    it("counts reached targets instead", () => {
+        expect(metCount(goal({ percent: 140, over: true }))).toBe(1);
+        expect(metCount(goal({ over: true, sub_budgets: [sub(120, true), sub(40)] }))).toBe(2);
+        // A cap is never "met" - passing it is not an achievement.
+        expect(metCount(budget({ over: true }))).toBe(0);
+    });
+
+    it("sorts a badly-behind goal up with the breached caps, and a met one down", () => {
+        const met = goal({ _id: "met", categories: ["Apples"], percent: 130, over: true });
+        const behind = goal({ _id: "behind", categories: ["Zucchini"], percent: 5 });
+        const fine = budget({ _id: "fine", categories: ["Mangoes"], percent: 10 });
+        // "behind" is in trouble; "met" and "fine" are both untroubled, so they fall to
+        // alphabetical order by category (Apples before Mangoes).
+        expect(sortBudgets([met, fine, behind]).map((b) => b._id))
+            .toEqual(["behind", "met", "fine"]);
+    });
+
+    it("keeps worstPercent as raw progress, whatever the direction", () => {
+        expect(worstPercent(goal({ percent: 20 }))).toBe(20);
     });
 });

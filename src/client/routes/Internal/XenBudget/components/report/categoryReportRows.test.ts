@@ -12,7 +12,7 @@ const TO = new Date(2026, 8, 1);
 
 function budget(patch: Partial<BudgetStatus> = {}): BudgetStatus {
     return {
-        _id: "b1", categories: ["Groceries"], period: "monthly",
+        _id: "b1", categories: ["Groceries"], kind: "cap", period: "monthly",
         spent: 0, item_count: 0, amount: 800, remaining: 800, percent: 0, over: false,
         by_person: [], sub_budgets: [],
         period_from: FROM.toISOString(), period_to: TO.toISOString(),
@@ -100,17 +100,17 @@ describe("buildCategoryReport", () => {
     });
 
     it("counts a whole-book budget separately from any category", () => {
-        const { rows, spanning, wholeBook, totalBudgeted } = buildCategoryReport({
+        const { rows, spanning, wholeBook, totalCapped } = buildCategoryReport({
             ...base, budgets: [budget({ categories: [], amount: 3000 })],
         });
         expect(wholeBook).toBe(3000);
-        expect(totalBudgeted).toBe(3000);
+        expect(totalCapped).toBe(3000);
         expect(spanning).toHaveLength(0);
         expect(rows.every((r) => r.budgeted === undefined)).toBe(true);
     });
 
     it("counts every budget exactly once in the total", () => {
-        const { totalBudgeted } = buildCategoryReport({
+        const { totalCapped } = buildCategoryReport({
             ...base,
             budgets: [
                 budget({ _id: "a", categories: ["Groceries"], amount: 800 }),
@@ -118,17 +118,17 @@ describe("buildCategoryReport", () => {
                 budget({ _id: "c", categories: [], amount: 3000 }),
             ],
         });
-        expect(totalBudgeted).toBe(4800);
+        expect(totalCapped).toBe(4800);
     });
 
     it("scales the budget to the range rather than showing one period's cap", () => {
         // A full year of an $800 monthly cap.
-        const { rows, totalBudgeted } = buildCategoryReport({
+        const { rows, totalCapped } = buildCategoryReport({
             ...base, budgets: [budget()],
             rangeFrom: new Date(2026, 0, 1), rangeTo: new Date(2027, 0, 1),
         });
         expect(rows.find((r) => r.label === "Groceries")?.budgeted).toBeCloseTo(9600, 6);
-        expect(totalBudgeted).toBeCloseTo(9600, 6);
+        expect(totalCapped).toBeCloseTo(9600, 6);
     });
 
     it("adds an uncategorised row only when there is something in it", () => {
@@ -155,21 +155,21 @@ describe("buildCategoryReport", () => {
             amount: undefined, remaining: undefined, percent: undefined, over: undefined,
             sub_budgets: [sub(ALICE, 200)],
         });
-        const { hasBudgets, totalBudgeted } = buildCategoryReport({
+        const { hasBudgets, totalCapped } = buildCategoryReport({
             ...base, budgets: [personalOnly],
         });
         expect(hasBudgets).toBe(false);
-        expect(totalBudgeted).toBe(0);
+        expect(totalCapped).toBe(0);
     });
 
     describe("narrowed to one member", () => {
         it("uses that member's own limit, not the household cap", () => {
             const shared = budget({ amount: 800, sub_budgets: [sub(ALICE, 200), sub(BOB, 150)] });
-            const { rows, totalBudgeted } = buildCategoryReport({
+            const { rows, totalCapped } = buildCategoryReport({
                 ...base, budgets: [shared], personId: ALICE,
             });
             expect(rows.find((r) => r.label === "Groceries")?.budgeted).toBe(200);
-            expect(totalBudgeted).toBe(200);
+            expect(totalCapped).toBe(200);
         });
 
         it("gives no budget figure for a household cap they have no limit inside", () => {
@@ -186,10 +186,10 @@ describe("buildCategoryReport", () => {
                 amount: undefined, remaining: undefined, percent: undefined, over: undefined,
                 sub_budgets: [sub(BOB, 150)],
             });
-            const { totalBudgeted } = buildCategoryReport({
+            const { totalCapped } = buildCategoryReport({
                 ...base, budgets: [bobsOwn], personId: ALICE,
             });
-            expect(totalBudgeted).toBe(0);
+            expect(totalCapped).toBe(0);
         });
     });
 });
@@ -278,7 +278,13 @@ describe("summary rows", () => {
             period("2026-02", 700, 4000),
             period("2026-03", 1100, 4000),
         ],
-        byCategoryPeriod: [],
+        // Groceries cells add up to the 620 that base.byCategory reports, so the
+        // column-versus-total assertions below actually mean something.
+        byCategoryPeriod: [
+            { category: "Groceries", key: "2026-01", total: 200 },
+            { category: "Groceries", key: "2026-02", total: 300 },
+            { category: "Groceries", key: "2026-03", total: 120 },
+        ],
         rangeFrom: new Date(2026, 0, 1),
         rangeTo: new Date(2026, 3, 1),
     };
@@ -300,8 +306,8 @@ describe("summary rows", () => {
     it("restates the budget for each column", () => {
         const { summary } = buildCategoryReport({ ...quarter, budgets: [budget({ amount: 800 })] });
         // A monthly cap is one whole cap per month column.
-        expect(summary.budgeted.byPeriod).toEqual({ "2026-01": 800, "2026-02": 800, "2026-03": 800 });
-        expect(summary.budgeted.total).toBeCloseTo(2400, 6);
+        expect(summary.capped.byPeriod).toEqual({ "2026-01": 800, "2026-02": 800, "2026-03": 800 });
+        expect(summary.capped.total).toBeCloseTo(2400, 6);
     });
 
     it("adds the columns up to the total beside them", () => {
@@ -310,11 +316,11 @@ describe("summary rows", () => {
         });
         const sum = (t: { byPeriod: Record<string, number> }) =>
             periodKeys.reduce((acc, k) => acc + (t.byPeriod[k] ?? 0), 0);
-        expect(sum(summary.budgeted)).toBeCloseTo(summary.budgeted.total, 6);
+        expect(sum(summary.capped)).toBeCloseTo(summary.capped.total, 6);
         expect(sum(summary.spent)).toBeCloseTo(summary.spent.total, 6);
         expect(sum(summary.income)).toBeCloseTo(summary.income.total, 6);
         expect(sum(summary.net)).toBeCloseTo(summary.net.total, 6);
-        expect(sum(summary.budgetNet)).toBeCloseTo(summary.budgetNet.total, 6);
+        expect(sum(summary.capsLeft)).toBeCloseTo(summary.capsLeft.total, 6);
     });
 
     it("still adds up when the range ends part-way through the last column", () => {
@@ -332,17 +338,27 @@ describe("summary rows", () => {
         const { summary, periodKeys } = buildCategoryReport({
             ...partial, budgets: [budget({ amount: 800 })],
         });
-        const summed = periodKeys.reduce((acc, k) => acc + (summary.budgeted.byPeriod[k] ?? 0), 0);
-        expect(summed).toBeCloseTo(summary.budgeted.total, 6);
+        const summed = periodKeys.reduce((acc, k) => acc + (summary.capped.byPeriod[k] ?? 0), 0);
+        expect(summed).toBeCloseTo(summary.capped.total, 6);
         // Half of March, so half a month's cap.
-        expect(summary.budgeted.byPeriod["2026-03"]).toBeCloseTo(800 * (15 / 31), 6);
+        expect(summary.capped.byPeriod["2026-03"]).toBeCloseTo(800 * (15 / 31), 6);
     });
 
-    it("reports budget net as what the caps left over, column by column", () => {
+    it("measures caps against spending in capped categories, not every outgoing", () => {
+        // The $800 cap is on Groceries alone. Comparing it to the book's whole $2,700
+        // outgoings would call it wildly overspent when Groceries only took $620.
         const { summary } = buildCategoryReport({ ...quarter, budgets: [budget({ amount: 800 })] });
-        expect(summary.budgetNet.byPeriod["2026-01"]).toBeCloseTo(-100, 6);
-        expect(summary.budgetNet.byPeriod["2026-02"]).toBeCloseTo(100, 6);
-        expect(summary.budgetNet.total).toBeCloseTo(2400 - 2700, 6);
+        expect(summary.capsLeft.byPeriod["2026-01"]).toBeCloseTo(800 - 200, 6);
+        expect(summary.capsLeft.byPeriod["2026-02"]).toBeCloseTo(800 - 300, 6);
+        expect(summary.capsLeft.total).toBeCloseTo(2400 - 620, 6);
+    });
+
+    it("brings all the spending in when a cap covers the whole book", () => {
+        const { summary } = buildCategoryReport({
+            ...quarter, budgets: [budget({ categories: [], amount: 1000 })],
+        });
+        // Nothing is outside a whole-book cap, so every outgoing counts against it.
+        expect(summary.capsLeft.total).toBeCloseTo(3000 - 2700, 6);
     });
 
     it("still totals the range when there are no columns to spread across", () => {
@@ -351,7 +367,7 @@ describe("summary rows", () => {
         expect(summary.spent.byPeriod).toEqual({});
         expect(summary.spent.total).toBe(860);
         expect(summary.income.total).toBe(4000);
-        expect(summary.budgeted.total).toBe(800);
+        expect(summary.capped.total).toBe(800);
     });
 });
 
@@ -420,5 +436,97 @@ describe("every category gets a row", () => {
             budgets: [],
         });
         expect(rows[rows.length - 1].label).toBe("Uncategorised");
+    });
+});
+
+describe("savings goals", () => {
+    const MONTHS = ["2026-01", "2026-02", "2026-03"];
+
+    const withSavings = {
+        ...base,
+        allCategories: ["Groceries", "Dining", "Savings"],
+        byCategory: [
+            { category: "Groceries", total: 620, count: 12 },
+            { category: "Dining", total: 240, count: 5 },
+            { category: "Savings", total: 900, count: 3 },
+        ],
+        byPeriod: [
+            period("2026-01", 900, 4000),
+            period("2026-02", 700, 4000),
+            period("2026-03", 1100, 4000),
+        ],
+        byCategoryPeriod: [
+            { category: "Savings", key: "2026-01", total: 300 },
+            { category: "Savings", key: "2026-02", total: 300 },
+            { category: "Savings", key: "2026-03", total: 300 },
+        ],
+        rangeFrom: new Date(2026, 0, 1),
+        rangeTo: new Date(2026, 3, 1),
+    };
+
+    const goal = (patch = {}) =>
+        budget({ kind: "goal" as const, categories: ["Savings"], amount: 500, ...patch });
+
+    it("marks the row so the table can flip its meaning", () => {
+        const { rows } = buildCategoryReport({ ...withSavings, budgets: [goal()] });
+        const savings = rows.find((r) => r.label === "Savings");
+        expect(savings?.kind).toBe("goal");
+        expect(savings?.budgeted).toBeCloseTo(1500, 6);
+    });
+
+    it("leaves a capped row marked as a cap", () => {
+        const { rows } = buildCategoryReport({
+            ...withSavings, budgets: [budget({ amount: 800 }), goal()],
+        });
+        expect(rows.find((r) => r.label === "Groceries")?.kind).toBe("cap");
+    });
+
+    it("never adds a savings target to a spending cap", () => {
+        const { totalCapped, totalGoal } = buildCategoryReport({
+            ...withSavings, budgets: [budget({ amount: 800 }), goal()],
+        });
+        expect(totalCapped).toBeCloseTo(2400, 6);
+        expect(totalGoal).toBeCloseTo(1500, 6);
+    });
+
+    it("reports what was actually saved against the target", () => {
+        const { summary, goalSaved } = buildCategoryReport({ ...withSavings, budgets: [goal()] });
+        expect(goalSaved).toBe(900);
+        expect(summary.saved.total).toBe(900);
+        expect(summary.saved.byPeriod).toEqual({ "2026-01": 300, "2026-02": 300, "2026-03": 300 });
+        expect(summary.goals.byPeriod).toEqual({ "2026-01": 500, "2026-02": 500, "2026-03": 500 });
+    });
+
+    it("keeps savings out of the caps comparison entirely", () => {
+        const { summary } = buildCategoryReport({
+            ...withSavings, budgets: [budget({ amount: 800 }), goal()],
+        });
+        // Caps left weighs the Groceries cap against Groceries spending - the $900 put
+        // into Savings is not an overspend against anything.
+        expect(summary.capsLeft.total).toBeCloseTo(2400 - 620, 6);
+    });
+
+    it("flags that goals exist so the table can title its columns", () => {
+        expect(buildCategoryReport({ ...withSavings, budgets: [goal()] }).hasGoals).toBe(true);
+        expect(buildCategoryReport({ ...withSavings, budgets: [budget()] }).hasGoals).toBe(false);
+    });
+
+    it("still counts savings in total spending, since that is what it is", () => {
+        const { summary } = buildCategoryReport({ ...withSavings, budgets: [goal()] });
+        expect(summary.spent.total).toBe(2700);
+    });
+
+    it("uses a member's own target when narrowed to them", () => {
+        const shared = goal({
+            sub_budgets: [{
+                _id: "s1", person_id: "alice-id", person_name: "Alice",
+                amount: 200, spent: 0, remaining: 200, percent: 0, over: false, item_count: 0,
+            }],
+        });
+        const { rows, totalGoal } = buildCategoryReport({
+            ...withSavings, budgets: [shared], personId: "alice-id",
+        });
+        expect(rows.find((r) => r.label === "Savings")?.budgeted).toBeCloseTo(600, 6);
+        expect(totalGoal).toBeCloseTo(600, 6);
     });
 });

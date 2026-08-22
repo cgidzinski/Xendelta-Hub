@@ -614,6 +614,8 @@ const subBudgetShape = z.object({
 
 const budgetShape = {
   categories: z.array(z.string().max(50)).max(20, "Too many categories").optional(),
+  // Omitted means a cap, so every budget stored before goals existed keeps its meaning.
+  kind: z.enum(["cap", "goal"]).optional(),
   period: z.enum(["weekly", "monthly", "quarterly", "yearly", "custom"]),
   // Optional, unlike the per-person amounts below: a budget may cap only named people.
   amount: z.number("Amount must be a number").positive("Amount must be positive").optional(),
