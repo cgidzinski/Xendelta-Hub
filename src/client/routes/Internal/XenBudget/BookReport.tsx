@@ -19,7 +19,7 @@ import BudgetCard from "./components/budget/BudgetCard";
 import { sortBudgets } from "./components/budget/sortBudgets";
 import { budgetsForPerson } from "./components/budget/budgetPersonView";
 import CategoryReportTable from "./components/report/CategoryReportTable";
-import { buildCategoryReport } from "./components/report/categoryReportRows";
+import { buildCategoryReport, type CategoryReportRow } from "./components/report/categoryReportRows";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { formatCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
@@ -68,7 +68,11 @@ export default function BookReport() {
     // rather than shown as one period's worth - see budgetedForRange.
     const categoryReport = useMemo(() => buildCategoryReport({
         byCategory: summary?.by_category ?? [],
+        byCategoryPeriod: summary?.by_category_period ?? [],
         uncategorised: summary?.uncategorised ?? { total: 0, count: 0 },
+        uncategorisedByPeriod: summary?.uncategorised_by_period ?? [],
+        // The same buckets the charts use, so a column lines up with a bar.
+        periodKeys: (summary?.by_period ?? []).map((p) => p.key),
         budgets,
         rangeFrom: range.from,
         rangeTo: range.to,
@@ -117,6 +121,14 @@ export default function BookReport() {
         );
     }, [summary, book.members]);
 
+    const categoryCsvRow = (r: CategoryReportRow) => [
+        r.label,
+        ...categoryReport.periodKeys.map((k) => r.byPeriod[k] ?? ""),
+        r.spent,
+        r.budgeted ?? "",
+        r.budgeted === undefined ? "" : r.budgeted - r.spent,
+    ];
+
     const exportCsv = () => {
         if (!summary) return;
         const rows: unknown[][] = [
@@ -126,24 +138,14 @@ export default function BookReport() {
             ["Period", "In", "Out", "Net"],
             ...summary.by_period.map((p) => [p.key, p.income, p.expense, p.net]),
             [],
-            // Mirrors the table on screen, budget column included, so the export doesn't
-            // quietly say something different from what was exported from.
-            ["Category", "Budgeted", "Spent", "Left"],
-            ...categoryReport.rows.map((r) => [
-                r.label,
-                r.budgeted ?? "",
-                r.spent,
-                r.budgeted === undefined ? "" : r.budgeted - r.spent,
-            ]),
+            // Mirrors the table on screen, period and budget columns included, so the
+            // export doesn't quietly say something different from what it was taken from.
+            ["Category", ...categoryReport.periodKeys, "Total", "Budgeted", "Left"],
+            ...categoryReport.rows.map(categoryCsvRow),
             ...(categoryReport.spanning.length > 0 ? [
                 [],
                 ["Budgets over several categories (also counted above)"],
-                ...categoryReport.spanning.map((r) => [
-                    r.label,
-                    r.budgeted ?? "",
-                    r.spent,
-                    r.budgeted === undefined ? "" : r.budgeted - r.spent,
-                ]),
+                ...categoryReport.spanning.map(categoryCsvRow),
             ] : []),
             [],
             ...(categoryReport.hasBudgets ? [
@@ -178,6 +180,9 @@ export default function BookReport() {
             style: "currency", currency: summary.currency, maximumFractionDigits: 0,
         }).format(v);
     };
+    const round = (v: number) => new Intl.NumberFormat("en-US", {
+        style: "currency", currency: summary.currency, maximumFractionDigits: 0,
+    }).format(v);
     const tooltipStyle = {
         contentStyle: { background: "#1a1a19", border: "1px solid #ffffff26", borderRadius: 8 },
         labelStyle: { color: "#c3c2b7" },
@@ -248,6 +253,7 @@ export default function BookReport() {
                             income={summary.totals.income}
                             net={summary.totals.net}
                             money={money}
+                            round={round}
                             categoryRegistry={book.categories}
                             rangeLabel={range.label}
                         />

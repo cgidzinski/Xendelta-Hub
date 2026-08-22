@@ -1,6 +1,9 @@
-import type { BudgetStatus, SummaryCategory } from "../../../../../hooks/xenbudget/types";
+import type {
+    BudgetStatus, SummaryCategory, SummaryCategoryPeriod,
+} from "../../../../../hooks/xenbudget/types";
 import { budgetedForRange } from "../budget/budgetForRange";
 import { budgetsForPerson } from "../budget/budgetPersonView";
+import { shouldPivot } from "./periodColumns";
 
 /** One line of the budget-vs-actual table. */
 export interface CategoryReportRow {
@@ -12,6 +15,8 @@ export interface CategoryReportRow {
     spent: number;
     /** Absent when no budget covers this line, which is different from a budget of zero. */
     budgeted?: number;
+    /** Spend per period bucket, keyed as `by_period` is. Empty when the table isn't pivoted. */
+    byPeriod: Record<string, number>;
 }
 
 export interface CategoryReport {
@@ -30,11 +35,20 @@ export interface CategoryReport {
     totalBudgeted: number;
     /** True once anything at all is budgeted, so the column can be dropped when nothing is. */
     hasBudgets: boolean;
+    /**
+     * The period columns to render, in order. Empty when the range has only one bucket or
+     * too many to read, in which case the table falls back to a single Spent column.
+     */
+    periodKeys: string[];
 }
 
 interface BuildInput {
     byCategory: SummaryCategory[];
+    byCategoryPeriod: SummaryCategoryPeriod[];
     uncategorised: { total: number; count: number };
+    uncategorisedByPeriod: { key: string; total: number }[];
+    /** Every bucket in the range, in order, straight from `by_period`. */
+    periodKeys: string[];
     budgets: BudgetStatus[];
     rangeFrom: Date;
     rangeTo: Date;
@@ -58,13 +72,26 @@ function limitFor(budget: BudgetStatus, personId?: string): number | undefined {
 }
 
 export function buildCategoryReport({
-    byCategory, uncategorised, budgets, rangeFrom, rangeTo, personId,
+    byCategory, byCategoryPeriod, uncategorised, uncategorisedByPeriod, periodKeys,
+    budgets, rangeFrom, rangeTo, personId,
 }: BuildInput): CategoryReport {
     const kept = personId ? budgetsForPerson(budgets, personId) : budgets;
+    const pivoted = shouldPivot(periodKeys);
 
     const spentByCategory = new Map<string, { label: string; spent: number }>();
     for (const row of byCategory) {
         spentByCategory.set(key(row.category), { label: row.category, spent: row.total });
+    }
+
+    // Cells for the grid. Only assembled when the table is actually pivoted - a month
+    // view would build 31 buckets per category and then throw them away.
+    const cellsByCategory = new Map<string, Record<string, number>>();
+    if (pivoted) {
+        for (const cell of byCategoryPeriod) {
+            const bucket = cellsByCategory.get(key(cell.category)) ?? {};
+            bucket[cell.key] = (bucket[cell.key] ?? 0) + cell.total;
+            cellsByCategory.set(key(cell.category), bucket);
+        }
     }
 
     const budgetedByCategory = new Map<string, { label: string; budgeted: number }>();
@@ -106,6 +133,7 @@ export function buildCategoryReport({
                 spent: budget.categories.reduce(
                     (sum, name) => sum + (spentByCategory.get(key(name))?.spent ?? 0), 0,
                 ),
+                byPeriod: sumCells(budget.categories.map((name) => cellsByCategory.get(key(name)))),
                 budgeted,
             });
         }
@@ -123,6 +151,7 @@ export function buildCategoryReport({
             label,
             categories: [label],
             spent: spend?.spent ?? 0,
+            byPeriod: cellsByCategory.get(name) ?? {},
             budgeted: budget?.budgeted,
         };
     });
@@ -136,10 +165,27 @@ export function buildCategoryReport({
             label: "Uncategorised",
             categories: [],
             spent: uncategorised.total,
+            byPeriod: pivoted
+                ? Object.fromEntries(uncategorisedByPeriod.map((r) => [r.key, r.total]))
+                : {},
         });
     }
 
     spanning.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
 
-    return { rows, spanning, wholeBook, totalBudgeted, hasBudgets };
+    return {
+        rows, spanning, wholeBook, totalBudgeted, hasBudgets,
+        periodKeys: pivoted ? periodKeys : [],
+    };
+}
+
+/** Adds several categories' period cells together for a budget that spans them. */
+function sumCells(buckets: (Record<string, number> | undefined)[]): Record<string, number> {
+    const total: Record<string, number> = {};
+    for (const bucket of buckets) {
+        for (const [periodKey, value] of Object.entries(bucket ?? {})) {
+            total[periodKey] = (total[periodKey] ?? 0) + value;
+        }
+    }
+    return total;
 }

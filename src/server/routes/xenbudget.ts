@@ -1895,10 +1895,38 @@ module.exports = function (app: any) {
                 },
                 { $sort: { total: -1 } },
               ],
+              // The same two rollups again, but cut by period as well as category - what
+              // the report's month-by-month grid is built from. Kept as their own facets
+              // rather than derived on the client, because only the server can weight a
+              // split purchase correctly, and re-deriving it from the flat by_category
+              // rows is impossible: those have already been summed across time.
+              byCategoryPeriod: [
+                expenseOnly,
+                { $unwind: "$categories" },
+                {
+                  $group: {
+                    _id: {
+                      category: "$categories.name",
+                      period: { $dateToString: { format, date: "$date", timezone: tz } },
+                    },
+                    total: { $sum: categoryTotalExpr },
+                  },
+                },
+              ],
               uncategorised: [
                 expenseOnly,
                 { $match: { $or: [{ categories: { $size: 0 } }, { categories: { $exists: false } }] } },
                 { $group: { _id: null, total: { $sum: amountField }, count: { $sum: 1 } } },
+              ],
+              uncategorisedByPeriod: [
+                expenseOnly,
+                { $match: { $or: [{ categories: { $size: 0 } }, { categories: { $exists: false } }] } },
+                {
+                  $group: {
+                    _id: { $dateToString: { format, date: "$date", timezone: tz } },
+                    total: { $sum: amountField },
+                  },
+                },
               ],
               totals: [
                 {
@@ -1948,6 +1976,15 @@ module.exports = function (app: any) {
               return { key, expense, income, net: roundMoney(income - expense), count: row?.count || 0 };
             }),
             by_category: byCategory.map((r: any) => ({ category: r._id, total: roundMoney(r.total), count: r.count })),
+            by_category_period: (facets?.byCategoryPeriod ?? []).map((r: any) => ({
+              category: r._id.category,
+              key: r._id.period,
+              total: roundMoney(r.total),
+            })),
+            uncategorised_by_period: (facets?.uncategorisedByPeriod ?? []).map((r: any) => ({
+              key: r._id,
+              total: roundMoney(r.total),
+            })),
             by_person: byPersonRaw.map((r: any) => ({
               user_id: r._id,
               username: userMap.get(r._id)?.username || "Unknown",

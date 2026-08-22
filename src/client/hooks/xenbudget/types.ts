@@ -364,6 +364,14 @@ export interface SummaryCategory {
     count: number;
 }
 
+/** One category's spend in one period bucket - the report grid's cells. */
+export interface SummaryCategoryPeriod {
+    category: string;
+    /** Matches a `by_period` key, so the two line up column for column. */
+    key: string;
+    total: number;
+}
+
 export interface SummaryPerson {
     user_id: string;
     username: string;
@@ -386,8 +394,11 @@ export interface XenBudgetSummary {
     currencies: string[];
     by_period: SummaryPeriod[];
     by_category: SummaryCategory[];
+    /** by_category cut by period as well. Sums to by_category across all keys. */
+    by_category_period: SummaryCategoryPeriod[];
     by_person: SummaryPerson[];
     uncategorised: { total: number; count: number };
+    uncategorised_by_period: { key: string; total: number }[];
     totals: { expense: number; income: number; net: number; count: number };
 }
 

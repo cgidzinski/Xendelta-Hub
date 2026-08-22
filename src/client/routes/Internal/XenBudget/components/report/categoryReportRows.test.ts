@@ -32,7 +32,11 @@ const base = {
         { category: "Groceries", total: 620, count: 12 },
         { category: "Dining", total: 240, count: 5 },
     ],
+    byCategoryPeriod: [],
     uncategorised: { total: 0, count: 0 },
+    uncategorisedByPeriod: [],
+    // One bucket, so nothing pivots unless a test asks for it.
+    periodKeys: ["2026-08"],
     rangeFrom: FROM,
     rangeTo: TO,
 };
@@ -180,5 +184,79 @@ describe("buildCategoryReport", () => {
             });
             expect(totalBudgeted).toBe(0);
         });
+    });
+});
+
+describe("period columns", () => {
+    const MONTHS = Array.from({ length: 12 }, (_, i) => `2026-${String(i + 1).padStart(2, "0")}`);
+
+    const yearly = {
+        ...base,
+        periodKeys: MONTHS,
+        byCategoryPeriod: [
+            { category: "Groceries", key: "2026-01", total: 300 },
+            { category: "Groceries", key: "2026-02", total: 320 },
+            { category: "Dining", key: "2026-02", total: 240 },
+        ],
+        rangeFrom: new Date(2026, 0, 1),
+        rangeTo: new Date(2027, 0, 1),
+    };
+
+    it("hands back the columns to render when the range has a few buckets", () => {
+        expect(buildCategoryReport({ ...yearly, budgets: [] }).periodKeys).toEqual(MONTHS);
+    });
+
+    it("reports no columns for a single bucket, so the table stays flat", () => {
+        expect(buildCategoryReport({ ...base, budgets: [] }).periodKeys).toEqual([]);
+    });
+
+    it("reports no columns when there are too many buckets to read", () => {
+        const days = Array.from({ length: 31 }, (_, i) => `2026-08-${String(i + 1).padStart(2, "0")}`);
+        const { periodKeys, rows } = buildCategoryReport({
+            ...base, budgets: [], periodKeys: days,
+            byCategoryPeriod: [{ category: "Groceries", key: "2026-08-01", total: 50 }],
+        });
+        expect(periodKeys).toEqual([]);
+        // And the cells aren't built at all, rather than built and discarded.
+        expect(rows.find((r) => r.label === "Groceries")?.byPeriod).toEqual({});
+    });
+
+    it("fills each category's cells from the cross-tab", () => {
+        const { rows } = buildCategoryReport({ ...yearly, budgets: [] });
+        expect(rows.find((r) => r.label === "Groceries")?.byPeriod)
+            .toEqual({ "2026-01": 300, "2026-02": 320 });
+        expect(rows.find((r) => r.label === "Dining")?.byPeriod).toEqual({ "2026-02": 240 });
+    });
+
+    it("adds the member categories' cells together on a spanning row", () => {
+        const { spanning } = buildCategoryReport({
+            ...yearly,
+            budgets: [budget({ categories: ["Groceries", "Dining"], amount: 1000 })],
+        });
+        expect(spanning[0].byPeriod).toEqual({ "2026-01": 300, "2026-02": 560 });
+    });
+
+    it("matches cross-tab rows to categories case-insensitively", () => {
+        const { rows } = buildCategoryReport({
+            ...yearly,
+            byCategoryPeriod: [{ category: "groceries", key: "2026-01", total: 300 }],
+            budgets: [],
+        });
+        expect(rows.find((r) => r.label === "Groceries")?.byPeriod).toEqual({ "2026-01": 300 });
+    });
+
+    it("gives the uncategorised row its own cells", () => {
+        const { rows } = buildCategoryReport({
+            ...yearly,
+            budgets: [],
+            uncategorised: { total: 95, count: 3 },
+            uncategorisedByPeriod: [{ key: "2026-03", total: 95 }],
+        });
+        expect(rows.find((r) => r.label === "Uncategorised")?.byPeriod).toEqual({ "2026-03": 95 });
+    });
+
+    it("leaves a category with no spend in a bucket with no cell for it", () => {
+        const { rows } = buildCategoryReport({ ...yearly, budgets: [] });
+        expect(rows.find((r) => r.label === "Dining")?.byPeriod["2026-01"]).toBeUndefined();
     });
 });

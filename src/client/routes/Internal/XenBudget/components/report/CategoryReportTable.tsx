@@ -1,7 +1,9 @@
 import {
     Box, Card, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography, alpha,
 } from "@mui/material";
+import type { SxProps, Theme } from "@mui/material";
 import type { CategoryReport, CategoryReportRow } from "./categoryReportRows";
+import { periodColumnLabels } from "./periodColumns";
 import { CategoryChip } from "../LabelChip";
 import type { XenBudgetLabel } from "../../../../../hooks/xenbudget/types";
 import { cardSx, sectionLabelSx } from "../../../../../components/ui/surfaceStyles";
@@ -14,6 +16,8 @@ interface CategoryReportTableProps {
     income: number;
     net: number;
     money: (v: number) => string;
+    /** Whole units, no cents - the grid has too many columns to spend width on decimals. */
+    round: (v: number) => string;
     categoryRegistry: XenBudgetLabel[];
     /** Human-readable range, e.g. "2026" or "Aug 1 - Aug 31". */
     rangeLabel: string;
@@ -22,43 +26,79 @@ interface CategoryReportTableProps {
 /**
  * Budget against actual, category by category, with the book's bottom line underneath.
  *
+ * Over a range of several periods it becomes a grid - a column per month of a year, per
+ * week of a quarter - because "what did groceries cost" and "when did it cost it" are
+ * different questions and the second one is what a report is for. A single month groups
+ * by day, which is too many columns to read, so that keeps the plain layout.
+ *
  * The budget column is every cap RESTATED for the range being reported on (see
- * budgetedForRange) - a monthly cap read over a year is that cap twelve times, not $800.
- * The header says so, because a budget figure that silently means something other than
- * what the row above it means is worse than no column at all.
+ * budgetedForRange): a monthly cap read over a year is that cap twelve times, not $800.
+ * The caption says so, because a budget figure that silently means something other than
+ * the row beside it is worse than no column at all.
  */
 export default function CategoryReportTable({
-    report, expense, income, net, money, categoryRegistry, rangeLabel,
+    report, expense, income, net, money, round, categoryRegistry, rangeLabel,
 }: CategoryReportTableProps) {
-    const { rows, spanning, wholeBook, totalBudgeted, hasBudgets } = report;
+    const { rows, spanning, wholeBook, totalBudgeted, hasBudgets, periodKeys } = report;
+    const pivoted = periodKeys.length > 0;
+    const columnLabels = periodColumnLabels(periodKeys);
 
-    const difference = (row: CategoryReportRow) =>
-        row.budgeted === undefined ? undefined : row.budgeted - row.spent;
+    // The name column stays put while the periods scroll under it - a row of figures with
+    // its label scrolled off the screen says nothing.
+    const stickySx: SxProps<Theme> = {
+        position: "sticky",
+        left: 0,
+        bgcolor: "background.paper",
+        zIndex: 1,
+        minWidth: 120,
+        maxWidth: 170,
+        overflow: "hidden",
+    };
 
-    const cell = (value: number | undefined) => (value === undefined ? "—" : money(value));
+    const numberCell = (value: number | undefined, format: (v: number) => string) => (
+        // A grid of zeroes reads as noise; an empty cell reads as nothing happened.
+        value === undefined || value === 0 ? "" : format(value)
+    );
 
-    const differenceCell = (value: number | undefined) => {
-        if (value === undefined) return <TableCell align="right">—</TableCell>;
-        const over = value < 0;
+    const leftCell = (row: CategoryReportRow) => {
+        if (row.budgeted === undefined) {
+            return <TableCell align="right" sx={{ color: "text.disabled" }}>—</TableCell>;
+        }
+        const left = row.budgeted - row.spent;
         return (
-            <TableCell align="right" sx={{ color: over ? "error.main" : "text.secondary" }}>
-                {over ? `−${money(-value)}` : money(value)}
+            <TableCell align="right" sx={{ color: left < 0 ? "error.main" : "text.secondary" }}>
+                {left < 0 ? `−${round(-left)}` : round(left)}
             </TableCell>
         );
     };
 
     const dataRow = (row: CategoryReportRow, showChip: boolean) => (
         <TableRow key={row.key}>
-            <TableCell sx={{ maxWidth: 180 }}>
+            <TableCell sx={stickySx}>
                 {showChip && row.categories.length === 1
                     ? <CategoryChip name={row.categories[0]} registry={categoryRegistry} />
-                    : <Typography variant="body2">{row.label}</Typography>}
+                    : <Typography variant="body2" noWrap>{row.label}</Typography>}
             </TableCell>
-            {hasBudgets && <TableCell align="right">{cell(row.budgeted)}</TableCell>}
-            <TableCell align="right">{money(row.spent)}</TableCell>
-            {hasBudgets && differenceCell(difference(row))}
+            {periodKeys.map((periodKey) => (
+                <TableCell key={periodKey} align="right" sx={{ color: "text.secondary" }}>
+                    {numberCell(row.byPeriod[periodKey], round)}
+                </TableCell>
+            ))}
+            <TableCell align="right" sx={{ fontWeight: pivoted ? 600 : 400 }}>
+                {pivoted ? round(row.spent) : money(row.spent)}
+            </TableCell>
+            {hasBudgets && (
+                <TableCell align="right">
+                    {row.budgeted === undefined
+                        ? <Box component="span" sx={{ color: "text.disabled" }}>—</Box>
+                        : (pivoted ? round(row.budgeted) : money(row.budgeted))}
+                </TableCell>
+            )}
+            {hasBudgets && leftCell(row)}
         </TableRow>
     );
+
+    const columnCount = 1 + periodKeys.length + 1 + (hasBudgets ? 2 : 0);
 
     return (
         <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
@@ -69,16 +109,20 @@ export default function CategoryReportTable({
                 {hasBudgets
                     ? `Budgets scaled to ${rangeLabel} — a monthly cap counts once per month covered.`
                     : `Spending across ${rangeLabel}.`}
+                {pivoted && " Figures rounded to whole amounts."}
             </Typography>
 
             {/* Wide content scrolls inside its own box rather than pushing the page sideways. */}
             <Box sx={{ overflowX: "auto" }}>
-                <Table size="small">
+                <Table size="small" sx={{ "& td, & th": { whiteSpace: "nowrap" } }}>
                     <TableHead>
                         <TableRow>
-                            <TableCell>Category</TableCell>
+                            <TableCell sx={stickySx}>Category</TableCell>
+                            {columnLabels.map((label, i) => (
+                                <TableCell key={periodKeys[i]} align="right">{label}</TableCell>
+                            ))}
+                            <TableCell align="right">{pivoted ? "Total" : "Spent"}</TableCell>
                             {hasBudgets && <TableCell align="right">Budgeted</TableCell>}
-                            <TableCell align="right">Spent</TableCell>
                             {hasBudgets && <TableCell align="right">Left</TableCell>}
                         </TableRow>
                     </TableHead>
@@ -89,7 +133,7 @@ export default function CategoryReportTable({
                             <>
                                 <TableRow>
                                     <TableCell
-                                        colSpan={hasBudgets ? 4 : 2}
+                                        colSpan={columnCount}
                                         sx={{ borderBottom: "none", pt: 2, pb: 0.5 }}
                                     >
                                         <Typography variant="caption" sx={sectionLabelSx}>
@@ -118,7 +162,7 @@ export default function CategoryReportTable({
                     borderColor: (theme) => alpha(theme.palette.text.primary, 0.12),
                 }}
             >
-                {hasBudgets && (
+                {hasBudgets ? (
                     <>
                         {wholeBook > 0 && (
                             <TotalRow label="Whole-book budgets" value={money(wholeBook)} muted />
@@ -133,8 +177,9 @@ export default function CategoryReportTable({
                             color={totalBudgeted - expense < 0 ? "error.main" : INCOME_COLOR}
                         />
                     </>
+                ) : (
+                    <TotalRow label="Spent" value={money(expense)} muted />
                 )}
-                {!hasBudgets && <TotalRow label="Spent" value={money(expense)} muted />}
                 <TotalRow label="Income" value={money(income)} color={INCOME_COLOR} muted />
                 <TotalRow
                     label="Net"
