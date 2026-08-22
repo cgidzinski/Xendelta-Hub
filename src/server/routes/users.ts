@@ -50,6 +50,7 @@ module.exports = function (app: express.Application) {
           unread_notifications: hasUnreadNotifications,
           has_new_notifications: !!hasNewNotifications,
           pinnedApps: user.pinnedApps || [],
+          timezone: user.timezone || "",
           xenbox: {
             fileCount: fileCount,
             spaceUsed: spaceUsed,
@@ -66,8 +67,14 @@ module.exports = function (app: express.Application) {
     validate(updateProfileSchema),
     async function (req: express.Request, res: express.Response) {
       const userId = (req as AuthenticatedRequest).user!._id;
-      const { username } = req.body;
+      const { username, timezone } = req.body;
       const user = await User.findOne({ _id: userId }).exec();
+
+      if (timezone !== undefined) {
+        // "" clears the preference, putting the user back on their browser's zone.
+        user.timezone = timezone || undefined;
+        await user.save();
+      }
 
       if (username !== undefined) {
         // Check uniqueness — reject if another user already has this username
@@ -104,6 +111,7 @@ module.exports = function (app: express.Application) {
             username: user.username,
             email: user.email,
             avatar: user.avatar || "/avatars/default-avatar.png",
+            timezone: user.timezone || "",
             unread_messages: false,
             unread_notifications: true,
             has_new_notifications: true,

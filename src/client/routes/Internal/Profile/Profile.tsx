@@ -22,6 +22,7 @@ import {
 import {
   Security,
   Person,
+  Public,
   Settings as SettingsIcon,
   Notifications,
   Palette,
@@ -39,6 +40,7 @@ import AuthProviderManager from "./components/AuthProviderManager";
 import { useUserAvatar } from "../../../hooks/user/useUserAvatar";
 import ProfileHeader from "./components/ProfileHeader";
 import AvatarUploadSection from "./components/AvatarUploadSection";
+import TimezoneSection from "./components/TimezoneSection";
 import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
 
 function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
@@ -221,6 +223,15 @@ export default function Profile() {
                       {isSavingUsername ? "Saving..." : "Save"}
                     </Button>
                   </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid size={{ xs: 12 }}>
+              <Card variant="outlined" sx={cardSx}>
+                <CardContent sx={{ p: 3 }}>
+                  <SectionHeader icon={<Public fontSize="small" />} label="Timezone" />
+                  <TimezoneSection />
                 </CardContent>
               </Card>
             </Grid>

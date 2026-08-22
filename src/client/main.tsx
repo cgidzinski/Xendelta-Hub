@@ -78,6 +78,17 @@ import GroupBalances from "./routes/Internal/Xensplit/GroupBalances";
 import GroupSettlements from "./routes/Internal/Xensplit/GroupSettlements";
 import GroupExplain from "./routes/Internal/Xensplit/GroupExplain";
 import GroupSettings from "./routes/Internal/Xensplit/GroupSettings";
+// Routes - XenBudget
+import XenBudgetBooksList from "./routes/Internal/XenBudget/BooksList";
+import XenBudgetBookDetail from "./routes/Internal/XenBudget/BookDetail";
+import XenBudgetBookOverview from "./routes/Internal/XenBudget/BookOverview";
+import XenBudgetBookItems from "./routes/Internal/XenBudget/BookItems";
+import XenBudgetBookReport from "./routes/Internal/XenBudget/BookReport";
+import XenBudgetBookSettings from "./routes/Internal/XenBudget/BookSettings";
+import XenBudgetGeneralSection from "./routes/Internal/XenBudget/settings/GeneralSection";
+import XenBudgetTaggingSection from "./routes/Internal/XenBudget/settings/TaggingSection";
+import XenBudgetBudgetsSection from "./routes/Internal/XenBudget/settings/BudgetsSection";
+import XenBudgetImportsSection from "./routes/Internal/XenBudget/settings/ImportsSection";
 // Routes - Admin
 import Admin from "./routes/Admin/Admin";
 import Users from "./routes/Admin/Users";
@@ -215,6 +226,35 @@ const router = createBrowserRouter(
           <Route path="analytics" element={<GroupAnalytics />} />
           <Route path="explain" element={<GroupExplain />} />
           <Route path="settings" element={<GroupSettings />} />
+        </Route>
+        <Route path="xenbudget">
+          <Route index element={<Navigate to="books" replace />} />
+          <Route path="books" element={<XenBudgetBooksList />} />
+          <Route path="books/:bookId" element={<XenBudgetBookDetail />}>
+            <Route index element={<Navigate to="overview" replace />} />
+            <Route path="overview" element={<XenBudgetBookOverview />} />
+            <Route path="items" element={<XenBudgetBookItems />} />
+            <Route path="report" element={<XenBudgetBookReport />} />
+            <Route path="settings" element={<XenBudgetBookSettings />}>
+              <Route index element={<Navigate to="general" replace />} />
+              <Route path="general" element={<XenBudgetGeneralSection />} />
+              <Route path="tagging" element={<XenBudgetTaggingSection />} />
+              <Route path="budgets" element={<XenBudgetBudgetsSection />} />
+              <Route path="imports" element={<XenBudgetImportsSection />} />
+              {/* Old section paths, so a tab or bookmark open mid-development doesn't land on
+                  nothing. Safe to drop once this ships. */}
+              <Route path="book" element={<Navigate to="../general" replace />} />
+              <Route path="people" element={<Navigate to="../general" replace />} />
+              <Route path="backup" element={<Navigate to="../general" replace />} />
+              <Route path="categories" element={<Navigate to="../tagging" replace />} />
+              <Route path="flags" element={<Navigate to="../tagging" replace />} />
+              <Route path="rules" element={<Navigate to="../tagging" replace />} />
+            </Route>
+            {/* Budgets and Rules used to be top-level tabs. Redirect rather than blank,
+                for a tab left open across the change. Safe to drop once this ships. */}
+            <Route path="budgets" element={<Navigate to="../settings/budgets" replace />} />
+            <Route path="rules" element={<Navigate to="../settings/tagging" replace />} />
+          </Route>
         </Route>
       </Route>
       {/* Admin routes - require admin role and use AdminNavBar */}

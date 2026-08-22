@@ -52,6 +52,10 @@ var userSchema = new mongoose.Schema({
   },
   xenlink: [{ type: Schema.Types.ObjectId, ref: "XenLink" }],
   pinnedApps: [{ type: String }],
+  // Preferred IANA timezone. Empty/absent means "follow my browser" — the default, and
+  // a thing only the client can resolve, so the effective zone is sent with each request
+  // that buckets by time rather than inferred here.
+  timezone: { type: String },
   inventory: [inventoryItemSchema],
   notificationsLastCheckedAt: { type: Date },
 });

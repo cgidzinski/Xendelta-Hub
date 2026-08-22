@@ -8,6 +8,18 @@ const objectIdSchema = z.string().refine(
   { message: "Invalid ObjectId format" }
 );
 
+// Rejects a timezone the runtime can't actually resolve. Every month boundary in
+// /summary and /budget-status is computed from this, so an unusable value would silently
+// misfile items rather than fail loudly.
+const timezoneSchema = z.string().refine((tz) => {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}, { message: "Unknown timezone" });
+
 // User validation schemas
 export const signupSchema = z.object({
   email: z.string().email("Invalid email format").toLowerCase().max(VALIDATION_LIMITS.EMAIL_MAX, "Email too long"),
@@ -30,6 +42,8 @@ export const loginSchema = z.object({
 
 export const updateProfileSchema = z.object({
   avatar: z.string().url("Invalid avatar URL").optional(),
+  // "" clears the preference and falls back to the browser's zone.
+  timezone: z.union([timezoneSchema, z.literal("")]).optional(),
   username: z.string()
     .min(3, "Username must be at least 3 characters")
     .max(50, "Username too long")
@@ -353,5 +367,291 @@ export const createExchangeSchema = z.object({
 export const xenSplitExchangeParamSchema = z.object({
   groupId: objectIdSchema,
   exchangeId: objectIdSchema,
+});
+
+// XenBudget validation schemas
+
+export const xenBudgetBookIdParamSchema = z.object({
+  bookId: objectIdSchema,
+});
+
+export const xenBudgetItemParamSchema = z.object({
+  bookId: objectIdSchema,
+  itemId: objectIdSchema,
+});
+
+export const xenBudgetMemberParamSchema = z.object({
+  bookId: objectIdSchema,
+  userId: objectIdSchema,
+});
+
+export const createXenBudgetBookSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100, "Name too long"),
+  memberIds: z.array(objectIdSchema).optional(),
+  default_currency: z.string().max(10).optional(),
+});
+
+export const updateXenBudgetBookSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  default_currency: z.string().max(10).optional(),
+  archived: z.boolean().optional(),
+});
+
+export const addXenBudgetMembersSchema = z.object({
+  memberIds: z.array(objectIdSchema).min(1, "At least one member required"),
+});
+
+export const transferXenBudgetBookSchema = z.object({
+  userId: objectIdSchema,
+});
+
+const xenBudgetShareSchema = z.object({
+  user_id: objectIdSchema,
+  amount: z.number().optional(),
+  percentage: z.number().optional(),
+});
+
+// Shared by create and (partially) update. Amount is always positive - `type` carries the
+// sign - so a negative amount is a mapping bug rather than an income row.
+const xenBudgetCategoryWeightSchema = z.object({
+  name: z.string().min(1).max(50),
+  amount: z.number().optional(),
+  percentage: z.number().optional(),
+});
+
+const itemBodyShape = {
+  type: z.enum(["expense", "income"]).optional(),
+  amount: z.number("Amount must be a number").positive("Amount must be positive"),
+  currency: z.string().max(10).optional(),
+  date: z.string().datetime().optional(),
+  description: z.string().min(1, "Description required").max(500),
+  notes: z.string().max(1000).optional(),
+  // What the purchase was, weighted.
+  categories: z.array(xenBudgetCategoryWeightSchema).max(20, "Too many categories").optional(),
+  category_split_type: z.enum(["equal", "exact", "percent"]).optional(),
+  // What needs attention.
+  flags: z.array(z.string().max(50)).max(20, "Too many flags").optional(),
+  share_type: z.enum(["equal", "exact", "percent"]).optional(),
+  shares: z.array(xenBudgetShareSchema).optional(),
+};
+
+export const createXenBudgetItemSchema = z.object(itemBodyShape);
+
+// A restore payload. Items are validated loosely — a backup is our own format, and being
+// strict about every legacy field would make an older export unrestorable, which defeats
+// the point of having a backup.
+export const xenBudgetRestoreSchema = z.object({
+  format_version: z.number().int().min(1).max(1, "That backup was made by a newer version of XenBudget"),
+  book: z.object({
+    name: z.string().min(1).max(100),
+    // Accepted but ignored: books no longer carry a timezone, and an older backup
+    // shouldn't fail to restore just because it has one.
+    timezone: z.string().max(64).optional(),
+    default_currency: z.string().max(10).optional(),
+    categories: z.array(z.any()).max(500).optional(),
+    flags: z.array(z.any()).max(500).optional(),
+    budgets: z.array(z.any()).max(500).optional(),
+    rules: z.array(z.any()).max(500).optional(),
+    import_presets: z.array(z.any()).max(200).optional(),
+    members: z.array(z.object({
+      user_id: z.string().optional(),
+      username: z.string().optional(),
+    })).max(200).optional(),
+  }),
+  items: z.array(z.any()).max(50000, "That backup is too large to restore in one go"),
+  /**
+   * merge  - add to what's already here, skipping items that already exist
+   * replace - wipe this book's items first (creator only, and confirmed client-side)
+   */
+  mode: z.enum(["merge", "replace"]).optional(),
+});
+
+export const xenBudgetPresetParamSchema = z.object({
+  bookId: objectIdSchema,
+  presetId: objectIdSchema,
+});
+
+export const xenBudgetBatchParamSchema = z.object({
+  bookId: objectIdSchema,
+  batchId: objectIdSchema,
+});
+
+// One import request's worth of rows. Mirrors MAX_BULK_ROWS in routes/xenbudget.ts.
+const MAX_IMPORT_ROWS = 2000;
+
+// A candidate row from the CSV wizard. Looser than createXenBudgetItemSchema because the
+// rules engine still gets to set type, flags and description before anything is stored.
+const importRowSchema = z.object({
+  type: z.enum(["expense", "income"]).optional(),
+  amount: z.number().positive("Amount must be positive"),
+  currency: z.string().max(10).optional(),
+  date: z.string().datetime().optional(),
+  description: z.string().min(1, "Description required").max(500),
+  categories: z.array(z.string().max(50)).max(20).optional(),
+  flags: z.array(z.string().max(50)).max(20).optional(),
+  people: z.array(objectIdSchema).optional(),
+});
+
+export const xenBudgetBulkItemsSchema = z.object({
+  items: z.array(importRowSchema).min(1, "Nothing to import").max(MAX_IMPORT_ROWS, `At most ${MAX_IMPORT_ROWS} rows at a time`),
+  /**
+   * Who these rows belong to. Defaults to the importing user — a card statement is
+   * usually one person's, not the whole book's.
+   */
+  default_people: z.array(objectIdSchema).max(50).optional(),
+  /** Which card this came from, and the file it came in, so it can be found later. */
+  source_label: z.string().max(100).optional(),
+  filename: z.string().max(200).optional(),
+  preset_id: objectIdSchema.optional(),
+});
+
+export const xenBudgetCheckDuplicatesSchema = z.object({
+  items: z.array(z.object({
+    amount: z.number(),
+    date: z.string().datetime().optional(),
+    description: z.string().max(500),
+  })).min(1).max(MAX_IMPORT_ROWS),
+});
+
+const importPresetShape = {
+  name: z.string().min(1, "Name is required").max(100),
+  column_map: z.object({
+    date: z.string().max(200).optional(),
+    description: z.string().max(200).optional(),
+    amount: z.string().max(200).optional(),
+    debit: z.string().max(200).optional(),
+    credit: z.string().max(200).optional(),
+    categories: z.string().max(200).optional(),
+    people: z.string().max(200).optional(),
+  }),
+  amount_mode: z.enum(["signed", "debit_credit"]).optional(),
+  sign_convention: z.enum(["negative_is_expense", "positive_is_expense"]).optional(),
+  date_format: z.string().max(40).optional(),
+  has_header: z.boolean().optional(),
+  skip_rows: z.number().int().min(0).max(100).optional(),
+  default_categories: z.array(z.string().max(50)).max(20).optional(),
+};
+
+export const createXenBudgetPresetSchema = z.object(importPresetShape);
+export const updateXenBudgetPresetSchema = z.object(importPresetShape);
+
+export const xenBudgetRuleParamSchema = z.object({
+  bookId: objectIdSchema,
+  ruleId: objectIdSchema,
+});
+
+// Mirrors MAX_REGEX_LENGTH in utils/xenBudgetRules.ts. Validating the pattern here means
+// a bad one is reported in the rule form rather than silently never matching mid-import.
+const MAX_RULE_REGEX_LENGTH = 200;
+
+const ruleConditionSchema = z.object({
+  field: z.enum(["description", "amount", "flags", "category", "type", "date", "source"]),
+  op: z.enum([
+    "contains", "not_contains", "equals", "starts_with", "ends_with", "regex",
+    "gt", "gte", "lt", "lte", "between", "is_empty",
+  ]),
+  value: z.string().max(500).optional(),
+  value2: z.string().max(500).optional(),
+  case_sensitive: z.boolean().optional(),
+}).refine((c) => c.op === "is_empty" || (c.value !== undefined && c.value !== ""), {
+  message: "This condition needs a value", path: ["value"],
+}).refine((c) => c.op !== "between" || (c.value2 !== undefined && c.value2 !== ""), {
+  message: "A between condition needs both values", path: ["value2"],
+}).refine((c) => {
+  if (c.op !== "regex") return true;
+  if (!c.value || c.value.length > MAX_RULE_REGEX_LENGTH) return false;
+  try {
+    new RegExp(c.value);
+    return true;
+  } catch {
+    return false;
+  }
+}, { message: `Not a valid regular expression (max ${MAX_RULE_REGEX_LENGTH} characters)`, path: ["value"] });
+
+const ruleShape = {
+  name: z.string().min(1, "Name is required").max(100, "Name too long"),
+  enabled: z.boolean().optional(),
+  priority: z.number().int().optional(),
+  match: z.object({
+    mode: z.enum(["all", "any"]).optional(),
+    // A rule with no conditions would match every item, which is destructive when its
+    // action is exclude or skip. The engine refuses to match one; reject it here too.
+    conditions: z.array(ruleConditionSchema).min(1, "Add at least one condition"),
+  }),
+  actions: z.object({
+    set_categories: z.array(z.string().max(50)).max(20).optional(),
+    add_flags: z.array(z.string().max(50)).max(20).optional(),
+    remove_flags: z.array(z.string().max(50)).max(20).optional(),
+    set_type: z.enum(["expense", "income"]).nullish(),
+    set_people: z.array(objectIdSchema).optional(),
+    set_description: z.string().max(500).optional(),
+    disposition: z.enum(["keep", "exclude", "skip"]).optional(),
+  }),
+  stop_on_match: z.boolean().optional(),
+};
+
+export const createXenBudgetRuleSchema = z.object(ruleShape);
+export const updateXenBudgetRuleSchema = z.object(ruleShape);
+
+export const reapplyXenBudgetRulesSchema = z.object({
+  dry_run: z.boolean().optional(),
+  /**
+   * Re-apply leaves hand-corrected items alone by default; a sweep silently overwriting
+   * a manual fix is the surprising, destructive outcome.
+   */
+  include_manually_edited: z.boolean().optional(),
+});
+
+export const xenBudgetBudgetParamSchema = z.object({
+  bookId: objectIdSchema,
+  budgetId: objectIdSchema,
+});
+
+const budgetShape = {
+  person_id: objectIdSchema.optional(),
+  categories: z.array(z.string().max(50)).max(20, "Too many categories").optional(),
+  period: z.enum(["weekly", "monthly", "quarterly", "yearly", "custom"]),
+  amount: z.number("Amount must be a number").positive("Amount must be positive"),
+  start_date: z.string().datetime().optional(),
+  end_date: z.string().datetime().optional(),
+  active: z.boolean().optional(),
+};
+
+// Who (person_id) and what (categories) are independent and both optional — an empty
+// budget (neither set) is the legitimate whole-book case, so there's nothing to enforce
+// about their pairing. Only the custom-period window still needs both ends.
+const budgetRefinements = (schema: z.ZodType<any>) => schema
+  .refine((d: any) => d.period !== "custom" || (!!d.start_date && !!d.end_date), {
+    message: "A custom period needs a start and an end date", path: ["end_date"],
+  })
+  .refine((d: any) => !d.start_date || !d.end_date || new Date(d.end_date) > new Date(d.start_date), {
+    message: "End date must be after the start date", path: ["end_date"],
+  });
+
+export const createXenBudgetBudgetSchema = budgetRefinements(z.object(budgetShape));
+
+export const updateXenBudgetBudgetSchema = budgetRefinements(z.object(budgetShape));
+
+// One shape for both label registries — categories and flags differ in meaning, not form.
+export const xenBudgetLabelParamSchema = z.object({
+  bookId: objectIdSchema,
+  labelId: objectIdSchema,
+});
+
+export const createXenBudgetLabelSchema = z.object({
+  name: z.string().min(1, "A name is required").max(50, "Name too long"),
+  color: z.string().max(32).optional(),
+});
+
+export const updateXenBudgetLabelSchema = z.object({
+  name: z.string().min(1).max(50).optional(),
+  color: z.string().max(32).optional(),
+});
+
+export const updateXenBudgetItemSchema = z.object({
+  ...itemBodyShape,
+  amount: z.number().positive("Amount must be positive").optional(),
+  description: z.string().min(1).max(500).optional(),
+  excluded: z.boolean().optional(),
 });
 

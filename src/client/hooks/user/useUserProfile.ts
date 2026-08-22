@@ -15,6 +15,8 @@ export interface UserProfile {
   unread_notifications: boolean;
   has_new_notifications: boolean;
   pinnedApps: string[];
+  /** Preferred IANA zone; "" means follow the browser. */
+  timezone: string;
   xenbox: {
     fileCount: number;
     spaceUsed: number;
@@ -25,6 +27,8 @@ export interface UserProfile {
 export interface UpdateProfileData {
   avatar?: string;
   username?: string;
+  /** "" clears the preference and falls back to the browser's zone. */
+  timezone?: string;
 }
 
 interface UseUserProfileReturn {
@@ -85,9 +89,11 @@ export const useUserProfile = (): UseUserProfileReturn => {
   // Mutation for updating user profile
   const updateMutation = useMutation({
     mutationFn: updateCurrentUserProfile,
-    onSuccess: (updatedProfile) => {
-      // Update the profile cache with the updated data
-      queryClient.setQueryData(userProfileKeys.profile(), updatedProfile);
+    onSuccess: () => {
+      // Refetch rather than writing the response into the cache: the update endpoint
+      // returns only the handful of fields it touches, so seeding the cache with it
+      // would drop pinnedApps, points and the xenbox quota until the next reload.
+      queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
     },
     onError: () => {
       // Error handled by mutation error state

@@ -16,6 +16,16 @@ export {
   MAX_BLOG_ASSET_SIZE,
 } from "./blog";
 
+export {
+  SYSTEM_FLAGS,
+  STARTER_CATEGORIES,
+  FLAG_UNCATEGORISED,
+  FLAG_POSSIBLE_DUPLICATE,
+  FLAG_NEEDS_REVIEW,
+  FLAG_IGNORED,
+  isSystemFlag,
+} from "./xenbudget";
+
 // File upload limits
 export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes (for avatars)
 export const MAX_XENSPLIT_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB per expense image
