@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
-    Box, Button, InputAdornment, Stack, TextField, ToggleButton, ToggleButtonGroup,
-    Typography,
+    Autocomplete, Box, Button, Chip, InputAdornment, Stack, TextField, ToggleButton,
+    ToggleButtonGroup, Typography,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
@@ -28,19 +28,19 @@ const DATE_FILTERS: { label: string; value: DateFilter }[] = [
     { label: "This year", value: "thisYear" },
 ];
 
-type Quick = "all" | "expense" | "income" | "review" | "uncategorised" | "excluded";
+type Quick = "all" | "expense" | "income";
 
 const QUICK_FILTERS: { label: string; value: Quick }[] = [
     { label: "All", value: "all" },
     { label: "Expenses", value: "expense" },
     { label: "Income", value: "income" },
-    { label: "Needs review", value: "review" },
-    { label: "Uncategorised", value: "uncategorised" },
-    { label: "Excluded", value: "excluded" },
 ];
 
-// The built-in flag the importer and rules use to say "a human should look at this".
-const FLAG_NEEDS_REVIEW = "Needs review";
+// Synthetic option in the flags dropdown below — not a real flag or a field on the item.
+const EXCLUDED_FILTER = "__excluded__";
+// The built-in flag the importer uses to say "nothing matched" — special-cased below so
+// selecting it also catches items with no category that were never run through an import.
+const FLAG_UNCATEGORISED = "Uncategorised";
 
 function dateRange(filter: DateFilter): { from?: string; to?: string } {
     const now = new Date();
@@ -62,28 +62,33 @@ export default function BookItems() {
     const [dateFilter, setDateFilter] = useState<DateFilter>("all");
     const [quick, setQuick] = useState<Quick>("all");
     const [activeCategories, setActiveCategories] = useState<string[]>([]);
-    const [activeFlags, setActiveFlags] = useState<string[]>([]);
+    const [selectedFlags, setSelectedFlags] = useState<string[]>([]);
     const [importOpen, setImportOpen] = useState(false);
 
     const toggle = (list: string[], set: (v: string[]) => void, name: string) =>
         set(list.includes(name) ? list.filter((n) => n !== name) : [...list, name]);
 
+    const flagFilterOptions = useMemo(
+        () => [...book.flags.map((f) => f.name), EXCLUDED_FILTER],
+        [book.flags],
+    );
+
     // Filtering happens server-side (the list is paginated), so the filter object is part
     // of the query key rather than a useMemo over an already-loaded array.
-    const filters: ItemFilters = useMemo(() => ({
-        ...dateRange(dateFilter),
-        q: search.trim() || undefined,
-        categories: activeCategories.length ? activeCategories : undefined,
-        // "Needs review" is that specific built-in flag; a chip row filters by any flag.
-        flags: quick === "review"
-            ? [FLAG_NEEDS_REVIEW, ...activeFlags]
-            : (activeFlags.length ? activeFlags : undefined),
-        type: quick === "expense" || quick === "income" ? quick : undefined,
-        // The *state* of having no category, not the flag — so an item leaves this filter
-        // the moment it's categorised, whether or not anyone cleared the flag.
-        uncategorised: quick === "uncategorised" || undefined,
-        excluded: quick === "excluded" ? "only" : "hidden",
-    }), [dateFilter, search, quick, activeCategories, activeFlags]);
+    const filters: ItemFilters = useMemo(() => {
+        const realFlags = selectedFlags.filter((f) => f !== EXCLUDED_FILTER && f !== FLAG_UNCATEGORISED);
+        return {
+            ...dateRange(dateFilter),
+            q: search.trim() || undefined,
+            categories: activeCategories.length ? activeCategories : undefined,
+            flags: realFlags.length ? realFlags : undefined,
+            type: quick === "expense" || quick === "income" ? quick : undefined,
+            // The *state* of having no category, not just the flag — so a hand-entered
+            // item with no category is caught too, not only ones an import flagged.
+            uncategorised: selectedFlags.includes(FLAG_UNCATEGORISED) || undefined,
+            excluded: selectedFlags.includes(EXCLUDED_FILTER) ? "only" : "hidden",
+        };
+    }, [dateFilter, search, quick, activeCategories, selectedFlags]);
 
     const {
         items, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
@@ -149,21 +154,24 @@ export default function BookItems() {
                         ))}
                     </Stack>
                 )}
-                {book.flags.length > 0 && (
-                    <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>
-                        {book.flags.map((flag) => (
-                            <FlagChip
-                                key={flag._id} name={flag.name} registry={book.flags}
-                                onClick={() => toggle(activeFlags, setActiveFlags, flag.name)}
-                                sx={{
-                                    cursor: "pointer",
-                                    opacity: activeFlags.length === 0 || activeFlags.includes(flag.name) ? 1 : 0.4,
-                                    fontWeight: activeFlags.includes(flag.name) ? 700 : 400,
-                                }}
-                            />
-                        ))}
-                    </Stack>
-                )}
+                <Autocomplete
+                    multiple size="small" options={flagFilterOptions}
+                    value={selectedFlags} onChange={(_, v) => setSelectedFlags(v)}
+                    getOptionLabel={(o) => (o === EXCLUDED_FILTER ? "Excluded" : o)}
+                    renderTags={(value, getTagProps) => value.map((option, index) => {
+                        const { key, ...tagProps } = getTagProps({ index });
+                        return option === EXCLUDED_FILTER
+                            ? <Chip key={key} size="small" label="Excluded" {...tagProps} />
+                            : <FlagChip key={key} name={option} registry={book.flags} {...tagProps} />;
+                    })}
+                    renderInput={(params) => (
+                        <TextField
+                            {...params} label="Flags"
+                            placeholder={selectedFlags.length ? undefined : "Filter by flag"}
+                        />
+                    )}
+                    sx={{ minWidth: 220 }}
+                />
             </Stack>
 
             {isError ? (
@@ -178,7 +186,7 @@ export default function BookItems() {
                     <Typography variant="subtitle1">Nothing here</Typography>
                     <Typography variant="body2" color="text.secondary">
                         {search || quick !== "all" || dateFilter !== "all"
-                            || activeFlags.length > 0 || activeCategories.length > 0
+                            || selectedFlags.length > 0 || activeCategories.length > 0
                             ? "No items match those filters."
                             : "Add your first item, or import a CSV from your bank."}
                     </Typography>

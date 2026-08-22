@@ -10,14 +10,10 @@ export const TAB_PATHS = ["overview", "items", "report", "settings"] as const;
 
 /** Settings sections, in the order they render. */
 export const SETTINGS_SECTIONS = [
-    { path: "book", label: "Book" },
-    { path: "categories", label: "Categories" },
-    { path: "flags", label: "Flags" },
-    { path: "people", label: "People" },
+    { path: "general", label: "General" },
+    { path: "tagging", label: "Tagging" },
     { path: "budgets", label: "Budgets" },
-    { path: "rules", label: "Rules" },
     { path: "imports", label: "Imports" },
-    { path: "backup", label: "Backup" },
 ] as const;
 
 /**

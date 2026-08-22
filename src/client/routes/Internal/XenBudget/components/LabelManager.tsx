@@ -3,7 +3,6 @@ import {
     Box, Button, IconButton, Stack, TextField, Tooltip, Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import CasinoIcon from "@mui/icons-material/Casino";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import LockIcon from "@mui/icons-material/Lock";
@@ -118,13 +117,12 @@ export default function LabelManager({ book, kind }: LabelManagerProps) {
                                 </Box>
                             )}
 
-                            <Box sx={{
-                                width: 16, height: 16, borderRadius: "50%",
-                                bgcolor: resolveLabelColor(label.name, labels),
-                            }} />
-                            <Tooltip title="Shuffle colour">
-                                <IconButton size="small" onClick={() => shuffleColor(label)}>
-                                    <CasinoIcon fontSize="small" />
+                            <Tooltip title="Click to randomize colour">
+                                <IconButton size="small" onClick={() => shuffleColor(label)} sx={{ p: 0.25 }}>
+                                    <Box sx={{
+                                        width: 16, height: 16, borderRadius: "50%",
+                                        bgcolor: resolveLabelColor(label.name, labels),
+                                    }} />
                                 </IconButton>
                             </Tooltip>
 
