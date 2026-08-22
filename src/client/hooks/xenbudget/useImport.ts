@@ -91,6 +91,14 @@ export function useXenBudgetImport(bookId: string) {
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] }),
     });
 
+    const updatePresetMutation = useMutation({
+        mutationFn: async ({ presetId, input }: { presetId: string; input: PresetInput }) => {
+            const res = await apiClient.put(`/api/xenbudget/books/${bookId}/import-presets/${presetId}`, input);
+            return res.data.data as XenBudgetBook;
+        },
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] }),
+    });
+
     const deletePresetMutation = useMutation({
         mutationFn: async (presetId: string) => {
             const res = await apiClient.delete(`/api/xenbudget/books/${bookId}/import-presets/${presetId}`);
@@ -108,6 +116,7 @@ export function useXenBudgetImport(bookId: string) {
         undoImportAsync: undoMutation.mutateAsync,
         isUndoing: undoMutation.isPending,
         savePresetAsync: savePresetMutation.mutateAsync,
+        updatePresetAsync: updatePresetMutation.mutateAsync,
         deletePresetAsync: deletePresetMutation.mutateAsync,
     };
 }

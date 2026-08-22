@@ -87,7 +87,7 @@ import XenBudgetBookReport from "./routes/Internal/XenBudget/BookReport";
 import XenBudgetBookSettings from "./routes/Internal/XenBudget/BookSettings";
 import XenBudgetBookSection from "./routes/Internal/XenBudget/settings/BookSection";
 import XenBudgetCategoriesSection from "./routes/Internal/XenBudget/settings/CategoriesSection";
-import XenBudgetTagsSection from "./routes/Internal/XenBudget/settings/TagsSection";
+import XenBudgetFlagsSection from "./routes/Internal/XenBudget/settings/FlagsSection";
 import XenBudgetPeopleSection from "./routes/Internal/XenBudget/settings/PeopleSection";
 import XenBudgetBudgetsSection from "./routes/Internal/XenBudget/settings/BudgetsSection";
 import XenBudgetRulesSection from "./routes/Internal/XenBudget/settings/RulesSection";
@@ -243,7 +243,7 @@ const router = createBrowserRouter(
               <Route index element={<Navigate to="book" replace />} />
               <Route path="book" element={<XenBudgetBookSection />} />
               <Route path="categories" element={<XenBudgetCategoriesSection />} />
-              <Route path="tags" element={<XenBudgetTagsSection />} />
+              <Route path="flags" element={<XenBudgetFlagsSection />} />
               <Route path="people" element={<XenBudgetPeopleSection />} />
               <Route path="budgets" element={<XenBudgetBudgetsSection />} />
               <Route path="rules" element={<XenBudgetRulesSection />} />

@@ -38,7 +38,7 @@ import {
   budgetPeriodRange,
 } from "../utils/xenBudgetUtils";
 import {
-  SYSTEM_TAGS, STARTER_CATEGORIES, TAG_UNCATEGORISED, TAG_POSSIBLE_DUPLICATE,
+  SYSTEM_FLAGS, STARTER_CATEGORIES, FLAG_UNCATEGORISED, FLAG_POSSIBLE_DUPLICATE,
 } from "../constants";
 import {
   applyRules, stripRuleEffects, type DraftItem, type Rule,
@@ -114,7 +114,7 @@ async function loadBookForCreator(req: Request, res: Response): Promise<any | nu
 /**
  * The one place the shared item filters are built. Every list, tally and chart goes
  * through here, so "an excluded item never reaches a total" is stated once rather than
- * repeated in each pipeline — get that wrong in a single place and the per-tag,
+ * repeated in each pipeline — get that wrong in a single place and the per-flag,
  * per-person and top-line numbers silently stop reconciling.
  *
  * `excluded` is tri-state: hidden (default), "true" for only-excluded, "all" for both.
@@ -128,7 +128,7 @@ function baseItemMatch(bookId: any, q: Record<string, string>): Record<string, a
     if (q.to) filter.date.$lte = new Date(q.to);
   }
   if (q.categories) filter["categories.name"] = { $in: q.categories.split(",").filter(Boolean) };
-  if (q.tags) filter.tags = { $in: q.tags.split(",").filter(Boolean) };
+  if (q.flags) filter.flags = { $in: q.flags.split(",").filter(Boolean) };
   // "has no category at all" - the worklist an import leaves behind.
   if (q.uncategorised === "true") filter.categories = { $size: 0 };
   if (q.people) filter["shares.user_id"] = { $in: q.people.split(",").filter(Boolean) };
@@ -142,7 +142,7 @@ function baseItemMatch(bookId: any, q: Record<string, string>): Record<string, a
 }
 
 // A budget's target has to exist in this book, or it would silently never match: a
-// person who isn't a member has no shares here, and a misspelled tag is on no item.
+// person who isn't a member has no shares here, and a misspelled category is on no item.
 function validateBudgetTarget(body: any, book: any): string | null {
   if (body.person_id && !isMember(book, body.person_id)) {
     return "That person is not a member of this book";
@@ -227,7 +227,7 @@ function remapUser(id: string | undefined, idMap: Map<string, string>): string |
   return idMap.get(id) || id;
 }
 
-// Only person_id needs remapping: categories and tags travel by name, which is stable
+// Only person_id needs remapping: categories and flags travel by name, which is stable
 // across deployments in a way an account id is not.
 function remapBudgets(budgets: any[], idMap: Map<string, string>): any[] {
   return budgets.map((b: any) => ({ ...b, person_id: remapUser(b.person_id, idMap) }));
@@ -292,8 +292,8 @@ async function insertRestoredItems(
       ),
       category_split_type: raw.category_split_type || "equal",
       rule_categories: Array.isArray(raw.rule_categories) ? raw.rule_categories : [],
-      tags: Array.isArray(raw.tags) ? raw.tags : [],
-      rule_tags: Array.isArray(raw.rule_tags) ? raw.rule_tags : [],
+      flags: Array.isArray(raw.flags) ? raw.flags : [],
+      rule_flags: Array.isArray(raw.rule_flags) ? raw.rule_flags : [],
       share_type: raw.share_type || "equal",
       // Share user ids are remapped where a person resolved to a different account, so
       // per-person totals still attribute to the right people after a restore.
@@ -317,10 +317,10 @@ async function insertRestoredItems(
 }
 
 /**
- * Guarantees every book has the built-in tags.
+ * Guarantees every book has the built-in flags.
  *
  * The importer and the rules engine reference these by name, so a book without them would
- * silently fail to tag anything. Runs on create, on restore and on the book-fetch path,
+ * silently fail to flag anything. Runs on create, on restore and on the book-fetch path,
  * which makes it self-healing: adding a fifth built-in later needs no migration. It only
  * ever ADDS - a colour the user has changed is never rewritten.
  *
@@ -328,16 +328,16 @@ async function insertRestoredItems(
  */
 function ensureSystemLabels(book: any): boolean {
   let changed = false;
-  for (const seed of SYSTEM_TAGS) {
-    const existing = (book.tags || []).find(
+  for (const seed of SYSTEM_FLAGS) {
+    const existing = (book.flags || []).find(
       (t: any) => t.name.toLowerCase() === seed.name.toLowerCase(),
     );
     if (existing) {
-      // Keep an existing tag's colour; only mark it as built-in if it wasn't.
+      // Keep an existing flag's colour; only mark it as built-in if it wasn't.
       if (!existing.system) { existing.system = true; changed = true; }
       continue;
     }
-    book.tags.push({ name: seed.name, color: seed.color, system: true });
+    book.flags.push({ name: seed.name, color: seed.color, system: true });
     changed = true;
   }
   return changed;
@@ -348,11 +348,11 @@ function ensureSystemLabels(book: any): boolean {
  * what a rename and a delete have to do to the items that reference them, so the routes
  * are generated rather than written twice and left to drift.
  */
-function registerLabelRoutes(app: any, kind: "categories" | "tags") {
+function registerLabelRoutes(app: any, kind: "categories" | "flags") {
   const base = `/api/xenbudget/books/:bookId/${kind}`;
-  const singular = kind === "categories" ? "Category" : "Tag";
+  const singular = kind === "categories" ? "Category" : "Flag";
 
-  // Items store a category as a subdocument and a tag as a bare string, so renaming and
+  // Items store a category as a subdocument and a flag as a bare string, so renaming and
   // removing them reach one level apart.
   const renameOnItems = (bookId: any, from: string, to: string) => (kind === "categories"
     ? XenBudgetItem.updateMany(
@@ -361,8 +361,8 @@ function registerLabelRoutes(app: any, kind: "categories" | "tags") {
       { arrayFilters: [{ "el.name": from }] },
     )
     : XenBudgetItem.updateMany(
-      { book_id: bookId, tags: from },
-      { $set: { "tags.$[el]": to } },
+      { book_id: bookId, flags: from },
+      { $set: { "flags.$[el]": to } },
       { arrayFilters: [{ el: from }] },
     ));
 
@@ -371,7 +371,7 @@ function registerLabelRoutes(app: any, kind: "categories" | "tags") {
     // re-weighting money across the categories that remain - which the user never asked
     // for and would quietly change what their reports say.
     ? XenBudgetItem.updateMany({ book_id: bookId, "categories.name": name }, { $pull: { categories: { name } } })
-    : XenBudgetItem.updateMany({ book_id: bookId, tags: name }, { $pull: { tags: name } }));
+    : XenBudgetItem.updateMany({ book_id: bookId, flags: name }, { $pull: { flags: name } }));
 
   app.post(base,
     validateParams(xenBudgetBookIdParamSchema), validate(createXenBudgetLabelSchema),
@@ -405,7 +405,7 @@ function registerLabelRoutes(app: any, kind: "categories" | "tags") {
 
         const oldName = label.name;
         if (req.body.name !== undefined && req.body.name.trim() !== oldName) {
-          // A built-in tag's name is referenced by rules and by the importer, so renaming
+          // A built-in flag's name is referenced by rules and by the importer, so renaming
           // one would quietly stop them working.
           if (label.system) {
             return res.status(400).json({
@@ -434,7 +434,7 @@ function registerLabelRoutes(app: any, kind: "categories" | "tags") {
             });
           }
           book.rules.forEach((r: any) => {
-            const list = kind === "categories" ? r.actions?.set_categories : r.actions?.add_tags;
+            const list = kind === "categories" ? r.actions?.set_categories : r.actions?.add_flags;
             if (list) {
               for (let i = 0; i < list.length; i++) if (list[i] === oldName) list[i] = label.name;
             }
@@ -552,8 +552,8 @@ function plainRules(book: any): Rule[] {
     },
     actions: {
       set_categories: r.actions?.set_categories || [],
-      add_tags: r.actions?.add_tags || [],
-      remove_tags: r.actions?.remove_tags || [],
+      add_flags: r.actions?.add_flags || [],
+      remove_flags: r.actions?.remove_flags || [],
       set_type: r.actions?.set_type ?? null,
       set_people: r.actions?.set_people || [],
       set_description: r.actions?.set_description,
@@ -572,12 +572,12 @@ function toDraft(item: any): DraftItem {
     description: item.description,
     original_description: item.original_description,
     categories: (item.categories || []).map((c: any) => c.name),
-    tags: [...(item.tags || [])],
+    flags: [...(item.flags || [])],
     excluded: !!item.excluded,
     excluded_reason: item.excluded_reason,
     applied_rule_ids: (item.applied_rule_ids || []).map((id: any) => id.toString()),
     rule_categories: [...(item.rule_categories || [])],
-    rule_tags: [...(item.rule_tags || [])],
+    rule_flags: [...(item.rule_flags || [])],
     source: item.source,
   };
 }
@@ -590,11 +590,11 @@ function draftFromRow(row: any, book: any): DraftItem {
     date: row.date ? new Date(row.date) : new Date(),
     description: String(row.description || "").slice(0, 500),
     categories: Array.isArray(row.categories) ? [...row.categories] : [],
-    tags: Array.isArray(row.tags) ? [...row.tags] : [],
+    flags: Array.isArray(row.flags) ? [...row.flags] : [],
     excluded: false,
     applied_rule_ids: [],
     rule_categories: [],
-    rule_tags: [],
+    rule_flags: [],
     source: row.source || "csv",
   };
 }
@@ -609,7 +609,7 @@ function sameNames(a: string[], b: string[]): boolean {
  */
 function describeChange(item: any, before: DraftItem, after: DraftItem): any | null {
   const changed = !sameNames(before.categories, after.categories)
-    || !sameNames(before.tags, after.tags)
+    || !sameNames(before.flags, after.flags)
     || before.excluded !== after.excluded
     || before.description !== after.description
     || before.type !== after.type;
@@ -618,11 +618,11 @@ function describeChange(item: any, before: DraftItem, after: DraftItem): any | n
     _id: item._id.toString(),
     description: after.description,
     before: {
-      categories: before.categories, tags: before.tags, excluded: before.excluded,
+      categories: before.categories, flags: before.flags, excluded: before.excluded,
       description: before.description, type: before.type,
     },
     after: {
-      categories: after.categories, tags: after.tags, excluded: after.excluded,
+      categories: after.categories, flags: after.flags, excluded: after.excluded,
       description: after.description, type: after.type,
     },
   };
@@ -860,14 +860,14 @@ module.exports = function (app: any) {
       }
     });
 
-  // --- Labels: categories and tags -----------------------------------------
+  // --- Labels: categories and flags -----------------------------------------
   //
   // Two parallel registries of the same shape. Items reference labels by NAME, so a
   // rename has to carry across every item that used the old one - otherwise those items
   // silently fall out of that label's filters, budgets and reports.
 
   registerLabelRoutes(app, "categories");
-  registerLabelRoutes(app, "tags");
+  registerLabelRoutes(app, "flags");
 
 
   // --- Rules ---------------------------------------------------------------
@@ -975,8 +975,8 @@ module.exports = function (app: any) {
             item.categories = evenCategoryWeights(after.categories, item.amount);
             item.category_split_type = "equal";
             item.rule_categories = after.rule_categories;
-            item.tags = after.tags;
-            item.rule_tags = after.rule_tags;
+            item.flags = after.flags;
+            item.rule_flags = after.rule_flags;
             item.applied_rule_ids = after.applied_rule_ids;
             item.excluded = after.excluded;
             item.excluded_reason = after.excluded_reason;
@@ -1056,7 +1056,7 @@ module.exports = function (app: any) {
               date: result.item.date,
               description: result.item.description,
               categories: result.item.categories,
-              tags: result.item.tags,
+              flags: result.item.flags,
               excluded: result.item.excluded,
               excluded_reason: result.item.excluded_reason,
             },
@@ -1070,7 +1070,7 @@ module.exports = function (app: any) {
             previews,
             skipped: previews.filter((p: any) => p.skipped).length,
             excluded: previews.filter((p: any) => !p.skipped && p.item.excluded).length,
-            tagged: previews.filter((p: any) => !p.skipped && p.item.tags.length > 0).length,
+            flagged: previews.filter((p: any) => !p.skipped && p.item.flags.length > 0).length,
           },
         });
       } catch (error) {
@@ -1107,7 +1107,7 @@ module.exports = function (app: any) {
           name: book.name,
           default_currency: book.default_currency,
           categories: book.categories,
-          tags: book.tags,
+          flags: book.flags,
           budgets: book.budgets,
           rules: book.rules,
           import_presets: book.import_presets,
@@ -1154,7 +1154,7 @@ module.exports = function (app: any) {
           created_by: userId,
           members,
           categories: stripIds(payload.book.categories),
-          tags: stripIds(payload.book.tags),
+          flags: stripIds(payload.book.flags),
           budgets: remapBudgets(stripIds(payload.book.budgets), idMap),
           rules: remapRules(stripIds(payload.book.rules), idMap),
           import_presets: stripIds(payload.book.import_presets),
@@ -1198,7 +1198,7 @@ module.exports = function (app: any) {
           const result = await XenBudgetItem.deleteMany({ book_id: book._id });
           removed = result.deletedCount || 0;
           book.categories = stripIds(req.body.book.categories);
-          book.tags = stripIds(req.body.book.tags);
+          book.flags = stripIds(req.body.book.flags);
           ensureSystemLabels(book);
           book.budgets = remapBudgets(stripIds(req.body.book.budgets), idMap);
           book.rules = remapRules(stripIds(req.body.book.rules), idMap);
@@ -1299,7 +1299,7 @@ module.exports = function (app: any) {
 
         // Rows matching something already in the book are marked rather than refused —
         // two identical charges on the same day are both real, and the user already chose
-        // to import these. The tag keeps that decision visible after the wizard closes.
+        // to import these. The flag keeps that decision visible after the wizard closes.
         const incomingHashes = req.body.items.map((row: any) => computeImportHash(
           row.date || new Date(), roundMoney(Number(row.amount) || 0), row.description || "",
         ));
@@ -1333,16 +1333,16 @@ module.exports = function (app: any) {
             failed.push({ index, reason: e.message });
             return;
           }
-          // Applied by the importer, not by a rule, so these go into `tags` and NOT into
-          // `rule_tags`: a later re-apply sweep must not strip a marker that was true at
+          // Applied by the importer, not by a rule, so these go into `flags` and NOT into
+          // `rule_flags`: a later re-apply sweep must not strip a marker that was true at
           // import time.
-          const importTags = [...ruled.tags];
+          const importFlags = [...ruled.flags];
           if (ruled.categories.length === 0 && ruled.type === "expense"
-            && !importTags.includes(TAG_UNCATEGORISED)) {
-            importTags.push(TAG_UNCATEGORISED);
+            && !importFlags.includes(FLAG_UNCATEGORISED)) {
+            importFlags.push(FLAG_UNCATEGORISED);
           }
-          if (seenBefore.has(incomingHashes[index]) && !importTags.includes(TAG_POSSIBLE_DUPLICATE)) {
-            importTags.push(TAG_POSSIBLE_DUPLICATE);
+          if (seenBefore.has(incomingHashes[index]) && !importFlags.includes(FLAG_POSSIBLE_DUPLICATE)) {
+            importFlags.push(FLAG_POSSIBLE_DUPLICATE);
           }
 
           docs.push({
@@ -1356,8 +1356,8 @@ module.exports = function (app: any) {
             categories: evenCategoryWeights(ruled.categories, ruled.amount),
             category_split_type: "equal",
             rule_categories: ruled.rule_categories,
-            tags: importTags,
-            rule_tags: ruled.rule_tags,
+            flags: importFlags,
+            rule_flags: ruled.rule_flags,
             applied_rule_ids: ruled.applied_rule_ids,
             excluded: ruled.excluded,
             excluded_reason: ruled.excluded_reason,
@@ -1393,8 +1393,8 @@ module.exports = function (app: any) {
             batch_id: batchId.toString(),
             created: docs.length,
             excluded: docs.filter((d) => d.excluded).length,
-            uncategorised: docs.filter((d) => d.tags.includes(TAG_UNCATEGORISED)).length,
-            duplicates: docs.filter((d) => d.tags.includes(TAG_POSSIBLE_DUPLICATE)).length,
+            uncategorised: docs.filter((d) => d.flags.includes(FLAG_UNCATEGORISED)).length,
+            duplicates: docs.filter((d) => d.flags.includes(FLAG_POSSIBLE_DUPLICATE)).length,
             skipped,
             failed,
           },
@@ -1740,7 +1740,7 @@ module.exports = function (app: any) {
   // GET /api/xenbudget/books/:bookId/summary?from&to&group_by=month|week|day&currency
   //
   // The engine behind both the live tally and the report page. One $facet pass, so the
-  // per-period, per-tag, per-person and top-line numbers are computed over exactly the
+  // per-period, per-category, per-person and top-line numbers are computed over exactly the
   // same set of items and always reconcile with each other.
   app.get("/api/xenbudget/books/:bookId/summary",
     validateParams(xenBudgetBookIdParamSchema),
@@ -1879,7 +1879,7 @@ module.exports = function (app: any) {
   // --- Items ---------------------------------------------------------------
 
   // GET /api/xenbudget/books/:bookId/items
-  //   ?from&to&categories=a,b&tags=a,b&people=id,id&type&uncategorised&excluded&q&limit&cursor
+  //   ?from&to&categories=a,b&flags=a,b&people=id,id&type&uncategorised&excluded&q&limit&cursor
   app.get("/api/xenbudget/books/:bookId/items", validateParams(xenBudgetBookIdParamSchema), async (req: Request, res: Response) => {
     try {
       const book = await loadBookForMember(req, res);
@@ -1976,8 +1976,8 @@ module.exports = function (app: any) {
           categories: manualCategories,
           category_split_type: body.category_split_type || "equal",
           rule_categories: ruled.rule_categories,
-          tags: ruled.tags,
-          rule_tags: ruled.rule_tags,
+          flags: ruled.flags,
+          rule_flags: ruled.rule_flags,
           applied_rule_ids: ruled.applied_rule_ids,
           excluded: ruled.excluded,
           excluded_reason: ruled.excluded_reason,
@@ -2013,7 +2013,7 @@ module.exports = function (app: any) {
         if (body.date !== undefined) item.date = new Date(body.date);
         if (body.description !== undefined) item.description = body.description;
         if (body.notes !== undefined) item.notes = body.notes;
-        if (body.tags !== undefined) item.tags = body.tags;
+        if (body.flags !== undefined) item.flags = body.flags;
         if (body.categories !== undefined || body.category_split_type !== undefined
           || body.amount !== undefined) {
           // Weights have to be recomputed whenever the amount or the split changes, or
@@ -2025,7 +2025,7 @@ module.exports = function (app: any) {
           item.categories = resolveCategories(item.category_split_type, item.amount, requested);
           // A hand-categorised item is no longer the importer's "nothing matched" case.
           if (item.categories.length > 0) {
-            item.tags = (item.tags || []).filter((t: string) => t !== TAG_UNCATEGORISED);
+            item.flags = (item.flags || []).filter((t: string) => t !== FLAG_UNCATEGORISED);
           }
         }
         if (body.excluded !== undefined) {

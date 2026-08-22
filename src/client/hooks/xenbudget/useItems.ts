@@ -6,7 +6,7 @@ export interface ItemFilters {
     from?: string;
     to?: string;
     categories?: string[];
-    tags?: string[];
+    flags?: string[];
     people?: string[];
     type?: "expense" | "income";
     /** Items with no category at all — the worklist an import leaves behind. */
@@ -21,7 +21,7 @@ function toParams(filters: ItemFilters): Record<string, string> {
     if (filters.from) params.from = filters.from;
     if (filters.to) params.to = filters.to;
     if (filters.categories?.length) params.categories = filters.categories.join(",");
-    if (filters.tags?.length) params.tags = filters.tags.join(",");
+    if (filters.flags?.length) params.flags = filters.flags.join(",");
     if (filters.people?.length) params.people = filters.people.join(",");
     if (filters.type) params.type = filters.type;
     if (filters.uncategorised) params.uncategorised = "true";

@@ -16,8 +16,8 @@ export function useXenBudgetRules(bookId: string) {
         queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
     };
 
-    // A sweep rewrites tags, exclusions and flags across the book, so everything derived
-    // from items is stale afterwards.
+    // A sweep rewrites categories, flags and exclusions across the book, so everything
+    // derived from items is stale afterwards.
     const invalidateEverything = () => {
         invalidate();
         queryClient.invalidateQueries({ queryKey: ["xenbudget", "items", bookId] });

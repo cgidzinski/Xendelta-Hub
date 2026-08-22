@@ -11,7 +11,7 @@ import { startOfMonth, startOfWeek, startOfYear, subMonths } from "date-fns";
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetItems, type ItemFilters } from "../../../hooks/xenbudget/useItems";
 import ItemListItem from "./components/ItemListItem";
-import { CategoryChip, TagChip } from "./components/LabelChip";
+import { CategoryChip, FlagChip } from "./components/LabelChip";
 import ImportWizard from "./components/ImportWizard";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -39,8 +39,8 @@ const QUICK_FILTERS: { label: string; value: Quick }[] = [
     { label: "Excluded", value: "excluded" },
 ];
 
-// The built-in tag the importer and rules use to say "a human should look at this".
-const TAG_NEEDS_REVIEW = "Needs review";
+// The built-in flag the importer and rules use to say "a human should look at this".
+const FLAG_NEEDS_REVIEW = "Needs review";
 
 function dateRange(filter: DateFilter): { from?: string; to?: string } {
     const now = new Date();
@@ -62,7 +62,7 @@ export default function BookItems() {
     const [dateFilter, setDateFilter] = useState<DateFilter>("all");
     const [quick, setQuick] = useState<Quick>("all");
     const [activeCategories, setActiveCategories] = useState<string[]>([]);
-    const [activeTags, setActiveTags] = useState<string[]>([]);
+    const [activeFlags, setActiveFlags] = useState<string[]>([]);
     const [importOpen, setImportOpen] = useState(false);
 
     const toggle = (list: string[], set: (v: string[]) => void, name: string) =>
@@ -74,16 +74,16 @@ export default function BookItems() {
         ...dateRange(dateFilter),
         q: search.trim() || undefined,
         categories: activeCategories.length ? activeCategories : undefined,
-        // "Needs review" is that specific built-in tag; a chip row filters by any tag.
-        tags: quick === "review"
-            ? [TAG_NEEDS_REVIEW, ...activeTags]
-            : (activeTags.length ? activeTags : undefined),
+        // "Needs review" is that specific built-in flag; a chip row filters by any flag.
+        flags: quick === "review"
+            ? [FLAG_NEEDS_REVIEW, ...activeFlags]
+            : (activeFlags.length ? activeFlags : undefined),
         type: quick === "expense" || quick === "income" ? quick : undefined,
-        // The *state* of having no category, not the tag — so an item leaves this filter
-        // the moment it's categorised, whether or not anyone cleared the tag.
+        // The *state* of having no category, not the flag — so an item leaves this filter
+        // the moment it's categorised, whether or not anyone cleared the flag.
         uncategorised: quick === "uncategorised" || undefined,
         excluded: quick === "excluded" ? "only" : "hidden",
-    }), [dateFilter, search, quick, activeCategories, activeTags]);
+    }), [dateFilter, search, quick, activeCategories, activeFlags]);
 
     const {
         items, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
@@ -149,16 +149,16 @@ export default function BookItems() {
                         ))}
                     </Stack>
                 )}
-                {book.tags.length > 0 && (
+                {book.flags.length > 0 && (
                     <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>
-                        {book.tags.map((tag) => (
-                            <TagChip
-                                key={tag._id} name={tag.name} registry={book.tags}
-                                onClick={() => toggle(activeTags, setActiveTags, tag.name)}
+                        {book.flags.map((flag) => (
+                            <FlagChip
+                                key={flag._id} name={flag.name} registry={book.flags}
+                                onClick={() => toggle(activeFlags, setActiveFlags, flag.name)}
                                 sx={{
                                     cursor: "pointer",
-                                    opacity: activeTags.length === 0 || activeTags.includes(tag.name) ? 1 : 0.4,
-                                    fontWeight: activeTags.includes(tag.name) ? 700 : 400,
+                                    opacity: activeFlags.length === 0 || activeFlags.includes(flag.name) ? 1 : 0.4,
+                                    fontWeight: activeFlags.includes(flag.name) ? 700 : 400,
                                 }}
                             />
                         ))}
@@ -178,7 +178,7 @@ export default function BookItems() {
                     <Typography variant="subtitle1">Nothing here</Typography>
                     <Typography variant="body2" color="text.secondary">
                         {search || quick !== "all" || dateFilter !== "all"
-                            || activeTags.length > 0 || activeCategories.length > 0
+                            || activeFlags.length > 0 || activeCategories.length > 0
                             ? "No items match those filters."
                             : "Add your first item, or import a CSV from your bank."}
                     </Typography>
@@ -197,7 +197,7 @@ export default function BookItems() {
                                         item={item}
                                         members={book.members}
                                         categoryRegistry={book.categories}
-                                        tagRegistry={book.tags}
+                                        flagRegistry={book.flags}
                                         onClick={onEditItem}
                                     />
                                 ))}

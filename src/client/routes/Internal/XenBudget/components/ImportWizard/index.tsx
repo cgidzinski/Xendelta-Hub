@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     Alert, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle,
-    FormControlLabel, MenuItem, Stack, Step, StepLabel, Stepper, TextField, Typography,
+    FormControlLabel, IconButton, MenuItem, Stack, Step, StepLabel, Stepper, TextField, Typography,
 } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import Papa from "papaparse";
 import { useSnackbar } from "notistack";
 import type {
-    XenBudgetBook, ImportPreviewRow, DuplicateMatch, BulkImportResult,
+    XenBudgetBook, XenBudgetImportPreset, ImportPreviewRow, DuplicateMatch, BulkImportResult,
 } from "../../../../../hooks/xenbudget/types";
 import { useXenBudgetImport, type ImportCandidate } from "../../../../../hooks/xenbudget/useImport";
 import { useAuth } from "../../../../../contexts/AuthContext";
@@ -28,12 +29,90 @@ const blankConfig = (): MappingConfig => ({
     amount_mode: "signed",
     sign_convention: "negative_is_expense",
     date_format: "auto",
+    has_header: true,
+    skip_rows: 0,
 });
 
 interface ImportWizardProps {
     open: boolean;
     onClose: () => void;
     book: XenBudgetBook;
+}
+
+// Papaparse always treats the string it's given as the whole file, so a "skip N rows"
+// option has to happen at the text level, before parsing — slicing raw lines rather than
+// asking Papaparse to do it keeps the header-detection and no-header paths identical.
+async function parseOneFile(
+    file: File, hasHeader: boolean, skipRows: number,
+): Promise<{ headers: string[]; rows: CsvRow[] }> {
+    const text = await file.text();
+    const lines = text.split(/\r\n|\n|\r/);
+    const sliced = lines.slice(skipRows).join("\n");
+    return new Promise((resolve, reject) => {
+        Papa.parse<any>(sliced, {
+            header: hasHeader,
+            skipEmptyLines: "greedy",
+            complete: (parsed) => {
+                if (hasHeader) {
+                    const fields = (parsed.meta.fields || []).filter(Boolean);
+                    resolve({ headers: fields, rows: parsed.data as CsvRow[] });
+                } else {
+                    // No real header to name columns by, so synthesize one per position —
+                    // the rest of the mapping UI needs headers to exist either way.
+                    const dataRows = parsed.data as string[][];
+                    const width = dataRows.reduce((max, r) => Math.max(max, r.length), 0);
+                    const fields = Array.from({ length: width }, (_, i) => `Column ${i + 1}`);
+                    const rows: CsvRow[] = dataRows.map((r) => {
+                        const obj: CsvRow = {};
+                        fields.forEach((f, i) => { obj[f] = r[i] ?? ""; });
+                        return obj;
+                    });
+                    resolve({ headers: fields, rows });
+                }
+            },
+            error: (err: Error) => reject(err),
+        });
+    });
+}
+
+// A book's month can arrive as two exports from the same card (a mid-month card swap, a
+// statement cycle that doesn't line up with the calendar) — merging them here means the
+// rest of the wizard never has to know there was more than one file. They're required to
+// share the same columns: silently unioning mismatched files would misalign data no one
+// asked to misalign.
+async function parseAllFiles(
+    files: File[], hasHeader: boolean, skipRows: number,
+): Promise<{ headers: string[]; rows: CsvRow[]; error?: string }> {
+    if (files.length === 0) return { headers: [], rows: [] };
+    const parsed = await Promise.all(files.map((f) => parseOneFile(f, hasHeader, skipRows)));
+    const first = parsed[0];
+    for (let i = 1; i < parsed.length; i++) {
+        const sameShape = parsed[i].headers.length === first.headers.length
+            && parsed[i].headers.every((h, idx) => h === first.headers[idx]);
+        if (!sameShape) {
+            return {
+                headers: [], rows: [],
+                error: `"${files[i].name}" has different columns than "${files[0].name}" — pick files from the same export.`,
+            };
+        }
+    }
+    return { headers: first.headers, rows: parsed.flatMap((p) => p.rows) };
+}
+
+// Only column_map/amount_mode/sign_convention/date_format/has_header/skip_rows/
+// default_categories are what a preset actually remembers — comparing exactly those (and
+// nothing else) is what lets "unchanged" and "modified" be told apart.
+function configMatchesPreset(config: MappingConfig, preset: XenBudgetImportPreset): boolean {
+    const sameColumnMap = JSON.stringify(config.column_map) === JSON.stringify(preset.column_map);
+    const sameDefaults = JSON.stringify(config.default_categories || [])
+        === JSON.stringify(preset.default_categories || []);
+    return sameColumnMap
+        && config.amount_mode === preset.amount_mode
+        && config.sign_convention === preset.sign_convention
+        && (config.date_format || "auto") === (preset.date_format || "auto")
+        && (config.has_header !== false) === preset.has_header
+        && (config.skip_rows || 0) === preset.skip_rows
+        && sameDefaults;
 }
 
 /**
@@ -48,14 +127,18 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
     const { enqueueSnackbar } = useSnackbar();
     const {
         previewAsync, isPreviewing, checkDuplicatesAsync, importAsync, isImporting,
-        undoImportAsync, isUndoing, savePresetAsync,
+        undoImportAsync, isUndoing, savePresetAsync, updatePresetAsync,
     } = useXenBudgetImport(book._id);
 
     const [step, setStep] = useState(0);
-    const [fileName, setFileName] = useState("");
+    const [files, setFiles] = useState<File[]>([]);
     const [rawRows, setRawRows] = useState<CsvRow[]>([]);
     const [headers, setHeaders] = useState<string[]>([]);
+    const [parseError, setParseError] = useState<string | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
     const [config, setConfig] = useState<MappingConfig>(blankConfig());
+    const [dateFrom, setDateFrom] = useState<Date | null>(null);
+    const [dateTo, setDateTo] = useState<Date | null>(null);
     const [previews, setPreviews] = useState<ImportPreviewRow[]>([]);
     const [duplicates, setDuplicates] = useState<DuplicateMatch[]>([]);
     const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -69,6 +152,11 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
 
     const { user } = useAuth();
 
+    // Which file selection the auto-guessed column mapping was last built for, so toggling
+    // "first row is a header" afterward reparses without clobbering a mapping the user has
+    // already adjusted by hand.
+    const guessedForRef = useRef<File[] | null>(null);
+
     useEffect(() => {
         if (!open) return;
         setOwners(user?.id ? [{ key: user.id, value: "" }] : []);
@@ -77,10 +165,13 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
     useEffect(() => {
         if (open) return;
         setStep(0);
-        setFileName("");
+        setFiles([]);
         setRawRows([]);
         setHeaders([]);
+        setParseError(null);
         setConfig(blankConfig());
+        setDateFrom(null);
+        setDateTo(null);
         setPreviews([]);
         setDuplicates([]);
         setSelected(new Set());
@@ -88,7 +179,58 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
         setSavePresetName("");
         setPresetId("");
         setSourceLabel("");
+        guessedForRef.current = null;
     }, [open]);
+
+    // Re-parses whenever the file set changes, or the header/skip-rows settings do —
+    // toggling "first row is a header" has to reread the actual file, not just reinterpret
+    // rows already split the wrong way.
+    useEffect(() => {
+        if (files.length === 0) {
+            setRawRows([]);
+            setHeaders([]);
+            setParseError(null);
+            return;
+        }
+        let cancelled = false;
+        parseAllFiles(files, config.has_header !== false, config.skip_rows || 0)
+            .then((parsedResult) => {
+                if (cancelled) return;
+                if (parsedResult.error) {
+                    setParseError(parsedResult.error);
+                    setRawRows([]);
+                    setHeaders([]);
+                    return;
+                }
+                setParseError(null);
+                setHeaders(parsedResult.headers);
+                setRawRows(parsedResult.rows);
+
+                // Guess the obvious columns, but only the first time this exact file set
+                // is parsed — a later reparse (from toggling the header switch) must not
+                // stomp a mapping the user has since adjusted.
+                if (guessedForRef.current !== files) {
+                    guessedForRef.current = files;
+                    const guess = (candidates: string[]) =>
+                        parsedResult.headers.find((f) => candidates.some((c) => f.toLowerCase().includes(c)));
+                    setConfig((prev) => ({
+                        ...prev,
+                        column_map: {
+                            date: guess(["date", "posted"]),
+                            description: guess(["description", "payee", "merchant", "name", "memo"]),
+                            amount: guess(["amount", "value"]),
+                            debit: guess(["debit", "withdrawal"]),
+                            credit: guess(["credit", "deposit"]),
+                        },
+                    }));
+                }
+            })
+            .catch((err) => {
+                if (!cancelled) enqueueSnackbar(`Could not read that file: ${err.message}`, { variant: "error" });
+            });
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [files, config.has_header, config.skip_rows]);
 
     const mapped = useMemo(
         () => (rawRows.length ? applyMapping(rawRows, config) : { rows: [], errors: [] as MappingError[] }),
@@ -103,32 +245,14 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
     const canMap = !!config.column_map.date && !!config.column_map.description
         && (config.amount_mode === "signed" ? !!config.column_map.amount : !!config.column_map.debit);
 
-    const handleFile = (file: File) => {
-        setFileName(file.name);
-        Papa.parse<CsvRow>(file, {
-            header: true,
-            skipEmptyLines: "greedy",
-            complete: (parsed) => {
-                const fields = (parsed.meta.fields || []).filter(Boolean);
-                setHeaders(fields);
-                setRawRows(parsed.data as CsvRow[]);
-                // Guess the obvious columns so the common case is one click.
-                const guess = (candidates: string[]) =>
-                    fields.find((f) => candidates.some((c) => f.toLowerCase().includes(c)));
-                setConfig((prev) => ({
-                    ...prev,
-                    column_map: {
-                        date: guess(["date", "posted"]),
-                        description: guess(["description", "payee", "merchant", "name", "memo"]),
-                        amount: guess(["amount", "value"]),
-                        debit: guess(["debit", "withdrawal"]),
-                        credit: guess(["credit", "deposit"]),
-                    },
-                }));
-                setStep(1);
-            },
-            error: (err) => enqueueSnackbar(`Could not read that file: ${err.message}`, { variant: "error" }),
-        });
+    const handleFiles = (chosen: File[]) => {
+        const csvOnly = chosen.filter((f) => f.name.toLowerCase().endsWith(".csv") || f.type === "text/csv");
+        if (csvOnly.length === 0) return;
+        setFiles((prev) => [...prev, ...csvOnly]);
+    };
+
+    const removeFile = (index: number) => {
+        setFiles((prev) => prev.filter((_, i) => i !== index));
     };
 
     const applyPreset = (id: string) => {
@@ -143,9 +267,14 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
             amount_mode: preset.amount_mode,
             sign_convention: preset.sign_convention,
             date_format: preset.date_format || "auto",
+            has_header: preset.has_header,
+            skip_rows: preset.skip_rows,
             default_categories: preset.default_categories,
         });
     };
+
+    const selectedPreset = presetId ? book.import_presets.find((p) => p._id === presetId) : undefined;
+    const presetUnchanged = !!selectedPreset && configMatchesPreset(config, selectedPreset);
 
     const toCandidates = (): ImportCandidate[] => mapped.rows.map((r) => ({
         type: r.type,
@@ -155,6 +284,22 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
         categories: r.categories,
         currency: book.default_currency,
     }));
+
+    // Rows outside the optional cutoff stay visible, just unticked by default — like
+    // duplicates, nothing about what happened to a row is hidden.
+    const outOfRangeIndices = useMemo(() => {
+        if (!dateFrom && !dateTo) return new Set<number>();
+        const from = dateFrom ? dateFrom.getTime() : -Infinity;
+        const to = dateTo ? dateTo.getTime() : Infinity;
+        return new Set(
+            previews
+                .filter((p) => {
+                    const t = new Date(p.item.date).getTime();
+                    return t < from || t > to;
+                })
+                .map((p) => p.index),
+        );
+    }, [previews, dateFrom, dateTo]);
 
     const goToReview = async () => {
         try {
@@ -171,11 +316,20 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
             ]);
             setPreviews(preview.previews);
             setDuplicates(dupes);
-            // Everything a rule would keep is ticked, except likely duplicates — those
-            // start unticked so a re-import doesn't double the month by default.
+            // Everything a rule would keep is ticked, except likely duplicates and rows
+            // outside the date cutoff — those start unticked so nothing is double-counted
+            // or pulled in from outside the month by default.
             const dupeIndices = new Set(dupes.map((d) => d.index));
+            const from = dateFrom ? dateFrom.getTime() : -Infinity;
+            const to = dateTo ? dateTo.getTime() : Infinity;
             setSelected(new Set(
-                preview.previews.filter((p) => !p.skipped && !dupeIndices.has(p.index)).map((p) => p.index),
+                preview.previews
+                    .filter((p) => {
+                        if (p.skipped || dupeIndices.has(p.index)) return false;
+                        const t = new Date(p.item.date).getTime();
+                        return t >= from && t <= to;
+                    })
+                    .map((p) => p.index),
             ));
             setStep(2);
         } catch (e) {
@@ -189,23 +343,32 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
             // `index` is the row's position in the mapped list, which is what the preview
             // and duplicate results are keyed by.
             const chosen = candidates.filter((_, i) => selected.has(mapped.rows[i].index));
+            const filename = files.map((f) => f.name).join(", ") || undefined;
             const imported = await importAsync({
                 items: chosen,
                 default_people: owners.map((o) => o.key),
                 source_label: sourceLabel.trim() || undefined,
-                filename: fileName || undefined,
+                filename,
             });
             setResult(imported);
             setStep(3);
-            if (savePresetName.trim()) {
-                await savePresetAsync({
-                    name: savePresetName.trim(),
-                    column_map: config.column_map,
-                    amount_mode: config.amount_mode,
-                    sign_convention: config.sign_convention,
-                    date_format: config.date_format,
-                    default_categories: config.default_categories,
-                }).catch(() => enqueueSnackbar("Imported, but the preset could not be saved", { variant: "warning" }));
+
+            const presetInput = {
+                name: selectedPreset ? selectedPreset.name : savePresetName.trim(),
+                column_map: config.column_map,
+                amount_mode: config.amount_mode,
+                sign_convention: config.sign_convention,
+                date_format: config.date_format,
+                has_header: config.has_header,
+                skip_rows: config.skip_rows,
+                default_categories: config.default_categories,
+            };
+            if (selectedPreset && !presetUnchanged) {
+                await updatePresetAsync({ presetId: selectedPreset._id, input: presetInput })
+                    .catch(() => enqueueSnackbar("Imported, but the mapping could not be updated", { variant: "warning" }));
+            } else if (!selectedPreset && savePresetName.trim()) {
+                await savePresetAsync(presetInput)
+                    .catch(() => enqueueSnackbar("Imported, but the mapping could not be saved", { variant: "warning" }));
             }
         } catch (e) {
             enqueueSnackbar(e instanceof Error ? e.message : "Import failed", { variant: "error" });
@@ -232,10 +395,11 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                 </Stepper>
 
                 {step === 0 && (
-                    <Stack spacing={2} alignItems="flex-start">
+                    <Stack spacing={2} alignItems="stretch">
                         <Typography variant="body2" color="text.secondary">
                             Export from your bank or card as CSV. The file is read here in your browser —
-                            only the rows you approve are sent.
+                            only the rows you approve are sent. Add more than one if the month is split
+                            across statements.
                         </Typography>
                         {book.import_presets.length > 0 && (
                             <TextField
@@ -249,14 +413,56 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                                 ))}
                             </TextField>
                         )}
-                        <Button variant="outlined" component="label" startIcon={<UploadFileIcon />}>
-                            Choose CSV
-                            <input
-                                type="file" hidden accept=".csv,text/csv"
-                                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-                            />
-                        </Button>
-                        {fileName && <Typography variant="caption">{fileName}</Typography>}
+
+                        <Box
+                            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                            onDragLeave={() => setIsDragging(false)}
+                            onDrop={(e) => {
+                                e.preventDefault();
+                                setIsDragging(false);
+                                handleFiles(Array.from(e.dataTransfer.files));
+                            }}
+                            sx={{
+                                border: "2px dashed",
+                                borderColor: isDragging ? "primary.main" : "divider",
+                                borderRadius: 2,
+                                p: 3,
+                                textAlign: "center",
+                                bgcolor: isDragging ? "action.hover" : "transparent",
+                                transition: "background-color 0.15s, border-color 0.15s",
+                            }}
+                        >
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                                Drop CSV files here, or
+                            </Typography>
+                            <Button variant="outlined" component="label" startIcon={<UploadFileIcon />}>
+                                Choose CSV
+                                <input
+                                    type="file" hidden multiple accept=".csv,text/csv"
+                                    onChange={(e) => {
+                                        handleFiles(Array.from(e.target.files || []));
+                                        e.target.value = "";
+                                    }}
+                                />
+                            </Button>
+                        </Box>
+
+                        {files.length > 0 && (
+                            <Stack spacing={0.5}>
+                                {files.map((f, i) => (
+                                    <Stack key={`${f.name}-${i}`} direction="row" alignItems="center" spacing={1}>
+                                        <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
+                                            {f.name}
+                                        </Typography>
+                                        <IconButton size="small" onClick={() => removeFile(i)}>
+                                            <CloseIcon fontSize="small" />
+                                        </IconButton>
+                                    </Stack>
+                                ))}
+                            </Stack>
+                        )}
+
+                        {parseError && <Alert severity="error">{parseError}</Alert>}
                     </Stack>
                 )}
 
@@ -266,9 +472,13 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                         config={config}
                         onChange={setConfig}
                         detectedOrder={detectedOrder}
-                        sampleDate={config.column_map.date ? rawRows[0]?.[config.column_map.date] : undefined}
+                        sampleRow={rawRows[0]}
                         errorCount={mapped.errors.length}
                         mappedCount={mapped.rows.length}
+                        dateFrom={dateFrom}
+                        onDateFromChange={setDateFrom}
+                        dateTo={dateTo}
+                        onDateToChange={setDateTo}
                     />
                 )}
 
@@ -281,9 +491,10 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                             duplicates={duplicates}
                             errors={mapped.errors}
                             categoryRegistry={book.categories}
-                            tagRegistry={book.tags}
+                            flagRegistry={book.flags}
                             currency={book.default_currency}
                             selected={selected}
+                            outOfRangeIndices={outOfRangeIndices}
                             onToggle={(index) => setSelected((prev) => {
                                 const next = new Set(prev);
                                 if (next.has(index)) next.delete(index); else next.add(index);
@@ -291,7 +502,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                             })}
                         />
                         <TextField
-                            size="small" label="Which card is this?" value={sourceLabel}
+                            size="small" label="Card name" value={sourceLabel}
                             onChange={(e) => setSourceLabel(e.target.value)}
                             placeholder="Chase Visa"
                             helperText="Shown in the import history, so a bad file can be found and removed later."
@@ -313,21 +524,34 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                             />
                         </Box>
 
-                        <FormControlLabel
-                            control={
-                                <Checkbox
-                                    size="small" checked={savePresetName !== ""}
-                                    onChange={(e) => setSavePresetName(e.target.checked ? fileName.replace(/\.csv$/i, "") : "")}
+                        {selectedPreset ? (
+                            !presetUnchanged && (
+                                <Alert severity="info" variant="outlined">
+                                    This mapping has changed since &ldquo;{selectedPreset.name}&rdquo; was saved.
+                                    Importing will update it.
+                                </Alert>
+                            )
+                        ) : (
+                            <>
+                                <FormControlLabel
+                                    control={
+                                        <Checkbox
+                                            size="small" checked={savePresetName !== ""}
+                                            onChange={(e) => setSavePresetName(
+                                                e.target.checked ? files[0]?.name.replace(/\.csv$/i, "") || "" : "",
+                                            )}
+                                        />
+                                    }
+                                    label="Remember this mapping for next time"
                                 />
-                            }
-                            label="Remember this mapping for next time"
-                        />
-                        {savePresetName !== "" && (
-                            <TextField
-                                size="small" label="Mapping name" value={savePresetName}
-                                onChange={(e) => setSavePresetName(e.target.value)}
-                                placeholder="Chase Visa"
-                            />
+                                {savePresetName !== "" && (
+                                    <TextField
+                                        size="small" label="Mapping name" value={savePresetName}
+                                        onChange={(e) => setSavePresetName(e.target.value)}
+                                        placeholder="Chase Visa"
+                                    />
+                                )}
+                            </>
                         )}
                     </Stack>
                 ))}
@@ -335,7 +559,8 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                 {step === 3 && result && (
                     <Stack spacing={2}>
                         <Alert severity="success">
-                            Imported {result.created} item{result.created === 1 ? "" : "s"}.
+                            Imported {result.created} item{result.created === 1 ? "" : "s"}
+                            {files.length > 0 && ` from ${files.map((f) => f.name).join(", ")}`}.
                         </Alert>
                         {result.excluded > 0 && (
                             <Typography variant="body2" color="text.secondary">
@@ -345,7 +570,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                         )}
                         {result.uncategorised > 0 && (
                             <Typography variant="body2" color="text.secondary">
-                                {result.uncategorised} couldn&rsquo;t be categorised and were tagged
+                                {result.uncategorised} couldn&rsquo;t be categorised and were flagged
                                 &ldquo;Uncategorised&rdquo;. Filter by that on the items tab to work
                                 through them.
                             </Typography>
@@ -353,7 +578,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                         {result.duplicates > 0 && (
                             <Typography variant="body2" color="text.secondary">
                                 {result.duplicates} matched something already in this book and were
-                                tagged &ldquo;Possible duplicate&rdquo;.
+                                flagged &ldquo;Possible duplicate&rdquo;.
                             </Typography>
                         )}
                         {result.skipped.length > 0 && (
@@ -381,6 +606,15 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                     <Button onClick={() => setStep(step - 1)} sx={{ mr: "auto" }}>Back</Button>
                 )}
                 <Button onClick={onClose}>{step === 3 ? "Done" : "Cancel"}</Button>
+                {step === 0 && (
+                    <Button
+                        variant="contained"
+                        disabled={files.length === 0 || headers.length === 0 || !!parseError}
+                        onClick={() => setStep(1)}
+                    >
+                        Next
+                    </Button>
+                )}
                 {step === 1 && (
                     <Button variant="contained" disabled={!canMap || mapped.rows.length === 0} onClick={goToReview}>
                         Review {mapped.rows.length} row{mapped.rows.length === 1 ? "" : "s"}

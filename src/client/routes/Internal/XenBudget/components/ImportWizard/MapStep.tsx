@@ -1,7 +1,9 @@
 import {
-    Alert, Box, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography,
+    Alert, Box, FormControlLabel, MenuItem, Stack, Switch, TextField,
+    ToggleButton, ToggleButtonGroup, Typography,
 } from "@mui/material";
-import type { MappingConfig } from "../../../../../utils/csvMapping";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import type { CsvRow, MappingConfig } from "../../../../../utils/csvMapping";
 import { STABLE_CURRENCY_MENU_PROPS } from "../../../../../utils/currencyUtils";
 import { sectionLabelSx } from "../../../../../components/ui/surfaceStyles";
 
@@ -10,9 +12,15 @@ interface MapStepProps {
     config: MappingConfig;
     onChange: (config: MappingConfig) => void;
     detectedOrder: "ymd" | "dmy" | "mdy";
-    sampleDate?: string;
+    /** The first data row, so a column can be picked by what's actually in it. */
+    sampleRow?: CsvRow;
     errorCount: number;
     mappedCount: number;
+    /** Optional cutoff: rows outside this range are excluded rather than dropped silently. */
+    dateFrom: Date | null;
+    onDateFromChange: (d: Date | null) => void;
+    dateTo: Date | null;
+    onDateToChange: (d: Date | null) => void;
 }
 
 const ORDER_LABELS: Record<string, string> = {
@@ -22,26 +30,56 @@ const ORDER_LABELS: Record<string, string> = {
 };
 
 export default function MapStep({
-    headers, config, onChange, detectedOrder, sampleDate, errorCount, mappedCount,
+    headers, config, onChange, detectedOrder, sampleRow, errorCount, mappedCount,
+    dateFrom, onDateFromChange, dateTo, onDateToChange,
 }: MapStepProps) {
     const setColumn = (key: keyof MappingConfig["column_map"], value: string) =>
         onChange({ ...config, column_map: { ...config.column_map, [key]: value || undefined } });
 
-    const columnSelect = (key: keyof MappingConfig["column_map"], label: string, required = false) => (
-        <TextField
-            select fullWidth size="small" label={label}
-            value={config.column_map[key] ?? ""}
-            onChange={(e) => setColumn(key, e.target.value)}
-            error={required && !config.column_map[key]}
-            slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
-        >
-            <MenuItem value="">{required ? "— required —" : "— none —"}</MenuItem>
-            {headers.map((h) => <MenuItem key={h} value={h}>{h}</MenuItem>)}
-        </TextField>
-    );
+    // A raw header name doesn't say much on its own — showing what's actually in the
+    // first row turns "pick from a list of column names" into "see the data you're mapping".
+    const columnSelect = (key: keyof MappingConfig["column_map"], label: string, required = false) => {
+        const chosen = config.column_map[key];
+        const sample = chosen && sampleRow ? sampleRow[chosen] : undefined;
+        return (
+            <TextField
+                select fullWidth size="small" label={label}
+                value={chosen ?? ""}
+                onChange={(e) => setColumn(key, e.target.value)}
+                error={required && !chosen}
+                helperText={sample ? `"${sample}"` : undefined}
+                slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
+            >
+                <MenuItem value="">{required ? "— required —" : "— none —"}</MenuItem>
+                {headers.map((h) => <MenuItem key={h} value={h}>{h}</MenuItem>)}
+            </TextField>
+        );
+    };
 
     return (
         <Stack spacing={2}>
+            <Typography variant="caption" sx={sectionLabelSx}>File structure</Typography>
+
+            <Stack direction="row" spacing={2} alignItems="center">
+                <FormControlLabel
+                    control={
+                        <Switch
+                            checked={config.has_header !== false}
+                            onChange={(e) => onChange({ ...config, has_header: e.target.checked })}
+                        />
+                    }
+                    label="First row is a header"
+                />
+                <TextField
+                    size="small" type="number" label="Skip rows before that"
+                    value={config.skip_rows ?? 0}
+                    onChange={(e) => onChange({ ...config, skip_rows: Math.max(0, Number(e.target.value) || 0) })}
+                    sx={{ width: 170 }}
+                    slotProps={{ htmlInput: { min: 0, max: 100 } }}
+                    helperText="For files with junk rows above the real data"
+                />
+            </Stack>
+
             <Typography variant="caption" sx={sectionLabelSx}>Match your columns</Typography>
 
             {columnSelect("date", "Date", true)}
@@ -86,7 +124,7 @@ export default function MapStep({
                 onChange={(e) => onChange({ ...config, date_format: e.target.value })}
                 helperText={
                     config.date_format === "auto"
-                        ? `Detected: ${ORDER_LABELS[detectedOrder]}${sampleDate ? ` — "${sampleDate}" reads as ${ORDER_LABELS[detectedOrder].toLowerCase()}` : ""}`
+                        ? `Detected: ${ORDER_LABELS[detectedOrder]}`
                         : undefined
                 }
                 slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
@@ -98,6 +136,23 @@ export default function MapStep({
             </TextField>
 
             {columnSelect("categories", "Category (optional)")}
+
+            <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                    Only import rows within this range (optional) — everything else stays visible on
+                    the next step, just unticked.
+                </Typography>
+                <Stack direction="row" spacing={1}>
+                    <DatePicker
+                        label="From" value={dateFrom} onChange={onDateFromChange}
+                        slotProps={{ textField: { size: "small", fullWidth: true } }}
+                    />
+                    <DatePicker
+                        label="To" value={dateTo} onChange={onDateToChange}
+                        slotProps={{ textField: { size: "small", fullWidth: true } }}
+                    />
+                </Stack>
+            </Box>
 
             {errorCount > 0 && (
                 <Alert severity="warning">

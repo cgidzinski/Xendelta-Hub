@@ -11,11 +11,11 @@ function draft(over: Partial<DraftItem> = {}): DraftItem {
     date: new Date("2026-08-21T12:00:00.000Z"),
     description: "STARBUCKS #1234",
     categories: [],
-    tags: [],
+    flags: [],
     excluded: false,
     applied_rule_ids: [],
     rule_categories: [],
-    rule_tags: [],
+    rule_flags: [],
     source: "csv",
     ...over,
   };
@@ -77,14 +77,14 @@ describe("condition matching", () => {
     expect(ruleMatches(rule({ match: cond({ field: "amount", op: "gt", value: "" }) }), draft())).toBe(false);
   });
 
-  it("matches on tags, including empty", () => {
-    expect(ruleMatches(rule({ match: cond({ field: "tags", op: "is_empty" }) }), draft())).toBe(true);
-    expect(ruleMatches(rule({ match: cond({ field: "tags", op: "is_empty" }) }), draft({ tags: ["food"] }))).toBe(false);
-    expect(ruleMatches(rule({ match: cond({ field: "tags", op: "contains", value: "FOOD" }) }), draft({ tags: ["food"] }))).toBe(true);
-    expect(ruleMatches(rule({ match: cond({ field: "tags", op: "not_contains", value: "car" }) }), draft({ tags: ["food"] }))).toBe(true);
+  it("matches on flags, including empty", () => {
+    expect(ruleMatches(rule({ match: cond({ field: "flags", op: "is_empty" }) }), draft())).toBe(true);
+    expect(ruleMatches(rule({ match: cond({ field: "flags", op: "is_empty" }) }), draft({ flags: ["food"] }))).toBe(false);
+    expect(ruleMatches(rule({ match: cond({ field: "flags", op: "contains", value: "FOOD" }) }), draft({ flags: ["food"] }))).toBe(true);
+    expect(ruleMatches(rule({ match: cond({ field: "flags", op: "not_contains", value: "car" }) }), draft({ flags: ["food"] }))).toBe(true);
   });
 
-  it("matches on category the same way it matches on tags", () => {
+  it("matches on category the same way it matches on flags", () => {
     const d = draft({ categories: ["Groceries"] });
     expect(ruleMatches(rule({ match: cond({ field: "category", op: "contains", value: "groceries" }) }), d)).toBe(true);
     expect(ruleMatches(rule({ match: cond({ field: "category", op: "not_contains", value: "rent" }) }), d)).toBe(true);
@@ -135,27 +135,27 @@ describe("regex safety", () => {
 });
 
 describe("actions", () => {
-  it("adds tags and records them as rule-contributed", () => {
-    const { item } = applyRules(draft(), [rule({ actions: { add_tags: ["Coffee", "Dining"] } })]);
-    expect(item.tags).toEqual(["Coffee", "Dining"]);
-    expect(item.rule_tags).toEqual(["Coffee", "Dining"]);
+  it("adds flags and records them as rule-contributed", () => {
+    const { item } = applyRules(draft(), [rule({ actions: { add_flags: ["Coffee", "Dining"] } })]);
+    expect(item.flags).toEqual(["Coffee", "Dining"]);
+    expect(item.rule_flags).toEqual(["Coffee", "Dining"]);
     expect(item.applied_rule_ids).toEqual(["r1"]);
   });
 
-  it("does not duplicate a tag the item already has", () => {
-    const { item } = applyRules(draft({ tags: ["coffee"] }), [rule({ actions: { add_tags: ["Coffee"] } })]);
-    expect(item.tags).toEqual(["coffee"]);
+  it("does not duplicate a flag the item already has", () => {
+    const { item } = applyRules(draft({ flags: ["coffee"] }), [rule({ actions: { add_flags: ["Coffee"] } })]);
+    expect(item.flags).toEqual(["coffee"]);
   });
 
-  it("removes tags", () => {
-    const { item } = applyRules(draft({ tags: ["food", "coffee"] }), [rule({ actions: { remove_tags: ["FOOD"] } })]);
-    expect(item.tags).toEqual(["coffee"]);
+  it("removes flags", () => {
+    const { item } = applyRules(draft({ flags: ["food", "coffee"] }), [rule({ actions: { remove_flags: ["FOOD"] } })]);
+    expect(item.flags).toEqual(["coffee"]);
   });
 
-  it("adds an attention tag, which is what the old flag action became", () => {
-    const { item } = applyRules(draft(), [rule({ name: "Big charges", actions: { add_tags: ["Needs review"] } })]);
-    expect(item.tags).toEqual(["Needs review"]);
-    expect(item.rule_tags).toEqual(["Needs review"]);
+  it("adds an attention flag, which is what the old flag action became", () => {
+    const { item } = applyRules(draft(), [rule({ name: "Big charges", actions: { add_flags: ["Needs review"] } })]);
+    expect(item.flags).toEqual(["Needs review"]);
+    expect(item.rule_flags).toEqual(["Needs review"]);
   });
 
   it("sets categories, replacing rather than appending", () => {
@@ -169,12 +169,12 @@ describe("actions", () => {
     expect(item.rule_categories).toEqual(["Groceries", "Household"]);
   });
 
-  it("keeps categories and tags apart", () => {
+  it("keeps categories and flags apart", () => {
     const { item } = applyRules(draft(), [rule({
-      actions: { set_categories: ["Dining"], add_tags: ["check receipt"] },
+      actions: { set_categories: ["Dining"], add_flags: ["check receipt"] },
     })]);
     expect(item.categories).toEqual(["Dining"]);
-    expect(item.tags).toEqual(["check receipt"]);
+    expect(item.flags).toEqual(["check receipt"]);
   });
 
   it("sets type and people", () => {
@@ -205,8 +205,8 @@ describe("actions", () => {
 
   it("does not mutate the input draft", () => {
     const original = draft();
-    applyRules(original, [rule({ actions: { set_categories: ["Dining"], add_tags: ["Coffee"] } })]);
-    expect(original.tags).toEqual([]);
+    applyRules(original, [rule({ actions: { set_categories: ["Dining"], add_flags: ["Coffee"] } })]);
+    expect(original.flags).toEqual([]);
     expect(original.categories).toEqual([]);
   });
 });
@@ -231,16 +231,16 @@ describe("ordering", () => {
       rule({
         _id: "a", priority: 1,
         match: cond({ field: "description", op: "contains", value: "starbucks" }),
-        actions: { add_tags: ["Coffee"] },
+        actions: { add_flags: ["Coffee"] },
       }),
       rule({
         _id: "b", priority: 2,
-        match: cond({ field: "tags", op: "contains", value: "Coffee" }),
-        actions: { add_tags: ["Discretionary"] },
+        match: cond({ field: "flags", op: "contains", value: "Coffee" }),
+        actions: { add_flags: ["Discretionary"] },
       }),
     ];
     const { item } = applyRules(draft(), rules);
-    expect(item.tags).toEqual(["Coffee", "Discretionary"]);
+    expect(item.flags).toEqual(["Coffee", "Discretionary"]);
   });
 
   it("chains the other way too: a rewrite can stop a later rule from matching", () => {
@@ -255,96 +255,96 @@ describe("ordering", () => {
       rule({
         _id: "b", priority: 2,
         match: cond({ field: "description", op: "contains", value: "starbucks" }),
-        actions: { add_tags: ["never applied"] },
+        actions: { add_flags: ["never applied"] },
       }),
     ];
     const { item } = applyRules(draft(), rules);
     expect(item.description).toBe("Coffee");
-    expect(item.tags).toEqual([]);
+    expect(item.flags).toEqual([]);
     expect(item.applied_rule_ids).toEqual(["a"]);
   });
 
   it("stops after a rule with stop_on_match", () => {
     const rules = [
-      rule({ _id: "a", priority: 1, stop_on_match: true, actions: { add_tags: ["first"] } }),
-      rule({ _id: "b", priority: 2, actions: { add_tags: ["second"] } }),
+      rule({ _id: "a", priority: 1, stop_on_match: true, actions: { add_flags: ["first"] } }),
+      rule({ _id: "b", priority: 2, actions: { add_flags: ["second"] } }),
     ];
     const { item } = applyRules(draft(), rules);
-    expect(item.tags).toEqual(["first"]);
+    expect(item.flags).toEqual(["first"]);
     expect(item.applied_rule_ids).toEqual(["a"]);
   });
 
   it("ignores disabled rules", () => {
-    const { item } = applyRules(draft(), [rule({ enabled: false, actions: { add_tags: ["nope"] } })]);
-    expect(item.tags).toEqual([]);
+    const { item } = applyRules(draft(), [rule({ enabled: false, actions: { add_flags: ["nope"] } })]);
+    expect(item.flags).toEqual([]);
   });
 
   it("skips immediately, without applying later rules", () => {
     const rules = [
       rule({ _id: "a", priority: 1, actions: { disposition: "skip" } }),
-      rule({ _id: "b", priority: 2, actions: { add_tags: ["later"] } }),
+      rule({ _id: "b", priority: 2, actions: { add_flags: ["later"] } }),
     ];
     const result = applyRules(draft(), rules);
     expect(result.skipped).toBe(true);
-    expect(result.item.tags).toEqual([]);
+    expect(result.item.flags).toEqual([]);
   });
 });
 
 describe("re-apply semantics", () => {
-  const tagger = rule({
+  const flagger = rule({
     _id: "r1", name: "Coffee",
-    actions: { set_categories: ["Dining"], add_tags: ["check receipt"] },
+    actions: { set_categories: ["Dining"], add_flags: ["check receipt"] },
   });
 
   it("is idempotent — running twice equals running once", () => {
-    const once = applyRules(draft(), [tagger]).item;
-    const twice = applyRules(stripRuleEffects(once), [tagger]).item;
+    const once = applyRules(draft(), [flagger]).item;
+    const twice = applyRules(stripRuleEffects(once), [flagger]).item;
     expect(twice.categories).toEqual(once.categories);
-    expect(twice.tags).toEqual(once.tags);
+    expect(twice.flags).toEqual(once.flags);
     expect(twice.rule_categories).toEqual(once.rule_categories);
-    expect(twice.rule_tags).toEqual(once.rule_tags);
+    expect(twice.rule_flags).toEqual(once.rule_flags);
     expect(twice.applied_rule_ids).toEqual(once.applied_rule_ids);
   });
 
   it("reverses a deleted rule's effects", () => {
-    const tagged = applyRules(draft(), [tagger]).item;
-    expect(tagged.categories).toEqual(["Dining"]);
-    expect(tagged.tags).toEqual(["check receipt"]);
+    const flagged = applyRules(draft(), [flagger]).item;
+    expect(flagged.categories).toEqual(["Dining"]);
+    expect(flagged.flags).toEqual(["check receipt"]);
     // The rule is gone; a sweep re-applies an empty rule set.
-    const swept = applyRules(stripRuleEffects(tagged), []).item;
+    const swept = applyRules(stripRuleEffects(flagged), []).item;
     expect(swept.categories).toEqual([]);
-    expect(swept.tags).toEqual([]);
+    expect(swept.flags).toEqual([]);
     expect(swept.applied_rule_ids).toEqual([]);
   });
 
-  it("reverses categories and tags independently", () => {
-    // Deleting a categorising rule must not strip an attention tag another rule added,
+  it("reverses categories and flags independently", () => {
+    // Deleting a categorising rule must not strip an attention flag another rule added,
     // and vice versa — which is why the two are tracked separately.
     const categoriser = rule({ _id: "cat", priority: 1, actions: { set_categories: ["Dining"] } });
-    const attention = rule({ _id: "att", priority: 2, actions: { add_tags: ["check receipt"] } });
+    const attention = rule({ _id: "att", priority: 2, actions: { add_flags: ["check receipt"] } });
     const both = applyRules(draft(), [categoriser, attention]).item;
     expect(both.categories).toEqual(["Dining"]);
-    expect(both.tags).toEqual(["check receipt"]);
+    expect(both.flags).toEqual(["check receipt"]);
 
     // The categorising rule is deleted; the attention one survives.
     const swept = applyRules(stripRuleEffects(both), [attention]).item;
     expect(swept.categories).toEqual([]);
-    expect(swept.tags).toEqual(["check receipt"]);
+    expect(swept.flags).toEqual(["check receipt"]);
   });
 
   it("reverses effects even when the responsible rule can no longer be looked up", () => {
-    // stripRuleEffects works off the item's own rule_tags, not the rule list.
-    const tagged = applyRules(draft(), [tagger]).item;
-    const stripped = stripRuleEffects(tagged);
-    expect(stripped.tags).toEqual([]);
-    expect(stripped.rule_tags).toEqual([]);
+    // stripRuleEffects works off the item's own rule_flags, not the rule list.
+    const flagged = applyRules(draft(), [flagger]).item;
+    const stripped = stripRuleEffects(flagged);
+    expect(stripped.flags).toEqual([]);
+    expect(stripped.rule_flags).toEqual([]);
   });
 
-  it("keeps tags the user added by hand while removing the rule's", () => {
-    const manual = draft({ tags: ["mine"] });
-    const tagged = applyRules(manual, [tagger]).item;
-    expect(tagged.tags).toEqual(["mine", "check receipt"]);
-    expect(stripRuleEffects(tagged).tags).toEqual(["mine"]);
+  it("keeps flags the user added by hand while removing the rule's", () => {
+    const manual = draft({ flags: ["mine"] });
+    const flagged = applyRules(manual, [flagger]).item;
+    expect(flagged.flags).toEqual(["mine", "check receipt"]);
+    expect(stripRuleEffects(flagged).flags).toEqual(["mine"]);
   });
 
   it("restores a rewritten description", () => {

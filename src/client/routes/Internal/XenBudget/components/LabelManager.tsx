@@ -1,8 +1,9 @@
 import { useState } from "react";
 import {
-    Box, Button, IconButton, Popover, Stack, TextField, Tooltip, Typography,
+    Box, Button, IconButton, Stack, TextField, Tooltip, Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import CasinoIcon from "@mui/icons-material/Casino";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import LockIcon from "@mui/icons-material/Lock";
@@ -24,18 +25,18 @@ const COPY = {
         empty: "No categories yet. A category you type on an item works straight away — add it here to pick its colour or rename it everywhere at once.",
         chip: "category" as const,
     },
-    tags: {
-        placeholder: "New tag",
-        empty: "No tags yet. Tags mark things needing attention.",
-        chip: "tag" as const,
+    flags: {
+        placeholder: "New flag",
+        empty: "No flags yet. Flags mark things needing attention.",
+        chip: "flag" as const,
     },
 };
 
 /**
  * Add, rename, recolour and remove one of a book's two label registries.
  *
- * Rendered twice in Settings rather than written twice: categories and tags are managed
- * identically. A built-in tag shows its colour but no rename or delete, with the reason
+ * Rendered twice in Settings rather than written twice: categories and flags are managed
+ * identically. A built-in flag shows its colour but no rename or delete, with the reason
  * stated — a disabled control nobody can explain is worse than no control.
  */
 export default function LabelManager({ book, kind }: LabelManagerProps) {
@@ -47,7 +48,6 @@ export default function LabelManager({ book, kind }: LabelManagerProps) {
 
     const [draft, setDraft] = useState("");
     const [editing, setEditing] = useState<{ id: string; name: string } | null>(null);
-    const [colorAnchor, setColorAnchor] = useState<{ el: HTMLElement; labelId: string } | null>(null);
 
     const run = async (fn: () => Promise<unknown>, fallback: string) => {
         try {
@@ -64,6 +64,16 @@ export default function LabelManager({ book, kind }: LabelManagerProps) {
             await createLabelAsync({ name });
             setDraft("");
         }, "Could not create that");
+    };
+
+    // Click until it looks right, rather than picking from a swatch grid. Excludes the
+    // current colour when there's more than one choice, so every click visibly changes it.
+    const shuffleColor = async (label: { _id: string; name: string }) => {
+        const current = resolveLabelColor(label.name, labels);
+        const choices = CHART_COLORS.filter((c) => c !== current);
+        const pool = choices.length > 0 ? choices : CHART_COLORS;
+        const next = pool[Math.floor(Math.random() * pool.length)];
+        await run(() => updateLabelAsync({ labelId: label._id, input: { color: next } }), "Could not set that colour");
     };
 
     return (
@@ -108,15 +118,13 @@ export default function LabelManager({ book, kind }: LabelManagerProps) {
                                 </Box>
                             )}
 
-                            <Tooltip title="Colour">
-                                <IconButton
-                                    size="small"
-                                    onClick={(e) => setColorAnchor({ el: e.currentTarget, labelId: label._id })}
-                                >
-                                    <Box sx={{
-                                        width: 16, height: 16, borderRadius: "50%",
-                                        bgcolor: resolveLabelColor(label.name, labels),
-                                    }} />
+                            <Box sx={{
+                                width: 16, height: 16, borderRadius: "50%",
+                                bgcolor: resolveLabelColor(label.name, labels),
+                            }} />
+                            <Tooltip title="Shuffle colour">
+                                <IconButton size="small" onClick={() => shuffleColor(label)}>
+                                    <CasinoIcon fontSize="small" />
                                 </IconButton>
                             </Tooltip>
 
@@ -145,30 +153,6 @@ export default function LabelManager({ book, kind }: LabelManagerProps) {
                     ))}
                 </Stack>
             )}
-
-            <Popover
-                open={!!colorAnchor}
-                anchorEl={colorAnchor?.el}
-                onClose={() => setColorAnchor(null)}
-                anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-            >
-                <Box sx={{ p: 1, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0.75 }}>
-                    {CHART_COLORS.map((c) => (
-                        <IconButton
-                            key={c} size="small"
-                            onClick={async () => {
-                                if (colorAnchor) {
-                                    await run(() => updateLabelAsync({ labelId: colorAnchor.labelId, input: { color: c } }),
-                                        "Could not set that colour");
-                                }
-                                setColorAnchor(null);
-                            }}
-                        >
-                            <Box sx={{ width: 20, height: 20, borderRadius: "50%", bgcolor: c }} />
-                        </IconButton>
-                    ))}
-                </Box>
-            </Popover>
         </Box>
     );
 }

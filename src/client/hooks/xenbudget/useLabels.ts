@@ -7,12 +7,12 @@ export interface LabelInput {
     color?: string;
 }
 
-export type LabelKind = "categories" | "tags";
+export type LabelKind = "categories" | "flags";
 
 /**
  * CRUD for one of a book's two label registries.
  *
- * Parameterised rather than duplicated: categories and tags differ in meaning, not in
+ * Parameterised rather than duplicated: categories and flags differ in meaning, not in
  * how they are managed. Every mutation invalidates the items and the tallies as well as
  * the book — a rename rewrites the label on every item that carried it and a delete
  * strips it, so anything derived from items is stale the moment either succeeds.
@@ -64,4 +64,4 @@ export function useXenBudgetLabels(bookId: string, kind: LabelKind) {
 }
 
 export const useXenBudgetCategories = (bookId: string) => useXenBudgetLabels(bookId, "categories");
-export const useXenBudgetTags = (bookId: string) => useXenBudgetLabels(bookId, "tags");
+export const useXenBudgetFlags = (bookId: string) => useXenBudgetLabels(bookId, "flags");

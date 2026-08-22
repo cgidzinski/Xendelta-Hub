@@ -15,12 +15,12 @@ var Schema = mongoose.Schema;
 //
 //   categories - what a purchase WAS (Groceries, Rent). Budgets and reports run on these,
 //                and one purchase can split across several by weight.
-//   tags       - what needs ATTENTION ("check receipt"). Unweighted: a tag applies or it
+//   flags      - what needs ATTENTION ("check receipt"). Unweighted: a flag applies or it
 //                doesn't. These replaced the old flagged/flag_reason pair.
 var labelSchema = new Schema({
   name: { type: String, required: true, maxlength: 50 },
   color: { type: String, maxlength: 32 },
-  // Built-in tags the importer and the rules engine reference by name (see
+  // Built-in flags the importer and the rules engine reference by name (see
   // constants/xenbudget.ts). Cannot be deleted or renamed; the colour stays editable.
   system: { type: Boolean, default: false },
 }, { _id: true });
@@ -45,7 +45,7 @@ var budgetSchema = new Schema({
 var ruleConditionSchema = new Schema({
   field: {
     type: String,
-    enum: ["description", "amount", "tags", "category", "type", "date", "source"],
+    enum: ["description", "amount", "flags", "category", "type", "date", "source"],
     required: true,
   },
   op: {
@@ -65,8 +65,8 @@ var ruleActionsSchema = new Schema({
   // What the purchase was. Assigned an even split, so one category means 100%.
   set_categories: { type: [String], default: [] },
   // What needs attention. This is what the old `flag` action became.
-  add_tags: { type: [String], default: [] },
-  remove_tags: { type: [String], default: [] },
+  add_flags: { type: [String], default: [] },
+  remove_flags: { type: [String], default: [] },
   set_type: { type: String, enum: ["expense", "income", null], default: null },
   set_people: { type: [String], default: [] },
   set_description: { type: String, maxlength: 500 },
@@ -109,7 +109,8 @@ var importPresetSchema = new Schema({
     default: "negative_is_expense",
   },
   date_format: { type: String, default: "auto" },  // date-fns pattern, or "auto"
-  skip_rows: { type: Number, default: 0 },
+  has_header: { type: Boolean, default: true },
+  skip_rows: { type: Number, default: 0 },  // extra junk rows before the header/data
   default_categories: { type: [String], default: [] },
   created_at: { type: Date, default: Date.now },
 }, { _id: true });
@@ -140,7 +141,7 @@ var bookSchema = new Schema({
   created_by: { type: String, required: true },
   members: [{ type: Schema.Types.ObjectId, ref: "User" }],
   categories: [labelSchema],
-  tags: [labelSchema],
+  flags: [labelSchema],
   budgets: [budgetSchema],
   rules: [ruleSchema],
   import_presets: [importPresetSchema],
@@ -189,7 +190,7 @@ var itemSchema = new Schema({
   categories: [itemCategorySchema],
   category_split_type: { type: String, enum: ["equal", "exact", "percent"], default: "equal" },
   // What needs attention, by name. Replaced the old flagged/flag_reason pair.
-  tags: { type: [String], default: [] },
+  flags: { type: [String], default: [] },
 
   share_type: { type: String, enum: ["equal", "exact", "percent"], default: "equal" },
   shares: [shareSchema],
@@ -201,10 +202,10 @@ var itemSchema = new Schema({
   applied_rule_ids: [{ type: Schema.Types.ObjectId }],
   // Exactly what rules contributed, tracked separately so a re-apply can reverse each
   // independently — deleting a categorising rule must not strip a hand-added attention
-  // tag. Recording the names rather than the rules keeps this correct even once the rule
+  // flag. Recording the names rather than the rules keeps this correct even once the rule
   // responsible has been deleted. Anything the user added by hand is untouched.
   rule_categories: { type: [String], default: [] },
-  rule_tags: { type: [String], default: [] },
+  rule_flags: { type: [String], default: [] },
   // Set by any user PUT. Re-apply skips these by default so a sweep never silently
   // overwrites a hand correction.
   manually_edited: { type: Boolean, default: false },
@@ -218,7 +219,7 @@ var itemSchema = new Schema({
 
 itemSchema.index({ book_id: 1, date: -1 });
 itemSchema.index({ book_id: 1, "categories.name": 1 });
-itemSchema.index({ book_id: 1, tags: 1 });
+itemSchema.index({ book_id: 1, flags: 1 });
 itemSchema.index({ book_id: 1, import_hash: 1 });
 itemSchema.index({ book_id: 1, import_batch_id: 1 });
 

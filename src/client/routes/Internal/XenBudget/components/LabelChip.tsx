@@ -1,5 +1,6 @@
 import { Chip, alpha } from "@mui/material";
 import type { ChipProps } from "@mui/material";
+import FlagIcon from "@mui/icons-material/Flag";
 import type { XenBudgetLabel } from "../../../../hooks/xenbudget/types";
 import { colorForLabel } from "../../../../components/ui/chartColors";
 
@@ -19,10 +20,10 @@ interface LabelChipProps extends Omit<ChipProps, "label" | "color"> {
     name: string;
     registry: XenBudgetLabel[];
     /**
-     * Categories are filled, tags outlined. The two must not read alike at a glance —
-     * one says what a purchase was, the other says look at this.
+     * Categories are filled, flags outlined with a pennant icon. The two must not read
+     * alike at a glance — one says what a purchase was, the other says look at this.
      */
-    variant2: "category" | "tag";
+    variant2: "category" | "flag";
     /** Shown on a category that carries less than the whole item, e.g. "70%". */
     weight?: string;
 }
@@ -33,6 +34,7 @@ export default function LabelChip({ name, registry, variant2, weight, sx, ...res
     return (
         <Chip
             size="small"
+            icon={isCategory ? undefined : <FlagIcon sx={{ fontSize: 12 }} />}
             label={weight ? `${name} ${weight}` : name}
             sx={{
                 height: 20,
@@ -41,6 +43,7 @@ export default function LabelChip({ name, registry, variant2, weight, sx, ...res
                 color,
                 border: isCategory ? "1px solid" : "1px dashed",
                 borderColor: alpha(color, isCategory ? 0.4 : 0.7),
+                "& .MuiChip-icon": { color, marginLeft: "6px" },
                 ...sx,
             }}
             {...rest}
@@ -54,6 +57,6 @@ export function CategoryChip({ name, registry, weight, ...rest }: Omit<LabelChip
 }
 
 /** What needs attention. */
-export function TagChip({ name, registry, ...rest }: Omit<LabelChipProps, "variant2" | "weight">) {
-    return <LabelChip name={name} registry={registry} variant2="tag" {...rest} />;
+export function FlagChip({ name, registry, ...rest }: Omit<LabelChipProps, "variant2" | "weight">) {
+    return <LabelChip name={name} registry={registry} variant2="flag" {...rest} />;
 }

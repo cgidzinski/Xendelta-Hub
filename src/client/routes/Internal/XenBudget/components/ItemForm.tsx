@@ -37,7 +37,7 @@ export default function ItemForm({
     const [date, setDate] = useState<Date | null>(new Date());
     const [description, setDescription] = useState("");
     const [notes, setNotes] = useState("");
-    const [tags, setTags] = useState<string[]>([]);
+    const [flags, setFlags] = useState<string[]>([]);
     const [categorySplitType, setCategorySplitType] = useState<ShareType>("equal");
     const [categories, setCategories] = useState<SplitDraft[]>([]);
     const [shareType, setShareType] = useState<ShareType>("equal");
@@ -53,7 +53,7 @@ export default function ItemForm({
             setDate(new Date(item.date));
             setDescription(item.description);
             setNotes(item.notes || "");
-            setTags(item.tags || []);
+            setFlags(item.flags || []);
             setCategorySplitType(item.category_split_type || "equal");
             setCategories((item.categories || []).map((c) => ({
                 key: c.name,
@@ -71,7 +71,7 @@ export default function ItemForm({
             setDate(new Date());
             setDescription("");
             setNotes("");
-            setTags([]);
+            setFlags([]);
             setCategorySplitType("equal");
             setCategories([]);
             setShareType("equal");
@@ -91,7 +91,7 @@ export default function ItemForm({
             date: (date || new Date()).toISOString(),
             description: description.trim(),
             notes: notes.trim() || undefined,
-            tags,
+            flags,
             category_split_type: categorySplitType,
             categories: categories.map((c) => ({
                 name: c.key,
@@ -182,9 +182,9 @@ export default function ItemForm({
 
                     <Autocomplete
                         multiple freeSolo
-                        options={book.tags.map((t) => t.name)}
-                        value={tags}
-                        onChange={(_, v) => setTags(v as string[])}
+                        options={book.flags.map((t) => t.name)}
+                        value={flags}
+                        onChange={(_, v) => setFlags(v as string[])}
                         renderTags={(value, getTagProps) =>
                             value.map((option, index) => {
                                 const { key, ...rest } = getTagProps({ index });
@@ -193,7 +193,7 @@ export default function ItemForm({
                         }
                         renderInput={(params) => (
                             <TextField
-                                {...params} label="Tags" placeholder="Anything needing attention?"
+                                {...params} label="Flags" placeholder="Anything needing attention?"
                                 helperText="For things to come back to — not what the purchase was."
                             />
                         )}

@@ -12,7 +12,7 @@ export const TAB_PATHS = ["overview", "items", "report", "settings"] as const;
 export const SETTINGS_SECTIONS = [
     { path: "book", label: "Book" },
     { path: "categories", label: "Categories" },
-    { path: "tags", label: "Tags" },
+    { path: "flags", label: "Flags" },
     { path: "people", label: "People" },
     { path: "budgets", label: "Budgets" },
     { path: "rules", label: "Rules" },

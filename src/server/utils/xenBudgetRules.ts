@@ -10,7 +10,7 @@
 // preview shows and what the import writes can never drift apart.
 
 export type RuleField =
-  | "description" | "amount" | "tags" | "category" | "type" | "date" | "source";
+  | "description" | "amount" | "flags" | "category" | "type" | "date" | "source";
 
 export type RuleOp =
   | "contains" | "not_contains" | "equals" | "starts_with" | "ends_with" | "regex"
@@ -30,8 +30,8 @@ export interface RuleActions {
   /** What the purchase was. Assigned an even split, so one category means 100%. */
   set_categories?: string[];
   /** What needs attention. This is what the old `flag` action became. */
-  add_tags?: string[];
-  remove_tags?: string[];
+  add_flags?: string[];
+  remove_flags?: string[];
   set_type?: "expense" | "income" | null;
   set_people?: string[];
   set_description?: string;
@@ -57,7 +57,7 @@ export interface DraftItem {
   /** What the purchase was, by name. The caller turns these into resolved weights. */
   categories: string[];
   /** What needs attention, by name. */
-  tags: string[];
+  flags: string[];
   /** Set by a rule's set_people; the caller turns it into resolved shares. */
   people?: string[];
   excluded: boolean;
@@ -66,10 +66,10 @@ export interface DraftItem {
   applied_rule_ids: string[];
   /**
    * Exactly what rules contributed, tracked separately so a re-apply can undo each
-   * independently — deleting a categorising rule must not strip a hand-added tag.
+   * independently — deleting a categorising rule must not strip a hand-added flag.
    */
   rule_categories: string[];
-  rule_tags: string[];
+  rule_flags: string[];
   source?: string;
 }
 
@@ -142,7 +142,7 @@ function matchNumber(op: RuleOp, subject: number, cond: RuleCondition): boolean 
   }
 }
 
-// Shared by the `tags` and `category` fields: both are lists of names where the only
+// Shared by the `flags` and `category` fields: both are lists of names where the only
 // sensible questions are "has this one" and "has none".
 function matchNameList(names: string[], cond: RuleCondition): boolean {
   if (cond.op === "is_empty") return names.length === 0;
@@ -167,8 +167,8 @@ function matchCondition(cond: RuleCondition, item: DraftItem): boolean {
     case "source":
       return cond.op === "equals" && norm(item.source || "", false) === norm(cond.value ?? "", false);
 
-    case "tags":
-      return matchNameList(item.tags || [], cond);
+    case "flags":
+      return matchNameList(item.flags || [], cond);
 
     case "category":
       return matchNameList(item.categories || [], cond);
@@ -205,17 +205,17 @@ function addUnique(list: string[], name: string) {
   if (!list.some((n) => n.toLowerCase() === name.toLowerCase())) list.push(name);
 }
 
-function addTag(item: DraftItem, tag: string, fromRule: boolean) {
-  const clean = tag.trim();
+function addFlag(item: DraftItem, flag: string, fromRule: boolean) {
+  const clean = flag.trim();
   if (!clean) return;
-  addUnique(item.tags, clean);
-  if (fromRule) addUnique(item.rule_tags, clean);
+  addUnique(item.flags, clean);
+  if (fromRule) addUnique(item.rule_flags, clean);
 }
 
-function removeTag(item: DraftItem, tag: string) {
-  const lower = tag.trim().toLowerCase();
-  item.tags = item.tags.filter((t) => t.toLowerCase() !== lower);
-  item.rule_tags = item.rule_tags.filter((t) => t.toLowerCase() !== lower);
+function removeFlag(item: DraftItem, flag: string) {
+  const lower = flag.trim().toLowerCase();
+  item.flags = item.flags.filter((t) => t.toLowerCase() !== lower);
+  item.rule_flags = item.rule_flags.filter((t) => t.toLowerCase() !== lower);
 }
 
 export interface ApplyOptions {
@@ -230,8 +230,8 @@ export interface ApplyOptions {
  * Runs the rule set over one draft item, in priority order.
  *
  * Evaluation is **chained**: each rule matches against the item as earlier rules have
- * already left it. That's what lets one rule tag an item "Coffee" and a later one match
- * that tag — but it cuts both ways, and a rule that rewrites the description will stop
+ * already left it. That's what lets one rule flag an item "Coffee" and a later one match
+ * that flag — but it cuts both ways, and a rule that rewrites the description will stop
  * later rules matching on the bank's original text. Both directions are covered by tests.
  *
  * Returns a new item rather than mutating the input, so a caller can show a before/after
@@ -241,9 +241,9 @@ export function applyRules(draft: DraftItem, rules: Rule[], options: ApplyOption
   const item: DraftItem = {
     ...draft,
     categories: [...(draft.categories || [])],
-    tags: [...(draft.tags || [])],
+    flags: [...(draft.flags || [])],
     rule_categories: [...(draft.rule_categories || [])],
-    rule_tags: [...(draft.rule_tags || [])],
+    rule_flags: [...(draft.rule_flags || [])],
     applied_rule_ids: [...(draft.applied_rule_ids || [])],
     people: draft.people ? [...draft.people] : undefined,
   };
@@ -270,8 +270,8 @@ export function applyRules(draft: DraftItem, rules: Rule[], options: ApplyOption
       item.excluded_reason = rule.name;
     }
 
-    (actions.remove_tags || []).forEach((t) => removeTag(item, t));
-    (actions.add_tags || []).forEach((t) => addTag(item, t, true));
+    (actions.remove_flags || []).forEach((t) => removeFlag(item, t));
+    (actions.add_flags || []).forEach((t) => addFlag(item, t, true));
 
     // set_categories replaces rather than appends: "this is a grocery run" is a statement
     // about what the purchase was, not one more label to pile on.
@@ -308,7 +308,7 @@ export function applyRules(draft: DraftItem, rules: Rule[], options: ApplyOption
  * produces the same result as importing the item fresh.
  *
  * This is what makes *deleting* a rule actually reverse its effects. It works off the
- * item's own `rule_tags` rather than looking the rules back up, so it stays correct even
+ * item's own `rule_flags` rather than looking the rules back up, so it stays correct even
  * when the rule responsible has since been deleted.
  */
 export function stripRuleEffects(item: DraftItem): DraftItem {
@@ -318,9 +318,9 @@ export function stripRuleEffects(item: DraftItem): DraftItem {
   return {
     ...item,
     categories: without(item.categories, item.rule_categories),
-    tags: without(item.tags, item.rule_tags),
+    flags: without(item.flags, item.rule_flags),
     rule_categories: [],
-    rule_tags: [],
+    rule_flags: [],
     applied_rule_ids: [],
     excluded: false,
     excluded_reason: undefined,

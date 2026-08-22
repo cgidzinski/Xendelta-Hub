@@ -1,4 +1,4 @@
-// Validated categorical palette for XenBudget's charts and tag chips.
+// Validated categorical palette for XenBudget's charts and label chips.
 //
 // The app renders dark-only (createTheme({ palette: { mode: "dark" } }) in main.tsx), so
 // only the dark steps are needed here.
@@ -26,9 +26,9 @@ export const CHART_COLORS = [
 /**
  * The single hue for magnitude bars.
  *
- * Comparing "how much per tag" is a magnitude job, not an identity one, so those bars use
- * one hue with the category named on the axis — rather than a colour per category, which
- * would have to cycle hues once a book has more than eight tags and would leave two
+ * Comparing "how much per category" is a magnitude job, not an identity one, so those bars
+ * use one hue with the category named on the axis — rather than a colour per category,
+ * which would have to cycle hues once a book has more than eight and would leave two
  * categories indistinguishable.
  */
 export const MAGNITUDE_COLOR = "#3987e5";
@@ -42,13 +42,13 @@ export function chartColorAt(index: number): string {
 }
 
 /**
- * Stable colour for a tag with no explicitly assigned one. Hashing the name (rather than
- * using list position) keeps a tag the same colour as tags are added and removed around
- * it.
+ * Stable colour for a label (category or flag) with no explicitly assigned one. Hashing
+ * the name (rather than using list position) keeps a label the same colour as others are
+ * added and removed around it.
  *
  * For CHIPS only — every chip carries its own text label, so a hue repeating across a
- * long tag list costs nothing. Charts must not encode a series by this: past eight tags
- * it would reuse hues, and two different tags sharing one would be unreadable.
+ * long list costs nothing. Charts must not encode a series by this: past eight labels it
+ * would reuse hues, and two different ones sharing a hue would be unreadable.
  */
 export function colorForLabel(label: string): string {
     let hash = 0;

@@ -27,6 +27,10 @@ export interface MappingConfig {
     sign_convention: SignConvention;
     /** A date-fns-ish pattern, or "auto" to infer from the data. */
     date_format: string;
+    /** False for a file that starts straight into data, with no header row at all. */
+    has_header?: boolean;
+    /** Junk rows to drop before the header (or the data, if there's no header). */
+    skip_rows?: number;
     default_categories?: string[];
 }
 

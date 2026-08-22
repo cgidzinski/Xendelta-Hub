@@ -16,8 +16,8 @@ interface ReapplyRulesDialogProps {
 }
 
 /**
- * A sweep rewrites tags, flags and exclusions across every item in the book, so it always
- * runs as a dry run first and shows what would change before anything is written.
+ * A sweep rewrites categories, flags and exclusions across every item in the book, so it
+ * always runs as a dry run first and shows what would change before anything is written.
  */
 export default function ReapplyRulesDialog({ open, onClose, reapply, isReapplying }: ReapplyRulesDialogProps) {
     const { enqueueSnackbar } = useSnackbar();
@@ -136,7 +136,7 @@ function describe(change: ReapplyResult["sample"][number]): string {
         if (removed.length) parts.push(`−${label}${removed.join(", ")}`);
     };
     diff(change.before.categories, change.after.categories, "");
-    diff(change.before.tags, change.after.tags, "tag ");
+    diff(change.before.flags, change.after.flags, "flag ");
     if (change.before.excluded !== change.after.excluded) {
         parts.push(change.after.excluded ? "excluded from totals" : "back in totals");
     }

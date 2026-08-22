@@ -1,21 +1,20 @@
-import { Avatar, AvatarGroup, Box, Stack, Tooltip, Typography, alpha } from "@mui/material";
-import BlockIcon from "@mui/icons-material/Block";
+import { Avatar, AvatarGroup, Box, Stack, Typography, alpha } from "@mui/material";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import type { XenBudgetItem, XenBudgetMember, XenBudgetLabel } from "../../../../hooks/xenbudget/types";
 import { formatCurrency } from "../../../../utils/currencyUtils";
-import { CategoryChip, TagChip } from "./LabelChip";
+import { CategoryChip, FlagChip } from "./LabelChip";
 import { xbCardSx, xbBadgeSx, xbExcludedRowSx } from "./rowStyles";
 
 interface ItemListItemProps {
     item: XenBudgetItem;
     members: XenBudgetMember[];
     categoryRegistry: XenBudgetLabel[];
-    tagRegistry: XenBudgetLabel[];
+    flagRegistry: XenBudgetLabel[];
     onClick: (item: XenBudgetItem) => void;
 }
 
-export default function ItemListItem({ item, members, categoryRegistry, tagRegistry, onClick }: ItemListItemProps) {
+export default function ItemListItem({ item, members, categoryRegistry, flagRegistry, onClick }: ItemListItemProps) {
     const isIncome = item.type === "income";
     const people = item.shares
         .map((s) => members.find((m) => m.user_id === s.user_id))
@@ -47,17 +46,10 @@ export default function ItemListItem({ item, members, categoryRegistry, tagRegis
             </Box>
 
             <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                <Stack direction="row" alignItems="center" spacing={0.75}>
-                    <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>
-                        {item.description}
-                    </Typography>
-                    {item.excluded && (
-                        <Tooltip title={item.excluded_reason || "Excluded from totals"}>
-                            <BlockIcon sx={{ fontSize: 15 }} color="disabled" />
-                        </Tooltip>
-                    )}
-                </Stack>
-                {(item.categories.length > 0 || item.tags.length > 0) && (
+                <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>
+                    {item.description}
+                </Typography>
+                {(item.categories.length > 0 || item.flags.length > 0) && (
                     <Stack direction="row" spacing={0.5} sx={{ mt: 0.25, flexWrap: "wrap", gap: 0.5 }}>
                         {item.categories.map((c) => (
                             <CategoryChip
@@ -68,8 +60,8 @@ export default function ItemListItem({ item, members, categoryRegistry, tagRegis
                                     : undefined}
                             />
                         ))}
-                        {item.tags.map((t) => (
-                            <TagChip key={t} name={t} registry={tagRegistry} sx={{ height: 18 }} />
+                        {item.flags.map((t) => (
+                            <FlagChip key={t} name={t} registry={flagRegistry} sx={{ height: 18 }} />
                         ))}
                     </Stack>
                 )}

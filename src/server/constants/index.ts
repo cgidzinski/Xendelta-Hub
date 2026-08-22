@@ -17,12 +17,12 @@ export {
 } from "./blog";
 
 export {
-  SYSTEM_TAGS,
+  SYSTEM_FLAGS,
   STARTER_CATEGORIES,
-  TAG_UNCATEGORISED,
-  TAG_POSSIBLE_DUPLICATE,
-  TAG_NEEDS_REVIEW,
-  isSystemTag,
+  FLAG_UNCATEGORISED,
+  FLAG_POSSIBLE_DUPLICATE,
+  FLAG_NEEDS_REVIEW,
+  isSystemFlag,
 } from "./xenbudget";
 
 // File upload limits

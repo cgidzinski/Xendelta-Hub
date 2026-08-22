@@ -57,6 +57,7 @@ export default function ImportHistory({ bookId }: ImportHistoryProps) {
                         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                             <Typography variant="body2" noWrap>{batch.source_label}</Typography>
                             <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                                {batch.filename ? `${batch.filename} · ` : ""}
                                 {new Date(batch.imported_at).toLocaleString()} · {batch.imported_by_name} ·{" "}
                                 {batch.remaining} of {batch.row_count} still here
                             </Typography>

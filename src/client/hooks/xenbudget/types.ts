@@ -12,13 +12,13 @@ export interface XenBudgetMember {
  * One entry in either of a book's two registries. Same shape, different meaning:
  *   categories - what a purchase WAS. Budgets and reports run on these, and one purchase
  *                can split across several by weight.
- *   tags       - what needs ATTENTION. Unweighted; replaced the old flagged boolean.
+ *   flags      - what needs ATTENTION. Unweighted; replaced the old flagged boolean.
  */
 export interface XenBudgetLabel {
     _id: string;
     name: string;
     color?: string;
-    /** Built-in tags the importer and rules refer to by name: no delete, no rename. */
+    /** Built-in flags the importer and rules refer to by name: no delete, no rename. */
     system?: boolean;
 }
 
@@ -38,7 +38,7 @@ export interface XenBudgetBudget {
 }
 
 export type RuleField =
-    | "description" | "amount" | "tags" | "category" | "type" | "date" | "source";
+    | "description" | "amount" | "flags" | "category" | "type" | "date" | "source";
 export type RuleOp =
     | "contains" | "not_contains" | "equals" | "starts_with" | "ends_with" | "regex"
     | "gt" | "gte" | "lt" | "lte" | "between" | "is_empty";
@@ -66,11 +66,12 @@ export interface XenBudgetImportPreset {
     name: string;
     column_map: {
         date?: string; description?: string; amount?: string;
-        debit?: string; credit?: string; tags?: string; people?: string;
+        debit?: string; credit?: string; people?: string;
     };
     amount_mode: "signed" | "debit_credit";
     sign_convention: "negative_is_expense" | "positive_is_expense";
     date_format: string;
+    has_header: boolean;
     skip_rows: number;
     default_categories: string[];
 }
@@ -84,7 +85,7 @@ export interface XenBudgetBook {
     is_creator: boolean;
     members: XenBudgetMember[];
     categories: XenBudgetLabel[];
-    tags: XenBudgetLabel[];
+    flags: XenBudgetLabel[];
     budgets: XenBudgetBudget[];
     rules: XenBudgetRule[];
     import_presets: XenBudgetImportPreset[];
@@ -125,7 +126,7 @@ export interface XenBudgetItem {
     categories: XenBudgetCategoryWeight[];
     category_split_type: ShareType;
     /** What needs attention. */
-    tags: string[];
+    flags: string[];
     share_type: ShareType;
     shares: XenBudgetShare[];
     excluded: boolean;
@@ -159,7 +160,7 @@ export interface CreateItemInput {
     notes?: string;
     categories?: { name: string; amount?: number; percentage?: number }[];
     category_split_type?: ShareType;
-    tags?: string[];
+    flags?: string[];
     share_type?: ShareType;
     shares?: { user_id: string; amount?: number; percentage?: number }[];
 }
@@ -174,8 +175,8 @@ export interface RuleActions {
     /** What the purchase was. Assigned an even split, so one category means 100%. */
     set_categories: string[];
     /** What needs attention. This is what the old flag action became. */
-    add_tags: string[];
-    remove_tags: string[];
+    add_flags: string[];
+    remove_flags: string[];
     set_type: "expense" | "income" | null;
     set_people: string[];
     set_description?: string;
@@ -193,7 +194,7 @@ export interface RuleInput {
 
 interface ReapplySide {
     categories: string[];
-    tags: string[];
+    flags: string[];
     excluded: boolean;
     description: string;
     type: ItemType;
@@ -221,7 +222,7 @@ export interface ImportPreviewRow {
     original: { description: string; categories: string[]; type: ItemType; amount: number };
     item: {
         type: ItemType; amount: number; date: string; description: string;
-        categories: string[]; tags: string[];
+        categories: string[]; flags: string[];
         excluded: boolean; excluded_reason?: string;
     };
 }
@@ -230,7 +231,7 @@ export interface ImportPreviewResult {
     previews: ImportPreviewRow[];
     skipped: number;
     excluded: number;
-    tagged: number;
+    flagged: number;
 }
 
 export interface DuplicateMatch {
@@ -267,6 +268,7 @@ export interface PresetInput {
     amount_mode?: "signed" | "debit_credit";
     sign_convention?: "negative_is_expense" | "positive_is_expense";
     date_format?: string;
+    has_header?: boolean;
     skip_rows?: number;
     default_categories?: string[];
 }

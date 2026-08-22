@@ -9,7 +9,7 @@ export interface SummaryParams {
     group_by?: "day" | "week" | "month";
     currency?: string;
     categories?: string[];
-    tags?: string[];
+    flags?: string[];
     people?: string[];
 }
 
@@ -34,7 +34,7 @@ export function useXenBudgetSummary(bookId: string, params: SummaryParams = {}) 
                     ...(params.group_by ? { group_by: params.group_by } : {}),
                     ...(params.currency ? { currency: params.currency } : {}),
                     ...(params.categories?.length ? { categories: params.categories.join(",") } : {}),
-                    ...(params.tags?.length ? { tags: params.tags.join(",") } : {}),
+                    ...(params.flags?.length ? { flags: params.flags.join(",") } : {}),
                     ...(params.people?.length ? { people: params.people.join(",") } : {}),
                 },
             });

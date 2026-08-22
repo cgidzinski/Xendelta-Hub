@@ -7,7 +7,7 @@ import type {
     ImportPreviewRow, DuplicateMatch, XenBudgetLabel,
 } from "../../../../../hooks/xenbudget/types";
 import type { MappingError } from "../../../../../utils/csvMapping";
-import { CategoryChip, TagChip } from "../LabelChip";
+import { CategoryChip, FlagChip } from "../LabelChip";
 import { formatCurrency } from "../../../../../utils/currencyUtils";
 import { cardSx } from "../../../../../components/ui/surfaceStyles";
 
@@ -16,25 +16,30 @@ interface PreviewStepProps {
     duplicates: DuplicateMatch[];
     errors: MappingError[];
     categoryRegistry: XenBudgetLabel[];
-    tagRegistry: XenBudgetLabel[];
+    flagRegistry: XenBudgetLabel[];
     currency: string;
     /** Row indices (into `previews`) the user has chosen to import. */
     selected: Set<number>;
     onToggle: (index: number) => void;
+    /** Row indices outside the wizard's optional date cutoff — shown, but unticked. */
+    outOfRangeIndices?: Set<number>;
 }
 
 export default function PreviewStep({
-    previews, duplicates, errors, categoryRegistry, tagRegistry, currency, selected, onToggle,
+    previews, duplicates, errors, categoryRegistry, flagRegistry, currency, selected, onToggle,
+    outOfRangeIndices,
 }: PreviewStepProps) {
     const duplicateIndices = new Set(duplicates.map((d) => d.index));
     const skipped = previews.filter((p) => p.skipped);
     const importable = previews.filter((p) => !p.skipped);
+    const outOfRange = outOfRangeIndices ?? new Set<number>();
 
     return (
         <Stack spacing={2}>
             <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
                 <Chip size="small" label={`${selected.size} to import`} color="primary" />
                 {duplicates.length > 0 && <Chip size="small" variant="outlined" label={`${duplicates.length} look like duplicates`} />}
+                {outOfRange.size > 0 && <Chip size="small" variant="outlined" label={`${outOfRange.size} outside the date range`} />}
                 {skipped.length > 0 && <Chip size="small" variant="outlined" label={`${skipped.length} skipped by rules`} />}
                 {errors.length > 0 && <Chip size="small" variant="outlined" color="warning" label={`${errors.length} unreadable`} />}
             </Stack>
@@ -68,6 +73,7 @@ export default function PreviewStep({
                     <TableBody>
                         {importable.map((row) => {
                             const isDuplicate = duplicateIndices.has(row.index);
+                            const isOutOfRange = outOfRange.has(row.index);
                             return (
                                 <TableRow key={row.index} sx={{ opacity: selected.has(row.index) ? 1 : 0.5 }}>
                                     <TableCell padding="checkbox">
@@ -89,6 +95,7 @@ export default function PreviewStep({
                                                 </Tooltip>
                                             )}
                                             {isDuplicate && <Chip size="small" variant="outlined" label="dup" sx={{ height: 16, fontSize: 10 }} />}
+                                            {isOutOfRange && <Chip size="small" variant="outlined" color="warning" label="outside range" sx={{ height: 16, fontSize: 10 }} />}
                                         </Stack>
                                         {row.item.description !== row.original.description && (
                                             <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
@@ -101,8 +108,8 @@ export default function PreviewStep({
                                             {row.item.categories.map((c) => (
                                                 <CategoryChip key={c} name={c} registry={categoryRegistry} sx={{ height: 16, fontSize: 10 }} />
                                             ))}
-                                            {row.item.tags.map((t) => (
-                                                <TagChip key={t} name={t} registry={tagRegistry} sx={{ height: 16, fontSize: 10 }} />
+                                            {row.item.flags.map((t) => (
+                                                <FlagChip key={t} name={t} registry={flagRegistry} sx={{ height: 16, fontSize: 10 }} />
                                             ))}
                                         </Stack>
                                     </TableCell>
@@ -110,7 +117,7 @@ export default function PreviewStep({
                                         <Typography
                                             variant="body2"
                                             sx={{
-                                                color: row.item.type === "income" ? "success.main" : "text.primary",
+                                                color: row.item.type === "income" ? "success.main" : "error.main",
                                                 textDecoration: row.item.excluded ? "line-through" : "none",
                                             }}
                                         >

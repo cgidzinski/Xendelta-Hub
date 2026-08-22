@@ -17,7 +17,7 @@ interface BookBackupSectionProps {
 
 /**
  * Per-book backup. Distinct from the report page's CSV export, which is for analysis and
- * is lossy: this JSON round-trips tags, budgets, rules, presets, shares and exclusions.
+ * is lossy: this JSON round-trips flags, budgets, rules, presets, shares and exclusions.
  */
 export default function BookBackupSection({ book, isCreator }: BookBackupSectionProps) {
     const navigate = useNavigate();
@@ -69,7 +69,7 @@ export default function BookBackupSection({ book, isCreator }: BookBackupSection
     return (
         <Box>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                A full backup of this book — items, tags, budgets, rules and saved import
+                A full backup of this book — items, flags, budgets, rules and saved import
                 mappings — as one JSON file.
             </Typography>
             <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
@@ -113,7 +113,7 @@ export default function BookBackupSection({ book, isCreator }: BookBackupSection
                         )}
                         {target === "replace" && (
                             <Alert severity="warning">
-                                Every item, tag, budget and rule currently in &ldquo;{book.name}&rdquo; is
+                                Every item, flag, budget and rule currently in &ldquo;{book.name}&rdquo; is
                                 deleted and replaced by the backup. This cannot be undone.
                             </Alert>
                         )}

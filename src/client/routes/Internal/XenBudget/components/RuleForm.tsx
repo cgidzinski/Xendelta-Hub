@@ -18,7 +18,7 @@ const FIELDS: { value: RuleField; label: string }[] = [
     { value: "description", label: "Description" },
     { value: "amount", label: "Amount" },
     { value: "category", label: "Category" },
-    { value: "tags", label: "Tags" },
+    { value: "flags", label: "Flags" },
     { value: "type", label: "Type" },
     { value: "date", label: "Date" },
     { value: "source", label: "Source" },
@@ -44,7 +44,7 @@ const OPS_BY_FIELD: Record<RuleField, { value: RuleOp; label: string }[]> = {
         { value: "equals", label: "is exactly" },
         { value: "between", label: "is between" },
     ],
-    tags: [
+    flags: [
         { value: "contains", label: "includes" },
         { value: "not_contains", label: "does not include" },
         { value: "is_empty", label: "is empty" },
@@ -89,7 +89,7 @@ export default function RuleForm({
     const [mode, setMode] = useState<"all" | "any">("all");
     const [conditions, setConditions] = useState<XenBudgetRuleCondition[]>([emptyCondition()]);
     const [setCategories, setSetCategories] = useState<string[]>([]);
-    const [addTags, setAddTags] = useState<string[]>([]);
+    const [addFlags, setAddFlags] = useState<string[]>([]);
     const [setType, setSetType] = useState<"" | "expense" | "income">("");
     const [setDescription, setSetDescription] = useState("");
     const [disposition, setDisposition] = useState<RuleDisposition>("keep");
@@ -103,7 +103,7 @@ export default function RuleForm({
             setMode(rule.match.mode || "all");
             setConditions(rule.match.conditions.length ? rule.match.conditions : [emptyCondition()]);
             setSetCategories(rule.actions.set_categories || []);
-            setAddTags(rule.actions.add_tags || []);
+            setAddFlags(rule.actions.add_flags || []);
             setSetType(rule.actions.set_type || "");
             setSetDescription(rule.actions.set_description || "");
             setDisposition(rule.actions.disposition || "keep");
@@ -114,7 +114,7 @@ export default function RuleForm({
             setMode("all");
             setConditions([emptyCondition()]);
             setSetCategories([]);
-            setAddTags([]);
+            setAddFlags([]);
             setSetType("");
             setSetDescription("");
             setDisposition("keep");
@@ -138,7 +138,7 @@ export default function RuleForm({
     const conditionsValid = conditions.every(
         (c) => c.op === "is_empty" || ((c.value ?? "") !== "" && (c.op !== "between" || (c.value2 ?? "") !== "")),
     );
-    const doesSomething = setCategories.length > 0 || addTags.length > 0 || !!setType
+    const doesSomething = setCategories.length > 0 || addFlags.length > 0 || !!setType
         || !!setDescription.trim() || disposition !== "keep";
     const canSubmit = !!name.trim() && conditions.length > 0 && conditionsValid && doesSomething;
 
@@ -150,7 +150,7 @@ export default function RuleForm({
                 match: { mode, conditions },
                 actions: {
                     set_categories: setCategories,
-                    add_tags: addTags,
+                    add_flags: addFlags,
                     set_type: setType || null,
                     set_description: setDescription.trim() || undefined,
                     disposition,
@@ -266,9 +266,9 @@ export default function RuleForm({
 
                             <Autocomplete
                                 multiple freeSolo
-                                options={book.tags.map((t) => t.name)}
-                                value={addTags}
-                                onChange={(_, v) => setAddTags(v as string[])}
+                                options={book.flags.map((t) => t.name)}
+                                value={addFlags}
+                                onChange={(_, v) => setAddFlags(v as string[])}
                                 renderTags={(value, getTagProps) =>
                                     value.map((option, index) => {
                                         const { key, ...rest } = getTagProps({ index });
@@ -277,7 +277,7 @@ export default function RuleForm({
                                 }
                                 renderInput={(params) => (
                                     <TextField
-                                        {...params} size="small" label="Add tags"
+                                        {...params} size="small" label="Add flags"
                                         helperText="For attention, e.g. Needs review."
                                     />
                                 )}
@@ -328,7 +328,7 @@ export default function RuleForm({
 
                     {!doesSomething && (
                         <Typography variant="caption" color="warning.main">
-                            This rule doesn&rsquo;t do anything yet — set a category, add a tag, or pick a disposition.
+                            This rule doesn&rsquo;t do anything yet — set a category, add a flag, or pick a disposition.
                         </Typography>
                     )}
                 </Stack>

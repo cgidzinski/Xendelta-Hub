@@ -430,7 +430,7 @@ const itemBodyShape = {
   categories: z.array(xenBudgetCategoryWeightSchema).max(20, "Too many categories").optional(),
   category_split_type: z.enum(["equal", "exact", "percent"]).optional(),
   // What needs attention.
-  tags: z.array(z.string().max(50)).max(20, "Too many tags").optional(),
+  flags: z.array(z.string().max(50)).max(20, "Too many flags").optional(),
   share_type: z.enum(["equal", "exact", "percent"]).optional(),
   shares: z.array(xenBudgetShareSchema).optional(),
 };
@@ -449,7 +449,7 @@ export const xenBudgetRestoreSchema = z.object({
     timezone: z.string().max(64).optional(),
     default_currency: z.string().max(10).optional(),
     categories: z.array(z.any()).max(500).optional(),
-    tags: z.array(z.any()).max(500).optional(),
+    flags: z.array(z.any()).max(500).optional(),
     budgets: z.array(z.any()).max(500).optional(),
     rules: z.array(z.any()).max(500).optional(),
     import_presets: z.array(z.any()).max(200).optional(),
@@ -480,7 +480,7 @@ export const xenBudgetBatchParamSchema = z.object({
 const MAX_IMPORT_ROWS = 2000;
 
 // A candidate row from the CSV wizard. Looser than createXenBudgetItemSchema because the
-// rules engine still gets to set type, tags and description before anything is stored.
+// rules engine still gets to set type, flags and description before anything is stored.
 const importRowSchema = z.object({
   type: z.enum(["expense", "income"]).optional(),
   amount: z.number().positive("Amount must be positive"),
@@ -488,7 +488,7 @@ const importRowSchema = z.object({
   date: z.string().datetime().optional(),
   description: z.string().min(1, "Description required").max(500),
   categories: z.array(z.string().max(50)).max(20).optional(),
-  tags: z.array(z.string().max(50)).max(20).optional(),
+  flags: z.array(z.string().max(50)).max(20).optional(),
   people: z.array(objectIdSchema).optional(),
 });
 
@@ -527,6 +527,7 @@ const importPresetShape = {
   amount_mode: z.enum(["signed", "debit_credit"]).optional(),
   sign_convention: z.enum(["negative_is_expense", "positive_is_expense"]).optional(),
   date_format: z.string().max(40).optional(),
+  has_header: z.boolean().optional(),
   skip_rows: z.number().int().min(0).max(100).optional(),
   default_categories: z.array(z.string().max(50)).max(20).optional(),
 };
@@ -544,7 +545,7 @@ export const xenBudgetRuleParamSchema = z.object({
 const MAX_RULE_REGEX_LENGTH = 200;
 
 const ruleConditionSchema = z.object({
-  field: z.enum(["description", "amount", "tags", "category", "type", "date", "source"]),
+  field: z.enum(["description", "amount", "flags", "category", "type", "date", "source"]),
   op: z.enum([
     "contains", "not_contains", "equals", "starts_with", "ends_with", "regex",
     "gt", "gte", "lt", "lte", "between", "is_empty",
@@ -579,8 +580,8 @@ const ruleShape = {
   }),
   actions: z.object({
     set_categories: z.array(z.string().max(50)).max(20).optional(),
-    add_tags: z.array(z.string().max(50)).max(20).optional(),
-    remove_tags: z.array(z.string().max(50)).max(20).optional(),
+    add_flags: z.array(z.string().max(50)).max(20).optional(),
+    remove_flags: z.array(z.string().max(50)).max(20).optional(),
     set_type: z.enum(["expense", "income"]).nullish(),
     set_people: z.array(objectIdSchema).optional(),
     set_description: z.string().max(500).optional(),
@@ -631,7 +632,7 @@ export const createXenBudgetBudgetSchema = budgetRefinements(z.object(budgetShap
 
 export const updateXenBudgetBudgetSchema = budgetRefinements(z.object(budgetShape));
 
-// One shape for both label registries — categories and tags differ in meaning, not form.
+// One shape for both label registries — categories and flags differ in meaning, not form.
 export const xenBudgetLabelParamSchema = z.object({
   bookId: objectIdSchema,
   labelId: objectIdSchema,

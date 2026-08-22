@@ -11,7 +11,7 @@ import type { XenBudgetRule } from "../../../../hooks/xenbudget/types";
 import { useXenBudgetRules } from "../../../../hooks/xenbudget/useRules";
 import RuleForm from "../components/RuleForm";
 import ReapplyRulesDialog from "../components/ReapplyRulesDialog";
-import { CategoryChip, TagChip } from "../components/LabelChip";
+import { CategoryChip, FlagChip } from "../components/LabelChip";
 import { cardSx, emptyStateSx, emptyStateIconCircleSx } from "../../../../components/ui/surfaceStyles";
 
 export default function BookRules() {
@@ -53,8 +53,8 @@ export default function BookRules() {
                     <Box sx={emptyStateIconCircleSx}><AutoFixHighIcon color="disabled" /></Box>
                     <Typography variant="subtitle1">No rules yet</Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Rules tag, flag and filter items automatically as they arrive — by hand or
-                        from a CSV import.
+                        Rules categorise, flag and filter items automatically as they arrive — by
+                        hand or from a CSV import.
                     </Typography>
                 </Box>
             ) : (
@@ -81,8 +81,8 @@ export default function BookRules() {
                                     {(rule.actions.set_categories || []).map((c) => (
                                         <CategoryChip key={c} name={c} registry={book.categories} />
                                     ))}
-                                    {(rule.actions.add_tags || []).map((t) => (
-                                        <TagChip key={t} name={t} registry={book.tags} />
+                                    {(rule.actions.add_flags || []).map((t) => (
+                                        <FlagChip key={t} name={t} registry={book.flags} />
                                     ))}
                                     {rule.actions.disposition === "exclude" && <Chip size="small" variant="outlined" label="exclude" sx={{ height: 20, fontSize: 11 }} />}
                                     {rule.actions.disposition === "skip" && <Chip size="small" color="error" variant="outlined" label="never import" sx={{ height: 20, fontSize: 11 }} />}

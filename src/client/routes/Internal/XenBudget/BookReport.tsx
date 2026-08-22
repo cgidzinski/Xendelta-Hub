@@ -257,7 +257,7 @@ export default function BookReport() {
  * value labelled directly.
  *
  * A colour per category would have to start reusing hues once a book has more than eight
- * tags, leaving two categories indistinguishable; and a value readable only by hovering
+ * categories, leaving two of them indistinguishable; and a value readable only by hovering
  * isn't readable at all on a touch screen.
  */
 function MagnitudeBars({ data, money, compact }: {

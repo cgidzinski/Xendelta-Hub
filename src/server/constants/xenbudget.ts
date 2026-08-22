@@ -1,28 +1,28 @@
 // XenBudget-specific constants.
 
 /**
- * Tags every book is guaranteed to have.
+ * Flags every book is guaranteed to have.
  *
  * The importer and the rules engine reference these by name, so they must exist in every
  * book — which is why the API refuses to delete or rename one. Colours stay editable;
  * they are cosmetic. See ensureSystemLabels() in routes/xenbudget.ts.
  */
-export const SYSTEM_TAGS: { name: string; color: string }[] = [
+export const SYSTEM_FLAGS: { name: string; color: string }[] = [
   { name: "Needs review", color: "#c98500" },        // a human should look at this
   { name: "Uncategorised", color: "#d95926" },       // imported, but nothing categorised it
   { name: "Possible duplicate", color: "#d55181" },  // matched an existing row, imported anyway
   { name: "Ignored", color: "#8b8b85" },             // deliberately set aside
 ];
 
-/** The system tag the importer puts on a row no rule managed to categorise. */
-export const TAG_UNCATEGORISED = "Uncategorised";
-/** The system tag the importer puts on a row that matched something already in the book. */
-export const TAG_POSSIBLE_DUPLICATE = "Possible duplicate";
-/** The generic "a human should look at this" tag; what a rule's old flag action became. */
-export const TAG_NEEDS_REVIEW = "Needs review";
+/** The system flag the importer puts on a row no rule managed to categorise. */
+export const FLAG_UNCATEGORISED = "Uncategorised";
+/** The system flag the importer puts on a row that matched something already in the book. */
+export const FLAG_POSSIBLE_DUPLICATE = "Possible duplicate";
+/** The generic "a human should look at this" flag; what a rule's old flag action became. */
+export const FLAG_NEEDS_REVIEW = "Needs review";
 
-export function isSystemTag(name: string): boolean {
-  return SYSTEM_TAGS.some((t) => t.name.toLowerCase() === (name || "").toLowerCase());
+export function isSystemFlag(name: string): boolean {
+  return SYSTEM_FLAGS.some((t) => t.name.toLowerCase() === (name || "").toLowerCase());
 }
 
 /**
