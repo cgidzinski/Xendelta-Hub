@@ -69,6 +69,7 @@ export default function BookReport() {
     // Budget against actual for the range on screen. The caps are restated for that range
     // rather than shown as one period's worth - see budgetedForRange.
     const categoryReport = useMemo(() => buildCategoryReport({
+        allCategories: book.categories.map((c) => c.name),
         byCategory: summary?.by_category ?? [],
         byCategoryPeriod: summary?.by_category_period ?? [],
         uncategorised: summary?.uncategorised ?? { total: 0, count: 0 },
@@ -79,7 +80,7 @@ export default function BookReport() {
         rangeFrom: range.from,
         rangeTo: range.to,
         personId: person,
-    }), [summary, budgets, range.from, range.to, person]);
+    }), [summary, budgets, book.categories, range.from, range.to, person]);
 
     const periodData = useMemo(() => (summary?.by_period ?? []).map((p) => ({
         key: p.key,
@@ -235,6 +236,20 @@ export default function BookReport() {
 
             <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: 2, pb: 2 }}>
                 <Stack spacing={2}>
+                    {/* The table IS the report - it leads the page, above the headline
+                    strip and every chart, and stays put across both views. Outside the
+                    empty-state branch as well: with nothing spent it still has the
+                    budgets to show, which is worth seeing. */}
+                    {(categoryReport.rows.length > 0 || categoryReport.hasBudgets) && (
+                        <CategoryReportTable
+                            report={categoryReport}
+                            money={money}
+                            round={round}
+                            categoryRegistry={book.categories}
+                            rangeLabel={range.label}
+                        />
+                    )}
+
                     {summary.totals.count === 0 ? (
                         <Box sx={emptyStateSx}>
                             <Box sx={emptyStateIconCircleSx}><InsightsIcon color="disabled" /></Box>
@@ -249,19 +264,6 @@ export default function BookReport() {
                         <TotalsSummary
                             income={summary.totals.income} expense={summary.totals.expense} net={summary.totals.net}
                             currency={summary.currency}
-                        />
-                    )}
-
-                    {/* The table is the report, so it sits above the charts and stays put
-                    across both views. Outside the empty-state branch as well: with nothing
-                    spent it still has the budgets to show, which is worth seeing. */}
-                    {(categoryReport.rows.length > 0 || categoryReport.hasBudgets) && (
-                        <CategoryReportTable
-                            report={categoryReport}
-                            money={money}
-                            round={round}
-                            categoryRegistry={book.categories}
-                            rangeLabel={range.label}
                         />
                     )}
 

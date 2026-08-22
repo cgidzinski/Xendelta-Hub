@@ -61,6 +61,13 @@ export interface ReportSummaryRows {
 }
 
 interface BuildInput {
+    /**
+     * Every category the book defines. They all get a row, spent on or not - a report
+     * that silently omits the categories nobody touched can't answer "what did we not
+     * spend on", and a budgeted category dropping out because it went unused is exactly
+     * the thing worth seeing.
+     */
+    allCategories: string[];
     byCategory: SummaryCategory[];
     byCategoryPeriod: SummaryCategoryPeriod[];
     uncategorised: { total: number; count: number };
@@ -90,12 +97,14 @@ function limitFor(budget: BudgetStatus, personId?: string): number | undefined {
 }
 
 export function buildCategoryReport({
-    byCategory, byCategoryPeriod, uncategorised, uncategorisedByPeriod, byPeriod,
-    budgets, rangeFrom, rangeTo, personId,
+    allCategories, byCategory, byCategoryPeriod, uncategorised, uncategorisedByPeriod,
+    byPeriod, budgets, rangeFrom, rangeTo, personId,
 }: BuildInput): CategoryReport {
     const kept = personId ? budgetsForPerson(budgets, personId) : budgets;
     const periodKeys = byPeriod.map((p) => p.key);
     const pivoted = shouldPivot(periodKeys);
+
+    const registryLabels = new Map(allCategories.map((name) => [key(name), name]));
 
     const spentByCategory = new Map<string, { label: string; spent: number }>();
     for (const row of byCategory) {
@@ -158,13 +167,18 @@ export function buildCategoryReport({
         }
     }
 
-    // A category earns a row by having been spent on, or by having a cap of its own - a
-    // budget nobody spent against is exactly the thing a report should surface.
-    const names = new Set([...spentByCategory.keys(), ...budgetedByCategory.keys()]);
+    // Every registered category, plus anything spent on or budgeted that the registry
+    // doesn't know about - a CSV import or a rule can name a category before anyone adds
+    // it to the book.
+    const names = new Set([
+        ...registryLabels.keys(),
+        ...spentByCategory.keys(),
+        ...budgetedByCategory.keys(),
+    ]);
     const rows: CategoryReportRow[] = [...names].map((name) => {
         const spend = spentByCategory.get(name);
         const budget = budgetedByCategory.get(name);
-        const label = spend?.label ?? budget?.label ?? name;
+        const label = registryLabels.get(name) ?? spend?.label ?? budget?.label ?? name;
         return {
             key: name,
             label,

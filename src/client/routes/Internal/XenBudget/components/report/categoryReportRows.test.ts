@@ -32,6 +32,9 @@ function sub(personId: string, amount: number): SubBudgetStatus {
 }
 
 const base = {
+    // Only the two that were spent on, so the existing cases stay about spend and budgets;
+    // the registry-driven rows get their own block at the end.
+    allCategories: ["Groceries", "Dining"],
     byCategory: [
         { category: "Groceries", total: 620, count: 12 },
         { category: "Dining", total: 240, count: 5 },
@@ -349,5 +352,73 @@ describe("summary rows", () => {
         expect(summary.spent.total).toBe(860);
         expect(summary.income.total).toBe(4000);
         expect(summary.budgeted.total).toBe(800);
+    });
+});
+
+describe("every category gets a row", () => {
+    it("includes a category with no spending and no budget", () => {
+        const { rows } = buildCategoryReport({
+            ...base,
+            allCategories: ["Groceries", "Dining", "Travel", "Gifts"],
+            budgets: [],
+        });
+        expect(rows.map((r) => r.label)).toEqual(["Groceries", "Dining", "Gifts", "Travel"]);
+        expect(rows.find((r) => r.label === "Travel")).toMatchObject({ spent: 0, byPeriod: {} });
+        expect(rows.find((r) => r.label === "Travel")?.budgeted).toBeUndefined();
+    });
+
+    it("sorts the untouched ones alphabetically below the ones with spend", () => {
+        const { rows } = buildCategoryReport({
+            ...base,
+            allCategories: ["Groceries", "Dining", "Zoo", "Admin"],
+            budgets: [],
+        });
+        // Spend first, biggest down; then everything at zero by name.
+        expect(rows.map((r) => r.label)).toEqual(["Groceries", "Dining", "Admin", "Zoo"]);
+    });
+
+    it("still lists a category the registry does not know about", () => {
+        // A CSV import or a rule can name one before anyone adds it to the book.
+        const { rows } = buildCategoryReport({
+            ...base,
+            allCategories: ["Groceries"],
+            byCategory: [
+                { category: "Groceries", total: 620, count: 12 },
+                { category: "Surprise", total: 40, count: 1 },
+            ],
+            budgets: [],
+        });
+        expect(rows.map((r) => r.label)).toContain("Surprise");
+    });
+
+    it("prefers the registry's spelling over an import's", () => {
+        const { rows } = buildCategoryReport({
+            ...base,
+            allCategories: ["Groceries"],
+            byCategory: [{ category: "GROCERIES", total: 620, count: 12 }],
+            budgets: [],
+        });
+        const matches = rows.filter((r) => r.label.toLowerCase() === "groceries");
+        expect(matches).toHaveLength(1);
+        expect(matches[0]).toMatchObject({ label: "Groceries", spent: 620 });
+    });
+
+    it("keeps a budgeted category that was never spent on", () => {
+        const { rows } = buildCategoryReport({
+            ...base,
+            allCategories: ["Groceries", "Dining", "Travel"],
+            budgets: [budget({ categories: ["Travel"], amount: 500 })],
+        });
+        expect(rows.find((r) => r.label === "Travel")).toMatchObject({ spent: 0, budgeted: 500 });
+    });
+
+    it("leaves uncategorised at the very bottom", () => {
+        const { rows } = buildCategoryReport({
+            ...base,
+            allCategories: ["Groceries", "Dining", "Zoo"],
+            uncategorised: { total: 95, count: 3 },
+            budgets: [],
+        });
+        expect(rows[rows.length - 1].label).toBe("Uncategorised");
     });
 });
