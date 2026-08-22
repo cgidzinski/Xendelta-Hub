@@ -7,10 +7,12 @@
  * book — which is why the API refuses to delete or rename one. Colours stay editable;
  * they are cosmetic. See ensureSystemLabels() in routes/xenbudget.ts.
  */
+// The four colours are chosen to read as clearly distinct from each other at a glance
+// (red / blue / amber / grey); they may coincide with category colours, which is fine.
 export const SYSTEM_FLAGS: { name: string; color: string }[] = [
-  { name: "Needs review", color: "#c98500" },        // a human should look at this
-  { name: "Uncategorised", color: "#d95926" },       // imported, but nothing categorised it
-  { name: "Possible duplicate", color: "#d55181" },  // matched an existing row, imported anyway
+  { name: "Needs review", color: "#e66767" },        // a human should look at this
+  { name: "Uncategorised", color: "#3987e5" },       // imported, but nothing categorised it
+  { name: "Possible duplicate", color: "#c98500" },  // matched an existing row, imported anyway
   { name: "Ignored", color: "#8b8b85" },             // deliberately set aside
 ];
 
@@ -20,6 +22,8 @@ export const FLAG_UNCATEGORISED = "Uncategorised";
 export const FLAG_POSSIBLE_DUPLICATE = "Possible duplicate";
 /** The generic "a human should look at this" flag; what a rule's old flag action became. */
 export const FLAG_NEEDS_REVIEW = "Needs review";
+/** Deliberately set aside — Review mode skips these even if they're also uncategorised. */
+export const FLAG_IGNORED = "Ignored";
 
 export function isSystemFlag(name: string): boolean {
   return SYSTEM_FLAGS.some((t) => t.name.toLowerCase() === (name || "").toLowerCase());
@@ -38,5 +42,19 @@ export const STARTER_CATEGORIES: { name: string; color: string }[] = [
   { name: "Utilities", color: "#9085e9" },
   { name: "Health", color: "#d55181" },
   { name: "Entertainment", color: "#e66767" },
+  { name: "Alcohol", color: "#ef4444" },
+  { name: "Bills", color: "#06b6d4" },
+  { name: "Car Maintenance", color: "#7e22ce" },
+  { name: "Eating Out", color: "#b45309" },
+  { name: "Entertainment & Experiences", color: "#be185d" },
+  { name: "Gas", color: "#16a34a" },
+  { name: "Gifts", color: "#ea580c" },
+  { name: "Hobbies", color: "#4f46e5" },
+  { name: "House Needs", color: "#84cc16" },
+  { name: "House Wants", color: "#0e7490" },
+  { name: "Medical Expenses", color: "#e11d48" },
+  { name: "Personal Care", color: "#c026d3" },
+  { name: "Pet Care", color: "#059669" },
+  { name: "Travel", color: "#92400e" },
   { name: "Other", color: "#8b8b85" },
 ];

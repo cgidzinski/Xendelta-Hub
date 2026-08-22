@@ -1,59 +1,40 @@
 import { useMemo, useState } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import {
-    Avatar, Box, Card, IconButton, LinearProgress, MenuItem, Stack, TextField, Typography, alpha,
+    Avatar, Box, Card, LinearProgress, MenuItem, Stack, TextField, Typography, alpha,
 } from "@mui/material";
-import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import InsightsIcon from "@mui/icons-material/Insights";
-import { endOfMonth, startOfMonth, subMonths } from "date-fns";
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
 import { CategoryChip, resolveLabelColor } from "./components/LabelChip";
-import BudgetProgressBar from "./components/BudgetProgressBar";
+import BudgetGroup from "./components/BudgetGroup";
+import { groupBudgets } from "./components/groupBudgets";
+import TimePeriodFilter, { defaultMonthMode, resolvePeriod, type PeriodMode } from "./components/TimePeriodFilter";
+import TotalsSummary from "./components/TotalsSummary";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { formatCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
+import { INCOME_COLOR } from "../../../components/ui/chartColors";
 import { cardSx, sectionLabelSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
 
-// The server buckets in the viewer's zone and echoes it back, so the label is derived
-// from the response rather than from the browser's clock — the two agree, and a stored
-// profile preference that differs from the browser still labels correctly.
-function monthLabel(from: string, timezone: string): string {
-    return new Date(from).toLocaleDateString(undefined, {
-        month: "long", year: "numeric", timeZone: timezone,
-    });
-}
-
 export default function BookOverview() {
-    const { book, currency, onCurrencyChange } = useOutletContext<BookDetailContext>();
+    const { book, currency, onCurrencyChange, person, onPersonChange } = useOutletContext<BookDetailContext>();
     const navigate = useNavigate();
 
-    // 0 = this month, 1 = one month back, etc. Only the current month has a "now" to
-    // measure a live budget against, so budgets stay tied to offset 0 further down.
-    const [monthOffset, setMonthOffset] = useState(0);
-    const monthDate = useMemo(() => subMonths(new Date(), monthOffset), [monthOffset]);
-    const from = useMemo(() => startOfMonth(monthDate), [monthDate]);
-    const to = useMemo(() => endOfMonth(monthDate), [monthDate]);
+    const [period, setPeriod] = useState<PeriodMode>(defaultMonthMode);
+    const { from, to, groupBy, label } = useMemo(() => resolvePeriod(period), [period]);
+    const now = new Date();
+    const isCurrentMonth = period.kind === "month"
+        && period.anchor.getFullYear() === now.getFullYear() && period.anchor.getMonth() === now.getMonth();
 
     const { summary, isLoading, isError, error } = useXenBudgetSummary(book._id, {
-        currency, from: from.toISOString(), to: to.toISOString(),
+        currency, from: from.toISOString(), to: to.toISOString(), group_by: groupBy,
+        people: person ? [person] : undefined,
     });
     const { budgets: budgetStatus } = useXenBudgetStatus(book._id, currency);
     const overBudgetCount = budgetStatus.filter((b) => b.over).length;
-
-    // Whole-book budgets first, then grouped by person (in member order) so one person's
-    // budgets sit together rather than interleaved with someone else's. Array.sort is
-    // stable, so budgets sharing a rank keep their existing relative order.
-    const sortedBudgets = useMemo(() => {
-        const memberOrder = new Map(book.members.map((m, i) => [m.user_id, i]));
-        return [...budgetStatus].sort((a, b) => {
-            const rankA = a.person_id ? (memberOrder.get(a.person_id) ?? book.members.length) + 1 : 0;
-            const rankB = b.person_id ? (memberOrder.get(b.person_id) ?? book.members.length) + 1 : 0;
-            return rankA - rankB;
-        });
-    }, [budgetStatus, book.members]);
+    const budgetGroups = useMemo(() => groupBudgets(budgetStatus), [budgetStatus]);
 
     const categoryRows = useMemo(() => {
         if (!summary) return [];
@@ -66,175 +47,179 @@ export default function BookOverview() {
         return rows;
     }, [summary]);
 
+    // Every member appears in the per-person card, defaulting to zero rather than being
+    // dropped when they have no share — the breakdown stays complete. A person filter
+    // narrows it to just that member.
+    const personRows = useMemo(() => {
+        const byId = new Map(summary?.by_person.map((p) => [p.user_id, p]) ?? []);
+        return book.members
+            .filter((m) => !person || m.user_id === person)
+            .map((m) => ({
+                user_id: m.user_id,
+                username: m.username,
+                avatar: m.avatar,
+                total: byId.get(m.user_id)?.total ?? 0,
+                income: byId.get(m.user_id)?.income ?? 0,
+            }));
+    }, [summary, book.members, person]);
+
     if (isLoading && !summary) return <LoadingSpinner message="Adding it up..." />;
     if (isError) return <ErrorDisplay error={error} />;
     if (!summary) return null;
 
     const { totals } = summary;
     const biggestCategory = Math.max(...categoryRows.map((r) => r.total), 0);
-    const biggestPerson = Math.max(...summary.by_person.map((p) => p.total), 0);
+    const biggestPersonTotal = Math.max(...personRows.map((p) => p.total + p.income), 0);
     const nothingYet = totals.count === 0;
 
     return (
-        <Box sx={{ p: 2 }}>
-            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
-                <Stack direction="row" alignItems="center" spacing={0.5}>
-                    <IconButton size="small" onClick={() => setMonthOffset((o) => o + 1)} aria-label="Previous month">
-                        <ChevronLeftIcon fontSize="small" />
-                    </IconButton>
-                    <Typography variant="subtitle1">{monthLabel(summary.from, summary.timezone)}</Typography>
-                    <IconButton
-                        size="small" onClick={() => setMonthOffset((o) => Math.max(0, o - 1))}
-                        disabled={monthOffset === 0} aria-label="Next month"
-                    >
-                        <ChevronRightIcon fontSize="small" />
-                    </IconButton>
-                </Stack>
-                {summary.currencies.length > 1 && (
-                    <TextField
-                        select size="small" value={summary.currency}
-                        onChange={(e) => onCurrencyChange(e.target.value)}
-                        sx={{ width: 110 }}
-                        slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
-                    >
-                        {summary.currencies.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-                    </TextField>
-                )}
-            </Stack>
-
-            <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
+        <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <Box sx={{ p: 2, pb: 1.5, flexShrink: 0 }}>
                 <Stack spacing={1}>
-                    <StatRow label="In" value={totals.income} currency={summary.currency} color="success.main" />
-                    <StatRow label="Out" value={totals.expense} currency={summary.currency} color="text.primary" />
-                    <StatRow
-                        label="Net" value={totals.net} currency={summary.currency}
-                        color={totals.net < 0 ? "error.main" : "success.main"} signed
+                    {summary.currencies.length > 1 && (
+                        <TextField
+                            select size="small" value={summary.currency}
+                            onChange={(e) => onCurrencyChange(e.target.value)}
+                            sx={{ width: 110, alignSelf: "flex-end" }}
+                            slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
+                        >
+                            {summary.currencies.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+                        </TextField>
+                    )}
+                    <TimePeriodFilter
+                        mode={period} onModeChange={setPeriod}
+                        person={person} onPersonChange={onPersonChange}
+                        members={book.members}
                     />
                 </Stack>
-            </Card>
+            </Box>
 
-            {monthOffset === 0 && budgetStatus.length > 0 && (
+            <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: 2, pb: 2 }}>
+                <TotalsSummary
+                    income={totals.income} expense={totals.expense} net={totals.net}
+                    currency={summary.currency} sx={{ mb: 2 }}
+                />
+
                 <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
-                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
-                        <Typography variant="caption" sx={sectionLabelSx}>Budgets</Typography>
-                        {overBudgetCount > 0 && (
-                            <Typography variant="caption" color="error.main">
-                                {overBudgetCount} over
-                            </Typography>
-                        )}
-                    </Stack>
-                    <Stack spacing={2}>
-                        {sortedBudgets.map((budget) => (
-                            <BudgetProgressBar
-                                key={budget._id}
-                                budget={budget}
-                                currency={summary.currency}
-                                categoryRegistry={book.categories}
-                                members={book.members}
-                                onClick={() => navigate(`/internal/xenbudget/books/${book._id}/settings/budgets`)}
-                            />
-                        ))}
+                    <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>
+                        Breakdown
+                    </Typography>
+                    <Stack spacing={1.5}>
+                        {[...personRows]
+                            .sort((a, b) => (b.total + b.income) - (a.total + a.income))
+                            .map((person) => (
+                                <Box key={person.user_id}>
+                                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                                        <Avatar src={person.avatar || undefined} sx={{ width: 22, height: 22, fontSize: 11 }}>
+                                            {person.username[0]?.toUpperCase()}
+                                        </Avatar>
+                                        <Typography variant="body2" sx={{ flexGrow: 1 }} noWrap>
+                                            {person.username}
+                                        </Typography>
+                                        <Typography variant="caption" sx={{ color: INCOME_COLOR, fontWeight: 600 }}>
+                                            +{formatCurrency(person.income, summary.currency)}
+                                        </Typography>
+                                        <Typography variant="caption" sx={{ color: "error.main", fontWeight: 600 }}>
+                                            −{formatCurrency(person.total, summary.currency)}
+                                        </Typography>
+                                    </Stack>
+                                    <Box sx={{
+                                        display: "flex", height: 5, borderRadius: 1, overflow: "hidden",
+                                        bgcolor: (theme) => theme.palette.action.hover,
+                                    }}>
+                                        <Box sx={{
+                                            flexShrink: 0,
+                                            width: `${biggestPersonTotal > 0 ? (person.income / biggestPersonTotal) * 100 : 0}%`,
+                                            bgcolor: INCOME_COLOR,
+                                        }} />
+                                        <Box sx={{
+                                            flexShrink: 0,
+                                            width: `${biggestPersonTotal > 0 ? (person.total / biggestPersonTotal) * 100 : 0}%`,
+                                            bgcolor: "error.main",
+                                        }} />
+                                    </Box>
+                                </Box>
+                            ))}
                     </Stack>
                 </Card>
-            )}
 
-            {nothingYet ? (
-                <Box sx={emptyStateSx}>
-                    <Box sx={emptyStateIconCircleSx}><InsightsIcon color="disabled" /></Box>
-                    <Typography variant="subtitle1">Nothing this month yet</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        Add an item and the tally updates for everyone in the book.
-                    </Typography>
-                </Box>
-            ) : (
-                <Stack spacing={2}>
-                    {categoryRows.length > 0 && (
-                        <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
-                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>
-                                Spending by category
-                            </Typography>
-                            <Stack spacing={1.25}>
-                                {categoryRows.map((row) => (
-                                    <Box
-                                        key={row.label}
-                                        onClick={() => row.category && navigate(
-                                            `/internal/xenbudget/books/${book._id}/items`,
-                                        )}
-                                        sx={{ cursor: row.category ? "pointer" : "default" }}
-                                    >
-                                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                                            {row.category
-                                                ? <CategoryChip name={row.category} registry={book.categories} />
-                                                : <Typography variant="caption" color="text.secondary">Uncategorised</Typography>}
-                                            <Typography variant="body2">
-                                                {formatCurrency(row.total, summary.currency)}
-                                            </Typography>
-                                        </Stack>
-                                        <LinearProgress
-                                            variant="determinate"
-                                            value={biggestCategory > 0 ? (row.total / biggestCategory) * 100 : 0}
-                                            sx={{
-                                                height: 5, borderRadius: 1,
-                                                bgcolor: (theme) => alpha(theme.palette.text.primary, 0.08),
-                                                "& .MuiLinearProgress-bar": {
-                                                    bgcolor: row.category ? resolveLabelColor(row.category, book.categories) : "text.disabled",
-                                                    borderRadius: 1,
-                                                },
-                                            }}
-                                        />
-                                    </Box>
-                                ))}
-                            </Stack>
-                        </Card>
-                    )}
+                {isCurrentMonth && budgetGroups.length > 0 && (
+                    <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+                            <Typography variant="caption" sx={sectionLabelSx}>Budgets</Typography>
+                            {overBudgetCount > 0 && (
+                                <Typography variant="caption" color="error.main">
+                                    {overBudgetCount} over
+                                </Typography>
+                            )}
+                        </Stack>
+                        <Stack spacing={2}>
+                            {budgetGroups.map((group) => (
+                                <BudgetGroup
+                                    key={group.id}
+                                    group={group}
+                                    currency={summary.currency}
+                                    categoryRegistry={book.categories}
+                                    members={book.members}
+                                    onClick={() => navigate(`/internal/xenbudget/books/${book._id}/settings/budgets`)}
+                                />
+                            ))}
+                        </Stack>
+                    </Card>
+                )}
 
-                    {summary.by_person.length > 0 && (
-                        <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
-                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>
-                                Spending by person
-                            </Typography>
-                            <Stack spacing={1.25}>
-                                {summary.by_person.map((person) => (
-                                    <Box key={person.user_id}>
-                                        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
-                                            <Avatar src={person.avatar || undefined} sx={{ width: 22, height: 22, fontSize: 11 }}>
-                                                {person.username[0]?.toUpperCase()}
-                                            </Avatar>
-                                            <Typography variant="body2" sx={{ flexGrow: 1 }} noWrap>
-                                                {person.username}
-                                            </Typography>
-                                            <Typography variant="body2">
-                                                {formatCurrency(person.total, summary.currency)}
-                                            </Typography>
-                                        </Stack>
-                                        <LinearProgress
-                                            variant="determinate"
-                                            value={biggestPerson > 0 ? (person.total / biggestPerson) * 100 : 0}
-                                            sx={{ height: 5, borderRadius: 1 }}
-                                        />
-                                    </Box>
-                                ))}
-                            </Stack>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
-                                Each person&rsquo;s share of every expense — these add up to the month&rsquo;s total.
-                            </Typography>
-                        </Card>
-                    )}
-                </Stack>
-            )}
+                {nothingYet ? (
+                    <Box sx={emptyStateSx}>
+                        <Box sx={emptyStateIconCircleSx}><InsightsIcon color="disabled" /></Box>
+                        <Typography variant="subtitle1">Nothing in {label} yet</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            Add an item and the tally updates for everyone in the book.
+                        </Typography>
+                    </Box>
+                ) : (
+                    <Stack spacing={2}>
+                        {categoryRows.length > 0 && (
+                            <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
+                                <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>
+                                    Spending by category
+                                </Typography>
+                                <Stack spacing={1.25}>
+                                    {categoryRows.map((row) => (
+                                        <Box
+                                            key={row.label}
+                                            onClick={() => row.category && navigate(
+                                                `/internal/xenbudget/books/${book._id}/items`,
+                                            )}
+                                            sx={{ cursor: row.category ? "pointer" : "default" }}
+                                        >
+                                            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                                                {row.category
+                                                    ? <CategoryChip name={row.category} registry={book.categories} />
+                                                    : <Typography variant="caption" color="text.secondary">Uncategorised</Typography>}
+                                                <Typography variant="body2">
+                                                    {formatCurrency(row.total, summary.currency)}
+                                                </Typography>
+                                            </Stack>
+                                            <LinearProgress
+                                                variant="determinate"
+                                                value={biggestCategory > 0 ? (row.total / biggestCategory) * 100 : 0}
+                                                sx={{
+                                                    height: 5, borderRadius: 1,
+                                                    bgcolor: (theme) => alpha(theme.palette.text.primary, 0.08),
+                                                    "& .MuiLinearProgress-bar": {
+                                                        bgcolor: row.category ? resolveLabelColor(row.category, book.categories) : "text.disabled",
+                                                        borderRadius: 1,
+                                                    },
+                                                }}
+                                            />
+                                        </Box>
+                                    ))}
+                                </Stack>
+                            </Card>
+                        )}
+                    </Stack>
+                )}
+            </Box>
         </Box>
-    );
-}
-
-function StatRow({ label, value, currency, color, signed }: {
-    label: string; value: number; currency: string; color: string; signed?: boolean;
-}) {
-    return (
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
-            <Typography variant="caption" sx={sectionLabelSx}>{label}</Typography>
-            <Typography variant="h6" sx={{ color }} noWrap>
-                {signed && value > 0 ? "+" : ""}{formatCurrency(value, currency)}
-            </Typography>
-        </Stack>
     );
 }

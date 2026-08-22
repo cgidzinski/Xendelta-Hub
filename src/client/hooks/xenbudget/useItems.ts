@@ -11,6 +11,8 @@ export interface ItemFilters {
     type?: "expense" | "income";
     /** Items with no category at all — the worklist an import leaves behind. */
     uncategorised?: boolean;
+    /** Review mode's queue: uncategorised OR flagged "Needs review", minus "Ignored". */
+    review?: boolean;
     /** hidden (default, matches the totals) | only | all */
     excluded?: "hidden" | "only" | "all";
     q?: string;
@@ -25,6 +27,7 @@ function toParams(filters: ItemFilters): Record<string, string> {
     if (filters.people?.length) params.people = filters.people.join(",");
     if (filters.type) params.type = filters.type;
     if (filters.uncategorised) params.uncategorised = "true";
+    if (filters.review) params.review = "true";
     if (filters.excluded === "only") params.excluded = "true";
     else if (filters.excluded === "all") params.excluded = "all";
     if (filters.q) params.q = filters.q;

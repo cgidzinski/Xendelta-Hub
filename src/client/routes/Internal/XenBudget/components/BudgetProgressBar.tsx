@@ -17,9 +17,13 @@ interface BudgetProgressBarProps {
     categoryRegistry: XenBudgetLabel[];
     members: XenBudgetMember[];
     onClick?: () => void;
+    /** Hide the "this month"/"this week" period label (merged overview/report rows). */
+    showPeriod?: boolean;
+    /** Hide the category/person chips (used under a group heading). */
+    showLabel?: boolean;
 }
 
-export default function BudgetProgressBar({ budget, currency, categoryRegistry, members, onClick }: BudgetProgressBarProps) {
+export default function BudgetProgressBar({ budget, currency, categoryRegistry, members, onClick, showPeriod = true, showLabel = true }: BudgetProgressBarProps) {
     const categories = budget.categories || [];
     const person = budget.person_id ? members.find((m) => m.user_id === budget.person_id) : undefined;
     const everything = categories.length === 0 && !budget.person_name;
@@ -35,23 +39,29 @@ export default function BudgetProgressBar({ budget, currency, categoryRegistry, 
     return (
         <Box onClick={onClick} sx={{ cursor: onClick ? "pointer" : "default" }}>
             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
-                <Stack direction="row" alignItems="center" spacing={0.5} flexWrap="wrap" sx={{ minWidth: 0, rowGap: 0.5 }}>
-                    {categories.map((c) => <CategoryChip key={c} name={c} registry={categoryRegistry} />)}
-                    {budget.person_name && (
-                        <Stack direction="row" alignItems="center" spacing={0.5}>
-                            {person && (
-                                <Avatar src={person.avatar || undefined} sx={{ width: 18, height: 18, fontSize: 10 }}>
-                                    {person.username[0]?.toUpperCase()}
-                                </Avatar>
-                            )}
-                            <Typography variant="body2" noWrap>{person?.username || budget.person_name}</Typography>
-                        </Stack>
+                {showLabel && (
+                    <Stack direction="row" alignItems="center" spacing={0.5} flexWrap="wrap" sx={{ minWidth: 0, rowGap: 0.5 }}>
+                        {categories.map((c) => <CategoryChip key={c} name={c} registry={categoryRegistry} />)}
+                        {budget.person_name && (
+                            <Stack direction="row" alignItems="center" spacing={0.5}>
+                                {person && (
+                                    <Avatar src={person.avatar || undefined} sx={{ width: 18, height: 18, fontSize: 10 }}>
+                                        {person.username[0]?.toUpperCase()}
+                                    </Avatar>
+                                )}
+                                <Typography variant="body2" noWrap>{person?.username || budget.person_name}</Typography>
+                            </Stack>
+                        )}
+                        {everything && <Typography variant="body2" color="text.secondary">Everything</Typography>}
+                    </Stack>
+                )}
+                <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                    {showPeriod && (
+                        <Typography variant="caption" color="text.secondary" noWrap>
+                            {PERIOD_LABELS[budget.period] || "this period"}
+                        </Typography>
                     )}
-                    {everything && <Typography variant="body2" color="text.secondary">Everything</Typography>}
-                </Stack>
-                <Typography variant="caption" color="text.secondary" sx={{ flexGrow: 1 }} noWrap>
-                    {PERIOD_LABELS[budget.period] || "this period"}
-                </Typography>
+                </Box>
                 <Typography
                     variant="body2" noWrap
                     sx={{ color: budget.over ? "error.main" : "text.primary", flexShrink: 0 }}

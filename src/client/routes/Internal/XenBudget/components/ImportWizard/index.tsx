@@ -5,6 +5,7 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
+import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import Papa from "papaparse";
 import { useSnackbar } from "notistack";
 import type {
@@ -20,9 +21,15 @@ import PreviewStep from "./PreviewStep";
 import WeightedSplitEditor, { type SplitDraft } from "../WeightedSplitEditor";
 import LoadingSpinner from "../../../../../components/LoadingSpinner";
 import { STABLE_CURRENCY_MENU_PROPS } from "../../../../../utils/currencyUtils";
-import { sectionLabelSx } from "../../../../../components/ui/surfaceStyles";
+import { cardSx, sectionLabelSx } from "../../../../../components/ui/surfaceStyles";
 
 const STEPS = ["Upload", "Map columns", "Review", "Done"];
+
+function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const blankConfig = (): MappingConfig => ({
     column_map: {},
@@ -32,6 +39,13 @@ const blankConfig = (): MappingConfig => ({
     has_header: true,
     skip_rows: 0,
 });
+
+export interface DateStats {
+    from: Date;
+    to: Date;
+    totalCount: number;
+    majority: { from: Date; to: Date; count: number; label: string };
+}
 
 interface ImportWizardProps {
     open: boolean;
@@ -139,6 +153,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
     const [config, setConfig] = useState<MappingConfig>(blankConfig());
     const [dateFrom, setDateFrom] = useState<Date | null>(null);
     const [dateTo, setDateTo] = useState<Date | null>(null);
+    const [rawPreviewLines, setRawPreviewLines] = useState<string[]>([]);
     const [previews, setPreviews] = useState<ImportPreviewRow[]>([]);
     const [duplicates, setDuplicates] = useState<DuplicateMatch[]>([]);
     const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -156,6 +171,9 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
     // "first row is a header" afterward reparses without clobbering a mapping the user has
     // already adjusted by hand.
     const guessedForRef = useRef<File[] | null>(null);
+    // Whether the majority-month default has already been applied to dateFrom/dateTo for
+    // this file selection, so later mapping tweaks don't clobber a range picked by hand.
+    const dateDefaultAppliedRef = useRef(false);
 
     useEffect(() => {
         if (!open) return;
@@ -169,6 +187,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
         setRawRows([]);
         setHeaders([]);
         setParseError(null);
+        setRawPreviewLines([]);
         setConfig(blankConfig());
         setDateFrom(null);
         setDateTo(null);
@@ -180,11 +199,27 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
         setPresetId("");
         setSourceLabel("");
         guessedForRef.current = null;
+        dateDefaultAppliedRef.current = false;
     }, [open]);
 
-    // Re-parses whenever the file set changes, or the header/skip-rows settings do —
-    // toggling "first row is a header" has to reread the actual file, not just reinterpret
-    // rows already split the wrong way.
+    // A raw peek at the file's first few lines, untouched by skip-rows — this is what lets
+    // the user see the junk rows for themselves instead of guessing how many to skip.
+    useEffect(() => {
+        if (files.length === 0) {
+            setRawPreviewLines([]);
+            return;
+        }
+        let cancelled = false;
+        files[0].text().then((text) => {
+            if (cancelled) return;
+            setRawPreviewLines(text.split(/\r\n|\n|\r/).slice(0, 3));
+        });
+        return () => { cancelled = true; };
+    }, [files]);
+
+    // Re-parses whenever the file set changes, or the skip-rows setting does — changing
+    // how many rows to skip has to reread the actual file, not just reinterpret rows
+    // already split the wrong way.
     useEffect(() => {
         if (files.length === 0) {
             setRawRows([]);
@@ -236,6 +271,50 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
         () => (rawRows.length ? applyMapping(rawRows, config) : { rows: [], errors: [] as MappingError[] }),
         [rawRows, config],
     );
+
+    // The span of dates actually found in the file, plus whichever single calendar month
+    // most of them fall in — a statement almost always is one month, with maybe a few days
+    // spilling from the cycle before or after. Grouped by UTC month, to match the UTC
+    // midnight each date was parsed to (applyMapping / parseDate) rather than the viewer's
+    // own timezone.
+    const dateStats = useMemo<DateStats | null>(() => {
+        if (mapped.rows.length === 0) return null;
+        const times = mapped.rows.map((r) => new Date(r.date).getTime());
+        const from = new Date(times.reduce((min, t) => Math.min(min, t), times[0]));
+        const to = new Date(times.reduce((max, t) => Math.max(max, t), times[0]));
+        const counts = new Map<string, number>();
+        for (const t of times) {
+            const d = new Date(t);
+            const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+            counts.set(key, (counts.get(key) || 0) + 1);
+        }
+        let bestKey = "";
+        let bestCount = -1;
+        counts.forEach((count, key) => {
+            if (count > bestCount) { bestCount = count; bestKey = key; }
+        });
+        const [year, month] = bestKey.split("-").map(Number);
+        const majorityFrom = new Date(Date.UTC(year, month, 1));
+        const majorityTo = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
+        return {
+            from, to, totalCount: times.length,
+            majority: {
+                from: majorityFrom, to: majorityTo, count: bestCount,
+                label: majorityFrom.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),
+            },
+        };
+    }, [mapped.rows]);
+
+    // Defaults the range to the majority month exactly once per file selection, as soon as
+    // the dates can actually be read — not on every mapping tweak after, so it never
+    // clobbers a range the user has since picked on purpose.
+    useEffect(() => { dateDefaultAppliedRef.current = false; }, [files]);
+    useEffect(() => {
+        if (dateDefaultAppliedRef.current || !dateStats) return;
+        dateDefaultAppliedRef.current = true;
+        setDateFrom(dateStats.majority.from);
+        setDateTo(dateStats.majority.to);
+    }, [dateStats]);
 
     const detectedOrder = useMemo(
         () => detectDateFormat(rawRows.map((r) => (config.column_map.date ? r[config.column_map.date] : ""))),
@@ -448,12 +527,19 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                         </Box>
 
                         {files.length > 0 && (
-                            <Stack spacing={0.5}>
+                            <Stack spacing={1}>
                                 {files.map((f, i) => (
-                                    <Stack key={`${f.name}-${i}`} direction="row" alignItems="center" spacing={1}>
-                                        <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
-                                            {f.name}
-                                        </Typography>
+                                    <Stack
+                                        key={`${f.name}-${i}`} direction="row" alignItems="center" spacing={1.5}
+                                        sx={{ ...cardSx, p: 1, pl: 1.5, bgcolor: "background.paper" }}
+                                    >
+                                        <InsertDriveFileIcon fontSize="small" color="action" />
+                                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                                            <Typography variant="body2" noWrap>{f.name}</Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                {formatFileSize(f.size)}
+                                            </Typography>
+                                        </Box>
                                         <IconButton size="small" onClick={() => removeFile(i)}>
                                             <CloseIcon fontSize="small" />
                                         </IconButton>
@@ -472,9 +558,11 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                         config={config}
                         onChange={setConfig}
                         detectedOrder={detectedOrder}
-                        sampleRow={rawRows[0]}
+                        rows={rawRows}
+                        rawPreviewLines={rawPreviewLines}
                         errorCount={mapped.errors.length}
                         mappedCount={mapped.rows.length}
+                        dateStats={dateStats}
                         dateFrom={dateFrom}
                         onDateFromChange={setDateFrom}
                         dateTo={dateTo}
@@ -495,20 +583,61 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                             currency={book.default_currency}
                             selected={selected}
                             outOfRangeIndices={outOfRangeIndices}
+                            fileLabel={files.map((f) => f.name).join(", ")}
                             onToggle={(index) => setSelected((prev) => {
                                 const next = new Set(prev);
                                 if (next.has(index)) next.delete(index); else next.add(index);
                                 return next;
                             })}
                         />
-                        <TextField
-                            size="small" label="Card name" value={sourceLabel}
-                            onChange={(e) => setSourceLabel(e.target.value)}
-                            placeholder="Chase Visa"
-                            helperText="Shown in the import history, so a bad file can be found and removed later."
-                        />
 
-                        <Box>
+                        <Box sx={{ ...cardSx, p: 2 }}>
+                            <Stack spacing={2}>
+                                <TextField
+                                    size="small" label="Card name" value={sourceLabel}
+                                    onChange={(e) => setSourceLabel(e.target.value)}
+                                    placeholder="Chase Visa"
+                                    helperText="Shown in the import history, so a bad file can be found and removed later."
+                                />
+                                {(selectedPreset ? !presetUnchanged : true) && (
+                                    <Box>
+                                        <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
+                                            Mapping
+                                        </Typography>
+                                        {selectedPreset ? (
+                                            <Alert severity="info" variant="outlined">
+                                                This mapping has changed since &ldquo;{selectedPreset.name}&rdquo; was saved.
+                                                Importing will update it.
+                                            </Alert>
+                                        ) : (
+                                            <Stack spacing={1.5}>
+                                                <FormControlLabel
+                                                    sx={{ m: 0 }}
+                                                    control={
+                                                        <Checkbox
+                                                            size="small" checked={savePresetName !== ""}
+                                                            onChange={(e) => setSavePresetName(
+                                                                e.target.checked ? files[0]?.name.replace(/\.csv$/i, "") || "" : "",
+                                                            )}
+                                                        />
+                                                    }
+                                                    label="Remember this mapping for next time"
+                                                />
+                                                {savePresetName !== "" && (
+                                                    <TextField
+                                                        size="small" label="Mapping name" value={savePresetName}
+                                                        onChange={(e) => setSavePresetName(e.target.value)}
+                                                        placeholder="Chase Visa"
+                                                    />
+                                                )}
+                                            </Stack>
+                                        )}
+                                    </Box>
+                                )}
+                            </Stack>
+                        </Box>
+
+                        <Box sx={{ ...cardSx, p: 2 }}>
                             <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
                                 Whose spending is this?
                             </Typography>
@@ -523,36 +652,6 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                                 amountless
                             />
                         </Box>
-
-                        {selectedPreset ? (
-                            !presetUnchanged && (
-                                <Alert severity="info" variant="outlined">
-                                    This mapping has changed since &ldquo;{selectedPreset.name}&rdquo; was saved.
-                                    Importing will update it.
-                                </Alert>
-                            )
-                        ) : (
-                            <>
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox
-                                            size="small" checked={savePresetName !== ""}
-                                            onChange={(e) => setSavePresetName(
-                                                e.target.checked ? files[0]?.name.replace(/\.csv$/i, "") || "" : "",
-                                            )}
-                                        />
-                                    }
-                                    label="Remember this mapping for next time"
-                                />
-                                {savePresetName !== "" && (
-                                    <TextField
-                                        size="small" label="Mapping name" value={savePresetName}
-                                        onChange={(e) => setSavePresetName(e.target.value)}
-                                        placeholder="Chase Visa"
-                                    />
-                                )}
-                            </>
-                        )}
                     </Stack>
                 ))}
 

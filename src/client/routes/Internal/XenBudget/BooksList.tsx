@@ -5,6 +5,7 @@ import {
 } from "@mui/material";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import AddIcon from "@mui/icons-material/Add";
+import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import { useTitle } from "../../../hooks/useTitle";
@@ -71,6 +72,7 @@ export default function BooksList() {
                                         <Typography variant="caption" color="text.secondary">
                                             {book.item_count ?? 0} item{book.item_count === 1 ? "" : "s"}
                                             {" · "}{book.default_currency}
+                                            {" · "}Created {format(new Date(book.created_at), "MMM yyyy")}
                                         </Typography>
                                     </Box>
                                     <AvatarGroup max={4} sx={{ "& .MuiAvatar-root": { width: 28, height: 28, fontSize: 13 } }}>

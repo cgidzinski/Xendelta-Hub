@@ -22,6 +22,7 @@ export {
   FLAG_UNCATEGORISED,
   FLAG_POSSIBLE_DUPLICATE,
   FLAG_NEEDS_REVIEW,
+  FLAG_IGNORED,
   isSystemFlag,
 } from "./xenbudget";
 

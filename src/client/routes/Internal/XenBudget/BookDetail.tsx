@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Box, Button, Chip, IconButton, Stack, Tab, Tabs, Tooltip, Typography } from "@mui/material";
+import { Box, Button, IconButton, Stack, Tab, Tabs, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import InsightsIcon from "@mui/icons-material/Insights";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import SettingsIcon from "@mui/icons-material/Settings";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTitle } from "../../../hooks/useTitle";
 import { useXenBudgetBook } from "../../../hooks/xenbudget/useBook";
@@ -15,6 +16,7 @@ import type {
     XenBudgetBook, XenBudgetItem, CreateItemInput, UpdateBookInput,
 } from "../../../hooks/xenbudget/types";
 import ItemForm from "./components/ItemForm";
+import ImportWizard from "./components/ImportWizard";
 import { TAB_PATHS, activeIndex } from "./navigation";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -34,6 +36,9 @@ export interface BookDetailContext {
      */
     currency: string;
     onCurrencyChange: (currency: string) => void;
+    /** Narrows Overview/Report tallies to one member's shares. Unset means everyone. */
+    person: string | undefined;
+    onPersonChange: (userId: string | undefined) => void;
     onAddItem: () => void;
     onEditItem: (item: XenBudgetItem) => void;
     updateBook: (input: UpdateBookInput) => void;
@@ -50,6 +55,8 @@ export default function BookDetail() {
     const navigate = useNavigate();
     const location = useLocation();
     useXenBudgetSocket(bookId);
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
     const {
         book, isLoading, isError, error,
@@ -63,13 +70,16 @@ export default function BookDetail() {
         deleteItemAsync, isDeleting,
     } = useXenBudgetItemMutations(bookId);
 
-    useTitle(book?.name || "XenBudget");
+    useTitle("XenBudget");
 
     const [formOpen, setFormOpen] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
     const [editing, setEditing] = useState<XenBudgetItem | null>(null);
     // Undefined lets the server pick (the book's default, or the only one present);
     // choosing from the switcher pins it for this session.
     const [currency, setCurrency] = useState<string | undefined>(undefined);
+    // Same shape as currency: unset means "everyone", picking a member pins it for the session.
+    const [person, setPerson] = useState<string | undefined>(undefined);
 
     // Tab order matches the <Tab> order below; the active tab comes from the URL rather
     // than being stored, so a deep link or the back button lands on the right one. See
@@ -85,6 +95,8 @@ export default function BookDetail() {
         isCreator: book.is_creator,
         currency: currency ?? book.default_currency,
         onCurrencyChange: setCurrency,
+        person,
+        onPersonChange: setPerson,
         onAddItem: () => { setEditing(null); setFormOpen(true); },
         onEditItem: (item) => { setEditing(item); setFormOpen(true); },
         updateBook,
@@ -102,8 +114,8 @@ export default function BookDetail() {
     };
 
     return (
-        <Box>
-            <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+        <Box sx={{ height: { xs: "calc(100dvh - 56px)", sm: "calc(100dvh - 64px)" }, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <Box sx={{ borderBottom: 1, borderColor: "divider", flexShrink: 0 }}>
                 <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, pt: 1.5, pb: 1 }}>
                     <Tooltip title="All books">
                         <IconButton size="small" onClick={() => navigate("/internal/xenbudget/books")}>
@@ -111,12 +123,17 @@ export default function BookDetail() {
                         </IconButton>
                     </Tooltip>
                     <Typography variant="h6" noWrap sx={{ flexGrow: 1, minWidth: 0 }}>{book.name}</Typography>
-                    <Chip size="small" label={book.default_currency} />
                     <Button
                         size="small" variant="contained" startIcon={<AddIcon />}
                         onClick={outletContext.onAddItem}
                     >
-                        Add
+                        New
+                    </Button>
+                    <Button
+                        size="small" variant="outlined" startIcon={<UploadFileIcon />}
+                        onClick={() => setImportOpen(true)}
+                    >
+                        Import
                     </Button>
                 </Stack>
                 <Tabs
@@ -124,14 +141,14 @@ export default function BookDetail() {
                     onChange={(_, v) => navigate(`/internal/xenbudget/books/${bookId}/${TAB_PATHS[v]}`)}
                     variant="fullWidth"
                 >
-                    <Tab icon={<InsightsIcon sx={{ fontSize: 20 }} />} label="Overview" />
-                    <Tab icon={<ReceiptLongIcon sx={{ fontSize: 20 }} />} label="Items" />
-                    <Tab icon={<BarChartIcon sx={{ fontSize: 20 }} />} label="Report" />
-                    <Tab icon={<SettingsIcon sx={{ fontSize: 20 }} />} label="Settings" />
+                    <Tab icon={<InsightsIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Overview"} aria-label="Overview" />
+                    <Tab icon={<ReceiptLongIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Items"} aria-label="Items" />
+                    <Tab icon={<BarChartIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Report"} aria-label="Report" />
+                    <Tab icon={<SettingsIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Settings"} aria-label="Settings" />
                 </Tabs>
             </Box>
 
-            <Box sx={{ maxWidth: 900, mx: "auto" }}>
+            <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", width: "100%", maxWidth: 900, mx: "auto" }}>
                 <Outlet context={outletContext} />
             </Box>
 
@@ -145,6 +162,8 @@ export default function BookDetail() {
                 onDelete={editing ? () => deleteItemAsync(editing._id) : undefined}
                 isDeleting={isDeleting}
             />
+
+            <ImportWizard open={importOpen} onClose={() => setImportOpen(false)} book={book} />
         </Box>
     );
 }

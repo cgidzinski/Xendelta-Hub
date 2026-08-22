@@ -39,6 +39,7 @@ import {
 } from "../utils/xenBudgetUtils";
 import {
   SYSTEM_FLAGS, STARTER_CATEGORIES, FLAG_UNCATEGORISED, FLAG_POSSIBLE_DUPLICATE,
+  FLAG_NEEDS_REVIEW, FLAG_IGNORED,
 } from "../constants";
 import {
   applyRules, stripRuleEffects, type DraftItem, type Rule,
@@ -131,6 +132,13 @@ function baseItemMatch(bookId: any, q: Record<string, string>): Record<string, a
   if (q.flags) filter.flags = { $in: q.flags.split(",").filter(Boolean) };
   // "has no category at all" - the worklist an import leaves behind.
   if (q.uncategorised === "true") filter.categories = { $size: 0 };
+  // Review mode's queue: uncategorised only. Items flagged "Needs review" are surfaced
+  // separately as a quick filter rather than pulled into the queue. Something deliberately
+  // set aside doesn't belong back in the queue just because it's also uncategorised.
+  if (q.review === "true") {
+    filter.categories = { $size: 0 };
+    filter.flags = { $nin: [FLAG_IGNORED] };
+  }
   if (q.people) filter["shares.user_id"] = { $in: q.people.split(",").filter(Boolean) };
   if (q.type === "expense" || q.type === "income") filter.type = q.type;
   if (q.currency) filter.currency = q.currency;
@@ -716,7 +724,14 @@ module.exports = function (app: any) {
       if (ensureSystemLabels(book)) await book.save();
       await book.populate("members", "username avatar");
       const count = await XenBudgetItem.countDocuments({ book_id: book._id, excluded: { $ne: true } });
-      res.json({ status: true, message: "Book retrieved", data: serializeBookFor(book, callerId(req), count) });
+      // Reuses the review-queue filter so the count always matches what the modal shows.
+      const reviewCount = await XenBudgetItem.countDocuments(baseItemMatch(book._id, { review: "true" }));
+      const needsReviewCount = await XenBudgetItem.countDocuments({
+        book_id: book._id,
+        excluded: { $ne: true },
+        flags: FLAG_NEEDS_REVIEW,
+      });
+      res.json({ status: true, message: "Book retrieved", data: serializeBookFor(book, callerId(req), count, reviewCount, needsReviewCount) });
     } catch (error) {
       console.error("Error fetching book:", error);
       res.status(500).json({ status: false, message: "Failed to fetch book" });
@@ -1651,18 +1666,20 @@ module.exports = function (app: any) {
               { $match: { "categories.name": { $in: cats } } },
               { $unwind: "$shares" },
               { $match: { "shares.user_id": person } },
-              { $group: {
-                _id: "$_id",
-                total: {
-                  $sum: {
-                    $cond: [
-                      { $eq: ["$amount", 0] },
-                      0,
-                      { $divide: [{ $multiply: ["$categories.amount", "$shares.amount"] }, "$amount"] },
-                    ],
+              {
+                $group: {
+                  _id: "$_id",
+                  total: {
+                    $sum: {
+                      $cond: [
+                        { $eq: ["$amount", 0] },
+                        0,
+                        { $divide: [{ $multiply: ["$categories.amount", "$shares.amount"] }, "$amount"] },
+                      ],
+                    },
                   },
-                },
-              } },
+                }
+              },
               { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } },
             ];
           } else if (cats) {
@@ -1750,6 +1767,7 @@ module.exports = function (app: any) {
         if (!book) return;
         const q = req.query as Record<string, string>;
         const tz = requestTimezone(q);
+        const people = q.people ? q.people.split(",").filter(Boolean) : null;
 
         // Amounts in different currencies can't be added together, so a summary is always
         // scoped to one - the same thing XenSplit's analytics does. The full list of
@@ -1768,50 +1786,83 @@ module.exports = function (app: any) {
         const from = q.from ? new Date(q.from) : zonedWallToUtc(`${tzMonthKey(now, tz)}-01`, tz);
         const to = q.to ? new Date(q.to) : now;
 
-        const match = baseItemMatch(book._id, { ...q, currency, from: from.toISOString(), to: to.toISOString() });
+        const matchQuery: Record<string, string> = { ...q, currency, from: from.toISOString(), to: to.toISOString() };
+        // Handled explicitly below: when narrowing to people, the rollups sum each selected
+        // person's share rather than the item's full amount.
+        delete matchQuery.people;
+        const match = baseItemMatch(book._id, matchQuery);
 
         const expenseOnly = { $match: { type: "expense" } };
+
+        // Narrowing to specific people changes what each document contributes: instead of
+        // the item's full amount, the rollups sum each selected person's actual share.
+        const shareStages: any[] = people
+          ? [
+            { $unwind: "$shares" },
+            { $match: { "shares.user_id": { $in: people } } },
+          ]
+          : [];
+        const amountField: any = people ? "$shares.amount" : "$amount";
+        // A person's share of one category weight: share × (category weight ÷ item amount).
+        const categoryTotalExpr: any = people
+          ? {
+            $cond: [
+              { $eq: ["$amount", 0] },
+              0,
+              { $divide: [{ $multiply: ["$shares.amount", "$categories.amount"] }, "$amount"] },
+            ],
+          }
+          : "$categories.amount";
+
         const [facets] = currency ? await XenBudgetItem.aggregate([
           { $match: match },
+          ...shareStages,
           {
             $facet: {
               byPeriod: [
                 {
                   $group: {
                     _id: { $dateToString: { format, date: "$date", timezone: tz } },
-                    expense: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] } },
-                    income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] } },
+                    expense: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, amountField, 0] } },
+                    income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, amountField, 0] } },
                     count: { $sum: 1 },
                   },
                 },
                 { $sort: { _id: 1 } },
               ],
-              // Sums the category's WEIGHT, not the item's full amount. Unwinding and
-              // summing $amount - which is what the old tags array did - counts an item
-              // once per label, so anything carrying two of them inflated the totals.
+              // Sums the category's WEIGHT (or the selected person's share of it), not the
+              // item's full amount. Unwinding and summing $amount - which is what the old
+              // tags array did - counts an item once per label, so anything carrying two of
+              // them inflated the totals.
               byCategory: [
                 expenseOnly,
                 { $unwind: "$categories" },
-                { $group: { _id: "$categories.name", total: { $sum: "$categories.amount" }, count: { $sum: 1 } } },
+                { $group: { _id: "$categories.name", total: { $sum: categoryTotalExpr }, count: { $sum: 1 } } },
                 { $sort: { total: -1 } },
               ],
               byPerson: [
-                expenseOnly,
                 { $unwind: "$shares" },
-                { $group: { _id: "$shares.user_id", total: { $sum: "$shares.amount" }, count: { $sum: 1 } } },
+                {
+                  $group: {
+                    _id: "$shares.user_id",
+                    total: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$shares.amount", 0] } },
+                    income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, "$shares.amount", 0] } },
+                    count: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, 1, 0] } },
+                  },
+                },
                 { $sort: { total: -1 } },
               ],
               uncategorised: [
                 expenseOnly,
                 { $match: { $or: [{ categories: { $size: 0 } }, { categories: { $exists: false } }] } },
-                { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } },
+                { $group: { _id: null, total: { $sum: amountField }, count: { $sum: 1 } } },
               ],
               totals: [
                 {
                   $group: {
                     _id: null,
-                    expense: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] } },
-                    income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] } },
+                    expense: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, amountField, 0] } },
+                    income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, amountField, 0] } },
                     count: { $sum: 1 },
                   },
                 },
@@ -1859,6 +1910,7 @@ module.exports = function (app: any) {
               username: userMap.get(r._id)?.username || "Unknown",
               avatar: userMap.get(r._id)?.avatar || null,
               total: roundMoney(r.total),
+              income: roundMoney(r.income),
               count: r.count,
             })),
             uncategorised: { total: roundMoney(uncategorisedRow?.total || 0), count: uncategorisedRow?.count || 0 },
@@ -1910,10 +1962,14 @@ module.exports = function (app: any) {
       const last = page[page.length - 1];
       const nextCursor = hasMore && last ? `${new Date(last.date).toISOString()}_${last._id}` : null;
 
+      // Resolve each item's import batch to a card label ("Chase Visa") so the client
+      // can show provenance without an extra lookup per item.
+      const batchById = new Map<string, any>((book.import_batches || []).map((b: any) => [b._id.toString(), b]));
+
       res.json({
         status: true,
         message: "Items retrieved",
-        data: { items: serializeItems(page), next_cursor: nextCursor, has_more: hasMore },
+        data: { items: serializeItems(page, batchById), next_cursor: nextCursor, has_more: hasMore },
       });
     } catch (error) {
       console.error("Error fetching items:", error);

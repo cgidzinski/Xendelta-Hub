@@ -8,6 +8,7 @@ import {
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import CloseIcon from "@mui/icons-material/Close";
 import { useSnackbar } from "notistack";
+import { format } from "date-fns";
 import type { BookDetailContext } from "../BookDetail";
 import SectionCard from "./SectionCard";
 import BookBackupSection from "../components/BookBackupSection";
@@ -70,6 +71,9 @@ export default function GeneralSection() {
                 <Typography variant="caption" color="text.secondary">
                     Months and budget periods follow each viewer&rsquo;s own timezone, set on your
                     profile — so this book reads in your local time and in everyone else&rsquo;s.
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                    Created {format(new Date(book.created_at), "MMMM d, yyyy")}.
                 </Typography>
             </SectionCard>
 

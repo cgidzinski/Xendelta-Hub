@@ -48,10 +48,10 @@ export default function BookSettings() {
     );
 
     return (
-        <Box sx={{ p: 2 }}>
-            <Box sx={{ display: "flex", flexDirection: isWide ? "row" : "column", gap: isWide ? 2 : 0 }}>
+        <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", p: 2 }}>
+            <Box sx={{ display: "flex", flexDirection: isWide ? "row" : "column", gap: isWide ? 2 : 0, flex: 1, minHeight: 0 }}>
                 {sectionTabs}
-                <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                <Box sx={{ flexGrow: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
                     <Outlet context={ctx} />
                 </Box>
             </Box>

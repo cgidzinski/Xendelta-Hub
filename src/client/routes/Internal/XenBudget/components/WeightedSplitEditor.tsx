@@ -4,7 +4,7 @@ import {
 } from "@mui/material";
 import type { ShareType, XenBudgetMember, XenBudgetLabel } from "../../../../hooks/xenbudget/types";
 import { formatCurrency, getCurrencySymbol, sanitizeAmount } from "../../../../utils/currencyUtils";
-import { resolveLabelColor } from "./LabelChip";
+import { CategoryChip, resolveLabelColor } from "./LabelChip";
 
 export interface SplitDraft {
     key: string;
@@ -31,6 +31,12 @@ interface WeightedSplitEditorProps {
      * since neither means anything without an amount.
      */
     amountless?: boolean;
+    /**
+     * Renders only rows already in `selected`, with no checkbox/`Autocomplete` to change
+     * who or what is included — for a second "now configure the split" step that follows a
+     * dedicated picker step, so the same people/categories aren't picked twice.
+     */
+    hidePicker?: boolean;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -45,7 +51,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  */
 export default function WeightedSplitEditor({
     splitType, onSplitTypeChange, selected, onSelectedChange, amount, currency, mode,
-    amountless = false,
+    amountless = false, hidePicker = false,
 }: WeightedSplitEditorProps) {
     const keys = selected.map((s) => s.key);
 
@@ -66,9 +72,18 @@ export default function WeightedSplitEditor({
     const noun = mode.kind === "people" ? "person" : "category";
     const summary = (() => {
         if (amountless) {
-            if (selected.length === 0) return { text: "Pick at least one person", error: true };
+            if (selected.length === 0) {
+                return mode.kind === "people"
+                    ? { text: "Pick at least one person", error: true }
+                    : { text: "Uncategorised", error: false };
+            }
+            if (selected.length === 1) {
+                return mode.kind === "people"
+                    ? { text: "All rows attributed to them", error: false }
+                    : { text: "All in one category", error: false };
+            }
             return {
-                text: selected.length === 1 ? "All rows attributed to them" : `Split evenly between ${selected.length}`,
+                text: `Split evenly between ${selected.length} ${mode.kind === "people" ? "people" : "categories"}`,
                 error: false,
             };
         }
@@ -124,11 +139,13 @@ export default function WeightedSplitEditor({
 
             {mode.kind === "people" ? (
                 <Stack spacing={0.5}>
-                    {mode.members.map((m) => {
+                    {(hidePicker ? mode.members.filter((m) => keys.includes(m.user_id)) : mode.members).map((m) => {
                         const draft = selected.find((s) => s.key === m.user_id);
                         return (
                             <Stack key={m.user_id} direction="row" alignItems="center" spacing={1}>
-                                <Checkbox size="small" checked={!!draft} onChange={() => toggle(m.user_id)} />
+                                {!hidePicker && (
+                                    <Checkbox size="small" checked={!!draft} onChange={() => toggle(m.user_id)} />
+                                )}
                                 <Avatar src={m.avatar || undefined} sx={{ width: 26, height: 26, fontSize: 12 }}>
                                     {m.username[0]?.toUpperCase()}
                                 </Avatar>
@@ -147,21 +164,46 @@ export default function WeightedSplitEditor({
                 </Stack>
             ) : (
                 <Stack spacing={1}>
-                    <Autocomplete
-                        multiple freeSolo
-                        options={mode.registry.map((c) => c.name)}
-                        value={keys}
-                        onChange={(_, v) => {
-                            const next = v as string[];
-                            // Keep any weight already typed for a category that survives.
-                            onSelectedChange(next.map((key) =>
-                                selected.find((s) => s.key === key) || { key, value: "" }));
-                        }}
-                        renderInput={(params) => (
-                            <TextField {...params} size="small" label="Categories" placeholder="What was this?" />
-                        )}
-                    />
-                    {splitType !== "equal" && selected.map((draft) => (
+                    {!hidePicker && (
+                        <Autocomplete
+                            multiple freeSolo
+                            options={mode.registry.map((c) => c.name)}
+                            value={keys}
+                            onChange={(_, v) => {
+                                const next = v as string[];
+                                // Keep any weight already typed for a category that survives.
+                                onSelectedChange(next.map((key) =>
+                                    selected.find((s) => s.key === key) || { key, value: "" }));
+                            }}
+                            renderTags={(value, getTagProps) =>
+                                value.map((option, index) => {
+                                    const { key, ...rest } = getTagProps({ index });
+                                    return <CategoryChip key={key} name={option} registry={mode.registry} {...rest} />;
+                                })
+                            }
+                            renderInput={(params) => (
+                                <TextField {...params} size="small" label="Categories" placeholder="What was this?" />
+                            )}
+                        />
+                    )}
+                    {hidePicker && selected.map((draft) => (
+                        <Stack key={draft.key} direction="row" alignItems="center" spacing={1}>
+                            <Box sx={{
+                                width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
+                                bgcolor: resolveLabelColor(draft.key, mode.registry),
+                            }} />
+                            <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
+                                {draft.key}
+                            </Typography>
+                            {!amountless && splitType === "equal" && selected.length > 1 && (
+                                <Typography variant="body2" color="text.secondary">
+                                    {formatCurrency(round2(perPart), currency)}
+                                </Typography>
+                            )}
+                            {!amountless && splitType !== "equal" && valueField(draft)}
+                        </Stack>
+                    ))}
+                    {!hidePicker && splitType !== "equal" && selected.map((draft) => (
                         <Stack key={draft.key} direction="row" alignItems="center" spacing={1}>
                             <Box sx={{
                                 width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
@@ -173,7 +215,7 @@ export default function WeightedSplitEditor({
                             {valueField(draft)}
                         </Stack>
                     ))}
-                    {splitType === "equal" && selected.length > 1 && (
+                    {!hidePicker && splitType === "equal" && selected.length > 1 && (
                         <Typography variant="caption" color="text.secondary">
                             {formatCurrency(round2(perPart), currency)} to each {noun}
                         </Typography>

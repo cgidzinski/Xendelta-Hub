@@ -93,6 +93,10 @@ export interface XenBudgetBook {
     created_at: string;
     /** Non-excluded item count, supplied by the list and detail endpoints. */
     item_count?: number;
+    /** Items waiting in the review queue (uncategorised only). */
+    review_count?: number;
+    /** Items flagged "Needs review" — surfaced as a quick filter. */
+    needs_review_count?: number;
 }
 
 export interface XenBudgetShare {
@@ -134,6 +138,8 @@ export interface XenBudgetItem {
     applied_rule_ids: string[];
     manually_edited: boolean;
     source: "manual" | "csv" | "restore";
+    /** Human-readable card/source name for imported items, e.g. "Chase Visa". */
+    source_label?: string;
     import_batch_id?: string;
     created_by: string;
     created_at: string;
@@ -327,7 +333,10 @@ export interface SummaryPerson {
     user_id: string;
     username: string;
     avatar: string | null;
+    /** Each person's share of the book's expenses for the period. */
     total: number;
+    /** Each person's share of the book's income for the period. */
+    income: number;
     count: number;
 }
 

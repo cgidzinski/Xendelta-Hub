@@ -3,6 +3,7 @@ import {
     Tooltip, Typography,
 } from "@mui/material";
 import BlockIcon from "@mui/icons-material/Block";
+import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import type {
     ImportPreviewRow, DuplicateMatch, XenBudgetLabel,
 } from "../../../../../hooks/xenbudget/types";
@@ -23,11 +24,13 @@ interface PreviewStepProps {
     onToggle: (index: number) => void;
     /** Row indices outside the wizard's optional date cutoff — shown, but unticked. */
     outOfRangeIndices?: Set<number>;
+    /** Name(s) of the file(s) this preview was built from, e.g. "statement.csv". */
+    fileLabel?: string;
 }
 
 export default function PreviewStep({
     previews, duplicates, errors, categoryRegistry, flagRegistry, currency, selected, onToggle,
-    outOfRangeIndices,
+    outOfRangeIndices, fileLabel,
 }: PreviewStepProps) {
     const duplicateIndices = new Set(duplicates.map((d) => d.index));
     const skipped = previews.filter((p) => p.skipped);
@@ -36,12 +39,20 @@ export default function PreviewStep({
 
     return (
         <Stack spacing={2}>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
-                <Chip size="small" label={`${selected.size} to import`} color="primary" />
-                {duplicates.length > 0 && <Chip size="small" variant="outlined" label={`${duplicates.length} look like duplicates`} />}
-                {outOfRange.size > 0 && <Chip size="small" variant="outlined" label={`${outOfRange.size} outside the date range`} />}
-                {skipped.length > 0 && <Chip size="small" variant="outlined" label={`${skipped.length} skipped by rules`} />}
-                {errors.length > 0 && <Chip size="small" variant="outlined" color="warning" label={`${errors.length} unreadable`} />}
+            <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
+                <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
+                    <Chip size="small" label={`${selected.size} to import`} color="primary" />
+                    {duplicates.length > 0 && <Chip size="small" variant="outlined" label={`${duplicates.length} look like duplicates`} />}
+                    {outOfRange.size > 0 && <Chip size="small" variant="outlined" label={`${outOfRange.size} outside the date range`} />}
+                    {skipped.length > 0 && <Chip size="small" variant="outlined" label={`${skipped.length} skipped by rules`} />}
+                    {errors.length > 0 && <Chip size="small" variant="outlined" color="warning" label={`${errors.length} unreadable`} />}
+                </Stack>
+                {fileLabel && (
+                    <Chip
+                        size="small" variant="outlined" icon={<InsertDriveFileIcon fontSize="small" />}
+                        label={fileLabel} sx={{ borderRadius: 1, flexShrink: 0, maxWidth: "100%" }}
+                    />
+                )}
             </Stack>
 
             {duplicates.length > 0 && (

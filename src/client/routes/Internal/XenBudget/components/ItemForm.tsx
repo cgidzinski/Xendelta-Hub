@@ -1,9 +1,14 @@
 import { useEffect, useState } from "react";
 import {
     Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-    Divider, InputAdornment, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup,
-    Typography,
+    Divider, IconButton, InputAdornment, MenuItem, Stack, Step, StepLabel, Stepper, TextField,
+    ToggleButton, ToggleButtonGroup, Typography,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import CloseIcon from "@mui/icons-material/Close";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { useSnackbar } from "notistack";
 import type {
@@ -14,6 +19,9 @@ import {
     getGroupCurrencies, getCurrencySymbol, sanitizeAmount, STABLE_CURRENCY_MENU_PROPS,
 } from "../../../../utils/currencyUtils";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
+import { EXPENSE_COLOR, INCOME_COLOR } from "../../../../components/ui/chartColors";
+
+const STEPS = ["Details", "Splits", "More"] as const;
 
 interface ItemFormProps {
     open: boolean;
@@ -31,6 +39,8 @@ export default function ItemForm({
     open, onClose, book, item, onSubmit, isSubmitting, onDelete, isDeleting,
 }: ItemFormProps) {
     const { enqueueSnackbar } = useSnackbar();
+    const isMobile = useMediaQuery("(max-width:600px)");
+    const [step, setStep] = useState(0);
     const [type, setType] = useState<ItemType>("expense");
     const [amount, setAmount] = useState("");
     const [currency, setCurrency] = useState(book.default_currency);
@@ -43,9 +53,14 @@ export default function ItemForm({
     const [shareType, setShareType] = useState<ShareType>("equal");
     const [shares, setShares] = useState<SplitDraft[]>([]);
 
+    // A solo book has no one else to attribute against — the picker still shows (so it's
+    // visible what this step normally does), just greyed and non-interactive.
+    const soloBook = book.members.length <= 1;
+
     // Re-seed whenever the dialog opens, so a cancelled edit doesn't leak into the next one.
     useEffect(() => {
         if (!open) return;
+        setStep(0);
         if (item) {
             setType(item.type);
             setAmount(String(item.amount));
@@ -82,6 +97,10 @@ export default function ItemForm({
 
     const numericAmount = parseFloat(amount) || 0;
     const canSubmit = description.trim().length > 0 && numericAmount > 0 && shares.length > 0;
+    const canProceed = STEPS[step] === "Details"
+        ? description.trim().length > 0 && numericAmount > 0 && shares.length > 0
+        : true;
+    const typeColor = type === "income" ? INCOME_COLOR : EXPENSE_COLOR;
 
     const handleSubmit = async () => {
         const input: CreateItemInput = {
@@ -113,136 +132,255 @@ export default function ItemForm({
         }
     };
 
+    const handleDelete = async () => {
+        if (!onDelete) return;
+        try {
+            await onDelete();
+            onClose();
+        } catch (e) {
+            enqueueSnackbar(e instanceof Error ? e.message : "Failed to delete item", { variant: "error" });
+        }
+    };
+
     return (
-        <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-            <DialogTitle>{item ? "Edit item" : "Add item"}</DialogTitle>
+        <Dialog
+            open={open} onClose={onClose} fullWidth maxWidth="sm" fullScreen={isMobile}
+            slotProps={{ paper: { sx: { borderRadius: isMobile ? 0 : 2 } } }}
+        >
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 3, pt: 2 }}>
+                <DialogTitle sx={{ fontWeight: 700, p: 0 }}>{item ? "Edit item" : "Add item"}</DialogTitle>
+                <IconButton size="small" onClick={onClose}><CloseIcon fontSize="small" /></IconButton>
+            </Box>
             <DialogContent>
-                <Stack spacing={2} sx={{ pt: 1 }}>
-                    <ToggleButtonGroup
-                        size="small" exclusive fullWidth value={type}
-                        onChange={(_, v) => v && setType(v)}
-                    >
-                        <ToggleButton value="expense">Expense</ToggleButton>
-                        <ToggleButton value="income">Income</ToggleButton>
-                    </ToggleButtonGroup>
+                <Stepper activeStep={step} sx={{ mb: 2 }}>
+                    {STEPS.map((label, i) => (
+                        <Step key={label}>
+                            <StepLabel
+                                onClick={item ? () => setStep(i) : undefined}
+                                sx={item ? { cursor: "pointer" } : undefined}
+                            >
+                                {label}
+                            </StepLabel>
+                        </Step>
+                    ))}
+                </Stepper>
 
-                    <TextField
-                        autoFocus fullWidth label="Description"
-                        placeholder={type === "income" ? "Paycheque" : "Groceries"}
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                    />
-
-                    <Stack direction="row" spacing={1}>
-                        <TextField
-                            label="Amount" value={amount}
-                            onChange={(e) => {
-                                const clean = sanitizeAmount(e.target.value);
-                                if (clean !== null) setAmount(clean);
-                            }}
-                            sx={{ flexGrow: 1 }}
-                            slotProps={{
-                                input: {
-                                    startAdornment: (
-                                        <InputAdornment position="start">{getCurrencySymbol(currency)}</InputAdornment>
-                                    ),
-                                },
-                            }}
-                        />
-                        <TextField
-                            select label="Currency" value={currency}
-                            onChange={(e) => setCurrency(e.target.value)}
-                            sx={{ width: 120 }}
-                            slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
+                {STEPS[step] === "Details" && (
+                    <Stack spacing={2}>
+                        <ToggleButtonGroup
+                            size="small" exclusive fullWidth value={type}
+                            onChange={(_, v) => v && setType(v)}
                         >
-                            {getGroupCurrencies(book.default_currency, [], currency).map((c) => (
-                                <MenuItem key={c} value={c}>{c}</MenuItem>
-                            ))}
-                        </TextField>
-                    </Stack>
+                            <ToggleButton
+                                value="expense"
+                                sx={{
+                                    gap: 0.75,
+                                    "&.Mui-selected": {
+                                        color: EXPENSE_COLOR,
+                                        borderColor: EXPENSE_COLOR,
+                                        bgcolor: alpha(EXPENSE_COLOR, 0.15),
+                                    },
+                                    "&.Mui-selected:hover": { bgcolor: alpha(EXPENSE_COLOR, 0.22) },
+                                }}
+                            >
+                                <ArrowDownwardIcon fontSize="small" />
+                                Expense
+                            </ToggleButton>
+                            <ToggleButton
+                                value="income"
+                                sx={{
+                                    gap: 0.75,
+                                    "&.Mui-selected": {
+                                        color: INCOME_COLOR,
+                                        borderColor: INCOME_COLOR,
+                                        bgcolor: alpha(INCOME_COLOR, 0.15),
+                                    },
+                                    "&.Mui-selected:hover": { bgcolor: alpha(INCOME_COLOR, 0.22) },
+                                }}
+                            >
+                                <ArrowUpwardIcon fontSize="small" />
+                                Income
+                            </ToggleButton>
+                        </ToggleButtonGroup>
 
-                    <DatePicker label="Date" value={date} onChange={setDate} />
-
-                    <Divider />
-
-                    <Box>
-                        <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-                            What was it?
-                        </Typography>
-                        <WeightedSplitEditor
-                            mode={{ kind: "categories", registry: book.categories }}
-                            splitType={categorySplitType}
-                            onSplitTypeChange={setCategorySplitType}
-                            selected={categories}
-                            onSelectedChange={setCategories}
-                            amount={numericAmount}
-                            currency={currency}
+                        <TextField
+                            autoFocus fullWidth label="Description"
+                            placeholder={type === "income" ? "Paycheque" : "Groceries"}
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
                         />
-                    </Box>
 
-                    <Autocomplete
-                        multiple freeSolo
-                        options={book.flags.map((t) => t.name)}
-                        value={flags}
-                        onChange={(_, v) => setFlags(v as string[])}
-                        renderTags={(value, getTagProps) =>
-                            value.map((option, index) => {
-                                const { key, ...rest } = getTagProps({ index });
-                                return <Chip key={key} size="small" variant="outlined" label={option} {...rest} />;
-                            })
-                        }
-                        renderInput={(params) => (
+                        <Stack direction="row" spacing={1}>
                             <TextField
-                                {...params} label="Flags" placeholder="Anything needing attention?"
-                                helperText="For things to come back to — not what the purchase was."
+                                label="Amount" value={amount}
+                                onChange={(e) => {
+                                    const clean = sanitizeAmount(e.target.value);
+                                    if (clean !== null) setAmount(clean);
+                                }}
+                                sx={{ flexGrow: 1 }}
+                                slotProps={{
+                                    input: {
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <Typography component="span" sx={{ color: typeColor, fontWeight: 600 }}>
+                                                    {getCurrencySymbol(currency)}
+                                                </Typography>
+                                            </InputAdornment>
+                                        ),
+                                    },
+                                }}
                             />
-                        )}
-                    />
+                            <TextField
+                                select label="Currency" value={currency}
+                                onChange={(e) => setCurrency(e.target.value)}
+                                sx={{ width: 120 }}
+                                slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
+                            >
+                                {getGroupCurrencies(book.default_currency, [], currency).map((c) => (
+                                    <MenuItem key={c} value={c}>{c}</MenuItem>
+                                ))}
+                            </TextField>
+                        </Stack>
 
-                    <TextField
-                        fullWidth multiline minRows={2} label="Notes (optional)"
-                        value={notes} onChange={(e) => setNotes(e.target.value)}
-                    />
+                        <DatePicker label="Date" value={date} onChange={setDate} />
 
-                    <Divider />
+                        <Divider />
 
-                    <Box>
-                        <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-                            Attributed to
-                        </Typography>
-                        <WeightedSplitEditor
-                            mode={{ kind: "people", members: book.members }}
-                            splitType={shareType}
-                            onSplitTypeChange={setShareType}
-                            selected={shares}
-                            onSelectedChange={setShares}
-                            amount={numericAmount}
-                            currency={currency}
+                        <Box>
+                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
+                                Attributed to
+                            </Typography>
+                            <Box sx={soloBook ? { opacity: 0.45, pointerEvents: "none" } : undefined}>
+                                <WeightedSplitEditor
+                                    mode={{ kind: "people", members: book.members }}
+                                    splitType={shareType}
+                                    onSplitTypeChange={setShareType}
+                                    selected={shares}
+                                    onSelectedChange={setShares}
+                                    amount={numericAmount}
+                                    currency={currency}
+                                    amountless
+                                />
+                            </Box>
+                            {soloBook && (
+                                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                                    Only one person in this book, so there&rsquo;s nothing to split.
+                                </Typography>
+                            )}
+                        </Box>
+
+                        <Divider />
+
+                        <Box>
+                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
+                                What was it?
+                            </Typography>
+                            <WeightedSplitEditor
+                                mode={{ kind: "categories", registry: book.categories }}
+                                splitType={categorySplitType}
+                                onSplitTypeChange={setCategorySplitType}
+                                selected={categories}
+                                onSelectedChange={setCategories}
+                                amount={numericAmount}
+                                currency={currency}
+                                amountless
+                            />
+                        </Box>
+                    </Stack>
+                )}
+
+                {STEPS[step] === "Splits" && (
+                    <Stack spacing={2}>
+                        <Box>
+                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
+                                Attributed to
+                            </Typography>
+                            <Box sx={soloBook ? { opacity: 0.45, pointerEvents: "none" } : undefined}>
+                                <WeightedSplitEditor
+                                    mode={{ kind: "people", members: book.members }}
+                                    splitType={shareType}
+                                    onSplitTypeChange={setShareType}
+                                    selected={shares}
+                                    onSelectedChange={setShares}
+                                    amount={numericAmount}
+                                    currency={currency}
+                                    hidePicker
+                                />
+                            </Box>
+                            {soloBook && (
+                                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                                    Only one person in this book, so there&rsquo;s nothing to split.
+                                </Typography>
+                            )}
+                        </Box>
+
+                        <Divider />
+
+                        <Box>
+                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
+                                What was it?
+                            </Typography>
+                            <WeightedSplitEditor
+                                mode={{ kind: "categories", registry: book.categories }}
+                                splitType={categorySplitType}
+                                onSplitTypeChange={setCategorySplitType}
+                                selected={categories}
+                                onSelectedChange={setCategories}
+                                amount={numericAmount}
+                                currency={currency}
+                                hidePicker
+                            />
+                        </Box>
+                    </Stack>
+                )}
+
+                {STEPS[step] === "More" && (
+                    <Stack spacing={2}>
+                        <Autocomplete
+                            multiple freeSolo
+                            options={book.flags.map((t) => t.name)}
+                            value={flags}
+                            onChange={(_, v) => setFlags(v as string[])}
+                            renderTags={(value, getTagProps) =>
+                                value.map((option, index) => {
+                                    const { key, ...rest } = getTagProps({ index });
+                                    return <Chip key={key} size="small" variant="outlined" label={option} {...rest} />;
+                                })
+                            }
+                            renderInput={(params) => (
+                                <TextField
+                                    {...params} label="Flags" placeholder="Anything needing attention?"
+                                    helperText="For things to come back to — not what the purchase was."
+                                />
+                            )}
                         />
-                    </Box>
-                </Stack>
+
+                        <TextField
+                            fullWidth multiline minRows={2} label="Notes (optional)"
+                            value={notes} onChange={(e) => setNotes(e.target.value)}
+                        />
+                    </Stack>
+                )}
             </DialogContent>
             <DialogActions>
-                {item && onDelete && (
-                    <Button
-                        color="error" disabled={isDeleting}
-                        onClick={async () => {
-                            try {
-                                await onDelete();
-                                onClose();
-                            } catch (e) {
-                                enqueueSnackbar(e instanceof Error ? e.message : "Failed to delete item", { variant: "error" });
-                            }
-                        }}
-                        sx={{ mr: "auto" }}
-                    >
-                        Delete
+                <Stack direction="row" spacing={1} sx={{ mr: "auto" }}>
+                    {item && onDelete && (
+                        <Button color="error" disabled={isDeleting} onClick={handleDelete}>
+                            Delete
+                        </Button>
+                    )}
+                    {step > 0 && <Button onClick={() => setStep((s) => s - 1)}>Back</Button>}
+                </Stack>
+                {(item || step === STEPS.length - 1) && (
+                    <Button variant="contained" disabled={!canSubmit || isSubmitting} onClick={handleSubmit}>
+                        Save
                     </Button>
                 )}
-                <Button onClick={onClose}>Cancel</Button>
-                <Button variant="contained" disabled={!canSubmit || isSubmitting} onClick={handleSubmit}>
-                    {item ? "Save" : "Add"}
-                </Button>
+                {step < STEPS.length - 1 && (
+                    <Button variant="outlined" disabled={!canProceed} onClick={() => setStep((s) => s + 1)}>
+                        Next
+                    </Button>
+                )}
             </DialogActions>
         </Dialog>
     );

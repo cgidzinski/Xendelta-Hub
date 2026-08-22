@@ -2,18 +2,42 @@ import { Chip, alpha } from "@mui/material";
 import type { ChipProps } from "@mui/material";
 import FlagIcon from "@mui/icons-material/Flag";
 import type { XenBudgetLabel } from "../../../../hooks/xenbudget/types";
-import { colorForLabel } from "../../../../components/ui/chartColors";
+import { CHART_COLORS, colorForLabel } from "../../../../components/ui/chartColors";
 
 /**
- * Resolves a label's colour: the registry's if one was set, otherwise a stable colour
- * derived from the name. Hashing the name rather than using list position keeps a label
- * the same colour as others are added and removed around it, and keeps an unregistered
- * one — named by a CSV import or a rule before anyone configured it — rendering
- * consistently instead of falling back to grey.
+ * Default colours for every flag in a registry that hasn't had one explicitly set —
+ * walked in registry order so two default flags never land on the same colour as long as
+ * eight or fewer are uncoloured, instead of each hashing independently and occasionally
+ * colliding (a book rarely has more than a couple of flags, where a name-hash's random
+ * spread is the opposite of distinct).
  */
-export function resolveLabelColor(name: string, registry: XenBudgetLabel[]): string {
+function defaultFlagColors(registry: XenBudgetLabel[]): Map<string, string> {
+    const used = new Set(registry.filter((l) => l.color).map((l) => l.color as string));
+    const map = new Map<string, string>();
+    for (const l of registry) {
+        if (l.color) continue;
+        const free = CHART_COLORS.find((c) => !used.has(c));
+        const color = free ?? colorForLabel(l.name);
+        used.add(color);
+        map.set(l.name.toLowerCase(), color);
+    }
+    return map;
+}
+
+/**
+ * Resolves a label's colour: the registry's if one was set, otherwise a default. Flags get
+ * the collision-avoiding assignment above; categories (and anything not found in the
+ * registry at all — named by a CSV import or a rule before anyone configured it) keep the
+ * name hash, which stays stable as the list is edited around them.
+ */
+export function resolveLabelColor(name: string, registry: XenBudgetLabel[], kind?: "category" | "flag"): string {
     const registered = registry.find((l) => l.name.toLowerCase() === name.toLowerCase());
-    return registered?.color || colorForLabel(name);
+    if (registered?.color) return registered.color;
+    if (kind === "flag") {
+        const assigned = defaultFlagColors(registry).get(name.toLowerCase());
+        if (assigned) return assigned;
+    }
+    return colorForLabel(name);
 }
 
 interface LabelChipProps extends Omit<ChipProps, "label" | "color"> {
@@ -29,7 +53,7 @@ interface LabelChipProps extends Omit<ChipProps, "label" | "color"> {
 }
 
 export default function LabelChip({ name, registry, variant2, weight, sx, ...rest }: LabelChipProps) {
-    const color = resolveLabelColor(name, registry);
+    const color = resolveLabelColor(name, registry, variant2);
     const isCategory = variant2 === "category";
     return (
         <Chip
