@@ -15,8 +15,8 @@ import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
 import TimePeriodFilter, { defaultYearMode, resolvePeriod, type PeriodMode } from "./components/TimePeriodFilter";
 import TotalsSummary from "./components/TotalsSummary";
-import BudgetGroup from "./components/BudgetGroup";
-import { groupBudgets } from "./components/groupBudgets";
+import BudgetCard from "./components/budget/BudgetCard";
+import { sortBudgets } from "./components/budget/sortBudgets";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { formatCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
@@ -53,8 +53,8 @@ export default function BookReport() {
         currency,
         people: person ? [person] : undefined,
     });
-    const { budgets } = useXenBudgetStatus(book._id, currency);
-    const budgetGroups = useMemo(() => groupBudgets(budgets), [budgets]);
+    const { status: budgetStatusResponse, budgets } = useXenBudgetStatus(book._id, currency);
+    const orderedBudgets = useMemo(() => sortBudgets(budgets), [budgets]);
 
     const periodData = useMemo(() => (summary?.by_period ?? []).map((p) => ({
         key: p.key,
@@ -256,21 +256,33 @@ export default function BookReport() {
                             </>
                         )}
 
-                        {budgetGroups.length > 0 && (
-                            <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
-                                <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>
+                        {orderedBudgets.length > 0 && (
+                            <Box>
+                                <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.5 }}>
                                     Budgets right now
                                 </Typography>
-                                <Stack spacing={2}>
-                                    {budgetGroups.map((group) => (
-                                        <BudgetGroup
-                                            key={group.id} group={group}
+                                {/* Budget status is always the CURRENT period, whatever range
+                                the report above is showing, so it says so rather than looking
+                                like part of the same window. */}
+                                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                                    Each budget&rsquo;s own period, not the report range above.
+                                </Typography>
+                                <Box sx={{
+                                    display: "grid",
+                                    gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                                    gap: 1,
+                                    alignItems: "start",
+                                }}>
+                                    {orderedBudgets.map((budget) => (
+                                        <BudgetCard
+                                            key={budget._id} budget={budget}
                                             currency={currency} categoryRegistry={book.categories}
                                             members={book.members}
+                                            asOf={budgetStatusResponse?.as_of ?? new Date().toISOString()}
                                         />
                                     ))}
-                                </Stack>
-                            </Card>
+                                </Box>
+                            </Box>
                         )}
                     </Stack>
                 )}

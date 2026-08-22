@@ -8,8 +8,8 @@ import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
 import { CategoryChip, resolveLabelColor } from "./components/LabelChip";
-import BudgetGroup from "./components/BudgetGroup";
-import { groupBudgets } from "./components/groupBudgets";
+import BudgetCard from "./components/budget/BudgetCard";
+import { sortBudgets, overCount } from "./components/budget/sortBudgets";
 import TimePeriodFilter, { defaultMonthMode, resolvePeriod, type PeriodMode } from "./components/TimePeriodFilter";
 import TotalsSummary from "./components/TotalsSummary";
 import LoadingSpinner from "../../../components/LoadingSpinner";
@@ -32,9 +32,12 @@ export default function BookOverview() {
         currency, from: from.toISOString(), to: to.toISOString(), group_by: groupBy,
         people: person ? [person] : undefined,
     });
-    const { budgets: budgetStatus } = useXenBudgetStatus(book._id, currency);
-    const overBudgetCount = budgetStatus.filter((b) => b.over).length;
-    const budgetGroups = useMemo(() => groupBudgets(budgetStatus), [budgetStatus]);
+    const { status: budgetStatusResponse, budgets: budgetStatus } = useXenBudgetStatus(book._id, currency);
+    // Counts every limit past its cap, the shared one and each person's, so the header
+    // agrees with the red bars underneath it rather than only counting whole budgets.
+    const overBudgetCount = budgetStatus.reduce((sum, b) => sum + overCount(b), 0);
+    const orderedBudgets = useMemo(() => sortBudgets(budgetStatus), [budgetStatus]);
+    const asOf = budgetStatusResponse?.as_of ?? new Date().toISOString();
 
     const categoryRows = useMemo(() => {
         if (!summary) return [];
@@ -143,9 +146,9 @@ export default function BookOverview() {
                     </Stack>
                 </Card>
 
-                {isCurrentMonth && budgetGroups.length > 0 && (
-                    <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
-                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+                {isCurrentMonth && orderedBudgets.length > 0 && (
+                    <Box sx={{ mb: 2 }}>
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
                             <Typography variant="caption" sx={sectionLabelSx}>Budgets</Typography>
                             {overBudgetCount > 0 && (
                                 <Typography variant="caption" color="error.main">
@@ -153,19 +156,28 @@ export default function BookOverview() {
                                 </Typography>
                             )}
                         </Stack>
-                        <Stack spacing={2}>
-                            {budgetGroups.map((group) => (
-                                <BudgetGroup
-                                    key={group.id}
-                                    group={group}
+                        <Stack spacing={1}>
+                            {orderedBudgets.map((budget) => (
+                                <BudgetCard
+                                    key={budget._id}
+                                    budget={budget}
                                     currency={summary.currency}
                                     categoryRegistry={book.categories}
                                     members={book.members}
-                                    onClick={() => navigate(`/internal/xenbudget/books/${book._id}/settings/budgets`)}
+                                    asOf={asOf}
+                                    onViewItems={(b) => navigate(
+                                        `/internal/xenbudget/books/${book._id}/items`,
+                                        { state: { budgetFilter: {
+                                            categories: b.categories,
+                                            from: b.period_from,
+                                            to: b.period_to,
+                                        } } },
+                                    )}
+                                    onEdit={() => navigate(`/internal/xenbudget/books/${book._id}/settings/budgets`)}
                                 />
                             ))}
                         </Stack>
-                    </Card>
+                    </Box>
                 )}
 
                 {nothingYet ? (

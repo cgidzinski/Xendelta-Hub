@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useXenBudgetBooks } from "../../../../hooks/xenbudget/useBooks";
 import { useXenBudgetSummary } from "../../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../../hooks/xenbudget/useBudgets";
-import BudgetProgressBar from "../../XenBudget/components/BudgetProgressBar";
+import BudgetBar from "../../XenBudget/components/budget/BudgetBar";
+import { scopeColor } from "../../XenBudget/components/budget/budgetColors";
+import { worstPercent, budgetLabel } from "../../XenBudget/components/budget/sortBudgets";
 import { formatCurrency } from "../../../../utils/currencyUtils";
 import { cardSx, sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 
@@ -26,8 +28,9 @@ export default function XenBudgetCardBody() {
         return <Typography variant="body2" color="text.secondary">No books yet.</Typography>;
     }
 
-    // Whatever is closest to (or furthest past) its limit is what's worth surfacing.
-    const tightest = [...budgets].sort((a, b) => b.percent - a.percent).slice(0, 2);
+    // Whatever is closest to (or furthest past) its limit is what's worth surfacing -
+    // counting a person's own limit inside a budget, not just the shared one.
+    const tightest = [...budgets].sort((a, b) => worstPercent(b) - worstPercent(a)).slice(0, 2);
     const currency = summary?.currency || book.default_currency;
 
     return (
@@ -56,16 +59,45 @@ export default function XenBudgetCardBody() {
             </Stack>
 
             {tightest.length > 0 && (
-                <Stack spacing={1.5}>
-                    {tightest.map((budget) => (
-                        <BudgetProgressBar
-                            key={budget._id}
-                            budget={budget}
-                            currency={currency}
-                            categoryRegistry={book.categories}
-                            members={book.members}
-                        />
-                    ))}
+                /* The dashboard has room for a number, not a whole budget card: one line
+                per budget, showing whichever of its limits is tightest. */
+                <Stack spacing={1.25}>
+                    {tightest.map((budget) => {
+                        const tightestSub = [...budget.sub_budgets]
+                            .sort((a, b) => b.percent - a.percent)[0];
+                        // A budget with no overall limit is read off its tightest person.
+                        const useSub = budget.amount === undefined
+                            || (tightestSub && tightestSub.percent > (budget.percent ?? 0));
+                        const percent = useSub ? tightestSub.percent : (budget.percent ?? 0);
+                        const over = useSub ? tightestSub.over : (budget.over ?? false);
+                        const spent = useSub ? tightestSub.spent : budget.spent;
+                        const amountFor = useSub ? tightestSub.amount : (budget.amount ?? 0);
+                        const name = budgetLabel(budget);
+                        return (
+                            <Box key={budget._id}>
+                                <Stack
+                                    direction="row" alignItems="center" spacing={1}
+                                    sx={{ mb: 0.5, minWidth: 0 }}
+                                >
+                                    <Typography variant="caption" noWrap sx={{ flexGrow: 1, minWidth: 0 }}>
+                                        {name}{useSub ? ` · ${tightestSub.person_name}` : ""}
+                                    </Typography>
+                                    <Typography
+                                        variant="caption" noWrap
+                                        sx={{ flexShrink: 0, color: over ? "error.main" : "text.secondary" }}
+                                    >
+                                        {formatCurrency(spent, currency)} / {formatCurrency(amountFor, currency)}
+                                    </Typography>
+                                </Stack>
+                                <BudgetBar
+                                    spent={spent} amount={amountFor} percent={percent} over={over}
+                                    color={scopeColor(budget.categories, book.categories)}
+                                    height={6}
+                                    label={`${name}: ${formatCurrency(spent, currency)} of ${formatCurrency(amountFor, currency)}, ${percent}% of the limit`}
+                                />
+                            </Box>
+                        );
+                    })}
                 </Stack>
             )}
         </Box>

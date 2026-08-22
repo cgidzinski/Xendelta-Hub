@@ -24,14 +24,21 @@ export interface XenBudgetLabel {
 
 export type BudgetPeriod = "weekly" | "monthly" | "quarterly" | "yearly" | "custom";
 
+/** One person's limit nested inside a budget, sharing its categories, period and window. */
+export interface XenBudgetSubBudget {
+    _id: string;
+    person_id: string;
+    amount: number;
+}
+
 export interface XenBudgetBudget {
     _id: string;
-    /** Unset = everyone. */
-    person_id?: string;
     /** Empty = every category. */
     categories: string[];
     period: BudgetPeriod;
-    amount: number;
+    /** The overall limit. Unset when the budget caps only the people in `sub_budgets`. */
+    amount?: number;
+    sub_budgets: XenBudgetSubBudget[];
     start_date?: string;
     end_date?: string;
     active: boolean;
@@ -279,20 +286,47 @@ export interface PresetInput {
     default_categories?: string[];
 }
 
+/** What one person put toward a budget's scope in its period. Sums to the budget's `spent`. */
+export interface BudgetPersonSpend {
+    user_id: string;
+    username: string;
+    amount: number;
+}
+
+/** A per-person limit, measured over its parent's scope and window. */
+export interface SubBudgetStatus {
+    _id: string;
+    person_id: string;
+    person_name: string;
+    amount: number;
+    spent: number;
+    remaining: number;
+    percent: number;
+    over: boolean;
+    item_count: number;
+}
+
 export interface BudgetStatus {
     _id: string;
     /** Empty = every category. */
     categories: string[];
-    person_id?: string;
-    person_name?: string;
     period: BudgetPeriod;
-    amount: number;
+    /** What the scope spent this period, whether or not there is an overall limit. */
     spent: number;
-    remaining: number;
-    /** Uncapped, so the bar can show how far past the limit it went. */
-    percent: number;
-    over: boolean;
     item_count: number;
+    /**
+     * The overall limit and its progress. All four are absent together when the budget
+     * caps only the people in `sub_budgets` - `amount === undefined` is the one check
+     * that decides whether there is an overall bar to draw.
+     */
+    amount?: number;
+    remaining?: number;
+    /** Uncapped, so the bar can show how far past the limit it went. */
+    percent?: number;
+    over?: boolean;
+    /** Who spent it, biggest first. Empty when nothing was spent. */
+    by_person: BudgetPersonSpend[];
+    sub_budgets: SubBudgetStatus[];
     period_from: string;
     period_to: string;
 }
@@ -305,10 +339,11 @@ export interface BudgetStatusResponse {
 }
 
 export interface BudgetInput {
-    person_id?: string;
     categories?: string[];
     period: BudgetPeriod;
-    amount: number;
+    /** Omit to cap only the people in `sub_budgets`; one of the two is required. */
+    amount?: number;
+    sub_budgets?: { person_id: string; amount: number }[];
     start_date?: string;
     end_date?: string;
     active?: boolean;
