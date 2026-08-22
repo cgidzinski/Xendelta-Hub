@@ -22,14 +22,14 @@ export interface XenBudgetLabel {
     system?: boolean;
 }
 
-export type BudgetScope = "all" | "category" | "person";
 export type BudgetPeriod = "weekly" | "monthly" | "quarterly" | "yearly" | "custom";
 
 export interface XenBudgetBudget {
     _id: string;
-    scope: BudgetScope;
-    category?: string;
+    /** Unset = everyone. */
     person_id?: string;
+    /** Empty = every category. */
+    categories: string[];
     period: BudgetPeriod;
     amount: number;
     start_date?: string;
@@ -273,8 +273,8 @@ export interface PresetInput {
 
 export interface BudgetStatus {
     _id: string;
-    scope: BudgetScope;
-    category?: string;
+    /** Empty = every category. */
+    categories: string[];
     person_id?: string;
     person_name?: string;
     period: BudgetPeriod;
@@ -297,9 +297,8 @@ export interface BudgetStatusResponse {
 }
 
 export interface BudgetInput {
-    scope: BudgetScope;
-    category?: string;
     person_id?: string;
+    categories?: string[];
     period: BudgetPeriod;
     amount: number;
     start_date?: string;

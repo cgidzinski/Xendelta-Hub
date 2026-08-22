@@ -607,9 +607,8 @@ export const xenBudgetBudgetParamSchema = z.object({
 });
 
 const budgetShape = {
-  scope: z.enum(["all", "category", "person"]),
-  category: z.string().max(50).optional(),
   person_id: objectIdSchema.optional(),
+  categories: z.array(z.string().max(50)).max(20, "Too many categories").optional(),
   period: z.enum(["weekly", "monthly", "quarterly", "yearly", "custom"]),
   amount: z.number("Amount must be a number").positive("Amount must be positive"),
   start_date: z.string().datetime().optional(),
@@ -617,15 +616,10 @@ const budgetShape = {
   active: z.boolean().optional(),
 };
 
-// A budget whose scope doesn't carry its target is meaningless — it would silently
-// match everything — so the pairing is enforced here rather than left to the handler.
+// Who (person_id) and what (categories) are independent and both optional — an empty
+// budget (neither set) is the legitimate whole-book case, so there's nothing to enforce
+// about their pairing. Only the custom-period window still needs both ends.
 const budgetRefinements = (schema: z.ZodType<any>) => schema
-  .refine((d: any) => d.scope !== "category" || !!d.category, {
-    message: "A category budget needs a category", path: ["category"],
-  })
-  .refine((d: any) => d.scope !== "person" || !!d.person_id, {
-    message: "A person budget needs a person", path: ["person_id"],
-  })
   .refine((d: any) => d.period !== "custom" || (!!d.start_date && !!d.end_date), {
     message: "A custom period needs a start and an end date", path: ["end_date"],
   })

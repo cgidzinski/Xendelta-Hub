@@ -130,18 +130,6 @@ function pad(n: number): string {
   return n < 10 ? "0" + n : String(n);
 }
 
-// Days in a 1-based (year, month), via UTC calendar arithmetic on a pure date.
-function daysInMonth(year: number, month: number): number {
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
-}
-
-// An anchor day of 31 has to mean "the 30th" in a 30-day month, and "the 28th" in
-// February - otherwise a monthly budget anchored on the 31st has no period at all in
-// most months.
-function clampDay(year: number, month: number, day: number): number {
-  return Math.min(day, daysInMonth(year, month));
-}
-
 function addMonths(year: number, month: number, n: number): { year: number; month: number } {
   const total = year * 12 + (month - 1) + n;
   return { year: Math.floor(total / 12), month: (((total % 12) + 12) % 12) + 1 };
@@ -164,11 +152,11 @@ const MONTHS_PER_PERIOD: Record<string, number> = { monthly: 1, quarterly: 3, ye
 
 // The [from, to) window a budget is currently in, as UTC instants.
 //
-// Periods are anchored on the budget's start_date, so a monthly budget starting on the
-// 15th runs 15th-to-15th rather than snapping to calendar months. All the calendar
-// arithmetic is done on wall-clock dates in `timeZone` and only converted to UTC at the
-// edges - doing it on UTC instants shifts the boundary by the offset and misfiles
-// anything spent near midnight.
+// Recurring periods always snap to the calendar boundary — the 1st of the month/quarter/
+// year, Monday for weekly — rather than an anchor day, so a budget created on the 15th
+// still runs calendar-month to calendar-month. All the arithmetic is done on wall-clock
+// dates in `timeZone` and only converted to UTC at the edges - doing it on UTC instants
+// shifts the boundary by the offset and misfiles anything spent near midnight.
 export function budgetPeriodRange(
   budget: BudgetLike,
   asOf: Date,
@@ -181,14 +169,10 @@ export function budgetPeriodRange(
   }
 
   const now = parseWallKey(tzDayKey(asOf, timeZone));
-  // With no explicit anchor, fall back to the 1st of the month (calendar periods).
-  const anchor = budget.start_date
-    ? parseWallKey(tzDayKey(new Date(budget.start_date), timeZone))
-    : { year: now.year, month: 1, day: 1 };
 
   if (budget.period === "weekly") {
-    const delta = (dayOfWeek(now.year, now.month, now.day)
-      - dayOfWeek(anchor.year, anchor.month, anchor.day) + 7) % 7;
+    // Monday-to-Monday, matching isoWeekKey's ISO-week convention below.
+    const delta = (dayOfWeek(now.year, now.month, now.day) + 6) % 7; // Monday = 0
     const startMs = Date.UTC(now.year, now.month - 1, now.day) - delta * 86400000;
     const s = new Date(startMs);
     const e = new Date(startMs + 7 * 86400000);
@@ -199,16 +183,12 @@ export function budgetPeriodRange(
   }
 
   const step = MONTHS_PER_PERIOD[budget.period] ?? 1;
-  let index = (now.year - anchor.year) * 12 + (now.month - anchor.month);
-  // Before the anchor day has come round this month, we're still in the previous period.
-  if (now.day < clampDay(now.year, now.month, anchor.day)) index -= 1;
-  index = Math.floor(index / step) * step;
-
-  const s = addMonths(anchor.year, anchor.month, index);
-  const e = addMonths(anchor.year, anchor.month, index + step);
+  const index = Math.floor((now.month - 1) / step) * step;
+  const s = addMonths(now.year, 1, index);
+  const e = addMonths(now.year, 1, index + step);
   return {
-    from: zonedWallToUtc(wallKey(s.year, s.month, clampDay(s.year, s.month, anchor.day)), timeZone),
-    to: zonedWallToUtc(wallKey(e.year, e.month, clampDay(e.year, e.month, anchor.day)), timeZone),
+    from: zonedWallToUtc(wallKey(s.year, s.month, 1), timeZone),
+    to: zonedWallToUtc(wallKey(e.year, e.month, 1), timeZone),
   };
 }
 

@@ -19,23 +19,27 @@ interface BudgetProgressBarProps {
 }
 
 export default function BudgetProgressBar({ budget, currency, categoryRegistry, onClick }: BudgetProgressBarProps) {
-    const label = budget.scope === "category"
-        ? budget.category
-        : budget.scope === "person"
-            ? budget.person_name
-            : "Everything";
+    const categories = budget.categories || [];
+    const everything = categories.length === 0 && !budget.person_name;
 
     // The bar is clamped so it can't overflow its track, but the caption reports the real
     // figure — a budget at 260% has to read as 260%, not as a full bar like one at 100%.
     const barValue = Math.min(budget.percent, 100);
     const barColor = budget.over ? "error.main" : budget.percent >= 80 ? "warning.main" : undefined;
+    // Only one category has a single colour to tint the bar with — more than one, or none
+    // at all, falls back to the default track colour.
+    const soleCategoryColor = categories.length === 1 ? resolveLabelColor(categories[0], categoryRegistry) : undefined;
 
     return (
         <Box onClick={onClick} sx={{ cursor: onClick ? "pointer" : "default" }}>
             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
-                {budget.scope === "category" && budget.category
-                    ? <CategoryChip name={budget.category} registry={categoryRegistry} />
-                    : <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>{label}</Typography>}
+                <Stack direction="row" alignItems="center" spacing={0.5} flexWrap="wrap" sx={{ minWidth: 0, rowGap: 0.5 }}>
+                    {categories.map((c) => <CategoryChip key={c} name={c} registry={categoryRegistry} />)}
+                    {budget.person_name && (
+                        <Typography variant="body2" noWrap>{budget.person_name}</Typography>
+                    )}
+                    {everything && <Typography variant="body2" color="text.secondary">Everything</Typography>}
+                </Stack>
                 <Typography variant="caption" color="text.secondary" sx={{ flexGrow: 1 }} noWrap>
                     {PERIOD_LABELS[budget.period] || "this period"}
                 </Typography>
@@ -57,8 +61,8 @@ export default function BudgetProgressBar({ budget, currency, categoryRegistry, 
                         borderRadius: 1,
                         ...(barColor
                             ? { bgcolor: barColor }
-                            : budget.scope === "category" && budget.category
-                                ? { bgcolor: resolveLabelColor(budget.category, categoryRegistry) }
+                            : soleCategoryColor
+                                ? { bgcolor: soleCategoryColor }
                                 : {}),
                     },
                 }}

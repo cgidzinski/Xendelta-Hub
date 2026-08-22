@@ -144,7 +144,7 @@ function baseItemMatch(bookId: any, q: Record<string, string>): Record<string, a
 // A budget's target has to exist in this book, or it would silently never match: a
 // person who isn't a member has no shares here, and a misspelled tag is on no item.
 function validateBudgetTarget(body: any, book: any): string | null {
-  if (body.scope === "person" && !isMember(book, body.person_id)) {
+  if (body.person_id && !isMember(book, body.person_id)) {
     return "That person is not a member of this book";
   }
   return null;
@@ -152,13 +152,14 @@ function validateBudgetTarget(body: any, book: any): string | null {
 
 function toBudgetFields(body: any): Record<string, any> {
   return {
-    scope: body.scope,
-    category: body.scope === "category" ? body.category : undefined,
-    person_id: body.scope === "person" ? body.person_id : undefined,
+    person_id: body.person_id || undefined,
+    categories: Array.isArray(body.categories) ? body.categories : [],
     period: body.period,
     amount: roundMoney(body.amount),
-    start_date: body.start_date ? new Date(body.start_date) : undefined,
-    end_date: body.end_date ? new Date(body.end_date) : undefined,
+    // Recurring periods snap to the calendar (see budgetPeriodRange) and no longer carry
+    // an anchor, so a start/end date only means anything for a custom one-off range.
+    start_date: body.period === "custom" && body.start_date ? new Date(body.start_date) : undefined,
+    end_date: body.period === "custom" && body.end_date ? new Date(body.end_date) : undefined,
     active: body.active !== false,
   };
 }
@@ -427,7 +428,10 @@ function registerLabelRoutes(app: any, kind: "categories" | "tags") {
           // Budgets and rules reference categories by name too, so they follow the rename
           // rather than being left pointing at something that no longer exists.
           if (kind === "categories") {
-            book.budgets.forEach((b: any) => { if (b.category === oldName) b.category = label.name; });
+            book.budgets.forEach((b: any) => {
+              const idx = (b.categories || []).indexOf(oldName);
+              if (idx !== -1) b.categories[idx] = label.name;
+            });
           }
           book.rules.forEach((r: any) => {
             const list = kind === "categories" ? r.actions?.set_categories : r.actions?.add_tags;
@@ -465,7 +469,7 @@ function registerLabelRoutes(app: any, kind: "categories" | "tags") {
         if (kind === "categories") {
           // A budget on a category that no longer exists could never match again, so this
           // is refused rather than left quietly broken.
-          const budget = book.budgets.find((b: any) => b.scope === "category" && b.category === label.name);
+          const budget = book.budgets.find((b: any) => (b.categories || []).includes(label.name));
           if (budget) {
             return res.status(400).json({
               status: false,
@@ -1629,21 +1633,54 @@ module.exports = function (app: any) {
           // `to` is exclusive: the instant a period ends is the instant the next begins,
           // so $lt (not $lte) keeps a boundary item from being counted twice.
           const inPeriod = { date: { $gte: r.from, $lt: r.to } };
-          if (b.scope === "person") {
-            facet[`b${i}`] = [
-              { $match: inPeriod },
-              { $unwind: "$shares" },
-              { $match: { "shares.user_id": b.person_id } },
-              { $group: { _id: null, total: { $sum: "$shares.amount" }, count: { $sum: 1 } } },
-            ];
-          } else if (b.scope === "category") {
-            // Mirrors the person branch above: unwind, match, and sum the WEIGHT, so a
-            // purchase split 70/30 counts 70% against this category rather than all of it.
+          const cats = b.categories && b.categories.length > 0 ? b.categories : null;
+          const person = b.person_id || null;
+
+          if (cats && person) {
+            // Who AND what: each item's contribution is that person's actual dollar share
+            // of the category-weighted portion, not a coarser "touches both" match — a
+            // $100 item split 70/30 by category and 50/50 by person owes this budget $35
+            // (50% of the $70 category weight), not $70 or $100. A second $group by item
+            // _id keeps item_count from inflating when an item matches more than one of
+            // the selected categories.
             facet[`b${i}`] = [
               { $match: inPeriod },
               { $unwind: "$categories" },
-              { $match: { "categories.name": b.category } },
-              { $group: { _id: null, total: { $sum: "$categories.amount" }, count: { $sum: 1 } } },
+              { $match: { "categories.name": { $in: cats } } },
+              { $unwind: "$shares" },
+              { $match: { "shares.user_id": person } },
+              { $group: {
+                _id: "$_id",
+                total: {
+                  $sum: {
+                    $cond: [
+                      { $eq: ["$amount", 0] },
+                      0,
+                      { $divide: [{ $multiply: ["$categories.amount", "$shares.amount"] }, "$amount"] },
+                    ],
+                  },
+                },
+              } },
+              { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } },
+            ];
+          } else if (cats) {
+            // Mirrors the person branch below: unwind, match, and sum the WEIGHT, so a
+            // purchase split 70/30 counts 70% against this category rather than all of it.
+            // $in supports more than one selected category; the two-stage group keeps
+            // item_count from inflating when an item matches more than one of them.
+            facet[`b${i}`] = [
+              { $match: inPeriod },
+              { $unwind: "$categories" },
+              { $match: { "categories.name": { $in: cats } } },
+              { $group: { _id: "$_id", total: { $sum: "$categories.amount" } } },
+              { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } },
+            ];
+          } else if (person) {
+            facet[`b${i}`] = [
+              { $match: inPeriod },
+              { $unwind: "$shares" },
+              { $match: { "shares.user_id": person } },
+              { $group: { _id: null, total: { $sum: "$shares.amount" }, count: { $sum: 1 } } },
             ];
           } else {
             facet[`b${i}`] = [
@@ -1673,8 +1710,7 @@ module.exports = function (app: any) {
               const amount = roundMoney(b.amount);
               return {
                 _id: b._id.toString(),
-                scope: b.scope,
-                category: b.category,
+                categories: b.categories || [],
                 person_id: b.person_id,
                 person_name: b.person_id ? (memberById.get(b.person_id)?.username || "Unknown") : undefined,
                 period: b.period,

@@ -26,17 +26,16 @@ var labelSchema = new Schema({
 }, { _id: true });
 
 var budgetSchema = new Schema({
-  scope: { type: String, enum: ["all", "category", "person"], required: true },
-  category: { type: String, maxlength: 50 },  // scope === "category"
-  person_id: { type: String },                // scope === "person"
+  person_id: { type: String },                    // unset = everyone
+  categories: { type: [String], default: [] },    // empty = every category
   period: {
     type: String,
     enum: ["weekly", "monthly", "quarterly", "yearly", "custom"],
     required: true,
   },
   amount: { type: Number, required: true },
-  // Anchor for recurring periods (which day of the month/week the period rolls over on).
-  // Required for "custom", where it pairs with end_date to form a fixed window.
+  // Recurring periods always start on the calendar boundary (see budgetPeriodRange), so
+  // these only carry meaning for period === "custom", where they form the fixed window.
   start_date: { type: Date },
   end_date: { type: Date },
   active: { type: Boolean, default: true },

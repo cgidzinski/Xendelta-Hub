@@ -115,9 +115,9 @@ describe("resolveCategories", () => {
 describe("budgetPeriodRange", () => {
   const TZ = "America/Toronto";
 
-  it("runs calendar months when the budget is anchored on the 1st", () => {
+  it("runs calendar months regardless of when the budget was created", () => {
     const range = budgetPeriodRange(
-      { period: "monthly", start_date: "2026-01-01T05:00:00.000Z" },
+      { period: "monthly", start_date: "2026-01-15T05:00:00.000Z" },
       new Date("2026-08-21T12:00:00.000Z"),
       TZ,
     );
@@ -125,31 +125,19 @@ describe("budgetPeriodRange", () => {
     expect(tzDayKey(range.to, TZ)).toBe("2026-09-01");
   });
 
-  it("runs 15th-to-15th when the budget is anchored mid-month", () => {
-    const anchored = { period: "monthly" as const, start_date: "2026-01-15T05:00:00.000Z" };
-    const before = budgetPeriodRange(anchored, new Date("2026-08-10T12:00:00.000Z"), TZ);
-    expect(tzDayKey(before.from, TZ)).toBe("2026-07-15");
-    expect(tzDayKey(before.to, TZ)).toBe("2026-08-15");
-
-    const after = budgetPeriodRange(anchored, new Date("2026-08-20T12:00:00.000Z"), TZ);
-    expect(tzDayKey(after.from, TZ)).toBe("2026-08-15");
-    expect(tzDayKey(after.to, TZ)).toBe("2026-09-15");
-  });
-
-  it("clamps a 31st anchor into short months instead of skipping them", () => {
-    // February has no 31st; the period must still exist, ending on the 28th.
+  it("always starts on the 1st, even in short months", () => {
     const range = budgetPeriodRange(
       { period: "monthly", start_date: "2026-01-31T05:00:00.000Z" },
       new Date("2026-02-15T12:00:00.000Z"),
       TZ,
     );
-    expect(tzDayKey(range.from, TZ)).toBe("2026-01-31");
-    expect(tzDayKey(range.to, TZ)).toBe("2026-02-28");
+    expect(tzDayKey(range.from, TZ)).toBe("2026-02-01");
+    expect(tzDayKey(range.to, TZ)).toBe("2026-03-01");
   });
 
-  it("steps quarterly budgets three months at a time from the anchor", () => {
+  it("steps quarterly budgets to the calendar quarter, not an anchor", () => {
     const range = budgetPeriodRange(
-      { period: "quarterly", start_date: "2026-01-01T05:00:00.000Z" },
+      { period: "quarterly", start_date: "2026-05-01T05:00:00.000Z" },
       new Date("2026-08-21T12:00:00.000Z"),
       TZ,
     );
@@ -157,20 +145,20 @@ describe("budgetPeriodRange", () => {
     expect(tzDayKey(range.to, TZ)).toBe("2026-10-01");
   });
 
-  it("steps yearly budgets from the anchor, not the calendar year", () => {
+  it("runs yearly budgets Jan 1 to Jan 1, not from the anchor", () => {
     const range = budgetPeriodRange(
       { period: "yearly", start_date: "2025-04-01T04:00:00.000Z" },
       new Date("2026-08-21T12:00:00.000Z"),
       TZ,
     );
-    expect(tzDayKey(range.from, TZ)).toBe("2026-04-01");
-    expect(tzDayKey(range.to, TZ)).toBe("2027-04-01");
+    expect(tzDayKey(range.from, TZ)).toBe("2026-01-01");
+    expect(tzDayKey(range.to, TZ)).toBe("2027-01-01");
   });
 
-  it("runs weekly budgets from the anchor's weekday", () => {
-    // 2026-01-05 is a Monday; 2026-08-21 is a Friday, so the period starts Mon 2026-08-17.
+  it("runs weekly budgets Monday-to-Monday, not from the anchor's weekday", () => {
+    // 2026-08-21 is a Friday, so the ISO week it falls in starts Mon 2026-08-17.
     const range = budgetPeriodRange(
-      { period: "weekly", start_date: "2026-01-05T05:00:00.000Z" },
+      { period: "weekly", start_date: "2026-01-07T05:00:00.000Z" },
       new Date("2026-08-21T12:00:00.000Z"),
       TZ,
     );

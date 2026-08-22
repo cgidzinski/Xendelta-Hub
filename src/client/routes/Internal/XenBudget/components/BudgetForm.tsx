@@ -6,15 +6,13 @@ import {
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { useSnackbar } from "notistack";
 import type {
-    XenBudgetBook, BudgetInput, BudgetScope, BudgetPeriod, BudgetStatus,
+    XenBudgetBook, BudgetInput, BudgetPeriod, BudgetStatus,
 } from "../../../../hooks/xenbudget/types";
 import { getCurrencySymbol, sanitizeAmount, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 
-const SCOPES: { value: BudgetScope; label: string }[] = [
-    { value: "all", label: "Everything in the book" },
-    { value: "category", label: "A category" },
-    { value: "person", label: "A person" },
-];
+// Not "" — MUI's Select treats an empty-string value as unset, which stops the "Who"
+// label from floating and makes the field look blank even though Everyone is selected.
+const EVERYONE = "everyone";
 
 const PERIODS: { value: BudgetPeriod; label: string }[] = [
     { value: "weekly", label: "Weekly" },
@@ -23,6 +21,16 @@ const PERIODS: { value: BudgetPeriod; label: string }[] = [
     { value: "yearly", label: "Yearly" },
     { value: "custom", label: "One-off date range" },
 ];
+
+// Recurring periods always snap to the calendar rather than an anchor date, so this is
+// informational only — there's nothing to pick.
+const PERIOD_START_HINT: Record<BudgetPeriod, string> = {
+    weekly: "Every Monday",
+    monthly: "The 1st of the month",
+    quarterly: "The 1st of the quarter",
+    yearly: "January 1st",
+    custom: "",
+};
 
 interface BudgetFormProps {
     open: boolean;
@@ -38,9 +46,8 @@ export default function BudgetForm({
     open, onClose, book, budget, onSubmit, isSubmitting, onDelete,
 }: BudgetFormProps) {
     const { enqueueSnackbar } = useSnackbar();
-    const [scope, setScope] = useState<BudgetScope>("all");
-    const [category, setCategory] = useState("");
-    const [personId, setPersonId] = useState("");
+    const [personId, setPersonId] = useState(EVERYONE);
+    const [categories, setCategories] = useState<string[]>([]);
     const [period, setPeriod] = useState<BudgetPeriod>("monthly");
     const [amount, setAmount] = useState("");
     const [startDate, setStartDate] = useState<Date | null>(new Date());
@@ -49,17 +56,15 @@ export default function BudgetForm({
     useEffect(() => {
         if (!open) return;
         if (budget) {
-            setScope(budget.scope);
-            setCategory(budget.category || "");
-            setPersonId(budget.person_id || "");
+            setPersonId(budget.person_id || EVERYONE);
+            setCategories(budget.categories || []);
             setPeriod(budget.period);
             setAmount(String(budget.amount));
-            setStartDate(new Date(budget.period_from));
+            setStartDate(budget.period === "custom" ? new Date(budget.period_from) : new Date());
             setEndDate(budget.period === "custom" ? new Date(budget.period_to) : null);
         } else {
-            setScope("all");
-            setCategory("");
-            setPersonId("");
+            setPersonId(EVERYONE);
+            setCategories([]);
             setPeriod("monthly");
             setAmount("");
             setStartDate(new Date());
@@ -69,19 +74,16 @@ export default function BudgetForm({
 
     const numericAmount = parseFloat(amount) || 0;
     const canSubmit = numericAmount > 0
-        && (scope !== "category" || !!category.trim())
-        && (scope !== "person" || !!personId)
         && (period !== "custom" || (!!startDate && !!endDate && endDate > startDate));
 
     const handleSubmit = async () => {
         try {
             await onSubmit({
-                scope,
-                category: scope === "category" ? category.trim() : undefined,
-                person_id: scope === "person" ? personId : undefined,
+                person_id: personId === EVERYONE ? undefined : personId,
+                categories,
                 period,
                 amount: numericAmount,
-                start_date: (startDate || new Date()).toISOString(),
+                start_date: period === "custom" && startDate ? startDate.toISOString() : undefined,
                 end_date: period === "custom" && endDate ? endDate.toISOString() : undefined,
             });
             onClose();
@@ -96,34 +98,28 @@ export default function BudgetForm({
             <DialogContent>
                 <Stack spacing={2} sx={{ pt: 1 }}>
                     <TextField
-                        select fullWidth label="Limit applies to" value={scope}
-                        onChange={(e) => setScope(e.target.value as BudgetScope)}
+                        select fullWidth label="Who" value={personId}
+                        onChange={(e) => setPersonId(e.target.value)}
                         slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
                     >
-                        {SCOPES.map((s) => <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>)}
+                        <MenuItem value={EVERYONE}>Everyone</MenuItem>
+                        {book.members.map((m) => (
+                            <MenuItem key={m.user_id} value={m.user_id}>{m.username}</MenuItem>
+                        ))}
                     </TextField>
 
-                    {scope === "category" && (
-                        <Autocomplete
-                            freeSolo
-                            options={book.categories.map((c) => c.name)}
-                            value={category}
-                            onInputChange={(_, v) => setCategory(v)}
-                            renderInput={(params) => <TextField {...params} label="Category" />}
-                        />
-                    )}
-
-                    {scope === "person" && (
-                        <TextField
-                            select fullWidth label="Person" value={personId}
-                            onChange={(e) => setPersonId(e.target.value)}
-                            slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
-                        >
-                            {book.members.map((m) => (
-                                <MenuItem key={m.user_id} value={m.user_id}>{m.username}</MenuItem>
-                            ))}
-                        </TextField>
-                    )}
+                    <Autocomplete
+                        multiple freeSolo
+                        options={book.categories.map((c) => c.name)}
+                        value={categories}
+                        onChange={(_, v) => setCategories(v)}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params} label="Categories"
+                                helperText={categories.length === 0 ? "Leave empty to cover every category." : undefined}
+                            />
+                        )}
+                    />
 
                     <TextField
                         fullWidth label="Amount" value={amount}
@@ -150,23 +146,16 @@ export default function BudgetForm({
                         {PERIODS.map((p) => <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>)}
                     </TextField>
 
-                    <DatePicker
-                        label={period === "custom" ? "Starts" : "Resets on"}
-                        value={startDate}
-                        onChange={setStartDate}
-                        // Recurring periods run from this date rather than snapping to the
-                        // calendar, so a monthly budget anchored on the 15th runs 15th-to-15th.
-                        slotProps={{
-                            textField: {
-                                helperText: period === "custom"
-                                    ? undefined
-                                    : "Periods run from this date, not the calendar month.",
-                            },
-                        }}
-                    />
-
-                    {period === "custom" && (
-                        <DatePicker label="Ends" value={endDate} onChange={setEndDate} />
+                    {period === "custom" ? (
+                        <>
+                            <DatePicker label="Starts" value={startDate} onChange={setStartDate} />
+                            <DatePicker label="Ends" value={endDate} onChange={setEndDate} />
+                        </>
+                    ) : (
+                        <TextField
+                            fullWidth disabled label="Resets on"
+                            value={PERIOD_START_HINT[period]}
+                        />
                     )}
                 </Stack>
             </DialogContent>
