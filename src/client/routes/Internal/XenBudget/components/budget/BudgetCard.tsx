@@ -13,6 +13,7 @@ import BudgetLimitLine from "./BudgetLimitLine";
 import BudgetDetails from "./BudgetDetails";
 import BudgetTarget from "./BudgetTarget";
 import { memberColor, scopeColor } from "./budgetColors";
+import { personShare } from "./budgetPersonView";
 import { budgetPace } from "./budgetPace";
 
 // Past three, the chips start wrapping to a third line on a phone and stop being a
@@ -30,6 +31,12 @@ interface BudgetCardProps {
     categoryRegistry: XenBudgetLabel[];
     members: XenBudgetMember[];
     asOf: string;
+    /**
+     * Set when the page is narrowed to one member. The caller has already dropped the
+     * budgets that don't constrain them and the other people's rows, so all this adds is
+     * naming their share of the shared limit - which stays a household figure.
+     */
+    personId?: string;
     onViewItems?: (budget: BudgetStatus) => void;
     onEdit?: (budget: BudgetStatus) => void;
 }
@@ -44,7 +51,7 @@ interface BudgetCardProps {
  * each other and might not even cover the same window.
  */
 export default function BudgetCard({
-    budget, currency, categoryRegistry, members, asOf, onViewItems, onEdit,
+    budget, currency, categoryRegistry, members, asOf, personId, onViewItems, onEdit,
 }: BudgetCardProps) {
     // Which limit's details are open, if any: "overall" or a sub-budget id. Only one at a
     // time, so an expanded card stays short enough to read without scrolling past it.
@@ -54,6 +61,9 @@ export default function BudgetCard({
     const chips = budget.categories.slice(0, MAX_CHIPS);
     const extra = budget.categories.length - chips.length;
     const suffix = PERIOD_SUFFIX[budget.period] || budget.period;
+    const filteredName = personId
+        ? members.find((m) => m.user_id === personId)?.username ?? "This person"
+        : undefined;
     const pace = budgetPace(budget.period_from, budget.period_to, asOf, budget.spent, budget.amount ?? 0);
 
     const heading = (
@@ -127,6 +137,17 @@ export default function BudgetCard({
                                     formatCurrency(budget.spent, currency)
                                 } of ${formatCurrency(budget.amount, currency)}, ${budget.percent ?? 0}% of the limit`}
                             />
+                        )}
+                        {/* Narrowed to one member: the bar above is still the household
+                        total, so their own contribution to it is named rather than
+                        substituted for it. */}
+                        {personId && budget.amount !== undefined && (
+                            <Typography
+                                variant="caption" color="text.secondary"
+                                sx={{ display: "block", mt: 0.25 }}
+                            >
+                                {filteredName}: {formatCurrency(personShare(budget, personId), currency)} of this
+                            </Typography>
                         )}
                     </Box>
                     <ExpandMoreIcon

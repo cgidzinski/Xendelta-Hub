@@ -10,6 +10,7 @@ import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
 import { CategoryChip, resolveLabelColor } from "./components/LabelChip";
 import BudgetCard from "./components/budget/BudgetCard";
 import { sortBudgets, overCount } from "./components/budget/sortBudgets";
+import { budgetsForPerson } from "./components/budget/budgetPersonView";
 import TimePeriodFilter, { defaultMonthMode, resolvePeriod, type PeriodMode } from "./components/TimePeriodFilter";
 import TotalsSummary from "./components/TotalsSummary";
 import LoadingSpinner from "../../../components/LoadingSpinner";
@@ -33,11 +34,19 @@ export default function BookOverview() {
         people: person ? [person] : undefined,
     });
     const { status: budgetStatusResponse, budgets: budgetStatus } = useXenBudgetStatus(book._id, currency);
+    // The person filter narrows these the same way it narrows the tallies above: down to
+    // the budgets that actually constrain them, showing only their own personal limit.
+    const visibleBudgets = useMemo(
+        () => sortBudgets(person ? budgetsForPerson(budgetStatus, person) : budgetStatus),
+        [budgetStatus, person],
+    );
     // Counts every limit past its cap, the shared one and each person's, so the header
-    // agrees with the red bars underneath it rather than only counting whole budgets.
-    const overBudgetCount = budgetStatus.reduce((sum, b) => sum + overCount(b), 0);
-    const orderedBudgets = useMemo(() => sortBudgets(budgetStatus), [budgetStatus]);
+    // agrees with the red bars actually on screen rather than with the unfiltered book.
+    const overBudgetCount = visibleBudgets.reduce((sum, b) => sum + overCount(b), 0);
     const asOf = budgetStatusResponse?.as_of ?? new Date().toISOString();
+    // The figures were measured in whatever currency /budget-status used, which is not
+    // necessarily the one the summary settled on - label them with the one they're in.
+    const budgetCurrency = budgetStatusResponse?.currency ?? currency;
 
     const categoryRows = useMemo(() => {
         if (!summary) return [];
@@ -146,7 +155,7 @@ export default function BookOverview() {
                     </Stack>
                 </Card>
 
-                {isCurrentMonth && orderedBudgets.length > 0 && (
+                {isCurrentMonth && visibleBudgets.length > 0 && (
                     <Box sx={{ mb: 2 }}>
                         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
                             <Typography variant="caption" sx={sectionLabelSx}>Budgets</Typography>
@@ -157,14 +166,15 @@ export default function BookOverview() {
                             )}
                         </Stack>
                         <Stack spacing={1}>
-                            {orderedBudgets.map((budget) => (
+                            {visibleBudgets.map((budget) => (
                                 <BudgetCard
                                     key={budget._id}
                                     budget={budget}
-                                    currency={summary.currency}
+                                    currency={budgetCurrency}
                                     categoryRegistry={book.categories}
                                     members={book.members}
                                     asOf={asOf}
+                                    personId={person}
                                     onViewItems={(b) => navigate(
                                         `/internal/xenbudget/books/${book._id}/items`,
                                         { state: { budgetFilter: {

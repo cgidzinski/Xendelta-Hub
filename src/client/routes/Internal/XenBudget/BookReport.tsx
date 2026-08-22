@@ -17,6 +17,7 @@ import TimePeriodFilter, { defaultYearMode, resolvePeriod, type PeriodMode } fro
 import TotalsSummary from "./components/TotalsSummary";
 import BudgetCard from "./components/budget/BudgetCard";
 import { sortBudgets } from "./components/budget/sortBudgets";
+import { budgetsForPerson } from "./components/budget/budgetPersonView";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { formatCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
@@ -54,7 +55,12 @@ export default function BookReport() {
         people: person ? [person] : undefined,
     });
     const { status: budgetStatusResponse, budgets } = useXenBudgetStatus(book._id, currency);
-    const orderedBudgets = useMemo(() => sortBudgets(budgets), [budgets]);
+    // Narrowed by the person filter the same way the charts above are: the budgets that
+    // constrain them, carrying only their own personal limit.
+    const visibleBudgets = useMemo(
+        () => sortBudgets(person ? budgetsForPerson(budgets, person) : budgets),
+        [budgets, person],
+    );
 
     const periodData = useMemo(() => (summary?.by_period ?? []).map((p) => ({
         key: p.key,
@@ -176,116 +182,121 @@ export default function BookReport() {
             </Box>
 
             <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: 2, pb: 2 }}>
-                {summary.totals.count === 0 ? (
-                    <Box sx={emptyStateSx}>
-                        <Box sx={emptyStateIconCircleSx}><InsightsIcon color="disabled" /></Box>
-                        <Typography variant="subtitle1">Nothing in this period</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Try a wider range, or a different currency.
-                        </Typography>
-                    </Box>
-                ) : (
-                    <Stack spacing={2}>
-                        {/* The headline numbers are a compact strip, not a chart — three bars
-                        would be a worse way to read three numbers. */}
-                        <TotalsSummary
-                            income={summary.totals.income} expense={summary.totals.expense} net={summary.totals.net}
-                            currency={summary.currency}
-                        />
+                <Stack spacing={2}>
+                    {summary.totals.count === 0 ? (
+                        <Box sx={emptyStateSx}>
+                            <Box sx={emptyStateIconCircleSx}><InsightsIcon color="disabled" /></Box>
+                            <Typography variant="subtitle1">Nothing in this period</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Try a wider range, or a different currency.
+                            </Typography>
+                        </Box>
+                    ) : (
+                        <>
+                            {/* The headline numbers are a compact strip, not a chart — three bars
+                            would be a worse way to read three numbers. */}
+                            <TotalsSummary
+                                income={summary.totals.income} expense={summary.totals.expense} net={summary.totals.net}
+                                currency={summary.currency}
+                            />
 
-                        {view === "table" ? (
-                            <ReportTable summary={summary} money={money} />
-                        ) : (
-                            <>
-                                <ChartCard title="Money in and out">
-                                    <ResponsiveContainer width="100%" height={260}>
-                                        <BarChart data={periodData} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
-                                            <CartesianGrid stroke={GRID} vertical={false} />
-                                            <XAxis dataKey="key" tick={AXIS} tickLine={false} axisLine={false} />
-                                            <YAxis tick={AXIS} tickLine={false} axisLine={false} width={AXIS_WIDTH}
-                                                tickFormatter={(v) => compact(Number(v))} />
-                                            <Tooltip {...tooltipStyle} formatter={(v) => money(Number(v))} cursor={{ fill: "#ffffff0a" }} />
-                                            <Legend />
-                                            {/* Two series, so identity is carried by a legend as well as colour. */}
-                                            <Bar dataKey="In" fill={INCOME_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
-                                            <Bar dataKey="Out" fill={EXPENSE_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </ChartCard>
-
-                                <ChartCard title="Net by period">
-                                    <ResponsiveContainer width="100%" height={220}>
-                                        <LineChart data={periodData} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
-                                            <CartesianGrid stroke={GRID} vertical={false} />
-                                            <XAxis dataKey="key" tick={AXIS} tickLine={false} axisLine={false} />
-                                            <YAxis tick={AXIS} tickLine={false} axisLine={false} width={AXIS_WIDTH}
-                                                tickFormatter={(v) => compact(Number(v))} />
-                                            <Tooltip {...tooltipStyle} formatter={(v) => money(Number(v))} />
-                                            {/* One series — the card title names it, so no legend box. */}
-                                            <Line
-                                                type="monotone" dataKey="Net" stroke={MAGNITUDE_COLOR}
-                                                strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }}
-                                            />
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                </ChartCard>
-
-                                {categoryData.length > 0 && (
-                                    <ChartCard title="Spending by category">
-                                        <MagnitudeBars data={categoryData} money={money} compact={compact} />
+                            {view === "table" ? (
+                                <ReportTable summary={summary} money={money} />
+                            ) : (
+                                <>
+                                    <ChartCard title="Money in and out">
+                                        <ResponsiveContainer width="100%" height={260}>
+                                            <BarChart data={periodData} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+                                                <CartesianGrid stroke={GRID} vertical={false} />
+                                                <XAxis dataKey="key" tick={AXIS} tickLine={false} axisLine={false} />
+                                                <YAxis tick={AXIS} tickLine={false} axisLine={false} width={AXIS_WIDTH}
+                                                    tickFormatter={(v) => compact(Number(v))} />
+                                                <Tooltip {...tooltipStyle} formatter={(v) => money(Number(v))} cursor={{ fill: "#ffffff0a" }} />
+                                                <Legend />
+                                                {/* Two series, so identity is carried by a legend as well as colour. */}
+                                                <Bar dataKey="In" fill={INCOME_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                                                <Bar dataKey="Out" fill={EXPENSE_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
                                     </ChartCard>
-                                )}
 
-                                {!person && personData.length > 0 && (
-                                    <ChartCard title="Spending by person">
-                                        <MagnitudeBars data={personData} money={money} compact={compact} />
-                                        <Typography variant="caption" color="text.secondary">
-                                            Each person&rsquo;s share of every expense — these add up to the total above.
-                                        </Typography>
+                                    <ChartCard title="Net by period">
+                                        <ResponsiveContainer width="100%" height={220}>
+                                            <LineChart data={periodData} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+                                                <CartesianGrid stroke={GRID} vertical={false} />
+                                                <XAxis dataKey="key" tick={AXIS} tickLine={false} axisLine={false} />
+                                                <YAxis tick={AXIS} tickLine={false} axisLine={false} width={AXIS_WIDTH}
+                                                    tickFormatter={(v) => compact(Number(v))} />
+                                                <Tooltip {...tooltipStyle} formatter={(v) => money(Number(v))} />
+                                                {/* One series — the card title names it, so no legend box. */}
+                                                <Line
+                                                    type="monotone" dataKey="Net" stroke={MAGNITUDE_COLOR}
+                                                    strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }}
+                                                />
+                                            </LineChart>
+                                        </ResponsiveContainer>
                                     </ChartCard>
-                                )}
 
-                                {!person && personIncomeData.length > 0 && (
-                                    <ChartCard title="Income by person">
-                                        <MagnitudeBars data={personIncomeData} money={money} compact={compact} color={INCOME_COLOR} />
-                                        <Typography variant="caption" color="text.secondary">
-                                            Each person&rsquo;s share of every income — these add up to the total above.
-                                        </Typography>
-                                    </ChartCard>
-                                )}
-                            </>
-                        )}
+                                    {categoryData.length > 0 && (
+                                        <ChartCard title="Spending by category">
+                                            <MagnitudeBars data={categoryData} money={money} compact={compact} />
+                                        </ChartCard>
+                                    )}
 
-                        {orderedBudgets.length > 0 && (
-                            <Box>
-                                <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.5 }}>
-                                    Budgets right now
-                                </Typography>
-                                {/* Budget status is always the CURRENT period, whatever range
-                                the report above is showing, so it says so rather than looking
-                                like part of the same window. */}
-                                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-                                    Each budget&rsquo;s own period, not the report range above.
-                                </Typography>
-                                <Box sx={{
-                                    display: "grid",
-                                    gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
-                                    gap: 1,
-                                    alignItems: "start",
-                                }}>
-                                    {orderedBudgets.map((budget) => (
-                                        <BudgetCard
-                                            key={budget._id} budget={budget}
-                                            currency={currency} categoryRegistry={book.categories}
-                                            members={book.members}
-                                            asOf={budgetStatusResponse?.as_of ?? new Date().toISOString()}
-                                        />
-                                    ))}
-                                </Box>
+                                    {!person && personData.length > 0 && (
+                                        <ChartCard title="Spending by person">
+                                            <MagnitudeBars data={personData} money={money} compact={compact} />
+                                            <Typography variant="caption" color="text.secondary">
+                                                Each person&rsquo;s share of every expense — these add up to the total above.
+                                            </Typography>
+                                        </ChartCard>
+                                    )}
+
+                                    {!person && personIncomeData.length > 0 && (
+                                        <ChartCard title="Income by person">
+                                            <MagnitudeBars data={personIncomeData} money={money} compact={compact} color={INCOME_COLOR} />
+                                            <Typography variant="caption" color="text.secondary">
+                                                Each person&rsquo;s share of every income — these add up to the total above.
+                                            </Typography>
+                                        </ChartCard>
+                                    )}
+                                </>
+                            )}
+                        </>
+                    )}
+
+                    {/* Outside the empty-state branch above: a budget is measured over its
+                    own current period, so an empty report range is no reason for it to
+                    disappear - least of all when the range is empty BECAUSE of the person
+                    filter. */}
+                    {visibleBudgets.length > 0 && (
+                        <Box>
+                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.5 }}>
+                                Budgets right now
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                                Each budget&rsquo;s own period, not the report range above.
+                            </Typography>
+                            <Box sx={{
+                                display: "grid",
+                                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                                gap: 1,
+                                alignItems: "start",
+                            }}>
+                                {visibleBudgets.map((budget) => (
+                                    <BudgetCard
+                                        key={budget._id} budget={budget}
+                                        currency={budgetStatusResponse?.currency ?? currency}
+                                        categoryRegistry={book.categories}
+                                        members={book.members}
+                                        asOf={budgetStatusResponse?.as_of ?? new Date().toISOString()}
+                                        personId={person}
+                                    />
+                                ))}
                             </Box>
-                        )}
-                    </Stack>
-                )}
+                        </Box>
+                    )}
+                </Stack>
             </Box>
         </Box>
     );
