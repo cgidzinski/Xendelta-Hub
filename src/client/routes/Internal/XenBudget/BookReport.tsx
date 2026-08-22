@@ -18,6 +18,8 @@ import TotalsSummary from "./components/TotalsSummary";
 import BudgetCard from "./components/budget/BudgetCard";
 import { sortBudgets } from "./components/budget/sortBudgets";
 import { budgetsForPerson } from "./components/budget/budgetPersonView";
+import CategoryReportTable from "./components/report/CategoryReportTable";
+import { buildCategoryReport } from "./components/report/categoryReportRows";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { formatCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
@@ -61,6 +63,17 @@ export default function BookReport() {
         () => sortBudgets(person ? budgetsForPerson(budgets, person) : budgets),
         [budgets, person],
     );
+
+    // Budget against actual for the range on screen. The caps are restated for that range
+    // rather than shown as one period's worth - see budgetedForRange.
+    const categoryReport = useMemo(() => buildCategoryReport({
+        byCategory: summary?.by_category ?? [],
+        uncategorised: summary?.uncategorised ?? { total: 0, count: 0 },
+        budgets,
+        rangeFrom: range.from,
+        rangeTo: range.to,
+        personId: person,
+    }), [summary, budgets, range.from, range.to, person]);
 
     const periodData = useMemo(() => (summary?.by_period ?? []).map((p) => ({
         key: p.key,
@@ -113,9 +126,34 @@ export default function BookReport() {
             ["Period", "In", "Out", "Net"],
             ...summary.by_period.map((p) => [p.key, p.income, p.expense, p.net]),
             [],
-            ["Category", "Spent"],
-            ...summary.by_category.map((c) => [c.category, c.total]),
-            ["Uncategorised", summary.uncategorised.total],
+            // Mirrors the table on screen, budget column included, so the export doesn't
+            // quietly say something different from what was exported from.
+            ["Category", "Budgeted", "Spent", "Left"],
+            ...categoryReport.rows.map((r) => [
+                r.label,
+                r.budgeted ?? "",
+                r.spent,
+                r.budgeted === undefined ? "" : r.budgeted - r.spent,
+            ]),
+            ...(categoryReport.spanning.length > 0 ? [
+                [],
+                ["Budgets over several categories (also counted above)"],
+                ...categoryReport.spanning.map((r) => [
+                    r.label,
+                    r.budgeted ?? "",
+                    r.spent,
+                    r.budgeted === undefined ? "" : r.budgeted - r.spent,
+                ]),
+            ] : []),
+            [],
+            ...(categoryReport.hasBudgets ? [
+                ...(categoryReport.wholeBook > 0 ? [["Whole-book budgets", categoryReport.wholeBook]] : []),
+                ["Budgeted", categoryReport.totalBudgeted],
+                ["Spent", summary.totals.expense],
+                ["Budget net", categoryReport.totalBudgeted - summary.totals.expense],
+            ] : [["Spent", summary.totals.expense]]),
+            ["Income", summary.totals.income],
+            ["Net", summary.totals.net],
             [],
             ["Person", "Spent", "Income"],
             ...summary.by_person.map((p) => [p.username, p.total, p.income]),
@@ -192,14 +230,31 @@ export default function BookReport() {
                             </Typography>
                         </Box>
                     ) : (
-                        <>
-                            {/* The headline numbers are a compact strip, not a chart — three bars
-                            would be a worse way to read three numbers. */}
-                            <TotalsSummary
-                                income={summary.totals.income} expense={summary.totals.expense} net={summary.totals.net}
-                                currency={summary.currency}
-                            />
+                        /* The headline numbers are a compact strip, not a chart — three bars
+                        would be a worse way to read three numbers. */
+                        <TotalsSummary
+                            income={summary.totals.income} expense={summary.totals.expense} net={summary.totals.net}
+                            currency={summary.currency}
+                        />
+                    )}
 
+                    {/* The table is the report, so it sits above the charts and stays put
+                    across both views. Outside the empty-state branch as well: with nothing
+                    spent it still has the budgets to show, which is worth seeing. */}
+                    {(categoryReport.rows.length > 0 || categoryReport.hasBudgets) && (
+                        <CategoryReportTable
+                            report={categoryReport}
+                            expense={summary.totals.expense}
+                            income={summary.totals.income}
+                            net={summary.totals.net}
+                            money={money}
+                            categoryRegistry={book.categories}
+                            rangeLabel={range.label}
+                        />
+                    )}
+
+                    {summary.totals.count > 0 && (
+                        <>
                             {view === "table" ? (
                                 <ReportTable summary={summary} money={money} />
                             ) : (
