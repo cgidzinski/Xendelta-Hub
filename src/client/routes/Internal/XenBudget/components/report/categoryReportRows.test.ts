@@ -20,6 +20,10 @@ function budget(patch: Partial<BudgetStatus> = {}): BudgetStatus {
     };
 }
 
+function period(key: string, expense: number, income = 0) {
+    return { key, expense, income, net: income - expense, count: 1 };
+}
+
 function sub(personId: string, amount: number): SubBudgetStatus {
     return {
         _id: `sub-${personId}`, person_id: personId, person_name: personId,
@@ -36,7 +40,7 @@ const base = {
     uncategorised: { total: 0, count: 0 },
     uncategorisedByPeriod: [],
     // One bucket, so nothing pivots unless a test asks for it.
-    periodKeys: ["2026-08"],
+    byPeriod: [period("2026-08", 860, 4000)],
     rangeFrom: FROM,
     rangeTo: TO,
 };
@@ -192,7 +196,7 @@ describe("period columns", () => {
 
     const yearly = {
         ...base,
-        periodKeys: MONTHS,
+        byPeriod: MONTHS.map((k) => period(k, k === "2026-01" ? 300 : k === "2026-02" ? 560 : 0)),
         byCategoryPeriod: [
             { category: "Groceries", key: "2026-01", total: 300 },
             { category: "Groceries", key: "2026-02", total: 320 },
@@ -213,7 +217,7 @@ describe("period columns", () => {
     it("reports no columns when there are too many buckets to read", () => {
         const days = Array.from({ length: 31 }, (_, i) => `2026-08-${String(i + 1).padStart(2, "0")}`);
         const { periodKeys, rows } = buildCategoryReport({
-            ...base, budgets: [], periodKeys: days,
+            ...base, budgets: [], byPeriod: days.map((k) => period(k, 10)),
             byCategoryPeriod: [{ category: "Groceries", key: "2026-08-01", total: 50 }],
         });
         expect(periodKeys).toEqual([]);
@@ -258,5 +262,92 @@ describe("period columns", () => {
     it("leaves a category with no spend in a bucket with no cell for it", () => {
         const { rows } = buildCategoryReport({ ...yearly, budgets: [] });
         expect(rows.find((r) => r.label === "Dining")?.byPeriod["2026-01"]).toBeUndefined();
+    });
+});
+
+describe("summary rows", () => {
+    const MONTHS = ["2026-01", "2026-02", "2026-03"];
+
+    const quarter = {
+        ...base,
+        byPeriod: [
+            period("2026-01", 900, 4000),
+            period("2026-02", 700, 4000),
+            period("2026-03", 1100, 4000),
+        ],
+        byCategoryPeriod: [],
+        rangeFrom: new Date(2026, 0, 1),
+        rangeTo: new Date(2026, 3, 1),
+    };
+
+    it("carries spend, income and net for every column", () => {
+        const { summary } = buildCategoryReport({ ...quarter, budgets: [] });
+        expect(summary.spent.byPeriod).toEqual({ "2026-01": 900, "2026-02": 700, "2026-03": 1100 });
+        expect(summary.income.byPeriod).toEqual({ "2026-01": 4000, "2026-02": 4000, "2026-03": 4000 });
+        expect(summary.net.byPeriod).toEqual({ "2026-01": 3100, "2026-02": 3300, "2026-03": 2900 });
+    });
+
+    it("totals each measure across the whole range", () => {
+        const { summary } = buildCategoryReport({ ...quarter, budgets: [] });
+        expect(summary.spent.total).toBe(2700);
+        expect(summary.income.total).toBe(12000);
+        expect(summary.net.total).toBe(9300);
+    });
+
+    it("restates the budget for each column", () => {
+        const { summary } = buildCategoryReport({ ...quarter, budgets: [budget({ amount: 800 })] });
+        // A monthly cap is one whole cap per month column.
+        expect(summary.budgeted.byPeriod).toEqual({ "2026-01": 800, "2026-02": 800, "2026-03": 800 });
+        expect(summary.budgeted.total).toBeCloseTo(2400, 6);
+    });
+
+    it("adds the columns up to the total beside them", () => {
+        const { summary, periodKeys } = buildCategoryReport({
+            ...quarter, budgets: [budget({ amount: 800 })],
+        });
+        const sum = (t: { byPeriod: Record<string, number> }) =>
+            periodKeys.reduce((acc, k) => acc + (t.byPeriod[k] ?? 0), 0);
+        expect(sum(summary.budgeted)).toBeCloseTo(summary.budgeted.total, 6);
+        expect(sum(summary.spent)).toBeCloseTo(summary.spent.total, 6);
+        expect(sum(summary.income)).toBeCloseTo(summary.income.total, 6);
+        expect(sum(summary.net)).toBeCloseTo(summary.net.total, 6);
+        expect(sum(summary.budgetNet)).toBeCloseTo(summary.budgetNet.total, 6);
+    });
+
+    it("still adds up when the range ends part-way through the last column", () => {
+        // A "last 3 months" range stops mid-month; counting that whole month would leave
+        // the columns overshooting the total.
+        const partial = {
+            ...quarter,
+            rangeTo: new Date(2026, 2, 16),
+            byPeriod: [
+                period("2026-01", 900, 4000),
+                period("2026-02", 700, 4000),
+                period("2026-03", 500, 2000),
+            ],
+        };
+        const { summary, periodKeys } = buildCategoryReport({
+            ...partial, budgets: [budget({ amount: 800 })],
+        });
+        const summed = periodKeys.reduce((acc, k) => acc + (summary.budgeted.byPeriod[k] ?? 0), 0);
+        expect(summed).toBeCloseTo(summary.budgeted.total, 6);
+        // Half of March, so half a month's cap.
+        expect(summary.budgeted.byPeriod["2026-03"]).toBeCloseTo(800 * (15 / 31), 6);
+    });
+
+    it("reports budget net as what the caps left over, column by column", () => {
+        const { summary } = buildCategoryReport({ ...quarter, budgets: [budget({ amount: 800 })] });
+        expect(summary.budgetNet.byPeriod["2026-01"]).toBeCloseTo(-100, 6);
+        expect(summary.budgetNet.byPeriod["2026-02"]).toBeCloseTo(100, 6);
+        expect(summary.budgetNet.total).toBeCloseTo(2400 - 2700, 6);
+    });
+
+    it("still totals the range when there are no columns to spread across", () => {
+        const { summary, periodKeys } = buildCategoryReport({ ...base, budgets: [budget()] });
+        expect(periodKeys).toEqual([]);
+        expect(summary.spent.byPeriod).toEqual({});
+        expect(summary.spent.total).toBe(860);
+        expect(summary.income.total).toBe(4000);
+        expect(summary.budgeted.total).toBe(800);
     });
 });

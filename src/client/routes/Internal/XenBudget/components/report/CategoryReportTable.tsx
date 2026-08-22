@@ -2,7 +2,7 @@ import {
     Box, Card, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography, alpha,
 } from "@mui/material";
 import type { SxProps, Theme } from "@mui/material";
-import type { CategoryReport, CategoryReportRow } from "./categoryReportRows";
+import type { CategoryReport, CategoryReportRow, PeriodTotals } from "./categoryReportRows";
 import { periodColumnLabels } from "./periodColumns";
 import { CategoryChip } from "../LabelChip";
 import type { XenBudgetLabel } from "../../../../../hooks/xenbudget/types";
@@ -11,10 +11,6 @@ import { INCOME_COLOR } from "../../../../../components/ui/chartColors";
 
 interface CategoryReportTableProps {
     report: CategoryReport;
-    /** Expense and income for the same range, straight from the summary. */
-    expense: number;
-    income: number;
-    net: number;
     money: (v: number) => string;
     /** Whole units, no cents - the grid has too many columns to spend width on decimals. */
     round: (v: number) => string;
@@ -37,9 +33,9 @@ interface CategoryReportTableProps {
  * the row beside it is worse than no column at all.
  */
 export default function CategoryReportTable({
-    report, expense, income, net, money, round, categoryRegistry, rangeLabel,
+    report, money, round, categoryRegistry, rangeLabel,
 }: CategoryReportTableProps) {
-    const { rows, spanning, wholeBook, totalBudgeted, hasBudgets, periodKeys } = report;
+    const { rows, spanning, wholeBook, hasBudgets, periodKeys, summary } = report;
     const pivoted = periodKeys.length > 0;
     const columnLabels = periodColumnLabels(periodKeys);
 
@@ -100,6 +96,69 @@ export default function CategoryReportTable({
 
     const columnCount = 1 + periodKeys.length + 1 + (hasBudgets ? 2 : 0);
 
+    /**
+     * A measure across every column. `first` draws the rule that separates the bottom
+     * block from the categories; `signed` marks the figures that can legitimately go
+     * either way, where the sign is the whole point.
+     */
+    const totalRow = (
+        label: string,
+        totals: PeriodTotals,
+        opts: { first?: boolean; signed?: boolean; strong?: boolean; color?: string } = {},
+    ) => {
+        const border = opts.first
+            ? {
+                borderTop: "2px solid",
+                borderTopColor: (theme: Theme) => alpha(theme.palette.text.primary, 0.24),
+            }
+            : {};
+        const tint = (v: number) => {
+            if (opts.color) return opts.color;
+            if (!opts.signed) return "text.primary";
+            return v < 0 ? "error.main" : INCOME_COLOR;
+        };
+        const show = (v: number) => {
+            if (v === 0) return round(0);
+            return opts.signed && v < 0 ? `−${round(-v)}` : round(v);
+        };
+
+        return (
+            <TableRow key={label}>
+                <TableCell sx={{ ...stickySx, ...border, fontWeight: 600 }}>
+                    <Typography variant="caption" sx={{ ...sectionLabelSx, color: "text.secondary" }}>
+                        {label}
+                    </Typography>
+                </TableCell>
+                {periodKeys.map((periodKey) => {
+                    const value = totals.byPeriod[periodKey] ?? 0;
+                    return (
+                        <TableCell
+                            key={periodKey} align="right"
+                            sx={{ ...border, color: tint(value) }}
+                        >
+                            {show(value)}
+                        </TableCell>
+                    );
+                })}
+                <TableCell
+                    align="right"
+                    sx={{
+                        ...border,
+                        color: tint(totals.total),
+                        fontWeight: opts.strong ? 700 : 600,
+                    }}
+                >
+                    {opts.signed && totals.total > 0 ? `+${round(totals.total)}` : show(totals.total)}
+                </TableCell>
+                {/* The Budgeted and Left columns are a category-level comparison; the
+                budget's own totals are the rows themselves, so repeating them here would
+                just be the same number twice. */}
+                {hasBudgets && <TableCell sx={border} />}
+                {hasBudgets && <TableCell sx={border} />}
+            </TableRow>
+        );
+    };
+
     return (
         <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
             <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.5 }}>
@@ -150,43 +209,37 @@ export default function CategoryReportTable({
                                 {spanning.map((row) => dataRow(row, false))}
                             </>
                         )}
+
+                        {/* The bottom line, carried across the same columns as everything
+                        above it - a year's spending is worth reading month by month, and
+                        so is what it left over. */}
+                        {hasBudgets && (
+                            <>
+                                {totalRow("Budgeted", summary.budgeted, { first: true })}
+                                {totalRow("Spent", summary.spent)}
+                                {totalRow("Budget net", summary.budgetNet, { signed: true })}
+                                {totalRow("Income", summary.income, { color: INCOME_COLOR })}
+                                {totalRow("Net", summary.net, { signed: true, strong: true })}
+                            </>
+                        )}
+                        {!hasBudgets && (
+                            <>
+                                {totalRow("Spent", summary.spent, { first: true })}
+                                {totalRow("Income", summary.income, { color: INCOME_COLOR })}
+                                {totalRow("Net", summary.net, { signed: true, strong: true })}
+                            </>
+                        )}
                     </TableBody>
                 </Table>
             </Box>
 
-            <Stack
-                spacing={0.5}
-                sx={{
-                    mt: 2, pt: 1.5,
-                    borderTop: "1px solid",
-                    borderColor: (theme) => alpha(theme.palette.text.primary, 0.12),
-                }}
-            >
-                {hasBudgets ? (
-                    <>
-                        {wholeBook > 0 && (
-                            <TotalRow label="Whole-book budgets" value={money(wholeBook)} muted />
-                        )}
-                        <TotalRow label="Budgeted" value={money(totalBudgeted)} muted />
-                        <TotalRow label="Spent" value={money(expense)} muted />
-                        <TotalRow
-                            label="Budget net"
-                            value={totalBudgeted - expense < 0
-                                ? `−${money(expense - totalBudgeted)}`
-                                : money(totalBudgeted - expense)}
-                            color={totalBudgeted - expense < 0 ? "error.main" : INCOME_COLOR}
-                        />
-                    </>
-                ) : (
-                    <TotalRow label="Spent" value={money(expense)} muted />
-                )}
-                <TotalRow label="Income" value={money(income)} color={INCOME_COLOR} muted />
-                <TotalRow
-                    label="Net"
-                    value={net < 0 ? `−${money(-net)}` : `+${money(net)}`}
-                    color={net < 0 ? "error.main" : INCOME_COLOR}
-                />
-            </Stack>
+            {wholeBook > 0 && (
+                <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 1 }}>
+                    Budgeted includes {money(wholeBook)} capping the whole book rather than any
+                    one category.
+                </Typography>
+            )}
+
         </Card>
     );
 }

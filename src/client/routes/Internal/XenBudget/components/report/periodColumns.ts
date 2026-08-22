@@ -1,3 +1,7 @@
+import {
+    addDays, addMonths, addWeeks, setISOWeek, startOfISOWeek, startOfMonth,
+} from "date-fns";
+
 /**
  * Column headings for the report grid.
  *
@@ -58,4 +62,36 @@ function label(key: string, multiYear: boolean): string {
 export function periodColumnLabels(periodKeys: string[]): string[] {
     const multiYear = new Set(periodKeys.map(yearOf)).size > 1;
     return periodKeys.map((key) => label(key, multiYear));
+}
+
+
+/**
+ * The window a period key covers, as a half-open [from, to).
+ *
+ * Needed to restate a budget for one column: the budget maths works in dates, and the
+ * summary hands back keys. The shape of the key says which bucket it is, the same way the
+ * headings above are derived.
+ */
+export function periodKeyRange(key: string): { from: Date; to: Date } | null {
+    const week = /^(\d{4})-W(\d{2})$/.exec(key);
+    if (week) {
+        // January 4th is always in ISO week 1, so it is a safe anchor to count from.
+        const anchor = new Date(Number(week[1]), 0, 4);
+        const from = startOfISOWeek(setISOWeek(anchor, Number(week[2])));
+        return { from, to: addWeeks(from, 1) };
+    }
+
+    const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+    if (day) {
+        const from = new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]));
+        return { from, to: addDays(from, 1) };
+    }
+
+    const month = /^(\d{4})-(\d{2})$/.exec(key);
+    if (month) {
+        const from = startOfMonth(new Date(Number(month[1]), Number(month[2]) - 1, 1));
+        return { from, to: addMonths(from, 1) };
+    }
+
+    return null;
 }

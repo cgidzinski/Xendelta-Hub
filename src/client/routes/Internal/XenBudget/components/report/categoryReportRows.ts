@@ -1,9 +1,9 @@
 import type {
-    BudgetStatus, SummaryCategory, SummaryCategoryPeriod,
+    BudgetStatus, SummaryCategory, SummaryCategoryPeriod, SummaryPeriod,
 } from "../../../../../hooks/xenbudget/types";
 import { budgetedForRange } from "../budget/budgetForRange";
 import { budgetsForPerson } from "../budget/budgetPersonView";
-import { shouldPivot } from "./periodColumns";
+import { periodKeyRange, shouldPivot } from "./periodColumns";
 
 /** One line of the budget-vs-actual table. */
 export interface CategoryReportRow {
@@ -40,6 +40,24 @@ export interface CategoryReport {
      * too many to read, in which case the table falls back to a single Spent column.
      */
     periodKeys: string[];
+    /** The bottom block, each measure carrying a figure for every column. */
+    summary: ReportSummaryRows;
+}
+
+/** One measure across the columns, plus its figure for the whole range. */
+export interface PeriodTotals {
+    byPeriod: Record<string, number>;
+    total: number;
+}
+
+export interface ReportSummaryRows {
+    budgeted: PeriodTotals;
+    spent: PeriodTotals;
+    /** budgeted - spent: what the caps left over, column by column. */
+    budgetNet: PeriodTotals;
+    income: PeriodTotals;
+    /** income - spent, the book's actual bottom line. */
+    net: PeriodTotals;
 }
 
 interface BuildInput {
@@ -48,7 +66,7 @@ interface BuildInput {
     uncategorised: { total: number; count: number };
     uncategorisedByPeriod: { key: string; total: number }[];
     /** Every bucket in the range, in order, straight from `by_period`. */
-    periodKeys: string[];
+    byPeriod: SummaryPeriod[];
     budgets: BudgetStatus[];
     rangeFrom: Date;
     rangeTo: Date;
@@ -72,10 +90,11 @@ function limitFor(budget: BudgetStatus, personId?: string): number | undefined {
 }
 
 export function buildCategoryReport({
-    byCategory, byCategoryPeriod, uncategorised, uncategorisedByPeriod, periodKeys,
+    byCategory, byCategoryPeriod, uncategorised, uncategorisedByPeriod, byPeriod,
     budgets, rangeFrom, rangeTo, personId,
 }: BuildInput): CategoryReport {
     const kept = personId ? budgetsForPerson(budgets, personId) : budgets;
+    const periodKeys = byPeriod.map((p) => p.key);
     const pivoted = shouldPivot(periodKeys);
 
     const spentByCategory = new Map<string, { label: string; spent: number }>();
@@ -173,10 +192,69 @@ export function buildCategoryReport({
 
     spanning.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
 
+    const columns = pivoted ? periodKeys : [];
+
+    // What each column allows. A bucket is clamped to the range before it is measured:
+    // "last 3 months" ends mid-month, and counting that whole month here would leave the
+    // columns adding up to more than the total beside them.
+    const budgetedByPeriod: Record<string, number> = {};
+    for (const periodKey of columns) {
+        const bucket = periodKeyRange(periodKey);
+        if (!bucket) continue;
+        const from = new Date(Math.max(bucket.from.getTime(), rangeFrom.getTime()));
+        const to = new Date(Math.min(bucket.to.getTime(), rangeTo.getTime()));
+        budgetedByPeriod[periodKey] = kept.reduce((sum, budget) => sum + budgetedForRange(
+            {
+                period: budget.period,
+                amount: limitFor(budget, personId),
+                period_from: budget.period_from,
+                period_to: budget.period_to,
+            },
+            from, to,
+        ), 0);
+    }
+
+    const spentByPeriod = fromPeriods(byPeriod, columns, (p) => p.expense);
+    const incomeByPeriod = fromPeriods(byPeriod, columns, (p) => p.income);
+
+    const totals = byPeriod.reduce(
+        (acc, p) => ({ expense: acc.expense + p.expense, income: acc.income + p.income }),
+        { expense: 0, income: 0 },
+    );
+
     return {
         rows, spanning, wholeBook, totalBudgeted, hasBudgets,
-        periodKeys: pivoted ? periodKeys : [],
+        periodKeys: columns,
+        summary: {
+            budgeted: { byPeriod: budgetedByPeriod, total: totalBudgeted },
+            spent: { byPeriod: spentByPeriod, total: totals.expense },
+            budgetNet: {
+                byPeriod: subtract(budgetedByPeriod, spentByPeriod, columns),
+                total: totalBudgeted - totals.expense,
+            },
+            income: { byPeriod: incomeByPeriod, total: totals.income },
+            net: {
+                byPeriod: subtract(incomeByPeriod, spentByPeriod, columns),
+                total: totals.income - totals.expense,
+            },
+        },
     };
+}
+
+function fromPeriods(
+    byPeriod: SummaryPeriod[], columns: string[], pick: (p: SummaryPeriod) => number,
+): Record<string, number> {
+    if (columns.length === 0) return {};
+    const wanted = new Set(columns);
+    return Object.fromEntries(
+        byPeriod.filter((p) => wanted.has(p.key)).map((p) => [p.key, pick(p)]),
+    );
+}
+
+function subtract(
+    a: Record<string, number>, b: Record<string, number>, columns: string[],
+): Record<string, number> {
+    return Object.fromEntries(columns.map((k) => [k, (a[k] ?? 0) - (b[k] ?? 0)]));
 }
 
 /** Adds several categories' period cells together for a budget that spans them. */

@@ -19,7 +19,9 @@ import BudgetCard from "./components/budget/BudgetCard";
 import { sortBudgets } from "./components/budget/sortBudgets";
 import { budgetsForPerson } from "./components/budget/budgetPersonView";
 import CategoryReportTable from "./components/report/CategoryReportTable";
-import { buildCategoryReport, type CategoryReportRow } from "./components/report/categoryReportRows";
+import {
+    buildCategoryReport, type CategoryReportRow, type PeriodTotals,
+} from "./components/report/categoryReportRows";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { formatCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
@@ -72,7 +74,7 @@ export default function BookReport() {
         uncategorised: summary?.uncategorised ?? { total: 0, count: 0 },
         uncategorisedByPeriod: summary?.uncategorised_by_period ?? [],
         // The same buckets the charts use, so a column lines up with a bar.
-        periodKeys: (summary?.by_period ?? []).map((p) => p.key),
+        byPeriod: summary?.by_period ?? [],
         budgets,
         rangeFrom: range.from,
         rangeTo: range.to,
@@ -129,6 +131,12 @@ export default function BookReport() {
         r.budgeted === undefined ? "" : r.budgeted - r.spent,
     ];
 
+    const summaryCsvRow = (label: string, totals: PeriodTotals) => [
+        label,
+        ...categoryReport.periodKeys.map((k) => totals.byPeriod[k] ?? 0),
+        totals.total,
+    ];
+
     const exportCsv = () => {
         if (!summary) return;
         const rows: unknown[][] = [
@@ -148,14 +156,15 @@ export default function BookReport() {
                 ...categoryReport.spanning.map(categoryCsvRow),
             ] : []),
             [],
-            ...(categoryReport.hasBudgets ? [
-                ...(categoryReport.wholeBook > 0 ? [["Whole-book budgets", categoryReport.wholeBook]] : []),
-                ["Budgeted", categoryReport.totalBudgeted],
-                ["Spent", summary.totals.expense],
-                ["Budget net", categoryReport.totalBudgeted - summary.totals.expense],
-            ] : [["Spent", summary.totals.expense]]),
-            ["Income", summary.totals.income],
-            ["Net", summary.totals.net],
+            ...(categoryReport.hasBudgets
+                ? [summaryCsvRow("Budgeted", categoryReport.summary.budgeted)] : []),
+            summaryCsvRow("Spent", categoryReport.summary.spent),
+            ...(categoryReport.hasBudgets
+                ? [summaryCsvRow("Budget net", categoryReport.summary.budgetNet)] : []),
+            summaryCsvRow("Income", categoryReport.summary.income),
+            summaryCsvRow("Net", categoryReport.summary.net),
+            ...(categoryReport.wholeBook > 0
+                ? [["Of which capping the whole book", categoryReport.wholeBook]] : []),
             [],
             ["Person", "Spent", "Income"],
             ...summary.by_person.map((p) => [p.username, p.total, p.income]),
@@ -249,9 +258,6 @@ export default function BookReport() {
                     {(categoryReport.rows.length > 0 || categoryReport.hasBudgets) && (
                         <CategoryReportTable
                             report={categoryReport}
-                            expense={summary.totals.expense}
-                            income={summary.totals.income}
-                            net={summary.totals.net}
                             money={money}
                             round={round}
                             categoryRegistry={book.categories}
