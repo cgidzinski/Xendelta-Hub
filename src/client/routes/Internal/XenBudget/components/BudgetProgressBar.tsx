@@ -1,5 +1,5 @@
-import { Box, LinearProgress, Stack, Typography, alpha } from "@mui/material";
-import type { BudgetStatus, XenBudgetLabel } from "../../../../hooks/xenbudget/types";
+import { Avatar, Box, LinearProgress, Stack, Typography, alpha } from "@mui/material";
+import type { BudgetStatus, XenBudgetLabel, XenBudgetMember } from "../../../../hooks/xenbudget/types";
 import { CategoryChip, resolveLabelColor } from "./LabelChip";
 import { formatCurrency } from "../../../../utils/currencyUtils";
 
@@ -15,11 +15,13 @@ interface BudgetProgressBarProps {
     budget: BudgetStatus;
     currency: string;
     categoryRegistry: XenBudgetLabel[];
+    members: XenBudgetMember[];
     onClick?: () => void;
 }
 
-export default function BudgetProgressBar({ budget, currency, categoryRegistry, onClick }: BudgetProgressBarProps) {
+export default function BudgetProgressBar({ budget, currency, categoryRegistry, members, onClick }: BudgetProgressBarProps) {
     const categories = budget.categories || [];
+    const person = budget.person_id ? members.find((m) => m.user_id === budget.person_id) : undefined;
     const everything = categories.length === 0 && !budget.person_name;
 
     // The bar is clamped so it can't overflow its track, but the caption reports the real
@@ -36,14 +38,24 @@ export default function BudgetProgressBar({ budget, currency, categoryRegistry, 
                 <Stack direction="row" alignItems="center" spacing={0.5} flexWrap="wrap" sx={{ minWidth: 0, rowGap: 0.5 }}>
                     {categories.map((c) => <CategoryChip key={c} name={c} registry={categoryRegistry} />)}
                     {budget.person_name && (
-                        <Typography variant="body2" noWrap>{budget.person_name}</Typography>
+                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                            {person && (
+                                <Avatar src={person.avatar || undefined} sx={{ width: 18, height: 18, fontSize: 10 }}>
+                                    {person.username[0]?.toUpperCase()}
+                                </Avatar>
+                            )}
+                            <Typography variant="body2" noWrap>{person?.username || budget.person_name}</Typography>
+                        </Stack>
                     )}
                     {everything && <Typography variant="body2" color="text.secondary">Everything</Typography>}
                 </Stack>
                 <Typography variant="caption" color="text.secondary" sx={{ flexGrow: 1 }} noWrap>
                     {PERIOD_LABELS[budget.period] || "this period"}
                 </Typography>
-                <Typography variant="body2" sx={{ color: budget.over ? "error.main" : "text.primary" }}>
+                <Typography
+                    variant="body2" noWrap
+                    sx={{ color: budget.over ? "error.main" : "text.primary", flexShrink: 0 }}
+                >
                     {formatCurrency(budget.spent, currency)}
                     <Typography component="span" variant="body2" color="text.secondary">
                         {" / "}{formatCurrency(budget.amount, currency)}

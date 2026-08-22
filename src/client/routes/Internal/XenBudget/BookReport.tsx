@@ -236,6 +236,7 @@ export default function BookReport() {
                                     <BudgetProgressBar
                                         key={budget._id} budget={budget}
                                         currency={currency} categoryRegistry={book.categories}
+                                        members={book.members}
                                     />
                                 ))}
                             </Stack>

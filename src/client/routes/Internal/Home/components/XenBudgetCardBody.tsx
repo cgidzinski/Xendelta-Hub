@@ -63,6 +63,7 @@ export default function XenBudgetCardBody() {
                             budget={budget}
                             currency={currency}
                             categoryRegistry={book.categories}
+                            members={book.members}
                         />
                     ))}
                 </Stack>

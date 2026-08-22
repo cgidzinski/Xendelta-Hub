@@ -54,6 +54,7 @@ export default function BookBudgets() {
                                 budget={budget}
                                 currency={currency}
                                 categoryRegistry={book.categories}
+                                members={book.members}
                                 onClick={() => { setEditing(budget); setFormOpen(true); }}
                             />
                         ))}

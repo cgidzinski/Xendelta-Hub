@@ -1604,6 +1604,8 @@ module.exports = function (app: any) {
       try {
         const book = await loadBookForMember(req, res);
         if (!book) return;
+        // memberById below needs real User docs, not raw ObjectIds.
+        await book.populate("members", "username avatar");
         const q = req.query as Record<string, string>;
         const tz = requestTimezone(q);
         const asOf = q.as_of ? new Date(q.as_of) : new Date();

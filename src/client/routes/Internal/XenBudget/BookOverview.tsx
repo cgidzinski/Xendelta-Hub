@@ -43,6 +43,18 @@ export default function BookOverview() {
     const { budgets: budgetStatus } = useXenBudgetStatus(book._id, currency);
     const overBudgetCount = budgetStatus.filter((b) => b.over).length;
 
+    // Whole-book budgets first, then grouped by person (in member order) so one person's
+    // budgets sit together rather than interleaved with someone else's. Array.sort is
+    // stable, so budgets sharing a rank keep their existing relative order.
+    const sortedBudgets = useMemo(() => {
+        const memberOrder = new Map(book.members.map((m, i) => [m.user_id, i]));
+        return [...budgetStatus].sort((a, b) => {
+            const rankA = a.person_id ? (memberOrder.get(a.person_id) ?? book.members.length) + 1 : 0;
+            const rankB = b.person_id ? (memberOrder.get(b.person_id) ?? book.members.length) + 1 : 0;
+            return rankA - rankB;
+        });
+    }, [budgetStatus, book.members]);
+
     const categoryRows = useMemo(() => {
         if (!summary) return [];
         const rows = summary.by_category.map((c) => ({
@@ -112,12 +124,13 @@ export default function BookOverview() {
                         )}
                     </Stack>
                     <Stack spacing={2}>
-                        {budgetStatus.map((budget) => (
+                        {sortedBudgets.map((budget) => (
                             <BudgetProgressBar
                                 key={budget._id}
                                 budget={budget}
                                 currency={summary.currency}
                                 categoryRegistry={book.categories}
+                                members={book.members}
                                 onClick={() => navigate(`/internal/xenbudget/books/${book._id}/settings/budgets`)}
                             />
                         ))}
