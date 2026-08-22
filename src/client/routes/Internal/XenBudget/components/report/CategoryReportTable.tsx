@@ -51,11 +51,6 @@ export default function CategoryReportTable({
         overflow: "hidden",
     };
 
-    const numberCell = (value: number | undefined, format: (v: number) => string) => (
-        // A grid of zeroes reads as noise; an empty cell reads as nothing happened.
-        value === undefined || value === 0 ? "" : format(value)
-    );
-
     const leftCell = (row: CategoryReportRow) => {
         if (row.budgeted === undefined) {
             return <TableCell align="right" sx={{ color: "text.disabled" }}>—</TableCell>;
@@ -75,11 +70,22 @@ export default function CategoryReportTable({
                     ? <CategoryChip name={row.categories[0]} registry={categoryRegistry} />
                     : <Typography variant="body2" noWrap>{row.label}</Typography>}
             </TableCell>
-            {periodKeys.map((periodKey) => (
-                <TableCell key={periodKey} align="right" sx={{ color: "text.secondary" }}>
-                    {numberCell(row.byPeriod[periodKey], round)}
-                </TableCell>
-            ))}
+            {periodKeys.map((periodKey) => {
+                const value = row.byPeriod[periodKey] ?? 0;
+                // A grid of zeroes reads as noise, but a blank cell is ambiguous - it
+                // could equally be a figure that failed to load. A dimmed dash says
+                // "nothing here" out loud, and matches the dash the budget columns
+                // already use for the same meaning.
+                const empty = value === 0;
+                return (
+                    <TableCell
+                        key={periodKey} align="right"
+                        sx={{ color: empty ? "text.disabled" : "text.secondary" }}
+                    >
+                        {empty ? "—" : round(value)}
+                    </TableCell>
+                );
+            })}
             <TableCell align="right" sx={{ fontWeight: pivoted ? 600 : 400 }}>
                 {pivoted ? round(row.spent) : money(row.spent)}
             </TableCell>
