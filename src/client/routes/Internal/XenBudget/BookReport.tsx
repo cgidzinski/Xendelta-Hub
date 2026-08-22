@@ -15,8 +15,13 @@ import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
 import TimePeriodFilter, { defaultYearMode, resolvePeriod, type PeriodMode } from "./components/TimePeriodFilter";
 import TotalsSummary from "./components/TotalsSummary";
-import BudgetGroup from "./components/BudgetGroup";
-import { groupBudgets } from "./components/groupBudgets";
+import BudgetCard from "./components/budget/BudgetCard";
+import { sortBudgets } from "./components/budget/sortBudgets";
+import { budgetsForPerson } from "./components/budget/budgetPersonView";
+import CategoryReportTable from "./components/report/CategoryReportTable";
+import {
+    buildCategoryReport, type CategoryReportRow, type PeriodTotals,
+} from "./components/report/categoryReportRows";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { formatCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
@@ -53,8 +58,29 @@ export default function BookReport() {
         currency,
         people: person ? [person] : undefined,
     });
-    const { budgets } = useXenBudgetStatus(book._id, currency);
-    const budgetGroups = useMemo(() => groupBudgets(budgets), [budgets]);
+    const { status: budgetStatusResponse, budgets } = useXenBudgetStatus(book._id, currency);
+    // Narrowed by the person filter the same way the charts above are: the budgets that
+    // constrain them, carrying only their own personal limit.
+    const visibleBudgets = useMemo(
+        () => sortBudgets(person ? budgetsForPerson(budgets, person) : budgets),
+        [budgets, person],
+    );
+
+    // Budget against actual for the range on screen. The caps are restated for that range
+    // rather than shown as one period's worth - see budgetedForRange.
+    const categoryReport = useMemo(() => buildCategoryReport({
+        allCategories: book.categories.map((c) => c.name),
+        byCategory: summary?.by_category ?? [],
+        byCategoryPeriod: summary?.by_category_period ?? [],
+        uncategorised: summary?.uncategorised ?? { total: 0, count: 0 },
+        uncategorisedByPeriod: summary?.uncategorised_by_period ?? [],
+        // The same buckets the charts use, so a column lines up with a bar.
+        byPeriod: summary?.by_period ?? [],
+        budgets,
+        rangeFrom: range.from,
+        rangeTo: range.to,
+        personId: person,
+    }), [summary, budgets, book.categories, range.from, range.to, person]);
 
     const periodData = useMemo(() => (summary?.by_period ?? []).map((p) => ({
         key: p.key,
@@ -98,6 +124,20 @@ export default function BookReport() {
         );
     }, [summary, book.members]);
 
+    const categoryCsvRow = (r: CategoryReportRow) => [
+        r.label,
+        ...categoryReport.periodKeys.map((k) => r.byPeriod[k] ?? ""),
+        r.spent,
+        r.budgeted ?? "",
+        r.budgeted === undefined ? "" : r.budgeted - r.spent,
+    ];
+
+    const summaryCsvRow = (label: string, totals: PeriodTotals) => [
+        label,
+        ...categoryReport.periodKeys.map((k) => totals.byPeriod[k] ?? 0),
+        totals.total,
+    ];
+
     const exportCsv = () => {
         if (!summary) return;
         const rows: unknown[][] = [
@@ -107,9 +147,29 @@ export default function BookReport() {
             ["Period", "In", "Out", "Net"],
             ...summary.by_period.map((p) => [p.key, p.income, p.expense, p.net]),
             [],
-            ["Category", "Spent"],
-            ...summary.by_category.map((c) => [c.category, c.total]),
-            ["Uncategorised", summary.uncategorised.total],
+            // Mirrors the table on screen, period and budget columns included, so the
+            // export doesn't quietly say something different from what it was taken from.
+            ["Category", ...categoryReport.periodKeys, "Total", "Budgeted", "Left"],
+            ...categoryReport.rows.map(categoryCsvRow),
+            ...(categoryReport.spanning.length > 0 ? [
+                [],
+                ["Budgets over several categories (also counted above)"],
+                ...categoryReport.spanning.map(categoryCsvRow),
+            ] : []),
+            [],
+            ...(categoryReport.summary.capped.total > 0 ? [
+                summaryCsvRow("Spending caps", categoryReport.summary.capped),
+                summaryCsvRow("Caps left", categoryReport.summary.capsLeft),
+            ] : []),
+            ...(categoryReport.hasGoals ? [
+                summaryCsvRow("Savings goals", categoryReport.summary.goals),
+                summaryCsvRow("Saved", categoryReport.summary.saved),
+            ] : []),
+            summaryCsvRow("Spent", categoryReport.summary.spent),
+            summaryCsvRow("Income", categoryReport.summary.income),
+            summaryCsvRow("Net", categoryReport.summary.net),
+            ...(categoryReport.wholeBook > 0
+                ? [["Of which budgeted across the whole book", categoryReport.wholeBook]] : []),
             [],
             ["Person", "Spent", "Income"],
             ...summary.by_person.map((p) => [p.username, p.total, p.income]),
@@ -134,6 +194,9 @@ export default function BookReport() {
             style: "currency", currency: summary.currency, maximumFractionDigits: 0,
         }).format(v);
     };
+    const round = (v: number) => new Intl.NumberFormat("en-US", {
+        style: "currency", currency: summary.currency, maximumFractionDigits: 0,
+    }).format(v);
     const tooltipStyle = {
         contentStyle: { background: "#1a1a19", border: "1px solid #ffffff26", borderRadius: 8 },
         labelStyle: { color: "#c3c2b7" },
@@ -176,104 +239,137 @@ export default function BookReport() {
             </Box>
 
             <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: 2, pb: 2 }}>
-                {summary.totals.count === 0 ? (
-                    <Box sx={emptyStateSx}>
-                        <Box sx={emptyStateIconCircleSx}><InsightsIcon color="disabled" /></Box>
-                        <Typography variant="subtitle1">Nothing in this period</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Try a wider range, or a different currency.
-                        </Typography>
-                    </Box>
-                ) : (
-                    <Stack spacing={2}>
-                        {/* The headline numbers are a compact strip, not a chart — three bars
-                        would be a worse way to read three numbers. */}
+                <Stack spacing={2}>
+                    {/* The table IS the report - it leads the page, above the headline
+                    strip and every chart, and stays put across both views. Outside the
+                    empty-state branch as well: with nothing spent it still has the
+                    budgets to show, which is worth seeing. */}
+                    {(categoryReport.rows.length > 0 || categoryReport.hasBudgets) && (
+                        <CategoryReportTable
+                            report={categoryReport}
+                            money={money}
+                            round={round}
+                            categoryRegistry={book.categories}
+                            rangeLabel={range.label}
+                        />
+                    )}
+
+                    {summary.totals.count === 0 ? (
+                        <Box sx={emptyStateSx}>
+                            <Box sx={emptyStateIconCircleSx}><InsightsIcon color="disabled" /></Box>
+                            <Typography variant="subtitle1">Nothing in this period</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Try a wider range, or a different currency.
+                            </Typography>
+                        </Box>
+                    ) : (
+                        /* The headline numbers are a compact strip, not a chart — three bars
+                        would be a worse way to read three numbers. */
                         <TotalsSummary
                             income={summary.totals.income} expense={summary.totals.expense} net={summary.totals.net}
                             currency={summary.currency}
                         />
+                    )}
 
-                        {view === "table" ? (
-                            <ReportTable summary={summary} money={money} />
-                        ) : (
-                            <>
-                                <ChartCard title="Money in and out">
-                                    <ResponsiveContainer width="100%" height={260}>
-                                        <BarChart data={periodData} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
-                                            <CartesianGrid stroke={GRID} vertical={false} />
-                                            <XAxis dataKey="key" tick={AXIS} tickLine={false} axisLine={false} />
-                                            <YAxis tick={AXIS} tickLine={false} axisLine={false} width={AXIS_WIDTH}
-                                                tickFormatter={(v) => compact(Number(v))} />
-                                            <Tooltip {...tooltipStyle} formatter={(v) => money(Number(v))} cursor={{ fill: "#ffffff0a" }} />
-                                            <Legend />
-                                            {/* Two series, so identity is carried by a legend as well as colour. */}
-                                            <Bar dataKey="In" fill={INCOME_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
-                                            <Bar dataKey="Out" fill={EXPENSE_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </ChartCard>
-
-                                <ChartCard title="Net by period">
-                                    <ResponsiveContainer width="100%" height={220}>
-                                        <LineChart data={periodData} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
-                                            <CartesianGrid stroke={GRID} vertical={false} />
-                                            <XAxis dataKey="key" tick={AXIS} tickLine={false} axisLine={false} />
-                                            <YAxis tick={AXIS} tickLine={false} axisLine={false} width={AXIS_WIDTH}
-                                                tickFormatter={(v) => compact(Number(v))} />
-                                            <Tooltip {...tooltipStyle} formatter={(v) => money(Number(v))} />
-                                            {/* One series — the card title names it, so no legend box. */}
-                                            <Line
-                                                type="monotone" dataKey="Net" stroke={MAGNITUDE_COLOR}
-                                                strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }}
-                                            />
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                </ChartCard>
-
-                                {categoryData.length > 0 && (
-                                    <ChartCard title="Spending by category">
-                                        <MagnitudeBars data={categoryData} money={money} compact={compact} />
+                    {summary.totals.count > 0 && (
+                        <>
+                            {view === "table" ? (
+                                <ReportTable summary={summary} money={money} />
+                            ) : (
+                                <>
+                                    <ChartCard title="Money in and out">
+                                        <ResponsiveContainer width="100%" height={260}>
+                                            <BarChart data={periodData} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+                                                <CartesianGrid stroke={GRID} vertical={false} />
+                                                <XAxis dataKey="key" tick={AXIS} tickLine={false} axisLine={false} />
+                                                <YAxis tick={AXIS} tickLine={false} axisLine={false} width={AXIS_WIDTH}
+                                                    tickFormatter={(v) => compact(Number(v))} />
+                                                <Tooltip {...tooltipStyle} formatter={(v) => money(Number(v))} cursor={{ fill: "#ffffff0a" }} />
+                                                <Legend />
+                                                {/* Two series, so identity is carried by a legend as well as colour. */}
+                                                <Bar dataKey="In" fill={INCOME_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                                                <Bar dataKey="Out" fill={EXPENSE_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
                                     </ChartCard>
-                                )}
 
-                                {!person && personData.length > 0 && (
-                                    <ChartCard title="Spending by person">
-                                        <MagnitudeBars data={personData} money={money} compact={compact} />
-                                        <Typography variant="caption" color="text.secondary">
-                                            Each person&rsquo;s share of every expense — these add up to the total above.
-                                        </Typography>
+                                    <ChartCard title="Net by period">
+                                        <ResponsiveContainer width="100%" height={220}>
+                                            <LineChart data={periodData} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+                                                <CartesianGrid stroke={GRID} vertical={false} />
+                                                <XAxis dataKey="key" tick={AXIS} tickLine={false} axisLine={false} />
+                                                <YAxis tick={AXIS} tickLine={false} axisLine={false} width={AXIS_WIDTH}
+                                                    tickFormatter={(v) => compact(Number(v))} />
+                                                <Tooltip {...tooltipStyle} formatter={(v) => money(Number(v))} />
+                                                {/* One series — the card title names it, so no legend box. */}
+                                                <Line
+                                                    type="monotone" dataKey="Net" stroke={MAGNITUDE_COLOR}
+                                                    strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }}
+                                                />
+                                            </LineChart>
+                                        </ResponsiveContainer>
                                     </ChartCard>
-                                )}
 
-                                {!person && personIncomeData.length > 0 && (
-                                    <ChartCard title="Income by person">
-                                        <MagnitudeBars data={personIncomeData} money={money} compact={compact} color={INCOME_COLOR} />
-                                        <Typography variant="caption" color="text.secondary">
-                                            Each person&rsquo;s share of every income — these add up to the total above.
-                                        </Typography>
-                                    </ChartCard>
-                                )}
-                            </>
-                        )}
+                                    {categoryData.length > 0 && (
+                                        <ChartCard title="Spending by category">
+                                            <MagnitudeBars data={categoryData} money={money} compact={compact} />
+                                        </ChartCard>
+                                    )}
 
-                        {budgetGroups.length > 0 && (
-                            <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
-                                <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>
-                                    Budgets right now
-                                </Typography>
-                                <Stack spacing={2}>
-                                    {budgetGroups.map((group) => (
-                                        <BudgetGroup
-                                            key={group.id} group={group}
-                                            currency={currency} categoryRegistry={book.categories}
-                                            members={book.members}
-                                        />
-                                    ))}
-                                </Stack>
-                            </Card>
-                        )}
-                    </Stack>
-                )}
+                                    {!person && personData.length > 0 && (
+                                        <ChartCard title="Spending by person">
+                                            <MagnitudeBars data={personData} money={money} compact={compact} />
+                                            <Typography variant="caption" color="text.secondary">
+                                                Each person&rsquo;s share of every expense — these add up to the total above.
+                                            </Typography>
+                                        </ChartCard>
+                                    )}
+
+                                    {!person && personIncomeData.length > 0 && (
+                                        <ChartCard title="Income by person">
+                                            <MagnitudeBars data={personIncomeData} money={money} compact={compact} color={INCOME_COLOR} />
+                                            <Typography variant="caption" color="text.secondary">
+                                                Each person&rsquo;s share of every income — these add up to the total above.
+                                            </Typography>
+                                        </ChartCard>
+                                    )}
+                                </>
+                            )}
+                        </>
+                    )}
+
+                    {/* Outside the empty-state branch above: a budget is measured over its
+                    own current period, so an empty report range is no reason for it to
+                    disappear - least of all when the range is empty BECAUSE of the person
+                    filter. */}
+                    {visibleBudgets.length > 0 && (
+                        <Box>
+                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.5 }}>
+                                Budgets right now
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                                Each budget&rsquo;s own period, not the report range above.
+                            </Typography>
+                            <Box sx={{
+                                display: "grid",
+                                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                                gap: 1,
+                                alignItems: "start",
+                            }}>
+                                {visibleBudgets.map((budget) => (
+                                    <BudgetCard
+                                        key={budget._id} budget={budget}
+                                        currency={budgetStatusResponse?.currency ?? currency}
+                                        categoryRegistry={book.categories}
+                                        members={book.members}
+                                        asOf={budgetStatusResponse?.as_of ?? new Date().toISOString()}
+                                        personId={person}
+                                    />
+                                ))}
+                            </Box>
+                        </Box>
+                    )}
+                </Stack>
             </Box>
         </Box>
     );

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useLocation, useOutletContext } from "react-router-dom";
 import {
     Alert, Autocomplete, Box, Button, Chip, InputAdornment, Stack, TextField, Typography,
 } from "@mui/material";
@@ -22,6 +22,13 @@ import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { groupByDay } from "../../../utils/dateGrouping";
 import { emptyStateSx, emptyStateIconCircleSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
+
+/** What a budget hands over when its "View items" action navigates here. */
+interface BudgetFilterSeed {
+    categories: string[];
+    from: string;
+    to: string;
+}
 
 // Synthetic options in the filters dropdown below — not real flags or fields on the item.
 const EXCLUDED_FILTER = "__excluded__";
@@ -56,11 +63,22 @@ function dateRange(value: DateFilterValue): { from?: string; to?: string } {
 
 export default function BookItems() {
     const { book, onEditItem } = useOutletContext<BookDetailContext>();
+    // "View items" on a budget hands over that budget's scope and window, so the tab opens
+    // showing the items the bar was measuring rather than everything in the book.
+    const seed = (useLocation().state as { budgetFilter?: BudgetFilterSeed } | null)?.budgetFilter;
     const [search, setSearch] = useState("");
-    const [dateValue, setDateValue] = useState<DateFilterValue>(DEFAULT_DATE_FILTER);
+    const [dateValue, setDateValue] = useState<DateFilterValue>(
+        seed ? {
+            preset: "custom",
+            from: new Date(seed.from),
+            // The budget's window ends exclusively; the date filter's end is inclusive of
+            // that whole day, so it steps back an instant to name the last covered day.
+            to: new Date(new Date(seed.to).getTime() - 1),
+        } : DEFAULT_DATE_FILTER,
+    );
     const [dateModalOpen, setDateModalOpen] = useState(false);
     const [reviewOpen, setReviewOpen] = useState(false);
-    const [activeCategories, setActiveCategories] = useState<string[]>([]);
+    const [activeCategories, setActiveCategories] = useState<string[]>(seed?.categories ?? []);
     const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
 
     const toggle = (list: string[], set: (v: string[]) => void, name: string) =>

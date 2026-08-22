@@ -25,15 +25,34 @@ var labelSchema = new Schema({
   system: { type: Boolean, default: false },
 }, { _id: true });
 
+// One person's limit INSIDE a budget. It inherits the parent's categories, period and
+// window, which is the whole point of nesting them: a household limit and the personal
+// limits under it are always measured over the same items and the same dates, so their
+// bars can be read against each other.
+var subBudgetSchema = new Schema({
+  person_id: { type: String, required: true },
+  amount: { type: Number, required: true },
+}, { _id: true });
+
 var budgetSchema = new Schema({
-  person_id: { type: String },                    // unset = everyone
   categories: { type: [String], default: [] },    // empty = every category
+  // Which way the amount points. A cap is a ceiling - passing it is the failure. A goal
+  // is a floor: money moved into a savings category, where reaching the amount is the
+  // whole point and passing it is better still. The measurement is identical either way;
+  // only the comparison and the colours differ, which is why this is one field and not a
+  // second kind of budget.
+  kind: { type: String, enum: ["cap", "goal"], default: "cap" },
   period: {
     type: String,
     enum: ["weekly", "monthly", "quarterly", "yearly", "custom"],
     required: true,
   },
-  amount: { type: Number, required: true },
+  // The overall limit for everyone, and OPTIONAL: a budget may instead carry only
+  // per-person limits (one member capped on a category nobody else is capped on). The
+  // validator requires at least one of amount / sub_budgets, so a budget that limits
+  // nothing at all can't be stored.
+  amount: { type: Number },
+  sub_budgets: { type: [subBudgetSchema], default: [] },
   // Recurring periods always start on the calendar boundary (see budgetPeriodRange), so
   // these only carry meaning for period === "custom", where they form the fixed window.
   start_date: { type: Date },

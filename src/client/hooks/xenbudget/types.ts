@@ -24,14 +24,31 @@ export interface XenBudgetLabel {
 
 export type BudgetPeriod = "weekly" | "monthly" | "quarterly" | "yearly" | "custom";
 
+/**
+ * Which way a budget's amount points.
+ *
+ * `cap` is a ceiling on spending - passing it is the failure. `goal` is a floor: money
+ * moved into a savings category, where reaching the amount is the point and passing it is
+ * better still. Both are measured identically; only the comparison and the colours differ.
+ */
+export type BudgetKind = "cap" | "goal";
+
+/** One person's limit nested inside a budget, sharing its categories, period and window. */
+export interface XenBudgetSubBudget {
+    _id: string;
+    person_id: string;
+    amount: number;
+}
+
 export interface XenBudgetBudget {
     _id: string;
-    /** Unset = everyone. */
-    person_id?: string;
     /** Empty = every category. */
     categories: string[];
+    kind: BudgetKind;
     period: BudgetPeriod;
-    amount: number;
+    /** The overall limit. Unset when the budget caps only the people in `sub_budgets`. */
+    amount?: number;
+    sub_budgets: XenBudgetSubBudget[];
     start_date?: string;
     end_date?: string;
     active: boolean;
@@ -279,20 +296,49 @@ export interface PresetInput {
     default_categories?: string[];
 }
 
+/** What one person put toward a budget's scope in its period. Sums to the budget's `spent`. */
+export interface BudgetPersonSpend {
+    user_id: string;
+    username: string;
+    amount: number;
+}
+
+/** A per-person limit, measured over its parent's scope and window. */
+export interface SubBudgetStatus {
+    _id: string;
+    person_id: string;
+    person_name: string;
+    amount: number;
+    spent: number;
+    remaining: number;
+    percent: number;
+    over: boolean;
+    item_count: number;
+}
+
 export interface BudgetStatus {
     _id: string;
     /** Empty = every category. */
     categories: string[];
-    person_id?: string;
-    person_name?: string;
+    kind: BudgetKind;
     period: BudgetPeriod;
-    amount: number;
+    /** What the scope spent this period, whether or not there is an overall limit. */
     spent: number;
-    remaining: number;
-    /** Uncapped, so the bar can show how far past the limit it went. */
-    percent: number;
-    over: boolean;
     item_count: number;
+    /**
+     * The overall limit and its progress. All four are absent together when the budget
+     * caps only the people in `sub_budgets` - `amount === undefined` is the one check
+     * that decides whether there is an overall bar to draw.
+     */
+    amount?: number;
+    remaining?: number;
+    /** Uncapped, so the bar can show how far past the amount it went. */
+    percent?: number;
+    /** Literally `spent > amount`. Good on a goal, bad on a cap - see `kind`. */
+    over?: boolean;
+    /** Who spent it, biggest first. Empty when nothing was spent. */
+    by_person: BudgetPersonSpend[];
+    sub_budgets: SubBudgetStatus[];
     period_from: string;
     period_to: string;
 }
@@ -305,10 +351,13 @@ export interface BudgetStatusResponse {
 }
 
 export interface BudgetInput {
-    person_id?: string;
     categories?: string[];
+    /** Omit for a spending cap. */
+    kind?: BudgetKind;
     period: BudgetPeriod;
-    amount: number;
+    /** Omit to cap only the people in `sub_budgets`; one of the two is required. */
+    amount?: number;
+    sub_budgets?: { person_id: string; amount: number }[];
     start_date?: string;
     end_date?: string;
     active?: boolean;
@@ -327,6 +376,14 @@ export interface SummaryCategory {
     category: string;
     total: number;
     count: number;
+}
+
+/** One category's spend in one period bucket - the report grid's cells. */
+export interface SummaryCategoryPeriod {
+    category: string;
+    /** Matches a `by_period` key, so the two line up column for column. */
+    key: string;
+    total: number;
 }
 
 export interface SummaryPerson {
@@ -351,8 +408,11 @@ export interface XenBudgetSummary {
     currencies: string[];
     by_period: SummaryPeriod[];
     by_category: SummaryCategory[];
+    /** by_category cut by period as well. Sums to by_category across all keys. */
+    by_category_period: SummaryCategoryPeriod[];
     by_person: SummaryPerson[];
     uncategorised: { total: number; count: number };
+    uncategorised_by_period: { key: string; total: number }[];
     totals: { expense: number; income: number; net: number; count: number };
 }
 

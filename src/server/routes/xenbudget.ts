@@ -152,18 +152,26 @@ function baseItemMatch(bookId: any, q: Record<string, string>): Record<string, a
 // A budget's target has to exist in this book, or it would silently never match: a
 // person who isn't a member has no shares here, and a misspelled category is on no item.
 function validateBudgetTarget(body: any, book: any): string | null {
-  if (body.person_id && !isMember(book, body.person_id)) {
-    return "That person is not a member of this book";
+  for (const sub of body.sub_budgets || []) {
+    if (!isMember(book, sub.person_id)) {
+      return "That person is not a member of this book";
+    }
   }
   return null;
 }
 
 function toBudgetFields(body: any): Record<string, any> {
   return {
-    person_id: body.person_id || undefined,
     categories: Array.isArray(body.categories) ? body.categories : [],
+    kind: body.kind === "goal" ? "goal" : "cap",
     period: body.period,
-    amount: roundMoney(body.amount),
+    // Left undefined rather than 0 when unset: a budget with only per-person limits has
+    // no overall cap, which is a different thing from a cap of nothing.
+    amount: body.amount == null ? undefined : roundMoney(body.amount),
+    sub_budgets: (body.sub_budgets || []).map((sub: any) => ({
+      person_id: sub.person_id,
+      amount: roundMoney(sub.amount),
+    })),
     // Recurring periods snap to the calendar (see budgetPeriodRange) and no longer carry
     // an anchor, so a start/end date only means anything for a custom one-off range.
     start_date: body.period === "custom" && body.start_date ? new Date(body.start_date) : undefined,
@@ -235,10 +243,20 @@ function remapUser(id: string | undefined, idMap: Map<string, string>): string |
   return idMap.get(id) || id;
 }
 
-// Only person_id needs remapping: categories and flags travel by name, which is stable
-// across deployments in a way an account id is not.
+// Only account ids need remapping: categories and flags travel by name, which is stable
+// across deployments in a way an account id is not. The per-person limits nested in a
+// budget carry ids too, so they're walked as well - missing that would restore a budget
+// whose sub-limits point at accounts from the source deployment.
 function remapBudgets(budgets: any[], idMap: Map<string, string>): any[] {
-  return budgets.map((b: any) => ({ ...b, person_id: remapUser(b.person_id, idMap) }));
+  return budgets.map((b: any) => ({
+    ...b,
+    sub_budgets: (b.sub_budgets || []).map((sub: any) => {
+      // Same reason stripIds drops the budget's own _id: a subdocument id minted in
+      // another deployment has no business being reused here.
+      const { _id, ...rest } = sub || {};
+      return { ...rest, person_id: remapUser(sub.person_id, idMap) };
+    }),
+  }));
 }
 
 function remapRules(rules: any[], idMap: Map<string, string>): any[] {
@@ -1628,7 +1646,11 @@ module.exports = function (app: any) {
 
         const budgets = book.budgets.filter((b: any) => b.active !== false);
         if (budgets.length === 0) {
-          return res.json({ status: true, message: "No budgets", data: { as_of: asOf.toISOString(), currency, budgets: [] } });
+          return res.json({
+            status: true,
+            message: "No budgets",
+            data: { as_of: asOf.toISOString(), currency, timezone: tz, budgets: [] },
+          });
         }
 
         const ranges = budgets.map((b: any) => budgetPeriodRange(b, asOf, tz));
@@ -1651,64 +1673,60 @@ module.exports = function (app: any) {
           // so $lt (not $lte) keeps a boundary item from being counted twice.
           const inPeriod = { date: { $gte: r.from, $lt: r.to } };
           const cats = b.categories && b.categories.length > 0 ? b.categories : null;
-          const person = b.person_id || null;
 
-          if (cats && person) {
-            // Who AND what: each item's contribution is that person's actual dollar share
-            // of the category-weighted portion, not a coarser "touches both" match — a
-            // $100 item split 70/30 by category and 50/50 by person owes this budget $35
-            // (50% of the $70 category weight), not $70 or $100. A second $group by item
-            // _id keeps item_count from inflating when an item matches more than one of
-            // the selected categories.
-            facet[`b${i}`] = [
+          // What this budget's SCOPE counts of each item: the whole thing when it names no
+          // categories, otherwise only the weights of the ones it does name.
+          const scopeStages: any[] = cats
+            ? [{ $unwind: "$categories" }, { $match: { "categories.name": { $in: cats } } }]
+            : [];
+          const scopeAmount: any = cats ? "$categories.amount" : "$amount";
+          // One person's slice of that scope: their share of the item, prorated by the
+          // category weight. A $100 item split 70/30 by category and 50/50 by person owes
+          // a Groceries budget $35 - 50% of the $70 weight, not $70 and not $100.
+          const personAmount: any = cats
+            ? {
+              $cond: [
+                { $eq: ["$amount", 0] },
+                0,
+                { $divide: [{ $multiply: ["$categories.amount", "$shares.amount"] }, "$amount"] },
+              ],
+            }
+            : "$shares.amount";
+
+          // The scope's own spend, computed whether or not there is an overall limit to
+          // measure it against: a budget that only caps named people still has a total,
+          // and the detail panel shows it. Grouping by item _id first keeps item_count
+          // from inflating when one item carries two of the selected categories.
+          facet[`b${i}`] = [
+            { $match: inPeriod },
+            ...scopeStages,
+            ...(cats ? [{ $group: { _id: "$_id", total: { $sum: scopeAmount } } }] : []),
+            { $group: { _id: null, total: { $sum: cats ? "$total" : scopeAmount }, count: { $sum: 1 } } },
+          ];
+
+          // Who spent it. Every member's shares add up to the item amount, so these rows
+          // sum back to the scope total above rather than telling a different story.
+          facet[`b${i}p`] = [
+            { $match: inPeriod },
+            ...scopeStages,
+            { $unwind: "$shares" },
+            { $group: { _id: "$shares.user_id", total: { $sum: personAmount } } },
+            { $sort: { total: -1 } },
+          ];
+
+          // One pipeline per per-person limit. Same scope, same window - the nesting is
+          // what guarantees a sub-limit is measured over exactly the parent's items.
+          (b.sub_budgets || []).forEach((sub: any, j: number) => {
+            facet[`b${i}s${j}`] = [
               { $match: inPeriod },
-              { $unwind: "$categories" },
-              { $match: { "categories.name": { $in: cats } } },
+              ...scopeStages,
               { $unwind: "$shares" },
-              { $match: { "shares.user_id": person } },
-              {
-                $group: {
-                  _id: "$_id",
-                  total: {
-                    $sum: {
-                      $cond: [
-                        { $eq: ["$amount", 0] },
-                        0,
-                        { $divide: [{ $multiply: ["$categories.amount", "$shares.amount"] }, "$amount"] },
-                      ],
-                    },
-                  },
-                }
-              },
+              { $match: { "shares.user_id": sub.person_id } },
+              { $group: { _id: "$_id", total: { $sum: personAmount } } },
               { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } },
             ];
-          } else if (cats) {
-            // Mirrors the person branch below: unwind, match, and sum the WEIGHT, so a
-            // purchase split 70/30 counts 70% against this category rather than all of it.
-            // $in supports more than one selected category; the two-stage group keeps
-            // item_count from inflating when an item matches more than one of them.
-            facet[`b${i}`] = [
-              { $match: inPeriod },
-              { $unwind: "$categories" },
-              { $match: { "categories.name": { $in: cats } } },
-              { $group: { _id: "$_id", total: { $sum: "$categories.amount" } } },
-              { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } },
-            ];
-          } else if (person) {
-            facet[`b${i}`] = [
-              { $match: inPeriod },
-              { $unwind: "$shares" },
-              { $match: { "shares.user_id": person } },
-              { $group: { _id: null, total: { $sum: "$shares.amount" }, count: { $sum: 1 } } },
-            ];
-          } else {
-            facet[`b${i}`] = [
-              { $match: inPeriod },
-              { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } },
-            ];
-          }
+          });
         });
-
         const [results] = await XenBudgetItem.aggregate([{ $match: base }, { $facet: facet }]);
 
         const memberById = new Map<string, any>();
@@ -1726,20 +1744,50 @@ module.exports = function (app: any) {
             budgets: budgets.map((b: any, i: number) => {
               const row = results?.[`b${i}`]?.[0];
               const spent = roundMoney(row?.total || 0);
-              const amount = roundMoney(b.amount);
+              // Absent when the budget caps only named people. The client keys every
+              // "is there an overall bar to draw" decision off this being undefined,
+              // which is why it isn't flattened to 0.
+              const amount = b.amount == null ? undefined : roundMoney(b.amount);
               return {
                 _id: b._id.toString(),
                 categories: b.categories || [],
-                person_id: b.person_id,
-                person_name: b.person_id ? (memberById.get(b.person_id)?.username || "Unknown") : undefined,
+                // The numbers below are the same either way - `over` means literally
+                // "past the amount". Whether that is a failure or the point of the
+                // budget is the client's call, and this is what it decides on.
+                kind: b.kind === "goal" ? "goal" : "cap",
                 period: b.period,
-                amount,
                 spent,
-                remaining: roundMoney(amount - spent),
-                // Uncapped rather than clamped, so the bar can show how far over it went.
-                percent: amount > 0 ? Math.round((spent / amount) * 100) : 0,
-                over: spent > amount,
                 item_count: row?.count || 0,
+                ...(amount === undefined ? {} : {
+                  amount,
+                  remaining: roundMoney(amount - spent),
+                  // Uncapped rather than clamped, so the bar can show how far over it went.
+                  percent: amount > 0 ? Math.round((spent / amount) * 100) : 0,
+                  over: spent > amount,
+                }),
+                by_person: (results?.[`b${i}p`] || [])
+                  .filter((p: any) => p._id)
+                  .map((p: any) => ({
+                    user_id: p._id,
+                    username: memberById.get(p._id)?.username || "Unknown",
+                    amount: roundMoney(p.total || 0),
+                  })),
+                sub_budgets: (b.sub_budgets || []).map((sub: any, j: number) => {
+                  const subRow = results?.[`b${i}s${j}`]?.[0];
+                  const subSpent = roundMoney(subRow?.total || 0);
+                  const subAmount = roundMoney(sub.amount);
+                  return {
+                    _id: sub._id.toString(),
+                    person_id: sub.person_id,
+                    person_name: memberById.get(sub.person_id)?.username || "Unknown",
+                    amount: subAmount,
+                    spent: subSpent,
+                    remaining: roundMoney(subAmount - subSpent),
+                    percent: subAmount > 0 ? Math.round((subSpent / subAmount) * 100) : 0,
+                    over: subSpent > subAmount,
+                    item_count: subRow?.count || 0,
+                  };
+                }),
                 period_from: ranges[i].from.toISOString(),
                 period_to: ranges[i].to.toISOString(),
               };
@@ -1852,10 +1900,38 @@ module.exports = function (app: any) {
                 },
                 { $sort: { total: -1 } },
               ],
+              // The same two rollups again, but cut by period as well as category - what
+              // the report's month-by-month grid is built from. Kept as their own facets
+              // rather than derived on the client, because only the server can weight a
+              // split purchase correctly, and re-deriving it from the flat by_category
+              // rows is impossible: those have already been summed across time.
+              byCategoryPeriod: [
+                expenseOnly,
+                { $unwind: "$categories" },
+                {
+                  $group: {
+                    _id: {
+                      category: "$categories.name",
+                      period: { $dateToString: { format, date: "$date", timezone: tz } },
+                    },
+                    total: { $sum: categoryTotalExpr },
+                  },
+                },
+              ],
               uncategorised: [
                 expenseOnly,
                 { $match: { $or: [{ categories: { $size: 0 } }, { categories: { $exists: false } }] } },
                 { $group: { _id: null, total: { $sum: amountField }, count: { $sum: 1 } } },
+              ],
+              uncategorisedByPeriod: [
+                expenseOnly,
+                { $match: { $or: [{ categories: { $size: 0 } }, { categories: { $exists: false } }] } },
+                {
+                  $group: {
+                    _id: { $dateToString: { format, date: "$date", timezone: tz } },
+                    total: { $sum: amountField },
+                  },
+                },
               ],
               totals: [
                 {
@@ -1905,6 +1981,15 @@ module.exports = function (app: any) {
               return { key, expense, income, net: roundMoney(income - expense), count: row?.count || 0 };
             }),
             by_category: byCategory.map((r: any) => ({ category: r._id, total: roundMoney(r.total), count: r.count })),
+            by_category_period: (facets?.byCategoryPeriod ?? []).map((r: any) => ({
+              category: r._id.category,
+              key: r._id.period,
+              total: roundMoney(r.total),
+            })),
+            uncategorised_by_period: (facets?.uncategorisedByPeriod ?? []).map((r: any) => ({
+              key: r._id,
+              total: roundMoney(r.total),
+            })),
             by_person: byPersonRaw.map((r: any) => ({
               user_id: r._id,
               username: userMap.get(r._id)?.username || "Unknown",

@@ -607,20 +607,35 @@ export const xenBudgetBudgetParamSchema = z.object({
   budgetId: objectIdSchema,
 });
 
-const budgetShape = {
-  person_id: objectIdSchema.optional(),
-  categories: z.array(z.string().max(50)).max(20, "Too many categories").optional(),
-  period: z.enum(["weekly", "monthly", "quarterly", "yearly", "custom"]),
+const subBudgetShape = z.object({
+  person_id: objectIdSchema,
   amount: z.number("Amount must be a number").positive("Amount must be positive"),
+});
+
+const budgetShape = {
+  categories: z.array(z.string().max(50)).max(20, "Too many categories").optional(),
+  // Omitted means a cap, so every budget stored before goals existed keeps its meaning.
+  kind: z.enum(["cap", "goal"]).optional(),
+  period: z.enum(["weekly", "monthly", "quarterly", "yearly", "custom"]),
+  // Optional, unlike the per-person amounts below: a budget may cap only named people.
+  amount: z.number("Amount must be a number").positive("Amount must be positive").optional(),
+  sub_budgets: z.array(subBudgetShape).max(20, "Too many per-person limits").optional(),
   start_date: z.string().datetime().optional(),
   end_date: z.string().datetime().optional(),
   active: z.boolean().optional(),
 };
 
-// Who (person_id) and what (categories) are independent and both optional — an empty
-// budget (neither set) is the legitimate whole-book case, so there's nothing to enforce
-// about their pairing. Only the custom-period window still needs both ends.
+// What (categories) stays free — an empty list is the legitimate whole-book case. What is
+// enforced now is that a budget limits SOMETHING (an overall amount, per-person amounts,
+// or both) and that no member is listed twice, which would silently double their cap.
 const budgetRefinements = (schema: z.ZodType<any>) => schema
+  .refine((d: any) => d.amount != null || (d.sub_budgets && d.sub_budgets.length > 0), {
+    message: "Set an overall amount, a per-person limit, or both", path: ["amount"],
+  })
+  .refine((d: any) => {
+    const ids = (d.sub_budgets || []).map((s: any) => s.person_id);
+    return new Set(ids).size === ids.length;
+  }, { message: "That person already has a limit on this budget", path: ["sub_budgets"] })
   .refine((d: any) => d.period !== "custom" || (!!d.start_date && !!d.end_date), {
     message: "A custom period needs a start and an end date", path: ["end_date"],
   })

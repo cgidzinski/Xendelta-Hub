@@ -8,8 +8,9 @@ import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
 import { CategoryChip, resolveLabelColor } from "./components/LabelChip";
-import BudgetGroup from "./components/BudgetGroup";
-import { groupBudgets } from "./components/groupBudgets";
+import BudgetCard from "./components/budget/BudgetCard";
+import { sortBudgets, overCount, metCount } from "./components/budget/sortBudgets";
+import { budgetsForPerson } from "./components/budget/budgetPersonView";
 import TimePeriodFilter, { defaultMonthMode, resolvePeriod, type PeriodMode } from "./components/TimePeriodFilter";
 import TotalsSummary from "./components/TotalsSummary";
 import LoadingSpinner from "../../../components/LoadingSpinner";
@@ -32,9 +33,22 @@ export default function BookOverview() {
         currency, from: from.toISOString(), to: to.toISOString(), group_by: groupBy,
         people: person ? [person] : undefined,
     });
-    const { budgets: budgetStatus } = useXenBudgetStatus(book._id, currency);
-    const overBudgetCount = budgetStatus.filter((b) => b.over).length;
-    const budgetGroups = useMemo(() => groupBudgets(budgetStatus), [budgetStatus]);
+    const { status: budgetStatusResponse, budgets: budgetStatus } = useXenBudgetStatus(book._id, currency);
+    // The person filter narrows these the same way it narrows the tallies above: down to
+    // the budgets that actually constrain them, showing only their own personal limit.
+    const visibleBudgets = useMemo(
+        () => sortBudgets(person ? budgetsForPerson(budgetStatus, person) : budgetStatus),
+        [budgetStatus, person],
+    );
+    // Counts every limit past its cap, the shared one and each person's, so the header
+    // agrees with the red bars actually on screen rather than with the unfiltered book.
+    // Savings goals are counted separately and the other way up: passing one is the point.
+    const overBudgetCount = visibleBudgets.reduce((sum, b) => sum + overCount(b), 0);
+    const goalsMetCount = visibleBudgets.reduce((sum, b) => sum + metCount(b), 0);
+    const asOf = budgetStatusResponse?.as_of ?? new Date().toISOString();
+    // The figures were measured in whatever currency /budget-status used, which is not
+    // necessarily the one the summary settled on - label them with the one they're in.
+    const budgetCurrency = budgetStatusResponse?.currency ?? currency;
 
     const categoryRows = useMemo(() => {
         if (!summary) return [];
@@ -143,29 +157,46 @@ export default function BookOverview() {
                     </Stack>
                 </Card>
 
-                {isCurrentMonth && budgetGroups.length > 0 && (
-                    <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
-                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+                {isCurrentMonth && visibleBudgets.length > 0 && (
+                    <Box sx={{ mb: 2 }}>
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
                             <Typography variant="caption" sx={sectionLabelSx}>Budgets</Typography>
-                            {overBudgetCount > 0 && (
-                                <Typography variant="caption" color="error.main">
-                                    {overBudgetCount} over
-                                </Typography>
-                            )}
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                {goalsMetCount > 0 && (
+                                    <Typography variant="caption" sx={{ color: INCOME_COLOR }}>
+                                        {goalsMetCount} saved
+                                    </Typography>
+                                )}
+                                {overBudgetCount > 0 && (
+                                    <Typography variant="caption" color="error.main">
+                                        {overBudgetCount} over
+                                    </Typography>
+                                )}
+                            </Stack>
                         </Stack>
-                        <Stack spacing={2}>
-                            {budgetGroups.map((group) => (
-                                <BudgetGroup
-                                    key={group.id}
-                                    group={group}
-                                    currency={summary.currency}
+                        <Stack spacing={1}>
+                            {visibleBudgets.map((budget) => (
+                                <BudgetCard
+                                    key={budget._id}
+                                    budget={budget}
+                                    currency={budgetCurrency}
                                     categoryRegistry={book.categories}
                                     members={book.members}
-                                    onClick={() => navigate(`/internal/xenbudget/books/${book._id}/settings/budgets`)}
+                                    asOf={asOf}
+                                    personId={person}
+                                    onViewItems={(b) => navigate(
+                                        `/internal/xenbudget/books/${book._id}/items`,
+                                        { state: { budgetFilter: {
+                                            categories: b.categories,
+                                            from: b.period_from,
+                                            to: b.period_to,
+                                        } } },
+                                    )}
+                                    onEdit={() => navigate(`/internal/xenbudget/books/${book._id}/settings/budgets`)}
                                 />
                             ))}
                         </Stack>
-                    </Card>
+                    </Box>
                 )}
 
                 {nothingYet ? (
