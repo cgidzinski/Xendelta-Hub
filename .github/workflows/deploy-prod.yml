@@ -17,6 +17,8 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Build and restart
+        env:
+          VITE_BUGSNAG_API_KEY: ${{ secrets.VITE_BUGSNAG_API_KEY }}
         run: |
           set -euo pipefail
           cd ~/XenHub-Prod

@@ -4,6 +4,7 @@
  */
 
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
+import { Bugsnag } from "./bugsnag";
 
 /**
  * Create axios instance with request interceptor for authentication
@@ -51,32 +52,55 @@ const createAxiosInstance = (): AxiosInstance => {
       return response;
     },
     (error) => {
+      const reportError = (err: Error, status?: number) => {
+        Bugsnag.notify(err, (event) => {
+          event.addMetadata("request", {
+            url: error.config?.url,
+            method: error.config?.method,
+            status,
+          });
+        });
+      };
+
       // Handle axios errors
       if (error.response) {
         // Server responded with error status
         const { status, data } = error.response;
-        
+
         if (status === 401) {
-          // Unauthorized - clear token and redirect
+          // Unauthorized - clear token and redirect. Routine token-expiry flow, not a bug,
+          // so it's not reported to Bugsnag.
           localStorage.removeItem("token");
           throw new Error("Unauthorized - please log in again");
         } else if (status === 403) {
-          throw new Error(data?.message || "You are not authorized to perform this action");
+          const err = new Error(data?.message || "You are not authorized to perform this action");
+          reportError(err, status);
+          throw err;
         } else if (status === 404) {
-          throw new Error(data?.message || "Resource not found");
+          const err = new Error(data?.message || "Resource not found");
+          reportError(err, status);
+          throw err;
         } else if (status === 400 && data?.errors && Array.isArray(data.errors)) {
           // Validation errors
           const errorMessages = data.errors.map((err: { path: string; message: string }) => err.message).join(", ");
-          throw new Error(errorMessages || data.message || "Validation failed");
+          const err = new Error(errorMessages || data.message || "Validation failed");
+          reportError(err, status);
+          throw err;
         } else {
-          throw new Error(data?.message || `Request failed: ${error.response.statusText}`);
+          const err = new Error(data?.message || `Request failed: ${error.response.statusText}`);
+          reportError(err, status);
+          throw err;
         }
       } else if (error.request) {
         // Request was made but no response received
-        throw new Error("Network error - please check your connection");
+        const err = new Error("Network error - please check your connection");
+        reportError(err);
+        throw err;
       } else {
         // Something else happened
-        throw new Error(error.message || "An unexpected error occurred");
+        const err = new Error(error.message || "An unexpected error occurred");
+        reportError(err);
+        throw err;
       }
     }
   );

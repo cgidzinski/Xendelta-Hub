@@ -114,6 +114,10 @@ GITHUB_CALLBACK_URL=https://xendelta.com/api/auth/github/callback
 GCS_PUBLIC_BUCKET_NAME=your-public-bucket-name
 GCS_PRIVATE_BUCKET_NAME=your-private-bucket-name
 GOOGLE_APPLICATION_CREDENTIALS=./gcs-service-account.json
+
+# Bugsnag Error Monitoring — production only. Do NOT add this to XenHub-Staging's .env;
+# the server only reports errors when this key is present.
+BUGSNAG_API_KEY=your_bugsnag_api_key
 ```
 
 > **Security Note:** Never commit the `.env` file to version control. Make sure it's listed in `.gitignore`.
