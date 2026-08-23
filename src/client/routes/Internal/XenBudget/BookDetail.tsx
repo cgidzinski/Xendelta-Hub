@@ -16,7 +16,9 @@ import type {
     XenBudgetBook, XenBudgetItem, CreateItemInput, UpdateBookInput,
 } from "../../../hooks/xenbudget/types";
 import ItemForm from "./components/ItemForm";
+import ItemPreviewModal from "./components/ItemPreviewModal";
 import ImportWizard from "./components/ImportWizard";
+import { useSnackbar } from "notistack";
 import { TAB_PATHS, activeIndex } from "./navigation";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -36,11 +38,10 @@ export interface BookDetailContext {
      */
     currency: string;
     onCurrencyChange: (currency: string) => void;
-    /** Narrows Overview/Report tallies to one member's shares. Unset means everyone. */
-    person: string | undefined;
-    onPersonChange: (userId: string | undefined) => void;
     onAddItem: () => void;
     onEditItem: (item: XenBudgetItem) => void;
+    /** Open the read-only preview before the edit form. */
+    onPreviewItem: (item: XenBudgetItem) => void;
     updateBook: (input: UpdateBookInput) => void;
     isUpdating: boolean;
     addMembersAsync: (memberIds: string[]) => Promise<unknown>;
@@ -68,18 +69,21 @@ export default function BookDetail() {
     const {
         createItemAsync, isCreating, updateItemAsync, isUpdating: isUpdatingItem,
         deleteItemAsync, isDeleting,
+        uploadItemImages, deleteItemImage, isDeletingImage,
     } = useXenBudgetItemMutations(bookId);
 
     useTitle("XenBudget");
 
+    const { enqueueSnackbar } = useSnackbar();
+
     const [formOpen, setFormOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     const [editing, setEditing] = useState<XenBudgetItem | null>(null);
+    const [previewing, setPreviewing] = useState<XenBudgetItem | null>(null);
+    const [addImages, setAddImages] = useState<File[]>([]);
     // Undefined lets the server pick (the book's default, or the only one present);
     // choosing from the switcher pins it for this session.
     const [currency, setCurrency] = useState<string | undefined>(undefined);
-    // Same shape as currency: unset means "everyone", picking a member pins it for the session.
-    const [person, setPerson] = useState<string | undefined>(undefined);
 
     // Tab order matches the <Tab> order below; the active tab comes from the URL rather
     // than being stored, so a deep link or the back button lands on the right one. See
@@ -95,10 +99,9 @@ export default function BookDetail() {
         isCreator: book.is_creator,
         currency: currency ?? book.default_currency,
         onCurrencyChange: setCurrency,
-        person,
-        onPersonChange: setPerson,
-        onAddItem: () => { setEditing(null); setFormOpen(true); },
+        onAddItem: () => { setEditing(null); setAddImages([]); setFormOpen(true); },
         onEditItem: (item) => { setEditing(item); setFormOpen(true); },
+        onPreviewItem: (item) => setPreviewing(item),
         updateBook,
         isUpdating,
         addMembersAsync,
@@ -109,8 +112,17 @@ export default function BookDetail() {
     };
 
     const handleSubmit = async (input: CreateItemInput) => {
-        if (editing) await updateItemAsync({ itemId: editing._id, input });
-        else await createItemAsync(input);
+        const saved = editing
+            ? await updateItemAsync({ itemId: editing._id, input })
+            : await createItemAsync(input);
+        if (addImages.length > 0 && saved?._id) {
+            try {
+                await uploadItemImages({ itemId: saved._id, files: addImages });
+            } catch {
+                enqueueSnackbar("Item saved but some images failed to upload", { variant: "warning" });
+            }
+        }
+        setAddImages([]);
     };
 
     return (
@@ -148,19 +160,31 @@ export default function BookDetail() {
                 </Tabs>
             </Box>
 
-            <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", width: "100%", maxWidth: 900, mx: "auto" }}>
+            <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", width: "100%", maxWidth: 1200, mx: "auto" }}>
                 <Outlet context={outletContext} />
             </Box>
 
             <ItemForm
                 open={formOpen}
-                onClose={() => setFormOpen(false)}
+                onClose={() => { setFormOpen(false); setAddImages([]); }}
                 book={book}
                 item={editing}
                 onSubmit={handleSubmit}
                 isSubmitting={isCreating || isUpdatingItem}
                 onDelete={editing ? () => deleteItemAsync(editing._id) : undefined}
                 isDeleting={isDeleting}
+                images={addImages}
+                onImagesChange={setAddImages}
+                onDeleteExistingImage={editing ? (imageId) => { deleteItemImage({ itemId: editing._id, imageId }); } : undefined}
+                isDeletingImage={isDeletingImage}
+            />
+
+            <ItemPreviewModal
+                open={!!previewing}
+                onClose={() => setPreviewing(null)}
+                book={book}
+                item={previewing}
+                onEdit={(it) => { setPreviewing(null); setEditing(it); setFormOpen(true); }}
             />
 
             <ImportWizard open={importOpen} onClose={() => setImportOpen(false)} book={book} />

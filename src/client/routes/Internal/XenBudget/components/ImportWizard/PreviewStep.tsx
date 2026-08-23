@@ -9,7 +9,7 @@ import type {
 } from "../../../../../hooks/xenbudget/types";
 import type { MappingError } from "../../../../../utils/csvMapping";
 import { CategoryChip, FlagChip } from "../LabelChip";
-import { formatCurrency } from "../../../../../utils/currencyUtils";
+import { formatCurrency } from "../../currency";
 import { cardSx } from "../../../../../components/ui/surfaceStyles";
 
 interface PreviewStepProps {
@@ -95,7 +95,9 @@ export default function PreviewStep({
                                         />
                                     </TableCell>
                                     <TableCell sx={{ whiteSpace: "nowrap" }}>
-                                        {new Date(row.item.date).toLocaleDateString()}
+                                        {new Date(row.item.date).toLocaleDateString("en-US", {
+                                            month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+                                        })}
                                     </TableCell>
                                     <TableCell>
                                         <Stack direction="row" alignItems="center" spacing={0.5}>

@@ -11,7 +11,8 @@ import { useSnackbar } from "notistack";
 import type {
     XenBudgetBook, BudgetInput, BudgetKind, BudgetPeriod, BudgetStatus,
 } from "../../../../hooks/xenbudget/types";
-import { formatCurrency, getCurrencySymbol, sanitizeAmount, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
+import { formatCurrency, getCurrencySymbol } from "../currency";
+import { sanitizeAmount, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 
 const PERIODS: { value: BudgetPeriod; label: string }[] = [

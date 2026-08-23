@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import {
-    Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-    Divider, IconButton, InputAdornment, MenuItem, Stack, Step, StepLabel, Stepper, TextField,
+    Autocomplete, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
+    Divider, IconButton, InputAdornment, Stack, Step, StepLabel, Stepper, TextField,
     ToggleButton, ToggleButtonGroup, Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
@@ -11,17 +11,27 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { useSnackbar } from "notistack";
+import PWAImageCapture from "../../../../pwa/components/PWAImageCapture";
+import { useXenBudgetItemImageUrls } from "../../../../hooks/xenbudget/useItems";
+import { useAuth } from "../../../../contexts/AuthContext";
 import type {
     XenBudgetBook, XenBudgetItem, ShareType, ItemType, CreateItemInput,
 } from "../../../../hooks/xenbudget/types";
 import WeightedSplitEditor, { type SplitDraft } from "./WeightedSplitEditor";
-import {
-    getGroupCurrencies, getCurrencySymbol, sanitizeAmount, STABLE_CURRENCY_MENU_PROPS,
-} from "../../../../utils/currencyUtils";
+import { getCurrencySymbol } from "../currency";
+import { sanitizeAmount } from "../../../../utils/currencyUtils";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { EXPENSE_COLOR, INCOME_COLOR } from "../../../../components/ui/chartColors";
 
-const STEPS = ["Details", "Splits", "More"] as const;
+const STEPS = ["Details", "Splits", "Images", "More"] as const;
+
+const MAX_IMAGES = 10;
+
+/** The picked day as a date-only ISO (UTC midnight) — the wire value the server anchors
+ *  to the book's timezone. */
+function dateOnlyIso(d: Date): string {
+    return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString();
+}
 
 interface ItemFormProps {
     open: boolean;
@@ -33,12 +43,20 @@ interface ItemFormProps {
     isSubmitting: boolean;
     onDelete?: () => Promise<unknown>;
     isDeleting?: boolean;
+    /** New, not-yet-uploaded receipt photos. Lifted to the parent so they can be
+     *  uploaded after the item itself is saved (the same two-phase flow as XenSplit). */
+    images: File[];
+    onImagesChange: (files: File[]) => void;
+    onDeleteExistingImage?: (imageId: string) => void;
+    isDeletingImage?: boolean;
 }
 
 export default function ItemForm({
     open, onClose, book, item, onSubmit, isSubmitting, onDelete, isDeleting,
+    images, onImagesChange, onDeleteExistingImage, isDeletingImage,
 }: ItemFormProps) {
     const { enqueueSnackbar } = useSnackbar();
+    const { user } = useAuth();
     const isMobile = useMediaQuery("(max-width:600px)");
     const [step, setStep] = useState(0);
     const [type, setType] = useState<ItemType>("expense");
@@ -90,10 +108,10 @@ export default function ItemForm({
             setCategorySplitType("equal");
             setCategories([]);
             setShareType("equal");
-            // Default to everyone: the common case is a shared household expense.
-            setShares(book.members.map((m) => ({ key: m.user_id, value: "" })));
+            // Default to just you; add others if the expense was shared.
+            setShares(user ? [{ key: user.id, value: "" }] : []);
         }
-    }, [open, item, book]);
+    }, [open, item, book, user]);
 
     const numericAmount = parseFloat(amount) || 0;
     const canSubmit = description.trim().length > 0 && numericAmount > 0 && shares.length > 0;
@@ -102,12 +120,37 @@ export default function ItemForm({
         : true;
     const typeColor = type === "income" ? INCOME_COLOR : EXPENSE_COLOR;
 
+    // Receipt photos: new files live in `images` (lifted to the parent) until the item
+    // is saved; already-saved photos resolve their display URLs on demand.
+    const { data: existingImageUrls } = useXenBudgetItemImageUrls(
+        book._id, item?._id, item?.images?.length ?? 0,
+    );
+    const existingImages = item?.images ?? [];
+    const totalImageCount = existingImages.length + images.length;
+    const canAddMoreImages = totalImageCount < MAX_IMAGES;
+
+    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+        const remaining = MAX_IMAGES - totalImageCount;
+        onImagesChange([...images, ...files.slice(0, remaining)]);
+        // Reset so the same file can be re-added after being removed.
+        e.target.value = "";
+    };
+
+    const handleRemoveNewImage = (index: number) => {
+        onImagesChange(images.filter((_, i) => i !== index));
+    };
+
+    const previewUrls = useMemo(() => images.map((f) => URL.createObjectURL(f)), [images]);
+    useEffect(() => () => { previewUrls.forEach((url) => URL.revokeObjectURL(url)); }, [previewUrls]);
+
     const handleSubmit = async () => {
         const input: CreateItemInput = {
             type,
             amount: numericAmount,
             currency,
-            date: (date || new Date()).toISOString(),
+            date: dateOnlyIso(date || new Date()),
             description: description.trim(),
             notes: notes.trim() || undefined,
             flags,
@@ -210,37 +253,24 @@ export default function ItemForm({
                             onChange={(e) => setDescription(e.target.value)}
                         />
 
-                        <Stack direction="row" spacing={1}>
-                            <TextField
-                                label="Amount" value={amount}
-                                onChange={(e) => {
-                                    const clean = sanitizeAmount(e.target.value);
-                                    if (clean !== null) setAmount(clean);
-                                }}
-                                sx={{ flexGrow: 1 }}
-                                slotProps={{
-                                    input: {
-                                        startAdornment: (
-                                            <InputAdornment position="start">
-                                                <Typography component="span" sx={{ color: typeColor, fontWeight: 600 }}>
-                                                    {getCurrencySymbol(currency)}
-                                                </Typography>
-                                            </InputAdornment>
-                                        ),
-                                    },
-                                }}
-                            />
-                            <TextField
-                                select label="Currency" value={currency}
-                                onChange={(e) => setCurrency(e.target.value)}
-                                sx={{ width: 120 }}
-                                slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
-                            >
-                                {getGroupCurrencies(book.default_currency, [], currency).map((c) => (
-                                    <MenuItem key={c} value={c}>{c}</MenuItem>
-                                ))}
-                            </TextField>
-                        </Stack>
+                        <TextField
+                            fullWidth label="Amount" value={amount}
+                            onChange={(e) => {
+                                const clean = sanitizeAmount(e.target.value);
+                                if (clean !== null) setAmount(clean);
+                            }}
+                            slotProps={{
+                                input: {
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <Typography component="span" sx={{ color: typeColor, fontWeight: 600 }}>
+                                                {getCurrencySymbol(currency)}
+                                            </Typography>
+                                        </InputAdornment>
+                                    ),
+                                },
+                            }}
+                        />
 
                         <DatePicker label="Date" value={date} onChange={setDate} />
 
@@ -334,6 +364,72 @@ export default function ItemForm({
                     </Stack>
                 )}
 
+                {STEPS[step] === "Images" && (
+                    <Box>
+                        <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+                            <Typography variant="subtitle2">
+                                Photos ({totalImageCount} / {MAX_IMAGES})
+                            </Typography>
+                            <Box sx={{ flex: 1 }} />
+                            <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+                                10MB max
+                            </Typography>
+                        </Box>
+
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                            {existingImages.map((img) => {
+                                const urlEntry = existingImageUrls?.find((u) => u._id === img._id);
+                                return (
+                                    <Box key={img._id} sx={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}>
+                                        {urlEntry ? (
+                                            <Box
+                                                component="img" src={urlEntry.signedUrl}
+                                                sx={{ width: 80, height: 80, objectFit: "cover", borderRadius: 1, display: "block" }}
+                                            />
+                                        ) : (
+                                            <Box sx={{ width: 80, height: 80, bgcolor: "action.hover", borderRadius: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                                <CircularProgress size={20} />
+                                            </Box>
+                                        )}
+                                        <IconButton
+                                            size="small" disabled={isDeletingImage}
+                                            onClick={() => onDeleteExistingImage?.(img._id)}
+                                            sx={{
+                                                position: "absolute", top: 2, right: 2,
+                                                bgcolor: "rgba(0,0,0,0.55)", color: "white", p: 0.25,
+                                                "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
+                                            }}
+                                        >
+                                            <CloseIcon sx={{ fontSize: 14 }} />
+                                        </IconButton>
+                                    </Box>
+                                );
+                            })}
+
+                            {previewUrls.map((url, index) => (
+                                <Box key={url} sx={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}>
+                                    <Box
+                                        component="img" src={url}
+                                        sx={{ width: 80, height: 80, objectFit: "cover", borderRadius: 1, display: "block", opacity: 0.8 }}
+                                    />
+                                    <IconButton
+                                        size="small" onClick={() => handleRemoveNewImage(index)}
+                                        sx={{
+                                            position: "absolute", top: 2, right: 2,
+                                            bgcolor: "rgba(0,0,0,0.55)", color: "white", p: 0.25,
+                                            "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
+                                        }}
+                                    >
+                                        <CloseIcon sx={{ fontSize: 14 }} />
+                                    </IconButton>
+                                </Box>
+                            ))}
+
+                            {canAddMoreImages && <PWAImageCapture onChange={handleFileChange} />}
+                        </Box>
+                    </Box>
+                )}
+
                 {STEPS[step] === "More" && (
                     <Stack spacing={2}>
                         <Autocomplete
@@ -372,12 +468,12 @@ export default function ItemForm({
                     {step > 0 && <Button onClick={() => setStep((s) => s - 1)}>Back</Button>}
                 </Stack>
                 {(item || step === STEPS.length - 1) && (
-                    <Button variant="contained" disabled={!canSubmit || isSubmitting} onClick={handleSubmit}>
+                    <Button variant="outlined" disabled={!canSubmit || isSubmitting} onClick={handleSubmit}>
                         Save
                     </Button>
                 )}
                 {step < STEPS.length - 1 && (
-                    <Button variant="outlined" disabled={!canProceed} onClick={() => setStep((s) => s + 1)}>
+                    <Button variant="contained" disabled={!canProceed} onClick={() => setStep((s) => s + 1)}>
                         Next
                     </Button>
                 )}

@@ -1,17 +1,15 @@
 import { useState } from "react";
 import {
-    Avatar, Box, Button, Chip, Dialog, IconButton, Stack, Typography,
+    Box, Button, Chip, Dialog, IconButton, Stack, Typography,
 } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
-import GroupIcon from "@mui/icons-material/Group";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import {
     endOfDay, endOfMonth, endOfYear, format, startOfMonth, startOfQuarter,
     startOfYear, subMonths,
 } from "date-fns";
-import type { XenBudgetMember } from "../../../../hooks/xenbudget/types";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 
 export type PeriodMode =
@@ -82,29 +80,21 @@ export const defaultYearMode = (): PeriodMode => ({ kind: "year", anchor: startO
 
 const YEAR_GRID_SPAN = 8;
 
-const chipSx = { borderRadius: 2, fontSize: 14, height: 36 } as const;
-const avatarSx = { width: 26, height: 26, fontSize: 13, borderRadius: "7px" } as const;
-
 interface TimePeriodFilterProps {
     mode: PeriodMode;
     onModeChange: (mode: PeriodMode) => void;
-    person: string | undefined;
-    onPersonChange: (userId: string | undefined) => void;
-    members: XenBudgetMember[];
     /** Report wants the wider Last 3/6 months + This quarter picks too; Overview doesn't. */
     showExtraPresets?: boolean;
 }
 
 /**
- * The one time + person filter shared by Overview and Report: a person chip and a period
- * pill. Clicking either opens a centered dialog in the same chip vocabulary — a person, a
- * quick pick and a grid cell are all the same shape, so the two pickers read as one family
- * of control rather than two.
+ * The time filter shared by Overview and Report: a period pill that opens a centered
+ * dialog in the same chip vocabulary — a quick pick and a grid cell are all the same
+ * shape, so the pickers read as one family of control.
  */
 export default function TimePeriodFilter({
-    mode, onModeChange, person, onPersonChange, members, showExtraPresets,
+    mode, onModeChange, showExtraPresets,
 }: TimePeriodFilterProps) {
-    const [personOpen, setPersonOpen] = useState(false);
     const [periodOpen, setPeriodOpen] = useState(false);
     // Which year the month grid is browsing — independent of the applied anchor, so
     // browsing around doesn't apply anything until a cell is actually clicked.
@@ -114,8 +104,6 @@ export default function TimePeriodFilter({
 
     const now = new Date();
     const resolved = resolvePeriod(mode);
-
-    const personMember = members.find((m) => m.user_id === person);
 
     const pickMonth = (m: number) => { onModeChange({ kind: "month", anchor: new Date(gridYear, m, 1) }); setPeriodOpen(false); };
     const pickYear = (y: number) => { onModeChange({ kind: "year", anchor: new Date(y, 0, 1) }); setPeriodOpen(false); };
@@ -128,18 +116,6 @@ export default function TimePeriodFilter({
 
     return (
         <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>
-            <Chip
-                clickable
-                onClick={() => setPersonOpen(true)}
-                avatar={
-                    <Avatar variant="rounded" src={personMember?.avatar || undefined} sx={avatarSx}>
-                        {personMember ? personMember.username[0]?.toUpperCase() : <GroupIcon sx={{ fontSize: 16 }} />}
-                    </Avatar>
-                }
-                label={personMember ? personMember.username : "Everyone"}
-                variant="outlined" sx={{ ...chipSx, maxWidth: 160 }}
-            />
-
             <Box sx={{ flexGrow: 1 }} />
 
             <Box
@@ -166,42 +142,6 @@ export default function TimePeriodFilter({
                     {resolved.label}
                 </Typography>
             </Box>
-
-            <Dialog open={personOpen} onClose={() => setPersonOpen(false)} maxWidth="xs">
-                <Box sx={{ p: 1.5, width: 260 }}>
-                    <Typography variant="caption" sx={sectionLabelSx}>Narrow to</Typography>
-                    <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap", gap: 0.75, mt: 1 }}>
-                        <Chip
-                            avatar={
-                                <Avatar variant="rounded" sx={{ width: 20, height: 20, fontSize: 10, borderRadius: "5px" }}>
-                                    <GroupIcon sx={{ fontSize: 13 }} />
-                                </Avatar>
-                            }
-                            label="Everyone" size="small" sx={{ borderRadius: 2 }}
-                            color={!person ? "primary" : undefined}
-                            variant={!person ? "filled" : "outlined"}
-                            onClick={() => { onPersonChange(undefined); setPersonOpen(false); }}
-                        />
-                        {members.map((m) => (
-                            <Chip
-                                key={m.user_id}
-                                avatar={
-                                    <Avatar
-                                        variant="rounded" src={m.avatar || undefined}
-                                        sx={{ width: 20, height: 20, fontSize: 10, borderRadius: "5px" }}
-                                    >
-                                        {m.username[0]?.toUpperCase()}
-                                    </Avatar>
-                                }
-                                label={m.username} size="small" sx={{ borderRadius: 2 }}
-                                color={person === m.user_id ? "primary" : undefined}
-                                variant={person === m.user_id ? "filled" : "outlined"}
-                                onClick={() => { onPersonChange(m.user_id); setPersonOpen(false); }}
-                            />
-                        ))}
-                    </Stack>
-                </Box>
-            </Dialog>
 
             <Dialog open={periodOpen} onClose={() => setPeriodOpen(false)} maxWidth="xs">
                 <Box sx={{ p: 1.5, width: 300 }}>

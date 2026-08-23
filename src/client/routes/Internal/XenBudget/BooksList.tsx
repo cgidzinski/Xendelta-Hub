@@ -40,7 +40,7 @@ export default function BooksList() {
     if (isError) return <ErrorDisplay error={error} />;
 
     return (
-        <Box sx={{ p: 2, maxWidth: 900, mx: "auto" }}>
+        <Box sx={{ p: 2, width: "100%" }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
                 <Typography variant="h6">Books</Typography>
                 <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>

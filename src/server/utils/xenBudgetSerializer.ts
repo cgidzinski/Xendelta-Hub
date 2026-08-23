@@ -25,6 +25,7 @@ export function serializeBook(book: any, itemCount?: number, reviewCount?: numbe
   return {
     ...transformMembers(obj),
     _id: obj._id.toString(),
+    timezone: obj.timezone || "UTC",
     is_creator: undefined,  // filled in per-request by the route; see serializeBookFor
     ...(itemCount === undefined ? {} : { item_count: itemCount }),
     ...(reviewCount === undefined ? {} : { review_count: reviewCount }),
@@ -56,6 +57,12 @@ export function serializeItem(item: any, batchById?: Map<string, any>): any {
     book_id: obj.book_id?.toString(),
     import_batch_id: batchId,
     applied_rule_ids: (obj.applied_rule_ids || []).map((id: any) => id.toString()),
+    images: Array.isArray(obj.images)
+      ? obj.images.map((img: any) => ({
+          _id: img._id?.toString() ?? img._id,
+          gcs_path: img.gcs_path,
+        }))
+      : obj.images,
     ...(sourceLabel ? { source_label: sourceLabel } : {}),
   };
 }

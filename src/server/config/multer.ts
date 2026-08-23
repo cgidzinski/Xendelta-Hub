@@ -6,7 +6,7 @@
 
 import multer from "multer";
 import { Request } from "express";
-import { MAX_FILE_SIZE, MAX_BLOG_ASSET_SIZE, MAX_RECIPAINT_ASSET_SIZE, MAX_XENSPLIT_IMAGE_SIZE, ALLOWED_IMAGE_MIMES } from "../constants";
+import { MAX_FILE_SIZE, MAX_BLOG_ASSET_SIZE, MAX_RECIPAINT_ASSET_SIZE, MAX_XENSPLIT_IMAGE_SIZE, MAX_XENBUDGET_IMAGE_SIZE, ALLOWED_IMAGE_MIMES } from "../constants";
 
 // File filter function for images only
 const imageFileFilter = function (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) {
@@ -56,6 +56,15 @@ export const uploadXenSplitImages = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: MAX_XENSPLIT_IMAGE_SIZE,
+  },
+  fileFilter: imageFileFilter,
+});
+
+// Configured multer instance for xenbudget item images (memory storage) - accepts images only
+export const uploadXenBudgetImages = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_XENBUDGET_IMAGE_SIZE,
   },
   fileFilter: imageFileFilter,
 });

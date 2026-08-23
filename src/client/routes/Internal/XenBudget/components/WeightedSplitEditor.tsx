@@ -1,9 +1,10 @@
 import {
-    Autocomplete, Avatar, Box, Checkbox, InputAdornment, Stack, TextField, ToggleButton,
+    Autocomplete, Avatar, Box, InputAdornment, Stack, TextField, ToggleButton,
     ToggleButtonGroup, Typography,
 } from "@mui/material";
 import type { ShareType, XenBudgetMember, XenBudgetLabel } from "../../../../hooks/xenbudget/types";
-import { formatCurrency, getCurrencySymbol, sanitizeAmount } from "../../../../utils/currencyUtils";
+import { formatCurrency, getCurrencySymbol } from "../currency";
+import { sanitizeAmount } from "../../../../utils/currencyUtils";
 import { CategoryChip, resolveLabelColor } from "./LabelChip";
 
 export interface SplitDraft {
@@ -78,9 +79,7 @@ export default function WeightedSplitEditor({
                     : { text: "Uncategorised", error: false };
             }
             if (selected.length === 1) {
-                return mode.kind === "people"
-                    ? { text: "All rows attributed to them", error: false }
-                    : { text: "All in one category", error: false };
+                return { text: "", error: false };
             }
             return {
                 text: `Split evenly between ${selected.length} ${mode.kind === "people" ? "people" : "categories"}`,
@@ -138,30 +137,70 @@ export default function WeightedSplitEditor({
             )}
 
             {mode.kind === "people" ? (
-                <Stack spacing={0.5}>
-                    {(hidePicker ? mode.members.filter((m) => keys.includes(m.user_id)) : mode.members).map((m) => {
-                        const draft = selected.find((s) => s.key === m.user_id);
-                        return (
-                            <Stack key={m.user_id} direction="row" alignItems="center" spacing={1}>
-                                {!hidePicker && (
-                                    <Checkbox size="small" checked={!!draft} onChange={() => toggle(m.user_id)} />
-                                )}
-                                <Avatar src={m.avatar || undefined} sx={{ width: 26, height: 26, fontSize: 12 }}>
-                                    {m.username[0]?.toUpperCase()}
-                                </Avatar>
-                                <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
-                                    {m.username}
-                                </Typography>
-                                {draft && !amountless && splitType === "equal" && (
-                                    <Typography variant="body2" color="text.secondary">
-                                        {formatCurrency(round2(perPart), currency)}
+                hidePicker ? (
+                    <Stack spacing={0.5}>
+                        {mode.members.filter((m) => keys.includes(m.user_id)).map((m) => {
+                            const draft = selected.find((s) => s.key === m.user_id);
+                            return (
+                                <Stack key={m.user_id} direction="row" alignItems="center" spacing={1}>
+                                    <Avatar src={m.avatar || undefined} sx={{ width: 26, height: 26, fontSize: 12 }}>
+                                        {m.username[0]?.toUpperCase()}
+                                    </Avatar>
+                                    <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
+                                        {m.username}
                                     </Typography>
-                                )}
-                                {draft && !amountless && splitType !== "equal" && valueField(draft)}
-                            </Stack>
-                        );
-                    })}
-                </Stack>
+                                    {draft && !amountless && splitType === "equal" && (
+                                        <Typography variant="body2" color="text.secondary">
+                                            {formatCurrency(round2(perPart), currency)}
+                                        </Typography>
+                                    )}
+                                    {draft && !amountless && splitType !== "equal" && valueField(draft)}
+                                </Stack>
+                            );
+                        })}
+                    </Stack>
+                ) : (
+                    <Stack spacing={1}>
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                            {mode.members.map((m) => {
+                                const isSelected = keys.includes(m.user_id);
+                                return (
+                                    <Box
+                                        key={m.user_id}
+                                        onClick={() => toggle(m.user_id)}
+                                        sx={{
+                                            display: "flex", alignItems: "center", gap: 1,
+                                            px: 1.5, py: 0.75, borderRadius: 2, cursor: "pointer",
+                                            bgcolor: "action.hover", color: "text.primary",
+                                            border: isSelected ? "2px solid" : "2px solid transparent",
+                                            borderColor: isSelected ? "primary.main" : "transparent",
+                                            transition: "all 0.2s",
+                                        }}
+                                    >
+                                        <Avatar src={m.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
+                                            {m.username[0]?.toUpperCase()}
+                                        </Avatar>
+                                        <Typography variant="caption">{m.username}</Typography>
+                                    </Box>
+                                );
+                            })}
+                        </Box>
+                        {!amountless && splitType !== "equal" && selected.map((draft) => {
+                            const m = mode.members.find((mm) => mm.user_id === draft.key);
+                            return (
+                                <Stack key={draft.key} direction="row" alignItems="center" spacing={1}>
+                                    <Avatar src={m?.avatar || undefined} sx={{ width: 26, height: 26, fontSize: 12 }}>
+                                        {m?.username[0]?.toUpperCase()}
+                                    </Avatar>
+                                    <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
+                                        {m?.username ?? draft.key}
+                                    </Typography>
+                                    {valueField(draft)}
+                                </Stack>
+                            );
+                        })}
+                    </Stack>
+                )
             ) : (
                 <Stack spacing={1}>
                     {!hidePicker && (
@@ -223,13 +262,15 @@ export default function WeightedSplitEditor({
                 </Stack>
             )}
 
-            <Typography
-                variant="caption"
-                color={summary.error ? "warning.main" : "text.secondary"}
-                sx={{ display: "block", mt: 1 }}
-            >
-                {summary.text}
-            </Typography>
+            {summary.text && (
+                <Typography
+                    variant="caption"
+                    color={summary.error ? "warning.main" : "text.secondary"}
+                    sx={{ display: "block", mt: 1 }}
+                >
+                    {summary.text}
+                </Typography>
+            )}
         </Box>
     );
 }

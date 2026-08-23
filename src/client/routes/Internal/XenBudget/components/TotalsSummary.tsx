@@ -1,7 +1,7 @@
 import { Card, Stack, Typography } from "@mui/material";
 import type { SxProps, Theme } from "@mui/material";
 import { cardSx, sectionLabelSx } from "../../../../components/ui/surfaceStyles";
-import { formatCurrency } from "../../../../utils/currencyUtils";
+import { formatCurrency } from "../currency";
 
 interface TotalsSummaryProps {
     income: number;

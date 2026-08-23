@@ -49,7 +49,7 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
     },
     {
         key: "xenbudget",
-        label: "XenBudget Beta",
+        label: "XenBudget",
         icon: AccountBalanceWalletIcon,
         path: "/internal/xenbudget",
         description: "Track spending and set budgets",

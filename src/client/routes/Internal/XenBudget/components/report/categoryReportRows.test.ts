@@ -3,7 +3,6 @@ import type { BudgetStatus, SubBudgetStatus } from "../../../../../hooks/xenbudg
 import { buildCategoryReport } from "./categoryReportRows";
 
 const ALICE = "alice-id";
-const BOB = "bob-id";
 
 // One calendar month, so a monthly cap scales to exactly its own amount and the
 // assertions below stay readable.
@@ -161,37 +160,6 @@ describe("buildCategoryReport", () => {
         expect(hasBudgets).toBe(false);
         expect(totalCapped).toBe(0);
     });
-
-    describe("narrowed to one member", () => {
-        it("uses that member's own limit, not the household cap", () => {
-            const shared = budget({ amount: 800, sub_budgets: [sub(ALICE, 200), sub(BOB, 150)] });
-            const { rows, totalCapped } = buildCategoryReport({
-                ...base, budgets: [shared], personId: ALICE,
-            });
-            expect(rows.find((r) => r.label === "Groceries")?.budgeted).toBe(200);
-            expect(totalCapped).toBe(200);
-        });
-
-        it("gives no budget figure for a household cap they have no limit inside", () => {
-            const shared = budget({ amount: 800, sub_budgets: [] });
-            const { rows, hasBudgets } = buildCategoryReport({
-                ...base, budgets: [shared], personId: ALICE,
-            });
-            expect(rows.find((r) => r.label === "Groceries")?.budgeted).toBeUndefined();
-            expect(hasBudgets).toBe(false);
-        });
-
-        it("ignores a budget that only caps somebody else", () => {
-            const bobsOwn = budget({
-                amount: undefined, remaining: undefined, percent: undefined, over: undefined,
-                sub_budgets: [sub(BOB, 150)],
-            });
-            const { totalCapped } = buildCategoryReport({
-                ...base, budgets: [bobsOwn], personId: ALICE,
-            });
-            expect(totalCapped).toBe(0);
-        });
-    });
 });
 
 describe("period columns", () => {
@@ -340,8 +308,14 @@ describe("summary rows", () => {
         });
         const summed = periodKeys.reduce((acc, k) => acc + (summary.capped.byPeriod[k] ?? 0), 0);
         expect(summed).toBeCloseTo(summary.capped.total, 6);
-        // Half of March, so half a month's cap.
-        expect(summary.capped.byPeriod["2026-03"]).toBeCloseTo(800 * (15 / 31), 6);
+        // The part of March the range covers, as a fraction of the whole month. Measured
+        // in real elapsed time like the production code, so it stays true across the DST
+        // switch inside March rather than assuming a fixed 31-day month.
+        const marchStart = new Date(2026, 2, 1);
+        const aprilStart = new Date(2026, 3, 1);
+        const marchFraction = (partial.rangeTo.getTime() - marchStart.getTime())
+            / (aprilStart.getTime() - marchStart.getTime());
+        expect(summary.capped.byPeriod["2026-03"]).toBeCloseTo(800 * marchFraction, 6);
     });
 
     it("measures caps against spending in capped categories, not every outgoing", () => {
@@ -514,19 +488,5 @@ describe("savings goals", () => {
     it("still counts savings in total spending, since that is what it is", () => {
         const { summary } = buildCategoryReport({ ...withSavings, budgets: [goal()] });
         expect(summary.spent.total).toBe(2700);
-    });
-
-    it("uses a member's own target when narrowed to them", () => {
-        const shared = goal({
-            sub_budgets: [{
-                _id: "s1", person_id: "alice-id", person_name: "Alice",
-                amount: 200, spent: 0, remaining: 200, percent: 0, over: false, item_count: 0,
-            }],
-        });
-        const { rows, totalGoal } = buildCategoryReport({
-            ...withSavings, budgets: [shared], personId: "alice-id",
-        });
-        expect(rows.find((r) => r.label === "Savings")?.budgeted).toBeCloseTo(600, 6);
-        expect(totalGoal).toBeCloseTo(600, 6);
     });
 });

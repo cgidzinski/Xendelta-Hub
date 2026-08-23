@@ -151,9 +151,10 @@ var importBatchSchema = new Schema({
 
 var bookSchema = new Schema({
   name: { type: String, required: true, maxlength: 100 },
-  // No timezone here: month and week boundaries follow whoever is *looking*, resolved
-  // from their own profile (or their browser) and sent with each request. See
-  // requestTimezone() in routes/xenbudget.ts.
+  // Every saved date is anchored to this timezone, so a calendar day means the same
+  // instant no matter whose browser saves it. How months/dates *display* still follows
+  // whoever is looking (requestTimezone() in routes/xenbudget.ts).
+  timezone: { type: String, default: "UTC" },
   default_currency: { type: String, default: "CAD" },
   // The owner / main admin: the only one who may add or remove members, transfer the
   // book, delete it, or restore over it. Every other member can do everything else.
@@ -193,6 +194,12 @@ var itemCategorySchema = new Schema({
   percentage: { type: Number },
 }, { _id: false });
 
+// Receipt photos. Like XenSplit's expense images: only the GCS path is stored, and the
+// client resolves display URLs on demand via short-lived signed URLs.
+var itemImageSchema = new Schema({
+  gcs_path: { type: String, required: true },
+}, { _id: true });
+
 var itemSchema = new Schema({
   book_id: { type: Schema.Types.ObjectId, ref: "XenBudgetBook", required: true },
   type: { type: String, enum: ["expense", "income"], default: "expense" },
@@ -204,6 +211,7 @@ var itemSchema = new Schema({
   // Pre-rule text, kept so a rule's set_description rewrite stays auditable.
   original_description: { type: String, maxlength: 500 },
   notes: { type: String, maxlength: 1000 },
+  images: [itemImageSchema],
 
   // What the purchase was, weighted. An item with no categories is uncategorised.
   categories: [itemCategorySchema],

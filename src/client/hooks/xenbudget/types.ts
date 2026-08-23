@@ -97,6 +97,7 @@ export interface XenBudgetBook {
     _id: string;
     name: string;
     default_currency: string;
+    timezone: string;
     created_by: string;
     /** True when the caller owns the book — gates member management and deletion. */
     is_creator: boolean;
@@ -132,6 +133,13 @@ export interface XenBudgetCategoryWeight {
     percentage?: number;
 }
 
+/** A receipt photo attached to an item. Only the GCS path is stored; display URLs are
+ *  resolved on demand via the signed-URL endpoint (see useXenBudgetItemImageUrls). */
+export interface XenBudgetItemImage {
+    _id: string;
+    gcs_path: string;
+}
+
 export interface XenBudgetItem {
     _id: string;
     book_id: string;
@@ -143,6 +151,8 @@ export interface XenBudgetItem {
     description: string;
     original_description?: string;
     notes?: string;
+    /** Receipt photos, uploaded after the item is saved. */
+    images?: XenBudgetItemImage[];
     /** What the purchase was, weighted. Empty means uncategorised. */
     categories: XenBudgetCategoryWeight[];
     category_split_type: ShareType;
@@ -166,12 +176,14 @@ export interface CreateBookInput {
     name: string;
     memberIds?: string[];
     default_currency?: string;
+    timezone?: string;
 }
 
 export interface UpdateBookInput {
     name?: string;
     default_currency?: string;
     archived?: boolean;
+    timezone?: string;
 }
 
 export interface CreateItemInput {

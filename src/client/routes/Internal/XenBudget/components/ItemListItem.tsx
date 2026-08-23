@@ -1,8 +1,9 @@
 import { Avatar, AvatarGroup, Box, Stack, Typography, alpha } from "@mui/material";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import type { XenBudgetItem, XenBudgetMember, XenBudgetLabel } from "../../../../hooks/xenbudget/types";
-import { formatCurrency } from "../../../../utils/currencyUtils";
+import { formatCurrency } from "../currency";
 import { CategoryChip, FlagChip } from "./LabelChip";
 import { xbCardSx, xbBadgeSx, xbExcludedRowSx } from "./rowStyles";
 
@@ -37,18 +38,23 @@ export default function ItemListItem({ item, members, categoryRegistry, flagRegi
                 sx={{
                     ...xbBadgeSx,
                     bgcolor: (theme) => alpha(
-                        isIncome ? theme.palette.success.main : theme.palette.primary.main, 0.15,
+                        isIncome ? theme.palette.success.main : theme.palette.error.main, 0.15,
                     ),
-                    color: isIncome ? "success.main" : "primary.main",
+                    color: isIncome ? "success.main" : "error.main",
                 }}
             >
                 {isIncome ? <TrendingUpIcon fontSize="small" /> : <TrendingDownIcon fontSize="small" />}
             </Box>
 
             <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>
-                    {item.description}
-                </Typography>
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+                    {(item.images?.length ?? 0) > 0 && (
+                        <ReceiptLongIcon sx={{ fontSize: 14, color: "text.secondary", flexShrink: 0 }} />
+                    )}
+                    <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>
+                        {item.description}
+                    </Typography>
+                </Stack>
                 {(item.categories.length > 0 || item.flags.length > 0) && (
                     <Stack direction="row" spacing={0.5} sx={{ mt: 0.25, flexWrap: "wrap", gap: 0.5 }}>
                         {item.categories.map((c) => (
@@ -80,7 +86,7 @@ export default function ItemListItem({ item, members, categoryRegistry, flagRegi
                 sx={{
                     fontWeight: 600,
                     flexShrink: 0,
-                    color: isIncome ? "success.main" : "text.primary",
+                    color: isIncome ? "success.main" : "error.main",
                     // An excluded amount must not read as money that counted.
                     textDecoration: item.excluded ? "line-through" : "none",
                 }}

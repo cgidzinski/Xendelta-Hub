@@ -7,7 +7,7 @@ import BudgetBar from "../../XenBudget/components/budget/BudgetBar";
 import { scopeColor } from "../../XenBudget/components/budget/budgetColors";
 import { troublePercent, budgetLabel } from "../../XenBudget/components/budget/sortBudgets";
 import { limitColor, limitState } from "../../XenBudget/components/budget/budgetKind";
-import { formatCurrency } from "../../../../utils/currencyUtils";
+import { formatCurrency } from "../../XenBudget/currency";
 import { cardSx, sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 
 /**

@@ -35,8 +35,8 @@ interface MapStepProps {
     onDateToChange: (d: Date | null) => void;
 }
 
-/** Formats a UTC-midnight-anchored Date (how every parsed row date is stored) as a plain
- *  day, without letting the viewer's own timezone shift it onto the neighbouring day. */
+/** Formats a parsed row date (a date-only value anchored at UTC midnight) as a plain
+ *  calendar day, without letting the viewer's own timezone shift it onto the next day. */
 function fmtUTCDate(d: Date, withYear = false): string {
     return d.toLocaleDateString("en-US", {
         month: "short", day: "numeric", year: withYear ? "numeric" : undefined, timeZone: "UTC",

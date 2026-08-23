@@ -5,17 +5,12 @@ import type {
 } from "../../../../../hooks/xenbudget/types";
 import { CategoryChip } from "../LabelChip";
 import { cardSx } from "../../../../../components/ui/surfaceStyles";
-import { formatCurrency } from "../../../../../utils/currencyUtils";
+import { formatCurrency } from "../../currency";
 import { INCOME_COLOR } from "../../../../../components/ui/chartColors";
 import BudgetLimitLine from "./BudgetLimitLine";
 import BudgetTarget from "./BudgetTarget";
 import { memberColor, scopeColor } from "./budgetColors";
-import { limitNoun } from "./budgetKind";
-
-const PERIOD_SUFFIX: Record<string, string> = {
-    weekly: "weekly", monthly: "monthly", quarterly: "quarterly",
-    yearly: "yearly", custom: "one-off",
-};
+import { limitNoun, periodLabel } from "./budgetKind";
 
 interface BudgetRowProps {
     budget: BudgetStatus;
@@ -36,7 +31,7 @@ export default function BudgetRow({
     budget, currency, categoryRegistry, members, onEdit,
 }: BudgetRowProps) {
     const color = scopeColor(budget.categories, categoryRegistry);
-    const suffix = PERIOD_SUFFIX[budget.period] || budget.period;
+    const suffix = periodLabel(budget.period);
 
     return (
         <Card
@@ -90,10 +85,8 @@ export default function BudgetRow({
                     currency={currency}
                     color={color}
                     height={6}
-                    barLabel={`${budget.categories.join(", ") || "Everything"}: ${
-                        formatCurrency(budget.spent, currency)
-                    } of ${formatCurrency(budget.amount, currency)}, ${
-                        budget.percent ?? 0}% of the ${limitNoun(budget.kind)}`}
+                    barLabel={`${budget.categories.join(", ") || "Everything"}: ${formatCurrency(budget.spent, currency)
+                        } of ${formatCurrency(budget.amount, currency)}, ${budget.percent ?? 0}% of the ${limitNoun(budget.kind)}`}
                 />
             )}
 
@@ -118,10 +111,8 @@ export default function BudgetRow({
                                 currency={currency}
                                 color={memberColor(sub.person_id, members)}
                                 height={5}
-                                barLabel={`${sub.person_name}: ${
-                                    formatCurrency(sub.spent, currency)
-                                } of ${formatCurrency(sub.amount, currency)}, ${
-                                    sub.percent}% of their ${limitNoun(budget.kind)}`}
+                                barLabel={`${sub.person_name}: ${formatCurrency(sub.spent, currency)
+                                    } of ${formatCurrency(sub.amount, currency)}, ${sub.percent}% of their ${limitNoun(budget.kind)}`}
                             />
                         </Box>
                     ))}

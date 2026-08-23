@@ -9,12 +9,13 @@ import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import { useSnackbar } from "notistack";
 import { format } from "date-fns";
-import type { XenBudgetBook, XenBudgetItem, XenBudgetMember, UpdateItemInput } from "../../../../hooks/xenbudget/types";
+import type { XenBudgetBook, XenBudgetItem, XenBudgetMember, UpdateItemInput, ShareType } from "../../../../hooks/xenbudget/types";
 import { useXenBudgetItemMutations, useXenBudgetItems } from "../../../../hooks/xenbudget/useItems";
-import { formatCurrency } from "../../../../utils/currencyUtils";
+import { formatCurrency } from "../currency";
 import { emptyStateSx, emptyStateIconCircleSx, sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import LoadingSpinner from "../../../../components/LoadingSpinner";
 import { CategoryChip, FlagChip } from "./LabelChip";
+import WeightedSplitEditor, { type SplitDraft } from "./WeightedSplitEditor";
 import { xbCardSx, xbBadgeSx } from "./rowStyles";
 
 // The system "Needs review" flag — mirrors FLAG_NEEDS_REVIEW server-side
@@ -54,6 +55,10 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     // Whether the current item is flagged "Needs review" — edited via the checkbox.
     const [needsReview, setNeedsReview] = useState(false);
+    // How the chosen categories divide the item. Only shown when two or more are picked.
+    const [splitType, setSplitType] = useState<ShareType>("equal");
+    // Raw text per category, so a half-typed amount isn't clobbered mid-keystroke.
+    const [categoryValues, setCategoryValues] = useState<Record<string, string>>({});
 
     useEffect(() => {
         if (open) {
@@ -71,6 +76,15 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
     useEffect(() => {
         setSelectedCategories(currentItem ? currentItem.categories.map((c) => c.name) : []);
         setNeedsReview(currentItem ? currentItem.flags.includes(FLAG_NEEDS_REVIEW) : false);
+        setSplitType(currentItem?.category_split_type ?? "equal");
+        setCategoryValues(Object.fromEntries(
+            (currentItem?.categories ?? []).map((c) => [
+                c.name,
+                currentItem?.category_split_type === "percent"
+                    ? String(c.percentage ?? "")
+                    : String(c.amount ?? ""),
+            ]),
+        ));
     }, [currentItem]);
 
     // Buffer ahead so advancing near the end of a page doesn't stall on a fetch.
@@ -97,6 +111,29 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
         );
     };
 
+    const categoryDrafts: SplitDraft[] = useMemo(
+        () => selectedCategories.map((name) => ({
+            key: name,
+            value: categoryValues[name] ?? "",
+        })),
+        [selectedCategories, categoryValues],
+    );
+
+    const handleDraftsChange = (drafts: SplitDraft[]) => {
+        setCategoryValues(Object.fromEntries(drafts.map((d) => [d.key, d.value])));
+    };
+
+    // Switching to exact amounts pre-fills an even split so the fields don't start blank.
+    const handleSplitTypeChange = (t: ShareType) => {
+        setSplitType(t);
+        if (t === "exact" && currentItem && selectedCategories.length > 0) {
+            const each = Math.round((currentItem.amount / selectedCategories.length) * 100) / 100;
+            setCategoryValues(Object.fromEntries(
+                selectedCategories.map((name) => [name, String(each)]),
+            ));
+        }
+    };
+
     const handleNext = () => {
         if (!currentItem || saving) return;
         const hasCategories = selectedCategories.length > 0;
@@ -110,11 +147,24 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
         const input: UpdateItemInput = { flags };
         if (hasCategories) {
             const original = currentItem.categories.map((c) => c.name);
-            const changed = selectedCategories.length !== original.length
+            const selectionChanged = selectedCategories.length !== original.length
                 || selectedCategories.some((n) => !original.includes(n));
-            if (changed) {
-                input.categories = selectedCategories.map((name) => ({ name }));
-                input.category_split_type = "equal";
+            const splitChanged = splitType !== (currentItem.category_split_type || "equal");
+            const weightsChanged = selectedCategories.some((name) => {
+                const existing = currentItem.categories.find((c) => c.name === name);
+                if (!existing) return true;
+                const stored = splitType === "percent"
+                    ? String(existing.percentage ?? "")
+                    : String(existing.amount ?? "");
+                return (categoryValues[name] ?? "").trim() !== stored.trim();
+            });
+            if (selectionChanged || splitChanged || weightsChanged) {
+                input.category_split_type = splitType;
+                input.categories = selectedCategories.map((name) => ({
+                    name,
+                    ...(splitType === "exact" ? { amount: parseFloat(categoryValues[name] ?? "") || 0 } : {}),
+                    ...(splitType === "percent" ? { percentage: parseFloat(categoryValues[name] ?? "") || 0 } : {}),
+                }));
             }
         }
         resolve(input);
@@ -252,30 +302,46 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
                         <Box>
                             <Typography variant="caption" sx={sectionLabelSx}>What was it?</Typography>
                             <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1, mt: 1 }}>
-                                {book.categories.map((c) => {
-                                    const selected = selectedCategories.includes(c.name);
-                                    return (
-                                        <CategoryChip
-                                            key={c._id} name={c.name} registry={book.categories}
-                                            onClick={() => toggleCategory(c.name)}
-                                            sx={{
-                                                cursor: "pointer",
-                                                width: "100%",
-                                                height: 56,
-                                                borderRadius: 1,
-                                                fontSize: 14,
-                                                justifyContent: "center",
-                                                "& .MuiChip-label": { px: 1 },
-                                                fontWeight: selected ? 700 : 400,
-                                                outline: selected ? "2px solid" : "none",
-                                                outlineColor: "primary.main",
-                                                outlineOffset: 1,
-                                                ...(saving ? { opacity: 0.5, pointerEvents: "none" } : {}),
-                                            }}
-                                        />
-                                    );
-                                })}
+                                {[...book.categories]
+                                    .sort((a, b) => a.name.localeCompare(b.name))
+                                    .map((c) => {
+                                        const selected = selectedCategories.includes(c.name);
+                                        return (
+                                            <CategoryChip
+                                                key={c._id} name={c.name} registry={book.categories}
+                                                onClick={() => toggleCategory(c.name)}
+                                                sx={{
+                                                    cursor: "pointer",
+                                                    width: "100%",
+                                                    height: 40,
+                                                    borderRadius: 1,
+                                                    fontSize: 14,
+                                                    justifyContent: "center",
+                                                    "& .MuiChip-label": { px: 1 },
+                                                    fontWeight: selected ? 700 : 400,
+                                                    outline: selected ? "2px solid" : "none",
+                                                    outlineColor: "primary.main",
+                                                    outlineOffset: 1,
+                                                    ...(saving ? { opacity: 0.5, pointerEvents: "none" } : {}),
+                                                }}
+                                            />
+                                        );
+                                    })}
                             </Box>
+                            {selectedCategories.length >= 2 && currentItem && (
+                                <Box sx={{ mt: 1.5 }}>
+                                    <WeightedSplitEditor
+                                        mode={{ kind: "categories", registry: book.categories }}
+                                        splitType={splitType}
+                                        onSplitTypeChange={handleSplitTypeChange}
+                                        selected={categoryDrafts}
+                                        onSelectedChange={handleDraftsChange}
+                                        amount={currentItem.amount}
+                                        currency={currentItem.currency}
+                                        hidePicker
+                                    />
+                                </Box>
+                            )}
                             <FormControlLabel
                                 control={
                                     <Checkbox

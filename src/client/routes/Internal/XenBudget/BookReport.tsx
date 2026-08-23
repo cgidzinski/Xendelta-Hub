@@ -17,14 +17,14 @@ import TimePeriodFilter, { defaultYearMode, resolvePeriod, type PeriodMode } fro
 import TotalsSummary from "./components/TotalsSummary";
 import BudgetCard from "./components/budget/BudgetCard";
 import { sortBudgets } from "./components/budget/sortBudgets";
-import { budgetsForPerson } from "./components/budget/budgetPersonView";
 import CategoryReportTable from "./components/report/CategoryReportTable";
 import {
     buildCategoryReport, type CategoryReportRow, type PeriodTotals,
 } from "./components/report/categoryReportRows";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
-import { formatCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
+import { formatCurrency } from "./currency";
+import { STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
 import { toCsv, downloadCsv } from "../../../utils/csvMapping";
 import { EXPENSE_COLOR, INCOME_COLOR, MAGNITUDE_COLOR } from "../../../components/ui/chartColors";
 import { cardSx, sectionLabelSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
@@ -35,7 +35,7 @@ const MAX_BARS = 8;
 
 const AXIS = { stroke: "#8b8b85", fontSize: 12 } as const;
 const GRID = "#ffffff14";
-// Axis ticks are for scanning, so they're abbreviated — a full "CA$8,000.00" needs a
+// Axis ticks are for scanning, so they're abbreviated — a full "$8,000.00" needs a
 // gutter wide enough to squeeze the plot, and gets truncated if it doesn't get one.
 // Exact figures live on the direct labels, the tooltip and the table view.
 const AXIS_WIDTH = 60;
@@ -45,7 +45,7 @@ const VALUE_LABEL_GUTTER = 104;
 const CATEGORY_WIDTH = 132;
 
 export default function BookReport() {
-    const { book, currency, onCurrencyChange, person, onPersonChange } = useOutletContext<BookDetailContext>();
+    const { book, currency, onCurrencyChange } = useOutletContext<BookDetailContext>();
     const [period, setPeriod] = useState<PeriodMode>(defaultYearMode);
     const [view, setView] = useState<"charts" | "table">("charts");
 
@@ -56,14 +56,11 @@ export default function BookReport() {
         to: range.to.toISOString(),
         group_by: range.groupBy,
         currency,
-        people: person ? [person] : undefined,
     });
     const { status: budgetStatusResponse, budgets } = useXenBudgetStatus(book._id, currency);
-    // Narrowed by the person filter the same way the charts above are: the budgets that
-    // constrain them, carrying only their own personal limit.
     const visibleBudgets = useMemo(
-        () => sortBudgets(person ? budgetsForPerson(budgets, person) : budgets),
-        [budgets, person],
+        () => sortBudgets(budgets),
+        [budgets],
     );
 
     // Budget against actual for the range on screen. The caps are restated for that range
@@ -79,8 +76,7 @@ export default function BookReport() {
         budgets,
         rangeFrom: range.from,
         rangeTo: range.to,
-        personId: person,
-    }), [summary, budgets, book.categories, range.from, range.to, person]);
+    }), [summary, budgets, book.categories, range.from, range.to]);
 
     const periodData = useMemo(() => (summary?.by_period ?? []).map((p) => ({
         key: p.key,
@@ -138,6 +134,13 @@ export default function BookReport() {
         totals.total,
     ];
 
+    const minusTotals = (a: PeriodTotals, b: PeriodTotals): PeriodTotals => ({
+        byPeriod: Object.fromEntries(
+            categoryReport.periodKeys.map((k) => [k, (a.byPeriod[k] ?? 0) - (b.byPeriod[k] ?? 0)]),
+        ),
+        total: a.total - b.total,
+    });
+
     const exportCsv = () => {
         if (!summary) return;
         const rows: unknown[][] = [
@@ -157,17 +160,15 @@ export default function BookReport() {
                 ...categoryReport.spanning.map(categoryCsvRow),
             ] : []),
             [],
-            ...(categoryReport.summary.capped.total > 0 ? [
-                summaryCsvRow("Spending caps", categoryReport.summary.capped),
-                summaryCsvRow("Caps left", categoryReport.summary.capsLeft),
-            ] : []),
-            ...(categoryReport.hasGoals ? [
-                summaryCsvRow("Savings goals", categoryReport.summary.goals),
-                summaryCsvRow("Saved", categoryReport.summary.saved),
-            ] : []),
-            summaryCsvRow("Spent", categoryReport.summary.spent),
+            summaryCsvRow("Savings — Save", categoryReport.summary.saved),
+            summaryCsvRow("Savings — Goal", categoryReport.summary.goals),
+            summaryCsvRow("Savings — Left to save", minusTotals(categoryReport.summary.goals, categoryReport.summary.saved)),
+            summaryCsvRow("Budget — Spend", minusTotals(categoryReport.summary.capped, categoryReport.summary.capsLeft)),
+            summaryCsvRow("Budget — Cap", categoryReport.summary.capped),
+            summaryCsvRow("Budget — Left in budget", categoryReport.summary.capsLeft),
             summaryCsvRow("Income", categoryReport.summary.income),
-            summaryCsvRow("Net", categoryReport.summary.net),
+            summaryCsvRow("Spent", categoryReport.summary.spent),
+            summaryCsvRow("Balance", categoryReport.summary.net),
             ...(categoryReport.wholeBook > 0
                 ? [["Of which budgeted across the whole book", categoryReport.wholeBook]] : []),
             [],
@@ -187,15 +188,18 @@ export default function BookReport() {
         if (abs >= 1000) {
             return new Intl.NumberFormat("en-US", {
                 style: "currency", currency: summary.currency,
+                currencyDisplay: "narrowSymbol",
                 notation: "compact", maximumFractionDigits: 1,
             }).format(v);
         }
         return new Intl.NumberFormat("en-US", {
-            style: "currency", currency: summary.currency, maximumFractionDigits: 0,
+            style: "currency", currency: summary.currency,
+            currencyDisplay: "narrowSymbol", maximumFractionDigits: 0,
         }).format(v);
     };
     const round = (v: number) => new Intl.NumberFormat("en-US", {
-        style: "currency", currency: summary.currency, maximumFractionDigits: 0,
+        style: "currency", currency: summary.currency,
+        currencyDisplay: "narrowSymbol", maximumFractionDigits: 0,
     }).format(v);
     const tooltipStyle = {
         contentStyle: { background: "#1a1a19", border: "1px solid #ffffff26", borderRadius: 8 },
@@ -218,8 +222,6 @@ export default function BookReport() {
                     )}
                     <TimePeriodFilter
                         mode={period} onModeChange={setPeriod}
-                        person={person} onPersonChange={onPersonChange}
-                        members={book.members}
                         showExtraPresets
                     />
                 </Stack>
@@ -316,7 +318,7 @@ export default function BookReport() {
                                         </ChartCard>
                                     )}
 
-                                    {!person && personData.length > 0 && (
+                                    {personData.length > 0 && (
                                         <ChartCard title="Spending by person">
                                             <MagnitudeBars data={personData} money={money} compact={compact} />
                                             <Typography variant="caption" color="text.secondary">
@@ -325,7 +327,7 @@ export default function BookReport() {
                                         </ChartCard>
                                     )}
 
-                                    {!person && personIncomeData.length > 0 && (
+                                    {personIncomeData.length > 0 && (
                                         <ChartCard title="Income by person">
                                             <MagnitudeBars data={personIncomeData} money={money} compact={compact} color={INCOME_COLOR} />
                                             <Typography variant="caption" color="text.secondary">
@@ -363,7 +365,6 @@ export default function BookReport() {
                                         categoryRegistry={book.categories}
                                         members={book.members}
                                         asOf={budgetStatusResponse?.as_of ?? new Date().toISOString()}
-                                        personId={person}
                                     />
                                 ))}
                             </Box>

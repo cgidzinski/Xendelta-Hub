@@ -56,5 +56,6 @@ export const STARTER_CATEGORIES: { name: string; color: string }[] = [
   { name: "Personal Care", color: "#c026d3" },
   { name: "Pet Care", color: "#059669" },
   { name: "Travel", color: "#92400e" },
+  { name: "Savings", color: "#10b981" },
   { name: "Other", color: "#8b8b85" },
 ];

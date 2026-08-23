@@ -2,7 +2,6 @@ import type {
     BudgetKind, BudgetStatus, SummaryCategory, SummaryCategoryPeriod, SummaryPeriod,
 } from "../../../../../hooks/xenbudget/types";
 import { budgetedForRange } from "../budget/budgetForRange";
-import { budgetsForPerson } from "../budget/budgetPersonView";
 import { periodKeyRange, shouldPivot } from "./periodColumns";
 
 /** One line of the budget-vs-actual table. */
@@ -102,30 +101,16 @@ interface BuildInput {
     budgets: BudgetStatus[];
     rangeFrom: Date;
     rangeTo: Date;
-    /** Set when the page is narrowed to one member. */
-    personId?: string;
 }
 
 /** Categories are matched by name, and a name can be spelled differently across items. */
 const key = (name: string) => name.toLowerCase();
 
-/**
- * The cap that applies to whoever is being looked at.
- *
- * Unfiltered that's the budget's overall amount. Narrowed to one member it's their own
- * limit inside it - a household cap is not that member's allowance, so a shared budget
- * with no personal limit for them contributes nothing to their column.
- */
-function limitFor(budget: BudgetStatus, personId?: string): number | undefined {
-    if (!personId) return budget.amount;
-    return budget.sub_budgets.find((s) => s.person_id === personId)?.amount;
-}
-
 export function buildCategoryReport({
     allCategories, byCategory, byCategoryPeriod, uncategorised, uncategorisedByPeriod,
-    byPeriod, budgets, rangeFrom, rangeTo, personId,
+    byPeriod, budgets, rangeFrom, rangeTo,
 }: BuildInput): CategoryReport {
-    const kept = personId ? budgetsForPerson(budgets, personId) : budgets;
+    const kept = budgets;
     const periodKeys = byPeriod.map((p) => p.key);
     const pivoted = shouldPivot(periodKeys);
 
@@ -162,7 +147,7 @@ export function buildCategoryReport({
         const budgeted = budgetedForRange(
             {
                 period: budget.period,
-                amount: limitFor(budget, personId),
+                amount: budget.amount,
                 period_from: budget.period_from,
                 period_to: budget.period_to,
             },
@@ -265,7 +250,7 @@ export function buildCategoryReport({
             const value = budgetedForRange(
                 {
                     period: budget.period,
-                    amount: limitFor(budget, personId),
+                    amount: budget.amount,
                     period_from: budget.period_from,
                     period_to: budget.period_to,
                 },

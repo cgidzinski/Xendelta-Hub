@@ -10,17 +10,17 @@ import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
 import { CategoryChip, resolveLabelColor } from "./components/LabelChip";
 import BudgetCard from "./components/budget/BudgetCard";
 import { sortBudgets, overCount, metCount } from "./components/budget/sortBudgets";
-import { budgetsForPerson } from "./components/budget/budgetPersonView";
 import TimePeriodFilter, { defaultMonthMode, resolvePeriod, type PeriodMode } from "./components/TimePeriodFilter";
 import TotalsSummary from "./components/TotalsSummary";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
-import { formatCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
+import { formatCurrency } from "./currency";
+import { STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
 import { INCOME_COLOR } from "../../../components/ui/chartColors";
 import { cardSx, sectionLabelSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
 
 export default function BookOverview() {
-    const { book, currency, onCurrencyChange, person, onPersonChange } = useOutletContext<BookDetailContext>();
+    const { book, currency, onCurrencyChange } = useOutletContext<BookDetailContext>();
     const navigate = useNavigate();
 
     const [period, setPeriod] = useState<PeriodMode>(defaultMonthMode);
@@ -31,14 +31,11 @@ export default function BookOverview() {
 
     const { summary, isLoading, isError, error } = useXenBudgetSummary(book._id, {
         currency, from: from.toISOString(), to: to.toISOString(), group_by: groupBy,
-        people: person ? [person] : undefined,
     });
     const { status: budgetStatusResponse, budgets: budgetStatus } = useXenBudgetStatus(book._id, currency);
-    // The person filter narrows these the same way it narrows the tallies above: down to
-    // the budgets that actually constrain them, showing only their own personal limit.
     const visibleBudgets = useMemo(
-        () => sortBudgets(person ? budgetsForPerson(budgetStatus, person) : budgetStatus),
-        [budgetStatus, person],
+        () => sortBudgets(budgetStatus),
+        [budgetStatus],
     );
     // Counts every limit past its cap, the shared one and each person's, so the header
     // agrees with the red bars actually on screen rather than with the unfiltered book.
@@ -62,12 +59,10 @@ export default function BookOverview() {
     }, [summary]);
 
     // Every member appears in the per-person card, defaulting to zero rather than being
-    // dropped when they have no share — the breakdown stays complete. A person filter
-    // narrows it to just that member.
+    // dropped when they have no share — the breakdown stays complete.
     const personRows = useMemo(() => {
         const byId = new Map(summary?.by_person.map((p) => [p.user_id, p]) ?? []);
         return book.members
-            .filter((m) => !person || m.user_id === person)
             .map((m) => ({
                 user_id: m.user_id,
                 username: m.username,
@@ -75,7 +70,7 @@ export default function BookOverview() {
                 total: byId.get(m.user_id)?.total ?? 0,
                 income: byId.get(m.user_id)?.income ?? 0,
             }));
-    }, [summary, book.members, person]);
+    }, [summary, book.members]);
 
     if (isLoading && !summary) return <LoadingSpinner message="Adding it up..." />;
     if (isError) return <ErrorDisplay error={error} />;
@@ -102,8 +97,6 @@ export default function BookOverview() {
                     )}
                     <TimePeriodFilter
                         mode={period} onModeChange={setPeriod}
-                        person={person} onPersonChange={onPersonChange}
-                        members={book.members}
                     />
                 </Stack>
             </Box>
@@ -158,7 +151,7 @@ export default function BookOverview() {
                 </Card>
 
                 {isCurrentMonth && visibleBudgets.length > 0 && (
-                    <Box sx={{ mb: 2 }}>
+                    <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
                         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
                             <Typography variant="caption" sx={sectionLabelSx}>Budgets</Typography>
                             <Stack direction="row" spacing={1} alignItems="center">
@@ -183,20 +176,24 @@ export default function BookOverview() {
                                     categoryRegistry={book.categories}
                                     members={book.members}
                                     asOf={asOf}
-                                    personId={person}
+                                    variant="minimal"
                                     onViewItems={(b) => navigate(
                                         `/internal/xenbudget/books/${book._id}/items`,
-                                        { state: { budgetFilter: {
-                                            categories: b.categories,
-                                            from: b.period_from,
-                                            to: b.period_to,
-                                        } } },
+                                        {
+                                            state: {
+                                                budgetFilter: {
+                                                    categories: b.categories,
+                                                    from: b.period_from,
+                                                    to: b.period_to,
+                                                }
+                                            }
+                                        },
                                     )}
                                     onEdit={() => navigate(`/internal/xenbudget/books/${book._id}/settings/budgets`)}
                                 />
                             ))}
                         </Stack>
-                    </Box>
+                    </Card>
                 )}
 
                 {nothingYet ? (

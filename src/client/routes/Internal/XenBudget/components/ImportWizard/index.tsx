@@ -274,9 +274,9 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
 
     // The span of dates actually found in the file, plus whichever single calendar month
     // most of them fall in — a statement almost always is one month, with maybe a few days
-    // spilling from the cycle before or after. Grouped by UTC month, to match the UTC
-    // midnight each date was parsed to (applyMapping / parseDate) rather than the viewer's
-    // own timezone.
+    // spilling from the cycle before or after. Grouped by calendar month: each parsed date
+    // is a date-only value anchored at UTC midnight, so its UTC month *is* the statement's
+    // month, independent of who's looking.
     const dateStats = useMemo<DateStats | null>(() => {
         if (mapped.rows.length === 0) return null;
         const times = mapped.rows.map((r) => new Date(r.date).getTime());

@@ -18,6 +18,7 @@ import {
   updateXenBudgetBudgetSchema,
   xenBudgetBookIdParamSchema,
   xenBudgetItemParamSchema,
+  xenBudgetItemImageParamSchema,
   xenBudgetMemberParamSchema,
   xenBudgetLabelParamSchema,
   xenBudgetBudgetParamSchema,
@@ -39,8 +40,11 @@ import {
 } from "../utils/xenBudgetUtils";
 import {
   SYSTEM_FLAGS, STARTER_CATEGORIES, FLAG_UNCATEGORISED, FLAG_POSSIBLE_DUPLICATE,
-  FLAG_NEEDS_REVIEW, FLAG_IGNORED,
+  FLAG_NEEDS_REVIEW, FLAG_IGNORED, MAX_XENBUDGET_IMAGES_PER_ITEM,
 } from "../constants";
+import { uploadXenBudgetImages } from "../config/multer";
+import { uploadToGCS, deleteFromGCS, generateSignedUrl } from "../utils/gcsUtils";
+import { generateUniqueFilename } from "../utils/mediaUtils";
 import {
   applyRules, stripRuleEffects, type DraftItem, type Rule,
 } from "../utils/xenBudgetRules";
@@ -625,6 +629,17 @@ function draftFromRow(row: any, book: any): DraftItem {
   };
 }
 
+/**
+ * The incoming item date is a date-only value anchored at UTC midnight ("2026-08-15").
+ * Storage is anchored to the book's own timezone instead, so the same calendar day means
+ * the same instant no matter whose browser saved it: convert the day to midnight in the
+ * book's zone.
+ */
+function bookDateToUtc(date: Date | string, timezone: string): Date {
+  const day = new Date(date).toISOString().slice(0, 10);
+  return zonedWallToUtc(day, timezone || "UTC");
+}
+
 function sameNames(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((t, i) => t === b[i]);
 }
@@ -693,7 +708,7 @@ module.exports = function (app: any) {
   app.post("/api/xenbudget/books", validate(createXenBudgetBookSchema), async (req: Request, res: Response) => {
     try {
       const userId = callerId(req);
-      const { name, memberIds: requestedMemberIds, default_currency } = req.body;
+      const { name, memberIds: requestedMemberIds, default_currency, timezone } = req.body;
 
       const members: string[] = [userId];
       if (requestedMemberIds && requestedMemberIds.length > 0) {
@@ -708,6 +723,7 @@ module.exports = function (app: any) {
       const book = new XenBudgetBook({
         name,
         default_currency: default_currency || "CAD",
+        timezone: timezone || "UTC",
         created_by: userId,
         members,
         // Starter categories so budgets and imports have something to work with on day
@@ -763,10 +779,17 @@ module.exports = function (app: any) {
       try {
         const book = await loadBookForMember(req, res);
         if (!book) return;
-        const { name, default_currency, archived } = req.body;
+        const { name, default_currency, archived, timezone } = req.body;
         if (name !== undefined) book.name = name;
         if (default_currency !== undefined) book.default_currency = default_currency;
         if (archived !== undefined) book.archived = archived;
+        // Dates are anchored to the book's timezone, so only the owner may change it.
+        if (timezone !== undefined) {
+          if (book.created_by !== callerId(req)) {
+            return res.status(403).json({ status: false, message: "Only the book owner can change its timezone" });
+          }
+          book.timezone = timezone;
+        }
         await book.save();
         await book.populate("members", "username avatar");
         broadcastBook(book);
@@ -1184,6 +1207,7 @@ module.exports = function (app: any) {
         const book = new XenBudgetBook({
           name: payload.book.name,
           default_currency: payload.book.default_currency || "CAD",
+          timezone: payload.book.timezone || "UTC",
           created_by: userId,
           members,
           categories: stripIds(payload.book.categories),
@@ -1383,7 +1407,7 @@ module.exports = function (app: any) {
             type: ruled.type,
             amount: ruled.amount,
             currency: row.currency || book.default_currency,
-            date: ruled.date,
+            date: bookDateToUtc(ruled.date, book.timezone),
             description: ruled.description,
             original_description: ruled.original_description || row.description,
             categories: evenCategoryWeights(ruled.categories, ruled.amount),
@@ -2104,7 +2128,8 @@ module.exports = function (app: any) {
         }
 
         const amount = ruled.amount;
-        const date = ruled.date;
+        // Anchor the picked day to the book's timezone.
+        const date = bookDateToUtc(ruled.date, book.timezone);
         const item = new XenBudgetItem({
           book_id: book._id,
           type: ruled.type,
@@ -2125,7 +2150,7 @@ module.exports = function (app: any) {
           share_type: shares.share_type,
           shares: shares.shares,
           source: "manual",
-          import_hash: computeImportHash(date, amount, ruled.description),
+          import_hash: computeImportHash(ruled.date, amount, ruled.description),
           created_by: userId,
         });
         await item.save();
@@ -2151,7 +2176,7 @@ module.exports = function (app: any) {
         if (body.type !== undefined) item.type = body.type;
         if (body.amount !== undefined) item.amount = roundMoney(body.amount);
         if (body.currency !== undefined) item.currency = body.currency;
-        if (body.date !== undefined) item.date = new Date(body.date);
+        if (body.date !== undefined) item.date = bookDateToUtc(new Date(body.date), book.timezone);
         if (body.description !== undefined) item.description = body.description;
         if (body.notes !== undefined) item.notes = body.notes;
         if (body.flags !== undefined) item.flags = body.flags;
@@ -2222,6 +2247,96 @@ module.exports = function (app: any) {
       } catch (error) {
         console.error("Error deleting item:", error);
         res.status(500).json({ status: false, message: "Failed to delete item" });
+      }
+    });
+
+  // POST /api/xenbudget/books/:bookId/items/:itemId/images - Upload item images
+  app.post("/api/xenbudget/books/:bookId/items/:itemId/images",
+    validateParams(xenBudgetItemParamSchema), uploadXenBudgetImages.array("images", MAX_XENBUDGET_IMAGES_PER_ITEM),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const item = await XenBudgetItem.findOne({ _id: req.params.itemId, book_id: book._id });
+        if (!item) return res.status(404).json({ status: false, message: "Item not found" });
+
+        const files = req.files as Express.Multer.File[] | undefined;
+        if (!files || files.length === 0) {
+          return res.status(400).json({ status: false, message: "No images provided" });
+        }
+
+        if (!item.images) item.images = [];
+        if (item.images.length + files.length > MAX_XENBUDGET_IMAGES_PER_ITEM) {
+          return res.status(400).json({ status: false, message: `Cannot exceed ${MAX_XENBUDGET_IMAGES_PER_ITEM} images per item` });
+        }
+
+        for (const file of files) {
+          const filename = generateUniqueFilename(file.originalname);
+          const gcsPath = `xenbudget-images/${req.params.bookId}/${req.params.itemId}/${filename}`;
+          await uploadToGCS(file.buffer, gcsPath, file.mimetype, true);
+          item.images.push({ gcs_path: gcsPath });
+        }
+
+        await item.save();
+        broadcastBook(book);
+        res.json({ status: true, message: "Images uploaded", data: serializeItem(item) });
+      } catch (error) {
+        console.error("Error uploading item images:", error);
+        res.status(500).json({ status: false, message: "Failed to upload images" });
+      }
+    });
+
+  // DELETE /api/xenbudget/books/:bookId/items/:itemId/images/:imageId - Delete an item image
+  app.delete("/api/xenbudget/books/:bookId/items/:itemId/images/:imageId",
+    validateParams(xenBudgetItemImageParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const item = await XenBudgetItem.findOne({ _id: req.params.itemId, book_id: book._id });
+        if (!item) return res.status(404).json({ status: false, message: "Item not found" });
+
+        const imageIndex = (item.images || []).findIndex((img: any) => img._id.toString() === req.params.imageId);
+        if (imageIndex === -1) {
+          return res.status(404).json({ status: false, message: "Image not found" });
+        }
+
+        await deleteFromGCS(item.images[imageIndex].gcs_path, true).catch(() => { });
+        item.images.splice(imageIndex, 1);
+        await item.save();
+        broadcastBook(book);
+        res.json({ status: true, message: "Image deleted", data: serializeItem(item) });
+      } catch (error) {
+        console.error("Error deleting item image:", error);
+        res.status(500).json({ status: false, message: "Failed to delete image" });
+      }
+    });
+
+  // GET /api/xenbudget/books/:bookId/items/:itemId/image-urls - Signed URLs for item images
+  app.get("/api/xenbudget/books/:bookId/items/:itemId/image-urls",
+    validateParams(xenBudgetItemParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const item = await XenBudgetItem.findOne({ _id: req.params.itemId, book_id: book._id });
+        if (!item) return res.status(404).json({ status: false, message: "Item not found" });
+
+        if (!item.images || item.images.length === 0) {
+          return res.json({ status: true, data: [] });
+        }
+
+        const signedUrls = await Promise.all(
+          item.images.map(async (img: any) => ({
+            _id: img._id.toString(),
+            signedUrl: await generateSignedUrl(img.gcs_path, 15),
+          }))
+        );
+
+        res.json({ status: true, data: signedUrls });
+      } catch (error) {
+        console.error("Error generating signed URLs:", error);
+        res.status(500).json({ status: false, message: "Failed to generate image URLs" });
       }
     });
 };

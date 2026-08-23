@@ -62,7 +62,7 @@ function dateRange(value: DateFilterValue): { from?: string; to?: string } {
 }
 
 export default function BookItems() {
-    const { book, onEditItem } = useOutletContext<BookDetailContext>();
+    const { book, onPreviewItem } = useOutletContext<BookDetailContext>();
     // "View items" on a budget hands over that budget's scope and window, so the tab opens
     // showing the items the bar was measuring rather than everything in the book.
     const seed = (useLocation().state as { budgetFilter?: BudgetFilterSeed } | null)?.budgetFilter;
@@ -132,6 +132,44 @@ export default function BookItems() {
         <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
             <Box sx={{ px: 2, pt: 2, flexShrink: 0 }}>
                 <Stack spacing={1.5} sx={{ mb: 2 }}>
+                    {needsReviewCount > 0 && (
+                        <Alert
+                            severity="error"
+                            variant="outlined"
+                            sx={{ alignItems: "center" }}
+                            action={
+                                <Button
+                                    size="small"
+                                    variant="contained"
+                                    color="error"
+                                    startIcon={<FactCheckIcon />}
+                                    onClick={toggleNeedsReviewFilter}
+                                >
+                                    {needsReviewFilterActive ? "Clear" : "Show"}
+                                </Button>
+                            }
+                        >
+                            {needsReviewCount} Flagged
+                        </Alert>
+                    )}
+                    {reviewCount > 0 && (
+                        <Alert
+                            severity="warning"
+                            variant="outlined"
+                            sx={{ alignItems: "center" }}
+                            action={
+                                <Button
+                                    size="small" variant="contained" color="warning"
+                                    startIcon={<FactCheckIcon />}
+                                    onClick={() => setReviewOpen(true)}
+                                >
+                                    Review
+                                </Button>
+                            }
+                        >
+                            {reviewCount} Missing Category
+                        </Alert>
+                    )}
                     <TextField
                         size="small" fullWidth placeholder="Search descriptions"
                         value={search} onChange={(e) => setSearch(e.target.value)}
@@ -207,44 +245,6 @@ export default function BookItems() {
                             ))}
                         </Stack>
                     )}
-                    {needsReviewCount > 0 && (
-                        <Alert
-                            severity="error"
-                            variant="outlined"
-                            sx={{ alignItems: "center" }}
-                            action={
-                                <Button
-                                    size="small"
-                                    variant="contained"
-                                    color="error"
-                                    startIcon={<FactCheckIcon />}
-                                    onClick={toggleNeedsReviewFilter}
-                                >
-                                    {needsReviewFilterActive ? "Clear" : "Show"}
-                                </Button>
-                            }
-                        >
-                            {needsReviewCount} Flagged
-                        </Alert>
-                    )}
-                    {reviewCount > 0 && (
-                        <Alert
-                            severity="warning"
-                            variant="outlined"
-                            sx={{ alignItems: "center" }}
-                            action={
-                                <Button
-                                    size="small" variant="contained" color="warning"
-                                    startIcon={<FactCheckIcon />}
-                                    onClick={() => setReviewOpen(true)}
-                                >
-                                    Review
-                                </Button>
-                            }
-                        >
-                            {reviewCount} Missing Category
-                        </Alert>
-                    )}
                 </Stack>
             </Box>
 
@@ -281,7 +281,7 @@ export default function BookItems() {
                                             members={book.members}
                                             categoryRegistry={book.categories}
                                             flagRegistry={book.flags}
-                                            onClick={onEditItem}
+                                            onClick={onPreviewItem}
                                         />
                                     ))}
                                 </Stack>

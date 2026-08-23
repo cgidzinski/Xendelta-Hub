@@ -8,7 +8,7 @@ import { limitState, limitColor } from "../budget/budgetKind";
 import { CategoryChip } from "../LabelChip";
 import type { XenBudgetLabel } from "../../../../../hooks/xenbudget/types";
 import { cardSx, sectionLabelSx } from "../../../../../components/ui/surfaceStyles";
-import { INCOME_COLOR } from "../../../../../components/ui/chartColors";
+import { EXPENSE_COLOR, INCOME_COLOR } from "../../../../../components/ui/chartColors";
 
 interface CategoryReportTableProps {
     report: CategoryReport;
@@ -107,35 +107,27 @@ export default function CategoryReportTable({
 
     const columnCount = 1 + periodKeys.length + 1 + (hasBudgets ? 2 : 0);
 
-    /**
-     * A measure across every column. `first` draws the rule that separates the bottom
-     * block from the categories; `signed` marks the figures that can legitimately go
-     * either way, where the sign is the whole point.
-     */
+    /** One summary line across every column, grouped under a section heading. */
     const totalRow = (
         label: string,
         totals: PeriodTotals,
-        opts: { first?: boolean; signed?: boolean; strong?: boolean; color?: string } = {},
+        opts: { signed?: boolean; strong?: boolean; color?: string; negative?: "red" | "green" } = {},
     ) => {
-        const border = opts.first
-            ? {
-                borderTop: "2px solid",
-                borderTopColor: (theme: Theme) => alpha(theme.palette.text.primary, 0.24),
-            }
-            : {};
         const tint = (v: number) => {
             if (opts.color) return opts.color;
+            if (opts.negative === "red") return v < 0 ? "error.main" : "text.primary";
+            if (opts.negative === "green") return v < 0 ? INCOME_COLOR : "text.primary";
             if (!opts.signed) return "text.primary";
             return v < 0 ? "error.main" : INCOME_COLOR;
         };
         const show = (v: number) => {
             if (v === 0) return round(0);
-            return opts.signed && v < 0 ? `−${round(-v)}` : round(v);
+            return (opts.signed || opts.negative) && v < 0 ? `−${round(-v)}` : round(v);
         };
 
         return (
             <TableRow key={label}>
-                <TableCell sx={{ ...stickySx, ...border, fontWeight: 600 }}>
+                <TableCell sx={{ ...stickySx, fontWeight: 600 }}>
                     <Typography variant="caption" sx={{ ...sectionLabelSx, color: "text.secondary" }}>
                         {label}
                     </Typography>
@@ -145,7 +137,7 @@ export default function CategoryReportTable({
                     return (
                         <TableCell
                             key={periodKey} align="right"
-                            sx={{ ...border, color: tint(value) }}
+                            sx={{ color: tint(value) }}
                         >
                             {show(value)}
                         </TableCell>
@@ -154,7 +146,6 @@ export default function CategoryReportTable({
                 <TableCell
                     align="right"
                     sx={{
-                        ...border,
                         color: tint(totals.total),
                         fontWeight: opts.strong ? 700 : 600,
                     }}
@@ -164,11 +155,38 @@ export default function CategoryReportTable({
                 {/* The Budgeted and Left columns are a category-level comparison; the
                 budget's own totals are the rows themselves, so repeating them here would
                 just be the same number twice. */}
-                {hasBudgets && <TableCell sx={border} />}
-                {hasBudgets && <TableCell sx={border} />}
+                {hasBudgets && <TableCell />}
+                {hasBudgets && <TableCell />}
             </TableRow>
         );
     };
+
+    /** Element-wise subtraction for the derived Net/Spend lines. */
+    const minus = (a: PeriodTotals, b: PeriodTotals): PeriodTotals => ({
+        byPeriod: Object.fromEntries(
+            periodKeys.map((k) => [k, (a.byPeriod[k] ?? 0) - (b.byPeriod[k] ?? 0)]),
+        ),
+        total: a.total - b.total,
+    });
+
+    /** A full-width heading that separates one summary section from the next. */
+    const sectionHeader = (title: string, first: boolean) => (
+        <TableRow key={`section-${title}`}>
+            <TableCell
+                colSpan={columnCount}
+                sx={{
+                    borderBottom: "none",
+                    pt: first ? 2 : 1.5,
+                    pb: 0.5,
+                    borderTop: first ? "2px solid" : "1px solid",
+                    borderTopColor: (theme: Theme) =>
+                        alpha(theme.palette.text.primary, first ? 0.24 : 0.12),
+                }}
+            >
+                <Typography variant="caption" sx={sectionLabelSx}>{title}</Typography>
+            </TableCell>
+        </TableRow>
+    );
 
     return (
         <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
@@ -221,26 +239,22 @@ export default function CategoryReportTable({
                             </>
                         )}
 
-                        {/* The bottom line, carried across the same columns as everything
-                        above it - a year's spending is worth reading month by month, and
-                        so is what it left over. */}
-                        {/* Caps and goals never share a line: adding a spending ceiling
-                        to a savings floor produces a number that means nothing. */}
-                        {summary.capped.total > 0 && (
-                            <>
-                                {totalRow("Spending caps", summary.capped, { first: true })}
-                                {totalRow("Caps left", summary.capsLeft, { signed: true })}
-                            </>
-                        )}
-                        {hasGoals && (
-                            <>
-                                {totalRow("Savings goals", summary.goals, { first: summary.capped.total <= 0 })}
-                                {totalRow("Saved", summary.saved, { color: INCOME_COLOR })}
-                            </>
-                        )}
-                        {totalRow("Spent", summary.spent, { first: !hasBudgets })}
+                        {/* The bottom line, grouped into three sections, each a heading
+                        and three lines, always shown even before any budget or goal
+                        exists. Savings and Budget stay apart deliberately: adding a
+                        spending ceiling to a savings floor means nothing. */}
+                        {sectionHeader("Savings", true)}
+                        {totalRow("Save", summary.saved, { color: INCOME_COLOR })}
+                        {totalRow("Goal", summary.goals)}
+                        {totalRow("Left to save", minus(summary.goals, summary.saved), { negative: "green" })}
+                        {sectionHeader("Budget", false)}
+                        {totalRow("Spend", minus(summary.capped, summary.capsLeft))}
+                        {totalRow("Cap", summary.capped)}
+                        {totalRow("Left in budget", summary.capsLeft, { negative: "red" })}
+                        {sectionHeader("Overall", false)}
                         {totalRow("Income", summary.income, { color: INCOME_COLOR })}
-                        {totalRow("Net", summary.net, { signed: true, strong: true })}
+                        {totalRow("Spent", summary.spent, { color: EXPENSE_COLOR })}
+                        {totalRow("Balance", summary.net, { signed: true, strong: true })}
                     </TableBody>
                 </Table>
             </Box>

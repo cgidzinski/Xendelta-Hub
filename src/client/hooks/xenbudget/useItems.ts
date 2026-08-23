@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import type { XenBudgetItem, ItemsPage, CreateItemInput, UpdateItemInput } from "./types";
 
@@ -74,6 +74,28 @@ export function useXenBudgetItemMutations(bookId: string) {
         onSuccess: invalidate,
     });
 
+    const uploadImagesMutation = useMutation({
+        mutationFn: async ({ itemId, files }: { itemId: string; files: File[] }) => {
+            const formData = new FormData();
+            files.forEach((f) => formData.append("images", f));
+            await apiClient.post(`/api/xenbudget/books/${bookId}/items/${itemId}/images`, formData);
+        },
+        onSuccess: (_data, { itemId }) => {
+            invalidate();
+            queryClient.invalidateQueries({ queryKey: ["xenbudget", "item-image-urls", bookId, itemId] });
+        },
+    });
+
+    const deleteImageMutation = useMutation({
+        mutationFn: async ({ itemId, imageId }: { itemId: string; imageId: string }) => {
+            await apiClient.delete(`/api/xenbudget/books/${bookId}/items/${itemId}/images/${imageId}`);
+        },
+        onSuccess: (_data, { itemId }) => {
+            invalidate();
+            queryClient.invalidateQueries({ queryKey: ["xenbudget", "item-image-urls", bookId, itemId] });
+        },
+    });
+
     return {
         createItemAsync: createMutation.mutateAsync,
         isCreating: createMutation.isPending,
@@ -81,7 +103,24 @@ export function useXenBudgetItemMutations(bookId: string) {
         isUpdating: updateMutation.isPending,
         deleteItemAsync: deleteMutation.mutateAsync,
         isDeleting: deleteMutation.isPending,
+        uploadItemImages: uploadImagesMutation.mutateAsync,
+        isUploadingImages: uploadImagesMutation.isPending,
+        deleteItemImage: deleteImageMutation.mutateAsync,
+        isDeletingImage: deleteImageMutation.isPending,
     };
+}
+
+/** Signed display URLs for an item's images, fetched on demand (short-lived GCS URLs). */
+export function useXenBudgetItemImageUrls(bookId: string, itemId: string | undefined, imageCount: number) {
+    return useQuery<{ _id: string; signedUrl: string }[]>({
+        queryKey: ["xenbudget", "item-image-urls", bookId, itemId],
+        queryFn: async () => {
+            const res = await apiClient.get(`/api/xenbudget/books/${bookId}/items/${itemId}/image-urls`);
+            return res.data.data;
+        },
+        enabled: !!itemId && imageCount > 0,
+        staleTime: 10 * 60 * 1000, // 10 min — signed URLs valid for 15 min
+    });
 }
 
 /**

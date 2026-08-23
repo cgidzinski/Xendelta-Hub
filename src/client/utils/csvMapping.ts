@@ -133,11 +133,11 @@ export function detectDateFormat(samples: string[]): "ymd" | "dmy" | "mdy" {
 }
 
 /**
- * Parses a date cell into a UTC-midnight Date.
+ * Parses a date cell into a date-only Date anchored at UTC midnight.
  *
- * Anchoring at midnight UTC rather than local time keeps an imported date on the day the
- * statement says: a local-midnight Date west of Greenwich serialises to the previous day
- * in ISO, which would file a transaction into the wrong month at a month boundary.
+ * This is a *calendar day*, not an instant: it's the wire value the client sends, and the
+ * server anchors it to the book's own timezone before storing. Keeping it as UTC midnight
+ * here means the day never shifts as it crosses timezones on the way there.
  */
 export function parseDate(raw: string | undefined | null, order: "ymd" | "dmy" | "mdy"): Date | null {
     if (!raw) return null;

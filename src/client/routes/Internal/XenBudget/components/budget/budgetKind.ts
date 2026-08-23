@@ -77,6 +77,16 @@ export function limitNoun(kind: BudgetKind): string {
     return kind === "goal" ? "goal" : "limit";
 }
 
+const PERIOD_LABELS: Record<string, string> = {
+    weekly: "weekly", monthly: "monthly", quarterly: "quarterly",
+    yearly: "yearly", custom: "one-off",
+};
+
+/** A budget's period as a word, e.g. "monthly" or "one-off" for a custom range. */
+export function periodLabel(period: string): string {
+    return PERIOD_LABELS[period] || period;
+}
+
 /**
  * Whether spending faster than an even pace is a problem.
  *

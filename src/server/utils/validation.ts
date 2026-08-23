@@ -380,6 +380,12 @@ export const xenBudgetItemParamSchema = z.object({
   itemId: objectIdSchema,
 });
 
+export const xenBudgetItemImageParamSchema = z.object({
+  bookId: objectIdSchema,
+  itemId: objectIdSchema,
+  imageId: objectIdSchema,
+});
+
 export const xenBudgetMemberParamSchema = z.object({
   bookId: objectIdSchema,
   userId: objectIdSchema,
@@ -389,12 +395,14 @@ export const createXenBudgetBookSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name too long"),
   memberIds: z.array(objectIdSchema).optional(),
   default_currency: z.string().max(10).optional(),
+  timezone: timezoneSchema.optional(),
 });
 
 export const updateXenBudgetBookSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   default_currency: z.string().max(10).optional(),
   archived: z.boolean().optional(),
+  timezone: timezoneSchema.optional(),
 });
 
 export const addXenBudgetMembersSchema = z.object({
@@ -444,8 +452,7 @@ export const xenBudgetRestoreSchema = z.object({
   format_version: z.number().int().min(1).max(1, "That backup was made by a newer version of XenBudget"),
   book: z.object({
     name: z.string().min(1).max(100),
-    // Accepted but ignored: books no longer carry a timezone, and an older backup
-    // shouldn't fail to restore just because it has one.
+    // Restored onto the new book; absent on older backups, which fall back to UTC.
     timezone: z.string().max(64).optional(),
     default_currency: z.string().max(10).optional(),
     categories: z.array(z.any()).max(500).optional(),
