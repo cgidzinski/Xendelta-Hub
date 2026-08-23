@@ -24,7 +24,14 @@ jobs:
           git fetch origin ${{ github.ref_name }}
           git checkout ${{ github.ref_name }}
           git reset --hard origin/${{ github.ref_name }}
+          SHA=$(git rev-parse HEAD)
           npm ci
-          npm run build
+          VITE_BUGSNAG_APP_VERSION="$SHA" npm run build
+          npx bugsnag-source-maps upload-browser \
+            --api-key "$VITE_BUGSNAG_API_KEY" \
+            --app-version "$SHA" \
+            --directory ./dist \
+            --base-url "https://staging.evg31337.com/"
+          find dist -name "*.map" -delete
           pm2 restart xenhub-staging
-          echo "Deployed $(git rev-parse HEAD) (branch ${{ github.ref_name }}) to staging"
+          echo "Deployed $SHA (branch ${{ github.ref_name }}) to staging"
