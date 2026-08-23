@@ -182,12 +182,6 @@ export default function BookItems() {
                         }}
                     />
                     <Stack direction="row" spacing={1}>
-                        <Button
-                            size="small" variant="outlined" startIcon={<CalendarMonthIcon />}
-                            onClick={() => setDateModalOpen(true)} sx={{ flexShrink: 0 }}
-                        >
-                            {dateFilterLabel(dateValue)}
-                        </Button>
                         <Autocomplete
                             multiple disableCloseOnSelect size="small" fullWidth options={filterOptions}
                             value={selectedFilters} onChange={(_, v) => setSelectedFilters(v)}
@@ -228,6 +222,12 @@ export default function BookItems() {
                                 />
                             )}
                         />
+                        <Button
+                            size="small" variant="outlined" startIcon={<CalendarMonthIcon />}
+                            onClick={() => setDateModalOpen(true)} sx={{ flexShrink: 0 }}
+                        >
+                            {dateFilterLabel(dateValue)}
+                        </Button>
                     </Stack>
                     {book.categories.length > 0 && (
                         <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>

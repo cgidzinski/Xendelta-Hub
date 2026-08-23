@@ -118,30 +118,18 @@ export default function TimePeriodFilter({
         <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>
             <Box sx={{ flexGrow: 1 }} />
 
-            <Box
+            <Button
+                size="small" variant="outlined" startIcon={<CalendarMonthIcon />}
                 onClick={() => {
                     setGridYear(mode.kind === "month" || mode.kind === "year" ? mode.anchor.getFullYear() : now.getFullYear());
                     setCustomFrom(mode.kind === "custom" ? mode.from : null);
                     setCustomTo(mode.kind === "custom" ? mode.to : null);
                     setPeriodOpen(true);
                 }}
-                sx={{
-                    display: "inline-flex", alignItems: "center", flexShrink: 0,
-                    border: "1px solid", borderColor: "divider", borderRadius: 2, height: 36, px: 1.5,
-                    cursor: "pointer",
-                }}
+                sx={{ flexShrink: 0 }}
             >
-                <CalendarMonthIcon sx={{ fontSize: 18 }} />
-                <Typography
-                    component="span" variant="body2" noWrap
-                    sx={{
-                        fontSize: 14, lineHeight: 1, fontVariantNumeric: "tabular-nums",
-                        minWidth: 72, maxWidth: 120, textAlign: "center", ml: 0.5,
-                    }}
-                >
-                    {resolved.label}
-                </Typography>
-            </Box>
+                {resolved.label}
+            </Button>
 
             <Dialog open={periodOpen} onClose={() => setPeriodOpen(false)} maxWidth="sm" fullWidth>
                 <Box sx={{ p: 3 }}>
