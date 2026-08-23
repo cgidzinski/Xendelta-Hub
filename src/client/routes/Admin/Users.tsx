@@ -27,6 +27,9 @@ import {
   Tab,
   Grid,
   Tooltip,
+  FormControlLabel,
+  Checkbox,
+  FormGroup,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
@@ -37,10 +40,12 @@ import InventoryIcon from "@mui/icons-material/Inventory2";
 import SettingsIcon from "@mui/icons-material/Settings";
 import PersonIcon from "@mui/icons-material/Person";
 import StarsIcon from "@mui/icons-material/Stars";
+import NotificationsIcon from "@mui/icons-material/Notifications";
+import SendIcon from "@mui/icons-material/Send";
 import { useSnackbar } from "notistack";
 import { useTitle } from "../../hooks/useTitle";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
-import { useAdminUsers, User } from "../../hooks/admin/useAdminUsers";
+import { useAdminUsers, User, NotifyChannel } from "../../hooks/admin/useAdminUsers";
 import { formatFileSize } from "../../utils/fileUtils";
 
 const AVAILABLE_ROLES = ["admin", "user"];
@@ -68,6 +73,8 @@ export default function Users() {
     isGivingItem,
     removeItem,
     isRemovingItem,
+    sendUserNotification,
+    isSendingNotification,
     refetch,
   } = useAdminUsers();
   const [searchQuery, setSearchQuery] = useState("");
@@ -78,6 +85,10 @@ export default function Users() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedGiftItem, setSelectedGiftItem] = useState<string>("");
   const [activeTab, setActiveTab] = useState(0);
+  const [notifyTitle, setNotifyTitle] = useState("");
+  const [notifyMessage, setNotifyMessage] = useState("");
+  const [notifyLink, setNotifyLink] = useState("");
+  const [notifyChannels, setNotifyChannels] = useState<NotifyChannel[]>(["inapp", "socket", "email", "push"]);
 
   const filteredUsers = useMemo(() => {
     if (searchQuery.trim() === "") {
@@ -106,7 +117,45 @@ export default function Users() {
     setSelectedUser(user);
     setEditingRoles(user.roles || []);
     setEditingQuota(user.xenbox?.spaceAllowed ? formatFileSize(user.xenbox.spaceAllowed) : "");
+    setNotifyTitle("");
+    setNotifyMessage("");
+    setNotifyLink("");
+    setNotifyChannels(["inapp", "socket", "email", "push"]);
     setUserModalOpen(true);
+  };
+
+  const toggleNotifyChannel = (channel: NotifyChannel) => {
+    setNotifyChannels((prev) =>
+      prev.includes(channel) ? prev.filter((c) => c !== channel) : [...prev, channel]
+    );
+  };
+
+  const handleSendNotification = async () => {
+    if (!selectedUser || !notifyTitle.trim() || !notifyMessage.trim() || notifyChannels.length === 0) return;
+
+    try {
+      const result = await sendUserNotification(selectedUser._id, {
+        title: notifyTitle.trim(),
+        message: notifyMessage.trim(),
+        link: notifyLink.trim() || undefined,
+        channels: notifyChannels,
+      });
+
+      const parts: string[] = [];
+      if (notifyChannels.includes("inapp")) parts.push(`In-app: ${result.inapp ? "sent" : "failed"}`);
+      if (notifyChannels.includes("socket")) parts.push(`Socket: ${result.socket ? "sent" : "failed"}`);
+      if (notifyChannels.includes("email")) parts.push(`Email: ${result.email ? "sent" : "skipped"}`);
+      if (notifyChannels.includes("push")) {
+        parts.push(`Push: ${result.push.sent} sent${result.push.pruned ? `, ${result.push.pruned} pruned` : ""}`);
+      }
+
+      enqueueSnackbar(parts.join(" \u00b7 "), { variant: "info" });
+      setNotifyTitle("");
+      setNotifyMessage("");
+      setNotifyLink("");
+    } catch (error: any) {
+      enqueueSnackbar(error?.response?.data?.message || "Failed to send notification", { variant: "error" });
+    }
   };
 
   const handleCloseModal = () => {
@@ -399,6 +448,7 @@ export default function Users() {
             <Tab icon={<PersonIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Info" />
             <Tab icon={<InventoryIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Inventory" />
             <Tab icon={<SettingsIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Misc" />
+            <Tab icon={<NotificationsIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Notify" />
           </Tabs>
           <DialogContent sx={{ p: 3 }}>
             {activeTab === 0 && selectedUser && (
@@ -586,6 +636,79 @@ export default function Users() {
                     Delete User
                   </Button>
                 </Box>
+              </Box>
+            )}
+
+            {activeTab === 3 && selectedUser && (
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 2, maxWidth: 480 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Send a one-off notification to {selectedUser.username} on the channels below \u2014
+                  useful for testing delivery (in-app row, live socket update, email, push).
+                </Typography>
+
+                <TextField
+                  label="Title"
+                  size="small"
+                  value={notifyTitle}
+                  onChange={(e) => setNotifyTitle(e.target.value)}
+                  fullWidth
+                />
+                <TextField
+                  label="Message"
+                  size="small"
+                  value={notifyMessage}
+                  onChange={(e) => setNotifyMessage(e.target.value)}
+                  multiline
+                  minRows={2}
+                  fullWidth
+                />
+                <TextField
+                  label="Link (optional)"
+                  size="small"
+                  placeholder="/internal/..."
+                  value={notifyLink}
+                  onChange={(e) => setNotifyLink(e.target.value)}
+                  fullWidth
+                />
+
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                    Channels
+                  </Typography>
+                  <FormGroup row>
+                    {(["inapp", "socket", "email", "push"] as NotifyChannel[]).map((channel) => (
+                      <FormControlLabel
+                        key={channel}
+                        control={
+                          <Checkbox
+                            size="small"
+                            checked={notifyChannels.includes(channel)}
+                            onChange={() => toggleNotifyChannel(channel)}
+                          />
+                        }
+                        label={
+                          { inapp: "In-app", socket: "Socket", email: "Email", push: "Push" }[channel]
+                        }
+                      />
+                    ))}
+                  </FormGroup>
+                </Box>
+
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<SendIcon />}
+                  onClick={handleSendNotification}
+                  disabled={
+                    isSendingNotification ||
+                    !notifyTitle.trim() ||
+                    !notifyMessage.trim() ||
+                    notifyChannels.length === 0
+                  }
+                  sx={{ alignSelf: "flex-start" }}
+                >
+                  {isSendingNotification ? "Sending..." : "Send"}
+                </Button>
               </Box>
             )}
           </DialogContent>

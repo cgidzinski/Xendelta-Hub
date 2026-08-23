@@ -82,7 +82,7 @@ export default function Profile() {
   const [language, setLanguage] = useState("en");
 
   const { enqueueSnackbar } = useSnackbar();
-  const { profile, isLoading, refetch, updateProfile } = useUserProfile();
+  const { profile, isLoading, refetch, updateProfile, isUpdating: isUpdatingProfile } = useUserProfile();
   const { logout } = useAuth();
   const { uploadAvatar, isUploading: isUploadingAvatar } = useUserAvatar();
   const navigate = useNavigate();
@@ -115,6 +115,16 @@ export default function Profile() {
     } else {
       const ok = await unsubscribePush();
       if (ok) enqueueSnackbar("Push notifications disabled on this device", { variant: "info" });
+    }
+  };
+
+  const handleEmailNotificationsToggle = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const checked = event.target.checked;
+    const ok = await updateProfile({ emailNotifications: checked });
+    if (ok) {
+      enqueueSnackbar(checked ? "Email notifications enabled" : "Email notifications disabled", {
+        variant: "success",
+      });
     }
   };
 
@@ -319,6 +329,22 @@ export default function Profile() {
                       {pushError}
                     </Typography>
                   )}
+
+                  <Divider sx={{ my: 2 }} />
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={profile?.emailNotifications ?? true}
+                        onChange={handleEmailNotificationsToggle}
+                        disabled={isUpdatingProfile}
+                      />
+                    }
+                    label="Email notifications"
+                  />
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    Get emailed for XenSplit expenses, settlements, and other account activity
+                  </Typography>
                 </CardContent>
               </Card>
             </Grid>

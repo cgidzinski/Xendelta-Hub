@@ -4,7 +4,7 @@ const { User } = require("../models/user");
 import { authenticateToken } from "../middleware/auth";
 import { requireAdmin } from "../middleware/admin";
 import { SocketManager } from "../infrastructure/SocketManager";
-import { validate, createNotificationSchema } from "../utils/validation";
+import { validate, createNotificationSchema, adminNotifyUserSchema } from "../utils/validation";
 import { notify } from "../utils/notificationUtils";
 import { TIMEOUTS } from "../constants";
 import { AuthenticatedRequest } from "../types";
@@ -183,6 +183,32 @@ module.exports = function (app: express.Application) {
           errorCount,
           pushCount,
         },
+      });
+    }
+  );
+
+  // Admin: Send a one-off notification to a single user on chosen channels — used by the
+  // "Notify" tab in the admin user panel to test/message a specific account.
+  app.post(
+    "/api/admin/notifications/user/:userId",
+    authenticateToken,
+    requireAdmin,
+    validate(adminNotifyUserSchema),
+    async function (req: express.Request, res: express.Response) {
+      const { userId } = req.params;
+      const { title, message, link, channels } = req.body;
+
+      const targetUser = await User.findById(userId).select("_id").exec();
+      if (!targetUser) {
+        return res.status(404).json({ status: false, message: "User not found" });
+      }
+
+      const result = await notify(userId, { title, message, link, channels });
+
+      return res.json({
+        status: true,
+        message: "Notification sent",
+        data: { result },
       });
     }
   );

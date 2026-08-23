@@ -17,6 +17,8 @@ export interface UserProfile {
   pinnedApps: string[];
   /** Preferred IANA zone; "" means follow the browser. */
   timezone: string;
+  /** Whether the account receives emailed notifications (opt-out; default true). */
+  emailNotifications: boolean;
   xenbox: {
     fileCount: number;
     spaceUsed: number;
@@ -29,6 +31,7 @@ export interface UpdateProfileData {
   username?: string;
   /** "" clears the preference and falls back to the browser's zone. */
   timezone?: string;
+  emailNotifications?: boolean;
 }
 
 interface UseUserProfileReturn {
