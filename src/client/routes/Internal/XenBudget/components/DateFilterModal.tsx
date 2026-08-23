@@ -20,6 +20,33 @@ export interface DateFilterValue {
 
 export const DEFAULT_DATE_FILTER: DateFilterValue = { preset: "all", from: null, to: null };
 
+const PRESET_VALUES: DatePreset[] = ["all", "thisWeek", "lastWeek", "thisYear", "custom"];
+
+/** For stashing the picked range in localStorage — Dates aren't JSON-safe on their own. */
+export function serializeDateFilterValue(value: DateFilterValue): string {
+    return JSON.stringify({
+        preset: value.preset,
+        from: value.from ? value.from.toISOString() : null,
+        to: value.to ? value.to.toISOString() : null,
+    });
+}
+
+/** The other half of `serializeDateFilterValue`. Returns null for anything missing or malformed. */
+export function parseDateFilterValue(raw: string | null): DateFilterValue | null {
+    if (!raw) return null;
+    try {
+        const obj = JSON.parse(raw);
+        if (!PRESET_VALUES.includes(obj.preset)) return null;
+        return {
+            preset: obj.preset,
+            from: obj.from ? new Date(obj.from) : null,
+            to: obj.to ? new Date(obj.to) : null,
+        };
+    } catch {
+        return null;
+    }
+}
+
 const PRESETS: { label: string; value: Exclude<DatePreset, "custom"> }[] = [
     { label: "All", value: "all" },
     { label: "This week", value: "thisWeek" },

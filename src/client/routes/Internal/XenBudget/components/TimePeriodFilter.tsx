@@ -78,6 +78,31 @@ export function resolvePeriod(mode: PeriodMode): ResolvedPeriod {
 export const defaultMonthMode = (): PeriodMode => ({ kind: "month", anchor: startOfMonth(new Date()) });
 export const defaultYearMode = (): PeriodMode => ({ kind: "year", anchor: startOfYear(new Date()) });
 
+/** For stashing the picked period in localStorage — Dates aren't JSON-safe on their own. */
+export function serializePeriodMode(mode: PeriodMode): string {
+    if (mode.kind === "month" || mode.kind === "year") {
+        return JSON.stringify({ kind: mode.kind, anchor: mode.anchor.toISOString() });
+    }
+    if (mode.kind === "preset") return JSON.stringify({ kind: "preset", preset: mode.preset });
+    return JSON.stringify({ kind: "custom", from: mode.from.toISOString(), to: mode.to.toISOString() });
+}
+
+/** The other half of `serializePeriodMode`. Returns null for anything missing or malformed. */
+export function parsePeriodMode(raw: string | null): PeriodMode | null {
+    if (!raw) return null;
+    try {
+        const obj = JSON.parse(raw);
+        if (obj.kind === "month" || obj.kind === "year") return { kind: obj.kind, anchor: new Date(obj.anchor) };
+        if (obj.kind === "preset" && ["last3", "last6", "thisQuarter"].includes(obj.preset)) {
+            return { kind: "preset", preset: obj.preset };
+        }
+        if (obj.kind === "custom") return { kind: "custom", from: new Date(obj.from), to: new Date(obj.to) };
+        return null;
+    } catch {
+        return null;
+    }
+}
+
 const YEAR_GRID_SPAN = 8;
 
 interface TimePeriodFilterProps {
