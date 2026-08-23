@@ -91,21 +91,21 @@ export default function DateFilterModal({
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
             <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 Select dates
-                <IconButton size="small" onClick={onClose}>
-                    <CloseIcon fontSize="small" />
+                <IconButton onClick={onClose}>
+                    <CloseIcon />
                 </IconButton>
             </DialogTitle>
-            <DialogContent>
-                <Stack spacing={2}>
+            <DialogContent sx={{ pb: 3 }}>
+                <Stack spacing={3}>
                     <Box>
-                        <Typography variant="caption" sx={sectionLabelSx}>Quick select</Typography>
-                        <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1, mt: 1 }}>
+                        <Typography variant="subtitle2" sx={sectionLabelSx}>Quick select</Typography>
+                        <Stack direction="row" spacing={1.25} sx={{ flexWrap: "wrap", gap: 1.25, mt: 1.5 }}>
                             {PRESETS.map((p) => (
                                 <Button
-                                    key={p.value} size="small"
+                                    key={p.value}
                                     variant={value.preset === p.value ? "contained" : "outlined"}
                                     onClick={() => pickPreset(p.value)}
                                 >
@@ -116,8 +116,8 @@ export default function DateFilterModal({
                     </Box>
                     <Divider />
                     <Box>
-                        <Typography variant="caption" sx={sectionLabelSx}>Pick a month</Typography>
-                        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1, mt: 1 }}>
+                        <Typography variant="subtitle2" sx={sectionLabelSx}>Pick a month</Typography>
+                        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1.25, mt: 1.5 }}>
                             {MONTH_GRID.map((m) => {
                                 const selected = value.preset === "custom" && !!value.from && !!value.to
                                     && isSameDay(value.from, m) && isSameDay(value.to, endOfMonth(m));
@@ -126,7 +126,7 @@ export default function DateFilterModal({
                                 const isCurrent = isSameMonth(m, new Date());
                                 return (
                                     <Button
-                                        key={m.toISOString()} size="small" fullWidth
+                                        key={m.toISOString()} fullWidth
                                         variant={selected ? "contained" : "outlined"}
                                         onClick={() => pickMonth(m)}
                                         sx={!selected && isCurrent ? { color: "success.main" } : undefined}
@@ -139,8 +139,8 @@ export default function DateFilterModal({
                     </Box>
                     <Divider />
                     <Box>
-                        <Typography variant="caption" sx={sectionLabelSx}>Custom range</Typography>
-                        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                        <Typography variant="subtitle2" sx={sectionLabelSx}>Custom range</Typography>
+                        <Stack direction="row" spacing={1.25} sx={{ mt: 1.5 }}>
                             <DatePicker
                                 label="From" value={draftFrom} onChange={setDraftFrom}
                                 slotProps={{ textField: { fullWidth: true } }}
@@ -153,7 +153,7 @@ export default function DateFilterModal({
                                 here needs an extra click to take effect, so this shouldn't
                                 read as if it applies the whole dialog either. */}
                             <Button
-                                variant="contained" size="small" sx={{ flexShrink: 0 }}
+                                variant="contained" sx={{ flexShrink: 0 }}
                                 disabled={!draftFrom && !draftTo} onClick={applyCustom}
                             >
                                 Apply

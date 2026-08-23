@@ -143,33 +143,33 @@ export default function TimePeriodFilter({
                 </Typography>
             </Box>
 
-            <Dialog open={periodOpen} onClose={() => setPeriodOpen(false)} maxWidth="xs">
-                <Box sx={{ p: 1.5, width: 340 }}>
-                    <Typography variant="caption" sx={sectionLabelSx}>Quick picks</Typography>
-                    <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap", gap: 0.75, mt: 1, mb: 1.75 }}>
+            <Dialog open={periodOpen} onClose={() => setPeriodOpen(false)} maxWidth="sm" fullWidth>
+                <Box sx={{ p: 3 }}>
+                    <Typography variant="subtitle2" sx={sectionLabelSx}>Quick picks</Typography>
+                    <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1, mt: 1.25, mb: 2.5 }}>
                         <Chip
-                            label="This month" size="small" sx={{ borderRadius: 2 }}
+                            label="This month" sx={{ borderRadius: 2 }}
                             onClick={() => { onModeChange(defaultMonthMode()); setPeriodOpen(false); }}
                         />
                         <Chip
-                            label="This year" size="small" sx={{ borderRadius: 2 }}
+                            label="This year" sx={{ borderRadius: 2 }}
                             onClick={() => { onModeChange(defaultYearMode()); setPeriodOpen(false); }}
                         />
                         {showExtraPresets && (
                             <>
-                                <Chip label="Last 3 months" size="small" sx={{ borderRadius: 2 }} onClick={() => pickPreset("last3")} />
-                                <Chip label="Last 6 months" size="small" sx={{ borderRadius: 2 }} onClick={() => pickPreset("last6")} />
-                                <Chip label="This quarter" size="small" sx={{ borderRadius: 2 }} onClick={() => pickPreset("thisQuarter")} />
+                                <Chip label="Last 3 months" sx={{ borderRadius: 2 }} onClick={() => pickPreset("last3")} />
+                                <Chip label="Last 6 months" sx={{ borderRadius: 2 }} onClick={() => pickPreset("last6")} />
+                                <Chip label="This quarter" sx={{ borderRadius: 2 }} onClick={() => pickPreset("thisQuarter")} />
                             </>
                         )}
                     </Stack>
 
-                    <Typography variant="caption" sx={sectionLabelSx}>
+                    <Typography variant="subtitle2" sx={sectionLabelSx}>
                         {mode.kind === "year" ? "Pick a year" : "Pick a month"}
                     </Typography>
 
                     {mode.kind === "year" ? (
-                        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0.75, mt: 1 }}>
+                        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 1.25, mt: 1.25 }}>
                             {Array.from(
                                 { length: YEAR_GRID_SPAN },
                                 (_, i) => now.getFullYear() - YEAR_GRID_SPAN + 1 + i,
@@ -177,8 +177,8 @@ export default function TimePeriodFilter({
                                 const isSel = mode.kind === "year" && mode.anchor.getFullYear() === y;
                                 return (
                                     <Chip
-                                        key={y} label={y} size="small"
-                                        sx={{ borderRadius: 2, ...(y === now.getFullYear() && !isSel ? { color: "success.main", borderColor: "success.main" } : {}) }}
+                                        key={y} label={y}
+                                        sx={{ borderRadius: 2, height: 36, fontSize: 15, ...(y === now.getFullYear() && !isSel ? { color: "success.main", borderColor: "success.main" } : {}) }}
                                         color={isSel ? "primary" : undefined}
                                         variant={isSel ? "filled" : "outlined"}
                                         onClick={() => pickYear(y)}
@@ -188,26 +188,26 @@ export default function TimePeriodFilter({
                         </Box>
                     ) : (
                         <>
-                            <Stack direction="row" alignItems="center" justifyContent="center" spacing={1} sx={{ mt: 1, mb: 0.75 }}>
-                                <IconButton size="small" onClick={() => setGridYear((y) => y - 1)} aria-label="Previous year">
-                                    <ChevronLeftIcon fontSize="small" />
+                            <Stack direction="row" alignItems="center" justifyContent="center" spacing={1.5} sx={{ mt: 1.25, mb: 1.25 }}>
+                                <IconButton onClick={() => setGridYear((y) => y - 1)} aria-label="Previous year">
+                                    <ChevronLeftIcon />
                                 </IconButton>
-                                <Typography variant="body2" sx={{ minWidth: 40, textAlign: "center" }}>{gridYear}</Typography>
+                                <Typography variant="body1" sx={{ minWidth: 48, textAlign: "center" }}>{gridYear}</Typography>
                                 <IconButton
-                                    size="small" disabled={gridYear >= now.getFullYear()}
+                                    disabled={gridYear >= now.getFullYear()}
                                     onClick={() => setGridYear((y) => y + 1)} aria-label="Next year"
                                 >
-                                    <ChevronRightIcon fontSize="small" />
+                                    <ChevronRightIcon />
                                 </IconButton>
                             </Stack>
-                            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 0.75 }}>
+                            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1.25 }}>
                                 {Array.from({ length: 12 }, (_, m) => m).map((m) => {
                                     const isSel = mode.kind === "month" && mode.anchor.getFullYear() === gridYear && mode.anchor.getMonth() === m;
                                     const isNow = gridYear === now.getFullYear() && m === now.getMonth();
                                     return (
                                         <Chip
-                                            key={m} label={format(new Date(gridYear, m, 1), "MMM")} size="small"
-                                            sx={{ borderRadius: 2, ...(isNow && !isSel ? { color: "success.main", borderColor: "success.main" } : {}) }}
+                                            key={m} label={format(new Date(gridYear, m, 1), "MMM")}
+                                            sx={{ borderRadius: 2, height: 36, fontSize: 15, ...(isNow && !isSel ? { color: "success.main", borderColor: "success.main" } : {}) }}
                                             color={isSel ? "primary" : undefined}
                                             variant={isSel ? "filled" : "outlined"}
                                             onClick={() => pickMonth(m)}
@@ -218,10 +218,10 @@ export default function TimePeriodFilter({
                         </>
                     )}
 
-                    <Typography variant="caption" sx={{ ...sectionLabelSx, display: "block", mt: 1.75, mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{ ...sectionLabelSx, display: "block", mt: 2.5, mb: 1.25 }}>
                         Custom range
                     </Typography>
-                    <Stack direction="row" spacing={0.75} alignItems="center">
+                    <Stack direction="row" spacing={1.25} alignItems="center">
                         <DatePicker
                             label="From" value={customFrom} onChange={setCustomFrom}
                             sx={{ flex: 1 }}
@@ -231,7 +231,7 @@ export default function TimePeriodFilter({
                             sx={{ flex: 1 }}
                         />
                         <Button
-                            variant="contained" size="small" disabled={!customFrom && !customTo}
+                            variant="contained" disabled={!customFrom && !customTo}
                             onClick={applyCustom} sx={{ flexShrink: 0 }}
                         >
                             Apply
