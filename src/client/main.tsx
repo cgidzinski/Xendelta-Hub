@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import * as ReactDOM from "react-dom/client";
 import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route, Navigate } from "react-router-dom";
 import CssBaseline from "@mui/material/CssBaseline";
@@ -6,6 +7,9 @@ import { SnackbarProvider } from "notistack";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
+
+// Error monitoring
+import { ErrorBoundary } from "./config/bugsnag";
 
 // Components
 import ErrorPage from "./components/ErrorPage";
@@ -311,26 +315,30 @@ const queryClient = new QueryClient({
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Failed to find the root element");
 
+const AppErrorBoundary = ErrorBoundary ?? Fragment;
+
 ReactDOM.createRoot(rootElement).render(
-  <LocalizationProvider dateAdapter={AdapterDateFns}>
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <AuthProvider>
-          <SocketProvider>
-            <NavBarProvider>
-              <SnackbarProvider
-                maxSnack={10}
-                autoHideDuration={6000}
-                anchorOrigin={{ vertical: "top", horizontal: "right" }}
-              >
-                <RouterProvider router={router} />
-                <PWA />
-              </SnackbarProvider>
-            </NavBarProvider>
-          </SocketProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
-  </LocalizationProvider>,
+  <AppErrorBoundary>
+    <LocalizationProvider dateAdapter={AdapterDateFns}>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          <AuthProvider>
+            <SocketProvider>
+              <NavBarProvider>
+                <SnackbarProvider
+                  maxSnack={10}
+                  autoHideDuration={6000}
+                  anchorOrigin={{ vertical: "top", horizontal: "right" }}
+                >
+                  <RouterProvider router={router} />
+                  <PWA />
+                </SnackbarProvider>
+              </NavBarProvider>
+            </SocketProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </LocalizationProvider>
+  </AppErrorBoundary>,
 );

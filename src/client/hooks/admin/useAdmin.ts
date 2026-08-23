@@ -56,6 +56,10 @@ const deleteAllMessagesData = async (): Promise<DeleteMessagesResponse> => {
   return response.data.data!;
 };
 
+const triggerServerErrorRequest = async (): Promise<void> => {
+  await apiClient.post("/api/admin/debug/trigger-error");
+};
+
 // Hooks
 export const useAdmin = () => {
   // Query for verifying admin role
@@ -92,6 +96,14 @@ export const useAdmin = () => {
     },
   });
 
+  // Mutation that deliberately fails, to verify server-side Bugsnag reporting
+  const { mutateAsync: triggerServerErrorMutation, isPending: isTriggeringServerError } = useMutation({
+    mutationFn: triggerServerErrorRequest,
+    onError: () => {
+      // Expected to fail - error handled by mutation error state
+    },
+  });
+
   return {
     roles: roles || [],
     isVerifyingRole,
@@ -100,5 +112,7 @@ export const useAdmin = () => {
     isSendingNotification,
     deleteAllMessages: deleteAllMessagesMutation,
     isDeletingMessages,
+    triggerServerError: triggerServerErrorMutation,
+    isTriggeringServerError,
   };
 };

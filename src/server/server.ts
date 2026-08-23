@@ -1,4 +1,5 @@
 require("dotenv").config({ quiet: true });
+const Bugsnag = require("./config/bugsnag").default;
 
 if (process.env.MOCK_WEEABETS === "true" && process.env.NODE_ENV !== "production") {
   require("./mocks/node").startWeeabetsMock();
@@ -19,6 +20,9 @@ require("./config/passport");
 const { Server: SocketIOServer } = require("socket.io");
 
 const app = express();
+if (Bugsnag.getPlugin("express")) {
+  app.use(Bugsnag.getPlugin("express").requestHandler);
+}
 app.use(cors());
 // Increase body size limits for file uploads (100MB to accommodate blog/recipaint assets and xenbox chunks (xenbox uses 10MB chunks, ~13-14MB base64 encoded))
 app.use(express.json({ limit: '100mb' }));
@@ -97,6 +101,7 @@ require("./routes/admin/blog.ts")(app);
 require("./routes/admin/users.ts")(app);
 require("./routes/admin/messages.ts")(app);
 require("./routes/admin/casino.ts")(app);
+require("./routes/admin/debug.ts")(app);
 require("./routes/recipaint.ts")(app);
 require("./routes/xenbox.ts")(app);
 require("./routes/xenlink.ts")(app);
@@ -112,3 +117,14 @@ require("./routes/casinoGames/plinko.ts")(app);
 require("./routes/casinoGames/pachinko.ts")(app);
 require("./routes/casinoPrinter.ts")(app);
 require("./routes/casinoRanch.ts")(app);
+
+if (Bugsnag.getPlugin("express")) {
+  app.use(Bugsnag.getPlugin("express").errorHandler);
+}
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error(">>> Unhandled error:", err);
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({
+    message: process.env.NODE_ENV === "production" ? "Internal server error" : err.message,
+  });
+});

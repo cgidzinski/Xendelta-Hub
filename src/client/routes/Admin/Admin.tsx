@@ -13,6 +13,7 @@ import MailIcon from "@mui/icons-material/Mail";
 import PersonIcon from "@mui/icons-material/Person";
 import LockIcon from "@mui/icons-material/Lock";
 import DeleteIcon from "@mui/icons-material/Delete";
+import BugReportIcon from "@mui/icons-material/BugReport";
 import { useTitle } from "../../hooks/useTitle";
 import { useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
@@ -27,7 +28,17 @@ export default function Admin() {
     isSendingNotification,
     deleteAllMessages,
     isDeletingMessages,
+    triggerServerError,
+    isTriggeringServerError,
   } = useAdmin();
+  const [triggerClientError, setTriggerClientError] = useState(false);
+
+  // Thrown during render (not in the onClick handler) so it's caught by the top-level
+  // Bugsnag ErrorBoundary in main.tsx, the same way a real render-time bug would be -
+  // this blanks the page, which is the actual behavior being tested.
+  if (triggerClientError) {
+    throw new Error("Test client error triggered from Admin panel");
+  }
 
   // Periodic role verification - check every 30 seconds
   // Note: AdminRoute already handles initial admin verification, so we only do periodic checks here
@@ -82,6 +93,15 @@ export default function Admin() {
         enqueueSnackbar(error.message || "Failed to delete messages and conversations", { variant: "error" });
       },
     });
+  };
+
+  const handleTriggerServerError = async () => {
+    try {
+      await triggerServerError();
+    } catch (error) {
+      // Expected to fail - confirms the request round-tripped and was reported
+      enqueueSnackbar((error as Error).message || "Server error triggered (check Bugsnag)", { variant: "error" });
+    }
   };
 
   const demoNotifications = [
@@ -190,6 +210,41 @@ export default function Admin() {
           >
             {isDeletingMessages ? "Deleting..." : "Delete All Messages"}
           </Button>
+        </Card>
+
+        {/* Error Monitoring Card */}
+        <Card elevation={3} sx={{ p: 3, mt: 3 }}>
+          <Typography variant="h5" gutterBottom>
+            Error Monitoring
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Deliberately trigger a test error to confirm Bugsnag is capturing and reporting
+            correctly. Only reports anywhere when a Bugsnag API key is configured for this
+            environment (production/staging) - a no-op on local dev. Triggering the client
+            error blanks the page, since it tests the same top-level error boundary a real
+            render crash would hit - refresh afterward.
+          </Typography>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
+            <Button
+              variant="outlined"
+              color="warning"
+              startIcon={<BugReportIcon />}
+              onClick={() => setTriggerClientError(true)}
+              sx={{ minWidth: 200 }}
+            >
+              Trigger Client Error
+            </Button>
+            <Button
+              variant="outlined"
+              color="warning"
+              startIcon={<BugReportIcon />}
+              onClick={handleTriggerServerError}
+              disabled={isTriggeringServerError}
+              sx={{ minWidth: 200 }}
+            >
+              Trigger Server Error
+            </Button>
+          </Box>
         </Card>
 
       </Container>
