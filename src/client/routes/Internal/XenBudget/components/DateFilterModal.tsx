@@ -143,11 +143,11 @@ export default function DateFilterModal({
                         <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
                             <DatePicker
                                 label="From" value={draftFrom} onChange={setDraftFrom}
-                                slotProps={{ textField: { size: "small", fullWidth: true } }}
+                                slotProps={{ textField: { fullWidth: true } }}
                             />
                             <DatePicker
                                 label="To" value={draftTo} onChange={setDraftTo}
-                                slotProps={{ textField: { size: "small", fullWidth: true } }}
+                                slotProps={{ textField: { fullWidth: true } }}
                             />
                             {/* Its own button, not the dialog's global action — nothing else
                                 here needs an extra click to take effect, so this shouldn't

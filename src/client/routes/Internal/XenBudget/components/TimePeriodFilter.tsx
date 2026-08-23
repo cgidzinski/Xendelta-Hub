@@ -144,7 +144,7 @@ export default function TimePeriodFilter({
             </Box>
 
             <Dialog open={periodOpen} onClose={() => setPeriodOpen(false)} maxWidth="xs">
-                <Box sx={{ p: 1.5, width: 300 }}>
+                <Box sx={{ p: 1.5, width: 340 }}>
                     <Typography variant="caption" sx={sectionLabelSx}>Quick picks</Typography>
                     <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap", gap: 0.75, mt: 1, mb: 1.75 }}>
                         <Chip
@@ -224,11 +224,11 @@ export default function TimePeriodFilter({
                     <Stack direction="row" spacing={0.75} alignItems="center">
                         <DatePicker
                             label="From" value={customFrom} onChange={setCustomFrom}
-                            slotProps={{ textField: { size: "small" } }} sx={{ width: 116 }}
+                            sx={{ flex: 1 }}
                         />
                         <DatePicker
                             label="To" value={customTo} onChange={setCustomTo}
-                            slotProps={{ textField: { size: "small" } }} sx={{ width: 116 }}
+                            sx={{ flex: 1 }}
                         />
                         <Button
                             variant="contained" size="small" disabled={!customFrom && !customTo}

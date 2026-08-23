@@ -42,7 +42,7 @@ export default function TaggingSection() {
 
             <SectionCard
                 title="Flags"
-                description="Things needing attention. The built-in ones are used by imports and rules, so they can't be renamed or removed — but their colours are yours."
+                description="Things needing attention. The built-in ones are used by imports and rules, so they can't be renamed or removed."
             >
                 <LabelManager book={book} kind="flags" />
             </SectionCard>

@@ -3,7 +3,7 @@ import {
 } from "@mui/material";
 import type { SxProps, Theme } from "@mui/material";
 import type { CategoryReport, CategoryReportRow, PeriodTotals } from "./categoryReportRows";
-import { periodColumnLabels } from "./periodColumns";
+import { isCurrentPeriod, periodColumnLabels } from "./periodColumns";
 import { limitState, limitColor } from "../budget/budgetKind";
 import { CategoryChip } from "../LabelChip";
 import type { XenBudgetLabel } from "../../../../../hooks/xenbudget/types";
@@ -207,7 +207,16 @@ export default function CategoryReportTable({
                         <TableRow>
                             <TableCell sx={stickySx}>Category</TableCell>
                             {columnLabels.map((label, i) => (
-                                <TableCell key={periodKeys[i]} align="right">{label}</TableCell>
+                                <TableCell
+                                    key={periodKeys[i]} align="right"
+                                    sx={isCurrentPeriod(periodKeys[i]) ? {
+                                        fontWeight: 700,
+                                        color: "success.main",
+                                        bgcolor: (t: Theme) => alpha(t.palette.success.main, 0.08),
+                                    } : undefined}
+                                >
+                                    {label}
+                                </TableCell>
                             ))}
                             <TableCell align="right">{pivoted ? "Total" : "Spent"}</TableCell>
                             {hasBudgets && <TableCell align="right">Budgeted</TableCell>}
