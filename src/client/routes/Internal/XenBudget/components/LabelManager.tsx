@@ -111,7 +111,7 @@ export default function LabelManager({ book, kind }: LabelManagerProps) {
                                 </Box>
                             )}
 
-                            {kind === "categories" ? (
+                            {kind === "categories" || !label.system ? (
                                 <LabelColorPicker
                                     color={resolveLabelColor(label.name, labels, copy.chip)}
                                     onChange={(hex) => setColor(label, hex)}
