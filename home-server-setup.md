@@ -380,9 +380,11 @@ Two clones on the same CT, same runner, different folder/port/PM2 process each:
 | Port | `3000` | `3001` |
 | PM2 process | `xenhub-prod` | `xenhub-staging` |
 | Deploys | `.github/workflows/deploy-prod.yml`, manual, hard-restricted to `main` | `.github/workflows/deploy-staging.yml`, manual, deploys whichever branch is picked in the dropdown (or comment `/deploy-staging` on a PR — see `.github/workflows/deploy-staging-comment.yml`) |
-| Hostname | `xendelta.com` (or whatever the prod domain is) | `staging.evg31337.com` |
+| Hostname | `xendelta.com` (or whatever the prod domain is) | `staging.xendelta.com` |
 
 Each folder has its **own** `.env` — staging points at its own Mongo DB / GCS buckets / secrets so test data never touches prod (`PORT` and `PUBLIC_URL` also differ per the table above).
+
+`evg31337.com` was the original test domain before `xendelta.com` became the real one — `staging.evg31337.com` still redirects to `staging.xendelta.com` as a backup, but `staging.xendelta.com` is the canonical hostname staging is actually served from (used for anything hostname-sensitive, e.g. the Bugsnag source map upload's `--base-url` in `deploy-staging.yml`).
 
 One-time setup per folder (the deploy workflow only ever `pm2 restart`s — it doesn't create the process):
 ```bash
@@ -395,12 +397,12 @@ pm2 start npm --name xenhub-staging -- run start
 pm2 save
 ```
 
-Traefik routing file for staging, `/opt/traefik/dynamic/xenhub-staging.yml` (same CT IP as prod, different port; `staging.evg31337.com` is already covered by the existing `*.evg31337.com` wildcard ingress, so no new Cloudflare DNS work is needed):
+Traefik routing file for staging, `/opt/traefik/dynamic/xenhub-staging.yml` (same CT IP as prod, different port; route on `staging.xendelta.com`, the canonical staging hostname — `staging.evg31337.com` is kept only as a redirect to it, so route new config off `xendelta.com`, not the old test domain):
 ```yaml
 http:
   routers:
     xenhub-staging:
-      rule: "Host(`staging.evg31337.com`)"
+      rule: "Host(`staging.xendelta.com`)"
       service: xenhub-staging
       entryPoints:
         - web
