@@ -450,6 +450,8 @@ const itemBodyShape = {
   flags: z.array(z.string().max(50)).max(20, "Too many flags").optional(),
   share_type: z.enum(["equal", "exact", "percent"]).optional(),
   shares: z.array(xenBudgetShareSchema).optional(),
+  // "Don't run my auto-tagging rules on this one" — offered on manual add and CSV import.
+  skip_rules: z.boolean().optional(),
 };
 
 export const createXenBudgetItemSchema = z.object(itemBodyShape);
@@ -519,6 +521,7 @@ export const xenBudgetBulkItemsSchema = z.object({
   source_label: z.string().max(100).optional(),
   filename: z.string().max(200).optional(),
   preset_id: objectIdSchema.optional(),
+  skip_rules: z.boolean().optional(),
 });
 
 export const xenBudgetCheckDuplicatesSchema = z.object({
@@ -596,6 +599,12 @@ const ruleShape = {
   }),
   actions: z.object({
     set_categories: z.array(z.string().max(50)).max(20).optional(),
+    category_split_type: z.enum(["equal", "percent"]).optional(),
+    set_category_weights: z.array(z.object({
+      name: z.string().max(50),
+      amount: z.number().optional(),
+      percentage: z.number().optional(),
+    })).max(20).optional(),
     add_flags: z.array(z.string().max(50)).max(20).optional(),
     remove_flags: z.array(z.string().max(50)).max(20).optional(),
     set_type: z.enum(["expense", "income"]).nullish(),
@@ -616,6 +625,11 @@ export const reapplyXenBudgetRulesSchema = z.object({
    * a manual fix is the surprising, destructive outcome.
    */
   include_manually_edited: z.boolean().optional(),
+  /**
+   * Item ids to leave alone — the review flow excludes the item being worked on, so a
+   * freshly created rule applies to the rest of the queue without clobbering that item.
+   */
+  exclude_ids: z.array(objectIdSchema).max(200).optional(),
 });
 
 export const xenBudgetBudgetParamSchema = z.object({

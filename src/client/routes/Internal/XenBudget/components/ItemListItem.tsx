@@ -2,6 +2,7 @@ import { Avatar, AvatarGroup, Box, Stack, Typography, alpha } from "@mui/materia
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import type { XenBudgetItem, XenBudgetMember, XenBudgetLabel } from "../../../../hooks/xenbudget/types";
 import { formatCurrency } from "../currency";
 import { CategoryChip, FlagChip } from "./LabelChip";
@@ -50,6 +51,9 @@ export default function ItemListItem({ item, members, categoryRegistry, flagRegi
                 <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
                     {(item.images?.length ?? 0) > 0 && (
                         <ReceiptLongIcon sx={{ fontSize: 14, color: "text.secondary", flexShrink: 0 }} />
+                    )}
+                    {item.applied_rule_ids.length > 0 && (
+                        <LocalOfferIcon sx={{ fontSize: 14, color: "text.secondary", flexShrink: 0 }} />
                     )}
                     <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>
                         {item.description}

@@ -78,10 +78,10 @@ export default function BookBackupSection({ book, isCreator }: BookBackupSection
                     onClick={() => exportBook(book.name).catch(() =>
                         enqueueSnackbar("Export failed", { variant: "error" }))}
                 >
-                    Download backup
+                    Backup
                 </Button>
                 <Button size="small" variant="outlined" component="label" startIcon={<UploadFileIcon />}>
-                    Restore from file
+                    Restore
                     <input
                         type="file" hidden accept="application/json,.json"
                         onChange={(e) => { const f = e.target.files?.[0]; if (f) readFile(f); e.target.value = ""; }}

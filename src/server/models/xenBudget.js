@@ -83,6 +83,14 @@ var ruleConditionSchema = new Schema({
 var ruleActionsSchema = new Schema({
   // What the purchase was. Assigned an even split, so one category means 100%.
   set_categories: { type: [String], default: [] },
+  // How those categories divide each item's amount. Omitted = even split (legacy).
+  category_split_type: { type: String, enum: ["equal", "percent"], default: "equal" },
+  // Per-category percentages when category_split_type is "percent".
+  set_category_weights: [{
+    name: { type: String, maxlength: 50 },
+    amount: { type: Number },
+    percentage: { type: Number },
+  }],
   // What needs attention. This is what the old `flag` action became.
   add_flags: { type: [String], default: [] },
   remove_flags: { type: [String], default: [] },

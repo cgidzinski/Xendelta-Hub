@@ -146,7 +146,7 @@ export default function GeneralSection() {
                         <Typography variant="body2" color="text.secondary">
                             Deleting this book also deletes every item in it.
                         </Typography>
-                        <Button color="error" onClick={() => setConfirmDelete(true)}>Delete book</Button>
+                        <Button variant="outlined" color="error" onClick={() => setConfirmDelete(true)}>Delete book</Button>
                     </Stack>
                 </SectionCard>
             )}

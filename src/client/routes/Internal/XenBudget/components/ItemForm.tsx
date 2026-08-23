@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import {
-    Autocomplete, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
-    Divider, IconButton, InputAdornment, Stack, Step, StepLabel, Stepper, TextField,
+    Autocomplete, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
+    Divider, FormControlLabel, IconButton, InputAdornment, Stack, Step, StepLabel, Stepper, TextField,
     ToggleButton, ToggleButtonGroup, Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
@@ -70,6 +70,8 @@ export default function ItemForm({
     const [categories, setCategories] = useState<SplitDraft[]>([]);
     const [shareType, setShareType] = useState<ShareType>("equal");
     const [shares, setShares] = useState<SplitDraft[]>([]);
+    // "Skip auto-tagging": save the item without running this book's rules over it.
+    const [skipRules, setSkipRules] = useState(false);
 
     // A solo book has no one else to attribute against — the picker still shows (so it's
     // visible what this step normally does), just greyed and non-interactive.
@@ -110,6 +112,7 @@ export default function ItemForm({
             setShareType("equal");
             // Default to just you; add others if the expense was shared.
             setShares(user ? [{ key: user.id, value: "" }] : []);
+            setSkipRules(false);
         }
     }, [open, item, book, user]);
 
@@ -154,6 +157,7 @@ export default function ItemForm({
             description: description.trim(),
             notes: notes.trim() || undefined,
             flags,
+            skip_rules: skipRules || undefined,
             category_split_type: categorySplitType,
             categories: categories.map((c) => ({
                 name: c.key,
@@ -450,6 +454,18 @@ export default function ItemForm({
                                 />
                             )}
                         />
+
+                        {!item && (
+                            <Box>
+                                <FormControlLabel
+                                    control={<Checkbox size="small" checked={skipRules} onChange={(e) => setSkipRules(e.target.checked)} />}
+                                    label="Skip auto-tagging"
+                                />
+                                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                                    This book's rules won't categorise, flag or exclude this item.
+                                </Typography>
+                            </Box>
+                        )}
 
                         <TextField
                             fullWidth multiline minRows={2} label="Notes (optional)"

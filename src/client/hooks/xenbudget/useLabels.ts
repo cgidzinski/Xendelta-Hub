@@ -65,3 +65,29 @@ export function useXenBudgetLabels(bookId: string, kind: LabelKind) {
 
 export const useXenBudgetCategories = (bookId: string) => useXenBudgetLabels(bookId, "categories");
 export const useXenBudgetFlags = (bookId: string) => useXenBudgetLabels(bookId, "flags");
+
+/**
+ * Re-seeds a book's missing starter categories and built-in flags in one call. Additive
+ * only - the server re-adds what's gone and leaves the rest alone.
+ */
+export function useXenBudgetReseedLabels(bookId: string) {
+    const queryClient = useQueryClient();
+
+    const mutation = useMutation({
+        mutationFn: async () => {
+            const res = await apiClient.post(`/api/xenbudget/books/${bookId}/reseed-labels`);
+            return res.data.data as XenBudgetBook;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
+            queryClient.invalidateQueries({ queryKey: ["xenbudget", "items", bookId] });
+            queryClient.invalidateQueries({ queryKey: ["xenbudget", "summary", bookId] });
+            queryClient.invalidateQueries({ queryKey: ["xenbudget", "budget-status", bookId] });
+        },
+    });
+
+    return {
+        reseedLabelsAsync: mutation.mutateAsync,
+        isReseeding: mutation.isPending,
+    };
+}

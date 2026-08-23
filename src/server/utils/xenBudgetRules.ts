@@ -18,6 +18,17 @@ export type RuleOp =
 
 export type Disposition = "keep" | "exclude" | "skip";
 
+/** One weighted category a rule can assign. `amount`/`percentage` are mutually exclusive. */
+export interface CategoryWeightInput {
+  name: string;
+  amount?: number;
+  percentage?: number;
+}
+
+// Rules apply to items of any amount, so an "exact" split is meaningless — only even and
+// percentage splits are offered. "equal" is the implicit default for legacy rules.
+export type RuleCategorySplit = "equal" | "percent";
+
 export interface RuleCondition {
   field: RuleField;
   op: RuleOp;
@@ -27,8 +38,12 @@ export interface RuleCondition {
 }
 
 export interface RuleActions {
-  /** What the purchase was. Assigned an even split, so one category means 100%. */
+  /** What the purchase was, by name. The caller turns these into resolved weights. */
   set_categories?: string[];
+  /** How those categories divide each item's amount. Omitted = even split (legacy). */
+  category_split_type?: RuleCategorySplit;
+  /** Per-category percentages when `category_split_type` is "percent". */
+  set_category_weights?: CategoryWeightInput[];
   /** What needs attention. This is what the old `flag` action became. */
   add_flags?: string[];
   remove_flags?: string[];
@@ -56,6 +71,9 @@ export interface DraftItem {
   original_description?: string;
   /** What the purchase was, by name. The caller turns these into resolved weights. */
   categories: string[];
+  /** A rule's weighted categories, resolved later against the item amount. */
+  category_weights?: CategoryWeightInput[];
+  category_split_type?: RuleCategorySplit;
   /** What needs attention, by name. */
   flags: string[];
   /** Set by a rule's set_people; the caller turns it into resolved shares. */
@@ -283,6 +301,10 @@ export function applyRules(draft: DraftItem, rules: Rule[], options: ApplyOption
         addUnique(item.categories, c);
         addUnique(item.rule_categories, c);
       });
+      item.category_split_type = actions.category_split_type === "percent" ? "percent" : "equal";
+      item.category_weights = (actions.set_category_weights || []).map((w) => ({
+        name: w.name, amount: w.amount, percentage: w.percentage,
+      }));
     }
 
     if (actions.set_type === "expense" || actions.set_type === "income") {
@@ -326,5 +348,7 @@ export function stripRuleEffects(item: DraftItem): DraftItem {
     excluded_reason: undefined,
     description: item.original_description || item.description,
     original_description: item.original_description,
+    category_weights: undefined,
+    category_split_type: undefined,
   };
 }

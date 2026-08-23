@@ -1,18 +1,34 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-    Autocomplete, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent,
-    DialogTitle, Divider, FormControlLabel, IconButton, MenuItem, Stack, TextField,
-    ToggleButton, ToggleButtonGroup, Typography,
+    Accordion, AccordionDetails, AccordionSummary, Box, Button, Checkbox, Chip, CircularProgress,
+    Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton,
+    MenuItem, Radio, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from "@mui/material";
+import type { SxProps, Theme } from "@mui/material";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import AddIcon from "@mui/icons-material/Add";
+import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useSnackbar } from "notistack";
 import type {
     XenBudgetBook, XenBudgetRule, XenBudgetRuleCondition, RuleInput, RuleField, RuleOp,
-    RuleDisposition,
+    RuleDisposition, ShareType,
 } from "../../../../hooks/xenbudget/types";
+import WeightedSplitEditor, { type SplitDraft } from "./WeightedSplitEditor";
 import { STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
+import { useXenBudgetRules, type RulePreviewMatch } from "../../../../hooks/xenbudget/useRules";
+import { formatCurrency } from "../currency";
+
+// Outlined, slightly darker panel used to group each subsection of the form.
+const groupSx = {
+    border: "1px solid",
+    borderColor: "divider",
+    borderRadius: 2,
+    p: 2,
+    bgcolor: "background.default",
+} satisfies SxProps<Theme>;
 
 const FIELDS: { value: RuleField; label: string }[] = [
     { value: "description", label: "Description" },
@@ -71,11 +87,23 @@ const DISPOSITIONS: { value: RuleDisposition; label: string; help: string }[] = 
 
 const emptyCondition = (): XenBudgetRuleCondition => ({ field: "description", op: "contains", value: "" });
 
+/** Auto-generated name: just the positive match — the target categories already show as
+ *  chips on the rule card, so repeating them in the name is redundant. */
+function generateRuleName(conditions: XenBudgetRuleCondition[]): string {
+    const value = conditions.find(
+        (c) => c.field === "description" && c.op === "contains" && (c.value ?? "").trim(),
+    )?.value?.trim()
+        ?? conditions.find((c) => c.field === "description" && (c.value ?? "").trim())?.value?.trim()
+        ?? "";
+    return value;
+}
+
 interface RuleFormProps {
     open: boolean;
     onClose: () => void;
     book: XenBudgetBook;
-    rule?: XenBudgetRule | null;
+    /** An existing rule to edit, or a suggestion's RuleInput to prefill before creating. */
+    rule?: XenBudgetRule | RuleInput | null;
     onSubmit: (input: RuleInput) => Promise<unknown>;
     isSubmitting: boolean;
     onDelete?: () => Promise<unknown>;
@@ -85,24 +113,59 @@ export default function RuleForm({
     open, onClose, book, rule, onSubmit, isSubmitting, onDelete,
 }: RuleFormProps) {
     const { enqueueSnackbar } = useSnackbar();
+    const { previewRuleAsync, isPreviewingRule } = useXenBudgetRules(book._id);
+    const isMobile = useMediaQuery("(max-width:600px)");
     const [name, setName] = useState("");
     const [mode, setMode] = useState<"all" | "any">("all");
-    const [conditions, setConditions] = useState<XenBudgetRuleCondition[]>([emptyCondition()]);
-    const [setCategories, setSetCategories] = useState<string[]>([]);
+    // Simple "contains" / "does not contain" fields; blank ones are ignored on submit.
+    const [contains, setContains] = useState("");
+    const [notContains, setNotContains] = useState("");
+    const [advancedOpen, setAdvancedOpen] = useState(false);
+    // Advanced conditions, only created when the user opens the accordion.
+    const [conditions, setConditions] = useState<XenBudgetRuleCondition[]>([]);
+    const [categories, setCategories] = useState<SplitDraft[]>([]);
+    const [categorySplitType, setCategorySplitType] = useState<ShareType>("equal");
     const [addFlags, setAddFlags] = useState<string[]>([]);
     const [setType, setSetType] = useState<"" | "expense" | "income">("");
     const [setDescription, setSetDescription] = useState("");
     const [disposition, setDisposition] = useState<RuleDisposition>("keep");
     const [stopOnMatch, setStopOnMatch] = useState(false);
     const [enabled, setEnabled] = useState(true);
+    // Once the user types in the name themselves, stop auto-generating it.
+    const [nameTouched, setNameTouched] = useState(false);
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const [previewMatches, setPreviewMatches] = useState<RulePreviewMatch[]>([]);
+
+    // The full match list: the two simple fields (blank = ignored) plus any advanced
+    // conditions. This is what gets validated and submitted.
+    const allConditions = useMemo(() => {
+        const list: XenBudgetRuleCondition[] = [];
+        if (contains.trim()) list.push({ field: "description", op: "contains", value: contains.trim() });
+        if (notContains.trim()) list.push({ field: "description", op: "not_contains", value: notContains.trim() });
+        list.push(...conditions);
+        return list;
+    }, [contains, notContains, conditions]);
 
     useEffect(() => {
         if (!open) return;
+        // Editing a saved rule keeps its name; creating one auto-generates as you go.
+        setNameTouched(!!rule && "_id" in rule);
         if (rule) {
             setName(rule.name);
             setMode(rule.match.mode || "all");
-            setConditions(rule.match.conditions.length ? rule.match.conditions : [emptyCondition()]);
-            setSetCategories(rule.actions.set_categories || []);
+            const source = rule.match.conditions || [];
+            const containsCond = source.find((c) => c.field === "description" && c.op === "contains");
+            const notContainsCond = source.find((c) => c.field === "description" && c.op === "not_contains");
+            setContains(containsCond?.value ?? "");
+            setNotContains(notContainsCond?.value ?? "");
+            const advanced = source.filter((c) => c !== containsCond && c !== notContainsCond);
+            setConditions(advanced);
+            setAdvancedOpen(advanced.length > 0);
+            setCategories((rule.actions.set_categories || []).map((name) => {
+                const weight = (rule.actions.set_category_weights || []).find((w) => w.name === name);
+                return { key: name, value: weight?.percentage !== undefined ? String(weight.percentage) : "" };
+            }));
+            setCategorySplitType(rule.actions.category_split_type === "percent" ? "percent" : "equal");
             setAddFlags(rule.actions.add_flags || []);
             setSetType(rule.actions.set_type || "");
             setSetDescription(rule.actions.set_description || "");
@@ -112,8 +175,12 @@ export default function RuleForm({
         } else {
             setName("");
             setMode("all");
-            setConditions([emptyCondition()]);
-            setSetCategories([]);
+            setContains("");
+            setNotContains("");
+            setConditions([]);
+            setAdvancedOpen(false);
+            setCategories([]);
+            setCategorySplitType("equal");
             setAddFlags([]);
             setSetType("");
             setSetDescription("");
@@ -122,6 +189,12 @@ export default function RuleForm({
             setEnabled(true);
         }
     }, [open, rule]);
+
+    // Auto-generate the name from the conditions while it hasn't been manually edited.
+    useEffect(() => {
+        if (!open || nameTouched) return;
+        setName(generateRuleName(allConditions));
+    }, [open, nameTouched, allConditions]);
 
     const updateCondition = (index: number, patch: Partial<XenBudgetRuleCondition>) => {
         setConditions((prev) => prev.map((c, i) => {
@@ -135,225 +208,357 @@ export default function RuleForm({
         }));
     };
 
-    const conditionsValid = conditions.every(
+    const conditionsValid = allConditions.every(
         (c) => c.op === "is_empty" || ((c.value ?? "") !== "" && (c.op !== "between" || (c.value2 ?? "") !== "")),
     );
-    const doesSomething = setCategories.length > 0 || addFlags.length > 0 || !!setType
+    const doesSomething = categories.length > 0 || addFlags.length > 0 || !!setType
         || !!setDescription.trim() || disposition !== "keep";
-    const canSubmit = !!name.trim() && conditions.length > 0 && conditionsValid && doesSomething;
+    const canSubmit = !!name.trim() && allConditions.length > 0 && conditionsValid && doesSomething;
+
+    // The rule as the API wants it, whether it's being saved or previewed.
+    const buildInput = (): RuleInput => ({
+        name: name.trim() || "preview",
+        enabled,
+        match: { mode, conditions: allConditions },
+        actions: {
+            set_categories: categories.map((c) => c.key),
+            category_split_type: categories.length >= 2 && categorySplitType === "percent"
+                ? "percent"
+                : "equal",
+            set_category_weights: categories.length >= 2 && categorySplitType === "percent"
+                ? categories.map((c) => ({ name: c.key, percentage: parseFloat(c.value) || 0 }))
+                : [],
+            add_flags: addFlags,
+            set_type: setType || null,
+            set_description: setDescription.trim() || undefined,
+            disposition,
+        },
+        stop_on_match: stopOnMatch,
+    });
 
     const handleSubmit = async () => {
         try {
-            await onSubmit({
-                name: name.trim(),
-                enabled,
-                match: { mode, conditions },
-                actions: {
-                    set_categories: setCategories,
-                    add_flags: addFlags,
-                    set_type: setType || null,
-                    set_description: setDescription.trim() || undefined,
-                    disposition,
-                },
-                stop_on_match: stopOnMatch,
-            });
+            await onSubmit(buildInput());
             onClose();
         } catch (e) {
             enqueueSnackbar(e instanceof Error ? e.message : "Failed to save rule", { variant: "error" });
         }
     };
 
+    const openPreview = async () => {
+        try {
+            setPreviewMatches([]);
+            setPreviewOpen(true);
+            const ruleId = rule && "_id" in rule ? rule._id : undefined;
+            const data = await previewRuleAsync({ input: buildInput(), ruleId });
+            setPreviewMatches(data.matches);
+        } catch (e) {
+            setPreviewOpen(false);
+            enqueueSnackbar(e instanceof Error ? e.message : "Could not preview rule", { variant: "error" });
+        }
+    };
+
     return (
-        <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-            <DialogTitle>{rule ? "Edit rule" : "New rule"}</DialogTitle>
-            <DialogContent>
-                <Stack spacing={2} sx={{ pt: 1 }}>
-                    <TextField
-                        autoFocus fullWidth label="Rule name" placeholder="Internal transfers"
-                        value={name} onChange={(e) => setName(e.target.value)}
-                        helperText="Shown on any item this rule excludes or flags."
-                    />
-
-                    <Divider />
-
-                    <Box>
-                        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-                            <Typography variant="caption" sx={sectionLabelSx}>When</Typography>
-                            <ToggleButtonGroup
-                                size="small" exclusive value={mode}
-                                onChange={(_, v) => v && setMode(v)}
-                            >
-                                <ToggleButton value="all">all match</ToggleButton>
-                                <ToggleButton value="any">any match</ToggleButton>
-                            </ToggleButtonGroup>
-                        </Stack>
-
-                        <Stack spacing={1}>
-                            {conditions.map((cond, index) => (
-                                <Stack key={index} direction="row" spacing={1} alignItems="flex-start">
-                                    <TextField
-                                        select size="small" label="Field" value={cond.field}
-                                        onChange={(e) => updateCondition(index, { field: e.target.value as RuleField })}
-                                        sx={{ width: 130 }}
-                                        slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
-                                    >
-                                        {FIELDS.map((f) => <MenuItem key={f.value} value={f.value}>{f.label}</MenuItem>)}
-                                    </TextField>
-                                    <TextField
-                                        select size="small" label="Is" value={cond.op}
-                                        onChange={(e) => updateCondition(index, { op: e.target.value as RuleOp })}
-                                        sx={{ width: 160 }}
-                                        slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
-                                    >
-                                        {OPS_BY_FIELD[cond.field].map((o) => (
-                                            <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
-                                        ))}
-                                    </TextField>
-                                    {cond.op !== "is_empty" && (
-                                        <TextField
-                                            size="small" label="Value" value={cond.value ?? ""}
-                                            onChange={(e) => updateCondition(index, { value: e.target.value })}
-                                            sx={{ flexGrow: 1 }}
-                                        />
-                                    )}
-                                    {cond.op === "between" && (
-                                        <TextField
-                                            size="small" label="And" value={cond.value2 ?? ""}
-                                            onChange={(e) => updateCondition(index, { value2: e.target.value })}
-                                            sx={{ width: 120 }}
-                                        />
-                                    )}
-                                    <IconButton
-                                        size="small" disabled={conditions.length === 1}
-                                        onClick={() => setConditions((prev) => prev.filter((_, i) => i !== index))}
-                                    >
-                                        <DeleteIcon fontSize="small" />
-                                    </IconButton>
-                                </Stack>
-                            ))}
-                        </Stack>
-                        <Button
-                            size="small" startIcon={<AddIcon />} sx={{ mt: 1 }}
-                            onClick={() => setConditions((prev) => [...prev, emptyCondition()])}
-                        >
-                            Add condition
-                        </Button>
-                    </Box>
-
-                    <Divider />
-
-                    <Box>
-                        <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Then</Typography>
-                        <Stack spacing={2}>
-                            <Autocomplete
-                                multiple freeSolo
-                                options={book.categories.map((c) => c.name)}
-                                value={setCategories}
-                                onChange={(_, v) => setSetCategories(v as string[])}
-                                renderTags={(value, getTagProps) =>
-                                    value.map((option, index) => {
-                                        const { key, ...rest } = getTagProps({ index });
-                                        return <Chip key={key} size="small" label={option} {...rest} />;
-                                    })
-                                }
-                                renderInput={(params) => (
-                                    <TextField
-                                        {...params} size="small" label="Set category"
-                                        helperText="Replaces whatever the item had. Two categories split it evenly."
-                                    />
-                                )}
+        <>
+            <Dialog
+                open={open} onClose={onClose} fullWidth maxWidth="sm"
+                fullScreen={isMobile}
+                slotProps={{ paper: { sx: { borderRadius: isMobile ? 0 : 2 } } }}
+            >
+                <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    {rule ? "Edit rule" : "New rule"}
+                    <IconButton size="small" onClick={onClose} sx={{ mr: -1 }}>
+                        <CloseIcon fontSize="small" />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ pt: 1 }}>
+                        <Box sx={groupSx}>
+                            <TextField
+                                autoFocus fullWidth label="Rule name" placeholder="Internal transfers"
+                                value={name} onChange={(e) => { setName(e.target.value); setNameTouched(true); }}
                             />
+                        </Box>
 
-                            <Autocomplete
-                                multiple freeSolo
-                                options={book.flags.map((t) => t.name)}
-                                value={addFlags}
-                                onChange={(_, v) => setAddFlags(v as string[])}
-                                renderTags={(value, getTagProps) =>
-                                    value.map((option, index) => {
-                                        const { key, ...rest } = getTagProps({ index });
-                                        return <Chip key={key} size="small" variant="outlined" label={option} {...rest} />;
-                                    })
-                                }
-                                renderInput={(params) => (
-                                    <TextField
-                                        {...params} size="small" label="Add flags"
-                                        helperText="For attention, e.g. Needs review."
-                                    />
-                                )}
-                            />
-
-                            <Stack direction="row" spacing={1}>
+                        <Box sx={groupSx}>
+                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>When</Typography>
+                            <Stack spacing={1}>
                                 <TextField
-                                    select size="small" label="Set type" value={setType}
-                                    onChange={(e) => setSetType(e.target.value as "" | "expense" | "income")}
-                                    sx={{ width: 150 }}
-                                    slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
-                                >
-                                    <MenuItem value="">Leave alone</MenuItem>
-                                    <MenuItem value="expense">Expense</MenuItem>
-                                    <MenuItem value="income">Income</MenuItem>
-                                </TextField>
+                                    size="small" fullWidth label="Description contains"
+                                    value={contains} onChange={(e) => setContains(e.target.value)}
+                                    placeholder='e.g. "SLEEMAN"'
+                                />
                                 <TextField
-                                    size="small" label="Rename to" value={setDescription}
-                                    onChange={(e) => setSetDescription(e.target.value)}
-                                    placeholder="Leave blank to keep"
-                                    sx={{ flexGrow: 1 }}
+                                    size="small" fullWidth label="Description doesn't contain"
+                                    value={notContains} onChange={(e) => setNotContains(e.target.value)}
+                                    placeholder='e.g. "GAS"'
                                 />
                             </Stack>
 
-                            <TextField
-                                select fullWidth size="small" label="Disposition" value={disposition}
-                                onChange={(e) => setDisposition(e.target.value as RuleDisposition)}
-                                helperText={DISPOSITIONS.find((d) => d.value === disposition)?.help}
-                                slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
+                            <Accordion
+                                elevation={0}
+                                disableGutters
+                                expanded={advancedOpen}
+                                onChange={(_, expanded) => setAdvancedOpen(expanded)}
+                                sx={{
+                                    mt: 1,
+                                    "&:before": { display: "none" },
+                                    border: "1px solid",
+                                    borderColor: "divider",
+                                    borderRadius: 1,
+                                    bgcolor: "action.hover",
+                                }}
                             >
-                                {DISPOSITIONS.map((d) => <MenuItem key={d.value} value={d.value}>{d.label}</MenuItem>)}
-                            </TextField>
-                        </Stack>
-                    </Box>
+                                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5 }}>
+                                    <Typography variant="body2">Advanced</Typography>
+                                </AccordionSummary>
+                                <AccordionDetails sx={{ px: 1.5, pt: 0, pb: 1.5 }}>
+                                    <Stack spacing={1.5}>
+                                        <Stack direction="row" alignItems="center" spacing={1}>
+                                            <Typography variant="caption" color="text.secondary">Match</Typography>
+                                            <ToggleButtonGroup
+                                                size="small" exclusive value={mode}
+                                                onChange={(_, v) => v && setMode(v)}
+                                            >
+                                                <ToggleButton value="all">all match</ToggleButton>
+                                                <ToggleButton value="any">any match</ToggleButton>
+                                            </ToggleButtonGroup>
+                                        </Stack>
 
-                    <Divider />
+                                        <Stack spacing={1}>
+                                            {conditions.map((cond, index) => (
+                                                <Box key={index} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, p: 1 }}>
+                                                    <Stack direction="row" spacing={1} alignItems="center">
+                                                        <TextField
+                                                            select size="small" label="Field" value={cond.field}
+                                                            onChange={(e) => updateCondition(index, { field: e.target.value as RuleField })}
+                                                            sx={{ width: 130 }}
+                                                            slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
+                                                        >
+                                                            {FIELDS.map((f) => <MenuItem key={f.value} value={f.value}>{f.label}</MenuItem>)}
+                                                        </TextField>
+                                                        <TextField
+                                                            select size="small" label="Is" value={cond.op}
+                                                            onChange={(e) => updateCondition(index, { op: e.target.value as RuleOp })}
+                                                            sx={{ width: 170 }}
+                                                            slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
+                                                        >
+                                                            {OPS_BY_FIELD[cond.field].map((o) => (
+                                                                <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+                                                            ))}
+                                                        </TextField>
+                                                        <IconButton
+                                                            size="small" sx={{ ml: "auto" }}
+                                                            onClick={() => setConditions((prev) => prev.filter((_, i) => i !== index))}
+                                                        >
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Stack>
+                                                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                                                        {cond.op !== "is_empty" && (
+                                                            <TextField
+                                                                size="small" label="Value" value={cond.value ?? ""}
+                                                                onChange={(e) => updateCondition(index, { value: e.target.value })}
+                                                                sx={{ flexGrow: 1 }}
+                                                            />
+                                                        )}
+                                                        {cond.op === "between" && (
+                                                            <TextField
+                                                                size="small" label="And" value={cond.value2 ?? ""}
+                                                                onChange={(e) => updateCondition(index, { value2: e.target.value })}
+                                                                sx={{ width: 140 }}
+                                                            />
+                                                        )}
+                                                    </Stack>
+                                                </Box>
+                                            ))}
+                                            {conditions.length === 0 && (
+                                                <Typography variant="caption" color="text.secondary">
+                                                    No advanced conditions — the simple fields above are enough.
+                                                </Typography>
+                                            )}
+                                        </Stack>
 
-                    <Stack>
-                        <FormControlLabel
-                            control={<Checkbox size="small" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />}
-                            label="Enabled"
-                        />
-                        <FormControlLabel
-                            control={<Checkbox size="small" checked={stopOnMatch} onChange={(e) => setStopOnMatch(e.target.checked)} />}
-                            label="Stop processing later rules when this one matches"
-                        />
+                                        <Button
+                                            size="small" startIcon={<AddIcon />}
+                                            onClick={() => setConditions((prev) => [...prev, emptyCondition()])}
+                                        >
+                                            Add condition
+                                        </Button>
+                                    </Stack>
+                                </AccordionDetails>
+                            </Accordion>
+                        </Box>
+
+                        <Box sx={groupSx}>
+                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Set category</Typography>
+                            <WeightedSplitEditor
+                                mode={{ kind: "categories", registry: book.categories }}
+                                splitType={categorySplitType}
+                                onSplitTypeChange={setCategorySplitType}
+                                selected={categories}
+                                onSelectedChange={setCategories}
+                                amount={0}
+                                currency={book.default_currency}
+                                noAmount
+                            />
+                        </Box>
+
+                        <Box sx={groupSx}>
+                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Add flags</Typography>
+                            <Stack spacing={0.5}>
+                                {book.flags.map((flag) => {
+                                    const checked = addFlags.includes(flag.name);
+                                    return (
+                                        <FormControlLabel
+                                            key={flag._id}
+                                            control={
+                                                <Checkbox
+                                                    size="small" checked={checked}
+                                                    onChange={() => setAddFlags((prev) =>
+                                                        checked ? prev.filter((t) => t !== flag.name) : [...prev, flag.name])}
+                                                />
+                                            }
+                                            label={flag.name}
+                                        />
+                                    );
+                                })}
+                            </Stack>
+                        </Box>
+
+                        <Box sx={groupSx}>
+                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Set type</Typography>
+                            <Stack spacing={0.5}>
+                                <FormControlLabel
+                                    control={<Radio size="small" checked={setType === ""} onChange={() => setSetType("")} />}
+                                    label="Keep same"
+                                />
+                                <FormControlLabel
+                                    control={<Radio size="small" checked={setType === "expense"} onChange={() => setSetType("expense")} />}
+                                    label="Expense"
+                                />
+                                <FormControlLabel
+                                    control={<Radio size="small" checked={setType === "income"} onChange={() => setSetType("income")} />}
+                                    label="Income"
+                                />
+                            </Stack>
+                        </Box>
+
+                        <Box sx={groupSx}>
+                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Disposition</Typography>
+                            <Stack spacing={0.5}>
+                                {DISPOSITIONS.map((d) => (
+                                    <FormControlLabel
+                                        key={d.value}
+                                        control={<Radio size="small" checked={disposition === d.value} onChange={() => setDisposition(d.value)} />}
+                                        label={d.label}
+                                    />
+                                ))}
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                                {DISPOSITIONS.find((d) => d.value === disposition)?.help}
+                            </Typography>
+                        </Box>
+
+                        <Box sx={groupSx}>
+                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Rename</Typography>
+                            <TextField
+                                size="small" fullWidth value={setDescription}
+                                onChange={(e) => setSetDescription(e.target.value)}
+                                placeholder="Leave blank to keep"
+                            />
+                        </Box>
+
+                        <Box sx={groupSx}>
+                            <FormControlLabel
+                                control={<Checkbox size="small" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />}
+                                label="Enabled"
+                            />
+                            <FormControlLabel
+                                control={<Checkbox size="small" checked={stopOnMatch} onChange={(e) => setStopOnMatch(e.target.checked)} />}
+                                label="Stop processing later rules when this one matches"
+                            />
+                        </Box>
+
+                        {!doesSomething && (
+                            <Typography variant="caption" color="warning.main">
+                                This rule doesn&rsquo;t do anything yet — set a category, add a flag, or pick a disposition.
+                            </Typography>
+                        )}
                     </Stack>
-
-                    {!doesSomething && (
-                        <Typography variant="caption" color="warning.main">
-                            This rule doesn&rsquo;t do anything yet — set a category, add a flag, or pick a disposition.
-                        </Typography>
-                    )}
-                </Stack>
-            </DialogContent>
-            <DialogActions>
-                {rule && onDelete && (
-                    <Button
-                        color="error" sx={{ mr: "auto" }}
-                        onClick={async () => {
-                            try {
-                                await onDelete();
-                                onClose();
-                            } catch (e) {
-                                enqueueSnackbar(e instanceof Error ? e.message : "Failed to delete rule", { variant: "error" });
-                            }
-                        }}
-                    >
-                        Delete
+                </DialogContent>
+                <DialogActions>
+                    <Stack direction="row" spacing={1} sx={{ mr: "auto" }}>
+                        <Button
+                            variant="outlined" disabled={allConditions.length === 0 || !conditionsValid}
+                            onClick={openPreview}
+                        >
+                            Preview
+                        </Button>
+                        {rule && onDelete && (
+                            <Button
+                                color="error"
+                                onClick={async () => {
+                                    try {
+                                        await onDelete();
+                                        onClose();
+                                    } catch (e) {
+                                        enqueueSnackbar(e instanceof Error ? e.message : "Failed to delete rule", { variant: "error" });
+                                    }
+                                }}
+                            >
+                                Delete
+                            </Button>
+                        )}
+                    </Stack>
+                    <Button variant="contained" disabled={!canSubmit || isSubmitting} onClick={handleSubmit}>
+                        {rule ? "Save" : "Create"}
                     </Button>
-                )}
-                <Button onClick={onClose}>Cancel</Button>
-                <Button variant="contained" disabled={!canSubmit || isSubmitting} onClick={handleSubmit}>
-                    {rule ? "Save" : "Create"}
-                </Button>
-            </DialogActions>
-        </Dialog>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} fullWidth maxWidth="sm">
+                <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    Rule preview
+                    <IconButton size="small" onClick={() => setPreviewOpen(false)} sx={{ mr: -1 }}>
+                        <CloseIcon fontSize="small" />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent>
+                    {isPreviewingRule ? (
+                        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                            <CircularProgress size={24} />
+                        </Box>
+                    ) : previewMatches.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">
+                            No transactions match this rule.
+                        </Typography>
+                    ) : (
+                        <Stack spacing={1}>
+                            <Typography variant="caption" color="text.secondary">
+                                {previewMatches.length === 10
+                                    ? "Showing the 10 most recent matches"
+                                    : `${previewMatches.length} match${previewMatches.length === 1 ? "" : "es"}`}
+                            </Typography>
+                            {previewMatches.map((m) => (
+                                <Box key={m._id} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, p: 1 }}>
+                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                        <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
+                                            {m.description}
+                                        </Typography>
+                                        {m.already_tagged && (
+                                            <Chip size="small" variant="outlined" label="tagged" sx={{ height: 20, fontSize: 11 }} />
+                                        )}
+                                        <Typography variant="body2" sx={{ fontWeight: 600, flexShrink: 0, color: m.type === "income" ? "success.main" : "error.main" }}>
+                                            {m.type === "income" ? "+" : "−"}{formatCurrency(m.amount, m.currency)}
+                                        </Typography>
+                                    </Stack>
+                                </Box>
+                            ))}
+                        </Stack>
+                    )}
+                </DialogContent>
+            </Dialog>
+        </>
     );
 }

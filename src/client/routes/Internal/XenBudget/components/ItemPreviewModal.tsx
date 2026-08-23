@@ -3,6 +3,7 @@ import {
     DialogTitle, IconButton, Stack, Typography, alpha,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -31,6 +32,10 @@ export default function ItemPreviewModal({ open, onClose, book, item, onEdit }: 
     const people = (item?.shares ?? [])
         .map((s) => book.members.find((m) => m.user_id === s.user_id))
         .filter((m): m is XenBudgetMember => !!m);
+    const autoTagNames = (item?.applied_rule_ids ?? [])
+        .map((id) => book.rules.find((r) => r._id === id)?.name)
+        .filter((n): n is string => !!n);
+    const autoTagged = (item?.applied_rule_ids.length ?? 0) > 0;
 
     return (
         <Dialog
@@ -83,6 +88,15 @@ export default function ItemPreviewModal({ open, onClose, book, item, onEdit }: 
                                 {item.flags.map((t) => (
                                     <FlagChip key={t} name={t} registry={book.flags} />
                                 ))}
+                            </Stack>
+                        )}
+
+                        {autoTagged && (
+                            <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+                                <LocalOfferIcon sx={{ fontSize: 14, color: "text.secondary", flexShrink: 0 }} />
+                                <Typography variant="caption" color="text.secondary">
+                                    Auto-tagged{autoTagNames.length > 0 ? ` by ${autoTagNames.join(", ")}` : ""}
+                                </Typography>
                             </Stack>
                         )}
 

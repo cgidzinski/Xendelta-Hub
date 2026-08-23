@@ -165,6 +165,8 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
     // Whose card this is. Defaults to you: a statement is usually one person's, not the
     // whole book's — which is what an empty list used to mean.
     const [owners, setOwners] = useState<SplitDraft[]>([]);
+    // "Deny auto-tagger": import these rows without running any rules over them.
+    const [skipRules, setSkipRules] = useState(false);
 
     const { user } = useAuth();
     const isMobile = useMediaQuery("(max-width:600px)");
@@ -200,6 +202,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
         setSavePresetName("");
         setPresetId("");
         setSourceLabel("");
+        setSkipRules(false);
         guessedForRef.current = null;
         dateDefaultAppliedRef.current = false;
     }, [open]);
@@ -382,7 +385,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
         );
     }, [previews, dateFrom, dateTo]);
 
-    const goToReview = async () => {
+    const goToReview = async (skip = skipRules) => {
         try {
             const candidates = toCandidates();
             if (candidates.length === 0) {
@@ -390,7 +393,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                 return;
             }
             const [preview, dupes] = await Promise.all([
-                previewAsync(candidates),
+                previewAsync({ items: candidates, skip_rules: skip }),
                 checkDuplicatesAsync(candidates.map((c) => ({
                     amount: c.amount, date: c.date, description: c.description,
                 }))),
@@ -430,6 +433,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                 default_people: owners.map((o) => o.key),
                 source_label: sourceLabel.trim() || undefined,
                 filename,
+                skip_rules: skipRules || undefined,
             });
             setResult(imported);
             setStep(3);
@@ -656,6 +660,23 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                                 currency={book.default_currency}
                                 amountless
                             />
+                            <FormControlLabel
+                                sx={{ mt: 1 }}
+                                control={
+                                    <Checkbox
+                                        size="small" checked={skipRules}
+                                        onChange={(e) => {
+                                            const checked = e.target.checked;
+                                            setSkipRules(checked);
+                                            goToReview(checked);
+                                        }}
+                                    />
+                                }
+                                label="Skip auto-tagging"
+                            />
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                                Import these rows as-is — this book's rules won't run over them.
+                            </Typography>
                         </Box>
                     </Stack>
                 ))}
@@ -720,7 +741,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                     </Button>
                 )}
                 {step === 1 && (
-                    <Button variant="contained" disabled={!canMap || mapped.rows.length === 0} onClick={goToReview}>
+                    <Button variant="contained" disabled={!canMap || mapped.rows.length === 0} onClick={() => goToReview()}>
                         Review {mapped.rows.length} row{mapped.rows.length === 1 ? "" : "s"}
                     </Button>
                 )}

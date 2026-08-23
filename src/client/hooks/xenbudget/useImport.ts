@@ -12,6 +12,8 @@ export interface BulkImportRequest {
     /** Which card this came from, so the import can be found again later. */
     source_label?: string;
     filename?: string;
+    /** "Skip auto-tagging" — import the rows without running the book's rules. */
+    skip_rules?: boolean;
 }
 
 export interface ImportCandidate {
@@ -51,8 +53,8 @@ export function useXenBudgetImport(bookId: string) {
     // The preview runs the rules on the server, so what the wizard shows is produced by
     // exactly the same code that the import will run. It writes nothing.
     const previewMutation = useMutation({
-        mutationFn: async (items: ImportCandidate[]) => {
-            const res = await apiClient.post(`/api/xenbudget/books/${bookId}/items/preview`, { items });
+        mutationFn: async ({ items, skip_rules }: { items: ImportCandidate[]; skip_rules?: boolean }) => {
+            const res = await apiClient.post(`/api/xenbudget/books/${bookId}/items/preview`, { items, skip_rules });
             return res.data.data as ImportPreviewResult;
         },
     });

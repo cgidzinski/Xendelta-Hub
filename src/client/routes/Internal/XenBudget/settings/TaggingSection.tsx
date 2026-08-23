@@ -1,14 +1,18 @@
 import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
-    Box, Button, Card, Chip, Stack, Switch, Typography,
+    Box, Button, Card, Chip, IconButton, Stack, Switch, Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import ReplayIcon from "@mui/icons-material/Replay";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import { useSnackbar } from "notistack";
 import type { BookDetailContext } from "../BookDetail";
 import type { XenBudgetRule } from "../../../../hooks/xenbudget/types";
 import { useXenBudgetRules } from "../../../../hooks/xenbudget/useRules";
+import { useXenBudgetReseedLabels } from "../../../../hooks/xenbudget/useLabels";
 import SectionCard from "./SectionCard";
 import LabelManager from "../components/LabelManager";
 import RuleForm from "../components/RuleForm";
@@ -18,21 +22,58 @@ import { cardSx, emptyStateSx, emptyStateIconCircleSx } from "../../../../compon
 
 export default function TaggingSection() {
     const { book } = useOutletContext<BookDetailContext>();
+    const { enqueueSnackbar } = useSnackbar();
     const {
         createRuleAsync, isCreatingRule, updateRuleAsync, isUpdatingRule, deleteRuleAsync,
         reapplyAsync, isReapplying,
     } = useXenBudgetRules(book._id);
+    const { reseedLabelsAsync, isReseeding } = useXenBudgetReseedLabels(book._id);
 
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState<XenBudgetRule | null>(null);
     const [reapplyOpen, setReapplyOpen] = useState(false);
 
+    const handleReseed = async () => {
+        try {
+            await reseedLabelsAsync();
+            enqueueSnackbar("Starter categories and built-in flags restored", { variant: "success" });
+        } catch (e) {
+            enqueueSnackbar(e instanceof Error ? e.message : "Could not re-seed labels", { variant: "error" });
+        }
+    };
+
     // Displayed in the order they actually run, since that is what makes a chain of rules
     // predictable — a later rule sees what earlier ones changed.
     const rules = [...book.rules].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
 
+    const handleDuplicate = async (rule: XenBudgetRule) => {
+        try {
+            await createRuleAsync({
+                name: `${rule.name} (copy)`,
+                enabled: rule.enabled !== false,
+                match: rule.match,
+                actions: rule.actions,
+                stop_on_match: !!rule.stop_on_match,
+            });
+            enqueueSnackbar("Rule duplicated", { variant: "success" });
+        } catch (e) {
+            enqueueSnackbar(e instanceof Error ? e.message : "Could not duplicate rule", { variant: "error" });
+        }
+    };
+
     return (
         <Stack spacing={2}>
+            <Stack direction="row" justifyContent="flex-end">
+                <Button
+                    size="small"
+                    startIcon={<RestartAltIcon />}
+                    onClick={handleReseed}
+                    disabled={isReseeding}
+                >
+                    Re-seed categories &amp; flags
+                </Button>
+            </Stack>
+
             <SectionCard
                 title="Categories"
                 description="What a purchase was. Budgets and reports run on these, and one purchase can split across several."
@@ -74,6 +115,7 @@ export default function TaggingSection() {
                                 Rules categorise, flag and filter items automatically as they arrive — by
                                 hand or from a CSV import.
                             </Typography>
+
                         </Box>
                     ) : (
                         <Stack spacing={1}>
@@ -96,15 +138,32 @@ export default function TaggingSection() {
                                             </Typography>
                                         </Box>
                                         <Stack direction="row" spacing={0.5} alignItems="center">
-                                            {(rule.actions.set_categories || []).map((c) => (
-                                                <CategoryChip key={c} name={c} registry={book.categories} />
-                                            ))}
+                                            {(rule.actions.set_categories || []).map((c) => {
+                                                const weight = rule.actions.category_split_type === "percent"
+                                                    ? rule.actions.set_category_weights?.find((w) => w.name === c)?.percentage
+                                                    : undefined;
+                                                return (
+                                                    <CategoryChip
+                                                        key={c}
+                                                        name={c}
+                                                        registry={book.categories}
+                                                        weight={weight !== undefined && weight < 100 ? `${weight}%` : undefined}
+                                                    />
+                                                );
+                                            })}
                                             {(rule.actions.add_flags || []).map((t) => (
                                                 <FlagChip key={t} name={t} registry={book.flags} />
                                             ))}
                                             {rule.actions.disposition === "exclude" && <Chip size="small" variant="outlined" label="exclude" sx={{ height: 20, fontSize: 11 }} />}
                                             {rule.actions.disposition === "skip" && <Chip size="small" color="error" variant="outlined" label="never import" sx={{ height: 20, fontSize: 11 }} />}
                                         </Stack>
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => handleDuplicate(rule)}
+                                            aria-label="Duplicate rule"
+                                        >
+                                            <ContentCopyIcon fontSize="small" />
+                                        </IconButton>
                                         <Switch
                                             size="small"
                                             checked={rule.enabled !== false}

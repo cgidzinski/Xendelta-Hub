@@ -7,15 +7,18 @@ import CloseIcon from "@mui/icons-material/Close";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
 import { useSnackbar } from "notistack";
 import { format } from "date-fns";
-import type { XenBudgetBook, XenBudgetItem, XenBudgetMember, UpdateItemInput, ShareType } from "../../../../hooks/xenbudget/types";
+import type { XenBudgetBook, XenBudgetItem, XenBudgetMember, UpdateItemInput, ShareType, RuleInput } from "../../../../hooks/xenbudget/types";
 import { useXenBudgetItemMutations, useXenBudgetItems } from "../../../../hooks/xenbudget/useItems";
+import { useXenBudgetRules } from "../../../../hooks/xenbudget/useRules";
 import { formatCurrency } from "../currency";
 import { emptyStateSx, emptyStateIconCircleSx, sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import LoadingSpinner from "../../../../components/LoadingSpinner";
 import { CategoryChip, FlagChip } from "./LabelChip";
 import WeightedSplitEditor, { type SplitDraft } from "./WeightedSplitEditor";
+import RuleForm from "./RuleForm";
 import { xbCardSx, xbBadgeSx } from "./rowStyles";
 
 // The system "Needs review" flag — mirrors FLAG_NEEDS_REVIEW server-side
@@ -44,6 +47,11 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
         { review: true },
     );
     const { updateItemAsync } = useXenBudgetItemMutations(book._id);
+    const { createRuleAsync, isCreatingRule, reapplyAsync, isReapplying } = useXenBudgetRules(book._id);
+
+    // The rule form, opened by "Setup Auto Tag" and prefilled from the item being reviewed.
+    const [prefill, setPrefill] = useState<RuleInput | null>(null);
+    const [ruleFormOpen, setRuleFormOpen] = useState(false);
 
     // Saved/dismissed items are hidden immediately rather than waiting on the mutation's
     // background refetch to land — the list just needs to *look* like it shrank right away.
@@ -123,14 +131,23 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
         setCategoryValues(Object.fromEntries(drafts.map((d) => [d.key, d.value])));
     };
 
-    // Switching to exact amounts pre-fills an even split so the fields don't start blank.
+    // Switching split type re-seeds the fields so a value in one unit never carries over
+    // into another (even -> exact -> percent used to leave "$120" showing as "120%").
     const handleSplitTypeChange = (t: ShareType) => {
         setSplitType(t);
-        if (t === "exact" && currentItem && selectedCategories.length > 0) {
+        if (!currentItem || selectedCategories.length === 0) return;
+        if (t === "exact") {
             const each = Math.round((currentItem.amount / selectedCategories.length) * 100) / 100;
             setCategoryValues(Object.fromEntries(
                 selectedCategories.map((name) => [name, String(each)]),
             ));
+        } else if (t === "percent") {
+            const each = Math.round((100 / selectedCategories.length) * 100) / 100;
+            setCategoryValues(Object.fromEntries(
+                selectedCategories.map((name) => [name, String(each)]),
+            ));
+        } else {
+            setCategoryValues({});
         }
     };
 
@@ -172,6 +189,42 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
 
     const handleSkip = () => setIndex((i) => i + 1);
     const handleBack = () => setIndex((i) => Math.max(0, i - 1));
+
+    const openRuleForm = () => {
+        const text = (currentItem?.original_description || currentItem?.description || "").trim();
+        const categories = selectedCategories.length > 0 ? [...selectedCategories] : [];
+
+        // Carry the split over from the categorise step. Rules have no fixed amount, so an
+        // "exact" split is converted to percentages here; "equal" needs no weights.
+        let category_split_type: "equal" | "percent" = "equal";
+        let set_category_weights: { name: string; percentage?: number }[] | undefined;
+        if (categories.length >= 2) {
+            if (splitType === "percent") {
+                category_split_type = "percent";
+                set_category_weights = categories.map((name) => ({
+                    name,
+                    percentage: parseFloat(categoryValues[name] ?? "") || 0,
+                }));
+            } else if (splitType === "exact" && currentItem && currentItem.amount > 0) {
+                category_split_type = "percent";
+                set_category_weights = categories.map((name) => {
+                    const amount = parseFloat(categoryValues[name] ?? "") || 0;
+                    return { name, percentage: Math.round((amount / currentItem.amount) * 10000) / 100 };
+                });
+            }
+        }
+
+        setPrefill({
+            name: text.slice(0, 100),
+            match: { mode: "all", conditions: [{ field: "description", op: "contains", value: text }] },
+            actions: {
+                set_categories: categories,
+                category_split_type,
+                ...(set_category_weights ? { set_category_weights } : {}),
+            },
+        });
+        setRuleFormOpen(true);
+    };
 
     const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === "ArrowLeft") { e.preventDefault(); handleBack(); }
@@ -345,13 +398,24 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
                             <FormControlLabel
                                 control={
                                     <Checkbox
+                                        color="warning"
                                         checked={needsReview}
                                         onChange={(e) => setNeedsReview(e.target.checked)}
                                         disabled={saving}
                                     />
                                 }
                                 label="Needs review"
-                                sx={{ mt: 0.5 }}
+                                sx={{
+                                    mt: 1.5,
+                                    width: "100%",
+                                    mx: 0,
+                                    border: "1px solid",
+                                    borderColor: "warning.main",
+                                    borderRadius: 1,
+                                    px: 1.5,
+                                    pt: 0.5,
+                                    pb: 0.25,
+                                }}
                             />
                         </Box>
                     </Stack>
@@ -364,18 +428,51 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
             ) : currentItem && (
                 <DialogActions sx={{ px: 2, pb: 2 }}>
                     <Stack direction="row" spacing={1} sx={{ width: "100%" }}>
-                        <Button onClick={handleBack} disabled={index === 0} sx={{ flex: 1 }}>Back</Button>
+                        <Button onClick={handleBack} disabled={index === 0}>Back</Button>
+                        {selectedCategories.length > 0 && (
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={openRuleForm}
+                                disabled={!currentItem}
+                                aria-label="Setup Auto Tag"
+                            >
+                                <AutoFixHighIcon fontSize="small" />
+                            </Button>
+                        )}
                         <Button
                             variant="contained"
                             onClick={handleNext}
                             disabled={saving}
-                            sx={{ flex: 3 }}
+                            sx={{ flexGrow: 1 }}
                         >
                             {selectedCategories.length > 0 || needsReview ? "Next" : "Skip"}
                         </Button>
                     </Stack>
                 </DialogActions>
             )}
+            <RuleForm
+                open={ruleFormOpen}
+                onClose={() => setRuleFormOpen(false)}
+                book={book}
+                rule={prefill}
+                isSubmitting={isCreatingRule || isReapplying}
+                onSubmit={async (input) => {
+                    await createRuleAsync(input);
+                    // Apply the new rule to the rest of the queue now, so identical items
+                    // that follow are tagged rather than left for another manual pass.
+                    const exclude = currentItem ? [currentItem._id] : [];
+                    try {
+                        await reapplyAsync({ exclude_ids: exclude });
+                        enqueueSnackbar("Rule saved — matching items updated", { variant: "success" });
+                    } catch (e) {
+                        enqueueSnackbar(
+                            e instanceof Error ? e.message : "Rule saved, but re-applying failed",
+                            { variant: "warning" },
+                        );
+                    }
+                }}
+            />
         </Dialog>
     );
 }

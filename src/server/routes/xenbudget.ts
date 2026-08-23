@@ -46,7 +46,7 @@ import { uploadXenBudgetImages } from "../config/multer";
 import { uploadToGCS, deleteFromGCS, generateSignedUrl } from "../utils/gcsUtils";
 import { generateUniqueFilename } from "../utils/mediaUtils";
 import {
-  applyRules, stripRuleEffects, type DraftItem, type Rule,
+  applyRules, ruleMatches, stripRuleEffects, type DraftItem, type Rule,
 } from "../utils/xenBudgetRules";
 import { tzMonthKey, zonedWallToUtc } from "../utils/statsRange";
 import { serializeBookFor, serializeBooksFor, serializeItem, serializeItems } from "../utils/xenBudgetSerializer";
@@ -374,6 +374,27 @@ function ensureSystemLabels(book: any): boolean {
 }
 
 /**
+ * The category half of ensureSystemLabels: re-adds any starter category the book is
+ * missing. Unlike flags, starter categories carry no special status - they are ordinary
+ * categories a book was seeded with on creation, so this only ever ADDS and never
+ * rewrites a colour the user has changed (matched case-insensitively).
+ *
+ * Returns true when it changed something, so the caller knows whether to save.
+ */
+function ensureStarterCategories(book: any): boolean {
+  let changed = false;
+  for (const seed of STARTER_CATEGORIES) {
+    const existing = (book.categories || []).find(
+      (c: any) => c.name.toLowerCase() === seed.name.toLowerCase(),
+    );
+    if (existing) continue;
+    book.categories.push({ name: seed.name, color: seed.color });
+    changed = true;
+  }
+  return changed;
+}
+
+/**
  * CRUD for one of the book's two label registries. Both behave identically apart from
  * what a rename and a delete have to do to the items that reference them, so the routes
  * are generated rather than written twice and left to drift.
@@ -531,6 +552,15 @@ function evenCategoryWeights(names: string[], amount: number) {
   return resolveCategories("equal", amount, (names || []).map((name) => ({ name })));
 }
 
+/** Resolves a rule's categories into stored weights, honouring a percentage split. */
+function draftCategoryWeights(draft: DraftItem, amount: number) {
+  const splitType = draft.category_split_type ?? "equal";
+  const parts = draft.category_weights && draft.category_weights.length > 0
+    ? draft.category_weights
+    : (draft.categories || []).map((name) => ({ name }));
+  return resolveCategories(splitType, amount, parts);
+}
+
 function broadcastBook(book: any) {
   SocketManager.getInstance().notifyXenBudgetBookUpdate(book._id.toString(), memberIds(book));
 }
@@ -582,6 +612,8 @@ function plainRules(book: any): Rule[] {
     },
     actions: {
       set_categories: r.actions?.set_categories || [],
+      set_category_weights: r.actions?.set_category_weights || [],
+      category_split_type: r.actions?.category_split_type,
       add_flags: r.actions?.add_flags || [],
       remove_flags: r.actions?.remove_flags || [],
       set_type: r.actions?.set_type ?? null,
@@ -602,6 +634,10 @@ function toDraft(item: any): DraftItem {
     description: item.description,
     original_description: item.original_description,
     categories: (item.categories || []).map((c: any) => c.name),
+    category_weights: (item.categories || []).map((c: any) => ({
+      name: c.name, amount: c.amount, percentage: c.percentage,
+    })),
+    category_split_type: item.category_split_type,
     flags: [...(item.flags || [])],
     excluded: !!item.excluded,
     excluded_reason: item.excluded_reason,
@@ -942,6 +978,36 @@ module.exports = function (app: any) {
   registerLabelRoutes(app, "categories");
   registerLabelRoutes(app, "flags");
 
+  // POST /api/xenbudget/books/:bookId/reseed-labels
+  // Re-adds any starter categories and built-in flags the book is missing - e.g. a book
+  // created before a later release added more. Additive only: existing names and colours
+  // are left untouched, and a category or flag the user deliberately deleted comes back.
+  app.post("/api/xenbudget/books/:bookId/reseed-labels",
+    validateParams(xenBudgetBookIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const categoriesChanged = ensureStarterCategories(book);
+        const flagsChanged = ensureSystemLabels(book);
+        if (!categoriesChanged && !flagsChanged) {
+          await book.populate("members", "username avatar");
+          return res.json({
+            status: true,
+            message: "Nothing to re-seed — the starter categories and flags are already all there",
+            data: serializeBookFor(book, callerId(req)),
+          });
+        }
+        await book.save();
+        await book.populate("members", "username avatar");
+        broadcastBook(book);
+        res.json({ status: true, message: "Categories and flags re-seeded", data: serializeBookFor(book, callerId(req)) });
+      } catch (error) {
+        console.error("Error reseeding labels:", error);
+        res.status(500).json({ status: false, message: "Failed to re-seed labels" });
+      }
+    });
+
 
   // --- Rules ---------------------------------------------------------------
 
@@ -989,6 +1055,68 @@ module.exports = function (app: any) {
       }
     });
 
+  // POST /api/xenbudget/books/:bookId/rules/preview
+  //
+  // Shows which existing items a not-yet-saved rule would match, so an edit can be checked
+  // against real transactions before committing. Writes nothing.
+  app.post("/api/xenbudget/books/:bookId/rules/preview",
+    validateParams(xenBudgetBookIdParamSchema), validate(createXenBudgetRuleSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const ruleId = typeof req.query.ruleId === "string" ? req.query.ruleId : "";
+        const rule: Rule = {
+          _id: "preview",
+          name: req.body.name || "preview",
+          enabled: req.body.enabled !== false,
+          priority: 0,
+          match: {
+            mode: req.body.match?.mode || "all",
+            conditions: req.body.match?.conditions || [],
+          },
+          actions: {},
+          stop_on_match: false,
+        };
+
+        // Scan a bounded window of the newest items and return at most a handful of
+        // matches — a preview is a sanity check, not a full sweep.
+        const MATCH_LIMIT = 10;
+        const SCAN_LIMIT = 1000;
+        const items = await XenBudgetItem.find({ book_id: book._id })
+          .sort({ date: -1, _id: -1 })
+          .limit(SCAN_LIMIT)
+          .lean();
+
+        const matches: any[] = [];
+        for (const item of items) {
+          if (matches.length >= MATCH_LIMIT) break;
+          if (ruleMatches(rule, toDraft(item))) {
+            matches.push({
+              _id: item._id.toString(),
+              description: item.description,
+              amount: item.amount,
+              currency: item.currency,
+              date: item.date,
+              type: item.type,
+              already_tagged: ruleId
+                ? (item.applied_rule_ids || []).some((id: any) => id.toString() === ruleId)
+                : false,
+            });
+          }
+        }
+
+        res.json({
+          status: true,
+          message: "Rule preview ready",
+          data: { matches, limit: MATCH_LIMIT, scanned: items.length },
+        });
+      } catch (error) {
+        console.error("Error previewing rule:", error);
+        res.status(500).json({ status: false, message: "Failed to preview rule" });
+      }
+    });
+
   app.delete("/api/xenbudget/books/:bookId/rules/:ruleId",
     validateParams(xenBudgetRuleParamSchema),
     async (req: Request, res: Response) => {
@@ -1027,9 +1155,11 @@ module.exports = function (app: any) {
         if (!book) return;
         const dryRun = req.body.dry_run === true;
         const includeManual = req.body.include_manually_edited === true;
+        const excludeIds = Array.isArray(req.body.exclude_ids) ? req.body.exclude_ids : [];
 
         const filter: Record<string, any> = { book_id: book._id };
         if (!includeManual) filter.manually_edited = { $ne: true };
+        if (excludeIds.length > 0) filter._id = { $nin: excludeIds };
 
         const items = await XenBudgetItem.find(filter);
         const rules = plainRules(book);
@@ -1044,9 +1174,9 @@ module.exports = function (app: any) {
           if (!diff) continue;
           changes.push(diff);
           if (!dryRun) {
-            // Rules name categories; the weights are derived here, evenly split.
-            item.categories = evenCategoryWeights(after.categories, item.amount);
-            item.category_split_type = "equal";
+            // Rules name categories; the weights (even or percentage) are derived here.
+            item.categories = draftCategoryWeights(after, item.amount);
+            item.category_split_type = after.category_split_type ?? "equal";
             item.rule_categories = after.rule_categories;
             item.flags = after.flags;
             item.rule_flags = after.rule_flags;
@@ -1114,7 +1244,9 @@ module.exports = function (app: any) {
         const rules = plainRules(book);
         const previews = rows.map((row: any, index: number) => {
           const draft = draftFromRow(row, book);
-          const result = applyRules(draft, rules);
+          const result = req.body.skip_rules
+            ? { item: draft, skipped: false, skippedByRuleName: undefined }
+            : applyRules(draft, rules);
           return {
             index,
             skipped: result.skipped,
@@ -1383,10 +1515,10 @@ module.exports = function (app: any) {
         );
 
         req.body.items.forEach((row: any, index: number) => {
-          const { item: ruled, skipped: wasSkipped, skippedByRuleName } = applyRules(
-            draftFromRow({ ...row, source: "csv" }, book),
-            rules,
-          );
+          const draft = draftFromRow({ ...row, source: "csv" }, book);
+          const { item: ruled, skipped: wasSkipped, skippedByRuleName } = req.body.skip_rules
+            ? { item: draft, skipped: false, skippedByRuleName: undefined }
+            : applyRules(draft, rules);
           if (wasSkipped) {
             skipped.push({ index, rule: skippedByRuleName || "a rule" });
             return;
@@ -1426,8 +1558,8 @@ module.exports = function (app: any) {
             date: bookDateToUtc(ruled.date, book.timezone),
             description: ruled.description,
             original_description: ruled.original_description || row.description,
-            categories: evenCategoryWeights(ruled.categories, ruled.amount),
-            category_split_type: "equal",
+            categories: draftCategoryWeights(ruled, ruled.amount),
+            category_split_type: ruled.category_split_type ?? "equal",
             rule_categories: ruled.rule_categories,
             flags: importFlags,
             rule_flags: ruled.rule_flags,
@@ -2127,10 +2259,11 @@ module.exports = function (app: any) {
 
         // Rules run on hand-entered items too, not just imports — otherwise the same
         // transaction would be tagged one way through a CSV and another way by hand.
-        const { item: ruled, skipped, skippedByRuleName } = applyRules(
-          draftFromRow({ ...body, source: "manual" }, book),
-          plainRules(book),
-        );
+        // "Skip auto-tagging" leaves the item exactly as it was entered.
+        const draft = draftFromRow({ ...body, source: "manual" }, book);
+        const { item: ruled, skipped, skippedByRuleName } = body.skip_rules
+          ? { item: draft, skipped: false, skippedByRuleName: undefined }
+          : applyRules(draft, plainRules(book));
         if (skipped) {
           // A manual add is a deliberate act, so a "skip" rule refuses it by name rather
           // than accepting the item and silently dropping it.
@@ -2143,7 +2276,7 @@ module.exports = function (app: any) {
         // A rule that named categories overrides what the form asked for; otherwise the
         // form's own weights are resolved, which is what allows an uneven split.
         const manualCategories = ruled.rule_categories.length > 0
-          ? evenCategoryWeights(ruled.categories, ruled.amount)
+          ? draftCategoryWeights(ruled, ruled.amount)
           : resolveCategories(body.category_split_type || "equal", ruled.amount, body.categories || []);
 
         let shares;
@@ -2169,7 +2302,9 @@ module.exports = function (app: any) {
           original_description: ruled.original_description || body.description,
           notes: body.notes,
           categories: manualCategories,
-          category_split_type: body.category_split_type || "equal",
+          category_split_type: ruled.rule_categories.length > 0
+            ? (ruled.category_split_type ?? "equal")
+            : (body.category_split_type || "equal"),
           rule_categories: ruled.rule_categories,
           flags: ruled.flags,
           rule_flags: ruled.rule_flags,

@@ -2,6 +2,22 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import type { XenBudgetBook, RuleInput, ReapplyResult } from "./types";
 
+export interface RulePreviewMatch {
+    _id: string;
+    description: string;
+    amount: number;
+    currency: string;
+    date: string;
+    type: "expense" | "income";
+    already_tagged: boolean;
+}
+
+export interface RulePreviewResult {
+    matches: RulePreviewMatch[];
+    limit: number;
+    scanned: number;
+}
+
 /**
  * Rule CRUD and the re-apply sweep.
  *
@@ -50,12 +66,20 @@ export function useXenBudgetRules(bookId: string) {
     });
 
     const reapplyMutation = useMutation({
-        mutationFn: async (opts: { dry_run?: boolean; include_manually_edited?: boolean }) => {
+        mutationFn: async (opts: { dry_run?: boolean; include_manually_edited?: boolean; exclude_ids?: string[] }) => {
             const res = await apiClient.post(`/api/xenbudget/books/${bookId}/rules/reapply`, opts);
             return res.data.data as ReapplyResult;
         },
         // A dry run writes nothing, so only a real sweep needs to invalidate.
         onSuccess: (data) => { if (!data.dry_run) invalidateEverything(); },
+    });
+
+    const previewMutation = useMutation({
+        mutationFn: async ({ input, ruleId }: { input: RuleInput; ruleId?: string }) => {
+            const query = ruleId ? `?ruleId=${encodeURIComponent(ruleId)}` : "";
+            const res = await apiClient.post(`/api/xenbudget/books/${bookId}/rules/preview${query}`, input);
+            return res.data.data as RulePreviewResult;
+        },
     });
 
     return {
@@ -67,5 +91,8 @@ export function useXenBudgetRules(bookId: string) {
         isDeletingRule: deleteMutation.isPending,
         reapplyAsync: reapplyMutation.mutateAsync,
         isReapplying: reapplyMutation.isPending,
+        previewRuleAsync: previewMutation.mutateAsync,
+        isPreviewingRule: previewMutation.isPending,
     };
 }
+

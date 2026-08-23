@@ -201,6 +201,8 @@ export interface CreateItemInput {
     flags?: string[];
     share_type?: ShareType;
     shares?: { user_id: string; amount?: number; percentage?: number }[];
+    /** "Skip auto-tagging" — save the item without running this book's rules. */
+    skip_rules?: boolean;
 }
 
 export type UpdateItemInput = Partial<CreateItemInput> & {
@@ -208,10 +210,21 @@ export type UpdateItemInput = Partial<CreateItemInput> & {
 };
 
 export type RuleDisposition = "keep" | "exclude" | "skip";
+export type RuleCategorySplit = "equal" | "percent";
+
+export interface RuleCategoryWeight {
+    name: string;
+    amount?: number;
+    percentage?: number;
+}
 
 export interface RuleActions {
-    /** What the purchase was. Assigned an even split, so one category means 100%. */
+    /** What the purchase was, by name. */
     set_categories: string[];
+    /** How those categories divide each item's amount. Omitted = even split. */
+    category_split_type?: RuleCategorySplit;
+    /** Per-category percentages when `category_split_type` is "percent". */
+    set_category_weights?: RuleCategoryWeight[];
     /** What needs attention. This is what the old flag action became. */
     add_flags: string[];
     remove_flags: string[];

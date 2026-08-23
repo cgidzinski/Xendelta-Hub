@@ -33,6 +33,11 @@ interface WeightedSplitEditorProps {
      */
     amountless?: boolean;
     /**
+     * For rules, which apply to items of any amount: only "even" and "percent" splits are
+     * offered (no exact amounts), and the even split never shows a per-part money figure.
+     */
+    noAmount?: boolean;
+    /**
      * Renders only rows already in `selected`, with no checkbox/`Autocomplete` to change
      * who or what is included — for a second "now configure the split" step that follows a
      * dedicated picker step, so the same people/categories aren't picked twice.
@@ -52,7 +57,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  */
 export default function WeightedSplitEditor({
     splitType, onSplitTypeChange, selected, onSelectedChange, amount, currency, mode,
-    amountless = false, hidePicker = false,
+    amountless = false, noAmount = false, hidePicker = false,
 }: WeightedSplitEditorProps) {
     const keys = selected.map((s) => s.key);
 
@@ -70,9 +75,8 @@ export default function WeightedSplitEditor({
     const entered = selected.reduce((acc, s) => acc + (parseFloat(s.value) || 0), 0);
     const perPart = selected.length > 0 ? amount / selected.length : 0;
 
-    const noun = mode.kind === "people" ? "person" : "category";
     const summary = (() => {
-        if (amountless) {
+        if (amountless || (noAmount && splitType === "equal")) {
             if (selected.length === 0) {
                 return mode.kind === "people"
                     ? { text: "Pick at least one person", error: true }
@@ -122,17 +126,82 @@ export default function WeightedSplitEditor({
         />
     );
 
+    // The even split shows the same textbox shape as exact/percent, just read-only.
+    const evenValue = noAmount
+        ? (selected.length > 0 ? String(Math.round((100 / selected.length) * 100) / 100) : "")
+        : String(round2(perPart));
+    const evenField = () => (
+        <TextField
+            size="small" value={evenValue} disabled sx={{ width: 120 }}
+            slotProps={{
+                input: noAmount
+                    ? { endAdornment: <InputAdornment position="end">%</InputAdornment> }
+                    : { startAdornment: <InputAdornment position="start">{getCurrencySymbol(currency)}</InputAdornment> },
+            }}
+        />
+    );
+
     return (
         <Box>
+            {!hidePicker && mode.kind === "people" && (
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1 }}>
+                    {mode.members.map((m) => {
+                        const isSelected = keys.includes(m.user_id);
+                        return (
+                            <Box
+                                key={m.user_id}
+                                onClick={() => toggle(m.user_id)}
+                                sx={{
+                                    display: "flex", alignItems: "center", gap: 1,
+                                    px: 1.5, py: 0.75, borderRadius: 2, cursor: "pointer",
+                                    bgcolor: "action.hover", color: "text.primary",
+                                    border: isSelected ? "2px solid" : "2px solid transparent",
+                                    borderColor: isSelected ? "primary.main" : "transparent",
+                                    transition: "all 0.2s",
+                                }}
+                            >
+                                <Avatar src={m.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
+                                    {m.username[0]?.toUpperCase()}
+                                </Avatar>
+                                <Typography variant="caption">{m.username}</Typography>
+                            </Box>
+                        );
+                    })}
+                </Box>
+            )}
+
+            {!hidePicker && mode.kind === "categories" && (
+                <Autocomplete
+                    multiple freeSolo
+                    options={mode.registry.map((c) => c.name)}
+                    value={keys}
+                    onChange={(_, v) => {
+                        const next = v as string[];
+                        // Keep any weight already typed for a category that survives.
+                        onSelectedChange(next.map((key) =>
+                            selected.find((s) => s.key === key) || { key, value: "" }));
+                    }}
+                    renderTags={(value, getTagProps) =>
+                        value.map((option, index) => {
+                            const { key, ...rest } = getTagProps({ index });
+                            return <CategoryChip key={key} name={option} registry={mode.registry} {...rest} />;
+                        })
+                    }
+                    renderInput={(params) => (
+                        <TextField {...params} size="small" label="Categories" placeholder="What was this?" />
+                    )}
+                />
+            )}
+
             {!amountless && (
                 <ToggleButtonGroup
                     size="small" exclusive fullWidth value={splitType}
                     onChange={(_, v) => v && onSplitTypeChange(v)}
-                    sx={{ mb: 1 }}
+                    sx={{ mt: !hidePicker ? 1 : 0, mb: 1 }}
                 >
-                    <ToggleButton value="equal">Split evenly</ToggleButton>
-                    <ToggleButton value="exact">Exact amounts</ToggleButton>
-                    <ToggleButton value="percent">Percentages</ToggleButton>
+                    <ToggleButton value="equal">Even</ToggleButton>
+                    <ToggleButton value="exact" disabled={noAmount}>Exact</ToggleButton>
+                    <ToggleButton value="percent">Percent</ToggleButton>
                 </ToggleButtonGroup>
             )}
 
@@ -149,11 +218,7 @@ export default function WeightedSplitEditor({
                                     <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
                                         {m.username}
                                     </Typography>
-                                    {draft && !amountless && splitType === "equal" && (
-                                        <Typography variant="body2" color="text.secondary">
-                                            {formatCurrency(round2(perPart), currency)}
-                                        </Typography>
-                                    )}
+                                    {draft && !amountless && splitType === "equal" && evenField()}
                                     {draft && !amountless && splitType !== "equal" && valueField(draft)}
                                 </Stack>
                             );
@@ -161,30 +226,6 @@ export default function WeightedSplitEditor({
                     </Stack>
                 ) : (
                     <Stack spacing={1}>
-                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                            {mode.members.map((m) => {
-                                const isSelected = keys.includes(m.user_id);
-                                return (
-                                    <Box
-                                        key={m.user_id}
-                                        onClick={() => toggle(m.user_id)}
-                                        sx={{
-                                            display: "flex", alignItems: "center", gap: 1,
-                                            px: 1.5, py: 0.75, borderRadius: 2, cursor: "pointer",
-                                            bgcolor: "action.hover", color: "text.primary",
-                                            border: isSelected ? "2px solid" : "2px solid transparent",
-                                            borderColor: isSelected ? "primary.main" : "transparent",
-                                            transition: "all 0.2s",
-                                        }}
-                                    >
-                                        <Avatar src={m.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
-                                            {m.username[0]?.toUpperCase()}
-                                        </Avatar>
-                                        <Typography variant="caption">{m.username}</Typography>
-                                    </Box>
-                                );
-                            })}
-                        </Box>
                         {!amountless && splitType !== "equal" && selected.map((draft) => {
                             const m = mode.members.find((mm) => mm.user_id === draft.key);
                             return (
@@ -203,28 +244,6 @@ export default function WeightedSplitEditor({
                 )
             ) : (
                 <Stack spacing={1}>
-                    {!hidePicker && (
-                        <Autocomplete
-                            multiple freeSolo
-                            options={mode.registry.map((c) => c.name)}
-                            value={keys}
-                            onChange={(_, v) => {
-                                const next = v as string[];
-                                // Keep any weight already typed for a category that survives.
-                                onSelectedChange(next.map((key) =>
-                                    selected.find((s) => s.key === key) || { key, value: "" }));
-                            }}
-                            renderTags={(value, getTagProps) =>
-                                value.map((option, index) => {
-                                    const { key, ...rest } = getTagProps({ index });
-                                    return <CategoryChip key={key} name={option} registry={mode.registry} {...rest} />;
-                                })
-                            }
-                            renderInput={(params) => (
-                                <TextField {...params} size="small" label="Categories" placeholder="What was this?" />
-                            )}
-                        />
-                    )}
                     {hidePicker && selected.map((draft) => (
                         <Stack key={draft.key} direction="row" alignItems="center" spacing={1}>
                             <Box sx={{
@@ -234,15 +253,11 @@ export default function WeightedSplitEditor({
                             <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
                                 {draft.key}
                             </Typography>
-                            {!amountless && splitType === "equal" && selected.length > 1 && (
-                                <Typography variant="body2" color="text.secondary">
-                                    {formatCurrency(round2(perPart), currency)}
-                                </Typography>
-                            )}
+                            {!amountless && selected.length > 1 && splitType === "equal" && evenField()}
                             {!amountless && splitType !== "equal" && valueField(draft)}
                         </Stack>
                     ))}
-                    {!hidePicker && splitType !== "equal" && selected.map((draft) => (
+                    {!hidePicker && selected.length > 1 && selected.map((draft) => (
                         <Stack key={draft.key} direction="row" alignItems="center" spacing={1}>
                             <Box sx={{
                                 width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
@@ -251,14 +266,9 @@ export default function WeightedSplitEditor({
                             <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
                                 {draft.key}
                             </Typography>
-                            {valueField(draft)}
+                            {splitType === "equal" ? evenField() : valueField(draft)}
                         </Stack>
                     ))}
-                    {!hidePicker && splitType === "equal" && selected.length > 1 && (
-                        <Typography variant="caption" color="text.secondary">
-                            {formatCurrency(round2(perPart), currency)} to each {noun}
-                        </Typography>
-                    )}
                 </Stack>
             )}
 
