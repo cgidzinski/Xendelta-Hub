@@ -160,7 +160,15 @@ export default function BookDetail() {
                 </Tabs>
             </Box>
 
-            <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", width: "100%", maxWidth: 1200, mx: "auto" }}>
+            {/* A hard maxWidth draws a line where padding suddenly appears - nothing on a
+            1400px window, a fixed gutter the moment it crosses 1600. Scaling the side
+            padding by breakpoint instead keeps a monitor from ever being edge-to-edge
+            without hitting that cliff, while mobile stays at (near) zero and leans on the
+            page's own 16px content padding. */}
+            <Box sx={{
+                flex: 1, minHeight: 0, display: "flex", flexDirection: "column", width: "100%",
+                px: { xs: 0, sm: 1, md: "3%", lg: "6%", xl: "10%" },
+            }}>
                 <Outlet context={outletContext} />
             </Box>
 

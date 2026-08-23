@@ -46,9 +46,19 @@ export interface RangeBudget {
     period_to: string;
 }
 
-export function budgetedForRange(budget: RangeBudget, rangeFrom: Date, rangeTo: Date): number {
-    const { amount } = budget;
-    if (amount === undefined || amount <= 0) return 0;
+/**
+ * How many of the budget's own periods the range covers, counting partial ones as the
+ * fraction actually covered. Twelve whole months of a monthly budget is 12; a half-month
+ * tail adds 0.5.
+ *
+ * This is the whole of the range maths - `budgetedForRange` is just this times the amount,
+ * and scaling a sub-budget's amount uses the same factor.
+ */
+export function periodsInRange(
+    budget: Pick<RangeBudget, "period" | "period_from" | "period_to">,
+    rangeFrom: Date,
+    rangeTo: Date,
+): number {
     if (rangeTo.getTime() <= rangeFrom.getTime()) return 0;
 
     // A one-off budget is a single fixed window, not a repeating one, so it contributes
@@ -58,7 +68,7 @@ export function budgetedForRange(budget: RangeBudget, rangeFrom: Date, rangeTo: 
         const to = new Date(budget.period_to);
         const span = to.getTime() - from.getTime();
         if (span <= 0) return 0;
-        return amount * (overlapMs(from, to, rangeFrom, rangeTo) / span);
+        return overlapMs(from, to, rangeFrom, rangeTo) / span;
     }
 
     const step = STEPS[budget.period];
@@ -70,8 +80,14 @@ export function budgetedForRange(budget: RangeBudget, rangeFrom: Date, rangeTo: 
         const periodEnd = step.next(periodStart);
         const span = periodEnd.getTime() - periodStart.getTime();
         if (span <= 0) break;
-        total += amount * (overlapMs(periodStart, periodEnd, rangeFrom, rangeTo) / span);
+        total += overlapMs(periodStart, periodEnd, rangeFrom, rangeTo) / span;
         periodStart = periodEnd;
     }
     return total;
+}
+
+export function budgetedForRange(budget: RangeBudget, rangeFrom: Date, rangeTo: Date): number {
+    const { amount } = budget;
+    if (amount === undefined || amount <= 0) return 0;
+    return amount * periodsInRange(budget, rangeFrom, rangeTo);
 }

@@ -37,6 +37,15 @@ export const MAGNITUDE_COLOR = "#3987e5";
 export const EXPENSE_COLOR = "#d95926";
 export const INCOME_COLOR = "#199e70";
 
+/**
+ * A plain-hex mirror of the theme's default `error.main` (unoverridden dark-mode MUI red),
+ * for the few charts that want the same true red already used everywhere else in XenBudget
+ * for expense (item rows, the "over budget" state, BudgetBar's overflow segment) rather
+ * than EXPENSE_COLOR's orange. EXPENSE_COLOR stays the default for charts in general - it's
+ * the one validated above for chart-safe contrast - this is a deliberate exception.
+ */
+export const EXPENSE_RED = "#f44336";
+
 export function chartColorAt(index: number): string {
     return CHART_COLORS[index % CHART_COLORS.length];
 }

@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import {
-    Avatar, Box, Card, LinearProgress, MenuItem, Stack, TextField, Typography, alpha,
+    Avatar, Box, Card, MenuItem, Stack, TextField, Typography,
 } from "@mui/material";
 import InsightsIcon from "@mui/icons-material/Insights";
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
-import { CategoryChip, resolveLabelColor } from "./components/LabelChip";
+import { CategoryChip } from "./components/LabelChip";
 import BudgetCard from "./components/budget/BudgetCard";
 import { sortBudgets, overCount, metCount } from "./components/budget/sortBudgets";
 import TimePeriodFilter, { defaultMonthMode, resolvePeriod, type PeriodMode } from "./components/TimePeriodFilter";
@@ -25,14 +25,19 @@ export default function BookOverview() {
 
     const [period, setPeriod] = useState<PeriodMode>(defaultMonthMode);
     const { from, to, groupBy, label } = useMemo(() => resolvePeriod(period), [period]);
-    const now = new Date();
-    const isCurrentMonth = period.kind === "month"
-        && period.anchor.getFullYear() === now.getFullYear() && period.anchor.getMonth() === now.getMonth();
 
     const { summary, isLoading, isError, error } = useXenBudgetSummary(book._id, {
         currency, from: from.toISOString(), to: to.toISOString(), group_by: groupBy,
     });
-    const { status: budgetStatusResponse, budgets: budgetStatus } = useXenBudgetStatus(book._id, currency);
+    // Measured over the selected period, not each budget's own - picking "Year" showing
+    // this month's live bars would be answering a question nobody asked.
+    const budgetRange = useMemo(
+        () => ({ from: from.toISOString(), to: to.toISOString() }),
+        [from, to],
+    );
+    const { status: budgetStatusResponse, budgets: budgetStatus } = useXenBudgetStatus(
+        book._id, currency, budgetRange,
+    );
     const visibleBudgets = useMemo(
         () => sortBudgets(budgetStatus),
         [budgetStatus],
@@ -77,7 +82,6 @@ export default function BookOverview() {
     if (!summary) return null;
 
     const { totals } = summary;
-    const biggestCategory = Math.max(...categoryRows.map((r) => r.total), 0);
     const biggestPersonTotal = Math.max(...personRows.map((p) => p.total + p.income), 0);
     const nothingYet = totals.count === 0;
 
@@ -150,9 +154,9 @@ export default function BookOverview() {
                     </Stack>
                 </Card>
 
-                {isCurrentMonth && visibleBudgets.length > 0 && (
+                {visibleBudgets.length > 0 && (
                     <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
-                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
                             <Typography variant="caption" sx={sectionLabelSx}>Budgets</Typography>
                             <Stack direction="row" spacing={1} alignItems="center">
                                 {goalsMetCount > 0 && (
@@ -167,7 +171,21 @@ export default function BookOverview() {
                                 )}
                             </Stack>
                         </Stack>
-                        <Stack spacing={1}>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                            Scaled to {label} — a monthly cap counts once per month covered.
+                        </Typography>
+                        {/* auto-fit (not auto-fill): empty tracks collapse, so a short
+                        last row stretches to fill the width instead of leaving a gap.
+                        320px keeps this at 1-4 columns inside the page's 1600px cap,
+                        rather than fanning out further on a wide monitor - wrapped in
+                        min(...,100%) so that floor can never exceed a narrow phone's
+                        actual width. */}
+                        <Box sx={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))",
+                            gap: 1,
+                            alignItems: "start",
+                        }}>
                             {visibleBudgets.map((budget) => (
                                 <BudgetCard
                                     key={budget._id}
@@ -177,6 +195,7 @@ export default function BookOverview() {
                                     members={book.members}
                                     asOf={asOf}
                                     variant="minimal"
+                                    periodLabel={label}
                                     onViewItems={(b) => navigate(
                                         `/internal/xenbudget/books/${book._id}/items`,
                                         {
@@ -192,7 +211,7 @@ export default function BookOverview() {
                                     onEdit={() => navigate(`/internal/xenbudget/books/${book._id}/settings/budgets`)}
                                 />
                             ))}
-                        </Stack>
+                        </Box>
                     </Card>
                 )}
 
@@ -211,38 +230,39 @@ export default function BookOverview() {
                                 <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>
                                     Spending by category
                                 </Typography>
-                                <Stack spacing={1.25}>
-                                    {categoryRows.map((row) => (
-                                        <Box
-                                            key={row.label}
-                                            onClick={() => row.category && navigate(
-                                                `/internal/xenbudget/books/${book._id}/items`,
-                                            )}
-                                            sx={{ cursor: row.category ? "pointer" : "default" }}
-                                        >
-                                            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                                {/* auto-fit, floor wrapped in min(...,100%) so it can never
+                                exceed the container - a bare 320px (or even 200px, now that
+                                a row is just a chip and two figures) can still overflow a
+                                narrow phone otherwise. */}
+                                <Box sx={{
+                                    display: "grid",
+                                    gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
+                                    gap: 1.25,
+                                    alignItems: "start",
+                                }}>
+                                    {categoryRows.map((row) => {
+                                        const percent = totals.expense > 0
+                                            ? Math.round((row.total / totals.expense) * 100)
+                                            : 0;
+                                        return (
+                                            <Stack
+                                                key={row.label}
+                                                direction="row" alignItems="center" justifyContent="space-between" spacing={1}
+                                                sx={{ minWidth: 0 }}
+                                            >
                                                 {row.category
                                                     ? <CategoryChip name={row.category} registry={book.categories} />
                                                     : <Typography variant="caption" color="text.secondary">Uncategorised</Typography>}
-                                                <Typography variant="body2">
+                                                <Typography variant="body2" noWrap sx={{ flexShrink: 0 }}>
                                                     {formatCurrency(row.total, summary.currency)}
+                                                    <Typography component="span" variant="body2" color="text.secondary">
+                                                        {" · "}{percent}%
+                                                    </Typography>
                                                 </Typography>
                                             </Stack>
-                                            <LinearProgress
-                                                variant="determinate"
-                                                value={biggestCategory > 0 ? (row.total / biggestCategory) * 100 : 0}
-                                                sx={{
-                                                    height: 5, borderRadius: 1,
-                                                    bgcolor: (theme) => alpha(theme.palette.text.primary, 0.08),
-                                                    "& .MuiLinearProgress-bar": {
-                                                        bgcolor: row.category ? resolveLabelColor(row.category, book.categories) : "text.disabled",
-                                                        borderRadius: 1,
-                                                    },
-                                                }}
-                                            />
-                                        </Box>
-                                    ))}
-                                </Stack>
+                                        );
+                                    })}
+                                </Box>
                             </Card>
                         )}
                     </Stack>

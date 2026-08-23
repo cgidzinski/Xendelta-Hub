@@ -12,6 +12,8 @@ interface BudgetDetailsProps {
     focus: SubBudgetStatus | null;
     currency: string;
     asOf: string;
+    /** Names the window the figures cover when it isn't the budget's own period. */
+    periodLabel?: string;
 }
 
 /**
@@ -20,7 +22,7 @@ interface BudgetDetailsProps {
  * bad trade.
  */
 export default function BudgetDetails({
-    budget, focus, currency, asOf,
+    budget, focus, currency, asOf, periodLabel,
 }: BudgetDetailsProps) {
     const money = (v: number) => formatCurrency(v, currency);
     const amount = focus ? focus.amount : budget.amount;
@@ -34,6 +36,7 @@ export default function BudgetDetails({
                 <PaceSummary
                     kind={budget.kind}
                     period={budget.period}
+                    periodLabel={periodLabel}
                     pace={pace}
                     amount={amount}
                     spent={spent}

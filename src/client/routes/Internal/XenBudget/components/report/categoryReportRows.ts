@@ -236,31 +236,9 @@ export function buildCategoryReport({
 
     const columns = pivoted ? periodKeys : [];
 
-    // What each column allows. A bucket is clamped to the range before it is measured:
-    // "last 3 months" ends mid-month, and counting that whole month here would leave the
-    // columns adding up to more than the total beside them.
-    const cappedByPeriod: Record<string, number> = {};
-    const goalByPeriod: Record<string, number> = {};
-    for (const periodKey of columns) {
-        const bucket = periodKeyRange(periodKey);
-        if (!bucket) continue;
-        const from = new Date(Math.max(bucket.from.getTime(), rangeFrom.getTime()));
-        const to = new Date(Math.min(bucket.to.getTime(), rangeTo.getTime()));
-        for (const budget of kept) {
-            const value = budgetedForRange(
-                {
-                    period: budget.period,
-                    amount: budget.amount,
-                    period_from: budget.period_from,
-                    period_to: budget.period_to,
-                },
-                from, to,
-            );
-            if (value <= 0) continue;
-            const target = budget.kind === "goal" ? goalByPeriod : cappedByPeriod;
-            target[periodKey] = (target[periodKey] ?? 0) + value;
-        }
-    }
+    const { capped: cappedByPeriod, goals: goalByPeriod } = allowanceByPeriod(
+        kept, columns, rangeFrom, rangeTo,
+    );
 
     const spentByPeriod = fromPeriods(byPeriod, columns, (p) => p.expense);
     const incomeByPeriod = fromPeriods(byPeriod, columns, (p) => p.income);
@@ -308,6 +286,48 @@ export function buildCategoryReport({
             },
         },
     };
+}
+
+/**
+ * What each period bucket allows, caps and goals kept apart.
+ *
+ * A bucket is clamped to the range before it is measured: "last 3 months" ends mid-month,
+ * and counting that whole month would leave the columns adding up to more than the total
+ * beside them.
+ *
+ * Exported because the burn-up chart needs the same figures over buckets the TABLE isn't
+ * pivoted into - a month grouped by day has 31 buckets, too many for columns but exactly
+ * what a line wants.
+ */
+export function allowanceByPeriod(
+    budgets: BudgetStatus[],
+    periodKeys: string[],
+    rangeFrom: Date,
+    rangeTo: Date,
+): { capped: Record<string, number>; goals: Record<string, number> } {
+    const capped: Record<string, number> = {};
+    const goals: Record<string, number> = {};
+    for (const periodKey of periodKeys) {
+        const bucket = periodKeyRange(periodKey);
+        if (!bucket) continue;
+        const from = new Date(Math.max(bucket.from.getTime(), rangeFrom.getTime()));
+        const to = new Date(Math.min(bucket.to.getTime(), rangeTo.getTime()));
+        for (const budget of budgets) {
+            const value = budgetedForRange(
+                {
+                    period: budget.period,
+                    amount: budget.amount,
+                    period_from: budget.period_from,
+                    period_to: budget.period_to,
+                },
+                from, to,
+            );
+            if (value <= 0) continue;
+            const target = budget.kind === "goal" ? goals : capped;
+            target[periodKey] = (target[periodKey] ?? 0) + value;
+        }
+    }
+    return { capped, goals };
 }
 
 /** Per-column spend across a set of categories. */

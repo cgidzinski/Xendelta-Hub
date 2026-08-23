@@ -9,6 +9,11 @@ interface PaceSummaryProps {
     kind: BudgetKind;
     /** Raw period value off the budget, e.g. "monthly" or "custom". */
     period: string;
+    /**
+     * Overrides the period word when the figures have been restated for some other window
+     * - a report range, say. Without it a year-scaled card would still claim "Monthly".
+     */
+    periodLabel?: string;
     pace: BudgetPace;
     amount: number;
     spent: number;
@@ -23,7 +28,7 @@ interface PaceSummaryProps {
  * rather than parsed out of a sentence.
  */
 export default function PaceSummary({
-    kind, period, pace, amount, spent, percent, money,
+    kind, period, periodLabel: labelOverride, pace, amount, spent, percent, money,
 }: PaceSummaryProps) {
     const state = limitState(kind, percent, pace.elapsed);
     const stateColor = limitColor(state);
@@ -38,7 +43,7 @@ export default function PaceSummary({
         >
             <Stack spacing={0.375}>
                 <Typography variant="caption" color="text.secondary">
-                    {capitalize(periodLabel(period))} · day {pace.dayOf} of {pace.totalDays}
+                    {labelOverride ?? capitalize(periodLabel(period))} · day {pace.dayOf} of {pace.totalDays}
                 </Typography>
                 <Typography variant="caption" sx={{ color: stateColor ?? "text.secondary" }}>
                     {pace.finished

@@ -1649,12 +1649,17 @@ module.exports = function (app: any) {
       }
     });
 
-  // GET /api/xenbudget/books/:bookId/budget-status?as_of&currency
+  // GET /api/xenbudget/books/:bookId/budget-status?as_of&currency&from&to
   //
   // What each active budget has spent in the period it is *currently* in. Every budget
   // carries its own anchor and period length, so their windows differ; they're all
   // resolved up front and then measured in one $facet pass over the union range rather
   // than one query per budget.
+  //
+  // `from`/`to` override that: every budget is measured over the one window instead, which
+  // is what a report covering an arbitrary range needs. Only the SPEND changes - `amount`
+  // stays each budget's own per-period figure, and scaling it to the range is the client's
+  // job (see scaleBudgetToRange), so that date maths lives in exactly one place.
   app.get("/api/xenbudget/books/:bookId/budget-status",
     validateParams(xenBudgetBookIdParamSchema),
     async (req: Request, res: Response) => {
@@ -1677,7 +1682,15 @@ module.exports = function (app: any) {
           });
         }
 
-        const ranges = budgets.map((b: any) => budgetPeriodRange(b, asOf, tz));
+        const rangeFrom = q.from ? new Date(q.from) : null;
+        const rangeTo = q.to ? new Date(q.to) : null;
+        const useRange = !!rangeFrom && !!rangeTo
+          && !isNaN(rangeFrom.getTime()) && !isNaN(rangeTo.getTime())
+          && rangeTo.getTime() > rangeFrom.getTime();
+
+        const ranges = budgets.map((b: any) => (useRange
+          ? { from: rangeFrom as Date, to: rangeTo as Date }
+          : budgetPeriodRange(b, asOf, tz)));
         const unionFrom = new Date(Math.min(...ranges.map((r: any) => r.from.getTime())));
         const unionTo = new Date(Math.max(...ranges.map((r: any) => r.to.getTime())));
 

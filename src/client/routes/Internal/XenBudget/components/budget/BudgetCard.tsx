@@ -37,6 +37,11 @@ interface BudgetCardProps {
      * limits when clicked.
      */
     variant?: "full" | "minimal";
+    /**
+     * Names the window the figures cover, for when they've been restated for a report
+     * range rather than measured over the budget's own period.
+     */
+    periodLabel?: string;
     onViewItems?: (budget: BudgetStatus) => void;
     onEdit?: (budget: BudgetStatus) => void;
 }
@@ -54,7 +59,8 @@ interface BudgetCardProps {
  * reveals the per-person limits (and the overall detail panel) on click.
  */
 export default function BudgetCard({
-    budget, currency, categoryRegistry, members, asOf, variant = "full", onViewItems, onEdit,
+    budget, currency, categoryRegistry, members, asOf, variant = "full", periodLabel,
+    onViewItems, onEdit,
 }: BudgetCardProps) {
     // Which limit's details are open, if any: "overall" or a sub-budget id. Only one at a
     // time, so an expanded card stays short enough to read without scrolling past it.
@@ -113,6 +119,7 @@ export default function BudgetCard({
             focus={focus}
             currency={currency}
             asOf={asOf}
+            periodLabel={periodLabel}
         />
     );
 
@@ -191,27 +198,39 @@ export default function BudgetCard({
                                             minHeight: 44, borderRadius: 1,
                                         }}
                                     >
-                                        <BudgetLimitLine
-                                            label={(
-                                                <BudgetTarget
-                                                    personId={sub.person_id}
-                                                    personName={sub.person_name}
-                                                    members={members}
+                                        <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ minWidth: 0 }}>
+                                            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                                                <BudgetLimitLine
+                                                    label={(
+                                                        <BudgetTarget
+                                                            personId={sub.person_id}
+                                                            personName={sub.person_name}
+                                                            members={members}
+                                                        />
+                                                    )}
+                                                    amount={sub.amount}
+                                                    spent={sub.spent}
+                                                    percent={sub.percent}
+                                                    over={sub.over}
+                                                    kind={budget.kind}
+                                                    currency={currency}
+                                                    color={memberColor(sub.person_id, members)}
+                                                    height={6}
+                                                    pace={pace.elapsed}
+                                                    itemCount={sub.item_count}
+                                                    barLabel={`${sub.person_name}: ${formatCurrency(sub.spent, currency)
+                                                        } of ${formatCurrency(sub.amount, currency)}, ${sub.percent}% of their ${limitNoun(budget.kind)}`}
                                                 />
-                                            )}
-                                            amount={sub.amount}
-                                            spent={sub.spent}
-                                            percent={sub.percent}
-                                            over={sub.over}
-                                            kind={budget.kind}
-                                            currency={currency}
-                                            color={memberColor(sub.person_id, members)}
-                                            height={6}
-                                            pace={pace.elapsed}
-                                            itemCount={sub.item_count}
-                                            barLabel={`${sub.person_name}: ${formatCurrency(sub.spent, currency)
-                                                } of ${formatCurrency(sub.amount, currency)}, ${sub.percent}% of their ${limitNoun(budget.kind)}`}
-                                        />
+                                            </Box>
+                                            <ExpandMoreIcon
+                                                fontSize="small"
+                                                sx={{
+                                                    color: "text.disabled", flexShrink: 0, mt: 0.25,
+                                                    transform: open === sub._id ? "rotate(180deg)" : "none",
+                                                    transition: "transform 150ms",
+                                                }}
+                                            />
+                                        </Stack>
                                     </ButtonBase>
                                     <Collapse in={open === sub._id} unmountOnExit>
                                         {detailsFor(sub)}
