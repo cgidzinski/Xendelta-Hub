@@ -3,6 +3,7 @@ import BugsnagPluginExpress from "@bugsnag/plugin-express";
 import { execSync } from "child_process";
 
 const apiKey = process.env.BUGSNAG_API_KEY;
+const releaseStage = process.env.BUGSNAG_RELEASE_STAGE || "unknown";
 
 function getAppVersion(): string {
   try {
@@ -16,7 +17,7 @@ if (apiKey) {
   Bugsnag.start({
     apiKey,
     appVersion: getAppVersion(),
-    releaseStage: "production",
+    releaseStage,
     plugins: [BugsnagPluginExpress],
   });
 }

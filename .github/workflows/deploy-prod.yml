@@ -19,6 +19,7 @@ jobs:
       - name: Build and restart
         env:
           VITE_BUGSNAG_API_KEY: ${{ secrets.VITE_BUGSNAG_API_KEY }}
+          VITE_BUGSNAG_RELEASE_STAGE: production
         run: |
           set -euo pipefail
           cd ~/XenHub-Prod
