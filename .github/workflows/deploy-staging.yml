@@ -31,7 +31,7 @@ jobs:
             --api-key "$VITE_BUGSNAG_API_KEY" \
             --app-version "$SHA" \
             --directory ./dist \
-            --base-url "https://staging.evg31337.com/"
+            --base-url "https://staging.xendelta.com/"
           find dist -name "*.map" -delete
           pm2 restart xenhub-staging
           echo "Deployed $SHA (branch ${{ github.ref_name }}) to staging"
