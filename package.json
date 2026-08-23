@@ -72,6 +72,7 @@
     "zod": "^4.1.13"
   },
   "devDependencies": {
+    "@bugsnag/source-maps": "^2.3.3",
     "@types/d3-force": "^3.0.10",
     "@types/express": "^5.0.1",
     "@types/jsonwebtoken": "^9.0.10",

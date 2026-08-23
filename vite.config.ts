@@ -34,5 +34,9 @@ export default defineConfig({
   root: process.cwd(),
   build: {
     outDir: "dist",
+    // "hidden": .map files are generated but never referenced via a //# sourceMappingURL
+    // comment, so browsers never fetch them and they aren't publicly linked - the deploy
+    // workflow uploads them to Bugsnag directly from dist/ and deletes them afterward.
+    sourcemap: "hidden",
   },
 });
