@@ -85,7 +85,11 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
       try {
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } },
-          body
+          body,
+          // Without this, Android defers delivery into a batched Doze/battery-optimization
+          // "maintenance window" — we saw a real device take several minutes to get a push
+          // that had no urgency set. "high" tells FCM to wake the device immediately instead.
+          { urgency: "high" }
         );
         return { ok: true as const };
       } catch (err: any) {
