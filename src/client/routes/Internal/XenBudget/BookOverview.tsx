@@ -112,6 +112,7 @@ export default function BookOverview() {
                     )}
                     <TimePeriodFilter
                         mode={period} onModeChange={setPeriod}
+                        showExtraPresets
                     />
                 </Stack>
             </Box>
