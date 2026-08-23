@@ -98,7 +98,18 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
           await PushSubscription.deleteOne({ _id: sub._id }).catch(() => {});
           return { ok: false as const, pruned: true };
         }
-        console.error("Push send failed:", err?.statusCode, err?.body || err?.message);
+        // web-push's own WebPushError carries statusCode/body only once a push service has
+        // actually responded with an HTTP error. Anything that fails before that (DNS,
+        // connection refused, a malformed subscription, an invalid VAPID key) is a plain
+        // Error with neither — logging just those two fields prints "undefined undefined"
+        // and gives no way to tell which device even failed. Log the endpoint plus whatever
+        // the error actually has.
+        console.error(
+          "Push send failed:",
+          sub.endpoint,
+          err?.statusCode !== undefined ? `HTTP ${err.statusCode}` : "(no HTTP response)",
+          err?.body || err?.message || err
+        );
         return { ok: false as const, pruned: false };
       }
     })
