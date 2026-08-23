@@ -115,6 +115,9 @@ export interface XenBudgetBook {
     review_count?: number;
     /** Items flagged "Needs review" — surfaced as a quick filter. */
     needs_review_count?: number;
+    /** Most recent non-excluded item's date, supplied by the list endpoint. Undefined
+     *  when the book has no items yet. */
+    last_item_at?: string;
 }
 
 export interface XenBudgetShare {

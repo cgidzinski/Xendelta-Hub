@@ -1,24 +1,55 @@
-import { Box, Skeleton, Stack, Typography } from "@mui/material";
+import { Avatar, AvatarGroup, Box, Chip, Divider, Skeleton, Stack, Tooltip, Typography } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useXenBudgetBooks } from "../../../../hooks/xenbudget/useBooks";
+import { useXenBudgetBook } from "../../../../hooks/xenbudget/useBook";
 import { useXenBudgetSummary } from "../../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../../hooks/xenbudget/useBudgets";
-import BudgetBar from "../../XenBudget/components/budget/BudgetBar";
-import { scopeColor } from "../../XenBudget/components/budget/budgetColors";
-import { troublePercent, budgetLabel } from "../../XenBudget/components/budget/sortBudgets";
-import { limitColor, limitState } from "../../XenBudget/components/budget/budgetKind";
+import { budgetPace } from "../../XenBudget/components/budget/budgetPace";
+import TotalsSummary from "../../XenBudget/components/TotalsSummary";
 import { formatCurrency } from "../../XenBudget/currency";
 import { cardSx, sectionLabelSx } from "../../../../components/ui/surfaceStyles";
+import type { XenBudgetBook, BudgetStatus } from "../../../../hooks/xenbudget/types";
 
 /**
- * Dashboard card: this month at a glance for the most recently created book, plus its
- * two tightest budgets. Deliberately one book — the card has room for a number people
- * can act on, not a portfolio summary.
+ * Dashboard card: this month at a glance for the most recently *active* book, plus one
+ * combined pace figure across its budgets. Deliberately one book, one number — the card
+ * has room for something people can act on, not a portfolio summary.
  */
+function mostRecentlyActive(books: XenBudgetBook[]): XenBudgetBook | undefined {
+    return [...books].sort((a, b) => {
+        const aAt = new Date(a.last_item_at ?? a.created_at).getTime();
+        const bAt = new Date(b.last_item_at ?? b.created_at).getTime();
+        return bAt - aAt;
+    })[0];
+}
+
+/**
+ * How far this one budget is from where an even spend would have it, in currency - or
+ * null when it doesn't contribute to a combined pace figure: goals read "ahead/behind"
+ * backwards from caps, and a closed window has nothing left to project.
+ *
+ * Mirrors the tightest-limit logic that used to drive the per-budget list: a cap with
+ * per-person sub-budgets is read off whichever of the overall cap or its worst sub-budget
+ * is tightest, never both, so the same dollars aren't counted twice within one budget.
+ */
+function budgetAhead(budget: BudgetStatus): { ahead: number; amount: number } | null {
+    if (budget.kind === "goal") return null;
+    const tightestSub = [...budget.sub_budgets].sort((a, b) => b.percent - a.percent)[0];
+    const useSub = budget.amount === undefined
+        || (tightestSub && tightestSub.percent > (budget.percent ?? 0));
+    const spent = useSub ? tightestSub.spent : budget.spent;
+    const amount = useSub ? tightestSub.amount : (budget.amount ?? 0);
+    if (amount <= 0) return null;
+    const pace = budgetPace(budget.period_from, budget.period_to, new Date().toISOString(), spent, amount);
+    if (pace.finished) return null;
+    return { ahead: pace.ahead, amount };
+}
+
 export default function XenBudgetCardBody() {
     const navigate = useNavigate();
     const { books, isLoading } = useXenBudgetBooks();
-    const book = books[0];
+    const book = mostRecentlyActive(books);
+    const { book: bookDetail } = useXenBudgetBook(book?._id || "");
     const { summary } = useXenBudgetSummary(book?._id || "");
     const { budgets } = useXenBudgetStatus(book?._id || "");
 
@@ -29,83 +60,113 @@ export default function XenBudgetCardBody() {
         return <Typography variant="body2" color="text.secondary">No books yet.</Typography>;
     }
 
-    // Whatever most needs attention is what's worth surfacing - counting a person's own
-    // limit inside a budget, not just the shared one, and reading a savings goal the
-    // right way up (a goal at 20% is the worrying one, not the comfortable one).
-    const tightest = [...budgets].sort((a, b) => troublePercent(b) - troublePercent(a)).slice(0, 2);
     const currency = summary?.currency || book.default_currency;
+    const otherBookCount = books.length - 1;
+    const needsReviewCount = bookDetail?.needs_review_count ?? 0;
+    const missingCategoryCount = bookDetail?.review_count ?? 0;
+
+    const paceEntries = budgets.map(budgetAhead).filter((e): e is { ahead: number; amount: number } => e !== null);
+    const combinedAhead = paceEntries.reduce((sum, e) => sum + e.ahead, 0);
+    const combinedAmount = paceEntries.reduce((sum, e) => sum + e.amount, 0);
+    const paceThreshold = Math.max(combinedAmount * 0.02, 1);
+    const hasPace = paceEntries.length > 0;
+
+    // The card itself already navigates to the books list (AppCard's own CardActionArea,
+    // via app.path) - this box is the one part of it that should jump straight to the
+    // book being previewed, so its click has to stop there rather than bubble up.
+    const goToBook = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        navigate(`/internal/xenbudget/books/${book._id}/overview`);
+    };
 
     return (
         <Box
-            onClick={() => navigate(`/internal/xenbudget/books/${book._id}/overview`)}
-            sx={{ cursor: "pointer" }}
+            onClick={goToBook}
+            sx={{ ...cardSx, p: 1, cursor: "pointer" }}
         >
-            <Typography variant="caption" sx={sectionLabelSx}>{book.name}</Typography>
-            <Stack direction="row" spacing={1} sx={{ mt: 1, mb: tightest.length ? 1.5 : 0 }}>
-                <Box sx={{ ...cardSx, p: 1, flex: 1, minWidth: 0 }}>
-                    <Typography variant="caption" color="text.secondary">Out</Typography>
-                    <Typography variant="subtitle2" noWrap>
-                        {formatCurrency(summary?.totals.expense ?? 0, currency)}
+            <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography variant="caption" sx={{ ...sectionLabelSx, flexGrow: 1, minWidth: 0 }} noWrap>
+                    {book.name}
+                    {otherBookCount > 0 && (
+                        <Typography component="span" variant="caption" color="text.secondary">
+                            {" "}· +{otherBookCount} more
+                        </Typography>
+                    )}
+                </Typography>
+                {(needsReviewCount > 0 || missingCategoryCount > 0) && (
+                    <Stack direction="row" spacing={0.75} sx={{ flexShrink: 0 }}>
+                        {needsReviewCount > 0 && (
+                            <Chip
+                                size="small"
+                                color="error"
+                                variant="outlined"
+                                label={`${needsReviewCount} Flagged`}
+                                sx={{ height: 20, "& .MuiChip-label": { px: 0.75, fontSize: 11 } }}
+                            />
+                        )}
+                        {missingCategoryCount > 0 && (
+                            <Chip
+                                size="small"
+                                color="warning"
+                                variant="outlined"
+                                label={`${missingCategoryCount} Needs Category`}
+                                sx={{ height: 20, "& .MuiChip-label": { px: 0.75, fontSize: 11 } }}
+                            />
+                        )}
+                    </Stack>
+                )}
+            </Stack>
+
+            <Divider sx={{ my: 1 }} />
+
+            <TotalsSummary
+                bare
+                income={summary?.totals.income ?? 0}
+                expense={summary?.totals.expense ?? 0}
+                net={summary?.totals.net ?? 0}
+                currency={currency}
+            />
+
+            {summary && summary.by_person.length > 1 && (
+                <AvatarGroup
+                    max={4}
+                    sx={{ justifyContent: "flex-end", mt: 1, "& .MuiAvatar-root": { width: 24, height: 24, fontSize: 11 } }}
+                >
+                    {summary.by_person.map((person) => (
+                        <Tooltip
+                            key={person.user_id}
+                            title={`${person.username}: ${formatCurrency(person.total, currency)}`}
+                        >
+                            <Avatar src={person.avatar || undefined} alt={person.username}>
+                                {person.username.charAt(0).toUpperCase()}
+                            </Avatar>
+                        </Tooltip>
+                    ))}
+                </AvatarGroup>
+            )}
+
+            {hasPace && (
+                <>
+                    <Divider sx={{ my: 1 }} />
+                    <Typography variant="caption" color="text.secondary">
+                        Pace · {paceEntries.length} budget{paceEntries.length === 1 ? "" : "s"}
                     </Typography>
-                </Box>
-                <Box sx={{ ...cardSx, p: 1, flex: 1, minWidth: 0 }}>
-                    <Typography variant="caption" color="text.secondary">Net</Typography>
                     <Typography
                         variant="subtitle2"
                         noWrap
-                        sx={{ color: (summary?.totals.net ?? 0) < 0 ? "error.main" : "success.main" }}
+                        sx={{
+                            color: combinedAhead > paceThreshold
+                                ? "error.main"
+                                : combinedAhead < -paceThreshold ? "success.main" : "text.primary",
+                        }}
                     >
-                        {formatCurrency(summary?.totals.net ?? 0, currency)}
+                        {Math.abs(combinedAhead) < paceThreshold
+                            ? "On pace"
+                            : combinedAhead > 0
+                                ? `${formatCurrency(combinedAhead, currency)} ahead of pace`
+                                : `${formatCurrency(-combinedAhead, currency)} behind pace`}
                     </Typography>
-                </Box>
-            </Stack>
-
-            {tightest.length > 0 && (
-                /* The dashboard has room for a number, not a whole budget card: one line
-                per budget, showing whichever of its limits is tightest. */
-                <Stack spacing={1.25}>
-                    {tightest.map((budget) => {
-                        // The row that most needs attention: furthest along a cap, or
-                        // furthest BEHIND a goal.
-                        const worst = (p: number) => (budget.kind === "goal" ? -p : p);
-                        const tightestSub = [...budget.sub_budgets]
-                            .sort((a, b) => worst(b.percent) - worst(a.percent))[0];
-                        // A budget with no overall amount is read off that person.
-                        const useSub = budget.amount === undefined
-                            || (tightestSub && worst(tightestSub.percent) > worst(budget.percent ?? 0));
-                        const percent = useSub ? tightestSub.percent : (budget.percent ?? 0);
-                        const over = useSub ? tightestSub.over : (budget.over ?? false);
-                        const stateColor = limitColor(limitState(budget.kind, percent));
-                        const spent = useSub ? tightestSub.spent : budget.spent;
-                        const amountFor = useSub ? tightestSub.amount : (budget.amount ?? 0);
-                        const name = budgetLabel(budget);
-                        return (
-                            <Box key={budget._id}>
-                                <Stack
-                                    direction="row" alignItems="center" spacing={1}
-                                    sx={{ mb: 0.5, minWidth: 0 }}
-                                >
-                                    <Typography variant="caption" noWrap sx={{ flexGrow: 1, minWidth: 0 }}>
-                                        {name}{useSub ? ` · ${tightestSub.person_name}` : ""}
-                                    </Typography>
-                                    <Typography
-                                        variant="caption" noWrap
-                                        sx={{ flexShrink: 0, color: stateColor ?? "text.secondary" }}
-                                    >
-                                        {formatCurrency(spent, currency)} / {formatCurrency(amountFor, currency)}
-                                    </Typography>
-                                </Stack>
-                                <BudgetBar
-                                    spent={spent} amount={amountFor} percent={percent} over={over}
-                                    kind={budget.kind}
-                                    color={scopeColor(budget.categories, book.categories)}
-                                    height={6}
-                                    label={`${name}: ${formatCurrency(spent, currency)} of ${formatCurrency(amountFor, currency)}, ${percent}% of the ${budget.kind === "goal" ? "goal" : "limit"}`}
-                                />
-                            </Box>
-                        );
-                    })}
-                </Stack>
+                </>
             )}
         </Box>
     );

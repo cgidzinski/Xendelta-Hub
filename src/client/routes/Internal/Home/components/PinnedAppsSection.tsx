@@ -17,9 +17,12 @@ export default function PinnedAppsSection({ pinnedApps, appDetails }: PinnedApps
             {pinned.length === 0 ? (
                 <Typography color="text.secondary">No apps pinned. Use the pin icon next to an app in the sidebar for quick access.</Typography>
             ) : (
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
+                <Box sx={{ columnCount: { xs: 1, md: 2 }, columnGap: 2 }}>
                     {pinned.map((app) => (
-                        <Box key={app.key} sx={{ width: { xs: "100%", md: "calc(50% - 8px)" } }}>
+                        <Box
+                            key={app.key}
+                            sx={{ display: "inline-block", width: "100%", breakInside: "avoid", mb: 2 }}
+                        >
                             <AppCard
                                 app={app}
                                 fullWidth

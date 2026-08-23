@@ -683,20 +683,25 @@ module.exports = function (app: any) {
         .populate("members", "username avatar")
         .sort({ created_at: -1 });
 
-      // One grouped count for the whole list rather than a query per book.
+      // One grouped count (and last activity date) for the whole list rather than a
+      // query per book.
       const counts = new Map<string, number>();
+      const lastItemAt = new Map<string, Date>();
       if (books.length > 0) {
         const rows = await XenBudgetItem.aggregate([
           { $match: { book_id: { $in: books.map((b: any) => b._id) }, excluded: { $ne: true } } },
-          { $group: { _id: "$book_id", count: { $sum: 1 } } },
+          { $group: { _id: "$book_id", count: { $sum: 1 }, lastItemAt: { $max: "$date" } } },
         ]);
-        rows.forEach((r: any) => counts.set(r._id.toString(), r.count));
+        rows.forEach((r: any) => {
+          counts.set(r._id.toString(), r.count);
+          lastItemAt.set(r._id.toString(), r.lastItemAt);
+        });
       }
 
       res.json({
         status: true,
         message: "Books retrieved",
-        data: serializeBooksFor(books, userId, counts),
+        data: serializeBooksFor(books, userId, counts, lastItemAt),
       });
     } catch (error) {
       console.error("Error fetching books:", error);
@@ -1394,8 +1399,7 @@ module.exports = function (app: any) {
           // `rule_flags`: a later re-apply sweep must not strip a marker that was true at
           // import time.
           const importFlags = [...ruled.flags];
-          if (ruled.categories.length === 0 && ruled.type === "expense"
-            && !importFlags.includes(FLAG_UNCATEGORISED)) {
+          if (ruled.categories.length === 0 && !importFlags.includes(FLAG_UNCATEGORISED)) {
             importFlags.push(FLAG_UNCATEGORISED);
           }
           if (seenBefore.has(incomingHashes[index]) && !importFlags.includes(FLAG_POSSIBLE_DUPLICATE)) {

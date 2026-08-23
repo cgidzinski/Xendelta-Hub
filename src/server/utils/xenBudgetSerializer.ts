@@ -20,7 +20,9 @@ export function transformMembers(obj: any): any {
  * `item_count` is optional because the list view counts items in one batched query rather
  * than per book.
  */
-export function serializeBook(book: any, itemCount?: number, reviewCount?: number, needsReviewCount?: number): any {
+export function serializeBook(
+  book: any, itemCount?: number, reviewCount?: number, needsReviewCount?: number, lastItemAt?: Date,
+): any {
   const obj = typeof book.toObject === "function" ? book.toObject() : book;
   return {
     ...transformMembers(obj),
@@ -30,6 +32,7 @@ export function serializeBook(book: any, itemCount?: number, reviewCount?: numbe
     ...(itemCount === undefined ? {} : { item_count: itemCount }),
     ...(reviewCount === undefined ? {} : { review_count: reviewCount }),
     ...(needsReviewCount === undefined ? {} : { needs_review_count: needsReviewCount }),
+    ...(lastItemAt === undefined ? {} : { last_item_at: lastItemAt.toISOString() }),
   };
 }
 
@@ -37,14 +40,20 @@ export function serializeBook(book: any, itemCount?: number, reviewCount?: numbe
  * Book payload for a specific caller. `is_creator` drives whether the client shows
  * member-management and book-deletion controls; the server still enforces it separately.
  */
-export function serializeBookFor(book: any, userId: string, itemCount?: number, reviewCount?: number, needsReviewCount?: number): any {
-  const obj = serializeBook(book, itemCount, reviewCount, needsReviewCount);
+export function serializeBookFor(
+  book: any, userId: string, itemCount?: number, reviewCount?: number, needsReviewCount?: number, lastItemAt?: Date,
+): any {
+  const obj = serializeBook(book, itemCount, reviewCount, needsReviewCount, lastItemAt);
   obj.is_creator = obj.created_by === userId;
   return obj;
 }
 
-export function serializeBooksFor(books: any[], userId: string, counts?: Map<string, number>): any[] {
-  return books.map((b) => serializeBookFor(b, userId, counts?.get(b._id.toString()) ?? 0));
+export function serializeBooksFor(
+  books: any[], userId: string, counts?: Map<string, number>, lastItemAt?: Map<string, Date>,
+): any[] {
+  return books.map((b) => serializeBookFor(
+    b, userId, counts?.get(b._id.toString()) ?? 0, undefined, undefined, lastItemAt?.get(b._id.toString()),
+  ));
 }
 
 export function serializeItem(item: any, batchById?: Map<string, any>): any {

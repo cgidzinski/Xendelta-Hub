@@ -45,7 +45,7 @@ export default function AppCard({ app, children, fullWidth, bodyClickable = true
                 <CardActionArea onClick={() => navigate(app.path)} sx={{ p: 0 }}>
                     {header}
                     {children && (
-                        <CardContent sx={{ pt: 1 }}>
+                        <CardContent sx={{ pt: 2 }}>
                             {children}
                         </CardContent>
                     )}
@@ -56,7 +56,7 @@ export default function AppCard({ app, children, fullWidth, bodyClickable = true
                         {header}
                     </CardActionArea>
                     {children && (
-                        <CardContent sx={{ pt: 1 }}>
+                        <CardContent sx={{ pt: 2 }}>
                             {children}
                         </CardContent>
                     )}
