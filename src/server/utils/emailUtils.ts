@@ -49,3 +49,60 @@ export async function sendPasswordResetEmail(data: PasswordResetEmailData): Prom
     return { success: false, error };
   }
 }
+
+export interface NotificationEmailData {
+  username: string;
+  email: string;
+  title: string;
+  message: string;
+  link?: string;
+}
+
+/**
+ * Send a general notification email. Used by the "email" channel of notify().
+ */
+export async function sendNotificationEmail(
+  data: NotificationEmailData
+): Promise<{ success: boolean; error?: any }> {
+  const { username, email, title, message, link } = data;
+
+  // Notification links are stored as app-relative paths (e.g. /internal/xensplit/groups/x),
+  // which are useless in an inbox — absolutise them against the deployed origin.
+  const baseUrl = process.env.PUBLIC_URL || "https://xendelta.com";
+  const absoluteLink = link ? new URL(link, baseUrl).toString() : null;
+
+  const emailConfig = {
+    to: email,
+    from: "no-reply@xendelta.com",
+    subject: `Xendelta Hub - ${title}`,
+    text: `${title}\n\n${message}${absoluteLink ? `\n\n${absoluteLink}` : ""}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">${title}</h2>
+        <p>Hello ${username},</p>
+        <p>${message}</p>
+        ${
+          absoluteLink
+            ? `<div style="text-align: center; margin: 30px 0;">
+          <a href="${absoluteLink}" style="background: linear-gradient(45deg, #667eea 30%, #764ba2 90%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">View in Xendelta Hub</a>
+        </div>`
+            : ""
+        }
+        <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+        <p style="color: #666; font-size: 12px;">This is an automated message from Xendelta Hub.</p>
+      </div>
+    `,
+  };
+
+  try {
+    const { error } = await resend.emails.send(emailConfig);
+
+    if (error) {
+      return { success: false, error };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error };
+  }
+}

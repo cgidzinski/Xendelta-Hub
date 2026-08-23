@@ -49,6 +49,7 @@ export const updateProfileSchema = z.object({
     .max(50, "Username too long")
     .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores")
     .optional(),
+  emailNotifications: z.boolean().optional(),
 });
 
 // Message validation schemas
@@ -93,6 +94,14 @@ export const createNotificationSchema = z.object({
 });
 
 // Admin validation schemas
+export const adminNotifyUserSchema = z.object({
+  title: z.string().min(1, "Title cannot be empty").max(200, "Title too long"),
+  message: z.string().min(1, "Message cannot be empty").max(5000, "Message too long"),
+  link: z.string().max(500, "Link too long").optional(),
+  channels: z.array(z.enum(["inapp", "socket", "email", "push"]))
+    .min(1, "Select at least one channel"),
+});
+
 export const adminBroadcastMessageSchema = z.object({
   message: z.string()
     .min(1, "Message cannot be empty")
@@ -677,3 +686,16 @@ export const updateXenBudgetItemSchema = z.object({
   excluded: z.boolean().optional(),
 });
 
+
+// Web Push subscription schemas
+export const pushSubscribeSchema = z.object({
+  endpoint: z.string().url("Endpoint must be a valid URL").max(2000, "Endpoint too long"),
+  keys: z.object({
+    p256dh: z.string().min(1, "p256dh key is required").max(500),
+    auth: z.string().min(1, "auth key is required").max(500),
+  }),
+});
+
+export const pushUnsubscribeSchema = z.object({
+  endpoint: z.string().url("Endpoint must be a valid URL").max(2000, "Endpoint too long"),
+});

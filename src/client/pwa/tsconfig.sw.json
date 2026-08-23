@@ -1,0 +1,10 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["WebWorker", "ESNext"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["vite/client"]
+  },
+  "include": ["sw.ts"]
+}

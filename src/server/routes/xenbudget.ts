@@ -742,8 +742,12 @@ module.exports = function (app: any) {
       SocketManager.getInstance().notifyXenBudgetBooksUpdated(members);
       for (const uid of members) {
         if (uid === userId) continue;
-        notify(uid, "Added to a budget book", `You were added to "${book.name}"`,
-          `/internal/xenbudget/books/${book._id}/overview`, "account_balance_wallet");
+        notify(uid, {
+          title: "Added to a budget book",
+          message: `You were added to "${book.name}"`,
+          link: `/internal/xenbudget/books/${book._id}/overview`,
+          icon: "account_balance_wallet",
+        });
       }
 
       res.json({ status: true, message: "Book created", data: serializeBookFor(book, userId, 0) });
@@ -852,8 +856,12 @@ module.exports = function (app: any) {
         SocketManager.getInstance().notifyXenBudgetBooksUpdated(memberIds(book));
         broadcastBook(book);
         for (const uid of added) {
-          notify(uid, "Added to a budget book", `You were added to "${book.name}"`,
-            `/internal/xenbudget/books/${book._id}/overview`, "account_balance_wallet");
+          notify(uid, {
+            title: "Added to a budget book",
+            message: `You were added to "${book.name}"`,
+            link: `/internal/xenbudget/books/${book._id}/overview`,
+            icon: "account_balance_wallet",
+          });
         }
         res.json({ status: true, message: "Members added", data: serializeBookFor(book, callerId(req)) });
       } catch (error) {
@@ -912,8 +920,12 @@ module.exports = function (app: any) {
         await book.populate("members", "username avatar");
         broadcastBook(book);
         SocketManager.getInstance().notifyXenBudgetBooksUpdated(memberIds(book));
-        notify(target, "You now own a budget book", `You were made the owner of "${book.name}"`,
-          `/internal/xenbudget/books/${book._id}/overview`, "account_balance_wallet");
+        notify(target, {
+          title: "You now own a budget book",
+          message: `You were made the owner of "${book.name}"`,
+          link: `/internal/xenbudget/books/${book._id}/overview`,
+          icon: "account_balance_wallet",
+        });
         res.json({ status: true, message: "Book transferred", data: serializeBookFor(book, callerId(req)) });
       } catch (error) {
         console.error("Error transferring book:", error);

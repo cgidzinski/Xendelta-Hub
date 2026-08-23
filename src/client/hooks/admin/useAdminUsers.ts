@@ -63,6 +63,26 @@ const removeItemFromUser = async (userId: string, itemKey: string): Promise<void
   await apiClient.delete(`/api/admin/users/${userId}/inventory/${itemKey}`);
 };
 
+export type NotifyChannel = "inapp" | "socket" | "email" | "push";
+
+export interface SendUserNotificationResult {
+  inapp: boolean;
+  socket: boolean;
+  email: boolean;
+  push: { sent: number; pruned: number };
+}
+
+const sendUserNotification = async (
+  userId: string,
+  data: { title: string; message: string; link?: string; channels: NotifyChannel[] }
+): Promise<SendUserNotificationResult> => {
+  const response = await apiClient.post<ApiResponse<{ result: SendUserNotificationResult }>>(
+    `/api/admin/notifications/user/${userId}`,
+    data
+  );
+  return response.data.data!.result;
+};
+
 // Hooks
 export const useAdminUsers = () => {
   const queryClient = useQueryClient();
@@ -144,6 +164,17 @@ export const useAdminUsers = () => {
     },
   });
 
+  // Mutation for sending a one-off notification to a single user (admin "Notify" tab)
+  const { mutateAsync: sendUserNotificationMutation, isPending: isSendingNotification } = useMutation({
+    mutationFn: ({
+      userId,
+      data,
+    }: {
+      userId: string;
+      data: { title: string; message: string; link?: string; channels: NotifyChannel[] };
+    }) => sendUserNotification(userId, data),
+  });
+
   return {
     users: users || [],
     isLoading,
@@ -160,5 +191,10 @@ export const useAdminUsers = () => {
     isGivingItem,
     removeItem: (userId: string, itemKey: string) => removeItemMutation({ userId, itemKey }),
     isRemovingItem,
+    sendUserNotification: (
+      userId: string,
+      data: { title: string; message: string; link?: string; channels: NotifyChannel[] }
+    ) => sendUserNotificationMutation({ userId, data }),
+    isSendingNotification,
   };
 };

@@ -58,6 +58,12 @@ var userSchema = new mongoose.Schema({
   timezone: { type: String },
   inventory: [inventoryItemSchema],
   notificationsLastCheckedAt: { type: Date },
+  notificationPrefs: {
+    // Opt-out: on by default, users turn it off in Profile settings. Push has no
+    // equivalent flag — it is governed by whether the user has any subscribed devices
+    // (see models/pushSubscription.js), since a browser can't be silently subscribed.
+    email: { type: Boolean, default: true },
+  },
 });
 userSchema.methods.generateHash = function (password) {
   return bcrypt.hashSync(password, bcrypt.genSaltSync(8), null);

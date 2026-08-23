@@ -263,7 +263,7 @@ module.exports = function (app: any) {
       const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
       SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
 
-      await notify(newOwnerId, "Group Ownership", `You are now the owner of ${group.name}`, `/internal/xensplit/groups/${groupId}/overview`, "person");
+      await notify(newOwnerId, { title: "Group Ownership", message: `You are now the owner of ${group.name}`, link: `/internal/xensplit/groups/${groupId}/overview`, icon: "person" });
 
       res.json({ status: true, message: "Ownership transferred", data: await serializeXenSplitGroup(group) });
     } catch (error) {
@@ -308,7 +308,7 @@ module.exports = function (app: any) {
       SocketManager.getInstance().notifyXenSplitGroupsUpdated(newMemberIds);
 
       for (const memberId of newMemberIds) {
-        await notify(memberId, "Added to Group", `You've been added to ${group.name}`, `/internal/xensplit/groups/${groupId}/overview`, "person");
+        await notify(memberId, { title: "Added to Group", message: `You've been added to ${group.name}`, link: `/internal/xensplit/groups/${groupId}/overview`, icon: "person" });
       }
 
       res.json({ status: true, message: "Members added", data: await serializeXenSplitGroup(group) });
@@ -363,7 +363,7 @@ module.exports = function (app: any) {
 
       // Notify removed user if they were removed by someone else (not a voluntary leave)
       if (targetUserId !== userId) {
-        await notify(targetUserId, "Removed from Group", `You've been removed from ${group.name}`, undefined, "person");
+        await notify(targetUserId, { title: "Removed from Group", message: `You've been removed from ${group.name}`, icon: "person" });
       }
 
       // Delete group if no members left
@@ -495,7 +495,7 @@ module.exports = function (app: any) {
       for (const member of respGroup.members as any[]) {
         const mid = member._id.toString();
         if (mid !== userId && involvedIds.has(mid)) {
-          await notify(mid, "New Expense", `${actorName} added: ${title} (${amount} ${expenseCurrency})`, `/internal/xensplit/groups/${groupId}/expenses`);
+          await notify(mid, { title: "New Expense", message: `${actorName} added: ${title} (${amount} ${expenseCurrency})`, link: `/internal/xensplit/groups/${groupId}/expenses` });
         }
       }
 
@@ -621,7 +621,7 @@ module.exports = function (app: any) {
       for (const member of respGroup.members as any[]) {
         const mid = member._id.toString();
         if (mid !== userId && involvedIds.has(mid)) {
-          await notify(mid, "Expense Updated", `${actorName} updated: ${expense.title}`, `/internal/xensplit/groups/${groupId}/expenses`);
+          await notify(mid, { title: "Expense Updated", message: `${actorName} updated: ${expense.title}`, link: `/internal/xensplit/groups/${groupId}/expenses` });
         }
       }
 
@@ -982,7 +982,7 @@ module.exports = function (app: any) {
 
       const fromMember = (group.members as any[]).find((m: any) => m._id.toString() === from);
       const fromName = fromMember?.username || "Someone";
-      await notify(to, "Settlement Received", `${fromName} paid you ${amount} ${currency} in ${group.name}`, `/internal/xensplit/groups/${groupId}/overview`);
+      await notify(to, { title: "Settlement Received", message: `${fromName} paid you ${amount} ${currency} in ${group.name}`, link: `/internal/xensplit/groups/${groupId}/overview` });
 
       res.json({ status: true, message: "Debt settled", data: await serializeXenSplitGroup(group) });
     } catch (error) {
@@ -1080,7 +1080,7 @@ module.exports = function (app: any) {
       const actorName = actor?.username || "Someone";
       const notifyIds = new Set([party_a, party_b].filter((id) => id !== userId));
       for (const mid of notifyIds) {
-        await notify(mid, "New Exchange", `${actorName} recorded a currency exchange in ${group.name}`, `/internal/xensplit/groups/${groupId}/expenses`, "swap_horiz");
+        await notify(mid, { title: "New Exchange", message: `${actorName} recorded a currency exchange in ${group.name}`, link: `/internal/xensplit/groups/${groupId}/expenses`, icon: "swap_horiz" });
       }
 
       const memberIds = (group.members as any[]).map((m: any) => m._id.toString());

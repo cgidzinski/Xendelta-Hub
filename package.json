@@ -6,9 +6,10 @@
     "dev": "cross-env NODE_ENV=development nodemon -w src/server -x tsx src/server/server.ts",
     "start": "cross-env NODE_ENV=production tsx src/server/server.ts",
     "build": "vite build",
-    "type-check": "npm run type-check:server && npm run type-check:client",
+    "type-check": "npm run type-check:server && npm run type-check:client && npm run type-check:sw",
     "type-check:server": "tsc --noEmit --project src/server/tsconfig.json",
     "type-check:client": "tsc --noEmit --project src/client/tsconfig.json",
+    "type-check:sw": "tsc --noEmit --project src/client/pwa/tsconfig.sw.json",
     "test": "vitest run",
     "db:export": "tsx scripts/db-backup.ts export",
     "db:import": "tsx scripts/db-backup.ts import"
@@ -64,6 +65,7 @@
     "tsx": "^4.19.3",
     "typescript": "^5.8.3",
     "vite-express": "*",
+    "web-push": "^3.6.7",
     "zod": "^4.1.13"
   },
   "devDependencies": {
@@ -78,12 +80,15 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
+    "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^4.4.1",
     "baseline-browser-mapping": "^2.9.7",
     "msw": "^2.15.0",
     "nodemon": "^3.1.10",
     "vite": "^6.3.3",
     "vite-plugin-pwa": "^1.3.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "workbox-core": "^7.4.1",
+    "workbox-precaching": "^7.4.1"
   }
 }
