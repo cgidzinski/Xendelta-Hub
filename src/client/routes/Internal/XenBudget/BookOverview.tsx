@@ -10,7 +10,9 @@ import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
 import { CategoryChip } from "./components/LabelChip";
 import BudgetCard from "./components/budget/BudgetCard";
 import { sortBudgets, overCount, metCount } from "./components/budget/sortBudgets";
-import TimePeriodFilter, { defaultMonthMode, resolvePeriod, type PeriodMode } from "./components/TimePeriodFilter";
+import TimePeriodFilter, {
+    defaultMonthMode, parsePeriodMode, resolvePeriod, serializePeriodMode, type PeriodMode,
+} from "./components/TimePeriodFilter";
 import TotalsSummary from "./components/TotalsSummary";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -23,7 +25,16 @@ export default function BookOverview() {
     const { book, currency, onCurrencyChange } = useOutletContext<BookDetailContext>();
     const navigate = useNavigate();
 
-    const [period, setPeriod] = useState<PeriodMode>(defaultMonthMode);
+    // Remembered per book, so leaving and coming back to the Overview picks up where you
+    // left off instead of resetting to "this month" every time.
+    const periodLsKey = `xenbudget_period_overview_${book._id}`;
+    const [period, setPeriodState] = useState<PeriodMode>(
+        () => parsePeriodMode(localStorage.getItem(periodLsKey)) ?? defaultMonthMode(),
+    );
+    const setPeriod = (next: PeriodMode) => {
+        setPeriodState(next);
+        localStorage.setItem(periodLsKey, serializePeriodMode(next));
+    };
     const { from, to, groupBy, label } = useMemo(() => resolvePeriod(period), [period]);
 
     const { summary, isLoading, isError, error } = useXenBudgetSummary(book._id, {
@@ -101,6 +112,7 @@ export default function BookOverview() {
                     )}
                     <TimePeriodFilter
                         mode={period} onModeChange={setPeriod}
+                        showExtraPresets
                     />
                 </Stack>
             </Box>

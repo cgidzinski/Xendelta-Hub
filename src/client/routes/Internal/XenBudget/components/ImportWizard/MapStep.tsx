@@ -4,6 +4,7 @@ import {
     TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton,
     ToggleButtonGroup, Typography,
 } from "@mui/material";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
@@ -92,6 +93,7 @@ export default function MapStep({
     const [previewIndex, setPreviewIndex] = useState(0);
     const rowIndex = rows.length ? Math.min(previewIndex, rows.length - 1) : 0;
     const sampleRow = rows[rowIndex];
+    const isMobile = useMediaQuery("(max-width:600px)");
 
     const [customOpen, setCustomOpen] = useState(false);
     const matchesRange = (from: Date, to: Date) =>
@@ -355,14 +357,14 @@ export default function MapStep({
                             )}
 
                             {(customOpen || isCustom) && (
-                                <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                                <Stack direction={isMobile ? "column" : "row"} spacing={1} sx={{ mt: 1 }}>
                                     <DatePicker
                                         label="From" value={dateFrom} onChange={onDateFromChange}
-                                        slotProps={{ textField: { size: "small", fullWidth: true } }}
+                                        slotProps={{ textField: { fullWidth: true } }}
                                     />
                                     <DatePicker
                                         label="To" value={dateTo} onChange={onDateToChange}
-                                        slotProps={{ textField: { size: "small", fullWidth: true } }}
+                                        slotProps={{ textField: { fullWidth: true } }}
                                     />
                                 </Stack>
                             )}

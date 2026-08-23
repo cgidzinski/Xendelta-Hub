@@ -15,7 +15,8 @@ import { useXenBudgetItems, type ItemFilters } from "../../../hooks/xenbudget/us
 import ItemListItem from "./components/ItemListItem";
 import { CategoryChip, FlagChip } from "./components/LabelChip";
 import DateFilterModal, {
-    dateFilterLabel, DEFAULT_DATE_FILTER, type DateFilterValue,
+    dateFilterLabel, DEFAULT_DATE_FILTER, parseDateFilterValue, serializeDateFilterValue,
+    type DateFilterValue,
 } from "./components/DateFilterModal";
 import ReviewModal from "./components/ReviewModal";
 import LoadingSpinner from "../../../components/LoadingSpinner";
@@ -67,15 +68,23 @@ export default function BookItems() {
     // showing the items the bar was measuring rather than everything in the book.
     const seed = (useLocation().state as { budgetFilter?: BudgetFilterSeed } | null)?.budgetFilter;
     const [search, setSearch] = useState("");
-    const [dateValue, setDateValue] = useState<DateFilterValue>(
+    // Remembered per book, so leaving and coming back to Items picks up the same date
+    // filter — except a budget's "View items" seed always wins, since that's a deliberate
+    // navigation into a specific window, not a preference to fall back on.
+    const dateLsKey = `xenbudget_dateFilter_items_${book._id}`;
+    const [dateValue, setDateValueState] = useState<DateFilterValue>(
         seed ? {
             preset: "custom",
             from: new Date(seed.from),
             // The budget's window ends exclusively; the date filter's end is inclusive of
             // that whole day, so it steps back an instant to name the last covered day.
             to: new Date(new Date(seed.to).getTime() - 1),
-        } : DEFAULT_DATE_FILTER,
+        } : parseDateFilterValue(localStorage.getItem(dateLsKey)) ?? DEFAULT_DATE_FILTER,
     );
+    const setDateValue = (next: DateFilterValue) => {
+        setDateValueState(next);
+        localStorage.setItem(dateLsKey, serializeDateFilterValue(next));
+    };
     const [dateModalOpen, setDateModalOpen] = useState(false);
     const [reviewOpen, setReviewOpen] = useState(false);
     const [activeCategories, setActiveCategories] = useState<string[]>(seed?.categories ?? []);
@@ -182,12 +191,6 @@ export default function BookItems() {
                         }}
                     />
                     <Stack direction="row" spacing={1}>
-                        <Button
-                            size="small" variant="outlined" startIcon={<CalendarMonthIcon />}
-                            onClick={() => setDateModalOpen(true)} sx={{ flexShrink: 0 }}
-                        >
-                            {dateFilterLabel(dateValue)}
-                        </Button>
                         <Autocomplete
                             multiple disableCloseOnSelect size="small" fullWidth options={filterOptions}
                             value={selectedFilters} onChange={(_, v) => setSelectedFilters(v)}
@@ -228,6 +231,12 @@ export default function BookItems() {
                                 />
                             )}
                         />
+                        <Button
+                            size="small" variant="outlined" startIcon={<CalendarMonthIcon />}
+                            onClick={() => setDateModalOpen(true)} sx={{ flexShrink: 0 }}
+                        >
+                            {dateFilterLabel(dateValue)}
+                        </Button>
                     </Stack>
                     {book.categories.length > 0 && (
                         <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>

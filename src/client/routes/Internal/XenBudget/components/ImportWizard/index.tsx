@@ -3,6 +3,7 @@ import {
     Alert, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle,
     FormControlLabel, IconButton, MenuItem, Stack, Step, StepLabel, Stepper, TextField, Typography,
 } from "@mui/material";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import CloseIcon from "@mui/icons-material/Close";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
@@ -166,6 +167,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
     const [owners, setOwners] = useState<SplitDraft[]>([]);
 
     const { user } = useAuth();
+    const isMobile = useMediaQuery("(max-width:600px)");
 
     // Which file selection the auto-guessed column mapping was last built for, so toggling
     // "first row is a header" afterward reparses without clobbering a mapping the user has
@@ -466,10 +468,13 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
     };
 
     return (
-        <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
+        <Dialog
+            open={open} onClose={onClose} fullWidth maxWidth="md" fullScreen={isMobile}
+            slotProps={{ paper: { sx: { borderRadius: isMobile ? 0 : 2 } } }}
+        >
             <DialogTitle>Import a CSV</DialogTitle>
             <DialogContent>
-                <Stepper activeStep={step} sx={{ mb: 3 }}>
+                <Stepper activeStep={step} orientation={isMobile ? "vertical" : "horizontal"} sx={{ mb: 3 }}>
                     {STEPS.map((label) => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}
                 </Stepper>
 

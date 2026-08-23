@@ -12,7 +12,9 @@ import {
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
-import TimePeriodFilter, { defaultYearMode, resolvePeriod, type PeriodMode } from "./components/TimePeriodFilter";
+import TimePeriodFilter, {
+    defaultYearMode, parsePeriodMode, resolvePeriod, serializePeriodMode, type PeriodMode,
+} from "./components/TimePeriodFilter";
 import TotalsSummary from "./components/TotalsSummary";
 import BudgetCard from "./components/budget/BudgetCard";
 import { sortBudgets } from "./components/budget/sortBudgets";
@@ -56,7 +58,16 @@ const BUDGETED_COLOR = "#6b6b64";
 
 export default function BookReport() {
     const { book, currency, onCurrencyChange } = useOutletContext<BookDetailContext>();
-    const [period, setPeriod] = useState<PeriodMode>(defaultYearMode);
+    // Remembered per book, so leaving and coming back to the Report picks up where you
+    // left off instead of resetting to "this year" every time.
+    const periodLsKey = `xenbudget_period_report_${book._id}`;
+    const [period, setPeriodState] = useState<PeriodMode>(
+        () => parsePeriodMode(localStorage.getItem(periodLsKey)) ?? defaultYearMode(),
+    );
+    const setPeriod = (next: PeriodMode) => {
+        setPeriodState(next);
+        localStorage.setItem(periodLsKey, serializePeriodMode(next));
+    };
 
     const range = useMemo(() => resolvePeriod(period), [period]);
 

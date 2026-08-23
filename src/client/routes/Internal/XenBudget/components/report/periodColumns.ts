@@ -95,3 +95,11 @@ export function periodKeyRange(key: string): { from: Date; to: Date } | null {
 
     return null;
 }
+
+/** Whether a period key's window contains today — the column a report grid highlights as "now". */
+export function isCurrentPeriod(key: string): boolean {
+    const range = periodKeyRange(key);
+    if (!range) return false;
+    const now = new Date();
+    return now >= range.from && now < range.to;
+}

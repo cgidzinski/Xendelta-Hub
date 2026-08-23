@@ -10,7 +10,7 @@ import { useSnackbar } from "notistack";
 import type { XenBudgetBook } from "../../../../hooks/xenbudget/types";
 import { useXenBudgetLabels, type LabelKind } from "../../../../hooks/xenbudget/useLabels";
 import LabelChip, { resolveLabelColor } from "./LabelChip";
-import { CHART_COLORS } from "../../../../components/ui/chartColors";
+import LabelColorPicker from "./LabelColorPicker";
 import { emptyStateSx } from "../../../../components/ui/surfaceStyles";
 
 interface LabelManagerProps {
@@ -65,14 +65,8 @@ export default function LabelManager({ book, kind }: LabelManagerProps) {
         }, "Could not create that");
     };
 
-    // Click until it looks right, rather than picking from a swatch grid. Excludes the
-    // current colour when there's more than one choice, so every click visibly changes it.
-    const shuffleColor = async (label: { _id: string; name: string }) => {
-        const current = resolveLabelColor(label.name, labels, copy.chip);
-        const choices = CHART_COLORS.filter((c) => c !== current);
-        const pool = choices.length > 0 ? choices : CHART_COLORS;
-        const next = pool[Math.floor(Math.random() * pool.length)];
-        await run(() => updateLabelAsync({ labelId: label._id, input: { color: next } }), "Could not set that colour");
+    const setColor = async (label: { _id: string; name: string }, hex: string) => {
+        await run(() => updateLabelAsync({ labelId: label._id, input: { color: hex } }), "Could not set that colour");
     };
 
     return (
@@ -117,17 +111,22 @@ export default function LabelManager({ book, kind }: LabelManagerProps) {
                                 </Box>
                             )}
 
-                            <Tooltip title="Click to randomize colour">
-                                <IconButton size="small" onClick={() => shuffleColor(label)} sx={{ p: 0.25 }}>
+                            {kind === "categories" || !label.system ? (
+                                <LabelColorPicker
+                                    color={resolveLabelColor(label.name, labels, copy.chip)}
+                                    onChange={(hex) => setColor(label, hex)}
+                                />
+                            ) : (
+                                <Box sx={{ p: 0.25 }}>
                                     <Box sx={{
                                         width: 16, height: 16, borderRadius: "50%",
                                         bgcolor: resolveLabelColor(label.name, labels, copy.chip),
                                     }} />
-                                </IconButton>
-                            </Tooltip>
+                                </Box>
+                            )}
 
                             {label.system ? (
-                                <Tooltip title="Built in — rules and imports refer to this by name, so it can't be renamed or deleted. Its colour is yours to change.">
+                                <Tooltip title={`Built in — rules and imports refer to this by name, so it can't be renamed or deleted.${kind === "categories" ? " Its colour is yours to change." : ""}`}>
                                     <LockIcon fontSize="small" sx={{ color: "text.disabled", mx: 0.5 }} />
                                 </Tooltip>
                             ) : (
