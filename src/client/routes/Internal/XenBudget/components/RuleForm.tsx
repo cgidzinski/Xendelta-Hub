@@ -13,7 +13,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useSnackbar } from "notistack";
 import type {
     XenBudgetBook, XenBudgetRule, XenBudgetRuleCondition, RuleInput, RuleField, RuleOp,
-    RuleDisposition, ShareType,
+    ShareType,
 } from "../../../../hooks/xenbudget/types";
 import WeightedSplitEditor, { type SplitDraft } from "./WeightedSplitEditor";
 import { STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
@@ -79,12 +79,6 @@ const OPS_BY_FIELD: Record<RuleField, { value: RuleOp; label: string }[]> = {
     source: [{ value: "equals", label: "is" }],
 };
 
-const DISPOSITIONS: { value: RuleDisposition; label: string; help: string }[] = [
-    { value: "keep", label: "Keep", help: "Counts normally." },
-    { value: "exclude", label: "Off budget", help: "Still listed, greyed out, and reversible — but never counted. Best for internal transfers." },
-    { value: "skip", label: "Never import", help: "Matching rows are not saved at all. Import reports how many were dropped and why." },
-];
-
 const emptyCondition = (): XenBudgetRuleCondition => ({ field: "description", op: "contains", value: "" });
 
 /** Auto-generated name: just the positive match — the target categories already show as
@@ -128,7 +122,8 @@ export default function RuleForm({
     const [addFlags, setAddFlags] = useState<string[]>([]);
     const [setType, setSetType] = useState<"" | "expense" | "income">("");
     const [setDescription, setSetDescription] = useState("");
-    const [disposition, setDisposition] = useState<RuleDisposition>("keep");
+    const [skip, setSkip] = useState(false);
+    const [people, setPeople] = useState<SplitDraft[]>([]);
     const [stopOnMatch, setStopOnMatch] = useState(false);
     const [enabled, setEnabled] = useState(true);
     // Once the user types in the name themselves, stop auto-generating it.
@@ -169,7 +164,8 @@ export default function RuleForm({
             setAddFlags(rule.actions.add_flags || []);
             setSetType(rule.actions.set_type || "");
             setSetDescription(rule.actions.set_description || "");
-            setDisposition(rule.actions.disposition || "keep");
+            setSkip(!!rule.actions.skip);
+            setPeople((rule.actions.set_people || []).map((id) => ({ key: id, value: "" })));
             setStopOnMatch(!!rule.stop_on_match);
             setEnabled(rule.enabled !== false);
         } else {
@@ -184,7 +180,8 @@ export default function RuleForm({
             setAddFlags([]);
             setSetType("");
             setSetDescription("");
-            setDisposition("keep");
+            setSkip(false);
+            setPeople([]);
             setStopOnMatch(false);
             setEnabled(true);
         }
@@ -212,7 +209,7 @@ export default function RuleForm({
         (c) => c.op === "is_empty" || ((c.value ?? "") !== "" && (c.op !== "between" || (c.value2 ?? "") !== "")),
     );
     const doesSomething = categories.length > 0 || addFlags.length > 0 || !!setType
-        || !!setDescription.trim() || disposition !== "keep";
+        || !!setDescription.trim() || skip || people.length > 0;
     const canSubmit = !!name.trim() && allConditions.length > 0 && conditionsValid && doesSomething;
 
     // The rule as the API wants it, whether it's being saved or previewed.
@@ -229,9 +226,10 @@ export default function RuleForm({
                 ? categories.map((c) => ({ name: c.key, percentage: parseFloat(c.value) || 0 }))
                 : [],
             add_flags: addFlags,
+            set_people: people.map((p) => p.key),
             set_type: setType || null,
             set_description: setDescription.trim() || undefined,
-            disposition,
+            skip,
         },
         stop_on_match: stopOnMatch,
     });
@@ -405,6 +403,20 @@ export default function RuleForm({
                         </Box>
 
                         <Box sx={groupSx}>
+                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Set people</Typography>
+                            <WeightedSplitEditor
+                                mode={{ kind: "people", members: book.members }}
+                                splitType="equal"
+                                onSplitTypeChange={() => { /* a rule attributes evenly */ }}
+                                selected={people}
+                                onSelectedChange={setPeople}
+                                amount={0}
+                                currency={book.default_currency}
+                                amountless
+                            />
+                        </Box>
+
+                        <Box sx={groupSx}>
                             <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Add flags</Typography>
                             <Stack spacing={0.5}>
                                 {book.flags.map((flag) => {
@@ -445,18 +457,14 @@ export default function RuleForm({
                         </Box>
 
                         <Box sx={groupSx}>
-                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Disposition</Typography>
-                            <Stack spacing={0.5}>
-                                {DISPOSITIONS.map((d) => (
-                                    <FormControlLabel
-                                        key={d.value}
-                                        control={<Radio size="small" checked={disposition === d.value} onChange={() => setDisposition(d.value)} />}
-                                        label={d.label}
-                                    />
-                                ))}
-                            </Stack>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
-                                {DISPOSITIONS.find((d) => d.value === disposition)?.help}
+                            <FormControlLabel
+                                control={<Checkbox size="small" checked={skip} onChange={(e) => setSkip(e.target.checked)} />}
+                                label="Skip — never import matching rows"
+                            />
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                                Matching rows aren&rsquo;t saved at all; import reports how many were dropped and
+                                why. To keep a row but exclude it from totals, add the &ldquo;Off budget&rdquo;
+                                flag above instead.
                             </Typography>
                         </Box>
 
@@ -482,7 +490,7 @@ export default function RuleForm({
 
                         {!doesSomething && (
                             <Typography variant="caption" color="warning.main">
-                                This rule doesn&rsquo;t do anything yet — set a category, add a flag, or pick a disposition.
+                                This rule doesn&rsquo;t do anything yet — set a category, attribute people, add a flag, or check skip.
                             </Typography>
                         )}
                     </Stack>

@@ -18,8 +18,6 @@ export type RuleOp =
   | "contains" | "not_contains" | "equals" | "starts_with" | "ends_with" | "regex"
   | "gt" | "gte" | "lt" | "lte" | "between" | "is_empty";
 
-export type Disposition = "keep" | "exclude" | "skip";
-
 /** One weighted category a rule can assign. `amount`/`percentage` are mutually exclusive. */
 export interface CategoryWeightInput {
   name: string;
@@ -52,7 +50,8 @@ export interface RuleActions {
   set_type?: "expense" | "income" | null;
   set_people?: string[];
   set_description?: string;
-  disposition?: Disposition;
+  /** Never store matching rows (import); a re-apply sweep degrades this to "Off budget". */
+  skip?: boolean;
 }
 
 export interface Rule {
@@ -241,9 +240,9 @@ function removeFlag(item: DraftItem, flag: string) {
 export interface ApplyOptions {
   /**
    * Re-apply sweeps set this: a "skip" rule can't retroactively delete an item that
-   * already exists, so it degrades to "exclude". Nothing is ever destroyed by a sweep.
+   * already exists, so it degrades to "Off budget". Nothing is ever destroyed by a sweep.
    */
-  skipBecomesExclude?: boolean;
+  skipBecomesOffBudget?: boolean;
 }
 
 /**
@@ -277,15 +276,16 @@ export function applyRules(draft: DraftItem, rules: Rule[], options: ApplyOption
     if (!ruleMatches(rule, item)) continue;
 
     const actions = rule.actions || {};
-    const disposition = actions.disposition ?? "keep";
+    const skip = actions.skip === true;
 
-    if (disposition === "skip" && !options.skipBecomesExclude) {
+    if (skip && !options.skipBecomesOffBudget) {
       return { item, skipped: true, skippedByRuleId: rule._id, skippedByRuleName: rule.name };
     }
 
     if (!item.applied_rule_ids.includes(rule._id)) item.applied_rule_ids.push(rule._id);
 
-    if (disposition === "exclude" || disposition === "skip") {
+    if (skip) {
+      // A skipped row that can't be dropped (re-apply sweep) becomes off-budget instead.
       addFlag(item, FLAG_OFF_BUDGET, true);
     }
 

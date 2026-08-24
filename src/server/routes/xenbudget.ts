@@ -737,7 +737,7 @@ function plainRules(book: any): Rule[] {
       set_type: r.actions?.set_type ?? null,
       set_people: r.actions?.set_people || [],
       set_description: r.actions?.set_description,
-      disposition: r.actions?.disposition,
+      skip: r.actions?.skip === true,
     },
     stop_on_match: r.stop_on_match,
   }));
@@ -1296,9 +1296,9 @@ module.exports = function (app: any) {
 
         for (const item of items) {
           const before = toDraft(item);
-          // skipBecomesExclude: a "skip" rule can't retroactively delete an item that
-          // already exists, so on a sweep it excludes instead. Nothing is destroyed.
-          const { item: after } = applyRules(stripRuleEffects(before), rules, { skipBecomesExclude: true });
+          // skipBecomesOffBudget: a "skip" rule can't retroactively delete an item that
+          // already exists, so on a sweep it becomes "Off budget". Nothing is destroyed.
+          const { item: after } = applyRules(stripRuleEffects(before), rules, { skipBecomesOffBudget: true });
           const diff = describeChange(item, before, after);
           if (!diff) continue;
           changes.push(diff);

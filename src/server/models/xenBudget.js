@@ -100,10 +100,9 @@ var ruleActionsSchema = new Schema({
   set_type: { type: String, enum: ["expense", "income", null], default: null },
   set_people: { type: [String], default: [] },
   set_description: { type: String, maxlength: 500 },
-  // keep    - store normally
-  // exclude - store, but with the "Off budget" flag so it never reaches a total (reversible)
-  // skip    - never store at all; only reachable via import, and always reported
-  disposition: { type: String, enum: ["keep", "exclude", "skip"], default: "keep" },
+  // Skip matching rows entirely at import; a re-apply sweep degrades this to "Off budget"
+  // rather than deleting an existing item.
+  skip: { type: Boolean, default: false },
 }, { _id: false });
 
 var ruleSchema = new Schema({

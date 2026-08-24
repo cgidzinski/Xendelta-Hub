@@ -603,8 +603,8 @@ const ruleShape = {
   priority: z.number().int().optional(),
   match: z.object({
     mode: z.enum(["all", "any"]).optional(),
-    // A rule with no conditions would match every item, which is destructive when its
-    // action is exclude or skip. The engine refuses to match one; reject it here too.
+    // A rule with no conditions would match every item, which is destructive when it
+    // skips rows. The engine refuses to match one; reject it here too.
     conditions: z.array(ruleConditionSchema).min(1, "Add at least one condition"),
   }),
   actions: z.object({
@@ -620,7 +620,7 @@ const ruleShape = {
     set_type: z.enum(["expense", "income"]).nullish(),
     set_people: z.array(objectIdSchema).optional(),
     set_description: z.string().max(500).optional(),
-    disposition: z.enum(["keep", "exclude", "skip"]).optional(),
+    skip: z.boolean().optional(),
   }),
   stop_on_match: z.boolean().optional(),
 };

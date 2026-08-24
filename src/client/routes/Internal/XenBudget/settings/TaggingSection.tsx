@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
-    Box, Button, Card, Chip, IconButton, Stack, Switch, Typography,
+    Avatar, Box, Button, Card, Chip, IconButton, Stack, Switch, Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
@@ -116,8 +116,22 @@ export default function TaggingSection() {
                                             {(rule.actions.add_flags || []).map((t) => (
                                                 <FlagChip key={t} name={t} registry={book.flags} />
                                             ))}
-                                            {rule.actions.disposition === "exclude" && <Chip size="small" variant="outlined" label="off budget" sx={{ height: 20, fontSize: 11 }} />}
-                                            {rule.actions.disposition === "skip" && <Chip size="small" color="error" variant="outlined" label="never import" sx={{ height: 20, fontSize: 11 }} />}
+                                            {(rule.actions.set_people || []).map((id) => {
+                                                const member = book.members.find((m) => m.user_id === id);
+                                                return (
+                                                    <Chip
+                                                        key={id}
+                                                        size="small"
+                                                        variant="outlined"
+                                                        label={member?.username ?? "member"}
+                                                        avatar={member?.avatar
+                                                            ? <Avatar src={member.avatar} sx={{ width: 16, height: 16, fontSize: 10 }} />
+                                                            : undefined}
+                                                        sx={{ height: 20, fontSize: 11 }}
+                                                    />
+                                                );
+                                            })}
+                                            {rule.actions.skip && <Chip size="small" color="error" variant="outlined" label="never import" sx={{ height: 20, fontSize: 11 }} />}
                                         </Stack>
                                         <IconButton
                                             size="small"

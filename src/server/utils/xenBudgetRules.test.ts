@@ -110,8 +110,8 @@ describe("condition matching", () => {
   });
 
   it("never matches a rule with no conditions", () => {
-    // Matching everything is never what someone means, and is destructive when the
-    // action is exclude or skip.
+    // Matching everything is never what someone means, and is destructive when it skips
+    // the row.
     expect(ruleMatches(rule({ match: { mode: "all", conditions: [] } }), draft())).toBe(false);
     expect(ruleMatches(rule({ match: { mode: "any", conditions: [] } }), draft())).toBe(false);
   });
@@ -190,14 +190,14 @@ describe("actions", () => {
   });
 
   it("marks an item off budget without destroying it", () => {
-    const { item, skipped } = applyRules(draft(), [rule({ name: "Internal transfers", actions: { disposition: "exclude" } })]);
+    const { item, skipped } = applyRules(draft(), [rule({ name: "Internal transfers", actions: { add_flags: [FLAG_OFF_BUDGET] } })]);
     expect(skipped).toBe(false);
     expect(item.flags).toContain(FLAG_OFF_BUDGET);
     expect(item.rule_flags).toContain(FLAG_OFF_BUDGET);
   });
 
   it("skips outright, naming the responsible rule so it isn't silent", () => {
-    const result = applyRules(draft(), [rule({ name: "Card payments", actions: { disposition: "skip" } })]);
+    const result = applyRules(draft(), [rule({ name: "Card payments", actions: { skip: true } })]);
     expect(result.skipped).toBe(true);
     expect(result.skippedByRuleName).toBe("Card payments");
     expect(result.skippedByRuleId).toBe("r1");
@@ -281,7 +281,7 @@ describe("ordering", () => {
 
   it("skips immediately, without applying later rules", () => {
     const rules = [
-      rule({ _id: "a", priority: 1, actions: { disposition: "skip" } }),
+      rule({ _id: "a", priority: 1, actions: { skip: true } }),
       rule({ _id: "b", priority: 2, actions: { add_flags: ["later"] } }),
     ];
     const result = applyRules(draft(), rules);
@@ -353,8 +353,8 @@ describe("re-apply semantics", () => {
   });
 
   it("degrades skip to off-budget on a sweep, so nothing is destroyed", () => {
-    const skipper = rule({ name: "Card payments", actions: { disposition: "skip" } });
-    const result = applyRules(draft(), [skipper], { skipBecomesExclude: true });
+    const skipper = rule({ name: "Card payments", actions: { skip: true } });
+    const result = applyRules(draft(), [skipper], { skipBecomesOffBudget: true });
     expect(result.skipped).toBe(false);
     expect(result.item.flags).toContain(FLAG_OFF_BUDGET);
   });

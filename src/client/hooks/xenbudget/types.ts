@@ -207,7 +207,6 @@ export interface CreateItemInput {
 
 export type UpdateItemInput = Partial<CreateItemInput>;
 
-export type RuleDisposition = "keep" | "exclude" | "skip";
 export type RuleCategorySplit = "equal" | "percent";
 
 export interface RuleCategoryWeight {
@@ -229,7 +228,8 @@ export interface RuleActions {
     set_type: "expense" | "income" | null;
     set_people: string[];
     set_description?: string;
-    disposition: RuleDisposition;
+    /** Never store matching rows (import); a re-apply sweep degrades this to "Off budget". */
+    skip: boolean;
 }
 
 export interface RuleInput {
