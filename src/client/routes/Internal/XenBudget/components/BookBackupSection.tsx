@@ -28,7 +28,7 @@ export default function BookBackupSection({ book, isCreator }: BookBackupSection
 
     const [payload, setPayload] = useState<Record<string, unknown> | null>(null);
     const [fileName, setFileName] = useState("");
-    const [target, setTarget] = useState<"new" | "merge" | "replace">("new");
+    const [target, setTarget] = useState<"new" | "items" | "config" | "everything">("new");
 
     const readFile = async (file: File) => {
         try {
@@ -52,11 +52,14 @@ export default function BookBackupSection({ book, isCreator }: BookBackupSection
         try {
             const result = target === "new"
                 ? await restoreAsNewAsync(payload)
-                : await restoreHereAsync({ payload, mode: target });
+                : await restoreHereAsync({ payload, scope: target });
             const unmatched = result.unmatched_people?.length
                 ? ` ${result.unmatched_people.length} person(s) couldn't be matched to an account here.`
                 : "";
-            enqueueSnackbar(`Restored ${result.restored} item(s).${unmatched}`, { variant: "success" });
+            const message = target === "config"
+                ? `Settings imported.${unmatched}`
+                : `Restored ${result.restored} item(s).${unmatched}`;
+            enqueueSnackbar(message, { variant: "success" });
             setPayload(null);
             if (target === "new" && result.book?._id) {
                 navigate(`/internal/xenbudget/books/${result.book._id}/overview`);
@@ -102,19 +105,29 @@ export default function BookBackupSection({ book, isCreator }: BookBackupSection
                             value={target} onChange={(e) => setTarget(e.target.value as typeof target)}
                         >
                             <MenuItem value="new">A new book</MenuItem>
-                            <MenuItem value="merge">This book — add what&rsquo;s missing</MenuItem>
-                            {isCreator && <MenuItem value="replace">This book — replace everything</MenuItem>}
+                            <MenuItem value="items">This book — add missing items</MenuItem>
+                            {isCreator && <MenuItem value="config">This book — import settings only</MenuItem>}
+                            {isCreator && <MenuItem value="everything">This book — replace everything</MenuItem>}
                         </TextField>
-                        {target === "merge" && (
+                        {target === "items" && (
                             <Alert severity="info">
                                 Items this book already has are skipped, so restoring over live data
-                                won&rsquo;t double anything.
+                                won&rsquo;t double anything. Budgets, categories, flags and rules are left
+                                untouched.
                             </Alert>
                         )}
-                        {target === "replace" && (
+                        {target === "config" && (
+                            <Alert severity="info">
+                                Budgets, tagging rules and saved import mappings are replaced by the
+                                backup&rsquo;s; categories and flags are merged by name. Items are left
+                                untouched.
+                            </Alert>
+                        )}
+                        {target === "everything" && (
                             <Alert severity="warning">
-                                Every item, flag, budget and rule currently in &ldquo;{book.name}&rdquo; is
-                                deleted and replaced by the backup. This cannot be undone.
+                                Every item, budget, rule and saved import mapping currently in
+                                &ldquo;{book.name}&rdquo; is deleted and replaced by the backup; categories and
+                                flags are merged by name. This cannot be undone.
                             </Alert>
                         )}
                     </Stack>
@@ -123,7 +136,7 @@ export default function BookBackupSection({ book, isCreator }: BookBackupSection
                     <Button onClick={() => setPayload(null)}>Cancel</Button>
                     <Button
                         variant="contained"
-                        color={target === "replace" ? "error" : "primary"}
+                        color={target === "everything" ? "error" : "primary"}
                         disabled={isRestoringHere || isRestoringAsNew}
                         onClick={doRestore}
                     >

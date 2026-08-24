@@ -10,7 +10,7 @@ import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import Papa from "papaparse";
 import { useSnackbar } from "notistack";
 import type {
-    XenBudgetBook, XenBudgetImportPreset, ImportPreviewRow, DuplicateMatch, BulkImportResult,
+    XenBudgetBook, ImportPreviewRow, DuplicateMatch, BulkImportResult,
 } from "../../../../../hooks/xenbudget/types";
 import { useXenBudgetImport, type ImportCandidate } from "../../../../../hooks/xenbudget/useImport";
 import { useAuth } from "../../../../../contexts/AuthContext";
@@ -126,21 +126,6 @@ async function parseAllFiles(
     return { headers: first.headers, rows: parsed.flatMap((p) => p.rows) };
 }
 
-// Only column_map/sign_convention/date_format/has_header/skip_rows/default_categories
-// are what a preset actually remembers — comparing exactly those (and nothing else) is
-// what lets "unchanged" and "modified" be told apart.
-function configMatchesPreset(config: MappingConfig, preset: XenBudgetImportPreset): boolean {
-    const sameColumnMap = JSON.stringify(config.column_map) === JSON.stringify(preset.column_map);
-    const sameDefaults = JSON.stringify(config.default_categories || [])
-        === JSON.stringify(preset.default_categories || []);
-    return sameColumnMap
-        && config.sign_convention === preset.sign_convention
-        && (config.date_format || "auto") === (preset.date_format || "auto")
-        && (config.has_header !== false) === preset.has_header
-        && (config.skip_rows || 0) === preset.skip_rows
-        && sameDefaults;
-}
-
 /**
  * The CSV import flow: upload → map → review → import.
  *
@@ -153,7 +138,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
     const { enqueueSnackbar } = useSnackbar();
     const {
         previewAsync, isPreviewing, checkDuplicatesAsync, importAsync, isImporting,
-        undoImportAsync, isUndoing, savePresetAsync, updatePresetAsync,
+        undoImportAsync, isUndoing, savePresetAsync,
     } = useXenBudgetImport(book._id);
 
     const [step, setStep] = useState(0);
@@ -259,34 +244,45 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                 setHeaders(parsedResult.headers);
                 setRawRows(parsedResult.rows);
 
-                // Auto-attempt header detection once per file selection: when the first
-                // row reads like data (real dates/money) rather than column names, flip
-                // "No header" on. The checkbox stays the source of truth afterward.
-                if (autoHeaderRef.current === false && config.has_header !== false
-                    && looksLikeDataRow(parsedResult.headers)) {
+                // A saved mapping owns the config from here on: its columns and header
+                // setting were deliberately saved, so auto-detection must never clobber
+                // them — even when "No header" is toggled for this file.
+                if (!presetId) {
+                    // Auto-attempt header detection once per file selection: when the first
+                    // row reads like data (real dates/money) rather than column names, flip
+                    // "No header" on. The checkbox stays the source of truth afterward.
+                    if (autoHeaderRef.current === false && config.has_header !== false
+                        && looksLikeDataRow(parsedResult.headers)) {
+                        autoHeaderRef.current = true;
+                        setConfig((prev) => ({ ...prev, has_header: false }));
+                        return;
+                    }
                     autoHeaderRef.current = true;
-                    setConfig((prev) => ({ ...prev, has_header: false }));
-                    return;
-                }
-                autoHeaderRef.current = true;
 
-                // Guess the obvious columns, but only the first time this exact file set
-                // is parsed — a later reparse (from toggling the header switch) must not
-                // stomp a mapping the user has since adjusted.
-                if (guessedForRef.current !== files) {
-                    guessedForRef.current = files;
-                    const guess = (candidates: string[]) =>
-                        parsedResult.headers.find((f) => candidates.some((c) => f.toLowerCase().includes(c)));
-                    setConfig((prev) => ({
-                        ...prev,
-                        column_map: {
-                            date: guess(["date", "posted"]),
-                            description: guess(["description", "payee", "merchant", "name", "memo"]),
-                            amount: guess(["amount", "value"]),
-                            debit: guess(["debit", "withdrawal"]),
-                            credit: guess(["credit", "deposit"]),
-                        },
-                    }));
+                    // Guess the obvious columns, but only the first time this exact file set
+                    // is parsed — a later reparse (from toggling the header switch) must not
+                    // stomp a mapping the user has since adjusted.
+                    if (guessedForRef.current !== files) {
+                        guessedForRef.current = files;
+                        const guess = (candidates: string[]) =>
+                            parsedResult.headers.find((f) => candidates.some((c) => f.toLowerCase().includes(c)));
+                        const descriptionHeader = guess(["description", "payee", "merchant", "name", "memo"]);
+                        const memoHeader = guess(["memo", "notes", "note"]);
+                        setConfig((prev) => ({
+                            ...prev,
+                            column_map: {
+                                date: guess(["date", "posted"]),
+                                description: descriptionHeader,
+                                // Only map a memo column when it's distinct — otherwise the
+                                // description fallback already used it, and two roles on one
+                                // header would misalign the preview.
+                                memo: memoHeader && memoHeader !== descriptionHeader ? memoHeader : undefined,
+                                amount: guess(["amount", "value"]),
+                                debit: guess(["debit", "withdrawal"]),
+                                credit: guess(["credit", "deposit"]),
+                            },
+                        }));
+                    }
                 }
             })
             .catch((err) => {
@@ -392,15 +388,13 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
     };
 
     const selectedPreset = presetId ? book.import_presets.find((p) => p._id === presetId) : undefined;
-    const presetUnchanged = !!selectedPreset
-        && configMatchesPreset(config, selectedPreset)
-        && presetName.trim() === selectedPreset.name;
 
     const toCandidates = (): ImportCandidate[] => mapped.rows.map((r) => ({
         type: r.type,
         amount: r.amount,
         date: r.date,
         description: r.description,
+        notes: r.notes,
         categories: r.categories,
         currency: book.default_currency,
     }));
@@ -477,7 +471,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
 
             // Every import is tied to a preset by id. A one-off name has to become a
             // preset before the import can point at it; an already-selected preset keeps
-            // its id and is updated (best-effort) after the import succeeds.
+            // its id — the import references it without overwriting it.
             let presetIdToUse = selectedPreset?._id;
             if (!selectedPreset) {
                 const saved = await savePresetAsync(presetInput);
@@ -493,11 +487,6 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
             });
             setResult(imported);
             setStep(3);
-
-            if (selectedPreset && !presetUnchanged) {
-                await updatePresetAsync({ presetId: selectedPreset._id, input: presetInput })
-                    .catch(() => enqueueSnackbar("Imported, but the mapping could not be updated", { variant: "warning" }));
-            }
         } catch (e) {
             enqueueSnackbar(e instanceof Error ? e.message : "Import failed", { variant: "error" });
         }
@@ -537,9 +526,9 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                 {step === 0 && (
                     <Stack spacing={2} alignItems="stretch">
                         <Typography variant="body2" color="text.secondary">
-                            Export from your bank or card as CSV. The file is read here in your browser —
-                            only the rows you approve are sent. Add more than one if the month is split
-                            across statements.
+                            Export from your bank or another source as CSV. The file is read here in your
+                            browser — only the rows you approve are sent. Add more than one file if the
+                            month is split across exports.
                         </Typography>
                         {book.import_presets.length > 0 && (
                             <TextField
@@ -629,6 +618,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                         onDateFromChange={setDateFrom}
                         dateTo={dateTo}
                         onDateToChange={setDateTo}
+                        locked={!!selectedPreset}
                     />
                 )}
 
@@ -658,16 +648,11 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                                 <TextField
                                     size="small" label="Name" value={presetName}
                                     onChange={(e) => setPresetName(e.target.value)}
-                                    placeholder="Chase Visa"
+                                    placeholder="e.g. My bank"
                                     required
-                                    helperText="Names this card and its saved mapping — shown in import history so a bad file can be found later."
+                                    disabled={!!selectedPreset}
+                                    helperText="Names this source and its saved mapping — shown in import history so a bad file can be found later."
                                 />
-                                {selectedPreset && !presetUnchanged && (
-                                    <Alert severity="info" variant="outlined">
-                                        This mapping has changed since &ldquo;{selectedPreset.name}&rdquo; was saved.
-                                        Importing will update it.
-                                    </Alert>
-                                )}
                             </Stack>
                         </Box>
 

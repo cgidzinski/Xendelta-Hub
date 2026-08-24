@@ -17,6 +17,7 @@ export interface ColumnMap {
     debit?: string;
     credit?: string;
     categories?: string;
+    memo?: string;
     people?: string;
 }
 
@@ -38,6 +39,8 @@ export interface MappedRow {
     amount: number;
     date: string;
     description: string;
+    /** The bank's own memo column, stored on the item as notes. */
+    notes?: string;
     categories: string[];
 }
 
@@ -253,6 +256,10 @@ export function applyMapping(rows: CsvRow[], config: MappingConfig): MappingResu
             return;
         }
 
+        // The bank's own memo column, kept as the item's notes (informational only —
+        // rules never read or rewrite it).
+        const memoText = String(map.memo ? row[map.memo] ?? "" : "").trim();
+
         out.push({
             index,
             // Negative means money out, whatever the file's own convention was.
@@ -260,6 +267,7 @@ export function applyMapping(rows: CsvRow[], config: MappingConfig): MappingResu
             amount: Math.round(Math.abs(signedAmount) * 100) / 100,
             date: date.toISOString(),
             description: description.slice(0, 500),
+            notes: memoText ? memoText.slice(0, 1000) : undefined,
             categories: [
                 ...(config.default_categories || []),
                 ...splitList(map.categories ? row[map.categories] : undefined),

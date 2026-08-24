@@ -111,6 +111,11 @@ export default function PreviewStep({
                                             {isDuplicate && <Chip size="small" variant="outlined" label="dup" sx={{ height: 16, fontSize: 10 }} />}
                                             {isOutOfRange && <Chip size="small" variant="outlined" color="warning" label="outside range" sx={{ height: 16, fontSize: 10 }} />}
                                         </Stack>
+                                        {row.item.notes && (
+                                            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                                                {row.item.notes}
+                                            </Typography>
+                                        )}
                                         {row.item.description !== row.original.description && (
                                             <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
                                                 was &ldquo;{row.original.description}&rdquo;

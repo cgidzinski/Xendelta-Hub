@@ -22,6 +22,8 @@ export interface ImportCandidate {
     currency?: string;
     date?: string;
     description: string;
+    /** The bank's memo column, stored on the item as notes. */
+    notes?: string;
     categories?: string[];
     people?: string[];
 }

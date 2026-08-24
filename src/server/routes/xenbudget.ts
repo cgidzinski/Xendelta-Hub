@@ -202,6 +202,21 @@ function stripIds(list: any[] | undefined): any[] {
   });
 }
 
+// Categories and flags are name-keyed, so a config restore ADDS the labels a backup has
+// that this book doesn't, rather than replacing the book's own — whose colour and
+// need_want tweaks would otherwise be clobbered by an older export.
+function mergeLabelsByName(existing: any[], incoming: any[] | undefined): any[] {
+  const names = new Set((existing || []).map((l: any) => l?.name).filter(Boolean));
+  const merged = [...(existing || [])];
+  for (const label of stripIds(incoming)) {
+    if (label?.name && !names.has(label.name)) {
+      merged.push(label);
+      names.add(label.name);
+    }
+  }
+  return merged;
+}
+
 /**
  * Works out who the exported members are on *this* deployment.
  *
@@ -280,6 +295,19 @@ function remapRules(rules: any[], idMap: Map<string, string>): any[] {
       set_people: ((r.actions?.set_people) || []).map((id: string) => remapUser(id, idMap)),
     },
   }));
+}
+
+// Applies the backup's book-level settings into an existing book. Budgets, rules and
+// import presets replace what's already there; categories and flags merge by name so the
+// user's own label colours/need_want survive. Built-in flags are re-added afterwards.
+async function applyConfig(book: any, payload: any, idMap: Map<string, string>): Promise<void> {
+  book.categories = mergeLabelsByName(book.categories, payload.book.categories);
+  book.flags = mergeLabelsByName(book.flags, payload.book.flags);
+  ensureSystemLabels(book);
+  book.budgets = remapBudgets(stripIds(payload.book.budgets), idMap);
+  book.rules = remapRules(stripIds(payload.book.rules), idMap);
+  book.import_presets = stripIds(payload.book.import_presets);
+  await book.save();
 }
 
 /**
@@ -743,6 +771,7 @@ function draftFromRow(row: any, book: any): DraftItem {
     amount: roundMoney(Number(row.amount) || 0),
     date: row.date ? new Date(row.date) : new Date(),
     description: String(row.description || "").slice(0, 500),
+    notes: String(row.notes || "").slice(0, 1000) || undefined,
     categories: Array.isArray(row.categories) ? [...row.categories] : [],
     flags: Array.isArray(row.flags) ? [...row.flags] : [],
     applied_rule_ids: [],
@@ -1358,6 +1387,7 @@ module.exports = function (app: any) {
               amount: result.item.amount,
               date: result.item.date,
               description: result.item.description,
+              notes: result.item.notes,
               categories: result.item.categories,
               flags: result.item.flags,
             },
@@ -1485,41 +1515,48 @@ module.exports = function (app: any) {
     validateParams(xenBudgetBookIdParamSchema), validate(xenBudgetRestoreSchema),
     async (req: Request, res: Response) => {
       try {
-        const mode = req.body.mode === "replace" ? "replace" : "merge";
-        // Replacing destroys everything already in the book, so it is the owner's call.
-        const book = mode === "replace"
-          ? await loadBookForCreator(req, res)
-          : await loadBookForMember(req, res);
+        // scope wins over the legacy mode field; a request with neither is an items-only
+        // merge, which is what a bare restore has always done.
+        const scope = (req.body.scope as "items" | "config" | "everything" | undefined)
+          || (req.body.mode === "replace" ? "everything" : "items");
+        // Config and everything overwrite book-level settings (and everything also wipes
+        // items), so they are the owner's call; a plain items merge is member-safe.
+        const book = scope === "items"
+          ? await loadBookForMember(req, res)
+          : await loadBookForCreator(req, res);
         if (!book) return;
 
         const userId = callerId(req);
         const { idMap, unmatched } = await resolveRestoreMembers(req.body.book.members || [], userId);
 
         let removed = 0;
-        if (mode === "replace") {
+        let inserted = 0;
+        if (scope === "config" || scope === "everything") {
+          await applyConfig(book, req.body, idMap);
+        }
+        if (scope === "everything") {
           const result = await XenBudgetItem.deleteMany({ book_id: book._id });
           removed = result.deletedCount || 0;
-          book.categories = stripIds(req.body.book.categories);
-          book.flags = stripIds(req.body.book.flags);
-          ensureSystemLabels(book);
-          book.budgets = remapBudgets(stripIds(req.body.book.budgets), idMap);
-          book.rules = remapRules(stripIds(req.body.book.rules), idMap);
-          book.import_presets = stripIds(req.body.book.import_presets);
-          await book.save();
+          inserted = await insertRestoredItems(book, req.body.items, idMap, userId, "replace");
+        } else if (scope === "items") {
+          inserted = await insertRestoredItems(book, req.body.items, idMap, userId, "merge");
         }
 
-        const inserted = await insertRestoredItems(book, req.body.items, idMap, userId, mode);
         await book.populate("members", "username avatar");
         broadcastBook(book);
 
+        const message = scope === "config"
+          ? "Imported settings"
+          : scope === "everything"
+            ? `Replaced ${removed} item${removed === 1 ? "" : "s"} with ${inserted}`
+            : `Added ${inserted} item${inserted === 1 ? "" : "s"}`;
+
         res.json({
           status: true,
-          message: mode === "replace"
-            ? `Replaced ${removed} item${removed === 1 ? "" : "s"} with ${inserted}`
-            : `Added ${inserted} item${inserted === 1 ? "" : "s"}`,
+          message,
           data: {
-            mode, restored: inserted, removed,
-            skipped_duplicates: req.body.items.length - inserted,
+            scope, restored: inserted, removed,
+            skipped_duplicates: scope === "items" ? req.body.items.length - inserted : 0,
             unmatched_people: unmatched,
           },
         });
@@ -1660,6 +1697,7 @@ module.exports = function (app: any) {
             date: bookDateToUtc(ruled.date, book.timezone),
             description: ruled.description,
             original_description: ruled.original_description || row.description,
+            notes: ruled.notes,
             categories: draftCategoryWeights(ruled, ruled.amount),
             category_split_type: ruled.category_split_type ?? "equal",
             rule_categories: ruled.rule_categories,

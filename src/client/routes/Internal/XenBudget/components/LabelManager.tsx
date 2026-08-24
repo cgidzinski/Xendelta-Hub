@@ -97,7 +97,18 @@ export default function LabelManager({ book, kind }: LabelManagerProps) {
             ) : (
                 <Stack spacing={0.75}>
                     {labels.map((label) => (
-                        <Stack key={label._id} direction="row" alignItems="center" spacing={1}>
+                        <Stack
+                            key={label._id}
+                            direction="row"
+                            alignItems="center"
+                            spacing={1}
+                            sx={{
+                                px: 1,
+                                py: 0.5,
+                                borderRadius: 1,
+                                "&:hover": { bgcolor: "action.hover" },
+                            }}
+                        >
                             {editing?.id === label._id ? (
                                 <TextField
                                     size="small" autoFocus value={editing.name}

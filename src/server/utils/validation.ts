@@ -482,6 +482,14 @@ export const xenBudgetRestoreSchema = z.object({
    * replace - wipe this book's items first (creator only, and confirmed client-side)
    */
   mode: z.enum(["merge", "replace"]).optional(),
+  /**
+   * What to restore when importing into an existing book. Wins over the legacy `mode`
+   * field (which is kept so old clients still work):
+   * items      - add missing items only, config untouched
+   * config     - budgets/categories/flags/rules/import_presets only, no items
+   * everything - config + replace every item
+   */
+  scope: z.enum(["items", "config", "everything"]).optional(),
 });
 
 export const xenBudgetPresetParamSchema = z.object({
@@ -505,6 +513,7 @@ const importRowSchema = z.object({
   currency: z.string().max(10).optional(),
   date: z.string().datetime().optional(),
   description: z.string().min(1, "Description required").max(500),
+  notes: z.string().max(1000).optional(),
   categories: z.array(z.string().max(50)).max(20).optional(),
   flags: z.array(z.string().max(50)).max(20).optional(),
   people: z.array(objectIdSchema).optional(),
@@ -541,6 +550,7 @@ const importPresetShape = {
     debit: z.string().max(200).optional(),
     credit: z.string().max(200).optional(),
     categories: z.string().max(200).optional(),
+    memo: z.string().max(200).optional(),
     people: z.string().max(200).optional(),
   }),
   amount_mode: z.enum(["signed", "debit_credit"]).optional(),

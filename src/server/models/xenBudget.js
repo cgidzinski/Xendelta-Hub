@@ -130,6 +130,7 @@ var importPresetSchema = new Schema({
     debit: { type: String },    // amount_mode === "debit_credit"
     credit: { type: String },
     categories: { type: String },
+    memo: { type: String },
     people: { type: String },
   },
   amount_mode: { type: String, enum: ["signed", "debit_credit"], default: "signed" },

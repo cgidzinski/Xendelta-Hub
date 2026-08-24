@@ -85,7 +85,7 @@ export interface XenBudgetImportPreset {
     name: string;
     column_map: {
         date?: string; description?: string; amount?: string;
-        debit?: string; credit?: string; categories?: string; people?: string;
+        debit?: string; credit?: string; categories?: string; memo?: string; people?: string;
     };
     amount_mode: "signed" | "debit_credit";
     sign_convention: "negative_is_expense" | "positive_is_expense";
@@ -270,7 +270,7 @@ export interface ImportPreviewRow {
     original: { description: string; categories: string[]; type: ItemType; amount: number };
     item: {
         type: ItemType; amount: number; date: string; description: string;
-        categories: string[]; flags: string[];
+        categories: string[]; flags: string[]; notes?: string;
     };
 }
 

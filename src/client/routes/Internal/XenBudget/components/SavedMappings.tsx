@@ -44,6 +44,7 @@ export default function SavedMappings() {
         const headers = [...new Set([
             p.column_map.date, p.column_map.description, p.column_map.amount,
             p.column_map.debit, p.column_map.credit, p.column_map.categories,
+            p.column_map.memo,
         ].filter((h): h is string => !!h))];
         setEditing({ _id: p._id, name: p.name, config, headers });
     };

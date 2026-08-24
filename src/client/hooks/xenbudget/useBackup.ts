@@ -1,7 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 
+export type RestoreScope = "items" | "config" | "everything";
+
 export interface RestoreResult {
+    scope?: RestoreScope;
     mode?: "merge" | "replace";
     restored: number;
     removed?: number;
@@ -33,8 +36,8 @@ export function useXenBudgetBackup(bookId: string) {
     };
 
     const restoreHereMutation = useMutation({
-        mutationFn: async ({ payload, mode }: { payload: unknown; mode: "merge" | "replace" }) => {
-            const res = await apiClient.post(`/api/xenbudget/books/${bookId}/import`, { ...(payload as object), mode });
+        mutationFn: async ({ payload, scope }: { payload: unknown; scope: RestoreScope }) => {
+            const res = await apiClient.post(`/api/xenbudget/books/${bookId}/import`, { ...(payload as object), scope });
             return res.data.data as RestoreResult;
         },
         onSuccess: invalidate,

@@ -39,6 +39,8 @@ interface MapStepProps {
     showDateRange?: boolean;
     /** Hide the "X of Y" row counter and chevrons (no sample rows to step through). */
     showRowNav?: boolean;
+    /** Read-only mapping controls — used when a saved mapping is selected. */
+    locked?: boolean;
 }
 
 /** Formats a parsed row date (a date-only value anchored at UTC midnight) as a plain
@@ -86,7 +88,7 @@ const ORDER_LABELS: Record<string, string> = {
 export default function MapStep({
     headers, config, onChange, detectedOrder, rows, rawPreviewLines, errorCount, mappedCount,
     customRangeCount, dateStats, dateFrom, onDateFromChange, dateTo, onDateToChange,
-    showDateRange = true, showRowNav = true,
+    showDateRange = true, showRowNav = true, locked = false,
 }: MapStepProps) {
     const [previewIndex, setPreviewIndex] = useState(0);
     const rowIndex = rows.length ? Math.min(previewIndex, rows.length - 1) : 0;
@@ -111,6 +113,7 @@ export default function MapStep({
         { value: "skip", label: "Skip" },
         { value: "date", label: "Date" },
         { value: "description", label: "Description" },
+        { value: "memo", label: "Memo" },
         { value: "amount", label: "Amount" },
         { value: "debit", label: "Debit (money out)" },
         { value: "credit", label: "Credit (money in)" },
@@ -214,6 +217,12 @@ export default function MapStep({
                 )}
             </Stack>
 
+            {locked && (
+                <Typography variant="caption" color="text.secondary">
+                    Using a saved mapping — column matching is locked.
+                </Typography>
+            )}
+
             <TableContainer sx={{ border: 1, borderColor: "divider", borderRadius: 1 }}>
                 <Table size="small">
                     <TableHead>
@@ -240,6 +249,7 @@ export default function MapStep({
                                             select fullWidth size="small"
                                             value={roleForHeader(h)}
                                             onChange={(e) => assignRole(h, e.target.value)}
+                                            disabled={locked}
                                             slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
                                         >
                                             {roleOptions.map((r) => (
@@ -266,6 +276,7 @@ export default function MapStep({
                     select fullWidth size="small" label="Which sign means money out?"
                     value={config.sign_convention}
                     onChange={(e) => onChange({ ...config, sign_convention: e.target.value as MappingConfig["sign_convention"] })}
+                    disabled={locked}
                     slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
                 >
                     <MenuItem value="negative_is_expense">Negative is spending</MenuItem>
@@ -277,6 +288,7 @@ export default function MapStep({
                 select fullWidth size="small" label="Date order"
                 value={config.date_format === "auto" ? "auto" : config.date_format}
                 onChange={(e) => onChange({ ...config, date_format: e.target.value })}
+                disabled={locked}
                 helperText={
                     config.date_format === "auto"
                         ? `Detected: ${ORDER_LABELS[detectedOrder]}`

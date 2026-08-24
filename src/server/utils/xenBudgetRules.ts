@@ -71,6 +71,8 @@ export interface DraftItem {
   date: Date;
   description: string;
   original_description?: string;
+  /** The bank's memo column, kept on the item as notes. Informational only. */
+  notes?: string;
   /** What the purchase was, by name. The caller turns these into resolved weights. */
   categories: string[];
   /** A rule's weighted categories, resolved later against the item amount. */
