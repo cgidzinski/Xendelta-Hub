@@ -458,12 +458,11 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
                 isSubmitting={isCreatingRule || isReapplying}
                 onSubmit={async (input) => {
                     await createRuleAsync(input);
-                    // Apply the new rule to the rest of the queue now, so identical items
-                    // that follow are tagged rather than left for another manual pass.
-                    const exclude = currentItem ? [currentItem._id] : [];
+                    // Run the item being reviewed through the new rule (and the rest of the
+                    // queue) straight away, so it's tagged without a separate manual save.
                     try {
-                        await reapplyAsync({ exclude_ids: exclude });
-                        enqueueSnackbar("Rule saved — matching items updated", { variant: "success" });
+                        await reapplyAsync({});
+                        enqueueSnackbar("Rule saved — this item and matching items updated", { variant: "success" });
                     } catch (e) {
                         enqueueSnackbar(
                             e instanceof Error ? e.message : "Rule saved, but re-applying failed",

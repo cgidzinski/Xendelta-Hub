@@ -124,6 +124,9 @@ export default function RuleForm({
     const [setDescription, setSetDescription] = useState("");
     const [skip, setSkip] = useState(false);
     const [people, setPeople] = useState<SplitDraft[]>([]);
+    // How the rule attributes items: inherit (leave as-is, e.g. whoever imported) or a
+    // hand-picked set of members.
+    const [peopleMode, setPeopleMode] = useState<"inherit" | "custom">("inherit");
     const [stopOnMatch, setStopOnMatch] = useState(false);
     const [enabled, setEnabled] = useState(true);
     // Once the user types in the name themselves, stop auto-generating it.
@@ -166,6 +169,7 @@ export default function RuleForm({
             setSetDescription(rule.actions.set_description || "");
             setSkip(!!rule.actions.skip);
             setPeople((rule.actions.set_people || []).map((id) => ({ key: id, value: "" })));
+            setPeopleMode((rule.actions.set_people || []).length > 0 ? "custom" : "inherit");
             setStopOnMatch(!!rule.stop_on_match);
             setEnabled(rule.enabled !== false);
         } else {
@@ -182,6 +186,7 @@ export default function RuleForm({
             setSetDescription("");
             setSkip(false);
             setPeople([]);
+            setPeopleMode("inherit");
             setStopOnMatch(false);
             setEnabled(true);
         }
@@ -209,7 +214,7 @@ export default function RuleForm({
         (c) => c.op === "is_empty" || ((c.value ?? "") !== "" && (c.op !== "between" || (c.value2 ?? "") !== "")),
     );
     const doesSomething = categories.length > 0 || addFlags.length > 0 || !!setType
-        || !!setDescription.trim() || skip || people.length > 0;
+        || !!setDescription.trim() || skip || (peopleMode === "custom" && people.length > 0);
     const canSubmit = !!name.trim() && allConditions.length > 0 && conditionsValid && doesSomething;
 
     // The rule as the API wants it, whether it's being saved or previewed.
@@ -226,7 +231,7 @@ export default function RuleForm({
                 ? categories.map((c) => ({ name: c.key, percentage: parseFloat(c.value) || 0 }))
                 : [],
             add_flags: addFlags,
-            set_people: people.map((p) => p.key),
+            set_people: peopleMode === "inherit" ? [] : people.map((p) => p.key),
             set_type: setType || null,
             set_description: setDescription.trim() || undefined,
             skip,
@@ -403,17 +408,41 @@ export default function RuleForm({
                         </Box>
 
                         <Box sx={groupSx}>
-                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Set people</Typography>
-                            <WeightedSplitEditor
-                                mode={{ kind: "people", members: book.members }}
-                                splitType="equal"
-                                onSplitTypeChange={() => { /* a rule attributes evenly */ }}
-                                selected={people}
-                                onSelectedChange={setPeople}
-                                amount={0}
-                                currency={book.default_currency}
-                                amountless
-                            />
+                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Attribution</Typography>
+                            <Stack spacing={0.5}>
+                                <FormControlLabel
+                                    control={
+                                        <Radio
+                                            size="small"
+                                            checked={peopleMode === "inherit"}
+                                            onChange={() => { setPeopleMode("inherit"); setPeople([]); }}
+                                        />
+                                    }
+                                    label="Inherit (initial person who imported)"
+                                />
+                                <FormControlLabel
+                                    control={
+                                        <Radio
+                                            size="small"
+                                            checked={peopleMode === "custom"}
+                                            onChange={() => setPeopleMode("custom")}
+                                        />
+                                    }
+                                    label="Choose people"
+                                />
+                            </Stack>
+                            {peopleMode === "custom" && (
+                                <WeightedSplitEditor
+                                    mode={{ kind: "people", members: book.members }}
+                                    splitType="equal"
+                                    onSplitTypeChange={() => { /* a rule attributes evenly */ }}
+                                    selected={people}
+                                    onSelectedChange={setPeople}
+                                    amount={0}
+                                    currency={book.default_currency}
+                                    amountless
+                                />
+                            )}
                         </Box>
 
                         <Box sx={groupSx}>
