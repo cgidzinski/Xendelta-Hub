@@ -7,6 +7,7 @@ import {
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import CloseIcon from "@mui/icons-material/Close";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { useSnackbar } from "notistack";
 import { format } from "date-fns";
 import type { BookDetailContext } from "../BookDetail";
@@ -14,6 +15,7 @@ import SectionCard from "./SectionCard";
 import BookBackupSection from "../components/BookBackupSection";
 import { UserSelect } from "../../../../components/UserSelect";
 import type { SearchedUser } from "../../../../hooks/useUserSearch";
+import { useXenBudgetReseedLabels } from "../../../../hooks/xenbudget/useLabels";
 import { ALL_CURRENCIES, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 import { COMMON_TIMEZONES } from "../../../../constants/timezones";
 
@@ -24,6 +26,7 @@ export default function GeneralSection() {
     } = useOutletContext<BookDetailContext>();
     const navigate = useNavigate();
     const { enqueueSnackbar } = useSnackbar();
+    const { reseedLabelsAsync, isReseeding } = useXenBudgetReseedLabels(book._id);
 
     const [name, setName] = useState(book.name);
     const [addOpen, setAddOpen] = useState(false);
@@ -49,6 +52,15 @@ export default function GeneralSection() {
             navigate("/internal/xenbudget/books");
         } catch (e) {
             enqueueSnackbar(e instanceof Error ? e.message : "Failed to delete book", { variant: "error" });
+        }
+    };
+
+    const handleReseed = async () => {
+        try {
+            await reseedLabelsAsync();
+            enqueueSnackbar("Starter categories and built-in flags restored", { variant: "success" });
+        } catch (e) {
+            enqueueSnackbar(e instanceof Error ? e.message : "Could not re-seed labels", { variant: "error" });
         }
     };
 
@@ -89,6 +101,22 @@ export default function GeneralSection() {
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                     Created {format(new Date(book.created_at), "MMMM d, yyyy")}.
                 </Typography>
+            </SectionCard>
+
+            <SectionCard
+                title="Categories &amp; flags"
+                description="Add back any starter categories and built-in flags that are missing. Existing ones are left untouched."
+            >
+                <Stack direction="row" justifyContent="flex-end">
+                    <Button
+                        size="small"
+                        startIcon={<RestartAltIcon />}
+                        onClick={handleReseed}
+                        disabled={isReseeding}
+                    >
+                        Re-seed categories &amp; flags
+                    </Button>
+                </Stack>
             </SectionCard>
 
             <SectionCard

@@ -79,9 +79,8 @@ export default function ReapplyRulesDialog({ open, onClose, reapply, isReapplyin
                                     onChange={(e) => setIncludeManual(e.target.checked)}
                                 />
                             }
-                            label={`Also sweep items I've edited by hand${
-                                preview.skipped_manually_edited ? ` (${preview.skipped_manually_edited} skipped)` : ""
-                            }`}
+                            label={`Also sweep items I've edited by hand${preview.skipped_manually_edited ? ` (${preview.skipped_manually_edited} skipped)` : ""
+                                }`}
                         />
                         {includeManual && (
                             <Alert severity="warning">
@@ -137,9 +136,6 @@ function describe(change: ReapplyResult["sample"][number]): string {
     };
     diff(change.before.categories, change.after.categories, "");
     diff(change.before.flags, change.after.flags, "flag ");
-    if (change.before.excluded !== change.after.excluded) {
-        parts.push(change.after.excluded ? "excluded from totals" : "back in totals");
-    }
     if (change.before.type !== change.after.type) parts.push(`now ${change.after.type}`);
     if (change.before.description !== change.after.description) {
         parts.push(`renamed from "${change.before.description}"`);

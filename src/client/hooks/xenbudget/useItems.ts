@@ -9,12 +9,18 @@ export interface ItemFilters {
     flags?: string[];
     people?: string[];
     type?: "expense" | "income";
+    /** Only items with a category classified need or want. */
+    need_want?: "need" | "want";
     /** Items with no category at all — the worklist an import leaves behind. */
     uncategorised?: boolean;
     /** Review mode's queue: uncategorised OR flagged "Needs review", minus "Ignored". */
     review?: boolean;
     /** hidden (default, matches the totals) | only | all */
     excluded?: "hidden" | "only" | "all";
+    /** Only items added manually or imported via CSV. */
+    source?: "manual" | "csv";
+    /** Only items imported under this saved mapping (preset id). */
+    card?: string;
     q?: string;
 }
 
@@ -26,10 +32,13 @@ function toParams(filters: ItemFilters): Record<string, string> {
     if (filters.flags?.length) params.flags = filters.flags.join(",");
     if (filters.people?.length) params.people = filters.people.join(",");
     if (filters.type) params.type = filters.type;
+    if (filters.need_want) params.need_want = filters.need_want;
     if (filters.uncategorised) params.uncategorised = "true";
     if (filters.review) params.review = "true";
     if (filters.excluded === "only") params.excluded = "true";
     else if (filters.excluded === "all") params.excluded = "all";
+    if (filters.source) params.source = filters.source;
+    if (filters.card) params.card = filters.card;
     if (filters.q) params.q = filters.q;
     return params;
 }

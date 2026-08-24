@@ -23,6 +23,7 @@ export {
   FLAG_POSSIBLE_DUPLICATE,
   FLAG_NEEDS_REVIEW,
   FLAG_IGNORED,
+  FLAG_OFF_BUDGET,
   isSystemFlag,
 } from "./xenbudget";
 

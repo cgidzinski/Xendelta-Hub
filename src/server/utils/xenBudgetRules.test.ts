@@ -3,6 +3,7 @@ import {
   applyRules, ruleMatches, stripRuleEffects, safeRegexTest, MAX_REGEX_LENGTH,
   type Rule, type DraftItem, type RuleCondition,
 } from "./xenBudgetRules";
+import { FLAG_OFF_BUDGET } from "../constants/xenbudget";
 
 function draft(over: Partial<DraftItem> = {}): DraftItem {
   return {
@@ -12,7 +13,6 @@ function draft(over: Partial<DraftItem> = {}): DraftItem {
     description: "STARBUCKS #1234",
     categories: [],
     flags: [],
-    excluded: false,
     applied_rule_ids: [],
     rule_categories: [],
     rule_flags: [],
@@ -189,11 +189,11 @@ describe("actions", () => {
     expect(item.original_description).toBe("STARBUCKS #1234");
   });
 
-  it("excludes without destroying, recording which rule was responsible", () => {
+  it("marks an item off budget without destroying it", () => {
     const { item, skipped } = applyRules(draft(), [rule({ name: "Internal transfers", actions: { disposition: "exclude" } })]);
     expect(skipped).toBe(false);
-    expect(item.excluded).toBe(true);
-    expect(item.excluded_reason).toBe("Internal transfers");
+    expect(item.flags).toContain(FLAG_OFF_BUDGET);
+    expect(item.rule_flags).toContain(FLAG_OFF_BUDGET);
   });
 
   it("skips outright, naming the responsible rule so it isn't silent", () => {
@@ -352,11 +352,10 @@ describe("re-apply semantics", () => {
     expect(stripRuleEffects(renamed).description).toBe("STARBUCKS #1234");
   });
 
-  it("degrades skip to exclude on a sweep, so nothing is destroyed", () => {
+  it("degrades skip to off-budget on a sweep, so nothing is destroyed", () => {
     const skipper = rule({ name: "Card payments", actions: { disposition: "skip" } });
     const result = applyRules(draft(), [skipper], { skipBecomesExclude: true });
     expect(result.skipped).toBe(false);
-    expect(result.item.excluded).toBe(true);
-    expect(result.item.excluded_reason).toBe("Card payments");
+    expect(result.item.flags).toContain(FLAG_OFF_BUDGET);
   });
 });

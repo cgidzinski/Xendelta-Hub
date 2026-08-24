@@ -15,7 +15,7 @@ import type {
 import { useXenBudgetImport, type ImportCandidate } from "../../../../../hooks/xenbudget/useImport";
 import { useAuth } from "../../../../../contexts/AuthContext";
 import {
-    applyMapping, detectDateFormat, type MappingConfig, type MappingError, type CsvRow,
+    applyMapping, detectDateFormat, looksLikeDataRow, type MappingConfig, type MappingError, type CsvRow,
 } from "../../../../../utils/csvMapping";
 import MapStep from "./MapStep";
 import PreviewStep from "./PreviewStep";
@@ -34,7 +34,6 @@ function formatFileSize(bytes: number): string {
 
 const blankConfig = (): MappingConfig => ({
     column_map: {},
-    amount_mode: "signed",
     sign_convention: "negative_is_expense",
     date_format: "auto",
     has_header: true,
@@ -45,7 +44,8 @@ export interface DateStats {
     from: Date;
     to: Date;
     totalCount: number;
-    majority: { from: Date; to: Date; count: number; label: string };
+    /** Every calendar month present, most rows first (ties: most recent first). */
+    months: { key: string; label: string; from: Date; to: Date; count: number }[];
 }
 
 interface ImportWizardProps {
@@ -65,25 +65,37 @@ async function parseOneFile(
     const sliced = lines.slice(skipRows).join("\n");
     return new Promise((resolve, reject) => {
         Papa.parse<any>(sliced, {
-            header: hasHeader,
+            // Always raw rows: the header is handled below rather than by Papaparse, so a
+            // blank or duplicate header cell can't silently drop a whole column.
+            header: false,
             skipEmptyLines: "greedy",
             complete: (parsed) => {
-                if (hasHeader) {
-                    const fields = (parsed.meta.fields || []).filter(Boolean);
-                    resolve({ headers: fields, rows: parsed.data as CsvRow[] });
-                } else {
-                    // No real header to name columns by, so synthesize one per position —
-                    // the rest of the mapping UI needs headers to exist either way.
-                    const dataRows = parsed.data as string[][];
-                    const width = dataRows.reduce((max, r) => Math.max(max, r.length), 0);
-                    const fields = Array.from({ length: width }, (_, i) => `Column ${i + 1}`);
-                    const rows: CsvRow[] = dataRows.map((r) => {
-                        const obj: CsvRow = {};
-                        fields.forEach((f, i) => { obj[f] = r[i] ?? ""; });
-                        return obj;
-                    });
-                    resolve({ headers: fields, rows });
+                const dataRows = parsed.data as string[][];
+                const rawHeaders = hasHeader && dataRows.length > 0 ? dataRows[0] : null;
+                const body = rawHeaders ? dataRows.slice(1) : dataRows;
+                const width = Math.max(
+                    rawHeaders ? rawHeaders.length : 0,
+                    ...body.map((r) => r.length),
+                );
+                const seen = new Set<string>();
+                const headers: string[] = [];
+                for (let i = 0; i < width; i++) {
+                    const raw = (rawHeaders ? rawHeaders[i] : undefined)?.trim().replace(/^\uFEFF/, "");
+                    let name = raw && raw.length > 0 ? raw : `Column ${i + 1}`;
+                    if (seen.has(name)) {
+                        let n = 2;
+                        while (seen.has(`${name} ${n}`)) n++;
+                        name = `${name} ${n}`;
+                    }
+                    seen.add(name);
+                    headers.push(name);
                 }
+                const rows: CsvRow[] = body.map((r) => {
+                    const obj: CsvRow = {};
+                    headers.forEach((h, i) => { obj[h] = r[i] ?? ""; });
+                    return obj;
+                });
+                resolve({ headers, rows });
             },
             error: (err: Error) => reject(err),
         });
@@ -114,15 +126,14 @@ async function parseAllFiles(
     return { headers: first.headers, rows: parsed.flatMap((p) => p.rows) };
 }
 
-// Only column_map/amount_mode/sign_convention/date_format/has_header/skip_rows/
-// default_categories are what a preset actually remembers — comparing exactly those (and
-// nothing else) is what lets "unchanged" and "modified" be told apart.
+// Only column_map/sign_convention/date_format/has_header/skip_rows/default_categories
+// are what a preset actually remembers — comparing exactly those (and nothing else) is
+// what lets "unchanged" and "modified" be told apart.
 function configMatchesPreset(config: MappingConfig, preset: XenBudgetImportPreset): boolean {
     const sameColumnMap = JSON.stringify(config.column_map) === JSON.stringify(preset.column_map);
     const sameDefaults = JSON.stringify(config.default_categories || [])
         === JSON.stringify(preset.default_categories || []);
     return sameColumnMap
-        && config.amount_mode === preset.amount_mode
         && config.sign_convention === preset.sign_convention
         && (config.date_format || "auto") === (preset.date_format || "auto")
         && (config.has_header !== false) === preset.has_header
@@ -159,9 +170,8 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
     const [duplicates, setDuplicates] = useState<DuplicateMatch[]>([]);
     const [selected, setSelected] = useState<Set<number>>(new Set());
     const [result, setResult] = useState<BulkImportResult | null>(null);
-    const [savePresetName, setSavePresetName] = useState("");
+    const [presetName, setPresetName] = useState("");
     const [presetId, setPresetId] = useState("");
-    const [sourceLabel, setSourceLabel] = useState("");
     // Whose card this is. Defaults to you: a statement is usually one person's, not the
     // whole book's — which is what an empty list used to mean.
     const [owners, setOwners] = useState<SplitDraft[]>([]);
@@ -178,6 +188,9 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
     // Whether the majority-month default has already been applied to dateFrom/dateTo for
     // this file selection, so later mapping tweaks don't clobber a range picked by hand.
     const dateDefaultAppliedRef = useRef(false);
+    // Whether header presence has already been auto-guessed for this file selection, so
+    // the user's manual "No header" toggle is never fought over afterward.
+    const autoHeaderRef = useRef(false);
 
     useEffect(() => {
         if (!open) return;
@@ -199,12 +212,12 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
         setDuplicates([]);
         setSelected(new Set());
         setResult(null);
-        setSavePresetName("");
+        setPresetName("");
         setPresetId("");
-        setSourceLabel("");
         setSkipRules(false);
         guessedForRef.current = null;
         dateDefaultAppliedRef.current = false;
+        autoHeaderRef.current = false;
     }, [open]);
 
     // A raw peek at the file's first few lines, untouched by skip-rows — this is what lets
@@ -246,6 +259,17 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                 setHeaders(parsedResult.headers);
                 setRawRows(parsedResult.rows);
 
+                // Auto-attempt header detection once per file selection: when the first
+                // row reads like data (real dates/money) rather than column names, flip
+                // "No header" on. The checkbox stays the source of truth afterward.
+                if (autoHeaderRef.current === false && config.has_header !== false
+                    && looksLikeDataRow(parsedResult.headers)) {
+                    autoHeaderRef.current = true;
+                    setConfig((prev) => ({ ...prev, has_header: false }));
+                    return;
+                }
+                autoHeaderRef.current = true;
+
                 // Guess the obvious columns, but only the first time this exact file set
                 // is parsed — a later reparse (from toggling the header switch) must not
                 // stomp a mapping the user has since adjusted.
@@ -277,6 +301,18 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
         [rawRows, config],
     );
 
+    // Rows inside the currently selected date range — the count shown on the
+    // "Custom range" toggle in the mapping step.
+    const customRangeCount = useMemo(() => {
+        if (!dateFrom || !dateTo) return mapped.rows.length;
+        const from = dateFrom.getTime();
+        const to = dateTo.getTime();
+        return mapped.rows.filter((r) => {
+            const t = new Date(r.date).getTime();
+            return t >= from && t <= to;
+        }).length;
+    }, [mapped.rows, dateFrom, dateTo]);
+
     // The span of dates actually found in the file, plus whichever single calendar month
     // most of them fall in — a statement almost always is one month, with maybe a few days
     // spilling from the cycle before or after. Grouped by calendar month: each parsed date
@@ -293,32 +329,31 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
             const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
             counts.set(key, (counts.get(key) || 0) + 1);
         }
-        let bestKey = "";
-        let bestCount = -1;
-        counts.forEach((count, key) => {
-            if (count > bestCount) { bestCount = count; bestKey = key; }
-        });
-        const [year, month] = bestKey.split("-").map(Number);
-        const majorityFrom = new Date(Date.UTC(year, month, 1));
-        const majorityTo = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
-        return {
-            from, to, totalCount: times.length,
-            majority: {
-                from: majorityFrom, to: majorityTo, count: bestCount,
-                label: majorityFrom.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),
-            },
-        };
+        const months = [...counts.entries()].map(([key, count]) => {
+            const [year, month] = key.split("-").map(Number);
+            const from = new Date(Date.UTC(year, month, 1));
+            const to = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
+            return {
+                key,
+                label: from.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),
+                from, to, count,
+            };
+        }).sort((a, b) => b.count - a.count || b.from.getTime() - a.from.getTime());
+        return { from, to, totalCount: times.length, months };
     }, [mapped.rows]);
 
     // Defaults the range to the majority month exactly once per file selection, as soon as
     // the dates can actually be read — not on every mapping tweak after, so it never
     // clobbers a range the user has since picked on purpose.
-    useEffect(() => { dateDefaultAppliedRef.current = false; }, [files]);
+    useEffect(() => {
+        dateDefaultAppliedRef.current = false;
+        autoHeaderRef.current = false;
+    }, [files]);
     useEffect(() => {
         if (dateDefaultAppliedRef.current || !dateStats) return;
         dateDefaultAppliedRef.current = true;
-        setDateFrom(dateStats.majority.from);
-        setDateTo(dateStats.majority.to);
+        setDateFrom(dateStats.months[0].from);
+        setDateTo(dateStats.months[0].to);
     }, [dateStats]);
 
     const detectedOrder = useMemo(
@@ -327,7 +362,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
     );
 
     const canMap = !!config.column_map.date && !!config.column_map.description
-        && (config.amount_mode === "signed" ? !!config.column_map.amount : !!config.column_map.debit);
+        && (!!config.column_map.amount || !!config.column_map.debit || !!config.column_map.credit);
 
     const handleFiles = (chosen: File[]) => {
         const csvOnly = chosen.filter((f) => f.name.toLowerCase().endsWith(".csv") || f.type === "text/csv");
@@ -345,10 +380,9 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
         if (!preset) return;
         // A saved mapping names its source ("Chase Visa"), which is a better label than
         // whatever the bank called the file.
-        setSourceLabel(preset.name);
+        setPresetName(preset.name);
         setConfig({
             column_map: { ...preset.column_map },
-            amount_mode: preset.amount_mode,
             sign_convention: preset.sign_convention,
             date_format: preset.date_format || "auto",
             has_header: preset.has_header,
@@ -358,7 +392,9 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
     };
 
     const selectedPreset = presetId ? book.import_presets.find((p) => p._id === presetId) : undefined;
-    const presetUnchanged = !!selectedPreset && configMatchesPreset(config, selectedPreset);
+    const presetUnchanged = !!selectedPreset
+        && configMatchesPreset(config, selectedPreset)
+        && presetName.trim() === selectedPreset.name;
 
     const toCandidates = (): ImportCandidate[] => mapped.rows.map((r) => ({
         type: r.type,
@@ -428,32 +464,39 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
             // and duplicate results are keyed by.
             const chosen = candidates.filter((_, i) => selected.has(mapped.rows[i].index));
             const filename = files.map((f) => f.name).join(", ") || undefined;
-            const imported = await importAsync({
-                items: chosen,
-                default_people: owners.map((o) => o.key),
-                source_label: sourceLabel.trim() || undefined,
-                filename,
-                skip_rules: skipRules || undefined,
-            });
-            setResult(imported);
-            setStep(3);
 
             const presetInput = {
-                name: selectedPreset ? selectedPreset.name : savePresetName.trim(),
+                name: presetName.trim(),
                 column_map: config.column_map,
-                amount_mode: config.amount_mode,
                 sign_convention: config.sign_convention,
                 date_format: config.date_format,
                 has_header: config.has_header,
                 skip_rows: config.skip_rows,
                 default_categories: config.default_categories,
             };
+
+            // Every import is tied to a preset by id. A one-off name has to become a
+            // preset before the import can point at it; an already-selected preset keeps
+            // its id and is updated (best-effort) after the import succeeds.
+            let presetIdToUse = selectedPreset?._id;
+            if (!selectedPreset) {
+                const saved = await savePresetAsync(presetInput);
+                presetIdToUse = saved.presetId;
+            }
+
+            const imported = await importAsync({
+                items: chosen,
+                default_people: owners.map((o) => o.key),
+                preset_id: presetIdToUse,
+                filename,
+                skip_rules: skipRules || undefined,
+            });
+            setResult(imported);
+            setStep(3);
+
             if (selectedPreset && !presetUnchanged) {
                 await updatePresetAsync({ presetId: selectedPreset._id, input: presetInput })
                     .catch(() => enqueueSnackbar("Imported, but the mapping could not be updated", { variant: "warning" }));
-            } else if (!selectedPreset && savePresetName.trim()) {
-                await savePresetAsync(presetInput)
-                    .catch(() => enqueueSnackbar("Imported, but the mapping could not be saved", { variant: "warning" }));
             }
         } catch (e) {
             enqueueSnackbar(e instanceof Error ? e.message : "Import failed", { variant: "error" });
@@ -476,10 +519,19 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
             open={open} onClose={onClose} fullWidth maxWidth="md" fullScreen={isMobile}
             slotProps={{ paper: { sx: { borderRadius: isMobile ? 0 : 2 } } }}
         >
-            <DialogTitle>Import a CSV</DialogTitle>
+            <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                Import a CSV
+                <IconButton size="small" onClick={onClose} aria-label="Close">
+                    <CloseIcon />
+                </IconButton>
+            </DialogTitle>
             <DialogContent>
-                <Stepper activeStep={step} orientation={isMobile ? "vertical" : "horizontal"} sx={{ mb: 3 }}>
-                    {STEPS.map((label) => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}
+                <Stepper activeStep={step} orientation="horizontal" sx={{ mb: isMobile ? 1.5 : 3 }}>
+                    {STEPS.map((label) => (
+                        <Step key={label}>
+                            <StepLabel>{isMobile ? null : label}</StepLabel>
+                        </Step>
+                    ))}
                 </Stepper>
 
                 {step === 0 && (
@@ -571,6 +623,7 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                         rawPreviewLines={rawPreviewLines}
                         errorCount={mapped.errors.length}
                         mappedCount={mapped.rows.length}
+                        customRangeCount={customRangeCount}
                         dateStats={dateStats}
                         dateFrom={dateFrom}
                         onDateFromChange={setDateFrom}
@@ -603,45 +656,17 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                         <Box sx={{ ...cardSx, p: 2 }}>
                             <Stack spacing={2}>
                                 <TextField
-                                    size="small" label="Card name" value={sourceLabel}
-                                    onChange={(e) => setSourceLabel(e.target.value)}
+                                    size="small" label="Name" value={presetName}
+                                    onChange={(e) => setPresetName(e.target.value)}
                                     placeholder="Chase Visa"
-                                    helperText="Shown in the import history, so a bad file can be found and removed later."
+                                    required
+                                    helperText="Names this card and its saved mapping — shown in import history so a bad file can be found later."
                                 />
-                                {(selectedPreset ? !presetUnchanged : true) && (
-                                    <Box>
-                                        <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-                                            Mapping
-                                        </Typography>
-                                        {selectedPreset ? (
-                                            <Alert severity="info" variant="outlined">
-                                                This mapping has changed since &ldquo;{selectedPreset.name}&rdquo; was saved.
-                                                Importing will update it.
-                                            </Alert>
-                                        ) : (
-                                            <Stack spacing={1.5}>
-                                                <FormControlLabel
-                                                    sx={{ m: 0 }}
-                                                    control={
-                                                        <Checkbox
-                                                            size="small" checked={savePresetName !== ""}
-                                                            onChange={(e) => setSavePresetName(
-                                                                e.target.checked ? files[0]?.name.replace(/\.csv$/i, "") || "" : "",
-                                                            )}
-                                                        />
-                                                    }
-                                                    label="Remember this mapping for next time"
-                                                />
-                                                {savePresetName !== "" && (
-                                                    <TextField
-                                                        size="small" label="Mapping name" value={savePresetName}
-                                                        onChange={(e) => setSavePresetName(e.target.value)}
-                                                        placeholder="Chase Visa"
-                                                    />
-                                                )}
-                                            </Stack>
-                                        )}
-                                    </Box>
+                                {selectedPreset && !presetUnchanged && (
+                                    <Alert severity="info" variant="outlined">
+                                        This mapping has changed since &ldquo;{selectedPreset.name}&rdquo; was saved.
+                                        Importing will update it.
+                                    </Alert>
                                 )}
                             </Stack>
                         </Box>
@@ -687,10 +712,10 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                             Imported {result.created} item{result.created === 1 ? "" : "s"}
                             {files.length > 0 && ` from ${files.map((f) => f.name).join(", ")}`}.
                         </Alert>
-                        {result.excluded > 0 && (
+                        {result.off_budget > 0 && (
                             <Typography variant="body2" color="text.secondary">
-                                {result.excluded} were excluded from totals by a rule — they&rsquo;re still
-                                listed, greyed out, on the items tab.
+                                {result.off_budget} were marked &ldquo;Off budget&rdquo; by a rule — they&rsquo;re
+                                still listed, greyed out, on the items tab.
                             </Typography>
                         )}
                         {result.uncategorised > 0 && (
@@ -730,7 +755,9 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                 {step > 0 && step < 3 && (
                     <Button onClick={() => setStep(step - 1)} sx={{ mr: "auto" }}>Back</Button>
                 )}
-                <Button onClick={onClose}>{step === 3 ? "Done" : "Cancel"}</Button>
+                {step === 3 && (
+                    <Button onClick={onClose}>Done</Button>
+                )}
                 {step === 0 && (
                     <Button
                         variant="contained"
@@ -742,11 +769,15 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
                 )}
                 {step === 1 && (
                     <Button variant="contained" disabled={!canMap || mapped.rows.length === 0} onClick={() => goToReview()}>
-                        Review {mapped.rows.length} row{mapped.rows.length === 1 ? "" : "s"}
+                        Review
                     </Button>
                 )}
                 {step === 2 && (
-                    <Button variant="contained" disabled={selected.size === 0 || isImporting} onClick={doImport}>
+                    <Button
+                        variant="contained"
+                        disabled={selected.size === 0 || isImporting || presetName.trim() === ""}
+                        onClick={doImport}
+                    >
                         Import {selected.size} item{selected.size === 1 ? "" : "s"}
                     </Button>
                 )}

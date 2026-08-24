@@ -6,7 +6,8 @@ import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import type { XenBudgetItem, XenBudgetMember, XenBudgetLabel } from "../../../../hooks/xenbudget/types";
 import { formatCurrency } from "../currency";
 import { CategoryChip, FlagChip } from "./LabelChip";
-import { xbCardSx, xbBadgeSx, xbExcludedRowSx } from "./rowStyles";
+import { xbCardSx, xbBadgeSx, xbOffBudgetRowSx } from "./rowStyles";
+import { FLAG_OFF_BUDGET } from "../../../../constants/xenbudget";
 
 interface ItemListItemProps {
     item: XenBudgetItem;
@@ -27,7 +28,7 @@ export default function ItemListItem({ item, members, categoryRegistry, flagRegi
             onClick={() => onClick(item)}
             sx={{
                 ...xbCardSx,
-                ...(item.excluded ? xbExcludedRowSx : {}),
+                ...(item.flags.includes(FLAG_OFF_BUDGET) ? xbOffBudgetRowSx : {}),
                 display: "flex",
                 alignItems: "center",
                 gap: 1.25,
@@ -91,8 +92,8 @@ export default function ItemListItem({ item, members, categoryRegistry, flagRegi
                     fontWeight: 600,
                     flexShrink: 0,
                     color: isIncome ? "success.main" : "error.main",
-                    // An excluded amount must not read as money that counted.
-                    textDecoration: item.excluded ? "line-through" : "none",
+                    // An off-budget amount must not read as money that counted.
+                    textDecoration: item.flags.includes(FLAG_OFF_BUDGET) ? "line-through" : "none",
                 }}
             >
                 {isIncome ? "+" : "−"}{formatCurrency(item.amount, item.currency)}

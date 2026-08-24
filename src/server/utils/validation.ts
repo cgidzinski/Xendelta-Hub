@@ -686,18 +686,19 @@ export const xenBudgetLabelParamSchema = z.object({
 export const createXenBudgetLabelSchema = z.object({
   name: z.string().min(1, "A name is required").max(50, "Name too long"),
   color: z.string().max(32).optional(),
+  need_want: z.enum(["need", "want", "none"]).optional(),
 });
 
 export const updateXenBudgetLabelSchema = z.object({
   name: z.string().min(1).max(50).optional(),
   color: z.string().max(32).optional(),
+  need_want: z.enum(["need", "want", "none"]).optional(),
 });
 
 export const updateXenBudgetItemSchema = z.object({
   ...itemBodyShape,
   amount: z.number().positive("Amount must be positive").optional(),
   description: z.string().min(1).max(500).optional(),
-  excluded: z.boolean().optional(),
 });
 
 

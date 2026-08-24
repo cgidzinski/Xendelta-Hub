@@ -8,7 +8,6 @@
 // Parsing the file itself is papaparse's job (quoted fields, embedded newlines, BOM);
 // this module only maps already-parsed rows.
 
-export type AmountMode = "signed" | "debit_credit";
 export type SignConvention = "negative_is_expense" | "positive_is_expense";
 
 export interface ColumnMap {
@@ -23,7 +22,6 @@ export interface ColumnMap {
 
 export interface MappingConfig {
     column_map: ColumnMap;
-    amount_mode: AmountMode;
     sign_convention: SignConvention;
     /** A date-fns-ish pattern, or "auto" to infer from the data. */
     date_format: string;
@@ -168,6 +166,28 @@ export function parseDate(raw: string | undefined | null, order: "ymd" | "dmy" |
     return new Date(Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()));
 }
 
+/**
+ * Guesses whether a row of cells is CSV data rather than a header. Bank headers are words
+ * like "Date"/"Amount"; data rows contain real dates or money. Lightweight and best-effort
+ * — the wizard's "No header" checkbox remains the source of truth.
+ */
+export function looksLikeDataRow(cells: string[]): boolean {
+    let dataSignals = 0;
+    let headerSignals = 0;
+    for (const cell of cells) {
+        const text = String(cell ?? "").trim();
+        if (!text) continue;
+        if (parseAmount(text) !== null
+            || parseDate(text, "ymd") || parseDate(text, "dmy") || parseDate(text, "mdy")) {
+            dataSignals++;
+        }
+        if (/date|description|payee|merchant|amount|debit|credit|memo|post|reference|transaction/i.test(text)) {
+            headerSignals++;
+        }
+    }
+    return dataSignals > 0 && headerSignals === 0;
+}
+
 function splitList(raw: string | undefined): string[] {
     if (!raw) return [];
     return String(raw).split(/[,;|]/).map((s) => s.trim()).filter(Boolean);
@@ -180,7 +200,11 @@ function splitList(raw: string | undefined): string[] {
  * loses eight of forty rows is worse than one that says so.
  */
 export function applyMapping(rows: CsvRow[], config: MappingConfig): MappingResult {
-    const { column_map: map, amount_mode: mode, sign_convention: sign } = config;
+    const { column_map: map, sign_convention: sign } = config;
+    // A signed Amount column wins when it is mapped, so a file that has both a signed
+    // column and a stray debit/credit pair can't double-count.
+    const usesAmount = !!map.amount;
+    const usesDebitCredit = !!map.debit || !!map.credit;
     const order = config.date_format === "auto" || !config.date_format
         ? detectDateFormat(rows.map((r) => (map.date ? r[map.date] : "")))
         : (config.date_format as "ymd" | "dmy" | "mdy");
@@ -196,17 +220,11 @@ export function applyMapping(rows: CsvRow[], config: MappingConfig): MappingResu
         }
 
         let signedAmount: number | null = null;
-        if (mode === "debit_credit") {
-            const debit = parseAmount(map.debit ? row[map.debit] : undefined);
-            const credit = parseAmount(map.credit ? row[map.credit] : undefined);
-            // A debit column is money out however it's signed in the file.
-            if (debit !== null && debit !== 0) signedAmount = -Math.abs(debit);
-            else if (credit !== null && credit !== 0) signedAmount = Math.abs(credit);
-            else {
-                errors.push({ index, reason: "No amount in either debit or credit" });
-                return;
-            }
-        } else {
+        if (!usesAmount && !usesDebitCredit) {
+            errors.push({ index, reason: "No amount, debit, or credit column mapped" });
+            return;
+        }
+        if (usesAmount) {
             const parsed = parseAmount(map.amount ? row[map.amount] : undefined);
             if (parsed === null) {
                 errors.push({ index, reason: "Amount is not a number" });
@@ -217,6 +235,16 @@ export function applyMapping(rows: CsvRow[], config: MappingConfig): MappingResu
                 return;
             }
             signedAmount = sign === "positive_is_expense" ? -parsed : parsed;
+        } else {
+            const debit = parseAmount(map.debit ? row[map.debit] : undefined);
+            const credit = parseAmount(map.credit ? row[map.credit] : undefined);
+            // A debit column is money out however it's signed in the file.
+            if (debit !== null && debit !== 0) signedAmount = -Math.abs(debit);
+            else if (credit !== null && credit !== 0) signedAmount = Math.abs(credit);
+            else {
+                errors.push({ index, reason: "No amount in either debit or credit" });
+                return;
+            }
         }
 
         const date = parseDate(map.date ? row[map.date] : undefined, order);

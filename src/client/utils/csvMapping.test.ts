@@ -1,12 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
-    parseAmount, parseDate, detectDateFormat, applyMapping, toCsv,
+    parseAmount, parseDate, detectDateFormat, applyMapping, toCsv, looksLikeDataRow,
     type MappingConfig, type CsvRow,
 } from "./csvMapping";
 
 const signed = (over: Partial<MappingConfig> = {}): MappingConfig => ({
     column_map: { date: "Date", description: "Payee", amount: "Amount" },
-    amount_mode: "signed",
     sign_convention: "negative_is_expense",
     date_format: "auto",
     ...over,
@@ -103,6 +102,18 @@ describe("parseDate", () => {
     });
 });
 
+describe("looksLikeDataRow", () => {
+    it("recognizes a header row of column names", () => {
+        expect(looksLikeDataRow(["Date", "Description", "Amount"])).toBe(false);
+        expect(looksLikeDataRow(["Posted Date", "Debit", "Credit"])).toBe(false);
+    });
+
+    it("recognizes a data row as headerless", () => {
+        expect(looksLikeDataRow(["2026-08-01", "STARBUCKS", "-6.50"])).toBe(true);
+        expect(looksLikeDataRow(["21/08/2026", "PAYROLL", "2500.00"])).toBe(true);
+    });
+});
+
 describe("applyMapping", () => {
     const rows: CsvRow[] = [
         { Date: "2026-08-01", Payee: "STARBUCKS", Amount: "-6.50" },
@@ -131,7 +142,6 @@ describe("applyMapping", () => {
         ];
         const { rows: mapped, errors } = applyMapping(dc, {
             column_map: { date: "Date", description: "Payee", debit: "Debit", credit: "Credit" },
-            amount_mode: "debit_credit",
             sign_convention: "negative_is_expense",
             date_format: "auto",
         });
@@ -145,12 +155,35 @@ describe("applyMapping", () => {
             [{ Date: "2026-08-01", Payee: "GROCERIES", Debit: "-90.00", Credit: "" }],
             {
                 column_map: { date: "Date", description: "Payee", debit: "Debit", credit: "Credit" },
-                amount_mode: "debit_credit",
                 sign_convention: "negative_is_expense",
                 date_format: "auto",
             },
         );
         expect(mapped[0]).toMatchObject({ type: "expense", amount: 90 });
+    });
+
+    it("prefers a mapped amount column over separate debit/credit columns", () => {
+        const both: CsvRow[] = [
+            { Date: "2026-08-01", Payee: "X", Amount: "-5.00", Debit: "99.00", Credit: "" },
+        ];
+        const { rows: mapped, errors } = applyMapping(both, signed({
+            column_map: {
+                date: "Date", description: "Payee", amount: "Amount", debit: "Debit", credit: "Credit",
+            },
+        }));
+        expect(errors).toEqual([]);
+        expect(mapped[0]).toMatchObject({ type: "expense", amount: 5 });
+    });
+
+    it("reports rows when no amount, debit, or credit column is mapped", () => {
+        const noAmount: CsvRow[] = [{ Date: "2026-08-01", Payee: "X" }];
+        const { rows: mapped, errors } = applyMapping(noAmount, {
+            column_map: { date: "Date", description: "Payee" },
+            sign_convention: "negative_is_expense",
+            date_format: "auto",
+        });
+        expect(mapped).toHaveLength(0);
+        expect(errors[0].reason).toMatch(/amount/i);
     });
 
     it("reports unmappable rows instead of dropping them silently", () => {

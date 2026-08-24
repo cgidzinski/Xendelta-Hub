@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
     Avatar, AvatarGroup, Box, Button, Dialog, DialogContent,
     DialogTitle, IconButton, Stack, Typography, alpha,
@@ -21,14 +22,30 @@ interface ItemPreviewModalProps {
     book: XenBudgetBook;
     item: XenBudgetItem | null;
     onEdit: (item: XenBudgetItem) => void;
+    /** Removes one flag from the item without opening the edit form. */
+    onRemoveFlag: (item: XenBudgetItem, flagName: string) => Promise<void>;
 }
 
 /** Read-only preview of an item, opened before the edit form. */
-export default function ItemPreviewModal({ open, onClose, book, item, onEdit }: ItemPreviewModalProps) {
+export default function ItemPreviewModal({ open, onClose, book, item, onEdit, onRemoveFlag }: ItemPreviewModalProps) {
     const isMobile = useMediaQuery("(max-width:600px)");
     const { data: imageUrls } = useXenBudgetItemImageUrls(book._id, item?._id, item?.images?.length ?? 0);
+    // Which flag is being removed right now — disables the chips while the save is in flight.
+    const [removingFlag, setRemovingFlag] = useState<string | null>(null);
+
+    const handleRemoveFlag = async (flagName: string) => {
+        if (!item || removingFlag) return;
+        setRemovingFlag(flagName);
+        try {
+            await onRemoveFlag(item, flagName);
+        } finally {
+            setRemovingFlag(null);
+        }
+    };
 
     const isIncome = item?.type === "income";
+    const provenance = !item ? "" : item.source === "manual" ? "Added manually"
+        : item.source_label ? `Imported via ${item.source_label}` : "Imported";
     const people = (item?.shares ?? [])
         .map((s) => book.members.find((m) => m.user_id === s.user_id))
         .filter((m): m is XenBudgetMember => !!m);
@@ -67,10 +84,13 @@ export default function ItemPreviewModal({ open, onClose, book, item, onEdit }: 
                                 <Typography variant="body1" sx={{ fontWeight: 600 }} noWrap>
                                     {item.description}
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                                     {isIncome ? "Income" : "Expense"} · {new Date(item.date).toLocaleDateString(undefined, {
                                         year: "numeric", month: "short", day: "numeric",
                                     })}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                                    {provenance}
                                 </Typography>
                             </Box>
                             <Typography
@@ -86,7 +106,11 @@ export default function ItemPreviewModal({ open, onClose, book, item, onEdit }: 
                                     <CategoryChip key={c.name} name={c.name} registry={book.categories} />
                                 ))}
                                 {item.flags.map((t) => (
-                                    <FlagChip key={t} name={t} registry={book.flags} />
+                                    <FlagChip
+                                        key={t} name={t} registry={book.flags}
+                                        onDelete={() => handleRemoveFlag(t)}
+                                        disabled={removingFlag !== null}
+                                    />
                                 ))}
                             </Stack>
                         )}

@@ -7,7 +7,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import InsightsIcon from "@mui/icons-material/Insights";
 import {
     Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, LineChart,
-    ResponsiveContainer, Tooltip, XAxis, YAxis,
+    Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
@@ -55,6 +55,10 @@ const MAX_STACK_SERIES = 8;
 // The neutral half of the budget-vs-actual pairing: the cap is the backdrop the spend is
 // read against, so it stays quiet and lets the spend bar carry the colour.
 const BUDGETED_COLOR = "#6b6b64";
+// Needs vs wants: two validated palette hues, deliberately not the income/expense pairing —
+// a need isn't a credit and a want isn't a debit.
+const NEED_COLOR = "#3987e5";
+const WANT_COLOR = "#c98500";
 
 export default function BookReport() {
     const { book, currency, onCurrencyChange } = useOutletContext<BookDetailContext>();
@@ -136,6 +140,29 @@ export default function BookReport() {
                 ? BUDGETED_COLOR
                 : resolveLabelColor(r.name, book.categories),
         }));
+    }, [summary, book.categories]);
+
+    // Needs vs wants: every category folds into its classification, with unclassified
+    // categories and uncategorised money gathered into "Other". Only rendered when at
+    // least one category is actually classified need or want.
+    const needWantData = useMemo(() => {
+        if (!summary) return [];
+        const kindByName: Record<string, "need" | "want" | "none"> = {};
+        for (const c of book.categories) kindByName[c.name.toLowerCase()] = c.need_want ?? "none";
+        const buckets = { need: 0, want: 0, none: 0 };
+        for (const c of summary.by_category) {
+            const kind = kindByName[c.category.toLowerCase()] ?? "none";
+            buckets[kind] += c.total;
+        }
+        buckets.none += summary.uncategorised.total;
+        if (buckets.need <= 0 && buckets.want <= 0) return [];
+        // Kept whole (zeroes included) so the legend always names Needs and Wants even
+        // when one of them has no spending in the range; the pie skips zero slices itself.
+        return [
+            { name: "Needs", total: buckets.need, color: NEED_COLOR },
+            { name: "Wants", total: buckets.want, color: WANT_COLOR },
+            { name: "Other", total: buckets.none, color: BUDGETED_COLOR },
+        ];
     }, [summary, book.categories]);
 
     // One row per person, spend and income both kept (not folded into "Other" - book
@@ -360,10 +387,10 @@ export default function BookReport() {
             <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: 2, pb: 2 }}>
                 <Stack spacing={2}>
                     {/* The table IS the report - it leads the page, above the headline
-                    strip and every chart, and stays put across both views. Outside the
-                    empty-state branch as well: with nothing spent it still has the
-                    budgets to show, which is worth seeing. */}
-                    {(categoryReport.rows.length > 0 || categoryReport.hasBudgets) && (
+                    strip and every chart, and stays put across both views. Like the
+                    charts it hides while there is nothing in the period; the empty state
+                    below carries that message instead. */}
+                    {summary.totals.count > 0 && (categoryReport.rows.length > 0 || categoryReport.hasBudgets) && (
                         <CategoryReportTable
                             report={categoryReport}
                             money={money}
@@ -492,6 +519,16 @@ export default function BookReport() {
                             {categoryData.length > 0 && (
                                 <ChartCard title="Spending by category">
                                     <MagnitudeBars data={categoryData} money={money} compact={compact} colorFor={(d) => d.color} />
+                                </ChartCard>
+                            )}
+
+                            {needWantData.length > 0 && (
+                                <ChartCard title="Needs vs wants">
+                                    <NeedWantDonut data={needWantData} money={money} />
+                                    <Typography variant="caption" color="text.secondary">
+                                        Category totals grouped by their need / want setting. Unclassified
+                                        and uncategorised spending is shown as Other.
+                                    </Typography>
                                 </ChartCard>
                             )}
 
@@ -658,6 +695,63 @@ function PersonFlowBars({ data, money, compact }: {
                 </Bar>
             </BarChart>
         </ResponsiveContainer>
+    );
+}
+
+/**
+ * Donut of spending split by need vs want, with the needs share in the middle. Other is
+ * the tail of unclassified categories plus anything uncategorised — kept so the two
+ * slices don't silently pretend to be the whole pie.
+ */
+function NeedWantDonut({ data, money }: {
+    data: { name: string; total: number; color: string }[];
+    money: (v: number) => string;
+}) {
+    const total = data.reduce((sum, d) => sum + d.total, 0);
+    const needs = data.find((d) => d.name === "Needs")?.total ?? 0;
+    const needsShare = total > 0 ? Math.round((needs / total) * 100) : 0;
+    // Zero-value slices would draw nothing but can still trip up the angle maths; the
+    // legend below keeps showing them regardless.
+    const slices = data.filter((d) => d.total > 0);
+    return (
+        <Box>
+            <Box sx={{ position: "relative", height: 220, minWidth: 0 }}>
+                <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                        <Pie
+                            data={slices} dataKey="total" nameKey="name"
+                            innerRadius={60} outerRadius={90} paddingAngle={2} stroke="none"
+                        >
+                            {slices.map((d) => <Cell key={d.name} fill={d.color} />)}
+                        </Pie>
+                        <Tooltip
+                            formatter={(v) => money(Number(v))}
+                            contentStyle={{ background: "#1a1a19", border: "1px solid #ffffff26", borderRadius: 8 }}
+                            labelStyle={{ color: "#c3c2b7" }}
+                        />
+                    </PieChart>
+                </ResponsiveContainer>
+                <Box sx={{
+                    position: "absolute", inset: 0, display: "flex",
+                    alignItems: "center", justifyContent: "center", pointerEvents: "none",
+                }}>
+                    <Box sx={{ textAlign: "center" }}>
+                        <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1 }}>{needsShare}%</Typography>
+                        <Typography variant="caption" color="text.secondary">needs</Typography>
+                    </Box>
+                </Box>
+            </Box>
+            <Stack direction="row" justifyContent="center" spacing={2} sx={{ pt: 1, flexWrap: "wrap", rowGap: 0.5 }}>
+                {data.map((d) => (
+                    <Stack key={d.name} direction="row" alignItems="center" spacing={0.5}>
+                        <Box sx={{ width: 10, height: 10, borderRadius: 0.5, bgcolor: d.color }} />
+                        <Typography variant="caption" color="text.secondary">
+                            {d.name} · {money(d.total)}
+                        </Typography>
+                    </Stack>
+                ))}
+            </Stack>
+        </Box>
     );
 }
 

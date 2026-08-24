@@ -11,6 +11,8 @@ export const TAB_PATHS = ["overview", "items", "report", "settings"] as const;
 /** Settings sections, in the order they render. */
 export const SETTINGS_SECTIONS = [
     { path: "general", label: "General" },
+    { path: "categories", label: "Categories" },
+    { path: "flags", label: "Flags" },
     { path: "tagging", label: "Tagging" },
     { path: "budgets", label: "Budgets" },
     { path: "imports", label: "Imports" },
@@ -19,7 +21,7 @@ export const SETTINGS_SECTIONS = [
 /**
  * Matches on a path SEGMENT rather than a suffix.
  *
- * Settings has sub-sections, so on /settings/rules nothing *ends with* "/settings" — a
+ * Settings has sub-sections, so on /settings/categories nothing *ends with* "/settings" — a
  * suffix match would leave the tab bar with no selection at all.
  *
  * Returns MUI's `false` for "no tab", not -1.

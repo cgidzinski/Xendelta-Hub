@@ -7,14 +7,11 @@ import AddIcon from "@mui/icons-material/Add";
 import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import ReplayIcon from "@mui/icons-material/Replay";
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { useSnackbar } from "notistack";
 import type { BookDetailContext } from "../BookDetail";
 import type { XenBudgetRule } from "../../../../hooks/xenbudget/types";
 import { useXenBudgetRules } from "../../../../hooks/xenbudget/useRules";
-import { useXenBudgetReseedLabels } from "../../../../hooks/xenbudget/useLabels";
 import SectionCard from "./SectionCard";
-import LabelManager from "../components/LabelManager";
 import RuleForm from "../components/RuleForm";
 import ReapplyRulesDialog from "../components/ReapplyRulesDialog";
 import { CategoryChip, FlagChip } from "../components/LabelChip";
@@ -27,20 +24,10 @@ export default function TaggingSection() {
         createRuleAsync, isCreatingRule, updateRuleAsync, isUpdatingRule, deleteRuleAsync,
         reapplyAsync, isReapplying,
     } = useXenBudgetRules(book._id);
-    const { reseedLabelsAsync, isReseeding } = useXenBudgetReseedLabels(book._id);
 
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState<XenBudgetRule | null>(null);
     const [reapplyOpen, setReapplyOpen] = useState(false);
-
-    const handleReseed = async () => {
-        try {
-            await reseedLabelsAsync();
-            enqueueSnackbar("Starter categories and built-in flags restored", { variant: "success" });
-        } catch (e) {
-            enqueueSnackbar(e instanceof Error ? e.message : "Could not re-seed labels", { variant: "error" });
-        }
-    };
 
     // Displayed in the order they actually run, since that is what makes a chain of rules
     // predictable — a later rule sees what earlier ones changed.
@@ -63,34 +50,9 @@ export default function TaggingSection() {
 
     return (
         <Stack spacing={2}>
-            <Stack direction="row" justifyContent="flex-end">
-                <Button
-                    size="small"
-                    startIcon={<RestartAltIcon />}
-                    onClick={handleReseed}
-                    disabled={isReseeding}
-                >
-                    Re-seed categories &amp; flags
-                </Button>
-            </Stack>
-
-            <SectionCard
-                title="Categories"
-                description="What a purchase was. Budgets and reports run on these, and one purchase can split across several."
-            >
-                <LabelManager book={book} kind="categories" />
-            </SectionCard>
-
-            <SectionCard
-                title="Flags"
-                description="Things needing attention. The built-in ones are used by imports and rules, so they can't be renamed, recoloured or removed — flags you add are yours to customise."
-            >
-                <LabelManager book={book} kind="flags" />
-            </SectionCard>
-
             <SectionCard
                 title="Rules"
-                description="Auto-categorise, flag, exclude and skip items as they arrive."
+                description="Auto-categorise, flag, mark off-budget and skip items as they arrive."
             >
                 <Box>
                     <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
@@ -154,7 +116,7 @@ export default function TaggingSection() {
                                             {(rule.actions.add_flags || []).map((t) => (
                                                 <FlagChip key={t} name={t} registry={book.flags} />
                                             ))}
-                                            {rule.actions.disposition === "exclude" && <Chip size="small" variant="outlined" label="exclude" sx={{ height: 20, fontSize: 11 }} />}
+                                            {rule.actions.disposition === "exclude" && <Chip size="small" variant="outlined" label="off budget" sx={{ height: 20, fontSize: 11 }} />}
                                             {rule.actions.disposition === "skip" && <Chip size="small" color="error" variant="outlined" label="never import" sx={{ height: 20, fontSize: 11 }} />}
                                         </Stack>
                                         <IconButton

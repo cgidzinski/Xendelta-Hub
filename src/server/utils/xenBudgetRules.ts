@@ -9,6 +9,8 @@
 // an endpoint rather than shipping a second copy of this to the browser, so what the
 // preview shows and what the import writes can never drift apart.
 
+import { FLAG_OFF_BUDGET } from "../constants/xenbudget";
+
 export type RuleField =
   | "description" | "amount" | "flags" | "category" | "type" | "date" | "source";
 
@@ -78,8 +80,6 @@ export interface DraftItem {
   flags: string[];
   /** Set by a rule's set_people; the caller turns it into resolved shares. */
   people?: string[];
-  excluded: boolean;
-  excluded_reason?: string;
   /** Which rules touched this item. */
   applied_rule_ids: string[];
   /**
@@ -284,8 +284,7 @@ export function applyRules(draft: DraftItem, rules: Rule[], options: ApplyOption
     if (!item.applied_rule_ids.includes(rule._id)) item.applied_rule_ids.push(rule._id);
 
     if (disposition === "exclude" || disposition === "skip") {
-      item.excluded = true;
-      item.excluded_reason = rule.name;
+      addFlag(item, FLAG_OFF_BUDGET, true);
     }
 
     (actions.remove_flags || []).forEach((t) => removeFlag(item, t));
@@ -344,8 +343,6 @@ export function stripRuleEffects(item: DraftItem): DraftItem {
     rule_categories: [],
     rule_flags: [],
     applied_rule_ids: [],
-    excluded: false,
-    excluded_reason: undefined,
     description: item.original_description || item.description,
     original_description: item.original_description,
     category_weights: undefined,

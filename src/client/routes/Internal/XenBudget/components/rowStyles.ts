@@ -19,8 +19,8 @@ export const xbBadgeSx = {
     flexShrink: 0,
 };
 
-// An excluded row stays visible so you can see what a rule caught, but must read as not
+// An off-budget row stays visible so you can see what a rule caught, but must read as not
 // counting toward anything.
-export const xbExcludedRowSx = {
+export const xbOffBudgetRowSx = {
     opacity: 0.55,
 };

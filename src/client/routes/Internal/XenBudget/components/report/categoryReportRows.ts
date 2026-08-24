@@ -54,6 +54,8 @@ export interface CategoryReport {
      * too many to read, in which case the table falls back to a single Spent column.
      */
     periodKeys: string[];
+    /** Number of period buckets in the selected range — denominator for the Average column. */
+    periodCount: number;
     /** The bottom block, each measure carrying a figure for every column. */
     summary: ReportSummaryRows;
 }
@@ -267,6 +269,7 @@ export function buildCategoryReport({
         hasBudgets: totalCapped > 0 || totalGoal > 0,
         hasGoals,
         periodKeys: columns,
+        periodCount: byPeriod.length,
         summary: {
             capped: { byPeriod: cappedByPeriod, total: totalCapped },
             goals: { byPeriod: goalByPeriod, total: totalGoal },

@@ -40,7 +40,7 @@ import {
 } from "../utils/xenBudgetUtils";
 import {
   SYSTEM_FLAGS, STARTER_CATEGORIES, FLAG_UNCATEGORISED, FLAG_POSSIBLE_DUPLICATE,
-  FLAG_NEEDS_REVIEW, FLAG_IGNORED, MAX_XENBUDGET_IMAGES_PER_ITEM,
+  FLAG_NEEDS_REVIEW, FLAG_IGNORED, FLAG_OFF_BUDGET, MAX_XENBUDGET_IMAGES_PER_ITEM,
 } from "../constants";
 import { uploadXenBudgetImages } from "../config/multer";
 import { uploadToGCS, deleteFromGCS, generateSignedUrl } from "../utils/gcsUtils";
@@ -118,11 +118,12 @@ async function loadBookForCreator(req: Request, res: Response): Promise<any | nu
 
 /**
  * The one place the shared item filters are built. Every list, tally and chart goes
- * through here, so "an excluded item never reaches a total" is stated once rather than
+ * through here, so "an off-budget item never reaches a total" is stated once rather than
  * repeated in each pipeline — get that wrong in a single place and the per-flag,
  * per-person and top-line numbers silently stop reconciling.
  *
- * `excluded` is tri-state: hidden (default), "true" for only-excluded, "all" for both.
+ * `excluded` (the "Off budget" flag) is tri-state: hidden (default), "true" for
+ * only-off-budget, "all" for both.
  */
 function baseItemMatch(bookId: any, q: Record<string, string>): Record<string, any> {
   const filter: Record<string, any> = { book_id: bookId };
@@ -133,22 +134,30 @@ function baseItemMatch(bookId: any, q: Record<string, string>): Record<string, a
     if (q.to) filter.date.$lte = new Date(q.to);
   }
   if (q.categories) filter["categories.name"] = { $in: q.categories.split(",").filter(Boolean) };
-  if (q.flags) filter.flags = { $in: q.flags.split(",").filter(Boolean) };
   // "has no category at all" - the worklist an import leaves behind.
   if (q.uncategorised === "true") filter.categories = { $size: 0 };
+  if (q.people) filter["shares.user_id"] = { $in: q.people.split(",").filter(Boolean) };
+  if (q.type === "expense" || q.type === "income") filter.type = q.type;
+  if (q.source === "manual" || q.source === "csv") filter.source = q.source;
+  if (q.currency) filter.currency = q.currency;
+
+  // Mongo can't express two independent conditions on the same array field as separate
+  // keys, so every flags filter merges into one compound operator.
+  const flagsFilter: Record<string, any> = {};
+  if (q.flags) flagsFilter.$in = q.flags.split(",").filter(Boolean);
   // Review mode's queue: uncategorised only. Items flagged "Needs review" are surfaced
   // separately as a quick filter rather than pulled into the queue. Something deliberately
   // set aside doesn't belong back in the queue just because it's also uncategorised.
   if (q.review === "true") {
     filter.categories = { $size: 0 };
-    filter.flags = { $nin: [FLAG_IGNORED] };
+    flagsFilter.$nin = [FLAG_IGNORED];
   }
-  if (q.people) filter["shares.user_id"] = { $in: q.people.split(",").filter(Boolean) };
-  if (q.type === "expense" || q.type === "income") filter.type = q.type;
-  if (q.currency) filter.currency = q.currency;
-
-  if (q.excluded === "true") filter.excluded = true;
-  else if (q.excluded !== "all") filter.excluded = { $ne: true };
+  if (q.excluded === "true") {
+    flagsFilter.$in = [...(flagsFilter.$in || []), FLAG_OFF_BUDGET];
+  } else if (q.excluded !== "all") {
+    flagsFilter.$nin = [...(flagsFilter.$nin || []), FLAG_OFF_BUDGET];
+  }
+  if (Object.keys(flagsFilter).length > 0) filter.flags = flagsFilter;
 
   return filter;
 }
@@ -332,10 +341,11 @@ async function insertRestoredItems(
         amount: s.amount,
         percentage: s.percentage,
       })),
-      excluded: !!raw.excluded,
-      excluded_reason: raw.excluded_reason,
       manually_edited: !!raw.manually_edited,
-      source: "restore",
+      // Restored items keep their original source (manual/csv) so provenance and any
+      // "source is csv/manual" rules still apply after a restore. Legacy or unknown
+      // values coalesce to "csv" — bulk restores are overwhelmingly imports.
+      source: raw.source === "manual" ? "manual" : "csv",
       import_hash: hash,
       created_by: raw.created_by || userId,
       created_at: raw.created_at ? new Date(raw.created_at) : new Date(),
@@ -395,6 +405,59 @@ function ensureStarterCategories(book: any): boolean {
 }
 
 /**
+ * Replaces every occurrence of `from` with `to` (case-insensitively) in a string list.
+ * Shared by the rename route, which has to update every name-based reference a label can
+ * have — budgets, rules and import presets — so a rename never leaves a dangling name.
+ */
+function renameInList(list: string[] | undefined, from: string, to: string): void {
+  if (!list) return;
+  for (let i = 0; i < list.length; i++) {
+    if ((list[i] || "").toLowerCase() === from.toLowerCase()) list[i] = to;
+  }
+}
+
+/**
+ * Which rules (and, for categories, import presets) still point at a label by name, so
+ * deleting it would leave them dangling. Mirrors the budget guard in the delete route:
+ * refuse rather than silently change what a rule or a preset does.
+ *
+ * Categories are referenced by a rule's set_categories / set_category_weights and by an
+ * import preset's default_categories; flags by a rule's add_flags / remove_flags. Both
+ * are also referenced by rule conditions whose field is "category" or "flags".
+ */
+function findLabelReferences(book: any, kind: "categories" | "flags", name: string): string[] {
+  const lower = name.toLowerCase();
+  const blockers: string[] = [];
+
+  for (const rule of book.rules || []) {
+    const actions = rule.actions || {};
+    const lists: string[][] = kind === "categories"
+      ? [actions.set_categories || [], (actions.set_category_weights || []).map((w: any) => w.name)]
+      : [actions.add_flags || [], actions.remove_flags || []];
+    const referencedInActions = lists.some((list) =>
+      list.some((n) => (n || "").toLowerCase() === lower));
+
+    const conditionField = kind === "categories" ? "category" : "flags";
+    const referencedInConditions = ((rule.match && rule.match.conditions) || [])
+      .some((c: any) => c.field === conditionField && (c.value || "").toLowerCase() === lower);
+
+    if (referencedInActions || referencedInConditions) {
+      blockers.push(`rule "${rule.name || "unnamed"}"`);
+    }
+  }
+
+  if (kind === "categories") {
+    for (const preset of book.import_presets || []) {
+      if ((preset.default_categories || []).some((n: string) => (n || "").toLowerCase() === lower)) {
+        blockers.push(`import preset "${preset.name || "unnamed"}"`);
+      }
+    }
+  }
+
+  return blockers;
+}
+
+/**
  * CRUD for one of the book's two label registries. Both behave identically apart from
  * what a rename and a delete have to do to the items that reference them, so the routes
  * are generated rather than written twice and left to drift.
@@ -434,7 +497,11 @@ function registerLabelRoutes(app: any, kind: "categories" | "flags") {
         if (book[kind].some((l: any) => l.name.toLowerCase() === name.toLowerCase())) {
           return res.status(400).json({ status: false, message: `That ${singular.toLowerCase()} already exists` });
         }
-        book[kind].push({ name, color: req.body.color });
+        book[kind].push({
+          name,
+          color: req.body.color,
+          ...(kind === "categories" ? { need_want: req.body.need_want ?? "none" } : {}),
+        });
         await book.save();
         await book.populate("members", "username avatar");
         broadcastBook(book);
@@ -472,23 +539,36 @@ function registerLabelRoutes(app: any, kind: "categories" | "flags") {
           label.name = name;
         }
         if (req.body.color !== undefined) label.color = req.body.color;
+        if (kind === "categories" && req.body.need_want !== undefined) label.need_want = req.body.need_want;
         await book.save();
 
         if (label.name !== oldName) {
           await renameOnItems(book._id, oldName, label.name);
-          // Budgets and rules reference categories by name too, so they follow the rename
-          // rather than being left pointing at something that no longer exists.
+          // Budgets, rules and import presets reference names too, so they follow the
+          // rename rather than being left pointing at something that no longer exists.
           if (kind === "categories") {
-            book.budgets.forEach((b: any) => {
-              const idx = (b.categories || []).indexOf(oldName);
-              if (idx !== -1) b.categories[idx] = label.name;
-            });
+            book.budgets.forEach((b: any) => renameInList(b.categories, oldName, label.name));
+            book.import_presets.forEach((p: any) => renameInList(p.default_categories, oldName, label.name));
           }
           book.rules.forEach((r: any) => {
-            const list = kind === "categories" ? r.actions?.set_categories : r.actions?.add_flags;
-            if (list) {
-              for (let i = 0; i < list.length; i++) if (list[i] === oldName) list[i] = label.name;
+            const actions = r.actions || {};
+            if (kind === "categories") {
+              renameInList(actions.set_categories, oldName, label.name);
+              (actions.set_category_weights || []).forEach((w: any) => {
+                if ((w.name || "").toLowerCase() === oldName.toLowerCase()) w.name = label.name;
+              });
+            } else {
+              renameInList(actions.add_flags, oldName, label.name);
+              renameInList(actions.remove_flags, oldName, label.name);
             }
+            // A rule condition names a category or flag in its `value`; without this a
+            // "category is Groceries" condition would silently stop matching.
+            const conditionField = kind === "categories" ? "category" : "flags";
+            ((r.match && r.match.conditions) || []).forEach((c: any) => {
+              if (c.field === conditionField && (c.value || "").toLowerCase() === oldName.toLowerCase()) {
+                c.value = label.name;
+              }
+            });
           });
           await book.save();
         }
@@ -527,6 +607,16 @@ function registerLabelRoutes(app: any, kind: "categories" | "flags") {
               message: `"${label.name}" still has a budget on it. Delete that budget first.`,
             });
           }
+        }
+
+        // A rule or import preset that still points at this name would be left dangling,
+        // so this is refused rather than silently changing what it does.
+        const blockers = findLabelReferences(book, kind, label.name);
+        if (blockers.length > 0) {
+          return res.status(400).json({
+            status: false,
+            message: `"${label.name}" is still used by ${blockers.join(" and ")}. Update or delete ${blockers.length === 1 ? "it" : "them"} first.`,
+          });
         }
 
         const name = label.name;
@@ -639,8 +729,6 @@ function toDraft(item: any): DraftItem {
     })),
     category_split_type: item.category_split_type,
     flags: [...(item.flags || [])],
-    excluded: !!item.excluded,
-    excluded_reason: item.excluded_reason,
     applied_rule_ids: (item.applied_rule_ids || []).map((id: any) => id.toString()),
     rule_categories: [...(item.rule_categories || [])],
     rule_flags: [...(item.rule_flags || [])],
@@ -657,7 +745,6 @@ function draftFromRow(row: any, book: any): DraftItem {
     description: String(row.description || "").slice(0, 500),
     categories: Array.isArray(row.categories) ? [...row.categories] : [],
     flags: Array.isArray(row.flags) ? [...row.flags] : [],
-    excluded: false,
     applied_rule_ids: [],
     rule_categories: [],
     rule_flags: [],
@@ -687,7 +774,6 @@ function sameNames(a: string[], b: string[]): boolean {
 function describeChange(item: any, before: DraftItem, after: DraftItem): any | null {
   const changed = !sameNames(before.categories, after.categories)
     || !sameNames(before.flags, after.flags)
-    || before.excluded !== after.excluded
     || before.description !== after.description
     || before.type !== after.type;
   if (!changed) return null;
@@ -695,14 +781,29 @@ function describeChange(item: any, before: DraftItem, after: DraftItem): any | n
     _id: item._id.toString(),
     description: after.description,
     before: {
-      categories: before.categories, flags: before.flags, excluded: before.excluded,
+      categories: before.categories, flags: before.flags,
       description: before.description, type: before.type,
     },
     after: {
-      categories: after.categories, flags: after.flags, excluded: after.excluded,
+      categories: after.categories, flags: after.flags,
       description: after.description, type: after.type,
     },
   };
+}
+
+/**
+ * The human-readable label for one import batch. The preset is the source of truth:
+ * batches store only its id, so renaming a preset renames its historical imports. A
+ * batch with no preset (legacy rows) keeps its stored label; a deleted preset yields
+ * undefined, which callers render as a generic "Import".
+ */
+function resolveBatchLabel(batch: any, book: any): string | undefined {
+  if (batch.preset_id) {
+    const preset = book.import_presets.id(batch.preset_id);
+    if (preset?.name) return preset.name;
+    return undefined;
+  }
+  return batch.source_label || undefined;
 }
 
 module.exports = function (app: any) {
@@ -725,7 +826,7 @@ module.exports = function (app: any) {
       const lastItemAt = new Map<string, Date>();
       if (books.length > 0) {
         const rows = await XenBudgetItem.aggregate([
-          { $match: { book_id: { $in: books.map((b: any) => b._id) }, excluded: { $ne: true } } },
+          { $match: { book_id: { $in: books.map((b: any) => b._id) }, flags: { $nin: [FLAG_OFF_BUDGET] } } },
           { $group: { _id: "$book_id", count: { $sum: 1 }, lastItemAt: { $max: "$date" } } },
         ]);
         rows.forEach((r: any) => {
@@ -802,13 +903,12 @@ module.exports = function (app: any) {
       // than needing a migration.
       if (ensureSystemLabels(book)) await book.save();
       await book.populate("members", "username avatar");
-      const count = await XenBudgetItem.countDocuments({ book_id: book._id, excluded: { $ne: true } });
+      const count = await XenBudgetItem.countDocuments({ book_id: book._id, flags: { $nin: [FLAG_OFF_BUDGET] } });
       // Reuses the review-queue filter so the count always matches what the modal shows.
       const reviewCount = await XenBudgetItem.countDocuments(baseItemMatch(book._id, { review: "true" }));
       const needsReviewCount = await XenBudgetItem.countDocuments({
         book_id: book._id,
-        excluded: { $ne: true },
-        flags: FLAG_NEEDS_REVIEW,
+        flags: { $nin: [FLAG_OFF_BUDGET], $in: [FLAG_NEEDS_REVIEW] },
       });
       res.json({ status: true, message: "Book retrieved", data: serializeBookFor(book, callerId(req), count, reviewCount, needsReviewCount) });
     } catch (error) {
@@ -1181,8 +1281,6 @@ module.exports = function (app: any) {
             item.flags = after.flags;
             item.rule_flags = after.rule_flags;
             item.applied_rule_ids = after.applied_rule_ids;
-            item.excluded = after.excluded;
-            item.excluded_reason = after.excluded_reason;
             item.description = after.description;
             item.original_description = after.original_description;
             item.type = after.type;
@@ -1262,8 +1360,6 @@ module.exports = function (app: any) {
               description: result.item.description,
               categories: result.item.categories,
               flags: result.item.flags,
-              excluded: result.item.excluded,
-              excluded_reason: result.item.excluded_reason,
             },
           };
         });
@@ -1274,7 +1370,7 @@ module.exports = function (app: any) {
           data: {
             previews,
             skipped: previews.filter((p: any) => p.skipped).length,
-            excluded: previews.filter((p: any) => !p.skipped && p.item.excluded).length,
+            off_budget: previews.filter((p: any) => !p.skipped && p.item.flags.includes(FLAG_OFF_BUDGET)).length,
             flagged: previews.filter((p: any) => !p.skipped && p.item.flags.length > 0).length,
           },
         });
@@ -1499,6 +1595,12 @@ module.exports = function (app: any) {
         }
         const defaultPeople = requested.length > 0 ? requested : [userId];
 
+        // The batch points at a preset, and the label shown later is resolved from its
+        // id — an unknown id would leave the import nameless.
+        if (req.body.preset_id && !book.import_presets.id(req.body.preset_id)) {
+          return res.status(400).json({ status: false, message: "Unknown mapping preset" });
+        }
+
         const docs: any[] = [];
         const skipped: { index: number; rule: string }[] = [];
         const failed: { index: number; reason: string }[] = [];
@@ -1564,8 +1666,6 @@ module.exports = function (app: any) {
             flags: importFlags,
             rule_flags: ruled.rule_flags,
             applied_rule_ids: ruled.applied_rule_ids,
-            excluded: ruled.excluded,
-            excluded_reason: ruled.excluded_reason,
             share_type: shares.share_type,
             shares: shares.shares,
             source: "csv",
@@ -1581,7 +1681,6 @@ module.exports = function (app: any) {
           // nothing shouldn't leave a row in the history to puzzle over later.
           book.import_batches.push({
             _id: batchId,
-            source_label: (req.body.source_label || "").trim() || req.body.filename || "Import",
             filename: req.body.filename,
             imported_by: userId,
             row_count: docs.length,
@@ -1597,7 +1696,7 @@ module.exports = function (app: any) {
           data: {
             batch_id: batchId.toString(),
             created: docs.length,
-            excluded: docs.filter((d) => d.excluded).length,
+            off_budget: docs.filter((d) => d.flags.includes(FLAG_OFF_BUDGET)).length,
             uncategorised: docs.filter((d) => d.flags.includes(FLAG_UNCATEGORISED)).length,
             duplicates: docs.filter((d) => d.flags.includes(FLAG_POSSIBLE_DUPLICATE)).length,
             skipped,
@@ -1636,7 +1735,7 @@ module.exports = function (app: any) {
           .sort((a: any, b: any) => new Date(b.imported_at).getTime() - new Date(a.imported_at).getTime())
           .map((b: any) => ({
             _id: b._id.toString(),
-            source_label: b.source_label,
+            source_label: resolveBatchLabel(b, book) ?? "Import",
             filename: b.filename,
             imported_at: b.imported_at,
             imported_by: b.imported_by,
@@ -1685,11 +1784,17 @@ module.exports = function (app: any) {
       try {
         const book = await loadBookForMember(req, res);
         if (!book) return;
-        book.import_presets.push(req.body);
+        const preset = book.import_presets.create(req.body);
+        book.import_presets.push(preset);
         await book.save();
         await book.populate("members", "username avatar");
         broadcastBook(book);
-        res.json({ status: true, message: "Preset saved", data: serializeBookFor(book, callerId(req)) });
+        res.json({
+          status: true,
+          message: "Preset saved",
+          preset_id: preset._id.toString(),
+          data: serializeBookFor(book, callerId(req)),
+        });
       } catch (error) {
         console.error("Error saving preset:", error);
         res.status(500).json({ status: false, message: "Failed to save preset" });
@@ -1847,7 +1952,7 @@ module.exports = function (app: any) {
           book_id: book._id,
           currency,
           type: "expense",
-          excluded: { $ne: true },
+          flags: { $nin: [FLAG_OFF_BUDGET] },
           date: { $gte: unionFrom, $lt: unionTo },
         };
 
@@ -2210,7 +2315,26 @@ module.exports = function (app: any) {
       const q = req.query as Record<string, string>;
       const filter = baseItemMatch(book._id, q);
 
+      // Need/Want is a classification on the category registry, not on the item, so it
+      // must be resolved to names first. An item matches when ANY of its categories
+      // carries the requested classification.
+      if (q.need_want === "need" || q.need_want === "want") {
+        const names = (book.categories || [])
+          .filter((c: any) => c.need_want === q.need_want)
+          .map((c: any) => c.name);
+        filter.$and = [...(filter.$and || []), { "categories.name": { $in: names } }];
+      }
+
       if (q.q) filter.description = { $regex: escapeRegex(q.q), $options: "i" };
+
+      // Filtering by card means "every batch that used this saved mapping", since the
+      // batch is what links items back to a preset.
+      if (q.card) {
+        const batchIds = (book.import_batches || [])
+          .filter((b: any) => b.preset_id && b.preset_id.toString() === q.card)
+          .map((b: any) => b._id);
+        filter.import_batch_id = { $in: batchIds };
+      }
 
       // Keyset pagination on the (date, _id) sort, so a page boundary can't drop or
       // repeat an item the way a skip/limit offset does when rows are inserted.
@@ -2233,13 +2357,18 @@ module.exports = function (app: any) {
       const nextCursor = hasMore && last ? `${new Date(last.date).toISOString()}_${last._id}` : null;
 
       // Resolve each item's import batch to a card label ("Chase Visa") so the client
-      // can show provenance without an extra lookup per item.
-      const batchById = new Map<string, any>((book.import_batches || []).map((b: any) => [b._id.toString(), b]));
+      // can show provenance without an extra lookup per item. The label comes from the
+      // preset the batch points at, not a denormalized name on the batch itself.
+      const batchLabelById = new Map<string, string>();
+      (book.import_batches || []).forEach((b: any) => {
+        const label = resolveBatchLabel(b, book);
+        if (label) batchLabelById.set(b._id.toString(), label);
+      });
 
       res.json({
         status: true,
         message: "Items retrieved",
-        data: { items: serializeItems(page, batchById), next_cursor: nextCursor, has_more: hasMore },
+        data: { items: serializeItems(page, batchLabelById), next_cursor: nextCursor, has_more: hasMore },
       });
     } catch (error) {
       console.error("Error fetching items:", error);
@@ -2309,8 +2438,6 @@ module.exports = function (app: any) {
           flags: ruled.flags,
           rule_flags: ruled.rule_flags,
           applied_rule_ids: ruled.applied_rule_ids,
-          excluded: ruled.excluded,
-          excluded_reason: ruled.excluded_reason,
           share_type: shares.share_type,
           shares: shares.shares,
           source: "manual",
@@ -2357,12 +2484,6 @@ module.exports = function (app: any) {
           if (item.categories.length > 0) {
             item.flags = (item.flags || []).filter((t: string) => t !== FLAG_UNCATEGORISED);
           }
-        }
-        if (body.excluded !== undefined) {
-          item.excluded = body.excluded;
-          // Un-excluding by hand clears the rule's note; leaving it would keep blaming a
-          // rule for a state the user has since overridden.
-          if (!body.excluded) item.excluded_reason = undefined;
         }
 
         // Shares have to be recomputed whenever the amount or the split changes, or the

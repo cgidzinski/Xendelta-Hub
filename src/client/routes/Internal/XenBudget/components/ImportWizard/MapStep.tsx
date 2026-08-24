@@ -1,8 +1,7 @@
 import { useState } from "react";
 import {
     Alert, Box, Button, Checkbox, Chip, FormControlLabel, IconButton, MenuItem, Stack, Table,
-    TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton,
-    ToggleButtonGroup, Typography,
+    TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from "@mui/material";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
@@ -27,6 +26,8 @@ interface MapStepProps {
     rawPreviewLines: string[];
     errorCount: number;
     mappedCount: number;
+    /** Rows inside the currently selected date range — shown on the "Custom range" toggle. */
+    customRangeCount: number;
     /** The file's own date span and majority month, or null until a Date column is mapped. */
     dateStats: DateStats | null;
     /** Optional cutoff: rows outside this range are excluded rather than dropped silently. */
@@ -34,6 +35,10 @@ interface MapStepProps {
     onDateFromChange: (d: Date | null) => void;
     dateTo: Date | null;
     onDateToChange: (d: Date | null) => void;
+    /** Hide the "Which rows to import" date-range section (e.g. editing a preset). */
+    showDateRange?: boolean;
+    /** Hide the "X of Y" row counter and chevrons (no sample rows to step through). */
+    showRowNav?: boolean;
 }
 
 /** Formats a parsed row date (a date-only value anchored at UTC midnight) as a plain
@@ -78,17 +83,10 @@ const ORDER_LABELS: Record<string, string> = {
     mdy: "Month first (08/21/2026)",
 };
 
-const AMOUNT_ROLES: Record<MappingConfig["amount_mode"], { value: keyof ColumnMap; label: string }[]> = {
-    signed: [{ value: "amount", label: "Amount" }],
-    debit_credit: [
-        { value: "debit", label: "Debit (money out)" },
-        { value: "credit", label: "Credit (money in)" },
-    ],
-};
-
 export default function MapStep({
     headers, config, onChange, detectedOrder, rows, rawPreviewLines, errorCount, mappedCount,
-    dateStats, dateFrom, onDateFromChange, dateTo, onDateToChange,
+    customRangeCount, dateStats, dateFrom, onDateFromChange, dateTo, onDateToChange,
+    showDateRange = true, showRowNav = true,
 }: MapStepProps) {
     const [previewIndex, setPreviewIndex] = useState(0);
     const rowIndex = rows.length ? Math.min(previewIndex, rows.length - 1) : 0;
@@ -99,17 +97,23 @@ export default function MapStep({
     const matchesRange = (from: Date, to: Date) =>
         !!dateFrom && !!dateTo && dateFrom.getTime() === from.getTime() && dateTo.getTime() === to.getTime();
     const isAll = !!dateStats && matchesRange(dateStats.from, dateStats.to);
-    const isMajority = !!dateStats && matchesRange(dateStats.majority.from, dateStats.majority.to);
-    // Anything that isn't one of the two canonical choices is, by definition, a custom
-    // range — surface the fields for it even if the toggle above was never clicked (e.g.
-    // a preset-free reopen, or the majority month shifting after a column fix).
-    const isCustom = !!dateStats && !!dateFrom && !!dateTo && !isAll && !isMajority;
+    // The month (if any) whose exact range is currently selected.
+    const activeMonth = dateStats?.months.find((m) => matchesRange(m.from, m.to));
+    // Anything that isn't a listed month or the full range is, by definition, a custom
+    // range — surface the fields for it even if the toggle was never clicked.
+    const isCustom = !!dateStats && !!dateFrom && !!dateTo && !isAll && !activeMonth;
 
-    const roleOptions: { value: keyof ColumnMap | ""; label: string }[] = [
-        { value: "", label: "— unused —" },
+    // Raw preview fields per line, plus the widest column count across the sample lines.
+    const rawParsed = rawPreviewLines.map(splitCsvLine);
+    const rawColCount = rawParsed.reduce((m, r) => Math.max(m, r.length), 0);
+
+    const roleOptions: { value: keyof ColumnMap | "skip"; label: string }[] = [
+        { value: "skip", label: "Skip" },
         { value: "date", label: "Date" },
         { value: "description", label: "Description" },
-        ...AMOUNT_ROLES[config.amount_mode],
+        { value: "amount", label: "Amount" },
+        { value: "debit", label: "Debit (money out)" },
+        { value: "credit", label: "Credit (money in)" },
         { value: "categories", label: "Category" },
     ];
 
@@ -118,7 +122,7 @@ export default function MapStep({
     const roleForHeader = (header: string): string => {
         const entry = (Object.entries(config.column_map) as [keyof ColumnMap, string | undefined][])
             .find(([, v]) => v === header);
-        return entry ? entry[0] : "";
+        return entry ? entry[0] : "skip";
     };
 
     const assignRole = (header: string, role: string) => {
@@ -126,12 +130,12 @@ export default function MapStep({
         (Object.keys(next) as (keyof ColumnMap)[]).forEach((key) => {
             if (next[key] === header) delete next[key];
         });
-        if (role) next[role as keyof ColumnMap] = header;
+        if (role && role !== "skip") next[role as keyof ColumnMap] = header;
         onChange({ ...config, column_map: next });
     };
 
     const missingRequired = !config.column_map.date || !config.column_map.description
-        || (config.amount_mode === "signed" ? !config.column_map.amount : !config.column_map.debit);
+        || (!config.column_map.amount && !config.column_map.debit && !config.column_map.credit);
 
     return (
         <Stack spacing={2}>
@@ -151,67 +155,64 @@ export default function MapStep({
             </Stack>
 
             {rawPreviewLines.length > 0 && (
-                <Box sx={{ bgcolor: "action.hover", borderRadius: 1, p: 1, overflowX: "auto" }}>
-                    {rawPreviewLines.map((line, i) => (
-                        <Typography
-                            key={i} variant="caption" component="div"
-                            sx={{ fontFamily: "monospace", whiteSpace: "pre" }}
-                        >
-                            {config.has_header === false || !line ? (
-                                line || " "
-                            ) : (
-                                splitCsvLine(line).map((field, fi) => (
-                                    <Box key={fi} component="span">
-                                        {fi > 0 && <Box component="span" sx={{ color: "text.disabled" }}>,</Box>}
-                                        <Box component="span" sx={{ color: chartColorAt(fi) }}>{field}</Box>
-                                    </Box>
-                                ))
-                            )}
-                        </Typography>
-                    ))}
+                <Box sx={{ bgcolor: "action.hover", borderRadius: 1, p: 0.75, overflowX: "auto" }}>
+                    <Box
+                        component="table"
+                        sx={{
+                            borderCollapse: "collapse",
+                            fontFamily: "monospace",
+                            fontSize: 11,
+                            lineHeight: 1.35,
+                        }}
+                    >
+                        <Box component="tbody">
+                            {rawParsed.map((fields, row) => (
+                                <Box component="tr" key={row}>
+                                    {Array.from({ length: rawColCount }, (_, col) => (
+                                        <Box
+                                            component="td"
+                                            key={col}
+                                            sx={{
+                                                px: 1,
+                                                py: 0,
+                                                whiteSpace: "nowrap",
+                                                color: chartColorAt(col),
+                                                borderRight: col < rawColCount - 1 ? "1px solid" : undefined,
+                                                borderColor: "divider",
+                                            }}
+                                        >
+                                            {fields[col] ? fields[col] : "\u00A0"}
+                                        </Box>
+                                    ))}
+                                </Box>
+                            ))}
+                        </Box>
+                    </Box>
                 </Box>
             )}
 
             <Stack direction="row" alignItems="center" justifyContent="space-between">
                 <Typography variant="caption" sx={sectionLabelSx}>Match your columns</Typography>
-                <Stack direction="row" spacing={0.5} alignItems="center">
-                    <Typography variant="caption" color="text.secondary">
-                        Checking row {rows.length ? rowIndex + 1 : 0} of {rows.length}
-                    </Typography>
-                    <IconButton
-                        size="small" disabled={rowIndex <= 0}
-                        onClick={() => setPreviewIndex((i) => Math.max(0, i - 1))}
-                    >
-                        <ChevronLeftIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                        size="small" disabled={rowIndex >= rows.length - 1}
-                        onClick={() => setPreviewIndex((i) => Math.min(rows.length - 1, i + 1))}
-                    >
-                        <ChevronRightIcon fontSize="small" />
-                    </IconButton>
-                </Stack>
+                {showRowNav && (
+                    <Stack direction="row" spacing={0.5} alignItems="center">
+                        <Typography variant="caption" color="text.secondary">
+                            {rows.length ? rowIndex + 1 : 0} of {rows.length}
+                        </Typography>
+                        <IconButton
+                            size="small" disabled={rowIndex <= 0}
+                            onClick={() => setPreviewIndex((i) => Math.max(0, i - 1))}
+                        >
+                            <ChevronLeftIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                            size="small" disabled={rowIndex >= rows.length - 1}
+                            onClick={() => setPreviewIndex((i) => Math.min(rows.length - 1, i + 1))}
+                        >
+                            <ChevronRightIcon fontSize="small" />
+                        </IconButton>
+                    </Stack>
+                )}
             </Stack>
-
-            <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
-                    How are amounts laid out?
-                </Typography>
-                <ToggleButtonGroup
-                    size="small" exclusive fullWidth value={config.amount_mode}
-                    onChange={(_, v) => v && onChange({
-                        ...config,
-                        amount_mode: v,
-                        column_map: {
-                            ...config.column_map,
-                            ...(v === "signed" ? { debit: undefined, credit: undefined } : { amount: undefined }),
-                        },
-                    })}
-                >
-                    <ToggleButton value="signed">One signed column</ToggleButton>
-                    <ToggleButton value="debit_credit">Separate debit &amp; credit</ToggleButton>
-                </ToggleButtonGroup>
-            </Box>
 
             <TableContainer sx={{ border: 1, borderColor: "divider", borderRadius: 1 }}>
                 <Table size="small">
@@ -255,20 +256,20 @@ export default function MapStep({
 
             {missingRequired && (
                 <Typography variant="caption" color="error">
-                    Date, Description, and {config.amount_mode === "signed" ? "Amount" : "Debit"} must all be
-                    mapped to a column above.
+                    Date, Description, and at least one of Amount, Debit, or Credit must be mapped to a
+                    column above.
                 </Typography>
             )}
 
-            {config.amount_mode === "signed" && (
+            {!!config.column_map.amount && (
                 <TextField
                     select fullWidth size="small" label="Which sign means money out?"
                     value={config.sign_convention}
                     onChange={(e) => onChange({ ...config, sign_convention: e.target.value as MappingConfig["sign_convention"] })}
                     slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
                 >
-                    <MenuItem value="negative_is_expense">Negative is spending (most banks)</MenuItem>
-                    <MenuItem value="positive_is_expense">Positive is spending (some card statements)</MenuItem>
+                    <MenuItem value="negative_is_expense">Negative is spending</MenuItem>
+                    <MenuItem value="positive_is_expense">Positive is spending</MenuItem>
                 </TextField>
             )}
 
@@ -289,93 +290,93 @@ export default function MapStep({
                 <MenuItem value="mdy">{ORDER_LABELS.mdy}</MenuItem>
             </TextField>
 
-            <Box>
-                <Typography variant="caption" sx={sectionLabelSx}>Which rows to import</Typography>
-                <Box sx={{ mt: 0.75 }}>
-                    {dateStats ? (
-                        <>
-                            <Stack
-                                direction="row" alignItems="center" justifyContent="space-between" spacing={1}
-                                sx={{
-                                    flexWrap: "wrap", rowGap: 0.5, bgcolor: "action.hover",
-                                    border: 1, borderColor: "divider", borderRadius: 1, px: 1.5, py: 1,
-                                }}
-                            >
-                                <Typography variant="body2">
-                                    Found dates from <b>{fmtUTCDate(dateStats.from)}</b> to{" "}
-                                    <b>{fmtUTCDate(dateStats.to, true)}</b> in your file.
-                                </Typography>
-                                <Chip
-                                    size="small" variant="outlined" color="success"
-                                    label={`${dateStats.totalCount} row${dateStats.totalCount === 1 ? "" : "s"}`}
-                                    sx={{ fontFamily: "monospace", fontSize: 11, fontWeight: 600 }}
-                                />
-                            </Stack>
+            {showDateRange && (
+                <Box>
+                    <Typography variant="caption" sx={sectionLabelSx}>Which rows to import</Typography>
+                    <Box sx={{ mt: 0.75 }}>
+                        {dateStats ? (
+                            <>
+                                <Stack
+                                    direction="row" alignItems="center" justifyContent="space-between" spacing={1}
+                                    sx={{
+                                        flexWrap: "wrap", rowGap: 0.5, bgcolor: "action.hover",
+                                        border: 1, borderColor: "divider", borderRadius: 1, px: 1.5, py: 1,
+                                    }}
+                                >
+                                    <Typography variant="body2">
+                                        Found dates from <b>{fmtUTCDate(dateStats.from)}</b> to{" "}
+                                        <b>{fmtUTCDate(dateStats.to, true)}</b> in your file.
+                                    </Typography>
+                                    <Chip
+                                        size="small" variant="outlined" color="success"
+                                        label={`${dateStats.totalCount} row${dateStats.totalCount === 1 ? "" : "s"}`}
+                                        sx={{ fontFamily: "monospace", fontSize: 11, fontWeight: 600 }}
+                                    />
+                                </Stack>
 
-                            <ToggleButtonGroup
-                                size="small" exclusive fullWidth
-                                value={isAll ? "all" : "month"}
-                                sx={{ mt: 1.25 }}
-                                onChange={(_, v) => {
-                                    if (!v) return;
-                                    setCustomOpen(false);
-                                    if (v === "all") {
-                                        onDateFromChange(dateStats.from);
-                                        onDateToChange(dateStats.to);
-                                    } else {
-                                        onDateFromChange(dateStats.majority.from);
-                                        onDateToChange(dateStats.majority.to);
-                                    }
-                                }}
-                            >
-                                <ToggleButton value="month">{dateStats.majority.label}</ToggleButton>
-                                <ToggleButton value="all">All dates</ToggleButton>
-                            </ToggleButtonGroup>
-
-                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
-                                {isAll ? (
-                                    <>Importing the full range — all {dateStats.totalCount} rows.</>
-                                ) : (
-                                    <>
-                                        Importing {fmtUTCDate(dateStats.majority.from)}&ndash;
-                                        {fmtUTCDate(dateStats.majority.to)} — {dateStats.majority.count} row
-                                        {dateStats.majority.count === 1 ? "" : "s"}.
-                                        {dateStats.totalCount > dateStats.majority.count && (
-                                            <> The other {dateStats.totalCount - dateStats.majority.count} stay
-                                                visible on the next step, just unticked.</>
-                                        )}
-                                    </>
-                                )}
-                            </Typography>
-
-                            {!isCustom && (
-                                <Stack direction="row" justifyContent="center" sx={{ mt: 0.25 }}>
-                                    <Button size="small" onClick={() => setCustomOpen((v) => !v)}>
-                                        {customOpen ? "Hide custom range" : "Or pick a custom range"}
+                                <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5, mt: 1.25 }}>
+                                    {dateStats.months.map((m) => {
+                                        const selected = !customOpen && !isAll && activeMonth?.key === m.key;
+                                        return (
+                                            <Button
+                                                key={m.key}
+                                                size="small"
+                                                variant={selected ? "contained" : "outlined"}
+                                                sx={{ flexGrow: 1 }}
+                                                onClick={() => {
+                                                    setCustomOpen(false);
+                                                    onDateFromChange(m.from);
+                                                    onDateToChange(m.to);
+                                                }}
+                                            >
+                                                {m.label} · {m.count}
+                                            </Button>
+                                        );
+                                    })}
+                                    <Button
+                                        size="small"
+                                        variant={isAll ? "contained" : "outlined"}
+                                        sx={{ flexGrow: 1 }}
+                                        onClick={() => {
+                                            setCustomOpen(false);
+                                            onDateFromChange(dateStats.from);
+                                            onDateToChange(dateStats.to);
+                                        }}
+                                    >
+                                        All dates · {dateStats.totalCount}
+                                    </Button>
+                                    <Button
+                                        size="small"
+                                        variant={(customOpen || isCustom) ? "contained" : "outlined"}
+                                        sx={{ flexGrow: 1 }}
+                                        onClick={() => setCustomOpen(true)}
+                                    >
+                                        Custom range · {customRangeCount}
                                     </Button>
                                 </Stack>
-                            )}
 
-                            {(customOpen || isCustom) && (
-                                <Stack direction={isMobile ? "column" : "row"} spacing={1} sx={{ mt: 1 }}>
-                                    <DatePicker
-                                        label="From" value={dateFrom} onChange={onDateFromChange}
-                                        slotProps={{ textField: { fullWidth: true } }}
-                                    />
-                                    <DatePicker
-                                        label="To" value={dateTo} onChange={onDateToChange}
-                                        slotProps={{ textField: { fullWidth: true } }}
-                                    />
-                                </Stack>
-                            )}
-                        </>
-                    ) : (
-                        <Typography variant="caption" color="text.secondary">
-                            Once a Date column is mapped above, you can trim which rows import here.
-                        </Typography>
-                    )}
+                                {!isAll && !isCustom && activeMonth && dateStats.totalCount > activeMonth.count && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                                        The other {dateStats.totalCount - activeMonth.count} stay
+                                        visible on the next step, just unticked.
+                                    </Typography>
+                                )}
+
+                                {(customOpen || isCustom) && (
+                                    <Stack direction={isMobile ? "column" : "row"} spacing={1} sx={{ mt: 1 }}>
+                                        <DatePicker label="From" value={dateFrom} onChange={onDateFromChange} />
+                                        <DatePicker label="To" value={dateTo} onChange={onDateToChange} />
+                                    </Stack>
+                                )}
+                            </>
+                        ) : (
+                            <Typography variant="caption" color="text.secondary">
+                                Once a Date column is mapped above, you can trim which rows import here.
+                            </Typography>
+                        )}
+                    </Box>
                 </Box>
-            </Box>
+            )}
 
             {errorCount > 0 && (
                 <Alert severity="warning">

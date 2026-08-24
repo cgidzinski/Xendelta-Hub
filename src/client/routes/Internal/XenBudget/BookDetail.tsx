@@ -125,6 +125,18 @@ export default function BookDetail() {
         setAddImages([]);
     };
 
+    const handleRemoveFlag = async (item: XenBudgetItem, flagName: string) => {
+        try {
+            const updated = await updateItemAsync({
+                itemId: item._id,
+                input: { flags: item.flags.filter((f) => f !== flagName) },
+            });
+            setPreviewing(updated);
+        } catch {
+            enqueueSnackbar("Failed to remove flag", { variant: "error" });
+        }
+    };
+
     return (
         <Box sx={{ height: { xs: "calc(100dvh - 56px)", sm: "calc(100dvh - 64px)" }, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <Box sx={{ borderBottom: 1, borderColor: "divider", flexShrink: 0 }}>
@@ -193,6 +205,7 @@ export default function BookDetail() {
                 book={book}
                 item={previewing}
                 onEdit={(it) => { setPreviewing(null); setEditing(it); setFormOpen(true); }}
+                onRemoveFlag={handleRemoveFlag}
             />
 
             <ImportWizard open={importOpen} onClose={() => setImportOpen(false)} book={book} />

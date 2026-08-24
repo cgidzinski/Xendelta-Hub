@@ -56,10 +56,10 @@ export function serializeBooksFor(
   ));
 }
 
-export function serializeItem(item: any, batchById?: Map<string, any>): any {
+export function serializeItem(item: any, batchLabelById?: Map<string, string>): any {
   const obj = typeof item.toObject === "function" ? item.toObject() : item;
   const batchId = obj.import_batch_id?.toString();
-  const sourceLabel = batchById && batchId ? batchById.get(batchId)?.source_label : undefined;
+  const sourceLabel = batchLabelById && batchId ? batchLabelById.get(batchId) : undefined;
   return {
     ...obj,
     _id: obj._id.toString(),
@@ -76,6 +76,6 @@ export function serializeItem(item: any, batchById?: Map<string, any>): any {
   };
 }
 
-export function serializeItems(items: any[], batchById?: Map<string, any>): any[] {
-  return items.map((item) => serializeItem(item, batchById));
+export function serializeItems(items: any[], batchLabelById?: Map<string, string>): any[] {
+  return items.map((item) => serializeItem(item, batchLabelById));
 }

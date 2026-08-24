@@ -251,7 +251,6 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
     const sourceLabel = useMemo(() => {
         if (!currentItem) return "";
         if (currentItem.source === "manual") return "Added manually";
-        if (currentItem.source === "restore") return "Restored from backup";
         return currentItem.source_label ? `Imported via ${currentItem.source_label}` : "Imported";
     }, [currentItem]);
 

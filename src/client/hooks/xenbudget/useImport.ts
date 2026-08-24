@@ -9,8 +9,8 @@ export interface BulkImportRequest {
     items: ImportCandidate[];
     /** Who these rows belong to. Empty means the importing user. */
     default_people?: string[];
-    /** Which card this came from, so the import can be found again later. */
-    source_label?: string;
+    /** The import's mapping preset; its name is resolved for display when the import is read back. */
+    preset_id?: string;
     filename?: string;
     /** "Skip auto-tagging" — import the rows without running the book's rules. */
     skip_rules?: boolean;
@@ -88,7 +88,7 @@ export function useXenBudgetImport(bookId: string) {
     const savePresetMutation = useMutation({
         mutationFn: async (input: PresetInput) => {
             const res = await apiClient.post(`/api/xenbudget/books/${bookId}/import-presets`, input);
-            return res.data.data as XenBudgetBook;
+            return { presetId: res.data.preset_id as string, book: res.data.data as XenBudgetBook };
         },
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] }),
     });

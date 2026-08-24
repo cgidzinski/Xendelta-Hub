@@ -90,6 +90,8 @@ import XenBudgetBookItems from "./routes/Internal/XenBudget/BookItems";
 import XenBudgetBookReport from "./routes/Internal/XenBudget/BookReport";
 import XenBudgetBookSettings from "./routes/Internal/XenBudget/BookSettings";
 import XenBudgetGeneralSection from "./routes/Internal/XenBudget/settings/GeneralSection";
+import XenBudgetCategoriesSection from "./routes/Internal/XenBudget/settings/CategoriesSection";
+import XenBudgetFlagsSection from "./routes/Internal/XenBudget/settings/FlagsSection";
 import XenBudgetTaggingSection from "./routes/Internal/XenBudget/settings/TaggingSection";
 import XenBudgetBudgetsSection from "./routes/Internal/XenBudget/settings/BudgetsSection";
 import XenBudgetImportsSection from "./routes/Internal/XenBudget/settings/ImportsSection";
@@ -242,6 +244,8 @@ const router = createBrowserRouter(
             <Route path="settings" element={<XenBudgetBookSettings />}>
               <Route index element={<Navigate to="general" replace />} />
               <Route path="general" element={<XenBudgetGeneralSection />} />
+              <Route path="categories" element={<XenBudgetCategoriesSection />} />
+              <Route path="flags" element={<XenBudgetFlagsSection />} />
               <Route path="tagging" element={<XenBudgetTaggingSection />} />
               <Route path="budgets" element={<XenBudgetBudgetsSection />} />
               <Route path="imports" element={<XenBudgetImportsSection />} />
@@ -250,8 +254,6 @@ const router = createBrowserRouter(
               <Route path="book" element={<Navigate to="../general" replace />} />
               <Route path="people" element={<Navigate to="../general" replace />} />
               <Route path="backup" element={<Navigate to="../general" replace />} />
-              <Route path="categories" element={<Navigate to="../tagging" replace />} />
-              <Route path="flags" element={<Navigate to="../tagging" replace />} />
               <Route path="rules" element={<Navigate to="../tagging" replace />} />
             </Route>
             {/* Budgets and Rules used to be top-level tabs. Redirect rather than blank,

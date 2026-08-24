@@ -36,9 +36,10 @@ interface CategoryReportTableProps {
 export default function CategoryReportTable({
     report, money, round, categoryRegistry, rangeLabel,
 }: CategoryReportTableProps) {
-    const { rows, spanning, wholeBook, hasBudgets, hasGoals, periodKeys, summary } = report;
+    const { rows, spanning, wholeBook, hasBudgets, hasGoals, periodKeys, periodCount, summary } = report;
     const pivoted = periodKeys.length > 0;
     const columnLabels = periodColumnLabels(periodKeys);
+    const avg = (v: number) => (periodCount > 0 ? v / periodCount : v);
 
     // The name column stays put while the periods scroll under it - a row of figures with
     // its label scrolled off the screen says nothing.
@@ -91,6 +92,9 @@ export default function CategoryReportTable({
                     </TableCell>
                 );
             })}
+            <TableCell align="right" sx={{ color: "text.secondary" }}>
+                {pivoted ? round(avg(row.spent)) : money(avg(row.spent))}
+            </TableCell>
             <TableCell align="right" sx={{ fontWeight: pivoted ? 600 : 400 }}>
                 {pivoted ? round(row.spent) : money(row.spent)}
             </TableCell>
@@ -105,7 +109,7 @@ export default function CategoryReportTable({
         </TableRow>
     );
 
-    const columnCount = 1 + periodKeys.length + 1 + (hasBudgets ? 2 : 0);
+    const columnCount = 1 + periodKeys.length + 2 + (hasBudgets ? 2 : 0);
 
     /** One summary line across every column, grouped under a section heading. */
     const totalRow = (
@@ -143,6 +147,9 @@ export default function CategoryReportTable({
                         </TableCell>
                     );
                 })}
+                <TableCell align="right" sx={{ color: tint(totals.total) }}>
+                    {show(avg(totals.total))}
+                </TableCell>
                 <TableCell
                     align="right"
                     sx={{
@@ -218,6 +225,7 @@ export default function CategoryReportTable({
                                     {label}
                                 </TableCell>
                             ))}
+                            <TableCell align="right">Average</TableCell>
                             <TableCell align="right">{pivoted ? "Total" : "Spent"}</TableCell>
                             {hasBudgets && <TableCell align="right">Budgeted</TableCell>}
                             {hasBudgets && <TableCell align="right">{hasGoals ? "Left / to go" : "Left"}</TableCell>}

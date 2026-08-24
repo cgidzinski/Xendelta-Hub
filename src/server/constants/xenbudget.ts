@@ -14,6 +14,7 @@ export const SYSTEM_FLAGS: { name: string; color: string }[] = [
   { name: "Uncategorised", color: "#3987e5" },       // imported, but nothing categorised it
   { name: "Possible duplicate", color: "#c98500" },  // matched an existing row, imported anyway
   { name: "Ignored", color: "#8b8b85" },             // deliberately set aside
+  { name: "Off budget", color: "#64748b" },          // stored, but never counted in a total
 ];
 
 /** The system flag the importer puts on a row no rule managed to categorise. */
@@ -24,6 +25,8 @@ export const FLAG_POSSIBLE_DUPLICATE = "Possible duplicate";
 export const FLAG_NEEDS_REVIEW = "Needs review";
 /** Deliberately set aside — Review mode skips these even if they're also uncategorised. */
 export const FLAG_IGNORED = "Ignored";
+/** Stored, but never counted in a total — what a rule's "exclude" disposition became. */
+export const FLAG_OFF_BUDGET = "Off budget";
 
 export function isSystemFlag(name: string): boolean {
   return SYSTEM_FLAGS.some((t) => t.name.toLowerCase() === (name || "").toLowerCase());

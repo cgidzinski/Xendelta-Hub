@@ -81,7 +81,7 @@ const OPS_BY_FIELD: Record<RuleField, { value: RuleOp; label: string }[]> = {
 
 const DISPOSITIONS: { value: RuleDisposition; label: string; help: string }[] = [
     { value: "keep", label: "Keep", help: "Counts normally." },
-    { value: "exclude", label: "Exclude from totals", help: "Still listed, greyed out, and reversible — but never counted. Best for internal transfers." },
+    { value: "exclude", label: "Off budget", help: "Still listed, greyed out, and reversible — but never counted. Best for internal transfers." },
     { value: "skip", label: "Never import", help: "Matching rows are not saved at all. Import reports how many were dropped and why." },
 ];
 

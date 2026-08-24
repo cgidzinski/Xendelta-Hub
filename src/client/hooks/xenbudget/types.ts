@@ -18,6 +18,8 @@ export interface XenBudgetLabel {
     _id: string;
     name: string;
     color?: string;
+    /** Whether a category is a need or a want. Unset/"none" for flags. */
+    need_want?: "need" | "want" | "none";
     /** Built-in flags the importer and rules refer to by name: no delete, no rename. */
     system?: boolean;
 }
@@ -83,7 +85,7 @@ export interface XenBudgetImportPreset {
     name: string;
     column_map: {
         date?: string; description?: string; amount?: string;
-        debit?: string; credit?: string; people?: string;
+        debit?: string; credit?: string; categories?: string; people?: string;
     };
     amount_mode: "signed" | "debit_credit";
     sign_convention: "negative_is_expense" | "positive_is_expense";
@@ -109,13 +111,13 @@ export interface XenBudgetBook {
     import_presets: XenBudgetImportPreset[];
     archived: boolean;
     created_at: string;
-    /** Non-excluded item count, supplied by the list and detail endpoints. */
+    /** Non-off-budget item count, supplied by the list and detail endpoints. */
     item_count?: number;
     /** Items waiting in the review queue (uncategorised only). */
     review_count?: number;
     /** Items flagged "Needs review" — surfaced as a quick filter. */
     needs_review_count?: number;
-    /** Most recent non-excluded item's date, supplied by the list endpoint. Undefined
+    /** Most recent non-off-budget item's date, supplied by the list endpoint. Undefined
      *  when the book has no items yet. */
     last_item_at?: string;
 }
@@ -163,11 +165,9 @@ export interface XenBudgetItem {
     flags: string[];
     share_type: ShareType;
     shares: XenBudgetShare[];
-    excluded: boolean;
-    excluded_reason?: string;
     applied_rule_ids: string[];
     manually_edited: boolean;
-    source: "manual" | "csv" | "restore";
+    source: "manual" | "csv";
     /** Human-readable card/source name for imported items, e.g. "Chase Visa". */
     source_label?: string;
     import_batch_id?: string;
@@ -205,9 +205,7 @@ export interface CreateItemInput {
     skip_rules?: boolean;
 }
 
-export type UpdateItemInput = Partial<CreateItemInput> & {
-    excluded?: boolean;
-};
+export type UpdateItemInput = Partial<CreateItemInput>;
 
 export type RuleDisposition = "keep" | "exclude" | "skip";
 export type RuleCategorySplit = "equal" | "percent";
@@ -246,7 +244,6 @@ export interface RuleInput {
 interface ReapplySide {
     categories: string[];
     flags: string[];
-    excluded: boolean;
     description: string;
     type: ItemType;
 }
@@ -274,14 +271,13 @@ export interface ImportPreviewRow {
     item: {
         type: ItemType; amount: number; date: string; description: string;
         categories: string[]; flags: string[];
-        excluded: boolean; excluded_reason?: string;
     };
 }
 
 export interface ImportPreviewResult {
     previews: ImportPreviewRow[];
     skipped: number;
-    excluded: number;
+    off_budget: number;
     flagged: number;
 }
 
@@ -306,7 +302,7 @@ export interface XenBudgetImportBatch {
 export interface BulkImportResult {
     batch_id: string;
     created: number;
-    excluded: number;
+    off_budget: number;
     uncategorised: number;
     duplicates: number;
     skipped: { index: number; rule: string }[];

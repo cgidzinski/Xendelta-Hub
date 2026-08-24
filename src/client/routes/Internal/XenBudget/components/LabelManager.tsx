@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
-    Box, Button, IconButton, Stack, TextField, Tooltip, Typography,
+    Box, Button, IconButton, Stack, TextField, ToggleButton, ToggleButtonGroup,
+    Tooltip, Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -69,6 +70,13 @@ export default function LabelManager({ book, kind }: LabelManagerProps) {
         await run(() => updateLabelAsync({ labelId: label._id, input: { color: hex } }), "Could not set that colour");
     };
 
+    const setNeedWant = async (label: { _id: string }, needWant: "need" | "want" | "none") => {
+        await run(
+            () => updateLabelAsync({ labelId: label._id, input: { need_want: needWant } }),
+            "Could not set that",
+        );
+    };
+
     return (
         <Box>
             <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
@@ -109,6 +117,22 @@ export default function LabelManager({ book, kind }: LabelManagerProps) {
                                 <Box sx={{ flexGrow: 1 }}>
                                     <LabelChip name={label.name} registry={labels} variant2={copy.chip} />
                                 </Box>
+                            )}
+
+                            {kind === "categories" && (
+                                <ToggleButtonGroup
+                                    size="small" exclusive value={label.need_want ?? "none"}
+                                    onChange={(_, v) => { if (v) setNeedWant(label, v as "need" | "want" | "none"); }}
+                                    sx={{
+                                        "& .MuiToggleButton-root": {
+                                            px: 0.75, py: 0.25, fontSize: 11, textTransform: "none",
+                                        },
+                                    }}
+                                >
+                                    <ToggleButton value="want">Want</ToggleButton>
+                                    <ToggleButton value="need">Need</ToggleButton>
+                                    <ToggleButton value="none">—</ToggleButton>
+                                </ToggleButtonGroup>
                             )}
 
                             {kind === "categories" || !label.system ? (

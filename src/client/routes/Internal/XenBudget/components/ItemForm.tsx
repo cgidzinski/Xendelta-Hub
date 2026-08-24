@@ -23,7 +23,7 @@ import { sanitizeAmount } from "../../../../utils/currencyUtils";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { EXPENSE_COLOR, INCOME_COLOR } from "../../../../components/ui/chartColors";
 
-const STEPS = ["Details", "Splits", "Images", "More"] as const;
+const STEPS = ["Details", "Images", "More"] as const;
 
 const MAX_IMAGES = 10;
 
@@ -293,7 +293,6 @@ export default function ItemForm({
                                     onSelectedChange={setShares}
                                     amount={numericAmount}
                                     currency={currency}
-                                    amountless
                                 />
                             </Box>
                             {soloBook && (
@@ -317,52 +316,6 @@ export default function ItemForm({
                                 onSelectedChange={setCategories}
                                 amount={numericAmount}
                                 currency={currency}
-                                amountless
-                            />
-                        </Box>
-                    </Stack>
-                )}
-
-                {STEPS[step] === "Splits" && (
-                    <Stack spacing={2}>
-                        <Box>
-                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-                                Attributed to
-                            </Typography>
-                            <Box sx={soloBook ? { opacity: 0.45, pointerEvents: "none" } : undefined}>
-                                <WeightedSplitEditor
-                                    mode={{ kind: "people", members: book.members }}
-                                    splitType={shareType}
-                                    onSplitTypeChange={setShareType}
-                                    selected={shares}
-                                    onSelectedChange={setShares}
-                                    amount={numericAmount}
-                                    currency={currency}
-                                    hidePicker
-                                />
-                            </Box>
-                            {soloBook && (
-                                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
-                                    Only one person in this book, so there&rsquo;s nothing to split.
-                                </Typography>
-                            )}
-                        </Box>
-
-                        <Divider />
-
-                        <Box>
-                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-                                What was it?
-                            </Typography>
-                            <WeightedSplitEditor
-                                mode={{ kind: "categories", registry: book.categories }}
-                                splitType={categorySplitType}
-                                onSplitTypeChange={setCategorySplitType}
-                                selected={categories}
-                                onSelectedChange={setCategories}
-                                amount={numericAmount}
-                                currency={currency}
-                                hidePicker
                             />
                         </Box>
                     </Stack>
@@ -462,7 +415,7 @@ export default function ItemForm({
                                     label="Skip auto-tagging"
                                 />
                                 <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                                    This book's rules won't categorise, flag or exclude this item.
+                                    This book's rules won't categorise, flag or mark &ldquo;Off budget&rdquo;.
                                 </Typography>
                             </Box>
                         )}

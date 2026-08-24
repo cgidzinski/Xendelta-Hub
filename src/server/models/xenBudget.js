@@ -20,6 +20,9 @@ var Schema = mongoose.Schema;
 var labelSchema = new Schema({
   name: { type: String, required: true, maxlength: 50 },
   color: { type: String, maxlength: 32 },
+  // Whether a category is a need or a want. Meaningless for flags (they keep the
+  // default); only the categories settings surface it.
+  need_want: { type: String, enum: ["need", "want", "none"], default: "none" },
   // Built-in flags the importer and the rules engine reference by name (see
   // constants/xenbudget.ts). Cannot be deleted or renamed; the colour stays editable.
   system: { type: Boolean, default: false },
@@ -98,7 +101,7 @@ var ruleActionsSchema = new Schema({
   set_people: { type: [String], default: [] },
   set_description: { type: String, maxlength: 500 },
   // keep    - store normally
-  // exclude - store, but with excluded:true so it never reaches a total (reversible)
+  // exclude - store, but with the "Off budget" flag so it never reaches a total (reversible)
   // skip    - never store at all; only reachable via import, and always reported
   disposition: { type: String, enum: ["keep", "exclude", "skip"], default: "keep" },
 }, { _id: false });
@@ -231,8 +234,6 @@ var itemSchema = new Schema({
   shares: [shareSchema],
 
   // --- rules engine output ---
-  excluded: { type: Boolean, default: false },
-  excluded_reason: { type: String, maxlength: 200 },
   // Which rules touched this item, for provenance in the UI.
   applied_rule_ids: [{ type: Schema.Types.ObjectId }],
   // Exactly what rules contributed, tracked separately so a re-apply can reverse each
@@ -245,7 +246,7 @@ var itemSchema = new Schema({
   // overwrites a hand correction.
   manually_edited: { type: Boolean, default: false },
 
-  source: { type: String, enum: ["manual", "csv", "restore"], default: "manual" },
+  source: { type: String, enum: ["manual", "csv"], default: "manual" },
   import_batch_id: { type: Schema.Types.ObjectId },  // groups one import, for undo
   import_hash: { type: String },                      // duplicate detection
   created_by: { type: String },

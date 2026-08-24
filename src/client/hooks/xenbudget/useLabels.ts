@@ -5,6 +5,7 @@ import type { XenBudgetBook } from "./types";
 export interface LabelInput {
     name?: string;
     color?: string;
+    need_want?: "need" | "want" | "none";
 }
 
 export type LabelKind = "categories" | "flags";

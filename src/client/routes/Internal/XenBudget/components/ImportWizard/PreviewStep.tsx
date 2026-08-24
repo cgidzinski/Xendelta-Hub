@@ -11,6 +11,7 @@ import type { MappingError } from "../../../../../utils/csvMapping";
 import { CategoryChip, FlagChip } from "../LabelChip";
 import { formatCurrency } from "../../currency";
 import { cardSx } from "../../../../../components/ui/surfaceStyles";
+import { FLAG_OFF_BUDGET } from "../../../../../constants/xenbudget";
 
 interface PreviewStepProps {
     previews: ImportPreviewRow[];
@@ -102,8 +103,8 @@ export default function PreviewStep({
                                     <TableCell>
                                         <Stack direction="row" alignItems="center" spacing={0.5}>
                                             <Typography variant="body2" noWrap>{row.item.description}</Typography>
-                                            {row.item.excluded && (
-                                                <Tooltip title={`Excluded from totals by "${row.item.excluded_reason}"`}>
+                                            {row.item.flags.includes(FLAG_OFF_BUDGET) && (
+                                                <Tooltip title="Off budget — not counted in totals">
                                                     <BlockIcon sx={{ fontSize: 14 }} color="disabled" />
                                                 </Tooltip>
                                             )}
@@ -131,7 +132,7 @@ export default function PreviewStep({
                                             variant="body2"
                                             sx={{
                                                 color: row.item.type === "income" ? "success.main" : "error.main",
-                                                textDecoration: row.item.excluded ? "line-through" : "none",
+                                                textDecoration: row.item.flags.includes(FLAG_OFF_BUDGET) ? "line-through" : "none",
                                             }}
                                         >
                                             {row.item.type === "income" ? "+" : "−"}

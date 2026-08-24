@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useLocation, useOutletContext } from "react-router-dom";
 import {
-    Alert, Autocomplete, Box, Button, Chip, InputAdornment, Stack, TextField, Typography,
+    Alert, Autocomplete, Box, Button, Chip, Divider, InputAdornment, MenuItem, Stack, TextField, Typography,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
@@ -23,6 +23,7 @@ import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { groupByDay } from "../../../utils/dateGrouping";
 import { emptyStateSx, emptyStateIconCircleSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
+import { FLAG_OFF_BUDGET } from "../../../constants/xenbudget";
 
 /** What a budget hands over when its "View items" action navigates here. */
 interface BudgetFilterSeed {
@@ -35,6 +36,11 @@ interface BudgetFilterSeed {
 const EXCLUDED_FILTER = "__excluded__";
 const TYPE_EXPENSE = "__type_expense__";
 const TYPE_INCOME = "__type_income__";
+const NEED_FILTER = "__need__";
+const WANT_FILTER = "__want__";
+// Categories are prefixed so a category name can never collide with a flag name in the
+// shared dropdown (both registries allow the same string).
+const CATEGORY_PREFIX = "__category__";
 // The built-in flag the importer uses to say "nothing matched" — special-cased below so
 // selecting it also catches items with no category that were never run through an import.
 const FLAG_UNCATEGORISED = "Uncategorised";
@@ -87,38 +93,59 @@ export default function BookItems() {
     };
     const [dateModalOpen, setDateModalOpen] = useState(false);
     const [reviewOpen, setReviewOpen] = useState(false);
-    const [activeCategories, setActiveCategories] = useState<string[]>(seed?.categories ?? []);
-    const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
-
-    const toggle = (list: string[], set: (v: string[]) => void, name: string) =>
-        set(list.includes(name) ? list.filter((n) => n !== name) : [...list, name]);
+    // Which source/card the list is narrowed to: "all", "manual", "csv", or "card:<id>".
+    const [sourceFilter, setSourceFilter] = useState("all");
+    // Seeded categories (from a budget's "View items") start pre-selected in the dropdown.
+    const [selectedFilters, setSelectedFilters] = useState<string[]>(
+        (seed?.categories ?? []).map((name) => CATEGORY_PREFIX + name),
+    );
 
     const filterOptions = useMemo(
-        () => [TYPE_EXPENSE, TYPE_INCOME, ...book.flags.map((f) => f.name), EXCLUDED_FILTER],
-        [book.flags],
+        () => [
+            TYPE_EXPENSE, TYPE_INCOME, NEED_FILTER, WANT_FILTER,
+            ...book.categories.map((c) => CATEGORY_PREFIX + c.name),
+            ...book.flags.map((f) => f.name).filter((name) => name !== FLAG_OFF_BUDGET),
+            EXCLUDED_FILTER,
+        ],
+        [book.categories, book.flags],
     );
 
     // Filtering happens server-side (the list is paginated), so the filter object is part
     // of the query key rather than a useMemo over an already-loaded array.
     const filters: ItemFilters = useMemo(() => {
         const realFlags = selectedFilters.filter(
-            (f) => ![EXCLUDED_FILTER, FLAG_UNCATEGORISED, TYPE_EXPENSE, TYPE_INCOME].includes(f),
+            (f) => ![
+                EXCLUDED_FILTER, FLAG_UNCATEGORISED, FLAG_OFF_BUDGET, TYPE_EXPENSE, TYPE_INCOME,
+                NEED_FILTER, WANT_FILTER,
+            ].includes(f) && !f.startsWith(CATEGORY_PREFIX),
         );
+        const selectedCategories = selectedFilters
+            .filter((f) => f.startsWith(CATEGORY_PREFIX))
+            .map((f) => f.slice(CATEGORY_PREFIX.length));
         const wantsExpense = selectedFilters.includes(TYPE_EXPENSE);
         const wantsIncome = selectedFilters.includes(TYPE_INCOME);
+        const wantsNeed = selectedFilters.includes(NEED_FILTER);
+        const wantsWant = selectedFilters.includes(WANT_FILTER);
+        const source = sourceFilter === "all" || sourceFilter.startsWith("card:")
+            ? undefined
+            : (sourceFilter as ItemFilters["source"] || undefined);
+        const card = sourceFilter.startsWith("card:") ? sourceFilter.slice(5) : undefined;
         return {
             ...dateRange(dateValue),
             q: search.trim() || undefined,
-            categories: activeCategories.length ? activeCategories : undefined,
+            categories: selectedCategories.length ? selectedCategories : undefined,
             flags: realFlags.length ? realFlags : undefined,
             // Selecting both (or neither) means "all types" — no filter to apply.
             type: wantsExpense !== wantsIncome ? (wantsExpense ? "expense" : "income") : undefined,
+            need_want: wantsNeed !== wantsWant ? (wantsNeed ? "need" : "want") : undefined,
             // The *state* of having no category, not just the flag — so a hand-entered
             // item with no category is caught too, not only ones an import flagged.
             uncategorised: selectedFilters.includes(FLAG_UNCATEGORISED) || undefined,
             excluded: selectedFilters.includes(EXCLUDED_FILTER) ? "only" : "hidden",
+            source,
+            card,
         };
-    }, [dateValue, search, activeCategories, selectedFilters]);
+    }, [dateValue, search, selectedFilters, sourceFilter]);
 
     const {
         items, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
@@ -191,20 +218,42 @@ export default function BookItems() {
                         }}
                     />
                     <Stack direction="row" spacing={1}>
+                        <TextField
+                            select size="small" label="Source" value={sourceFilter}
+                            onChange={(e) => setSourceFilter(e.target.value)}
+                            sx={{ flexShrink: 0, "& .MuiInputBase-root": { width: "auto" } }}
+                        >
+                            <MenuItem value="all">All</MenuItem>
+                            <MenuItem value="manual">Manual</MenuItem>
+                            <MenuItem value="csv">Imported</MenuItem>
+                            {book.import_presets.length > 0 && <Divider />}
+                            {book.import_presets.map((p) => (
+                                <MenuItem key={p._id} value={`card:${p._id}`}>{p.name}</MenuItem>
+                            ))}
+                        </TextField>
                         <Autocomplete
                             multiple disableCloseOnSelect size="small" fullWidth options={filterOptions}
                             value={selectedFilters} onChange={(_, v) => setSelectedFilters(v)}
-                            groupBy={(o) => (o === TYPE_EXPENSE || o === TYPE_INCOME
-                                ? "Type" : o === EXCLUDED_FILTER ? "Other" : "Flags")}
+                            groupBy={(o) => (
+                                o === TYPE_EXPENSE || o === TYPE_INCOME ? "Type"
+                                    : o === NEED_FILTER || o === WANT_FILTER ? "Need / Want"
+                                        : o.startsWith(CATEGORY_PREFIX) ? "Categories"
+                                            : o === EXCLUDED_FILTER ? "Other"
+                                                : "Flags"
+                            )}
                             getOptionLabel={(o) => (
-                                o === EXCLUDED_FILTER ? "Excluded"
+                                o === EXCLUDED_FILTER ? "Off budget"
                                     : o === TYPE_EXPENSE ? "Expenses"
-                                        : o === TYPE_INCOME ? "Income" : o
+                                        : o === TYPE_INCOME ? "Income"
+                                            : o === NEED_FILTER ? "Need"
+                                                : o === WANT_FILTER ? "Want"
+                                                    : o.startsWith(CATEGORY_PREFIX) ? o.slice(CATEGORY_PREFIX.length)
+                                                        : o
                             )}
                             renderTags={(value, getTagProps) => value.map((option, index) => {
                                 const { key, ...tagProps } = getTagProps({ index });
                                 if (option === EXCLUDED_FILTER) {
-                                    return <Chip key={key} size="small" label="Excluded" {...tagProps} />;
+                                    return <Chip key={key} size="small" label="Off budget" {...tagProps} />;
                                 }
                                 if (option === TYPE_EXPENSE) {
                                     return (
@@ -219,6 +268,22 @@ export default function BookItems() {
                                         <Chip
                                             key={key} size="small" label="Income" color="success"
                                             icon={<TrendingUpIcon fontSize="small" />} {...tagProps}
+                                        />
+                                    );
+                                }
+                                if (option === NEED_FILTER) {
+                                    return <Chip key={key} size="small" label="Need" {...tagProps} />;
+                                }
+                                if (option === WANT_FILTER) {
+                                    return <Chip key={key} size="small" label="Want" {...tagProps} />;
+                                }
+                                if (option.startsWith(CATEGORY_PREFIX)) {
+                                    return (
+                                        <CategoryChip
+                                            key={key}
+                                            name={option.slice(CATEGORY_PREFIX.length)}
+                                            registry={book.categories}
+                                            {...tagProps}
                                         />
                                     );
                                 }
@@ -238,22 +303,6 @@ export default function BookItems() {
                             {dateFilterLabel(dateValue)}
                         </Button>
                     </Stack>
-                    {book.categories.length > 0 && (
-                        <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>
-                            {book.categories.map((c) => (
-                                <CategoryChip
-                                    key={c._id} name={c.name} registry={book.categories}
-                                    onClick={() => toggle(activeCategories, setActiveCategories, c.name)}
-                                    sx={{
-                                        cursor: "pointer",
-                                        // A selected chip reads as pressed rather than merely present.
-                                        opacity: activeCategories.length === 0 || activeCategories.includes(c.name) ? 1 : 0.4,
-                                        fontWeight: activeCategories.includes(c.name) ? 700 : 400,
-                                    }}
-                                />
-                            ))}
-                        </Stack>
-                    )}
                 </Stack>
             </Box>
 
@@ -270,7 +319,7 @@ export default function BookItems() {
                         <Typography variant="subtitle1">Nothing here</Typography>
                         <Typography variant="body2" color="text.secondary">
                             {search || dateValue.preset !== "all"
-                                || selectedFilters.length > 0 || activeCategories.length > 0
+                                || selectedFilters.length > 0 || sourceFilter !== "all"
                                 ? "No items match those filters."
                                 : "Add your first item, or import a CSV from your bank."}
                         </Typography>
