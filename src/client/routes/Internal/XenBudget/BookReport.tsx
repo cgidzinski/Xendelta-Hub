@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useNavigate } from "react-router-dom";
 import {
     Box, Button, Card, MenuItem, Stack, TextField, Typography, useMediaQuery,
 } from "@mui/material";
@@ -63,6 +63,7 @@ const WANT_COLOR = "#c98500";
 
 export default function BookReport() {
     const { book, currency, onCurrencyChange } = useOutletContext<BookDetailContext>();
+    const navigate = useNavigate();
     // Remembered per book, so leaving and coming back to the Report picks up where you
     // left off instead of resetting to "this year" every time.
     const periodLsKey = `xenbudget_period_report_${book._id}`;
@@ -579,6 +580,19 @@ export default function BookReport() {
                                                     categoryRegistry={book.categories}
                                                     members={book.members}
                                                     asOf={budgetStatusResponse?.as_of ?? new Date().toISOString()}
+                                                    onViewItems={(b) => navigate(
+                                                        `/internal/xenbudget/books/${book._id}/items`,
+                                                        {
+                                                            state: {
+                                                                budgetFilter: {
+                                                                    categories: b.categories,
+                                                                    from: b.period_from,
+                                                                    to: b.period_to,
+                                                                    period: b.period,
+                                                                }
+                                                            }
+                                                        },
+                                                    )}
                                                     periodLabel={range.label}
                                                 />
                                             </Box>
