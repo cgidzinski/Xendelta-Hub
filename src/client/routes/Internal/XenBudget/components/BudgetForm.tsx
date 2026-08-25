@@ -14,6 +14,8 @@ import type {
 import { formatCurrency, getCurrencySymbol } from "../currency";
 import { sanitizeAmount, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
+import { budgetPeriodWindow } from "./budget/budgetForRange";
+import { monthlyEquivalent, windowLabel } from "./budget/periodDisplay";
 
 const PERIODS: { value: BudgetPeriod; label: string }[] = [
     { value: "weekly", label: "Weekly" },
@@ -97,6 +99,23 @@ export default function BudgetForm({
     const overAllocated = kind === "cap" && numericAmount > 0 && allocated > numericAmount;
     const isGoal = kind === "goal";
 
+    // The window the chosen period currently covers (or the picked dates for a one-off),
+    // for the live "per month" and current-window previews. A saved budget gets this back
+    // from the server; a budget being drafted has to work it out itself.
+    let previewWindow: { from: string; to: string } | null;
+    if (period === "custom") {
+        previewWindow = startDate && endDate
+            ? { from: startDate.toISOString(), to: endDate.toISOString() }
+            : null;
+    } else {
+        const { from, to } = budgetPeriodWindow(period, new Date());
+        previewWindow = { from: from.toISOString(), to: to.toISOString() };
+    }
+    const monthlyAmount = monthlyEquivalent(period, numericAmount);
+    const previewWindowLabel = previewWindow
+        ? windowLabel(period, previewWindow.from, previewWindow.to)
+        : undefined;
+
     // A member can hold at most one limit per budget, so the picker only offers the ones
     // not already listed.
     const availableMembers = book.members.filter(
@@ -171,9 +190,14 @@ export default function BudgetForm({
                             const clean = sanitizeAmount(e.target.value);
                             if (clean !== null) setAmount(clean);
                         }}
-                        helperText={isGoal
-                            ? "The target for everyone together. Leave empty to set targets only for the people below."
-                            : "The limit for everyone together. Leave empty to cap only the people below."}
+                        helperText={[
+                            isGoal
+                                ? "The target for everyone together. Leave empty to set targets only for the people below."
+                                : "The limit for everyone together. Leave empty to cap only the people below.",
+                            monthlyAmount !== undefined
+                                ? `≈ ${formatCurrency(monthlyAmount, currency)}/mo`
+                                : undefined,
+                        ].filter(Boolean).join(" · ")}
                         slotProps={{
                             input: {
                                 startAdornment: (
@@ -261,9 +285,12 @@ export default function BudgetForm({
                     <TextField
                         select fullWidth label="Period" value={period}
                         onChange={(e) => setPeriod(e.target.value as BudgetPeriod)}
-                        helperText={isGoal
-                            ? "Per-person targets use this same period."
-                            : "Per-person limits use this same period."}
+                        helperText={[
+                            isGoal
+                                ? "Per-person targets use this same period."
+                                : "Per-person limits use this same period.",
+                            previewWindowLabel ? `Current window: ${previewWindowLabel}` : undefined,
+                        ].filter(Boolean).join(" · ")}
                         slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
                     >
                         {PERIODS.map((p) => <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>)}

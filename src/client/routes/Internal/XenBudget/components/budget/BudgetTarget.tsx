@@ -8,6 +8,8 @@ interface BudgetTargetProps {
     personName?: string;
     members: XenBudgetMember[];
     size?: number;
+    /** Stretch the "Everyone" pill to fill its container. */
+    fullWidth?: boolean;
 }
 
 /**
@@ -17,13 +19,14 @@ interface BudgetTargetProps {
  * limit" look identical otherwise, which is exactly the distinction a budget carrying
  * both needs to make.
  */
-export default function BudgetTarget({ personId, personName, members, size = 20 }: BudgetTargetProps) {
+export default function BudgetTarget({ personId, personName, members, size = 20, fullWidth }: BudgetTargetProps) {
     if (!personId) {
         return (
             <Stack
                 direction="row" alignItems="center" spacing={0.5}
                 sx={{
                     px: 0.75, py: 0.125, borderRadius: 999, flexShrink: 0,
+                    ...(fullWidth ? { width: "100%" } : {}),
                     bgcolor: (theme) => alpha(theme.palette.text.primary, 0.08),
                 }}
             >

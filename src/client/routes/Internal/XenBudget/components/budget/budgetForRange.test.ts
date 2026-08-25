@@ -44,6 +44,19 @@ describe("budgetedForRange", () => {
             .toBeCloseTo(12000, 6);
     });
 
+    it("prices a yearly cap by whole months, not days", () => {
+        // Three whole months of a year are exactly a quarter of it.
+        const yearly: RangeBudget = { period: "yearly", amount: 600, period_from: "", period_to: "" };
+        expect(budgetedForRange(yearly, local(2026, 6, 1), local(2026, 9, 1)))
+            .toBeCloseTo(150, 6);
+    });
+
+    it("prices a quarterly cap by whole months", () => {
+        const quarterly: RangeBudget = { period: "quarterly", amount: 3000, period_from: "", period_to: "" };
+        expect(budgetedForRange(quarterly, local(2026, 6, 1), local(2026, 7, 1)))
+            .toBeCloseTo(1000, 6);
+    });
+
     it("counts whole weeks of a weekly cap", () => {
         // 2026-08-03 is a Monday; four weeks to 2026-08-31.
         const weekly: RangeBudget = { period: "weekly", amount: 100, period_from: "", period_to: "" };

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import { scaleBudgetToRange } from "../../routes/Internal/XenBudget/components/budget/scaleBudgetToRange";
+import { normalizedAmounts } from "../../routes/Internal/XenBudget/components/budget/periodDisplay";
 import type { XenBudgetBook, BudgetInput, BudgetStatusResponse } from "./types";
 
 /** An explicit reporting window, as ISO strings. */
@@ -38,10 +39,24 @@ export function useXenBudgetStatus(bookId: string, currency?: string, range?: Bu
 
     const budgets = useMemo(() => {
         const raw = data?.budgets ?? [];
-        if (!range) return raw;
+        // Stash each budget's own per-period amount and its monthly/quarterly/yearly
+        // equivalents BEFORE any range scaling, so the period identity stays correct on
+        // restated cards too.
+        const decorated = raw.map((b) => {
+            const normalized = normalizedAmounts(b.period, b.amount);
+            return {
+                ...b,
+                period_amount: b.amount,
+                weekly_amount: normalized.weekly,
+                monthly_amount: normalized.monthly,
+                quarterly_amount: normalized.quarterly,
+                yearly_amount: normalized.yearly,
+            };
+        });
+        if (!range) return decorated;
         const from = new Date(range.from);
         const to = new Date(range.to);
-        return raw.map((b) => scaleBudgetToRange(b, from, to));
+        return decorated.map((b) => scaleBudgetToRange(b, from, to));
     }, [data, range?.from, range?.to]);
 
     return { status: data, budgets, isLoading, isError, error };

@@ -61,13 +61,13 @@ export function resolvePeriod(mode: PeriodMode): ResolvedPeriod {
         const now = new Date();
         if (mode.preset === "last3") {
             return {
-                from: utcDay(startOfMonth(subMonths(now, 2))), to: utcEndOfDay(now),
+                from: utcDay(startOfMonth(subMonths(now, 2))), to: utcEndOfDay(endOfMonth(now)),
                 groupBy: "month", label: PRESET_LABELS.last3,
             };
         }
         if (mode.preset === "last6") {
             return {
-                from: utcDay(startOfMonth(subMonths(now, 5))), to: utcEndOfDay(now),
+                from: utcDay(startOfMonth(subMonths(now, 5))), to: utcEndOfDay(endOfMonth(now)),
                 groupBy: "month", label: PRESET_LABELS.last6,
             };
         }

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
-    Box, Button, Card, MenuItem, Stack, TextField, Typography,
+    Box, Button, Card, MenuItem, Stack, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
 import InsightsIcon from "@mui/icons-material/Insights";
@@ -17,6 +17,7 @@ import TimePeriodFilter, {
 } from "./components/TimePeriodFilter";
 import TotalsSummary from "./components/TotalsSummary";
 import BudgetCard from "./components/budget/BudgetCard";
+import { useBalancedColumns } from "./components/budget/useBalancedColumns";
 import { sortBudgets } from "./components/budget/sortBudgets";
 import CategoryReportTable from "./components/report/CategoryReportTable";
 import {
@@ -94,6 +95,13 @@ export default function BookReport() {
         () => sortBudgets(budgets),
         [budgets],
     );
+    // Balanced columns: each card goes into the shortest column, and the result is locked
+    // so expanding a card only grows its own column - cards never reshuffle.
+    const isSm = useMediaQuery("(min-width:600px)");
+    const isMd = useMediaQuery("(min-width:900px)");
+    const isXl = useMediaQuery("(min-width:1536px)");
+    const columnCount = isXl ? 4 : isMd ? 3 : isSm ? 2 : 1;
+    const { columns: budgetColumns, measureRef } = useBalancedColumns(visibleBudgets, columnCount);
 
     // Budget against actual for the range on screen. The caps are restated for that range
     // rather than shown as one period's worth - see budgetedForRange.
@@ -558,28 +566,24 @@ export default function BookReport() {
                             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
                                 Scaled to {range.label} — a monthly cap counts once per month covered.
                             </Typography>
-                            {/* auto-fit, not an `md` breakpoint or auto-fill: MUI's
-                            breakpoints measure the VIEWPORT (the shell's sidebar can leave
-                            this column far narrower than the window says), and auto-fill
-                            would leave a short last row's empty tracks reserved rather than
-                            collapsed. 320px keeps this at 1-4 columns inside the page's
-                            1600px cap, wrapped in min(...,100%) so that floor can never
-                            exceed a narrow phone's actual width. */}
-                            <Box sx={{
-                                display: "grid",
-                                gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))",
-                                gap: 1,
-                                alignItems: "start",
-                            }}>
-                                {visibleBudgets.map((budget) => (
-                                    <BudgetCard
-                                        key={budget._id} budget={budget}
-                                        currency={budgetStatusResponse?.currency ?? currency}
-                                        categoryRegistry={book.categories}
-                                        members={book.members}
-                                        asOf={budgetStatusResponse?.as_of ?? new Date().toISOString()}
-                                        periodLabel={range.label}
-                                    />
+                            {/* Fixed-column masonry: expanding a card only pushes the cards below
+                            it in its own column down - cards never jump to another column. */}
+                            <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                                {budgetColumns.map((col, i) => (
+                                    <Stack key={i} spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+                                        {col.map((budget) => (
+                                            <Box key={budget._id} ref={measureRef(budget._id)}>
+                                                <BudgetCard
+                                                    budget={budget}
+                                                    currency={budgetStatusResponse?.currency ?? currency}
+                                                    categoryRegistry={book.categories}
+                                                    members={book.members}
+                                                    asOf={budgetStatusResponse?.as_of ?? new Date().toISOString()}
+                                                    periodLabel={range.label}
+                                                />
+                                            </Box>
+                                        ))}
+                                    </Stack>
                                 ))}
                             </Box>
                         </Box>

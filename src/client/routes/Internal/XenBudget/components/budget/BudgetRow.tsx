@@ -1,4 +1,4 @@
-import { Box, Card, Chip, IconButton, Stack, Typography } from "@mui/material";
+import { Box, Card, Chip, IconButton, Stack, Typography, alpha } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import type {
     BudgetStatus, XenBudgetLabel, XenBudgetMember,
@@ -8,7 +8,7 @@ import { cardSx } from "../../../../../components/ui/surfaceStyles";
 import { formatCurrency } from "../../currency";
 import { INCOME_COLOR } from "../../../../../components/ui/chartColors";
 import BudgetTarget from "./BudgetTarget";
-import { periodLabel } from "./budgetKind";
+import { periodNoun } from "./periodDisplay";
 
 interface BudgetRowProps {
     budget: BudgetStatus;
@@ -28,7 +28,7 @@ interface BudgetRowProps {
 export default function BudgetRow({
     budget, currency, categoryRegistry, members, onEdit,
 }: BudgetRowProps) {
-    const suffix = periodLabel(budget.period);
+    const noun = periodNoun(budget.period);
 
     return (
         <Card
@@ -46,7 +46,6 @@ export default function BudgetRow({
                         : budget.categories.map((c) => (
                             <CategoryChip key={c} name={c} registry={categoryRegistry} />
                         ))}
-                    <Chip size="small" label={suffix} sx={{ height: 20, fontSize: 11 }} />
                     {budget.kind === "goal" && (
                         <Chip
                             size="small" label="Savings goal"
@@ -66,20 +65,42 @@ export default function BudgetRow({
             </Stack>
 
             {budget.amount !== undefined && (
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
-                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                        <BudgetTarget members={members} />
-                    </Box>
-                    <Typography variant="body2" noWrap sx={{ flexShrink: 0, color: "text.secondary" }}>
-                        {formatCurrency(budget.amount, currency)}
-                    </Typography>
+                <Stack spacing={1} sx={{ minWidth: 0 }}>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
+                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                            <BudgetTarget members={members} fullWidth />
+                        </Box>
+                        <Typography variant="body2" noWrap sx={{ flexShrink: 0, color: "text.secondary" }}>
+                            {formatCurrency(budget.amount, currency)} / {noun}
+                        </Typography>
+                    </Stack>
+                    {budget.weekly_amount !== undefined && budget.monthly_amount !== undefined && budget.quarterly_amount !== undefined && budget.yearly_amount !== undefined && (
+                        <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", justifyContent: "flex-end" }}>
+                            <Chip size="small" label={`${formatCurrency(budget.weekly_amount, currency)}/wk`} sx={{ height: 20, fontSize: 11 }} />
+                            <Chip size="small" label={`${formatCurrency(budget.monthly_amount, currency)}/mo`} sx={{ height: 20, fontSize: 11 }} />
+                            <Chip size="small" label={`${formatCurrency(budget.quarterly_amount, currency)}/qtr`} sx={{ height: 20, fontSize: 11 }} />
+                            <Chip size="small" label={`${formatCurrency(budget.yearly_amount, currency)}/yr`} sx={{ height: 20, fontSize: 11 }} />
+                        </Stack>
+                    )}
                 </Stack>
             )}
 
             {budget.sub_budgets.length > 0 && (
                 <Stack spacing={1} sx={{ mt: 1.25 }}>
                     {budget.sub_budgets.map((sub) => (
-                        <Stack key={sub._id} direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
+                        <Stack
+                            key={sub._id}
+                            direction="row"
+                            alignItems="center"
+                            spacing={1}
+                            sx={{
+                                border: "1px solid",
+                                borderColor: (theme) => alpha(theme.palette.divider, 0.5),
+                                borderRadius: 1.5,
+                                p: 1,
+                                minWidth: 0,
+                            }}
+                        >
                             <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                                 <BudgetTarget
                                     personId={sub.person_id}
@@ -89,7 +110,7 @@ export default function BudgetRow({
                                 />
                             </Box>
                             <Typography variant="body2" noWrap sx={{ flexShrink: 0, color: "text.secondary" }}>
-                                {formatCurrency(sub.amount, currency)}
+                                {formatCurrency(sub.amount, currency)} / {noun}
                             </Typography>
                         </Stack>
                     ))}

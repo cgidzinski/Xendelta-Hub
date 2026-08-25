@@ -366,6 +366,27 @@ export interface BudgetStatus {
     sub_budgets: SubBudgetStatus[];
     period_from: string;
     period_to: string;
+    /** Client-computed: the budget's own per-period overall amount, before any range
+     *  scaling in `scaleBudgetToRange`. Equals `amount` when the figures are un-scaled. */
+    period_amount?: number;
+    /** Client-computed: `period_amount` as a per-month figure, for comparing budgets of
+     *  different periods at a glance (calendar-accurate; see periodDisplay.ts). */
+    weekly_amount?: number;
+    monthly_amount?: number;
+    /** Client-computed: `period_amount` per quarter and per year (same source as monthly). */
+    quarterly_amount?: number;
+    yearly_amount?: number;
+    /** Server-provided: what the scope spent over the budget's OWN current period, even
+     *  when `spent` is measured over a requested range. */
+    period_spent?: number;
+    /** Server-provided: item count over the budget's own current period. */
+    period_item_count?: number;
+    /** Server-provided: the budget's OWN current-period window (period_from/to follow the
+     *  requested range instead). */
+    own_period_from?: string;
+    own_period_to?: string;
+    /** Server-provided: who spent over the budget's own current period. */
+    period_by_person?: BudgetPersonSpend[];
 }
 
 export interface BudgetStatusResponse {

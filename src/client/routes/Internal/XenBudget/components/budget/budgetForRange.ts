@@ -62,6 +62,13 @@ const STEPS: Record<Exclude<BudgetPeriod, "custom">, {
     yearly: { start: utcStartOfYear, next: (d) => utcAddYears(d, 1) },
 };
 
+/** Months in one period, for the month-aligned periods. */
+const MONTHS_PER_PERIOD: Record<"monthly" | "quarterly" | "yearly", number> = {
+    monthly: 1,
+    quarterly: 3,
+    yearly: 12,
+};
+
 function overlapMs(aFrom: Date, aTo: Date, bFrom: Date, bTo: Date): number {
     const from = Math.max(aFrom.getTime(), bFrom.getTime());
     const to = Math.min(aTo.getTime(), bTo.getTime());
@@ -102,23 +109,55 @@ export function periodsInRange(
         return overlapMs(from, to, rangeFrom, rangeTo) / span;
     }
 
-    const step = STEPS[budget.period];
-    if (!step) return 0;
-
-    let total = 0;
-    let periodStart = step.start(rangeFrom);
-    for (let i = 0; periodStart.getTime() < rangeTo.getTime() && i < MAX_PERIODS; i++) {
-        const periodEnd = step.next(periodStart);
-        const span = periodEnd.getTime() - periodStart.getTime();
-        if (span <= 0) break;
-        total += overlapMs(periodStart, periodEnd, rangeFrom, rangeTo) / span;
-        periodStart = periodEnd;
+    // Weekly is the only period that isn't month-aligned, so it keeps the day-based walk.
+    if (budget.period === "weekly") {
+        let total = 0;
+        let periodStart = STEPS.weekly.start(rangeFrom);
+        for (let i = 0; periodStart.getTime() < rangeTo.getTime() && i < MAX_PERIODS; i++) {
+            const periodEnd = STEPS.weekly.next(periodStart);
+            const span = periodEnd.getTime() - periodStart.getTime();
+            if (span <= 0) break;
+            total += overlapMs(periodStart, periodEnd, rangeFrom, rangeTo) / span;
+            periodStart = periodEnd;
+        }
+        return total;
     }
-    return total;
+
+    // Monthly/quarterly/yearly are month-aligned, so count calendar MONTHS and divide by
+    // how many months one period spans. Whole-month ranges then give exact fractions -
+    // three months of a year is exactly 3/12 - instead of day-counts that drift with
+    // month lengths (a $600 yearly cap over three months reads $150, not $139.73).
+    const monthsPerPeriod = MONTHS_PER_PERIOD[budget.period] ?? 1;
+    let months = 0;
+    let monthStart = new Date(Date.UTC(rangeFrom.getUTCFullYear(), rangeFrom.getUTCMonth(), 1));
+    while (monthStart.getTime() < rangeTo.getTime()) {
+        const monthEnd = new Date(Date.UTC(
+            monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1,
+        ));
+        const span = monthEnd.getTime() - monthStart.getTime();
+        if (span <= 0) break;
+        months += overlapMs(monthStart, monthEnd, rangeFrom, rangeTo) / span;
+        monthStart = monthEnd;
+    }
+    return months / monthsPerPeriod;
 }
 
 export function budgetedForRange(budget: RangeBudget, rangeFrom: Date, rangeTo: Date): number {
     const { amount } = budget;
     if (amount === undefined || amount <= 0) return 0;
     return amount * periodsInRange(budget, rangeFrom, rangeTo);
+}
+
+/**
+ * The window a fixed period is currently in, as a half-open [from, to) - the same
+ * boundary the server snaps to (`budgetPeriodRange`) and `periodsInRange` walks. Used for
+ * live previews before a budget exists (the form), since saved budgets already get their
+ * window back as `period_from`/`period_to`.
+ */
+export function budgetPeriodWindow(
+    period: Exclude<BudgetPeriod, "custom">, asOf: Date,
+): { from: Date; to: Date } {
+    const step = STEPS[period];
+    const from = step.start(asOf);
+    return { from, to: step.next(from) };
 }

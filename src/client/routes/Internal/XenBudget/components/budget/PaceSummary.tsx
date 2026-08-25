@@ -14,6 +14,12 @@ interface PaceSummaryProps {
      * - a report range, say. Without it a year-scaled card would still claim "Monthly".
      */
     periodLabel?: string;
+    /** The budget's own window name ("Q3 2026"), shown when the figures aren't restated. */
+    windowLabel?: string;
+    /** The budget's own per-period rate, e.g. "$3,000 / quarter". */
+    rate?: string;
+    /** The budget's own amount as a per-month figure, e.g. "$1,000". */
+    monthly?: string;
     pace: BudgetPace;
     amount: number;
     spent: number;
@@ -28,7 +34,8 @@ interface PaceSummaryProps {
  * rather than parsed out of a sentence.
  */
 export default function PaceSummary({
-    kind, period, periodLabel: labelOverride, pace, amount, spent, percent, money,
+    kind, period, periodLabel: labelOverride, windowLabel: window, rate, monthly,
+    pace, amount, spent, percent, money,
 }: PaceSummaryProps) {
     const state = limitState(kind, percent, pace.elapsed);
     const stateColor = limitColor(state);
@@ -43,7 +50,7 @@ export default function PaceSummary({
         >
             <Stack spacing={0.375}>
                 <Typography variant="caption" color="text.secondary">
-                    {labelOverride ?? capitalize(periodLabel(period))} · day {pace.dayOf} of {pace.totalDays}
+                    {`${labelOverride ?? window ?? capitalize(periodLabel(period))} · day ${pace.dayOf} of ${pace.totalDays}`}
                 </Typography>
                 <Typography variant="caption" sx={{ color: stateColor ?? "text.secondary" }}>
                     {pace.finished
@@ -57,6 +64,11 @@ export default function PaceSummary({
                             spent > 0 ? `${money(pace.projected)} projected` : null,
                         ].filter(Boolean).join(" · ")}
                 </Typography>
+                {rate && (
+                    <Typography variant="caption" color="text.secondary">
+                        {rate}{monthly ? ` · ≈ ${monthly}/mo` : null}
+                    </Typography>
+                )}
             </Stack>
         </Box>
     );

@@ -9,15 +9,23 @@ interface BudgetBreakdownProps {
     budget: BudgetStatus;
     currency: string;
     members: XenBudgetMember[];
+    /** Override for the whole-period section; defaults to the range breakdown. */
+    byPerson?: BudgetStatus["by_person"];
+    /** The spend the breakdown shares are a fraction of; defaults to `budget.spent`. */
+    spent?: number;
 }
 
 /**
  * Who a shared limit's spend actually went to, and what categories it covers. Scoped to
  * the whole budget - there's no per-person version of "who spent it".
  */
-export default function BudgetBreakdown({ budget, currency, members }: BudgetBreakdownProps) {
+export default function BudgetBreakdown({
+    budget, currency, members, byPerson, spent: spentOverride,
+}: BudgetBreakdownProps) {
     const money = (v: number) => formatCurrency(v, currency);
-    const breakdown = budget.by_person.filter((p) => p.amount > 0);
+    const people = byPerson ?? budget.by_person;
+    const spentTotal = spentOverride ?? budget.spent;
+    const breakdown = people.filter((p) => p.amount > 0);
 
     if (breakdown.length === 0 && budget.categories.length <= 1) return null;
 
@@ -30,7 +38,7 @@ export default function BudgetBreakdown({ budget, currency, members }: BudgetBre
                     </Typography>
                     <Stack spacing={1}>
                         {breakdown.map((person) => {
-                            const share = budget.spent > 0 ? (person.amount / budget.spent) * 100 : 0;
+                            const share = spentTotal > 0 ? (person.amount / spentTotal) * 100 : 0;
                             return (
                                 <Box key={person.user_id}>
                                     <Stack

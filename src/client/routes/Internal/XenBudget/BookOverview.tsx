@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import {
-    Avatar, Box, Card, MenuItem, Stack, TextField, Typography,
+    Avatar, Box, Card, MenuItem, Stack, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import InsightsIcon from "@mui/icons-material/Insights";
 import type { BookDetailContext } from "./BookDetail";
@@ -9,6 +9,7 @@ import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
 import { CategoryChip } from "./components/LabelChip";
 import BudgetCard from "./components/budget/BudgetCard";
+import { useBalancedColumns } from "./components/budget/useBalancedColumns";
 import { sortBudgets, overCount, metCount } from "./components/budget/sortBudgets";
 import TimePeriodFilter, {
     defaultMonthMode, parsePeriodMode, resolvePeriod, serializePeriodMode, type PeriodMode,
@@ -53,6 +54,13 @@ export default function BookOverview() {
         () => sortBudgets(budgetStatus),
         [budgetStatus],
     );
+    // Balanced columns: each card goes into the shortest column, and the result is locked
+    // so expanding a card only grows its own column - cards never reshuffle.
+    const isSm = useMediaQuery("(min-width:600px)");
+    const isMd = useMediaQuery("(min-width:900px)");
+    const isXl = useMediaQuery("(min-width:1536px)");
+    const columnCount = isXl ? 4 : isMd ? 3 : isSm ? 2 : 1;
+    const { columns: budgetColumns, measureRef } = useBalancedColumns(visibleBudgets, columnCount);
     // Counts every limit past its cap, the shared one and each person's, so the header
     // agrees with the red bars actually on screen rather than with the unfiltered book.
     // Savings goals are counted separately and the other way up: passing one is the point.
@@ -186,42 +194,37 @@ export default function BookOverview() {
                         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
                             Scaled to {label} — a monthly cap counts once per month covered.
                         </Typography>
-                        {/* auto-fit (not auto-fill): empty tracks collapse, so a short
-                        last row stretches to fill the width instead of leaving a gap.
-                        320px keeps this at 1-4 columns inside the page's 1600px cap,
-                        rather than fanning out further on a wide monitor - wrapped in
-                        min(...,100%) so that floor can never exceed a narrow phone's
-                        actual width. */}
-                        <Box sx={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))",
-                            gap: 1,
-                            alignItems: "start",
-                        }}>
-                            {visibleBudgets.map((budget) => (
-                                <BudgetCard
-                                    key={budget._id}
-                                    budget={budget}
-                                    currency={budgetCurrency}
-                                    categoryRegistry={book.categories}
-                                    members={book.members}
-                                    asOf={asOf}
-                                    variant="minimal"
-                                    periodLabel={label}
-                                    onViewItems={(b) => navigate(
-                                        `/internal/xenbudget/books/${book._id}/items`,
-                                        {
-                                            state: {
-                                                budgetFilter: {
-                                                    categories: b.categories,
-                                                    from: b.period_from,
-                                                    to: b.period_to,
-                                                    period: b.period,
-                                                }
-                                            }
-                                        },
-                                    )}
-                                />
+                        {/* Fixed-column masonry: expanding a card only pushes the cards below
+                        it in its own column down - cards never jump to another column. */}
+                        <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                            {budgetColumns.map((col, i) => (
+                                <Stack key={i} spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+                                    {col.map((budget) => (
+                                        <Box key={budget._id} ref={measureRef(budget._id)}>
+                                            <BudgetCard
+                                                budget={budget}
+                                                currency={budgetCurrency}
+                                                categoryRegistry={book.categories}
+                                                members={book.members}
+                                                asOf={asOf}
+                                                periodLabel={label}
+                                                onViewItems={(b) => navigate(
+                                                    `/internal/xenbudget/books/${book._id}/items`,
+                                                    {
+                                                        state: {
+                                                            budgetFilter: {
+                                                                categories: b.categories,
+                                                                from: b.period_from,
+                                                                to: b.period_to,
+                                                                period: b.period,
+                                                            }
+                                                        }
+                                                    },
+                                                )}
+                                            />
+                                        </Box>
+                                    ))}
+                                </Stack>
                             ))}
                         </Box>
                     </Card>

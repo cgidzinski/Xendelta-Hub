@@ -1975,11 +1975,17 @@ module.exports = function (app: any) {
           && !isNaN(rangeFrom.getTime()) && !isNaN(rangeTo.getTime())
           && rangeTo.getTime() > rangeFrom.getTime();
 
-        const ranges = budgets.map((b: any) => (useRange
+        // Each budget's own current-period window, always computed so the response can
+        // carry "whole period" figures alongside whatever range the caller asked for.
+        const ownRanges = budgets.map((b: any) => budgetPeriodRange(b, asOf));
+        const ranges = budgets.map((b: any, i: number) => (useRange
           ? { from: rangeFrom as Date, to: rangeTo as Date }
-          : budgetPeriodRange(b, asOf)));
-        const unionFrom = new Date(Math.min(...ranges.map((r: any) => r.from.getTime())));
-        const unionTo = new Date(Math.max(...ranges.map((r: any) => r.to.getTime())));
+          : ownRanges[i]));
+        // The base match has to cover both the requested window and each budget's own
+        // period, or a whole-period bar would be clipped to the requested range.
+        const union = useRange ? [...ranges, ...ownRanges] : ranges;
+        const unionFrom = new Date(Math.min(...union.map((r: any) => r.from.getTime())));
+        const unionTo = new Date(Math.max(...union.map((r: any) => r.to.getTime())));
 
         // Budgets cap spending, so income never counts against them.
         const base = {
@@ -2028,10 +2034,29 @@ module.exports = function (app: any) {
             { $group: { _id: null, total: { $sum: cats ? "$total" : scopeAmount }, count: { $sum: 1 } } },
           ];
 
+          // The same scope over the budget's OWN current period, not the requested range
+          // - the "whole period" bar. When no range is requested the two coincide.
+          facet[`b${i}full`] = [
+            { $match: { date: { $gte: ownRanges[i].from, $lt: ownRanges[i].to } } },
+            ...scopeStages,
+            ...(cats ? [{ $group: { _id: "$_id", total: { $sum: scopeAmount } } }] : []),
+            { $group: { _id: null, total: { $sum: cats ? "$total" : scopeAmount }, count: { $sum: 1 } } },
+          ];
+
           // Who spent it. Every member's shares add up to the item amount, so these rows
           // sum back to the scope total above rather than telling a different story.
           facet[`b${i}p`] = [
             { $match: inPeriod },
+            ...scopeStages,
+            { $unwind: "$shares" },
+            { $group: { _id: "$shares.user_id", total: { $sum: personAmount } } },
+            { $sort: { total: -1 } },
+          ];
+
+          // The same breakdown over the budget's OWN current period, for the whole-period
+          // section's "who spent it".
+          facet[`b${i}fullp`] = [
+            { $match: { date: { $gte: ownRanges[i].from, $lt: ownRanges[i].to } } },
             ...scopeStages,
             { $unwind: "$shares" },
             { $group: { _id: "$shares.user_id", total: { $sum: personAmount } } },
@@ -2067,6 +2092,8 @@ module.exports = function (app: any) {
             budgets: budgets.map((b: any, i: number) => {
               const row = results?.[`b${i}`]?.[0];
               const spent = roundMoney(row?.total || 0);
+              const periodRow = results?.[`b${i}full`]?.[0];
+              const periodSpent = roundMoney(periodRow?.total || 0);
               // Absent when the budget caps only named people. The client keys every
               // "is there an overall bar to draw" decision off this being undefined,
               // which is why it isn't flattened to 0.
@@ -2081,6 +2108,8 @@ module.exports = function (app: any) {
                 period: b.period,
                 spent,
                 item_count: row?.count || 0,
+                period_spent: periodSpent,
+                period_item_count: periodRow?.count || 0,
                 ...(amount === undefined ? {} : {
                   amount,
                   remaining: roundMoney(amount - spent),
@@ -2089,6 +2118,13 @@ module.exports = function (app: any) {
                   over: spent > amount,
                 }),
                 by_person: (results?.[`b${i}p`] || [])
+                  .filter((p: any) => p._id)
+                  .map((p: any) => ({
+                    user_id: p._id,
+                    username: memberById.get(p._id)?.username || "Unknown",
+                    amount: roundMoney(p.total || 0),
+                  })),
+                period_by_person: (results?.[`b${i}fullp`] || [])
                   .filter((p: any) => p._id)
                   .map((p: any) => ({
                     user_id: p._id,
@@ -2113,6 +2149,8 @@ module.exports = function (app: any) {
                 }),
                 period_from: ranges[i].from.toISOString(),
                 period_to: ranges[i].to.toISOString(),
+                own_period_from: ownRanges[i].from.toISOString(),
+                own_period_to: ownRanges[i].to.toISOString(),
               };
             }),
           },

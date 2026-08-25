@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-    Box, ButtonBase, Card, Chip, Collapse, IconButton, Stack, Tooltip, Typography,
+    Box, ButtonBase, Card, Chip, Collapse, Divider, IconButton, Stack, Tooltip, Typography,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
@@ -14,15 +14,21 @@ import { cardSx, sectionLabelSx } from "../../../../../components/ui/surfaceStyl
 import { formatCurrency } from "../../currency";
 import BudgetLimitLine from "./BudgetLimitLine";
 import BudgetDetails from "./BudgetDetails";
-import BudgetBreakdown from "./BudgetBreakdown";
 import BudgetTarget from "./BudgetTarget";
 import { memberColor, scopeColor } from "./budgetColors";
-import { limitNoun } from "./budgetKind";
+import { limitNoun, periodLabel as periodWord } from "./budgetKind";
 import { budgetPace } from "./budgetPace";
 
 // Past three, the chips start wrapping to a third line on a phone and stop being a
 // glanceable heading. The rest are named in the expanded panel.
 const MAX_CHIPS = 3;
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Single-letter badge for the budget's period. */
+const PERIOD_INITIALS: Record<string, string> = {
+    weekly: "W", monthly: "M", quarterly: "Q", yearly: "Y", custom: "C",
+};
 
 interface BudgetCardProps {
     budget: BudgetStatus;
@@ -30,12 +36,6 @@ interface BudgetCardProps {
     categoryRegistry: XenBudgetLabel[];
     members: XenBudgetMember[];
     asOf: string;
-    /**
-     * "full" (default) shows the shared limit and every person's limit all at once;
-     * "minimal" collapses to just the overarching budget and reveals the per-person
-     * limits when clicked.
-     */
-    variant?: "full" | "minimal";
     /**
      * Names the window the figures cover, for when they've been restated for a report
      * range rather than measured over the budget's own period.
@@ -57,17 +57,14 @@ interface BudgetCardProps {
  * reveals the per-person limits (and the overall detail panel) on click.
  */
 export default function BudgetCard({
-    budget, currency, categoryRegistry, members, asOf, variant = "full", periodLabel,
+    budget, currency, categoryRegistry, members, asOf, periodLabel,
     onViewItems,
 }: BudgetCardProps) {
-    // Which limit's details are open, if any: "overall" or a sub-budget id. Only one at a
-    // time, so an expanded card stays short enough to read without scrolling past it.
-    const [open, setOpen] = useState<string | null>(null);
-    // Minimal variant: whether the per-person limits are revealed under the headline.
-    const [revealed, setRevealed] = useState(false);
-    const isMinimal = variant === "minimal";
+    // One click expands both the selected-range and whole-period sections at once.
+    const [open, setOpen] = useState(false);
+    // Which person's limit is expanded, if any.
+    const [openSub, setOpenSub] = useState<string | null>(null);
     const hasOverall = budget.amount !== undefined;
-    const minimalOpen = revealed;
 
     const color = scopeColor(budget.categories, categoryRegistry);
     const chips = budget.categories.slice(0, MAX_CHIPS);
@@ -84,6 +81,16 @@ export default function BudgetCard({
         ? (budget.percent ?? 0)
         : headlineAmount > 0 ? Math.round((headlineSpent / headlineAmount) * 100) : 0;
     const headlineOver = hasOverall ? (budget.over ?? false) : headlineSpent > headlineAmount;
+    // The whole-period figures, for the second bar shown only when the budget's own period
+    // is longer than the selected range (so the whole-period total is the larger number).
+    const periodAmount = budget.period_amount;
+    const periodSpent = budget.period_spent ?? 0;
+    const periodPercent = periodAmount !== undefined && periodAmount > 0
+        ? Math.round((periodSpent / periodAmount) * 100) : 0;
+    const periodOver = periodAmount !== undefined && periodSpent > periodAmount;
+    const showWholePeriod = periodAmount !== undefined && periodAmount > headlineAmount;
+
+    const periodInitial = PERIOD_INITIALS[budget.period] ?? "?";
 
     const heading = (
         <Stack
@@ -96,6 +103,9 @@ export default function BudgetCard({
             {extra > 0 && (
                 <Chip size="small" label={`+${extra}`} sx={{ height: 20, fontSize: 11 }} />
             )}
+            <Tooltip title={capitalize(periodWord(budget.period))}>
+                <Chip size="small" label={periodInitial} sx={{ height: 20, fontSize: 11 }} />
+            </Tooltip>
             {hasOverall && (
                 <Tooltip title="Shared limit">
                     <PublicIcon sx={{ fontSize: 14, color: "text.disabled" }} />
@@ -109,152 +119,179 @@ export default function BudgetCard({
         </Stack>
     );
 
-    const toggle = (key: string) => setOpen((current) => (current === key ? null : key));
-
-    const detailsFor = (focus: SubBudgetStatus | null) => (
+    const detailsFor = (focus: SubBudgetStatus | null, section?: "range" | "whole") => (
         <BudgetDetails
             budget={budget}
             focus={focus}
+            section={section}
             currency={currency}
             asOf={asOf}
             periodLabel={periodLabel}
+            members={members}
         />
     );
 
-    // The pace/projection panel comes first, then the per-person limits in their own
-    // grouped box, then who the shared spend actually went to, with the card-level
-    // actions sitting at the very bottom.
-    const showPersonBudgets = !isMinimal || minimalOpen;
-    const showOverallDetails = isMinimal ? minimalOpen : open === "overall";
-    const showActions = !isMinimal || minimalOpen;
-
-    const header = (
-        <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ minWidth: 0 }}>
-            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                <BudgetLimitLine
-                    label={heading}
-                    amount={headlineAmount}
-                    spent={headlineSpent}
-                    percent={headlinePercent}
-                    over={headlineOver}
-                    kind={budget.kind}
-                    currency={currency}
-                    color={color}
-                    height={8}
-                    pace={pace.elapsed}
-                    itemCount={budget.item_count}
-                    barLabel={`${budget.categories.join(", ") || "Everything"}: ${formatCurrency(headlineSpent, currency)
-                        } of ${formatCurrency(headlineAmount, currency)}, ${headlinePercent}% of the ${limitNoun(budget.kind)}`}
-                />
-            </Box>
-            <ExpandMoreIcon
-                fontSize="small"
-                sx={{
-                    color: "text.disabled", flexShrink: 0, mt: 0.25,
-                    transform: (isMinimal ? revealed : open === "overall") ? "rotate(180deg)" : "none",
-                    transition: "transform 150ms",
-                }}
-            />
-        </Stack>
+    const chevron = (expanded: boolean) => (
+        <ExpandMoreIcon
+            fontSize="small"
+            sx={{
+                color: "text.disabled", flexShrink: 0,
+                transform: expanded ? "rotate(180deg)" : "none",
+                transition: "transform 150ms",
+            }}
+        />
     );
 
     return (
-        <Card variant="outlined" sx={{ ...cardSx, p: 1.5 }}>
-            {/* The shared limit, when there is one. A budget can cap only named people,
-            and then the categories are just a heading over their bars. */}
+        <Card
+            variant="outlined"
+            sx={{ ...cardSx, p: 1.5, borderWidth: 4, ...(open ? { cursor: "pointer" } : {}) }}
+            onClick={() => { if (open) setOpen(false); }}
+        >
+            {/* One click expands both periods, each with its detail under its own bar. */}
             <ButtonBase
-                onClick={isMinimal ? () => setRevealed((v) => !v) : () => toggle("overall")}
-                aria-expanded={isMinimal ? revealed : open === "overall"}
+                onClick={() => setOpen((v) => !v)}
+                aria-expanded={open}
                 sx={{
                     width: "100%", display: "block", textAlign: "left",
                     minHeight: 44, borderRadius: 1,
                 }}
             >
-                {header}
+                <Stack spacing={0.75} sx={{ minWidth: 0 }}>
+                    <Stack direction="row" alignItems="center" sx={{ minWidth: 0 }}>
+                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>{heading}</Box>
+                        {chevron(open)}
+                    </Stack>
+
+                    <BudgetLimitLine
+                        label={(
+                            <Typography variant="caption" color="text.secondary">
+                                {periodLabel ?? capitalize(periodWord(budget.period))}
+                            </Typography>
+                        )}
+                        amount={headlineAmount}
+                        spent={headlineSpent}
+                        percent={headlinePercent}
+                        over={headlineOver}
+                        kind={budget.kind}
+                        currency={currency}
+                        color={color}
+                        height={8}
+                        pace={pace.elapsed}
+                        itemCount={budget.item_count}
+                        barLabel={`${budget.categories.join(", ") || "Everything"}: ${formatCurrency(headlineSpent, currency)
+                            } of ${formatCurrency(headlineAmount, currency)}, ${headlinePercent}% of the ${limitNoun(budget.kind)}`}
+                    />
+                </Stack>
             </ButtonBase>
 
-            <Collapse in={showOverallDetails} unmountOnExit>
-                {detailsFor(null)}
+            <Collapse in={open} unmountOnExit>
+                {detailsFor(null, "range")}
             </Collapse>
 
-            <Collapse in={showPersonBudgets}>
-                {budget.sub_budgets.length > 0 && (
-                    <Box sx={{ ...cardSx, mt: 1.5, p: 1.25 }}>
-                        <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-                            {budget.kind === "goal"
-                                ? (budget.amount === undefined ? "Per-person targets" : "Per-person sub targets")
-                                : (budget.amount === undefined ? "Per-person limits" : "Per-person sub limits")}
-                        </Typography>
-                        <Stack spacing={1.25}>
-                            {budget.sub_budgets.map((sub) => (
-                                <Box key={sub._id}>
-                                    <ButtonBase
-                                        onClick={() => toggle(sub._id)}
-                                        aria-expanded={open === sub._id}
-                                        sx={{
-                                            width: "100%", display: "block", textAlign: "left",
-                                            minHeight: 44, borderRadius: 1,
-                                        }}
-                                    >
-                                        <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ minWidth: 0 }}>
-                                            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                                                <BudgetLimitLine
-                                                    label={(
-                                                        <BudgetTarget
-                                                            personId={sub.person_id}
-                                                            personName={sub.person_name}
-                                                            members={members}
-                                                        />
-                                                    )}
-                                                    amount={sub.amount}
-                                                    spent={sub.spent}
-                                                    percent={sub.percent}
-                                                    over={sub.over}
-                                                    kind={budget.kind}
-                                                    currency={currency}
-                                                    color={memberColor(sub.person_id, members)}
-                                                    height={6}
-                                                    pace={pace.elapsed}
-                                                    itemCount={sub.item_count}
-                                                    barLabel={`${sub.person_name}: ${formatCurrency(sub.spent, currency)
-                                                        } of ${formatCurrency(sub.amount, currency)}, ${sub.percent}% of their ${limitNoun(budget.kind)}`}
-                                                />
-                                            </Box>
-                                            <ExpandMoreIcon
-                                                fontSize="small"
-                                                sx={{
-                                                    color: "text.disabled", flexShrink: 0, mt: 0.25,
-                                                    transform: open === sub._id ? "rotate(180deg)" : "none",
-                                                    transition: "transform 150ms",
-                                                }}
+            {showWholePeriod && periodAmount !== undefined && (
+                <>
+                    <Divider sx={{ my: 0.25, ml: 0.5 }} />
+                    <ButtonBase
+                        onClick={() => setOpen((v) => !v)}
+                        aria-expanded={open}
+                        sx={{
+                            width: "100%", display: "block", textAlign: "left",
+                            minHeight: 44, borderRadius: 1,
+                        }}
+                    >
+                        <BudgetLimitLine
+                            label={(
+                                <Typography variant="caption" color="text.secondary">
+                                    {capitalize(periodWord(budget.period))}
+                                </Typography>
+                            )}
+                            amount={periodAmount}
+                            spent={periodSpent}
+                            percent={periodPercent}
+                            over={periodOver}
+                            kind={budget.kind}
+                            currency={currency}
+                            color={color}
+                            height={6}
+                            itemCount={budget.period_item_count}
+                            barLabel={`${capitalize(periodWord(budget.period))}: ${formatCurrency(periodSpent, currency)
+                                } of ${formatCurrency(periodAmount, currency)}, ${periodPercent}% of the ${limitNoun(budget.kind)}`}
+                        />
+                    </ButtonBase>
+                    <Collapse in={open} unmountOnExit>
+                        {detailsFor(null, "whole")}
+                    </Collapse>
+                </>
+            )}
+
+            {budget.sub_budgets.length > 0 && (
+                <Box sx={{ ...cardSx, mt: 1.5, p: 1.25 }}>
+                    <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
+                        {budget.kind === "goal"
+                            ? (budget.amount === undefined ? "Per-person targets" : "Per-person sub targets")
+                            : (budget.amount === undefined ? "Per-person limits" : "Per-person sub limits")}
+                    </Typography>
+                    <Stack spacing={1.25}>
+                        {budget.sub_budgets.map((sub) => (
+                            <Box key={sub._id}>
+                                <ButtonBase
+                                    onClick={(e) => { e.stopPropagation(); setOpenSub((c) => (c === sub._id ? null : sub._id)); }}
+                                    aria-expanded={openSub === sub._id}
+                                    sx={{
+                                        width: "100%", display: "block", textAlign: "left",
+                                        minHeight: 44, borderRadius: 1,
+                                    }}
+                                >
+                                    <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ minWidth: 0 }}>
+                                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                                            <BudgetLimitLine
+                                                label={(
+                                                    <BudgetTarget
+                                                        personId={sub.person_id}
+                                                        personName={sub.person_name}
+                                                        members={members}
+                                                    />
+                                                )}
+                                                amount={sub.amount}
+                                                spent={sub.spent}
+                                                percent={sub.percent}
+                                                over={sub.over}
+                                                kind={budget.kind}
+                                                currency={currency}
+                                                color={memberColor(sub.person_id, members)}
+                                                height={6}
+                                                pace={pace.elapsed}
+                                                itemCount={sub.item_count}
+                                                barLabel={`${sub.person_name}: ${formatCurrency(sub.spent, currency)
+                                                    } of ${formatCurrency(sub.amount, currency)}, ${sub.percent}% of their ${limitNoun(budget.kind)}`}
                                             />
-                                        </Stack>
-                                    </ButtonBase>
-                                    <Collapse in={open === sub._id} unmountOnExit>
-                                        {detailsFor(sub)}
-                                    </Collapse>
-                                </Box>
-                            ))}
-                        </Stack>
-                    </Box>
-                )}
-            </Collapse>
-
-            <Collapse in={showOverallDetails} unmountOnExit>
-                <BudgetBreakdown budget={budget} currency={currency} members={members} />
-            </Collapse>
-
-            <Collapse in={showActions}>
-                {onViewItems && (
-                    <Stack direction="row" justifyContent="flex-end" spacing={0.5} sx={{ pt: 1 }}>
-                        <Tooltip title="View items">
-                            <IconButton size="small" aria-label="View items" onClick={() => onViewItems(budget)}>
-                                <ReceiptLongIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
+                                        </Box>
+                                        {chevron(openSub === sub._id)}
+                                    </Stack>
+                                </ButtonBase>
+                                <Collapse in={openSub === sub._id} unmountOnExit>
+                                    {detailsFor(sub)}
+                                </Collapse>
+                            </Box>
+                        ))}
                     </Stack>
-                )}
-            </Collapse>
+                </Box>
+            )}
+
+            {open && onViewItems && (
+                <Stack direction="row" justifyContent="flex-end" spacing={0.5} sx={{ pt: 1 }}>
+                    <Tooltip title="View items">
+                        <IconButton
+                            size="small"
+                            aria-label="View items"
+                            onClick={(e) => { e.stopPropagation(); onViewItems(budget); }}
+                        >
+                            <ReceiptLongIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                </Stack>
+            )}
         </Card>
     );
 }
