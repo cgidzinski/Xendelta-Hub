@@ -13,6 +13,7 @@ import type {
 } from "../../../../hooks/xenbudget/types";
 import { useXenBudgetItemImageUrls } from "../../../../hooks/xenbudget/useItems";
 import { formatCurrency } from "../currency";
+import { formatDateOnly } from "../../../../utils/dateGrouping";
 import { CategoryChip, FlagChip } from "./LabelChip";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 
@@ -85,9 +86,7 @@ export default function ItemPreviewModal({ open, onClose, book, item, onEdit, on
                                     {item.description}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                                    {isIncome ? "Income" : "Expense"} · {new Date(item.date).toLocaleDateString(undefined, {
-                                        year: "numeric", month: "short", day: "numeric",
-                                    })}
+                                    {isIncome ? "Income" : "Expense"} · {formatDateOnly(item.date, { year: "numeric", month: "short", day: "numeric" })}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                                     {provenance}

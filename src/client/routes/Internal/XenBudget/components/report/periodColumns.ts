@@ -1,7 +1,3 @@
-import {
-    addDays, addMonths, addWeeks, setISOWeek, startOfISOWeek, startOfMonth,
-} from "date-fns";
-
 /**
  * Column headings for the report grid.
  *
@@ -75,22 +71,25 @@ export function periodColumnLabels(periodKeys: string[]): string[] {
 export function periodKeyRange(key: string): { from: Date; to: Date } | null {
     const week = /^(\d{4})-W(\d{2})$/.exec(key);
     if (week) {
-        // January 4th is always in ISO week 1, so it is a safe anchor to count from.
-        const anchor = new Date(Number(week[1]), 0, 4);
-        const from = startOfISOWeek(setISOWeek(anchor, Number(week[2])));
-        return { from, to: addWeeks(from, 1) };
+        // ISO week 1 is the week containing January 4th; step back from Jan 4 to its
+        // Monday, then forward (week - 1) weeks. All in UTC, matching the period keys
+        // the server's $dateToString produces.
+        const year = Number(week[1]);
+        const jan4 = new Date(Date.UTC(year, 0, 4));
+        const from = new Date(Date.UTC(year, 0, 4 - ((jan4.getUTCDay() + 6) % 7) + (Number(week[2]) - 1) * 7));
+        return { from, to: new Date(from.getTime() + 7 * 86400000) };
     }
 
     const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
     if (day) {
-        const from = new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]));
-        return { from, to: addDays(from, 1) };
+        const from = new Date(Date.UTC(Number(day[1]), Number(day[2]) - 1, Number(day[3])));
+        return { from, to: new Date(from.getTime() + 86400000) };
     }
 
     const month = /^(\d{4})-(\d{2})$/.exec(key);
     if (month) {
-        const from = startOfMonth(new Date(Number(month[1]), Number(month[2]) - 1, 1));
-        return { from, to: addMonths(from, 1) };
+        const from = new Date(Date.UTC(Number(month[1]), Number(month[2]) - 1, 1));
+        return { from, to: new Date(Date.UTC(Number(month[1]), Number(month[2]), 1)) };
     }
 
     return null;

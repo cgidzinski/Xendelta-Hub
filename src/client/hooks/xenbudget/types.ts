@@ -99,7 +99,6 @@ export interface XenBudgetBook {
     _id: string;
     name: string;
     default_currency: string;
-    timezone: string;
     created_by: string;
     /** True when the caller owns the book — gates member management and deletion. */
     is_creator: boolean;
@@ -179,14 +178,12 @@ export interface CreateBookInput {
     name: string;
     memberIds?: string[];
     default_currency?: string;
-    timezone?: string;
 }
 
 export interface UpdateBookInput {
     name?: string;
     default_currency?: string;
     archived?: boolean;
-    timezone?: string;
 }
 
 export interface CreateItemInput {
@@ -227,6 +224,10 @@ export interface RuleActions {
     remove_flags: string[];
     set_type: "expense" | "income" | null;
     set_people: string[];
+    /** How set_people divides each item's attribution. Omitted = even split. */
+    people_split_type?: "equal" | "percent";
+    /** Per-person percentages when people_split_type is "percent". */
+    set_people_weights?: { user_id: string; percentage?: number }[];
     set_description?: string;
     /** Never store matching rows (import); a re-apply sweep degrades this to "Off budget". */
     skip: boolean;
@@ -370,7 +371,6 @@ export interface BudgetStatus {
 export interface BudgetStatusResponse {
     as_of: string;
     currency: string;
-    timezone: string;
     budgets: BudgetStatus[];
 }
 
@@ -425,7 +425,6 @@ export interface XenBudgetSummary {
     from: string;
     to: string;
     group_by: "day" | "week" | "month";
-    timezone: string;
     /** Summaries are scoped to one currency — amounts in different ones can't be added. */
     currency: string;
     /** Every currency present in the book, so the UI can offer a switcher. */

@@ -15,6 +15,7 @@ export const SETTINGS_SECTIONS = [
     { path: "flags", label: "Flags" },
     { path: "tagging", label: "Tagging" },
     { path: "budgets", label: "Budgets" },
+    { path: "csv-maps", label: "CSV Maps" },
     { path: "imports", label: "Imports" },
 ] as const;
 

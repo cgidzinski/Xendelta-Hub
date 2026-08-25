@@ -94,6 +94,7 @@ import XenBudgetCategoriesSection from "./routes/Internal/XenBudget/settings/Cat
 import XenBudgetFlagsSection from "./routes/Internal/XenBudget/settings/FlagsSection";
 import XenBudgetTaggingSection from "./routes/Internal/XenBudget/settings/TaggingSection";
 import XenBudgetBudgetsSection from "./routes/Internal/XenBudget/settings/BudgetsSection";
+import XenBudgetCsvMapsSection from "./routes/Internal/XenBudget/settings/CsvMapsSection";
 import XenBudgetImportsSection from "./routes/Internal/XenBudget/settings/ImportsSection";
 // Routes - Admin
 import Admin from "./routes/Admin/Admin";
@@ -248,6 +249,7 @@ const router = createBrowserRouter(
               <Route path="flags" element={<XenBudgetFlagsSection />} />
               <Route path="tagging" element={<XenBudgetTaggingSection />} />
               <Route path="budgets" element={<XenBudgetBudgetsSection />} />
+              <Route path="csv-maps" element={<XenBudgetCsvMapsSection />} />
               <Route path="imports" element={<XenBudgetImportsSection />} />
               {/* Old section paths, so a tab or bookmark open mid-development doesn't land on
                   nothing. Safe to drop once this ships. */}

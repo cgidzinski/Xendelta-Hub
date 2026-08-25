@@ -127,6 +127,8 @@ export default function RuleForm({
     // How the rule attributes items: inherit (leave as-is, e.g. whoever imported) or a
     // hand-picked set of members.
     const [peopleMode, setPeopleMode] = useState<"inherit" | "custom">("inherit");
+    // How the chosen people divide each item's attribution (even or percentage).
+    const [peopleSplitType, setPeopleSplitType] = useState<ShareType>("equal");
     const [stopOnMatch, setStopOnMatch] = useState(false);
     const [enabled, setEnabled] = useState(true);
     // Once the user types in the name themselves, stop auto-generating it.
@@ -168,8 +170,12 @@ export default function RuleForm({
             setSetType(rule.actions.set_type || "");
             setSetDescription(rule.actions.set_description || "");
             setSkip(!!rule.actions.skip);
-            setPeople((rule.actions.set_people || []).map((id) => ({ key: id, value: "" })));
+            setPeople((rule.actions.set_people || []).map((id) => {
+                const weight = (rule.actions.set_people_weights || []).find((w) => w.user_id === id);
+                return { key: id, value: weight?.percentage !== undefined ? String(weight.percentage) : "" };
+            }));
             setPeopleMode((rule.actions.set_people || []).length > 0 ? "custom" : "inherit");
+            setPeopleSplitType(rule.actions.people_split_type === "percent" ? "percent" : "equal");
             setStopOnMatch(!!rule.stop_on_match);
             setEnabled(rule.enabled !== false);
         } else {
@@ -187,6 +193,7 @@ export default function RuleForm({
             setSkip(false);
             setPeople([]);
             setPeopleMode("inherit");
+            setPeopleSplitType("equal");
             setStopOnMatch(false);
             setEnabled(true);
         }
@@ -195,8 +202,10 @@ export default function RuleForm({
     // Auto-generate the name from the conditions while it hasn't been manually edited.
     useEffect(() => {
         if (!open || nameTouched) return;
+        // Editing a saved rule keeps its saved name — only fresh rules auto-generate.
+        if (rule && "_id" in rule) return;
         setName(generateRuleName(allConditions));
-    }, [open, nameTouched, allConditions]);
+    }, [open, nameTouched, rule, allConditions]);
 
     const updateCondition = (index: number, patch: Partial<XenBudgetRuleCondition>) => {
         setConditions((prev) => prev.map((c, i) => {
@@ -232,6 +241,12 @@ export default function RuleForm({
                 : [],
             add_flags: addFlags,
             set_people: peopleMode === "inherit" ? [] : people.map((p) => p.key),
+            people_split_type: peopleMode === "custom" && people.length >= 2 && peopleSplitType === "percent"
+                ? "percent"
+                : "equal",
+            set_people_weights: peopleMode === "custom" && people.length >= 2 && peopleSplitType === "percent"
+                ? people.map((p) => ({ user_id: p.key, percentage: parseFloat(p.value) || 0 }))
+                : [],
             set_type: setType || null,
             set_description: setDescription.trim() || undefined,
             skip,
@@ -418,7 +433,7 @@ export default function RuleForm({
                                             onChange={() => { setPeopleMode("inherit"); setPeople([]); }}
                                         />
                                     }
-                                    label="Inherit (initial person who imported)"
+                                    label="Inherit"
                                 />
                                 <FormControlLabel
                                     control={
@@ -434,13 +449,13 @@ export default function RuleForm({
                             {peopleMode === "custom" && (
                                 <WeightedSplitEditor
                                     mode={{ kind: "people", members: book.members }}
-                                    splitType="equal"
-                                    onSplitTypeChange={() => { /* a rule attributes evenly */ }}
+                                    splitType={peopleSplitType}
+                                    onSplitTypeChange={setPeopleSplitType}
                                     selected={people}
                                     onSelectedChange={setPeople}
                                     amount={0}
                                     currency={book.default_currency}
-                                    amountless
+                                    noAmount
                                 />
                             )}
                         </Box>

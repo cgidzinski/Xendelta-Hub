@@ -51,7 +51,7 @@ export default function BookSettings() {
         <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", p: 2 }}>
             <Box sx={{ display: "flex", flexDirection: isWide ? "row" : "column", gap: isWide ? 2 : 0, flex: 1, minHeight: 0 }}>
                 {sectionTabs}
-                <Box sx={{ flexGrow: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
+                <Box sx={{ flexGrow: 1, minWidth: 0, minHeight: 0, overflowY: "auto", pr: { xs: 0, sm: 3.5 } }}>
                     <Outlet context={ctx} />
                 </Box>
             </Box>

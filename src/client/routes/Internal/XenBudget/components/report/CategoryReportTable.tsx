@@ -13,7 +13,7 @@ import { EXPENSE_COLOR, INCOME_COLOR } from "../../../../../components/ui/chartC
 interface CategoryReportTableProps {
     report: CategoryReport;
     money: (v: number) => string;
-    /** Whole units, no cents - the grid has too many columns to spend width on decimals. */
+    /** Currency with cents shown only when the value has them - keeps the grid readable. */
     round: (v: number) => string;
     categoryRegistry: XenBudgetLabel[];
     /** Human-readable range, e.g. "2026" or "Aug 1 - Aug 31". */
@@ -92,9 +92,11 @@ export default function CategoryReportTable({
                     </TableCell>
                 );
             })}
-            <TableCell align="right" sx={{ color: "text.secondary" }}>
-                {pivoted ? round(avg(row.spent)) : money(avg(row.spent))}
-            </TableCell>
+            {pivoted && (
+                <TableCell align="right" sx={{ color: "text.secondary" }}>
+                    {round(avg(row.spent))}
+                </TableCell>
+            )}
             <TableCell align="right" sx={{ fontWeight: pivoted ? 600 : 400 }}>
                 {pivoted ? round(row.spent) : money(row.spent)}
             </TableCell>
@@ -109,7 +111,7 @@ export default function CategoryReportTable({
         </TableRow>
     );
 
-    const columnCount = 1 + periodKeys.length + 2 + (hasBudgets ? 2 : 0);
+    const columnCount = 1 + periodKeys.length + (pivoted ? 2 : 1) + (hasBudgets ? 2 : 0);
 
     /** One summary line across every column, grouped under a section heading. */
     const totalRow = (
@@ -147,9 +149,11 @@ export default function CategoryReportTable({
                         </TableCell>
                     );
                 })}
-                <TableCell align="right" sx={{ color: tint(totals.total) }}>
-                    {show(avg(totals.total))}
-                </TableCell>
+                {pivoted && (
+                    <TableCell align="right" sx={{ color: tint(totals.total) }}>
+                        {show(avg(totals.total))}
+                    </TableCell>
+                )}
                 <TableCell
                     align="right"
                     sx={{
@@ -204,7 +208,7 @@ export default function CategoryReportTable({
                 {hasBudgets
                     ? `Budgets scaled to ${rangeLabel} — a monthly cap counts once per month covered.`
                     : `Spending across ${rangeLabel}.`}
-                {pivoted && " Figures rounded to whole amounts."}
+                {pivoted && " Decimals shown where present."}
             </Typography>
 
             {/* Wide content scrolls inside its own box rather than pushing the page sideways. */}
@@ -225,7 +229,7 @@ export default function CategoryReportTable({
                                     {label}
                                 </TableCell>
                             ))}
-                            <TableCell align="right">Average</TableCell>
+                            {pivoted && <TableCell align="right">Average</TableCell>}
                             <TableCell align="right">{pivoted ? "Total" : "Spent"}</TableCell>
                             {hasBudgets && <TableCell align="right">Budgeted</TableCell>}
                             {hasBudgets && <TableCell align="right">{hasGoals ? "Left / to go" : "Left"}</TableCell>}

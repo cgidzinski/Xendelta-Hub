@@ -40,8 +40,6 @@ export function isSystemFlag(name: string): boolean {
 export const STARTER_CATEGORIES: { name: string; color: string }[] = [
   { name: "Groceries", color: "#199e70" },
   { name: "Rent", color: "#3987e5" },
-  { name: "Dining", color: "#c98500" },
-  { name: "Utilities", color: "#9085e9" },
   { name: "Health", color: "#d55181" },
   { name: "Entertainment", color: "#e66767" },
   { name: "Alcohol", color: "#ef4444" },

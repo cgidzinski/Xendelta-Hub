@@ -6,8 +6,8 @@ const ALICE = "alice-id";
 
 // One calendar month, so a monthly cap scales to exactly its own amount and the
 // assertions below stay readable.
-const FROM = new Date(2026, 7, 1);
-const TO = new Date(2026, 8, 1);
+const FROM = new Date(Date.UTC(2026, 7, 1));
+const TO = new Date(Date.UTC(2026, 8, 1));
 
 function budget(patch: Partial<BudgetStatus> = {}): BudgetStatus {
     return {
@@ -124,7 +124,7 @@ describe("buildCategoryReport", () => {
         // A full year of an $800 monthly cap.
         const { rows, totalCapped } = buildCategoryReport({
             ...base, budgets: [budget()],
-            rangeFrom: new Date(2026, 0, 1), rangeTo: new Date(2027, 0, 1),
+            rangeFrom: new Date(Date.UTC(2026, 0, 1)), rangeTo: new Date(Date.UTC(2027, 0, 1)),
         });
         expect(rows.find((r) => r.label === "Groceries")?.budgeted).toBeCloseTo(9600, 6);
         expect(totalCapped).toBeCloseTo(9600, 6);
@@ -173,8 +173,8 @@ describe("period columns", () => {
             { category: "Groceries", key: "2026-02", total: 320 },
             { category: "Dining", key: "2026-02", total: 240 },
         ],
-        rangeFrom: new Date(2026, 0, 1),
-        rangeTo: new Date(2027, 0, 1),
+        rangeFrom: new Date(Date.UTC(2026, 0, 1)),
+        rangeTo: new Date(Date.UTC(2027, 0, 1)),
     };
 
     it("hands back the columns to render when the range has a few buckets", () => {
@@ -253,8 +253,8 @@ describe("summary rows", () => {
             { category: "Groceries", key: "2026-02", total: 300 },
             { category: "Groceries", key: "2026-03", total: 120 },
         ],
-        rangeFrom: new Date(2026, 0, 1),
-        rangeTo: new Date(2026, 3, 1),
+        rangeFrom: new Date(Date.UTC(2026, 0, 1)),
+        rangeTo: new Date(Date.UTC(2026, 3, 1)),
     };
 
     it("carries spend, income and net for every column", () => {
@@ -296,7 +296,7 @@ describe("summary rows", () => {
         // the columns overshooting the total.
         const partial = {
             ...quarter,
-            rangeTo: new Date(2026, 2, 16),
+            rangeTo: new Date(Date.UTC(2026, 2, 16)),
             byPeriod: [
                 period("2026-01", 900, 4000),
                 period("2026-02", 700, 4000),
@@ -311,8 +311,8 @@ describe("summary rows", () => {
         // The part of March the range covers, as a fraction of the whole month. Measured
         // in real elapsed time like the production code, so it stays true across the DST
         // switch inside March rather than assuming a fixed 31-day month.
-        const marchStart = new Date(2026, 2, 1);
-        const aprilStart = new Date(2026, 3, 1);
+        const marchStart = new Date(Date.UTC(2026, 2, 1));
+        const aprilStart = new Date(Date.UTC(2026, 3, 1));
         const marchFraction = (partial.rangeTo.getTime() - marchStart.getTime())
             / (aprilStart.getTime() - marchStart.getTime());
         expect(summary.capped.byPeriod["2026-03"]).toBeCloseTo(800 * marchFraction, 6);
@@ -434,8 +434,8 @@ describe("savings goals", () => {
             { category: "Savings", key: "2026-02", total: 300 },
             { category: "Savings", key: "2026-03", total: 300 },
         ],
-        rangeFrom: new Date(2026, 0, 1),
-        rangeTo: new Date(2026, 3, 1),
+        rangeFrom: new Date(Date.UTC(2026, 0, 1)),
+        rangeTo: new Date(Date.UTC(2026, 3, 1)),
     };
 
     const goal = (patch = {}) =>

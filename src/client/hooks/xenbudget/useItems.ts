@@ -13,7 +13,7 @@ export interface ItemFilters {
     need_want?: "need" | "want";
     /** Items with no category at all — the worklist an import leaves behind. */
     uncategorised?: boolean;
-    /** Review mode's queue: uncategorised OR flagged "Needs review", minus "Ignored". */
+    /** Review mode's queue: uncategorised only, minus "Ignored" and "Needs review". */
     review?: boolean;
     /** hidden (default, matches the totals) | only | all */
     excluded?: "hidden" | "only" | "all";

@@ -19,6 +19,7 @@ import type {
 } from "../../../../hooks/xenbudget/types";
 import WeightedSplitEditor, { type SplitDraft } from "./WeightedSplitEditor";
 import { getCurrencySymbol } from "../currency";
+import { dateOnlyToLocal } from "../../../../utils/dateGrouping";
 import { sanitizeAmount } from "../../../../utils/currencyUtils";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { EXPENSE_COLOR, INCOME_COLOR } from "../../../../components/ui/chartColors";
@@ -27,8 +28,8 @@ const STEPS = ["Details", "Images", "More"] as const;
 
 const MAX_IMAGES = 10;
 
-/** The picked day as a date-only ISO (UTC midnight) — the wire value the server anchors
- *  to the book's timezone. */
+/** The picked day as a date-only ISO (UTC midnight) — the wire value the server stores
+ *  as-is; item dates have no timezone. */
 function dateOnlyIso(d: Date): string {
     return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString();
 }
@@ -85,7 +86,7 @@ export default function ItemForm({
             setType(item.type);
             setAmount(String(item.amount));
             setCurrency(item.currency);
-            setDate(new Date(item.date));
+            setDate(dateOnlyToLocal(item.date));
             setDescription(item.description);
             setNotes(item.notes || "");
             setFlags(item.flags || []);

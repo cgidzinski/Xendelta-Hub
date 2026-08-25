@@ -99,6 +99,13 @@ var ruleActionsSchema = new Schema({
   remove_flags: { type: [String], default: [] },
   set_type: { type: String, enum: ["expense", "income", null], default: null },
   set_people: { type: [String], default: [] },
+  // How set_people divides each item's attribution. Omitted = even split.
+  people_split_type: { type: String, enum: ["equal", "percent"], default: "equal" },
+  // Per-person percentages when people_split_type is "percent".
+  set_people_weights: [{
+    user_id: { type: String },
+    percentage: { type: Number },
+  }],
   set_description: { type: String, maxlength: 500 },
   // Skip matching rows entirely at import; a re-apply sweep degrades this to "Off budget"
   // rather than deleting an existing item.
@@ -162,10 +169,6 @@ var importBatchSchema = new Schema({
 
 var bookSchema = new Schema({
   name: { type: String, required: true, maxlength: 100 },
-  // Every saved date is anchored to this timezone, so a calendar day means the same
-  // instant no matter whose browser saves it. How months/dates *display* still follows
-  // whoever is looking (requestTimezone() in routes/xenbudget.ts).
-  timezone: { type: String, default: "UTC" },
   default_currency: { type: String, default: "CAD" },
   // The owner / main admin: the only one who may add or remove members, transfer the
   // book, delete it, or restore over it. Every other member can do everything else.

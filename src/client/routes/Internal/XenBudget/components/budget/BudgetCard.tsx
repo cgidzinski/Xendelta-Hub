@@ -4,7 +4,6 @@ import {
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-import EditIcon from "@mui/icons-material/Edit";
 import PublicIcon from "@mui/icons-material/Public";
 import PersonIcon from "@mui/icons-material/Person";
 import type {
@@ -43,7 +42,6 @@ interface BudgetCardProps {
      */
     periodLabel?: string;
     onViewItems?: (budget: BudgetStatus) => void;
-    onEdit?: (budget: BudgetStatus) => void;
 }
 
 /**
@@ -60,7 +58,7 @@ interface BudgetCardProps {
  */
 export default function BudgetCard({
     budget, currency, categoryRegistry, members, asOf, variant = "full", periodLabel,
-    onViewItems, onEdit,
+    onViewItems,
 }: BudgetCardProps) {
     // Which limit's details are open, if any: "overall" or a sub-budget id. Only one at a
     // time, so an expanded card stays short enough to read without scrolling past it.
@@ -247,22 +245,13 @@ export default function BudgetCard({
             </Collapse>
 
             <Collapse in={showActions}>
-                {(onViewItems || onEdit) && (
+                {onViewItems && (
                     <Stack direction="row" justifyContent="flex-end" spacing={0.5} sx={{ pt: 1 }}>
-                        {onViewItems && (
-                            <Tooltip title="View items">
-                                <IconButton size="small" aria-label="View items" onClick={() => onViewItems(budget)}>
-                                    <ReceiptLongIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        )}
-                        {onEdit && (
-                            <Tooltip title="Edit budget">
-                                <IconButton size="small" aria-label="Edit budget" onClick={() => onEdit(budget)}>
-                                    <EditIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        )}
+                        <Tooltip title="View items">
+                            <IconButton size="small" aria-label="View items" onClick={() => onViewItems(budget)}>
+                                <ReceiptLongIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
                     </Stack>
                 )}
             </Collapse>

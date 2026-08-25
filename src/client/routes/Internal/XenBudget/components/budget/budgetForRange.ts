@@ -1,7 +1,3 @@
-import {
-    addMonths, addQuarters, addWeeks, addYears,
-    startOfMonth, startOfQuarter, startOfWeek, startOfYear,
-} from "date-fns";
 import type { BudgetPeriod } from "../../../../../hooks/xenbudget/types";
 
 /**
@@ -12,23 +8,58 @@ import type { BudgetPeriod } from "../../../../../hooks/xenbudget/types";
  * does: every period the range touches contributes its amount in proportion to how much
  * of it the range actually covers. Twelve whole months of an $800 monthly cap come to
  * exactly $9,600, and a half-month tail adds $400 rather than a whole month's worth.
- *
- * Boundaries follow the calendar in the viewer's own timezone, matching the server's
- * budgetPeriodRange - the same reason the budget queries send a tz.
  */
 
 /** A weekly budget over a decade is ~520 steps; this only catches a non-advancing period. */
 const MAX_PERIODS = 5000;
+
+// Period boundaries are computed in UTC here, matching the server (which keys item dates
+// and budget windows on UTC days) and resolvePeriod's own UTC-midnight range boundaries.
+// date-fns' startOfMonth & friends run in the viewer's local zone, so mixing them with a
+// UTC range splits a whole month across two "months" of different lengths and prices the
+// few spill hours at the neighbouring month's daily rate - a $50 cap then reads $49.99.
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Monday of the UTC day `d` falls in, matching the server's ISO-week convention. */
+function utcStartOfWeek(d: Date): Date {
+    const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+    return date;
+}
+
+function utcStartOfMonth(d: Date): Date {
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+}
+
+function utcStartOfQuarter(d: Date): Date {
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - (d.getUTCMonth() % 3), 1));
+}
+
+function utcStartOfYear(d: Date): Date {
+    return new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+}
+
+function utcAddWeeks(d: Date, n: number): Date {
+    return new Date(d.getTime() + n * 7 * DAY_MS);
+}
+
+function utcAddMonths(d: Date, n: number): Date {
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
+}
+
+function utcAddYears(d: Date, n: number): Date {
+    return new Date(Date.UTC(d.getUTCFullYear() + n, 0, 1));
+}
 
 const STEPS: Record<Exclude<BudgetPeriod, "custom">, {
     start: (d: Date) => Date;
     next: (d: Date) => Date;
 }> = {
     // Monday-to-Monday, matching the server's ISO-week convention.
-    weekly: { start: (d) => startOfWeek(d, { weekStartsOn: 1 }), next: (d) => addWeeks(d, 1) },
-    monthly: { start: startOfMonth, next: (d) => addMonths(d, 1) },
-    quarterly: { start: startOfQuarter, next: (d) => addQuarters(d, 1) },
-    yearly: { start: startOfYear, next: (d) => addYears(d, 1) },
+    weekly: { start: utcStartOfWeek, next: (d) => utcAddWeeks(d, 1) },
+    monthly: { start: utcStartOfMonth, next: (d) => utcAddMonths(d, 1) },
+    quarterly: { start: utcStartOfQuarter, next: (d) => utcAddMonths(d, 3) },
+    yearly: { start: utcStartOfYear, next: (d) => utcAddYears(d, 1) },
 };
 
 function overlapMs(aFrom: Date, aTo: Date, bFrom: Date, bTo: Date): number {

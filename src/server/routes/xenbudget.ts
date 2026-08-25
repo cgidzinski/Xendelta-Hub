@@ -48,7 +48,6 @@ import { generateUniqueFilename } from "../utils/mediaUtils";
 import {
   applyRules, ruleMatches, stripRuleEffects, type DraftItem, type Rule,
 } from "../utils/xenBudgetRules";
-import { tzMonthKey, zonedWallToUtc } from "../utils/statsRange";
 import { serializeBookFor, serializeBooksFor, serializeItem, serializeItems } from "../utils/xenBudgetSerializer";
 import { notify } from "../utils/notificationUtils";
 const mongoose = require("mongoose");
@@ -58,24 +57,6 @@ const MAX_ITEMS_PAGE = 200;
 // exists so a malformed or hostile request can't ask the server to build an unbounded
 // number of documents in memory.
 const MAX_BULK_ROWS = 2000;
-
-/**
- * The timezone to bucket this request's tallies in.
- *
- * Books deliberately have no timezone of their own: months follow whoever is looking,
- * resolved client-side from their profile or their browser and sent as ?tz=. An
- * unresolvable value falls back to UTC rather than throwing - a bad zone should not take
- * out the whole summary.
- */
-function requestTimezone(q: Record<string, string>): string {
-  if (!q.tz) return "UTC";
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: q.tz });
-    return q.tz;
-  } catch {
-    return "UTC";
-  }
-}
 
 function callerId(req: Request): string {
   return (req.user as any)._id.toString();
@@ -146,11 +127,12 @@ function baseItemMatch(bookId: any, q: Record<string, string>): Record<string, a
   const flagsFilter: Record<string, any> = {};
   if (q.flags) flagsFilter.$in = q.flags.split(",").filter(Boolean);
   // Review mode's queue: uncategorised only. Items flagged "Needs review" are surfaced
-  // separately as a quick filter rather than pulled into the queue. Something deliberately
-  // set aside doesn't belong back in the queue just because it's also uncategorised.
+  // separately as a quick filter rather than pulled into the queue, and something
+  // deliberately set aside doesn't belong back in the queue just because it's also
+  // uncategorised.
   if (q.review === "true") {
     filter.categories = { $size: 0 };
-    flagsFilter.$nin = [FLAG_IGNORED];
+    flagsFilter.$nin = [FLAG_IGNORED, FLAG_NEEDS_REVIEW];
   }
   if (q.excluded === "true") {
     flagsFilter.$in = [...(flagsFilter.$in || []), FLAG_OFF_BUDGET];
@@ -705,12 +687,36 @@ function buildShares(body: any, book: any): { share_type: string; shares: any[] 
   };
 }
 
+// Turns a rule's set_people action into stored shares, honouring a percentage split when
+// the rule asked for one (people_split_type "percent" + set_people_weights).
+function buildRuleShares(after: any, book: any): { share_type: string; shares: any[] } {
+  const people: string[] = after.people || [];
+  const splitType = after.people_split_type === "percent" ? "percent" : "equal";
+  const weights = after.people_weights || [];
+  return buildShares(
+    {
+      amount: after.amount,
+      share_type: splitType,
+      shares: people.map((p: string) => ({
+        user_id: p,
+        ...(splitType === "percent"
+          ? { percentage: weights.find((w: any) => w.user_id === p)?.percentage ?? 0 }
+          : {}),
+      })),
+    },
+    book,
+  );
+}
+
 // A rule that attributes items to someone who isn't in the book would silently produce
 // shares nobody can see, so the pairing is checked when the rule is saved.
 function validateRulePeople(body: any, book: any): string | null {
   const people: string[] = body?.actions?.set_people || [];
   for (const id of people) {
     if (!isMember(book, id)) return "A rule can only attribute items to members of the book";
+  }
+  for (const w of body?.actions?.set_people_weights || []) {
+    if (!isMember(book, w.user_id)) return "A rule can only attribute items to members of the book";
   }
   return null;
 }
@@ -736,6 +742,8 @@ function plainRules(book: any): Rule[] {
       remove_flags: r.actions?.remove_flags || [],
       set_type: r.actions?.set_type ?? null,
       set_people: r.actions?.set_people || [],
+      people_split_type: r.actions?.people_split_type,
+      set_people_weights: r.actions?.set_people_weights || [],
       set_description: r.actions?.set_description,
       skip: r.actions?.skip === true,
     },
@@ -782,14 +790,13 @@ function draftFromRow(row: any, book: any): DraftItem {
 }
 
 /**
- * The incoming item date is a date-only value anchored at UTC midnight ("2026-08-15").
- * Storage is anchored to the book's own timezone instead, so the same calendar day means
- * the same instant no matter whose browser saved it: convert the day to midnight in the
- * book's zone.
+ * The incoming item date is a date-only value ("2026-08-15"). It is stored as that
+ * calendar day anchored at UTC midnight — a transaction's date has no timezone, so it
+ * must never be shifted by the viewer's or the book's zone.
  */
-function bookDateToUtc(date: Date | string, timezone: string): Date {
+function bookDateToUtc(date: Date | string): Date {
   const day = new Date(date).toISOString().slice(0, 10);
-  return zonedWallToUtc(day, timezone || "UTC");
+  return new Date(`${day}T00:00:00.000Z`);
 }
 
 function sameNames(a: string[], b: string[]): boolean {
@@ -879,7 +886,7 @@ module.exports = function (app: any) {
   app.post("/api/xenbudget/books", validate(createXenBudgetBookSchema), async (req: Request, res: Response) => {
     try {
       const userId = callerId(req);
-      const { name, memberIds: requestedMemberIds, default_currency, timezone } = req.body;
+      const { name, memberIds: requestedMemberIds, default_currency } = req.body;
 
       const members: string[] = [userId];
       if (requestedMemberIds && requestedMemberIds.length > 0) {
@@ -894,7 +901,6 @@ module.exports = function (app: any) {
       const book = new XenBudgetBook({
         name,
         default_currency: default_currency || "CAD",
-        timezone: timezone || "UTC",
         created_by: userId,
         members,
         // Starter categories so budgets and imports have something to work with on day
@@ -953,17 +959,10 @@ module.exports = function (app: any) {
       try {
         const book = await loadBookForMember(req, res);
         if (!book) return;
-        const { name, default_currency, archived, timezone } = req.body;
+        const { name, default_currency, archived } = req.body;
         if (name !== undefined) book.name = name;
         if (default_currency !== undefined) book.default_currency = default_currency;
         if (archived !== undefined) book.archived = archived;
-        // Dates are anchored to the book's timezone, so only the owner may change it.
-        if (timezone !== undefined) {
-          if (book.created_by !== callerId(req)) {
-            return res.status(403).json({ status: false, message: "Only the book owner can change its timezone" });
-          }
-          book.timezone = timezone;
-        }
         await book.save();
         await book.populate("members", "username avatar");
         broadcastBook(book);
@@ -1315,10 +1314,7 @@ module.exports = function (app: any) {
             item.type = after.type;
             if (after.people && after.people.length > 0) {
               try {
-                const resolved = buildShares(
-                  { amount: item.amount, share_type: "equal", shares: after.people.map((p) => ({ user_id: p })) },
-                  book,
-                );
+                const resolved = buildRuleShares(after, book);
                 item.share_type = resolved.share_type;
                 item.shares = resolved.shares;
               } catch {
@@ -1482,7 +1478,6 @@ module.exports = function (app: any) {
         const book = new XenBudgetBook({
           name: payload.book.name,
           default_currency: payload.book.default_currency || "CAD",
-          timezone: payload.book.timezone || "UTC",
           created_by: userId,
           members,
           categories: stripIds(payload.book.categories),
@@ -1667,13 +1662,15 @@ module.exports = function (app: any) {
             // A rule's set_people wins, then the row's own, then the import's default
             // owners. Falling back to an even split across every member - what an empty
             // list would do - is rarely right for a personal card statement.
-            const people = (ruled.people && ruled.people.length > 0 && ruled.people)
-              || (row.people && row.people.length > 0 && row.people)
-              || defaultPeople;
-            shares = buildShares(
-              { amount: ruled.amount, share_type: "equal", shares: people.map((u: string) => ({ user_id: u })) },
-              book,
-            );
+            if (ruled.people && ruled.people.length > 0) {
+              shares = buildRuleShares(ruled, book);
+            } else {
+              const people = (row.people && row.people.length > 0 && row.people) || defaultPeople;
+              shares = buildShares(
+                { amount: ruled.amount, share_type: "equal", shares: people.map((u: string) => ({ user_id: u })) },
+                book,
+              );
+            }
           } catch (e: any) {
             failed.push({ index, reason: e.message });
             return;
@@ -1694,7 +1691,7 @@ module.exports = function (app: any) {
             type: ruled.type,
             amount: ruled.amount,
             currency: row.currency || book.default_currency,
-            date: bookDateToUtc(ruled.date, book.timezone),
+            date: bookDateToUtc(ruled.date),
             description: ruled.description,
             original_description: ruled.original_description || row.description,
             notes: ruled.notes,
@@ -1960,7 +1957,6 @@ module.exports = function (app: any) {
         // memberById below needs real User docs, not raw ObjectIds.
         await book.populate("members", "username avatar");
         const q = req.query as Record<string, string>;
-        const tz = requestTimezone(q);
         const asOf = q.as_of ? new Date(q.as_of) : new Date();
         const currency = q.currency || book.default_currency;
 
@@ -1969,7 +1965,7 @@ module.exports = function (app: any) {
           return res.json({
             status: true,
             message: "No budgets",
-            data: { as_of: asOf.toISOString(), currency, timezone: tz, budgets: [] },
+            data: { as_of: asOf.toISOString(), currency, budgets: [] },
           });
         }
 
@@ -1981,7 +1977,7 @@ module.exports = function (app: any) {
 
         const ranges = budgets.map((b: any) => (useRange
           ? { from: rangeFrom as Date, to: rangeTo as Date }
-          : budgetPeriodRange(b, asOf, tz)));
+          : budgetPeriodRange(b, asOf)));
         const unionFrom = new Date(Math.min(...ranges.map((r: any) => r.from.getTime())));
         const unionTo = new Date(Math.max(...ranges.map((r: any) => r.to.getTime())));
 
@@ -2068,7 +2064,6 @@ module.exports = function (app: any) {
           data: {
             as_of: asOf.toISOString(),
             currency,
-            timezone: tz,
             budgets: budgets.map((b: any, i: number) => {
               const row = results?.[`b${i}`]?.[0];
               const spent = roundMoney(row?.total || 0);
@@ -2142,7 +2137,6 @@ module.exports = function (app: any) {
         const book = await loadBookForMember(req, res);
         if (!book) return;
         const q = req.query as Record<string, string>;
-        const tz = requestTimezone(q);
         const people = q.people ? q.people.split(",").filter(Boolean) : null;
 
         // Amounts in different currencies can't be added together, so a summary is always
@@ -2157,9 +2151,9 @@ module.exports = function (app: any) {
         const groupBy = q.group_by === "day" ? "day" : q.group_by === "week" ? "week" : "month";
         const format = groupBy === "day" ? "%Y-%m-%d" : groupBy === "week" ? "%G-W%V" : "%Y-%m";
 
-        // Default window: the current month in the *viewer's* timezone.
+        // Default window: the current UTC month.
         const now = new Date();
-        const from = q.from ? new Date(q.from) : zonedWallToUtc(`${tzMonthKey(now, tz)}-01`, tz);
+        const from = q.from ? new Date(q.from) : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
         const to = q.to ? new Date(q.to) : now;
 
         const matchQuery: Record<string, string> = { ...q, currency, from: from.toISOString(), to: to.toISOString() };
@@ -2198,7 +2192,7 @@ module.exports = function (app: any) {
               byPeriod: [
                 {
                   $group: {
-                    _id: { $dateToString: { format, date: "$date", timezone: tz } },
+                    _id: { $dateToString: { format, date: "$date" } },
                     expense: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, amountField, 0] } },
                     income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, amountField, 0] } },
                     count: { $sum: 1 },
@@ -2240,7 +2234,7 @@ module.exports = function (app: any) {
                   $group: {
                     _id: {
                       category: "$categories.name",
-                      period: { $dateToString: { format, date: "$date", timezone: tz } },
+                      period: { $dateToString: { format, date: "$date" } },
                     },
                     total: { $sum: categoryTotalExpr },
                   },
@@ -2256,7 +2250,7 @@ module.exports = function (app: any) {
                 { $match: { $or: [{ categories: { $size: 0 } }, { categories: { $exists: false } }] } },
                 {
                   $group: {
-                    _id: { $dateToString: { format, date: "$date", timezone: tz } },
+                    _id: { $dateToString: { format, date: "$date" } },
                     total: { $sum: amountField },
                   },
                 },
@@ -2299,10 +2293,9 @@ module.exports = function (app: any) {
             from: from.toISOString(),
             to: to.toISOString(),
             group_by: groupBy,
-            timezone: tz,
             currency: currency ?? book.default_currency,
             currencies,
-            by_period: seedPeriods(from, to, groupBy, tz).map((key) => {
+            by_period: seedPeriods(from, to, groupBy).map((key) => {
               const row = byPeriodRaw.find((r: any) => r._id === key);
               const expense = roundMoney(row?.expense || 0);
               const income = roundMoney(row?.income || 0);
@@ -2450,15 +2443,15 @@ module.exports = function (app: any) {
         try {
           // A rule's set_people overrides what the form asked for.
           shares = ruled.people && ruled.people.length > 0
-            ? buildShares({ amount: ruled.amount, share_type: "equal", shares: ruled.people.map((u) => ({ user_id: u })) }, book)
+            ? buildRuleShares(ruled, book)
             : buildShares(body, book);
         } catch (e: any) {
           return res.status(400).json({ status: false, message: e.message });
         }
 
         const amount = ruled.amount;
-        // Anchor the picked day to the book's timezone.
-        const date = bookDateToUtc(ruled.date, book.timezone);
+        // Anchor the picked day as a date-only UTC value.
+        const date = bookDateToUtc(ruled.date);
         const item = new XenBudgetItem({
           book_id: book._id,
           type: ruled.type,
@@ -2505,7 +2498,7 @@ module.exports = function (app: any) {
         if (body.type !== undefined) item.type = body.type;
         if (body.amount !== undefined) item.amount = roundMoney(body.amount);
         if (body.currency !== undefined) item.currency = body.currency;
-        if (body.date !== undefined) item.date = bookDateToUtc(new Date(body.date), book.timezone);
+        if (body.date !== undefined) item.date = bookDateToUtc(new Date(body.date));
         if (body.description !== undefined) item.description = body.description;
         if (body.notes !== undefined) item.notes = body.notes;
         if (body.flags !== undefined) item.flags = body.flags;

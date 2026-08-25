@@ -31,7 +31,7 @@ import { formatCurrency } from "./currency";
 import { STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
 import { toCsv, downloadCsv } from "../../../utils/csvMapping";
 import {
-    EXPENSE_COLOR, EXPENSE_RED, INCOME_COLOR, MAGNITUDE_COLOR,
+    EXPENSE_RED, INCOME_COLOR, MAGNITUDE_COLOR,
 } from "../../../components/ui/chartColors";
 import { cardSx, sectionLabelSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
 
@@ -340,9 +340,13 @@ export default function BookReport() {
             currencyDisplay: "narrowSymbol", maximumFractionDigits: 0,
         }).format(v);
     };
+    // Category breakdown grid: cents only when the value actually has them, so whole
+    // amounts stay compact while a $12.50 row shows its $12.50.
     const round = (v: number) => new Intl.NumberFormat("en-US", {
         style: "currency", currency: summary.currency,
-        currencyDisplay: "narrowSymbol", maximumFractionDigits: 0,
+        currencyDisplay: "narrowSymbol",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
     }).format(v);
     const tooltipStyle = {
         contentStyle: { background: "#1a1a19", border: "1px solid #ffffff26", borderRadius: 8 },
@@ -351,7 +355,7 @@ export default function BookReport() {
 
     return (
         <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <Box sx={{ px: 2, pt: 2, flexShrink: 0 }}>
+            <Box sx={{ pl: 2, pr: { xs: 2, sm: 3.5 }, pt: 2, flexShrink: 0 }}>
                 {/* Two groups pinned apart, rather than relying on TimePeriodFilter's own
                 internal spacer - that only pushes its pill right when TimePeriodFilter
                 itself is stretched to fill the row, which it isn't here. */}
@@ -384,7 +388,7 @@ export default function BookReport() {
                 </Stack>
             </Box>
 
-            <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: 2, pb: 2 }}>
+            <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pl: 2, pr: { xs: 2, sm: 3.5 }, pb: 2 }}>
                 <Stack spacing={2}>
                     {/* The table IS the report - it leads the page, above the headline
                     strip and every chart, and stays put across both views. Like the
@@ -458,7 +462,7 @@ export default function BookReport() {
                                                 strokeWidth={2} strokeDasharray="5 4" dot={false}
                                             />
                                             <Line
-                                                type="monotone" dataKey="Spent" stroke={EXPENSE_COLOR}
+                                                type="monotone" dataKey="Spent" stroke={EXPENSE_RED}
                                                 strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }}
                                             />
                                         </LineChart>
@@ -485,7 +489,7 @@ export default function BookReport() {
                                             <Tooltip {...tooltipStyle} formatter={(v) => money(Number(v))} cursor={{ fill: "#ffffff0a" }} />
                                             <Legend />
                                             <Bar dataKey="Budgeted" fill={BUDGETED_COLOR} radius={[0, 4, 4, 0]} maxBarSize={14} />
-                                            <Bar dataKey="Spent" fill={EXPENSE_COLOR} radius={[0, 4, 4, 0]} maxBarSize={14} />
+                                            <Bar dataKey="Spent" fill={EXPENSE_RED} radius={[0, 4, 4, 0]} maxBarSize={14} />
                                         </BarChart>
                                     </ResponsiveContainer>
                                     <Typography variant="caption" color="text.secondary">

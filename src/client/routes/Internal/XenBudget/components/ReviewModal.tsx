@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import {
-    Avatar, AvatarGroup, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, Stack, Typography, alpha,
+    Avatar, AvatarGroup, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, Radio, Stack, Typography, alpha,
 } from "@mui/material";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import CloseIcon from "@mui/icons-material/Close";
@@ -8,8 +8,9 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useSnackbar } from "notistack";
-import { format } from "date-fns";
+import { formatDateOnly } from "../../../../utils/dateGrouping";
 import type { XenBudgetBook, XenBudgetItem, XenBudgetMember, UpdateItemInput, ShareType, RuleInput } from "../../../../hooks/xenbudget/types";
 import { useXenBudgetItemMutations, useXenBudgetItems } from "../../../../hooks/xenbudget/useItems";
 import { useXenBudgetRules } from "../../../../hooks/xenbudget/useRules";
@@ -46,7 +47,7 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
         open ? book._id : "",
         { review: true },
     );
-    const { updateItemAsync } = useXenBudgetItemMutations(book._id);
+    const { updateItemAsync, deleteItemAsync } = useXenBudgetItemMutations(book._id);
     const { createRuleAsync, isCreatingRule, reapplyAsync, isReapplying } = useXenBudgetRules(book._id);
 
     // The rule form, opened by "Setup Auto Tag" and prefilled from the item being reviewed.
@@ -58,6 +59,7 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
     const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set());
     const [index, setIndex] = useState(0);
     const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
     // Categories chosen for the current item. Pre-seeded with any the item already has,
     // so a "Needs review" item with a custom split shows its split rather than a blank.
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -67,6 +69,10 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
     const [splitType, setSplitType] = useState<ShareType>("equal");
     // Raw text per category, so a half-typed amount isn't clobbered mid-keystroke.
     const [categoryValues, setCategoryValues] = useState<Record<string, string>>({});
+    // Attribution: inherit (keep whoever imported it) or a hand-picked weighted split.
+    const [peopleMode, setPeopleMode] = useState<"inherit" | "custom">("inherit");
+    const [peopleShareType, setPeopleShareType] = useState<ShareType>("equal");
+    const [peopleDrafts, setPeopleDrafts] = useState<SplitDraft[]>([]);
 
     useEffect(() => {
         if (open) {
@@ -93,6 +99,14 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
                     : String(c.amount ?? ""),
             ]),
         ));
+        setPeopleMode("inherit");
+        setPeopleShareType(currentItem?.share_type ?? "equal");
+        setPeopleDrafts((currentItem?.shares ?? []).map((s) => ({
+            key: s.user_id,
+            value: currentItem?.share_type === "percent"
+                ? String(s.percentage ?? "")
+                : String(s.amount ?? ""),
+        })));
     }, [currentItem]);
 
     // Buffer ahead so advancing near the end of a page doesn't stall on a fetch.
@@ -110,6 +124,20 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
             enqueueSnackbar(e instanceof Error ? e.message : "Failed to save item", { variant: "error" });
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!currentItem || deleting) return;
+        setDeleting(true);
+        try {
+            await deleteItemAsync(currentItem._id);
+            setResolvedIds((prev) => new Set(prev).add(currentItem._id));
+            enqueueSnackbar("Item deleted", { variant: "success" });
+        } catch (e) {
+            enqueueSnackbar(e instanceof Error ? e.message : "Failed to delete item", { variant: "error" });
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -151,10 +179,26 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
         }
     };
 
+    // Switching the people split type re-seeds the fields, matching the categories above.
+    const handlePeopleSplitTypeChange = (t: ShareType) => {
+        setPeopleShareType(t);
+        if (!currentItem || peopleDrafts.length === 0) return;
+        if (t === "exact") {
+            const each = Math.round((currentItem.amount / peopleDrafts.length) * 100) / 100;
+            setPeopleDrafts((prev) => prev.map((p) => ({ ...p, value: String(each) })));
+        } else if (t === "percent") {
+            const each = Math.round((100 / peopleDrafts.length) * 100) / 100;
+            setPeopleDrafts((prev) => prev.map((p) => ({ ...p, value: String(each) })));
+        } else {
+            setPeopleDrafts((prev) => prev.map((p) => ({ ...p, value: "" })));
+        }
+    };
+
     const handleNext = () => {
         if (!currentItem || saving) return;
         const hasCategories = selectedCategories.length > 0;
-        if (!hasCategories && !needsReview) {
+        const hasAttribution = peopleMode === "custom" && peopleDrafts.length > 0;
+        if (!hasCategories && !needsReview && !hasAttribution) {
             // Nothing to save — behave like skip rather than blocking.
             setIndex((i) => i + 1);
             return;
@@ -183,6 +227,14 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
                     ...(splitType === "percent" ? { percentage: parseFloat(categoryValues[name] ?? "") || 0 } : {}),
                 }));
             }
+        }
+        if (hasAttribution) {
+            input.share_type = peopleShareType;
+            input.shares = peopleDrafts.map((p) => ({
+                user_id: p.key,
+                ...(peopleShareType === "exact" ? { amount: parseFloat(p.value) || 0 } : {}),
+                ...(peopleShareType === "percent" ? { percentage: parseFloat(p.value) || 0 } : {}),
+            }));
         }
         resolve(input);
     };
@@ -214,6 +266,25 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
             }
         }
 
+        // Carry the attribution over too. A rule attributes evenly unless a percentage
+        // split was chosen; an "exact" people split is converted to percentages, as the
+        // rule form only offers even/percent for people.
+        let people_split_type: "equal" | "percent" = "equal";
+        let set_people_weights: { user_id: string; percentage?: number }[] | undefined;
+        const set_people = peopleMode === "custom" ? peopleDrafts.map((p) => p.key) : [];
+        if (peopleMode === "custom" && peopleDrafts.length >= 2) {
+            if (peopleShareType === "percent") {
+                people_split_type = "percent";
+                set_people_weights = peopleDrafts.map((p) => ({ user_id: p.key, percentage: parseFloat(p.value) || 0 }));
+            } else if (peopleShareType === "exact" && currentItem && currentItem.amount > 0) {
+                people_split_type = "percent";
+                set_people_weights = peopleDrafts.map((p) => {
+                    const amount = parseFloat(p.value) || 0;
+                    return { user_id: p.key, percentage: Math.round((amount / currentItem.amount) * 10000) / 100 };
+                });
+            }
+        }
+
         setPrefill({
             name: text.slice(0, 100),
             match: { mode: "all", conditions: [{ field: "description", op: "contains", value: text }] },
@@ -221,6 +292,9 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
                 set_categories: categories,
                 category_split_type,
                 ...(set_category_weights ? { set_category_weights } : {}),
+                set_people,
+                people_split_type,
+                ...(set_people_weights ? { set_people_weights } : {}),
             },
         });
         setRuleFormOpen(true);
@@ -280,7 +354,7 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
                         </Box>
                         <Typography variant="subtitle1">You&rsquo;re all caught up</Typography>
                         <Typography variant="body2" color="text.secondary">
-                            Nothing left that&rsquo;s uncategorised or flagged for review.
+                            Nothing left that&rsquo;s uncategorised.
                         </Typography>
                     </Box>
                 ) : (
@@ -327,7 +401,7 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
                                 )}
                                 <Stack direction="row" alignItems="baseline" justifyContent="space-between" spacing={1}>
                                     <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
-                                        {format(new Date(currentItem!.date), "MMM d, yyyy")}
+                                        {formatDateOnly(currentItem!.date, { month: "short", day: "numeric", year: "numeric" })}
                                     </Typography>
                                     <Typography
                                         variant="h6"
@@ -394,28 +468,79 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
                                     />
                                 </Box>
                             )}
-                            <FormControlLabel
-                                control={
-                                    <Checkbox
-                                        color="warning"
-                                        checked={needsReview}
-                                        onChange={(e) => setNeedsReview(e.target.checked)}
-                                        disabled={saving}
+                            <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1.5 }}>
+                                <FormControlLabel
+                                    control={
+                                        <Checkbox
+                                            color="warning"
+                                            checked={needsReview}
+                                            onChange={(e) => setNeedsReview(e.target.checked)}
+                                            disabled={saving}
+                                        />
+                                    }
+                                    label="Needs review"
+                                    sx={{
+                                        flexGrow: 1,
+                                        m: 0,
+                                        height: 42,
+                                        border: "1px solid",
+                                        borderColor: "warning.main",
+                                        borderRadius: 1,
+                                        px: 1.5,
+                                    }}
+                                />
+                                <IconButton
+                                    aria-label="Delete item"
+                                    size="small"
+                                    color="error"
+                                    onClick={handleDelete}
+                                    disabled={saving || deleting}
+                                    sx={{ height: 42, width: 42, border: "1px solid", borderColor: "error.main", borderRadius: 1 }}
+                                >
+                                    <DeleteIcon fontSize="small" />
+                                </IconButton>
+                            </Stack>
+                        </Box>
+
+                        <Box>
+                            <Typography variant="caption" sx={sectionLabelSx}>Attributed to</Typography>
+                            <Stack spacing={0.5} sx={{ mt: 1 }}>
+                                <FormControlLabel
+                                    control={
+                                        <Radio
+                                            size="small"
+                                            checked={peopleMode === "inherit"}
+                                            onChange={() => setPeopleMode("inherit")}
+                                            disabled={saving}
+                                        />
+                                    }
+                                    label="Inherit"
+                                />
+                                <FormControlLabel
+                                    control={
+                                        <Radio
+                                            size="small"
+                                            checked={peopleMode === "custom"}
+                                            onChange={() => setPeopleMode("custom")}
+                                            disabled={saving}
+                                        />
+                                    }
+                                    label="Choose people"
+                                />
+                            </Stack>
+                            {peopleMode === "custom" && currentItem && (
+                                <Box sx={{ mt: 1 }}>
+                                    <WeightedSplitEditor
+                                        mode={{ kind: "people", members: book.members }}
+                                        splitType={peopleShareType}
+                                        onSplitTypeChange={handlePeopleSplitTypeChange}
+                                        selected={peopleDrafts}
+                                        onSelectedChange={setPeopleDrafts}
+                                        amount={currentItem.amount}
+                                        currency={currentItem.currency}
                                     />
-                                }
-                                label="Needs review"
-                                sx={{
-                                    mt: 1.5,
-                                    width: "100%",
-                                    mx: 0,
-                                    border: "1px solid",
-                                    borderColor: "warning.main",
-                                    borderRadius: 1,
-                                    px: 1.5,
-                                    pt: 0.5,
-                                    pb: 0.25,
-                                }}
-                            />
+                                </Box>
+                            )}
                         </Box>
                     </Stack>
                 )}
@@ -428,24 +553,22 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
                 <DialogActions sx={{ px: 2, pb: 2 }}>
                     <Stack direction="row" spacing={1} sx={{ width: "100%" }}>
                         <Button onClick={handleBack} disabled={index === 0}>Back</Button>
-                        {selectedCategories.length > 0 && (
-                            <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={openRuleForm}
-                                disabled={!currentItem}
-                                aria-label="Setup Auto Tag"
-                            >
-                                <AutoFixHighIcon fontSize="small" />
-                            </Button>
-                        )}
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={openRuleForm}
+                            disabled={!currentItem || selectedCategories.length === 0}
+                            aria-label="Setup Auto Tag"
+                        >
+                            <AutoFixHighIcon fontSize="small" />
+                        </Button>
                         <Button
                             variant="contained"
                             onClick={handleNext}
                             disabled={saving}
                             sx={{ flexGrow: 1 }}
                         >
-                            {selectedCategories.length > 0 || needsReview ? "Next" : "Skip"}
+                            {selectedCategories.length > 0 || needsReview || (peopleMode === "custom" && peopleDrafts.length > 0) ? "Next" : "Skip"}
                         </Button>
                     </Stack>
                 </DialogActions>

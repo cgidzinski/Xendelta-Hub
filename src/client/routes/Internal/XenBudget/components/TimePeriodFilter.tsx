@@ -31,19 +31,29 @@ const PRESET_LABELS: Record<"last3" | "last6" | "thisQuarter", string> = {
     thisQuarter: "This quarter",
 };
 
+/** UTC midnight of a local-midnight Date's calendar day — item dates are date-only UTC. */
+function utcDay(d: Date): Date {
+    return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+}
+
+/** The end of a calendar day in UTC, so an inclusive `$lte` still covers the whole day. */
+function utcEndOfDay(d: Date): Date {
+    return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999));
+}
+
 /** Turns a `PeriodMode` into the from/to/groupBy a summary query needs, plus its label. */
 export function resolvePeriod(mode: PeriodMode): ResolvedPeriod {
     if (mode.kind === "month") {
         const from = startOfMonth(mode.anchor);
         return {
-            from, to: endOfMonth(mode.anchor), groupBy: "day",
+            from: utcDay(from), to: utcEndOfDay(endOfMonth(mode.anchor)), groupBy: "day",
             label: format(from, "MMMM yyyy"),
         };
     }
     if (mode.kind === "year") {
         const from = startOfYear(mode.anchor);
         return {
-            from, to: endOfYear(mode.anchor), groupBy: "month",
+            from: utcDay(from), to: utcEndOfDay(endOfYear(mode.anchor)), groupBy: "month",
             label: format(from, "yyyy"),
         };
     }
@@ -51,25 +61,25 @@ export function resolvePeriod(mode: PeriodMode): ResolvedPeriod {
         const now = new Date();
         if (mode.preset === "last3") {
             return {
-                from: startOfMonth(subMonths(now, 2)), to: endOfDay(now),
+                from: utcDay(startOfMonth(subMonths(now, 2))), to: utcEndOfDay(now),
                 groupBy: "month", label: PRESET_LABELS.last3,
             };
         }
         if (mode.preset === "last6") {
             return {
-                from: startOfMonth(subMonths(now, 5)), to: endOfDay(now),
+                from: utcDay(startOfMonth(subMonths(now, 5))), to: utcEndOfDay(now),
                 groupBy: "month", label: PRESET_LABELS.last6,
             };
         }
         return {
-            from: startOfQuarter(now), to: endOfDay(now),
+            from: utcDay(startOfQuarter(now)), to: utcEndOfDay(now),
             groupBy: "week", label: PRESET_LABELS.thisQuarter,
         };
     }
     const days = (mode.to.getTime() - mode.from.getTime()) / 86400000;
     const label = `${format(mode.from, "MMM d")} – ${format(mode.to, "MMM d")}`;
     return {
-        from: mode.from, to: mode.to,
+        from: utcDay(mode.from), to: utcEndOfDay(mode.to),
         groupBy: days > 180 ? "month" : days > 45 ? "week" : "day",
         label,
     };

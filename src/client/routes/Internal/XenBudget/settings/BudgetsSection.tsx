@@ -9,6 +9,7 @@ import { useXenBudgetStatus, useXenBudgetBudgets } from "../../../../hooks/xenbu
 import BudgetRow from "../components/budget/BudgetRow";
 import { sortBudgets } from "../components/budget/sortBudgets";
 import BudgetForm from "../components/BudgetForm";
+import SectionCard from "./SectionCard";
 import LoadingSpinner from "../../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
 import { emptyStateSx, emptyStateIconCircleSx } from "../../../../components/ui/surfaceStyles";
@@ -27,42 +28,45 @@ export default function BookBudgets() {
     if (isError) return <ErrorDisplay error={error} />;
 
     return (
-        <Box>
-            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-                <Typography variant="subtitle1">Budgets</Typography>
-                <Button
-                    size="small" startIcon={<AddIcon />}
-                    onClick={() => { setEditing(null); setFormOpen(true); }}
-                >
-                    New budget
-                </Button>
-            </Stack>
-
-            {budgets.length === 0 ? (
-                <Box sx={emptyStateSx}>
-                    <Box sx={emptyStateIconCircleSx}><SavingsIcon color="disabled" /></Box>
-                    <Typography variant="subtitle1">No budgets yet</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        Cap one or more categories, or everything in the book — and give
-                        anyone their own limit inside it.
-                    </Typography>
-                </Box>
-            ) : (
-                /* One card per budget rather than one card holding them all: on this page
-                every budget is its own editable thing, so each needs its own target. */
-                <Stack spacing={1}>
-                    {sortBudgets(budgets).map((budget) => (
-                        <BudgetRow
-                            key={budget._id}
-                            budget={budget}
-                            currency={currency}
-                            categoryRegistry={book.categories}
-                            members={book.members}
-                            onEdit={() => { setEditing(budget); setFormOpen(true); }}
-                        />
-                    ))}
+        <Stack spacing={2}>
+            <SectionCard
+                title="Budgets"
+                description="Cap one or more categories, or everything in the book — and give anyone their own limit inside it."
+            >
+                <Stack direction="row" justifyContent="flex-end">
+                    <Button
+                        size="small" startIcon={<AddIcon />}
+                        onClick={() => { setEditing(null); setFormOpen(true); }}
+                    >
+                        New budget
+                    </Button>
                 </Stack>
-            )}
+
+                {budgets.length === 0 ? (
+                    <Box sx={emptyStateSx}>
+                        <Box sx={emptyStateIconCircleSx}><SavingsIcon color="disabled" /></Box>
+                        <Typography variant="subtitle1">No budgets yet</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            Add your first budget to start capping spending.
+                        </Typography>
+                    </Box>
+                ) : (
+                    /* One card per budget rather than one card holding them all: on this page
+                    every budget is its own editable thing, so each needs its own target. */
+                    <Stack spacing={1}>
+                        {sortBudgets(budgets).map((budget) => (
+                            <BudgetRow
+                                key={budget._id}
+                                budget={budget}
+                                currency={currency}
+                                categoryRegistry={book.categories}
+                                members={book.members}
+                                onEdit={() => { setEditing(budget); setFormOpen(true); }}
+                            />
+                        ))}
+                    </Stack>
+                )}
+            </SectionCard>
 
             <BudgetForm
                 open={formOpen}
@@ -76,6 +80,6 @@ export default function BookBudgets() {
                 }}
                 onDelete={editing ? () => deleteBudgetAsync(editing._id) : undefined}
             />
-        </Box>
+        </Stack>
     );
 }

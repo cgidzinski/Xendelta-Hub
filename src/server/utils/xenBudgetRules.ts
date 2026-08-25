@@ -49,6 +49,8 @@ export interface RuleActions {
   remove_flags?: string[];
   set_type?: "expense" | "income" | null;
   set_people?: string[];
+  people_split_type?: "equal" | "percent";
+  set_people_weights?: { user_id: string; percentage?: number }[];
   set_description?: string;
   /** Never store matching rows (import); a re-apply sweep degrades this to "Off budget". */
   skip?: boolean;
@@ -81,6 +83,9 @@ export interface DraftItem {
   flags: string[];
   /** Set by a rule's set_people; the caller turns it into resolved shares. */
   people?: string[];
+  /** How people divide the item; percentage weights when people_split_type is percent. */
+  people_split_type?: "equal" | "percent";
+  people_weights?: { user_id: string; percentage?: number }[];
   /** Which rules touched this item. */
   applied_rule_ids: string[];
   /**
@@ -313,6 +318,11 @@ export function applyRules(draft: DraftItem, rules: Rule[], options: ApplyOption
     }
     if (actions.set_people && actions.set_people.length > 0) {
       item.people = [...actions.set_people];
+      item.people_split_type = actions.people_split_type === "percent" ? "percent" : "equal";
+      item.people_weights = (actions.set_people_weights || []).map((w) => ({
+        user_id: w.user_id,
+        percentage: w.percentage,
+      }));
     }
     if (actions.set_description && actions.set_description.trim()) {
       // Keep the bank's original text the first time a rule rewrites it, so the change

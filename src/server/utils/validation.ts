@@ -404,14 +404,12 @@ export const createXenBudgetBookSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name too long"),
   memberIds: z.array(objectIdSchema).optional(),
   default_currency: z.string().max(10).optional(),
-  timezone: timezoneSchema.optional(),
 });
 
 export const updateXenBudgetBookSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   default_currency: z.string().max(10).optional(),
   archived: z.boolean().optional(),
-  timezone: timezoneSchema.optional(),
 });
 
 export const addXenBudgetMembersSchema = z.object({
@@ -619,6 +617,11 @@ const ruleShape = {
     remove_flags: z.array(z.string().max(50)).max(20).optional(),
     set_type: z.enum(["expense", "income"]).nullish(),
     set_people: z.array(objectIdSchema).optional(),
+    people_split_type: z.enum(["equal", "percent"]).optional(),
+    set_people_weights: z.array(z.object({
+      user_id: objectIdSchema,
+      percentage: z.number().optional(),
+    })).max(20).optional(),
     set_description: z.string().max(500).optional(),
     skip: z.boolean().optional(),
   }),

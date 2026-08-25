@@ -113,46 +113,40 @@ describe("resolveCategories", () => {
 });
 
 describe("budgetPeriodRange", () => {
-  const TZ = "America/Toronto";
-
   it("runs calendar months regardless of when the budget was created", () => {
     const range = budgetPeriodRange(
       { period: "monthly", start_date: "2026-01-15T05:00:00.000Z" },
       new Date("2026-08-21T12:00:00.000Z"),
-      TZ,
     );
-    expect(tzDayKey(range.from, TZ)).toBe("2026-08-01");
-    expect(tzDayKey(range.to, TZ)).toBe("2026-09-01");
+    expect(range.from.toISOString().slice(0, 10)).toBe("2026-08-01");
+    expect(range.to.toISOString().slice(0, 10)).toBe("2026-09-01");
   });
 
   it("always starts on the 1st, even in short months", () => {
     const range = budgetPeriodRange(
       { period: "monthly", start_date: "2026-01-31T05:00:00.000Z" },
       new Date("2026-02-15T12:00:00.000Z"),
-      TZ,
     );
-    expect(tzDayKey(range.from, TZ)).toBe("2026-02-01");
-    expect(tzDayKey(range.to, TZ)).toBe("2026-03-01");
+    expect(range.from.toISOString().slice(0, 10)).toBe("2026-02-01");
+    expect(range.to.toISOString().slice(0, 10)).toBe("2026-03-01");
   });
 
   it("steps quarterly budgets to the calendar quarter, not an anchor", () => {
     const range = budgetPeriodRange(
       { period: "quarterly", start_date: "2026-05-01T05:00:00.000Z" },
       new Date("2026-08-21T12:00:00.000Z"),
-      TZ,
     );
-    expect(tzDayKey(range.from, TZ)).toBe("2026-07-01");
-    expect(tzDayKey(range.to, TZ)).toBe("2026-10-01");
+    expect(range.from.toISOString().slice(0, 10)).toBe("2026-07-01");
+    expect(range.to.toISOString().slice(0, 10)).toBe("2026-10-01");
   });
 
   it("runs yearly budgets Jan 1 to Jan 1, not from the anchor", () => {
     const range = budgetPeriodRange(
       { period: "yearly", start_date: "2025-04-01T04:00:00.000Z" },
       new Date("2026-08-21T12:00:00.000Z"),
-      TZ,
     );
-    expect(tzDayKey(range.from, TZ)).toBe("2026-01-01");
-    expect(tzDayKey(range.to, TZ)).toBe("2027-01-01");
+    expect(range.from.toISOString().slice(0, 10)).toBe("2026-01-01");
+    expect(range.to.toISOString().slice(0, 10)).toBe("2027-01-01");
   });
 
   it("runs weekly budgets Monday-to-Monday, not from the anchor's weekday", () => {
@@ -160,28 +154,25 @@ describe("budgetPeriodRange", () => {
     const range = budgetPeriodRange(
       { period: "weekly", start_date: "2026-01-07T05:00:00.000Z" },
       new Date("2026-08-21T12:00:00.000Z"),
-      TZ,
     );
-    expect(tzDayKey(range.from, TZ)).toBe("2026-08-17");
-    expect(tzDayKey(range.to, TZ)).toBe("2026-08-24");
+    expect(range.from.toISOString().slice(0, 10)).toBe("2026-08-17");
+    expect(range.to.toISOString().slice(0, 10)).toBe("2026-08-24");
   });
 
   it("uses the explicit window for a custom budget", () => {
     const from = "2026-03-01T05:00:00.000Z";
     const to = "2026-06-01T04:00:00.000Z";
-    const range = budgetPeriodRange({ period: "custom", start_date: from, end_date: to }, new Date(), TZ);
+    const range = budgetPeriodRange({ period: "custom", start_date: from, end_date: to }, new Date());
     expect(range.from.toISOString()).toBe(new Date(from).toISOString());
     expect(range.to.toISOString()).toBe(new Date(to).toISOString());
   });
 
-  it("produces a period boundary at local midnight, not UTC midnight", () => {
-    // Toronto is UTC-4 in August, so the period starts at 04:00 UTC.
+  it("produces a period boundary at UTC midnight", () => {
     const range = budgetPeriodRange(
       { period: "monthly", start_date: "2026-01-01T05:00:00.000Z" },
       new Date("2026-08-21T12:00:00.000Z"),
-      TZ,
     );
-    expect(range.from.toISOString()).toBe("2026-08-01T04:00:00.000Z");
+    expect(range.from.toISOString()).toBe("2026-08-01T00:00:00.000Z");
   });
 });
 
@@ -213,14 +204,11 @@ describe("timezone keys", () => {
 });
 
 describe("seedPeriods", () => {
-  const TZ = "America/Toronto";
-
   it("emits every month in the range, including ones with no spending", () => {
     const keys = seedPeriods(
       new Date("2026-06-01T04:00:00.000Z"),
       new Date("2026-09-15T12:00:00.000Z"),
       "month",
-      TZ,
     );
     expect(keys).toEqual(["2026-06", "2026-07", "2026-08", "2026-09"]);
   });
@@ -230,7 +218,6 @@ describe("seedPeriods", () => {
       new Date("2026-08-01T04:00:00.000Z"),
       new Date("2026-08-04T12:00:00.000Z"),
       "day",
-      TZ,
     );
     expect(keys).toEqual(["2026-08-01", "2026-08-02", "2026-08-03", "2026-08-04"]);
   });
@@ -240,29 +227,26 @@ describe("seedPeriods", () => {
       new Date("2026-08-17T04:00:00.000Z"),
       new Date("2026-08-30T12:00:00.000Z"),
       "week",
-      TZ,
     );
     expect(keys).toEqual(["2026-W34", "2026-W35"]);
   });
 
-  it("buckets by the local month, so a late-night instant doesn't start a new one", () => {
-    // 2026-09-01T02:00Z is 22:00 on Aug 31 in Toronto — still August.
+  it("buckets by the UTC day, so a date-only boundary starts a new period", () => {
     const keys = seedPeriods(
       new Date("2026-08-30T04:00:00.000Z"),
       new Date("2026-09-01T02:00:00.000Z"),
       "month",
-      TZ,
     );
-    expect(keys).toEqual(["2026-08"]);
+    expect(keys).toEqual(["2026-08", "2026-09"]);
   });
 
   it("returns nothing for an inverted range", () => {
-    expect(seedPeriods(new Date("2026-09-01"), new Date("2026-08-01"), "month", TZ)).toEqual([]);
+    expect(seedPeriods(new Date("2026-09-01"), new Date("2026-08-01"), "month")).toEqual([]);
   });
 
   it("covers a single-instant range with one bucket", () => {
     const d = new Date("2026-08-21T12:00:00.000Z");
-    expect(seedPeriods(d, d, "month", TZ)).toEqual(["2026-08"]);
+    expect(seedPeriods(d, d, "month")).toEqual(["2026-08"]);
   });
 });
 

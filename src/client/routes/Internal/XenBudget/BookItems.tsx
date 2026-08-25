@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useLocation, useOutletContext } from "react-router-dom";
 import {
-    Alert, Autocomplete, Box, Button, Chip, Divider, InputAdornment, MenuItem, Stack, TextField, Typography,
+    Alert, Autocomplete, Avatar, Box, Button, Chip, Divider, InputAdornment, MenuItem, Stack, TextField, Typography,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
@@ -9,7 +9,7 @@ import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
-import { endOfDay, startOfWeek, startOfYear, subWeeks } from "date-fns";
+import { startOfWeek, startOfYear, subWeeks, subDays, startOfMonth, endOfMonth } from "date-fns";
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetItems, type ItemFilters } from "../../../hooks/xenbudget/useItems";
 import ItemListItem from "./components/ItemListItem";
@@ -21,7 +21,7 @@ import DateFilterModal, {
 import ReviewModal from "./components/ReviewModal";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
-import { groupByDay } from "../../../utils/dateGrouping";
+import { groupByDay, dateOnlyToLocal } from "../../../utils/dateGrouping";
 import { emptyStateSx, emptyStateIconCircleSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
 import { FLAG_OFF_BUDGET } from "../../../constants/xenbudget";
 
@@ -30,10 +30,10 @@ interface BudgetFilterSeed {
     categories: string[];
     from: string;
     to: string;
+    period: string;
 }
 
 // Synthetic options in the filters dropdown below — not real flags or fields on the item.
-const EXCLUDED_FILTER = "__excluded__";
 const TYPE_EXPENSE = "__type_expense__";
 const TYPE_INCOME = "__type_income__";
 const NEED_FILTER = "__need__";
@@ -41,27 +41,39 @@ const WANT_FILTER = "__want__";
 // Categories are prefixed so a category name can never collide with a flag name in the
 // shared dropdown (both registries allow the same string).
 const CATEGORY_PREFIX = "__category__";
+// People are prefixed so a member's name can never collide with a category/flag name.
+const PERSON_PREFIX = "__person__";
 // The built-in flag the importer uses to say "nothing matched" — special-cased below so
 // selecting it also catches items with no category that were never run through an import.
 const FLAG_UNCATEGORISED = "Uncategorised";
 const FLAG_NEEDS_REVIEW = "Needs review";
 
+/** UTC midnight of a local-midnight Date's calendar day — item dates are date-only UTC. */
+function startOfDayUtc(d: Date): string {
+    return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString();
+}
+
+/** The end of a calendar day in UTC, so an inclusive `$lte` still covers the whole day. */
+function endOfDayUtc(d: Date): string {
+    return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999)).toISOString();
+}
+
 function dateRange(value: DateFilterValue): { from?: string; to?: string } {
     const now = new Date();
     switch (value.preset) {
         case "thisWeek":
-            return { from: startOfWeek(now).toISOString() };
+            return { from: startOfDayUtc(startOfWeek(now)) };
         case "lastWeek":
             return {
-                from: startOfWeek(subWeeks(now, 1)).toISOString(),
-                to: startOfWeek(now).toISOString(),
+                from: startOfDayUtc(startOfWeek(subWeeks(now, 1))),
+                to: endOfDayUtc(subDays(startOfWeek(now), 1)),
             };
         case "thisYear":
-            return { from: startOfYear(now).toISOString() };
+            return { from: startOfDayUtc(startOfYear(now)) };
         case "custom":
             return {
-                from: value.from ? value.from.toISOString() : undefined,
-                to: value.to ? endOfDay(value.to).toISOString() : undefined,
+                from: value.from ? startOfDayUtc(value.from) : undefined,
+                to: value.to ? endOfDayUtc(value.to) : undefined,
             };
         default:
             return {};
@@ -78,15 +90,23 @@ export default function BookItems() {
     // filter — except a budget's "View items" seed always wins, since that's a deliberate
     // navigation into a specific window, not a preference to fall back on.
     const dateLsKey = `xenbudget_dateFilter_items_${book._id}`;
-    const [dateValue, setDateValueState] = useState<DateFilterValue>(
-        seed ? {
+    const [dateValue, setDateValueState] = useState<DateFilterValue>(() => {
+        if (!seed) return parseDateFilterValue(localStorage.getItem(dateLsKey)) ?? DEFAULT_DATE_FILTER;
+        // A monthly budget's window is one whole calendar month, so name it as that month
+        // rather than an "Aug 1 – Aug 31" day range. Every other period keeps its exact
+        // window as a custom day range.
+        if (seed.period === "monthly") {
+            const monthStart = startOfMonth(dateOnlyToLocal(seed.from));
+            return { preset: "custom", from: monthStart, to: endOfMonth(monthStart) };
+        }
+        return {
             preset: "custom",
-            from: new Date(seed.from),
+            from: dateOnlyToLocal(seed.from),
             // The budget's window ends exclusively; the date filter's end is inclusive of
             // that whole day, so it steps back an instant to name the last covered day.
-            to: new Date(new Date(seed.to).getTime() - 1),
-        } : parseDateFilterValue(localStorage.getItem(dateLsKey)) ?? DEFAULT_DATE_FILTER,
-    );
+            to: dateOnlyToLocal(new Date(new Date(seed.to).getTime() - 1)),
+        };
+    });
     const setDateValue = (next: DateFilterValue) => {
         setDateValueState(next);
         localStorage.setItem(dateLsKey, serializeDateFilterValue(next));
@@ -104,10 +124,10 @@ export default function BookItems() {
         () => [
             TYPE_EXPENSE, TYPE_INCOME, NEED_FILTER, WANT_FILTER,
             ...book.categories.map((c) => CATEGORY_PREFIX + c.name),
-            ...book.flags.map((f) => f.name).filter((name) => name !== FLAG_OFF_BUDGET),
-            EXCLUDED_FILTER,
+            ...book.members.map((m) => PERSON_PREFIX + m.user_id),
+            ...book.flags.map((f) => f.name),
         ],
-        [book.categories, book.flags],
+        [book.categories, book.members, book.flags],
     );
 
     // Filtering happens server-side (the list is paginated), so the filter object is part
@@ -115,13 +135,16 @@ export default function BookItems() {
     const filters: ItemFilters = useMemo(() => {
         const realFlags = selectedFilters.filter(
             (f) => ![
-                EXCLUDED_FILTER, FLAG_UNCATEGORISED, FLAG_OFF_BUDGET, TYPE_EXPENSE, TYPE_INCOME,
+                FLAG_UNCATEGORISED, TYPE_EXPENSE, TYPE_INCOME,
                 NEED_FILTER, WANT_FILTER,
-            ].includes(f) && !f.startsWith(CATEGORY_PREFIX),
+            ].includes(f) && !f.startsWith(CATEGORY_PREFIX) && !f.startsWith(PERSON_PREFIX),
         );
         const selectedCategories = selectedFilters
             .filter((f) => f.startsWith(CATEGORY_PREFIX))
             .map((f) => f.slice(CATEGORY_PREFIX.length));
+        const selectedPeople = selectedFilters
+            .filter((f) => f.startsWith(PERSON_PREFIX))
+            .map((f) => f.slice(PERSON_PREFIX.length));
         const wantsExpense = selectedFilters.includes(TYPE_EXPENSE);
         const wantsIncome = selectedFilters.includes(TYPE_INCOME);
         const wantsNeed = selectedFilters.includes(NEED_FILTER);
@@ -134,6 +157,7 @@ export default function BookItems() {
             ...dateRange(dateValue),
             q: search.trim() || undefined,
             categories: selectedCategories.length ? selectedCategories : undefined,
+            people: selectedPeople.length ? selectedPeople : undefined,
             flags: realFlags.length ? realFlags : undefined,
             // Selecting both (or neither) means "all types" — no filter to apply.
             type: wantsExpense !== wantsIncome ? (wantsExpense ? "expense" : "income") : undefined,
@@ -141,7 +165,7 @@ export default function BookItems() {
             // The *state* of having no category, not just the flag — so a hand-entered
             // item with no category is caught too, not only ones an import flagged.
             uncategorised: selectedFilters.includes(FLAG_UNCATEGORISED) || undefined,
-            excluded: selectedFilters.includes(EXCLUDED_FILTER) ? "only" : "hidden",
+            excluded: selectedFilters.includes(FLAG_OFF_BUDGET) ? "all" : "hidden",
             source,
             card,
         };
@@ -151,7 +175,7 @@ export default function BookItems() {
         items, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
     } = useXenBudgetItems(book._id, filters);
 
-    const dayGroups = useMemo(() => groupByDay(items, (i) => i.date), [items]);
+    const dayGroups = useMemo(() => groupByDay(items, (i) => i.date, "UTC"), [items]);
 
     const reviewCount = book.review_count ?? 0;
     const needsReviewCount = book.needs_review_count ?? 0;
@@ -164,9 +188,22 @@ export default function BookItems() {
                 : [...prev, FLAG_NEEDS_REVIEW],
         );
 
+    // Label for a filter option value. People show their username; categories drop the
+    // prefix; everything else is a fixed label or the raw value.
+    const optionLabel = (o: string) => (
+        o === TYPE_EXPENSE ? "Expenses"
+            : o === TYPE_INCOME ? "Income"
+                : o === NEED_FILTER ? "Need"
+                    : o === WANT_FILTER ? "Want"
+                        : o.startsWith(CATEGORY_PREFIX) ? o.slice(CATEGORY_PREFIX.length)
+                            : o.startsWith(PERSON_PREFIX)
+                                ? (book.members.find((m) => m.user_id === o.slice(PERSON_PREFIX.length))?.username ?? o.slice(PERSON_PREFIX.length))
+                                : o
+    );
+
     return (
         <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <Box sx={{ px: 2, pt: 2, flexShrink: 0 }}>
+            <Box sx={{ pl: 2, pr: { xs: 2, sm: 3.5 }, pt: 2, flexShrink: 0 }}>
                 <Stack spacing={1.5} sx={{ mb: 2 }}>
                     {needsReviewCount > 0 && (
                         <Alert
@@ -238,23 +275,37 @@ export default function BookItems() {
                                 o === TYPE_EXPENSE || o === TYPE_INCOME ? "Type"
                                     : o === NEED_FILTER || o === WANT_FILTER ? "Need / Want"
                                         : o.startsWith(CATEGORY_PREFIX) ? "Categories"
-                                            : o === EXCLUDED_FILTER ? "Other"
+                                            : o.startsWith(PERSON_PREFIX) ? "People"
                                                 : "Flags"
                             )}
-                            getOptionLabel={(o) => (
-                                o === EXCLUDED_FILTER ? "Off budget"
-                                    : o === TYPE_EXPENSE ? "Expenses"
-                                        : o === TYPE_INCOME ? "Income"
-                                            : o === NEED_FILTER ? "Need"
-                                                : o === WANT_FILTER ? "Want"
-                                                    : o.startsWith(CATEGORY_PREFIX) ? o.slice(CATEGORY_PREFIX.length)
-                                                        : o
-                            )}
+                            getOptionLabel={optionLabel}
+                            renderOption={(props, option) => {
+                                const { key, ...optionProps } = props;
+                                if (option.startsWith(PERSON_PREFIX)) {
+                                    const member = book.members.find(
+                                        (m) => m.user_id === option.slice(PERSON_PREFIX.length),
+                                    );
+                                    return (
+                                        <Box component="li" key={key} {...optionProps} sx={{ gap: 1 }}>
+                                            <Avatar
+                                                src={member?.avatar || undefined}
+                                                alt={member?.username}
+                                                sx={{ width: 20, height: 20, fontSize: 10 }}
+                                            >
+                                                {member?.username[0]?.toUpperCase()}
+                                            </Avatar>
+                                            {member?.username ?? option.slice(PERSON_PREFIX.length)}
+                                        </Box>
+                                    );
+                                }
+                                return (
+                                    <Box component="li" key={key} {...optionProps}>
+                                        {optionLabel(option)}
+                                    </Box>
+                                );
+                            }}
                             renderTags={(value, getTagProps) => value.map((option, index) => {
                                 const { key, ...tagProps } = getTagProps({ index });
-                                if (option === EXCLUDED_FILTER) {
-                                    return <Chip key={key} size="small" label="Off budget" {...tagProps} />;
-                                }
                                 if (option === TYPE_EXPENSE) {
                                     return (
                                         <Chip
@@ -287,6 +338,22 @@ export default function BookItems() {
                                         />
                                     );
                                 }
+                                if (option.startsWith(PERSON_PREFIX)) {
+                                    const member = book.members.find(
+                                        (m) => m.user_id === option.slice(PERSON_PREFIX.length),
+                                    );
+                                    return (
+                                        <Chip
+                                            key={key}
+                                            size="small"
+                                            label={member?.username ?? option.slice(PERSON_PREFIX.length)}
+                                            avatar={member?.avatar
+                                                ? <Avatar src={member.avatar} sx={{ width: 16, height: 16, fontSize: 10 }} />
+                                                : undefined}
+                                            {...tagProps}
+                                        />
+                                    );
+                                }
                                 return <FlagChip key={key} name={option} registry={book.flags} {...tagProps} />;
                             })}
                             renderInput={(params) => (
@@ -306,7 +373,7 @@ export default function BookItems() {
                 </Stack>
             </Box>
 
-            <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: 2, pb: 2 }}>
+            <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pl: 2, pr: { xs: 2, sm: 3.5 }, pb: 2 }}>
                 {isError ? (
                     <ErrorDisplay error={error} />
                 ) : isLoading ? (

@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { budgetedForRange, type RangeBudget } from "./budgetForRange";
 
-// Local-time dates throughout: period boundaries follow the viewer's calendar, the same
-// way the server resolves them from the tz the query sends.
-const local = (y: number, m: number, d: number) => new Date(y, m - 1, d);
+// UTC dates throughout: period boundaries and report ranges are both anchored on UTC
+// days, the way the server keys items and resolvePeriod builds its ranges.
+const local = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d));
 
 function monthly(amount = 800): RangeBudget {
     return { period: "monthly", amount, period_from: "", period_to: "" };

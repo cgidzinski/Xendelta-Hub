@@ -1,6 +1,5 @@
 import crypto from "crypto";
 import { resolveSplits } from "./xenSplitUtils";
-import { tzDayKey, zonedWallToUtc } from "./statsRange";
 
 export type ShareType = "equal" | "exact" | "percent";
 export type BudgetPeriod = "weekly" | "monthly" | "quarterly" | "yearly" | "custom";
@@ -160,7 +159,6 @@ const MONTHS_PER_PERIOD: Record<string, number> = { monthly: 1, quarterly: 3, ye
 export function budgetPeriodRange(
   budget: BudgetLike,
   asOf: Date,
-  timeZone: string,
 ): PeriodRange {
   if (budget.period === "custom") {
     const from = budget.start_date ? new Date(budget.start_date) : new Date(0);
@@ -168,7 +166,7 @@ export function budgetPeriodRange(
     return { from, to };
   }
 
-  const now = parseWallKey(tzDayKey(asOf, timeZone));
+  const now = parseWallKey(asOf.toISOString().slice(0, 10));
 
   if (budget.period === "weekly") {
     // Monday-to-Monday, matching isoWeekKey's ISO-week convention below.
@@ -177,8 +175,8 @@ export function budgetPeriodRange(
     const s = new Date(startMs);
     const e = new Date(startMs + 7 * 86400000);
     return {
-      from: zonedWallToUtc(wallKey(s.getUTCFullYear(), s.getUTCMonth() + 1, s.getUTCDate()), timeZone),
-      to: zonedWallToUtc(wallKey(e.getUTCFullYear(), e.getUTCMonth() + 1, e.getUTCDate()), timeZone),
+      from: new Date(`${wallKey(s.getUTCFullYear(), s.getUTCMonth() + 1, s.getUTCDate())}T00:00:00.000Z`),
+      to: new Date(`${wallKey(e.getUTCFullYear(), e.getUTCMonth() + 1, e.getUTCDate())}T00:00:00.000Z`),
     };
   }
 
@@ -187,8 +185,8 @@ export function budgetPeriodRange(
   const s = addMonths(now.year, 1, index);
   const e = addMonths(now.year, 1, index + step);
   return {
-    from: zonedWallToUtc(wallKey(s.year, s.month, 1), timeZone),
-    to: zonedWallToUtc(wallKey(e.year, e.month, 1), timeZone),
+    from: new Date(`${wallKey(s.year, s.month, 1)}T00:00:00.000Z`),
+    to: new Date(`${wallKey(e.year, e.month, 1)}T00:00:00.000Z`),
   };
 }
 
@@ -219,12 +217,12 @@ const MAX_SEEDED_PERIODS = 3000;
 //
 // These keys MUST match what Mongo's $dateToString produces for the same grouping and
 // timezone; if the two drift apart the buckets never join and every period reads empty.
-export function seedPeriods(from: Date, to: Date, groupBy: GroupBy, timeZone: string): string[] {
+export function seedPeriods(from: Date, to: Date, groupBy: GroupBy): string[] {
   const keys: string[] = [];
   if (to < from) return keys;
 
-  const startKey = tzDayKey(from, timeZone);
-  const endKey = tzDayKey(to, timeZone);
+  const startKey = from.toISOString().slice(0, 10);
+  const endKey = to.toISOString().slice(0, 10);
   let cursor = new Date(`${startKey}T00:00:00Z`);
   const end = new Date(`${endKey}T00:00:00Z`);
 

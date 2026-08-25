@@ -17,7 +17,6 @@ import { UserSelect } from "../../../../components/UserSelect";
 import type { SearchedUser } from "../../../../hooks/useUserSearch";
 import { useXenBudgetReseedLabels } from "../../../../hooks/xenbudget/useLabels";
 import { ALL_CURRENCIES, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
-import { COMMON_TIMEZONES } from "../../../../constants/timezones";
 
 export default function GeneralSection() {
     const {
@@ -32,9 +31,6 @@ export default function GeneralSection() {
     const [addOpen, setAddOpen] = useState(false);
     const [selected, setSelected] = useState<SearchedUser[]>([]);
     const [confirmDelete, setConfirmDelete] = useState(false);
-    const timezoneOptions = book.timezone && !COMMON_TIMEZONES.includes(book.timezone)
-        ? [book.timezone, ...COMMON_TIMEZONES]
-        : COMMON_TIMEZONES;
 
     const handleAdd = async () => {
         try {
@@ -84,19 +80,9 @@ export default function GeneralSection() {
                 >
                     {ALL_CURRENCIES.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
                 </TextField>
-                {isCreator && (
-                    <TextField
-                        select fullWidth label="Timezone" value={book.timezone || "UTC"}
-                        onChange={(e) => updateBook({ timezone: e.target.value })}
-                        disabled={isUpdating}
-                        slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
-                    >
-                        {timezoneOptions.map((tz) => <MenuItem key={tz} value={tz}>{tz}</MenuItem>)}
-                    </TextField>
-                )}
                 <Typography variant="caption" color="text.secondary">
-                    Dates are saved on this book&rsquo;s timezone, and shown in each viewer&rsquo;s
-                    own time (set on your profile).
+                    Dates are saved as plain calendar days, so they read the same for every
+                    member regardless of where they are.
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                     Created {format(new Date(book.created_at), "MMMM d, yyyy")}.

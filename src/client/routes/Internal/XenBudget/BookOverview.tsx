@@ -98,7 +98,7 @@ export default function BookOverview() {
 
     return (
         <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <Box sx={{ p: 2, pb: 1.5, flexShrink: 0 }}>
+            <Box sx={{ pl: 2, pr: { xs: 2, sm: 3.5 }, pt: 2, pb: 1.5, flexShrink: 0 }}>
                 <Stack spacing={1}>
                     {summary.currencies.length > 1 && (
                         <TextField
@@ -117,7 +117,7 @@ export default function BookOverview() {
                 </Stack>
             </Box>
 
-            <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: 2, pb: 2 }}>
+            <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pl: 2, pr: { xs: 2, sm: 3.5 }, pb: 2 }}>
                 <TotalsSummary
                     income={totals.income} expense={totals.expense} net={totals.net}
                     currency={summary.currency} sx={{ mb: 2 }}
@@ -216,11 +216,11 @@ export default function BookOverview() {
                                                     categories: b.categories,
                                                     from: b.period_from,
                                                     to: b.period_to,
+                                                    period: b.period,
                                                 }
                                             }
                                         },
                                     )}
-                                    onEdit={() => navigate(`/internal/xenbudget/books/${book._id}/settings/budgets`)}
                                 />
                             ))}
                         </Box>

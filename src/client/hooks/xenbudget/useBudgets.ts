@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
-import { useTimezone } from "../useTimezone";
 import { scaleBudgetToRange } from "../../routes/Internal/XenBudget/components/budget/scaleBudgetToRange";
 import type { XenBudgetBook, BudgetInput, BudgetStatusResponse } from "./types";
 
@@ -21,15 +20,11 @@ export interface BudgetStatusRange {
  * is the one mistake this hook exists to make impossible.
  */
 export function useXenBudgetStatus(bookId: string, currency?: string, range?: BudgetStatusRange) {
-    // A budget period's boundaries are the viewer's, so the zone belongs in the key.
-    const tz = useTimezone();
-
     const { data, isLoading, isError, error } = useQuery({
-        queryKey: ["xenbudget", "budget-status", bookId, currency, tz, range?.from, range?.to],
+        queryKey: ["xenbudget", "budget-status", bookId, currency, range?.from, range?.to],
         queryFn: async () => {
             const res = await apiClient.get(`/api/xenbudget/books/${bookId}/budget-status`, {
                 params: {
-                    tz,
                     ...(currency ? { currency } : {}),
                     ...(range ? { from: range.from, to: range.to } : {}),
                 },

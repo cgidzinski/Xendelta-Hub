@@ -55,27 +55,27 @@ describe("periodColumnLabels", () => {
 describe("periodKeyRange", () => {
     it("covers a whole calendar month", () => {
         const range = periodKeyRange("2026-08");
-        expect(range?.from).toEqual(new Date(2026, 7, 1));
-        expect(range?.to).toEqual(new Date(2026, 8, 1));
+        expect(range?.from).toEqual(new Date(Date.UTC(2026, 7, 1)));
+        expect(range?.to).toEqual(new Date(Date.UTC(2026, 8, 1)));
     });
 
     it("rolls a December key into the next year", () => {
         const range = periodKeyRange("2026-12");
-        expect(range?.to).toEqual(new Date(2027, 0, 1));
+        expect(range?.to).toEqual(new Date(Date.UTC(2027, 0, 1)));
     });
 
     it("covers a Monday-to-Monday ISO week", () => {
         // ISO week 1 of 2026 starts Monday 2025-12-29.
         const range = periodKeyRange("2026-W01");
-        expect(range?.from).toEqual(new Date(2025, 11, 29));
-        expect(range?.to).toEqual(new Date(2026, 0, 5));
+        expect(range?.from).toEqual(new Date(Date.UTC(2025, 11, 29)));
+        expect(range?.to).toEqual(new Date(Date.UTC(2026, 0, 5)));
         expect((range!.to.getTime() - range!.from.getTime()) / 86400000).toBe(7);
     });
 
     it("covers a single day", () => {
         const range = periodKeyRange("2026-08-21");
-        expect(range?.from).toEqual(new Date(2026, 7, 21));
-        expect(range?.to).toEqual(new Date(2026, 7, 22));
+        expect(range?.from).toEqual(new Date(Date.UTC(2026, 7, 21)));
+        expect(range?.to).toEqual(new Date(Date.UTC(2026, 7, 22)));
     });
 
     it("returns nothing for a key it cannot read", () => {

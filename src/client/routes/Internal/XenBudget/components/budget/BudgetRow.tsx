@@ -7,10 +7,8 @@ import { CategoryChip } from "../LabelChip";
 import { cardSx } from "../../../../../components/ui/surfaceStyles";
 import { formatCurrency } from "../../currency";
 import { INCOME_COLOR } from "../../../../../components/ui/chartColors";
-import BudgetLimitLine from "./BudgetLimitLine";
 import BudgetTarget from "./BudgetTarget";
-import { memberColor, scopeColor } from "./budgetColors";
-import { limitNoun, periodLabel } from "./budgetKind";
+import { periodLabel } from "./budgetKind";
 
 interface BudgetRowProps {
     budget: BudgetStatus;
@@ -30,7 +28,6 @@ interface BudgetRowProps {
 export default function BudgetRow({
     budget, currency, categoryRegistry, members, onEdit,
 }: BudgetRowProps) {
-    const color = scopeColor(budget.categories, categoryRegistry);
     const suffix = periodLabel(budget.period);
 
     return (
@@ -68,53 +65,33 @@ export default function BudgetRow({
                 </IconButton>
             </Stack>
 
-            {budget.amount === undefined ? (
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-                    {budget.kind === "goal"
-                        ? `No overall target — ${formatCurrency(budget.spent, currency)} saved this period`
-                        : `No overall limit — ${formatCurrency(budget.spent, currency)} spent this period`}
-                </Typography>
-            ) : (
-                <BudgetLimitLine
-                    label={<BudgetTarget members={members} />}
-                    amount={budget.amount}
-                    spent={budget.spent}
-                    percent={budget.percent ?? 0}
-                    over={budget.over ?? false}
-                    kind={budget.kind}
-                    currency={currency}
-                    color={color}
-                    height={6}
-                    barLabel={`${budget.categories.join(", ") || "Everything"}: ${formatCurrency(budget.spent, currency)
-                        } of ${formatCurrency(budget.amount, currency)}, ${budget.percent ?? 0}% of the ${limitNoun(budget.kind)}`}
-                />
+            {budget.amount !== undefined && (
+                <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
+                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                        <BudgetTarget members={members} />
+                    </Box>
+                    <Typography variant="body2" noWrap sx={{ flexShrink: 0, color: "text.secondary" }}>
+                        {formatCurrency(budget.amount, currency)}
+                    </Typography>
+                </Stack>
             )}
 
             {budget.sub_budgets.length > 0 && (
                 <Stack spacing={1} sx={{ mt: 1.25 }}>
                     {budget.sub_budgets.map((sub) => (
-                        <Box key={sub._id}>
-                            <BudgetLimitLine
-                                label={(
-                                    <BudgetTarget
-                                        personId={sub.person_id}
-                                        personName={sub.person_name}
-                                        members={members}
-                                        size={18}
-                                    />
-                                )}
-                                amount={sub.amount}
-                                spent={sub.spent}
-                                percent={sub.percent}
-                                over={sub.over}
-                                kind={budget.kind}
-                                currency={currency}
-                                color={memberColor(sub.person_id, members)}
-                                height={5}
-                                barLabel={`${sub.person_name}: ${formatCurrency(sub.spent, currency)
-                                    } of ${formatCurrency(sub.amount, currency)}, ${sub.percent}% of their ${limitNoun(budget.kind)}`}
-                            />
-                        </Box>
+                        <Stack key={sub._id} direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
+                            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                                <BudgetTarget
+                                    personId={sub.person_id}
+                                    personName={sub.person_name}
+                                    members={members}
+                                    size={18}
+                                />
+                            </Box>
+                            <Typography variant="body2" noWrap sx={{ flexShrink: 0, color: "text.secondary" }}>
+                                {formatCurrency(sub.amount, currency)}
+                            </Typography>
+                        </Stack>
                     ))}
                 </Stack>
             )}
