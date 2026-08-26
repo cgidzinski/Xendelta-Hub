@@ -119,6 +119,7 @@ export default function WeightedSplitEditor({
             onChange={(e) => setValue(draft.key, e.target.value)}
             sx={{ width: 120 }}
             slotProps={{
+                htmlInput: { inputMode: "decimal" },
                 input: splitType === "percent"
                     ? { endAdornment: <InputAdornment position="end">%</InputAdornment> }
                     : { startAdornment: <InputAdornment position="start">{getCurrencySymbol(currency)}</InputAdornment> },

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import {
     Box, Button, Card, MenuItem, Stack, TextField, Typography, useMediaQuery,
@@ -12,9 +12,8 @@ import {
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
-import TimePeriodFilter, {
-    defaultYearMode, parsePeriodMode, resolvePeriod, serializePeriodMode, type PeriodMode,
-} from "./components/TimePeriodFilter";
+import TimePeriodFilter, { summaryQuickPicks } from "./components/TimePeriodFilter";
+import { resolvePeriod } from "./components/periodMode";
 import TotalsSummary from "./components/TotalsSummary";
 import BudgetCard from "./components/budget/BudgetCard";
 import { useBalancedColumns } from "./components/budget/useBalancedColumns";
@@ -62,19 +61,12 @@ const NEED_COLOR = "#3987e5";
 const WANT_COLOR = "#c98500";
 
 export default function BookReport() {
-    const { book, currency, onCurrencyChange } = useOutletContext<BookDetailContext>();
+    const {
+        book, currency, onCurrencyChange, period, onPeriodChange,
+    } = useOutletContext<BookDetailContext>();
     const navigate = useNavigate();
-    // Remembered per book, so leaving and coming back to the Report picks up where you
-    // left off instead of resetting to "this year" every time.
-    const periodLsKey = `xenbudget_period_report_${book._id}`;
-    const [period, setPeriodState] = useState<PeriodMode>(
-        () => parsePeriodMode(localStorage.getItem(periodLsKey)) ?? defaultYearMode(),
-    );
-    const setPeriod = (next: PeriodMode) => {
-        setPeriodState(next);
-        localStorage.setItem(periodLsKey, serializePeriodMode(next));
-    };
 
+    // The window is the book's, not this tab's — see BookDetail.
     const range = useMemo(() => resolvePeriod(period), [period]);
 
     const { summary, isLoading, isError, error } = useXenBudgetSummary(book._id, {
@@ -390,8 +382,8 @@ export default function BookReport() {
                             </TextField>
                         )}
                         <TimePeriodFilter
-                            mode={period} onModeChange={setPeriod}
-                            showExtraPresets
+                            mode={period} onModeChange={onPeriodChange}
+                            quickPicks={summaryQuickPicks()}
                         />
                     </Stack>
                 </Stack>

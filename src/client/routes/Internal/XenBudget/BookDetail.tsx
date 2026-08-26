@@ -18,6 +18,8 @@ import type {
 import ItemForm from "./components/ItemForm";
 import ItemPreviewModal from "./components/ItemPreviewModal";
 import ImportWizard from "./components/ImportWizard";
+import { loadPeriod, savePeriod } from "./components/periodStorage";
+import type { PeriodMode } from "./components/periodMode";
 import { useSnackbar } from "notistack";
 import { TAB_PATHS, activeIndex } from "./navigation";
 import LoadingSpinner from "../../../components/LoadingSpinner";
@@ -38,6 +40,12 @@ export interface BookDetailContext {
      */
     currency: string;
     onCurrencyChange: (currency: string) => void;
+    /**
+     * The window every tab is looking at. One value, remembered per book — picking August
+     * on the Overview means the Items list and the Report are showing August too.
+     */
+    period: PeriodMode;
+    onPeriodChange: (mode: PeriodMode) => void;
     onAddItem: () => void;
     onEditItem: (item: XenBudgetItem) => void;
     /** Open the read-only preview before the edit form. */
@@ -84,6 +92,14 @@ export default function BookDetail() {
     // Undefined lets the server pick (the book's default, or the only one present);
     // choosing from the switcher pins it for this session.
     const [currency, setCurrency] = useState<string | undefined>(undefined);
+    // Owned here rather than by each tab: three sibling routes over one stored key would
+    // only resync on remount, so a change on the Overview wouldn't reach an already
+    // mounted Items list.
+    const [period, setPeriodState] = useState<PeriodMode>(() => loadPeriod(bookId));
+    const handlePeriodChange = (next: PeriodMode) => {
+        setPeriodState(next);
+        savePeriod(bookId, next);
+    };
 
     // Tab order matches the <Tab> order below; the active tab comes from the URL rather
     // than being stored, so a deep link or the back button lands on the right one. See
@@ -99,6 +115,8 @@ export default function BookDetail() {
         isCreator: book.is_creator,
         currency: currency ?? book.default_currency,
         onCurrencyChange: setCurrency,
+        period,
+        onPeriodChange: handlePeriodChange,
         onAddItem: () => { setEditing(null); setAddImages([]); setFormOpen(true); },
         onEditItem: (item) => { setEditing(item); setFormOpen(true); },
         onPreviewItem: (item) => setPreviewing(item),

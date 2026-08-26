@@ -199,6 +199,7 @@ export default function BudgetForm({
                                 : undefined,
                         ].filter(Boolean).join(" · ")}
                         slotProps={{
+                            htmlInput: { inputMode: "decimal" },
                             input: {
                                 startAdornment: (
                                     <InputAdornment position="start">
@@ -237,6 +238,7 @@ export default function BudgetForm({
                                         }}
                                         sx={{ width: 120, flexShrink: 0 }}
                                         slotProps={{
+                                            htmlInput: { inputMode: "decimal" },
                                             input: {
                                                 startAdornment: (
                                                     <InputAdornment position="start">

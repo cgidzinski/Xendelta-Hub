@@ -265,6 +265,7 @@ export default function ItemForm({
                                 if (clean !== null) setAmount(clean);
                             }}
                             slotProps={{
+                                htmlInput: { inputMode: "decimal" },
                                 input: {
                                     startAdornment: (
                                         <InputAdornment position="start">
