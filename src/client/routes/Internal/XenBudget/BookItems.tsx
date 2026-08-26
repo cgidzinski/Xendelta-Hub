@@ -19,6 +19,7 @@ import DateFilterModal, {
     type DateFilterValue,
 } from "./components/DateFilterModal";
 import ReviewModal from "./components/ReviewModal";
+import ItemsTotalsBar from "./components/ItemsTotalsBar";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { groupByDay, dateOnlyToLocal } from "../../../utils/dateGrouping";
@@ -172,7 +173,7 @@ export default function BookItems() {
     }, [dateValue, search, selectedFilters, sourceFilter]);
 
     const {
-        items, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
+        items, totals, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
     } = useXenBudgetItems(book._id, filters);
 
     const dayGroups = useMemo(() => groupByDay(items, (i) => i.date, "UTC"), [items]);
@@ -271,6 +272,17 @@ export default function BookItems() {
                         <Autocomplete
                             multiple disableCloseOnSelect size="small" fullWidth options={filterOptions}
                             value={selectedFilters} onChange={(_, v) => setSelectedFilters(v)}
+                            /* MUI reserves 56px at the right end for the clear and popup
+                            indicators together, on EVERY wrapped line - so each row of
+                            chips stops well short of the X. The dropdown arrow earns none
+                            of that here (clicking the field opens the list anyway), so it
+                            goes, and the reservation drops to what the clear X itself
+                            needs - any less and a full row of chips slides under it. */
+                            forcePopupIcon={false}
+                            sx={{
+                                "& .MuiAutocomplete-inputRoot": { pr: "38px !important" },
+                                "& .MuiAutocomplete-input": { minWidth: 20 },
+                            }}
                             groupBy={(o) => (
                                 o === TYPE_EXPENSE || o === TYPE_INCOME ? "Type"
                                     : o === NEED_FILTER || o === WANT_FILTER ? "Need / Want"
@@ -370,6 +382,7 @@ export default function BookItems() {
                             {dateFilterLabel(dateValue)}
                         </Button>
                     </Stack>
+                    {!isLoading && <ItemsTotalsBar totals={totals} />}
                 </Stack>
             </Box>
 

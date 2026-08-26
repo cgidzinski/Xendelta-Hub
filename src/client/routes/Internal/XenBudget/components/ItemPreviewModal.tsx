@@ -60,13 +60,23 @@ export default function ItemPreviewModal({ open, onClose, book, item, onEdit, on
             fullWidth maxWidth="sm" fullScreen={isMobile} open={open} onClose={onClose}
             slotProps={{ paper: { sx: { borderRadius: isMobile ? 0 : 2 } } }}
         >
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2, gap: 1 }}>
                 <DialogTitle sx={{ fontWeight: 700, p: 0 }}>Item</DialogTitle>
-                <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
+                {/* Edit lives up here beside the close button rather than as a footer bar:
+                the preview is short enough that a full-width button at the bottom was a
+                scroll away from the item it edits on a phone. */}
+                <Stack direction="row" alignItems="center" spacing={0.5}>
+                    {item && (
+                        <Button size="small" variant="contained" onClick={() => onEdit(item)}>
+                            Edit
+                        </Button>
+                    )}
+                    <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
+                </Stack>
             </Box>
 
             {item && (
-                <DialogContent sx={{ pt: 2 }}>
+                <DialogContent sx={{ pt: 2, pb: 3 }}>
                     <Stack spacing={2}>
                         <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.25 }}>
                             <Box
@@ -186,14 +196,6 @@ export default function ItemPreviewModal({ open, onClose, book, item, onEdit, on
                         )}
                     </Stack>
                 </DialogContent>
-            )}
-
-            {item && (
-                <Box sx={{ px: 3, pb: 3 }}>
-                    <Button fullWidth variant="contained" onClick={() => onEdit(item)}>
-                        Edit
-                    </Button>
-                </Box>
             )}
         </Dialog>
     );
