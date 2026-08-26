@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSocket } from "../useSocket";
+import { invalidateItemDerived } from "./invalidate";
 
 /**
  * Keeps an open book in sync with edits made by other members. This is what makes the
@@ -16,10 +17,7 @@ export function useXenBudgetSocket(bookId: string) {
 
         const handleBookUpdate = (data: { bookId: string }) => {
             if (data.bookId !== bookId) return;
-            queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
-            queryClient.invalidateQueries({ queryKey: ["xenbudget", "items", bookId] });
-            queryClient.invalidateQueries({ queryKey: ["xenbudget", "summary", bookId] });
-            queryClient.invalidateQueries({ queryKey: ["xenbudget", "budget-status", bookId] });
+            invalidateItemDerived(queryClient, bookId);
         };
 
         socket.on("xenbudget:book_update", handleBookUpdate);

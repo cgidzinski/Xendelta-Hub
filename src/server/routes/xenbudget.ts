@@ -48,6 +48,9 @@ import { generateUniqueFilename } from "../utils/mediaUtils";
 import {
   applyRules, ruleMatches, stripRuleEffects, type DraftItem, type Rule,
 } from "../utils/xenBudgetRules";
+import {
+  detectRecurring, monthlyCommitted, normalizeMerchant, merchantMatchPattern,
+} from "../utils/xenBudgetRecurring";
 import { serializeBookFor, serializeBooksFor, serializeItem, serializeItems } from "../utils/xenBudgetSerializer";
 import { notify } from "../utils/notificationUtils";
 const mongoose = require("mongoose");
@@ -57,6 +60,18 @@ const MAX_ITEMS_PAGE = 200;
 // exists so a malformed or hostile request can't ask the server to build an unbounded
 // number of documents in memory.
 const MAX_BULK_ROWS = 2000;
+
+// How far back recurring detection and the merchant rollup look when the caller doesn't
+// say. Long enough to see a yearly renewal repeat, short enough that a decade-old book
+// doesn't scan its whole history to answer "what do I pay every month".
+const DEFAULT_RECURRING_LOOKBACK_MONTHS = 18;
+const MAX_RECURRING_LOOKBACK_MONTHS = 60;
+// A ceiling on the rows either analysis will pull into memory. Both read a lean
+// projection (five small fields), so this is a few MB at worst.
+const MAX_ANALYSIS_ITEMS = 20000;
+// Past this many merchants a list stops being something anyone reads.
+const DEFAULT_MERCHANT_LIMIT = 25;
+const MAX_MERCHANT_LIMIT = 200;
 
 function callerId(req: Request): string {
   return (req.user as any)._id.toString();
@@ -2372,6 +2387,215 @@ module.exports = function (app: any) {
       }
     });
 
+  // --- Derived from history -------------------------------------------------
+
+  /**
+   * The window and currency both analyses below share.
+   *
+   * Currency is resolved exactly the way /summary resolves it: amounts in different
+   * currencies can't be clustered or added, so each analysis is scoped to one. Returns
+   * null when the book holds nothing at all, which both callers answer as an empty result
+   * rather than an error.
+   */
+  async function analysisScope(book: any, q: Record<string, string>, defaultMonths: number) {
+    const currencies: string[] = await XenBudgetItem.distinct("currency", { book_id: book._id });
+    if (currencies.length === 0) return null;
+    const currency = q.currency && currencies.includes(q.currency)
+      ? q.currency
+      : (currencies.includes(book.default_currency) ? book.default_currency : currencies[0]);
+
+    const to = q.to ? new Date(q.to) : new Date();
+    let from: Date;
+    if (q.from) {
+      from = new Date(q.from);
+    } else {
+      const months = Math.min(
+        MAX_RECURRING_LOOKBACK_MONTHS,
+        Math.max(1, Number(q.lookback_months) || defaultMonths),
+      );
+      from = new Date(to);
+      from.setUTCMonth(from.getUTCMonth() - months);
+    }
+    return { currency, currencies, from, to };
+  }
+
+  /**
+   * The rows both analyses read: expenses only, in one currency, over the window.
+   *
+   * Goes through baseItemMatch so "Off budget" stays excluded here exactly as it is
+   * everywhere else — a row deliberately set aside must not come back as a subscription.
+   * The { book_id, date } index covers this, and the projection is lean because a long
+   * book is tens of thousands of rows.
+   */
+  function analysisItems(book: any, scope: { currency: string; from: Date; to: Date }) {
+    const match = baseItemMatch(book._id, {
+      currency: scope.currency,
+      from: scope.from.toISOString(),
+      to: scope.to.toISOString(),
+      type: "expense",
+    });
+    return XenBudgetItem.find(match)
+      .select("date amount description original_description categories.name")
+      .sort({ date: -1 })
+      .limit(MAX_ANALYSIS_ITEMS)
+      .lean();
+  }
+
+  // GET /api/xenbudget/books/:bookId/recurring?currency&lookback_months&from&to
+  //
+  // Subscriptions and bills, derived from what has already been imported. Read-only: the
+  // real transactions keep arriving by CSV, so generating occurrences of our own would
+  // only double-count them.
+  app.get("/api/xenbudget/books/:bookId/recurring",
+    validateParams(xenBudgetBookIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const q = req.query as Record<string, string>;
+
+        const scope = await analysisScope(book, q, DEFAULT_RECURRING_LOOKBACK_MONTHS);
+        if (!scope) {
+          return res.json({
+            status: true,
+            message: "Recurring charges retrieved",
+            data: {
+              currency: book.default_currency, currencies: [],
+              from: null, to: null, series: [], monthly_committed: 0,
+            },
+          });
+        }
+
+        const items = await analysisItems(book, scope);
+        // `now` is passed in rather than read inside the detector, so every status in one
+        // response is measured against the same instant.
+        const series = detectRecurring(
+          (items as any[]).map((item) => ({
+            date: item.date,
+            amount: item.amount,
+            description: item.description || "",
+            categories: item.categories || [],
+          })),
+          new Date(),
+        );
+
+        res.json({
+          status: true,
+          message: "Recurring charges retrieved",
+          data: {
+            currency: scope.currency,
+            currencies: scope.currencies,
+            from: scope.from.toISOString(),
+            to: scope.to.toISOString(),
+            series,
+            monthly_committed: monthlyCommitted(series),
+          },
+        });
+      } catch (error) {
+        console.error("Error detecting recurring charges:", error);
+        res.status(500).json({ status: false, message: "Failed to detect recurring charges" });
+      }
+    });
+
+  // GET /api/xenbudget/books/:bookId/merchants?currency&from&to&limit
+  //
+  // Where the money actually went. Category answers "what kind of spending"; this answers
+  // "who was paid", which is the question a rule gets written from.
+  app.get("/api/xenbudget/books/:bookId/merchants",
+    validateParams(xenBudgetBookIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const q = req.query as Record<string, string>;
+
+        const limit = Math.min(
+          MAX_MERCHANT_LIMIT,
+          Math.max(1, Number(q.limit) || DEFAULT_MERCHANT_LIMIT),
+        );
+        const scope = await analysisScope(book, q, DEFAULT_RECURRING_LOOKBACK_MONTHS);
+        if (!scope) {
+          return res.json({
+            status: true,
+            message: "Merchants retrieved",
+            data: {
+              currency: book.default_currency, currencies: [],
+              from: null, to: null, merchants: [], total: 0, merchant_count: 0,
+            },
+          });
+        }
+
+        const items = await analysisItems(book, scope);
+
+        // Grouped in JS rather than in an aggregation pipeline: normalizeMerchant is real
+        // string logic (stacked processor prefixes, reference numbers), not something
+        // $regexReplace should be asked to reproduce — and keeping ONE implementation is
+        // what lets a merchant row and a recurring series agree on what a merchant is.
+        interface MerchantGroup {
+          merchant: string; total: number; count: number;
+          last_date: Date; sample_description: string; categories: string[];
+        }
+        const groups = new Map<string, MerchantGroup>();
+        let total = 0;
+
+        for (const item of items as any[]) {
+          // The pre-rule text when there is one: a rule's set_description rewrite is a
+          // tidy-up for humans, and grouping on it would hide who was actually paid.
+          const raw = item.original_description || item.description || "";
+          const merchant = normalizeMerchant(raw);
+          if (!merchant) continue;
+          total += item.amount || 0;
+
+          const existing = groups.get(merchant);
+          const group: MerchantGroup = existing ?? {
+            merchant,
+            total: 0,
+            count: 0,
+            // Items arrive newest first, so the first one seen is the most recent.
+            last_date: item.date,
+            sample_description: raw,
+            categories: [],
+          };
+          group.total += item.amount || 0;
+          group.count += 1;
+          for (const category of item.categories || []) {
+            if (category?.name && !group.categories.includes(category.name)) {
+              group.categories.push(category.name);
+            }
+          }
+          if (!existing) groups.set(merchant, group);
+        }
+
+        const ranked = [...groups.values()].sort((a, b) => b.total - a.total);
+
+        res.json({
+          status: true,
+          message: "Merchants retrieved",
+          data: {
+            currency: scope.currency,
+            currencies: scope.currencies,
+            from: scope.from.toISOString(),
+            to: scope.to.toISOString(),
+            // The full count, so the UI can say what the tail it isn't showing amounts to.
+            merchant_count: ranked.length,
+            total: roundMoney(total),
+            merchants: ranked.slice(0, limit).map((g) => ({
+              merchant: g.merchant,
+              sample_description: g.sample_description,
+              total: roundMoney(g.total),
+              count: g.count,
+              average: roundMoney(g.total / g.count),
+              last_date: new Date(g.last_date).toISOString(),
+              categories: g.categories,
+            })),
+          },
+        });
+      } catch (error) {
+        console.error("Error building merchant rollup:", error);
+        res.status(500).json({ status: false, message: "Failed to build merchant rollup" });
+      }
+    });
+
   // --- Items ---------------------------------------------------------------
 
   // GET /api/xenbudget/books/:bookId/items
@@ -2395,6 +2619,23 @@ module.exports = function (app: any) {
       }
 
       if (q.q) filter.description = { $regex: escapeRegex(q.q), $options: "i" };
+
+      // One merchant, as the recurring and merchant analyses group them. Not a plain text
+      // search: normalising is lossy ("NETFLIX.COM 8829472" -> "NETFLIX COM"), so the name
+      // has to be turned back into a pattern that tolerates the punctuation and reference
+      // numbers it dropped. Matched against original_description too, so a rule that
+      // renamed the row for readability doesn't hide it from its own merchant.
+      if (q.merchant) {
+        const pattern = merchantMatchPattern(q.merchant);
+        // A name that normalises away to nothing would produce an empty pattern, which
+        // matches EVERY row — silently returning the whole book instead of one merchant.
+        if (pattern) {
+          const rx = { $regex: pattern, $options: "i" };
+          filter.$and = [...(filter.$and || []), {
+            $or: [{ description: rx }, { original_description: rx }],
+          }];
+        }
+      }
 
       // Filtering by card means "every batch that used this saved mapping", since the
       // batch is what links items back to a preset.

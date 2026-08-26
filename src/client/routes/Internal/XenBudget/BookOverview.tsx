@@ -7,8 +7,10 @@ import InsightsIcon from "@mui/icons-material/Insights";
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
+import { useXenBudgetRecurring } from "../../../hooks/xenbudget/useRecurring";
 import { CategoryChip } from "./components/LabelChip";
 import BudgetCard from "./components/budget/BudgetCard";
+import RecurringCard from "./components/recurring/RecurringCard";
 import { useBalancedColumns } from "./components/budget/useBalancedColumns";
 import { sortBudgets, overCount, metCount } from "./components/budget/sortBudgets";
 import TimePeriodFilter, {
@@ -54,6 +56,11 @@ export default function BookOverview() {
         () => sortBudgets(budgetStatus),
         [budgetStatus],
     );
+    // Deliberately NOT scoped to the selected period: a subscription is a standing
+    // commitment, so "what do I pay every month" is the same answer whether you're looking
+    // at August or at the year. Detection needs a long run of history to see a cadence at
+    // all, which a one-month window would never contain.
+    const { recurring } = useXenBudgetRecurring(book._id, { currency });
     // Balanced columns: each card goes into the shortest column, and the result is locked
     // so expanding a card only grows its own column - cards never reshuffle.
     const isSm = useMediaQuery("(min-width:600px)");
@@ -228,6 +235,19 @@ export default function BookOverview() {
                             ))}
                         </Box>
                     </Card>
+                )}
+
+                {recurring && recurring.series.length > 0 && (
+                    <RecurringCard
+                        series={recurring.series}
+                        monthlyCommitted={recurring.monthly_committed}
+                        currency={recurring.currency}
+                        categoryRegistry={book.categories}
+                        onViewItems={(s) => navigate(
+                            `/internal/xenbudget/books/${book._id}/items`,
+                            { state: { merchantSeed: { merchant: s.merchant } } },
+                        )}
+                    />
                 )}
 
                 {nothingYet ? (

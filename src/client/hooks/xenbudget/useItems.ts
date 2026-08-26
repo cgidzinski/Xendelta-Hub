@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
+import { invalidateItemDerived } from "./invalidate";
 import type { XenBudgetItem, ItemsPage, CreateItemInput, UpdateItemInput } from "./types";
 
 export interface ItemFilters {
@@ -22,6 +23,12 @@ export interface ItemFilters {
     /** Only items imported under this saved mapping (preset id). */
     card?: string;
     q?: string;
+    /**
+     * One merchant, as the recurring and merchant analyses group them. Distinct from `q`:
+     * the name is normalised, so the server turns it back into a pattern that tolerates
+     * the punctuation and reference numbers normalisation dropped.
+     */
+    merchant?: string;
 }
 
 function toParams(filters: ItemFilters): Record<string, string> {
@@ -40,6 +47,7 @@ function toParams(filters: ItemFilters): Record<string, string> {
     if (filters.source) params.source = filters.source;
     if (filters.card) params.card = filters.card;
     if (filters.q) params.q = filters.q;
+    if (filters.merchant) params.merchant = filters.merchant;
     return params;
 }
 
@@ -53,12 +61,7 @@ function toParams(filters: ItemFilters): Record<string, string> {
 export function useXenBudgetItemMutations(bookId: string) {
     const queryClient = useQueryClient();
 
-    const invalidate = () => {
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "items", bookId] });
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "summary", bookId] });
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "budget-status", bookId] });
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
-    };
+    const invalidate = () => invalidateItemDerived(queryClient, bookId);
 
     const createMutation = useMutation({
         mutationFn: async (input: CreateItemInput) => {

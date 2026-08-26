@@ -6,6 +6,7 @@ import {
 import SearchIcon from "@mui/icons-material/Search";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import AutorenewIcon from "@mui/icons-material/Autorenew";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
@@ -31,6 +32,15 @@ interface BudgetFilterSeed {
     from: string;
     to: string;
     period: string;
+}
+
+/**
+ * What the Recurring card and the merchant report hand over. Unlike a budget seed it
+ * carries no window — the point of opening a merchant is to see its whole history, so it
+ * clears the date filter rather than inheriting the one that happened to be remembered.
+ */
+interface MerchantSeed {
+    merchant: string;
 }
 
 // Synthetic options in the filters dropdown below — not real flags or fields on the item.
@@ -84,13 +94,25 @@ export default function BookItems() {
     const { book, onPreviewItem } = useOutletContext<BookDetailContext>();
     // "View items" on a budget hands over that budget's scope and window, so the tab opens
     // showing the items the bar was measuring rather than everything in the book.
-    const seed = (useLocation().state as { budgetFilter?: BudgetFilterSeed } | null)?.budgetFilter;
+    const navigationState = useLocation().state as {
+        budgetFilter?: BudgetFilterSeed;
+        merchantSeed?: MerchantSeed;
+    } | null;
+    const seed = navigationState?.budgetFilter;
     const [search, setSearch] = useState("");
+    // Held as its own filter rather than dropped into the search box: the merchant name is
+    // normalised, so as literal search text it would match nothing at all.
+    const [merchant, setMerchant] = useState<string | null>(
+        navigationState?.merchantSeed?.merchant ?? null,
+    );
     // Remembered per book, so leaving and coming back to Items picks up the same date
     // filter — except a budget's "View items" seed always wins, since that's a deliberate
     // navigation into a specific window, not a preference to fall back on.
     const dateLsKey = `xenbudget_dateFilter_items_${book._id}`;
     const [dateValue, setDateValueState] = useState<DateFilterValue>(() => {
+        // A merchant seed wants the whole history, so it clears the window rather than
+        // landing inside a remembered "this month" that hides most of the charges.
+        if (navigationState?.merchantSeed) return DEFAULT_DATE_FILTER;
         if (!seed) return parseDateFilterValue(localStorage.getItem(dateLsKey)) ?? DEFAULT_DATE_FILTER;
         // A monthly budget's window is one whole calendar month, so name it as that month
         // rather than an "Aug 1 – Aug 31" day range. Every other period keeps its exact
@@ -168,8 +190,9 @@ export default function BookItems() {
             excluded: selectedFilters.includes(FLAG_OFF_BUDGET) ? "all" : "hidden",
             source,
             card,
+            merchant: merchant ?? undefined,
         };
-    }, [dateValue, search, selectedFilters, sourceFilter]);
+    }, [dateValue, search, selectedFilters, sourceFilter, merchant]);
 
     const {
         items, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
@@ -242,6 +265,16 @@ export default function BookItems() {
                         >
                             {reviewCount} Missing Category
                         </Alert>
+                    )}
+                    {merchant && (
+                        <Chip
+                            size="small"
+                            variant="outlined"
+                            icon={<AutorenewIcon sx={{ fontSize: 14 }} />}
+                            label={`Merchant: ${merchant}`}
+                            onDelete={() => setMerchant(null)}
+                            sx={{ alignSelf: "flex-start" }}
+                        />
                     )}
                     <TextField
                         size="small" fullWidth placeholder="Search descriptions"
@@ -385,7 +418,7 @@ export default function BookItems() {
                         </Box>
                         <Typography variant="subtitle1">Nothing here</Typography>
                         <Typography variant="body2" color="text.secondary">
-                            {search || dateValue.preset !== "all"
+                            {search || dateValue.preset !== "all" || merchant
                                 || selectedFilters.length > 0 || sourceFilter !== "all"
                                 ? "No items match those filters."
                                 : "Add your first item, or import a CSV from your bank."}

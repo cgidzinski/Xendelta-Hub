@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
+import { invalidateItemDerived } from "./invalidate";
 import type { XenBudgetBook, RuleInput, ReapplyResult } from "./types";
 
 export interface RulePreviewMatch {
@@ -34,12 +35,7 @@ export function useXenBudgetRules(bookId: string) {
 
     // A sweep rewrites categories, flags and exclusions across the book, so everything
     // derived from items is stale afterwards.
-    const invalidateEverything = () => {
-        invalidate();
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "items", bookId] });
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "summary", bookId] });
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "budget-status", bookId] });
-    };
+    const invalidateEverything = () => invalidateItemDerived(queryClient, bookId);
 
     const createMutation = useMutation({
         mutationFn: async (input: RuleInput) => {

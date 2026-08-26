@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
+import { invalidateItemDerived } from "./invalidate";
 import type {
     XenBudgetBook, ImportPreviewResult, DuplicateMatch, BulkImportResult, PresetInput,
     XenBudgetImportBatch,
@@ -45,10 +46,8 @@ export function useXenBudgetImport(bookId: string) {
     const queryClient = useQueryClient();
 
     const invalidate = () => {
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "items", bookId] });
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "summary", bookId] });
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "budget-status", bookId] });
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
+        invalidateItemDerived(queryClient, bookId);
+        // An import also adds a batch to the history list, which nothing else touches.
         queryClient.invalidateQueries({ queryKey: ["xenbudget", "imports", bookId] });
     };
 
