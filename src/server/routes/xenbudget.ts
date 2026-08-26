@@ -53,6 +53,7 @@ import {
 } from "../utils/xenBudgetRecurring";
 import { serializeBookFor, serializeBooksFor, serializeItem, serializeItems } from "../utils/xenBudgetSerializer";
 import { notify } from "../utils/notificationUtils";
+import { csvLine } from "../utils/csvWriter";
 const mongoose = require("mongoose");
 
 const MAX_ITEMS_PAGE = 200;
@@ -2646,6 +2647,61 @@ module.exports = function (app: any) {
         filter.import_batch_id = { $in: batchIds };
       }
 
+      // CSV export of exactly this view.
+      //
+      // Handled INSIDE the list handler, on the far side of the filter construction above
+      // and before pagination, so the export and the list can never be filtered
+      // differently — the one property that matters for a file someone hands to somebody
+      // else. Exporting from the client would only ever cover the pages it had loaded.
+      if (q.format === "csv") {
+        await book.populate("members", "username avatar");
+        const usernameById = new Map<string, string>(
+          (book.members as any[]).map((m: any) => [m._id.toString(), m.username || "Unknown"]),
+        );
+        const batchLabels = new Map<string, string>();
+        (book.import_batches || []).forEach((b: any) => {
+          const label = resolveBatchLabel(b, book);
+          if (label) batchLabels.set(b._id.toString(), label);
+        });
+
+        const safeName = book.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition",
+          `attachment; filename="xenbudget-${safeName}-items-${new Date().toISOString().slice(0, 10)}.csv"`);
+
+        res.write(csvLine([
+          "Date", "Description", "Amount", "Type", "Currency",
+          "Categories", "Flags", "People", "Notes", "Source", "Card",
+        ]));
+
+        // Streamed from a cursor rather than loaded whole, the same way the book export
+        // does it: a filtered view can still be tens of thousands of rows, and buffering
+        // them all would spike memory per request.
+        const cursor = XenBudgetItem.find(filter).sort({ date: -1, _id: -1 }).lean().cursor();
+        for await (const item of cursor as any) {
+          res.write(csvLine([
+            new Date(item.date).toISOString().slice(0, 10),
+            item.description || "",
+            // Always positive on the row, with `type` carrying the sign — the same
+            // convention the schema stores, so a re-import reads back what it wrote.
+            item.amount,
+            item.type || "expense",
+            item.currency || book.default_currency,
+            // A weighted category keeps its share, otherwise the row would claim the
+            // whole amount landed in each of them.
+            (item.categories || []).map((c: any) => (
+              c.percentage != null && c.percentage < 100 ? `${c.name} (${c.percentage}%)` : c.name
+            )).join("; "),
+            (item.flags || []).join("; "),
+            (item.shares || []).map((s: any) => usernameById.get(s.user_id) || s.user_id).join("; "),
+            item.notes || "",
+            item.source || "manual",
+            (item.import_batch_id && batchLabels.get(item.import_batch_id.toString())) || "",
+          ]));
+        }
+        return res.end();
+      }
+
       // Keyset pagination on the (date, _id) sort, so a page boundary can't drop or
       // repeat an item the way a skip/limit offset does when rows are inserted.
       if (q.cursor) {
@@ -2682,7 +2738,10 @@ module.exports = function (app: any) {
       });
     } catch (error) {
       console.error("Error fetching items:", error);
-      res.status(500).json({ status: false, message: "Failed to fetch items" });
+      // A CSV export may already be streaming, in which case the headers are long gone and
+      // the only honest signal left is an abrupt end.
+      if (res.headersSent) res.end();
+      else res.status(500).json({ status: false, message: "Failed to fetch items" });
     }
   });
 

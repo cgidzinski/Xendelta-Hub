@@ -11,6 +11,9 @@ import { useXenBudgetRecurring } from "../../../hooks/xenbudget/useRecurring";
 import { CategoryChip } from "./components/LabelChip";
 import BudgetCard from "./components/budget/BudgetCard";
 import RecurringCard from "./components/recurring/RecurringCard";
+import ProjectionCard from "./components/budget/ProjectionCard";
+import { projectBook } from "./components/budget/bookPace";
+import { commitmentTotal } from "./components/recurring/recurringDisplay";
 import { useBalancedColumns } from "./components/budget/useBalancedColumns";
 import { sortBudgets, overCount, metCount } from "./components/budget/sortBudgets";
 import TimePeriodFilter, {
@@ -78,6 +81,21 @@ export default function BookOverview() {
     // necessarily the one the summary settled on - label them with the one they're in.
     const budgetCurrency = budgetStatusResponse?.currency ?? currency;
 
+    // Where the book lands by the end of the selected window. The commitments feeding it
+    // are only the charges still TO COME — one already posted is inside the spend figure,
+    // and adding it again would inflate the projection by a month of subscriptions.
+    const projection = useMemo(() => {
+        if (!summary) return null;
+        return projectBook({
+            periodFrom: from.toISOString(),
+            periodTo: to.toISOString(),
+            asOf: new Date().toISOString(),
+            expense: summary.totals.expense,
+            income: summary.totals.income,
+            committed: commitmentTotal(recurring?.series ?? [], new Date(), to),
+        });
+    }, [summary, recurring, from, to]);
+
     const categoryRows = useMemo(() => {
         if (!summary) return [];
         const rows = summary.by_category.map((c) => ({
@@ -137,6 +155,14 @@ export default function BookOverview() {
                     income={totals.income} expense={totals.expense} net={totals.net}
                     currency={summary.currency} sx={{ mb: 2 }}
                 />
+
+                {!nothingYet && projection && (
+                    <ProjectionCard
+                        projection={projection}
+                        currency={summary.currency}
+                        periodLabel={label}
+                    />
+                )}
 
                 <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
                     <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>

@@ -1,18 +1,21 @@
 import { useMemo, useState } from "react";
+import { useSnackbar } from "notistack";
 import { useLocation, useOutletContext } from "react-router-dom";
 import {
-    Alert, Autocomplete, Avatar, Box, Button, Chip, Divider, InputAdornment, MenuItem, Stack, TextField, Typography,
+    Alert, Autocomplete, Avatar, Box, Button, Chip, Divider, IconButton, InputAdornment,
+    MenuItem, Stack, TextField, Tooltip, Typography,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import AutorenewIcon from "@mui/icons-material/Autorenew";
+import DownloadIcon from "@mui/icons-material/Download";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import { startOfWeek, startOfYear, subWeeks, subDays, startOfMonth, endOfMonth } from "date-fns";
 import type { BookDetailContext } from "./BookDetail";
-import { useXenBudgetItems, type ItemFilters } from "../../../hooks/xenbudget/useItems";
+import { useXenBudgetItems, exportItemsCsv, type ItemFilters } from "../../../hooks/xenbudget/useItems";
 import ItemListItem from "./components/ItemListItem";
 import { CategoryChip, FlagChip } from "./components/LabelChip";
 import DateFilterModal, {
@@ -134,6 +137,8 @@ export default function BookItems() {
         localStorage.setItem(dateLsKey, serializeDateFilterValue(next));
     };
     const [dateModalOpen, setDateModalOpen] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
+    const { enqueueSnackbar } = useSnackbar();
     const [reviewOpen, setReviewOpen] = useState(false);
     // Which source/card the list is narrowed to: "all", "manual", "csv", or "card:<id>".
     const [sourceFilter, setSourceFilter] = useState("all");
@@ -402,6 +407,28 @@ export default function BookItems() {
                         >
                             {dateFilterLabel(dateValue)}
                         </Button>
+                        <Tooltip title="Export this view as CSV">
+                            {/* A span, because a disabled button fires no events and the
+                            tooltip would have nothing to listen to. */}
+                            <span>
+                                <IconButton
+                                    size="small"
+                                    disabled={isExporting || items.length === 0}
+                                    onClick={async () => {
+                                        setIsExporting(true);
+                                        try {
+                                            await exportItemsCsv(book._id, filters, book.name);
+                                        } catch {
+                                            enqueueSnackbar("Could not export these items", { variant: "error" });
+                                        } finally {
+                                            setIsExporting(false);
+                                        }
+                                    }}
+                                >
+                                    <DownloadIcon fontSize="small" />
+                                </IconButton>
+                            </span>
+                        </Tooltip>
                     </Stack>
                 </Stack>
             </Box>
