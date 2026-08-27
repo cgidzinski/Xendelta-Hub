@@ -218,11 +218,29 @@ export default function BookItems() {
                             },
                         }}
                     />
-                    <Stack direction="row" spacing={1} alignItems="flex-start">
+                    {/* One row from sm up; on a phone Filters takes the whole first line
+                    and Source and the period pill share the one below.
+
+                    #128 deliberately went the other way and put this back on a single
+                    row, so this is not that decision being undone by accident. What
+                    changed under it is the period button's label: it used to read "All"
+                    by default, and now the window is shared across the tabs it reads
+                    "August 2026", or "Last 3 months". Measured at 360px, the row needs
+                    the button at ~99px to fit and those labels take 135-152, so a single
+                    row now scrolls the page sideways. #128's real fix - collapsing the
+                    input's min-width and padding, just below - is untouched and still
+                    what keeps a lone chip on one 40px line at every width. */}
+                    <Stack
+                        useFlexGap direction="row" spacing={1}
+                        alignItems="flex-start" sx={{ flexWrap: "wrap" }}
+                    >
                         <TextField
                             select size="small" label="Source" value={sourceFilter}
                             onChange={(e) => setSourceFilter(e.target.value)}
-                            sx={{ flexShrink: 0, "& .MuiInputBase-root": { width: "auto" } }}
+                            sx={{
+                                flexShrink: 0, order: { xs: 2, sm: 0 },
+                                "& .MuiInputBase-root": { width: "auto" },
+                            }}
                         >
                             <MenuItem value="all">All</MenuItem>
                             <MenuItem value="manual">Manual</MenuItem>
@@ -233,9 +251,12 @@ export default function BookItems() {
                             ))}
                         </TextField>
                         <Autocomplete
-                            multiple disableCloseOnSelect size="small" fullWidth options={filterOptions}
+                            multiple disableCloseOnSelect size="small" options={filterOptions}
                             value={selectedFilters} onChange={(_, v) => setSelectedFilters(v)}
                             sx={{
+                                flexGrow: 1, minWidth: 0,
+                                flexBasis: { xs: "100%", sm: 0 },
+                                order: { xs: 1, sm: 0 },
                                 /* The text input MUI puts inside the field is flex-grow
                                 with a 30px min-width and 12px of horizontal padding, so on
                                 a phone it couldn't fit in what a chip left over and wrapped
@@ -366,7 +387,7 @@ export default function BookItems() {
                             stretching it to two lines tall whenever the filters wrapped.
                             Pinned to the fields' height instead, so it matches them and
                             stays put. */
-                            sx={{ height: 40 }}
+                            sx={{ height: 40, order: { xs: 3, sm: 0 } }}
                         />
                     </Stack>
                     {!isLoading && <ItemsTotalsBar totals={totals} />}
