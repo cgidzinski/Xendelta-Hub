@@ -252,7 +252,7 @@ export default function ItemForm({
                         </ToggleButtonGroup>
 
                         <TextField
-                            autoFocus fullWidth label="Description"
+                            autoFocus={!item} fullWidth label="Description"
                             placeholder={type === "income" ? "Paycheque" : "Groceries"}
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
@@ -265,6 +265,7 @@ export default function ItemForm({
                                 if (clean !== null) setAmount(clean);
                             }}
                             slotProps={{
+                                htmlInput: { inputMode: "decimal" },
                                 input: {
                                     startAdornment: (
                                         <InputAdornment position="start">

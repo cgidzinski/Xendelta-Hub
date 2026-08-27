@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import {
     Avatar, Box, Card, MenuItem, Stack, TextField, Typography, useMediaQuery,
@@ -17,9 +17,8 @@ import { projectBook } from "./components/budget/bookPace";
 import { commitmentTotal } from "./components/recurring/recurringDisplay";
 import { useBalancedColumns } from "./components/budget/useBalancedColumns";
 import { sortBudgets, overCount, metCount } from "./components/budget/sortBudgets";
-import TimePeriodFilter, {
-    defaultMonthMode, parsePeriodMode, resolvePeriod, serializePeriodMode, type PeriodMode,
-} from "./components/TimePeriodFilter";
+import TimePeriodFilter, { summaryQuickPicks } from "./components/TimePeriodFilter";
+import { resolvePeriod } from "./components/periodMode";
 import TotalsSummary from "./components/TotalsSummary";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -29,20 +28,13 @@ import { INCOME_COLOR } from "../../../components/ui/chartColors";
 import { cardSx, sectionLabelSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
 
 export default function BookOverview() {
-    const { book, currency, onCurrencyChange } = useOutletContext<BookDetailContext>();
+    const {
+        book, currency, onCurrencyChange, period, onPeriodChange,
+    } = useOutletContext<BookDetailContext>();
     const navigate = useNavigate();
 
-    // Remembered per book, so leaving and coming back to the Overview picks up where you
-    // left off instead of resetting to "this month" every time.
-    const periodLsKey = `xenbudget_period_overview_${book._id}`;
-    const [period, setPeriodState] = useState<PeriodMode>(
-        () => parsePeriodMode(localStorage.getItem(periodLsKey)) ?? defaultMonthMode(),
-    );
-    const setPeriod = (next: PeriodMode) => {
-        setPeriodState(next);
-        localStorage.setItem(periodLsKey, serializePeriodMode(next));
-    };
-    const { from, to, groupBy, label } = useMemo(() => resolvePeriod(period), [period]);
+    // The window is the book's, not this tab's — see BookDetail.
+    const { from, to, groupBy, label, bounded } = useMemo(() => resolvePeriod(period), [period]);
 
     const { summary, isLoading, isError, error } = useXenBudgetSummary(book._id, {
         currency, from: from.toISOString(), to: to.toISOString(), group_by: groupBy,
@@ -89,6 +81,10 @@ export default function BookOverview() {
     // and adding it again would inflate the projection by a month of subscriptions.
     const projection = useMemo(() => {
         if (!summary) return null;
+        // "All time" runs from the epoch to today, so there is no end to project towards —
+        // the figure would read "100% through All time" and restate the actuals. A
+        // projection only means something inside a window that actually closes.
+        if (!bounded) return null;
         return projectBook({
             periodFrom: from.toISOString(),
             periodTo: to.toISOString(),
@@ -97,7 +93,7 @@ export default function BookOverview() {
             income: summary.totals.income,
             committed: commitmentTotal(recurring?.series ?? [], new Date(), to),
         });
-    }, [summary, recurring, from, to]);
+    }, [summary, recurring, from, to, bounded]);
 
     const categoryRows = useMemo(() => {
         if (!summary) return [];
@@ -147,8 +143,9 @@ export default function BookOverview() {
                         </TextField>
                     )}
                     <TimePeriodFilter
-                        mode={period} onModeChange={setPeriod}
-                        showExtraPresets
+                        mode={period} onModeChange={onPeriodChange}
+                        quickPicks={summaryQuickPicks()}
+                        sx={{ alignSelf: "flex-end" }}
                     />
                 </Stack>
             </Box>

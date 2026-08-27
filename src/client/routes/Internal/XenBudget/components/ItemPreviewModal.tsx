@@ -1,9 +1,10 @@
 import { useState } from "react";
 import {
-    Avatar, AvatarGroup, Box, Button, Dialog, DialogContent,
-    DialogTitle, IconButton, Stack, Typography, alpha,
+    Avatar, AvatarGroup, Box, Dialog, DialogContent,
+    DialogTitle, IconButton, Stack, Tooltip, Typography, alpha,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import EditIcon from "@mui/icons-material/Edit";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
@@ -60,13 +61,25 @@ export default function ItemPreviewModal({ open, onClose, book, item, onEdit, on
             fullWidth maxWidth="sm" fullScreen={isMobile} open={open} onClose={onClose}
             slotProps={{ paper: { sx: { borderRadius: isMobile ? 0 : 2 } } }}
         >
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2, gap: 1 }}>
                 <DialogTitle sx={{ fontWeight: 700, p: 0 }}>Item</DialogTitle>
-                <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
+                {/* Edit lives up here beside the close button rather than as a footer bar:
+                the preview is short enough that a full-width button at the bottom was a
+                scroll away from the item it edits on a phone. */}
+                <Stack direction="row" alignItems="center" spacing={0.5}>
+                    {item && (
+                        <Tooltip title="Edit">
+                            <IconButton onClick={() => onEdit(item)} size="small" aria-label="Edit item">
+                                <EditIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    )}
+                    <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
+                </Stack>
             </Box>
 
             {item && (
-                <DialogContent sx={{ pt: 2 }}>
+                <DialogContent sx={{ pt: 2, pb: 3 }}>
                     <Stack spacing={2}>
                         <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.25 }}>
                             <Box
@@ -186,14 +199,6 @@ export default function ItemPreviewModal({ open, onClose, book, item, onEdit, on
                         )}
                     </Stack>
                 </DialogContent>
-            )}
-
-            {item && (
-                <Box sx={{ px: 3, pb: 3 }}>
-                    <Button fullWidth variant="contained" onClick={() => onEdit(item)}>
-                        Edit
-                    </Button>
-                </Box>
             )}
         </Dialog>
     );

@@ -2744,6 +2744,17 @@ module.exports = function (app: any) {
         return res.end();
       }
 
+      // The headline for the filtered list, computed over EVERY matching item rather
+      // than the pages loaded so far - a total that grows as you press "Load more" is
+      // worse than no total at all. Snapshotted before the cursor narrows the filter
+      // below, so page two doesn't come back with a total for page two.
+      //
+      // Only the first page carries it: the figure is the same for every page of a given
+      // filter, and a book fed by CSV imports is exactly the size where re-aggregating
+      // the whole thing per "Load more" would be felt.
+      const totalsFilter = { ...filter };
+      const wantsTotals = !q.cursor;
+
       // Keyset pagination on the (date, _id) sort, so a page boundary can't drop or
       // repeat an item the way a skip/limit offset does when rows are inserted.
       if (q.cursor) {
@@ -2757,7 +2768,36 @@ module.exports = function (app: any) {
       }
 
       const limit = Math.min(parseInt(q.limit || "100", 10) || 100, MAX_ITEMS_PAGE);
-      const items = await XenBudgetItem.find(filter).sort({ date: -1, _id: -1 }).limit(limit + 1).lean();
+      const [items, totalsRows] = await Promise.all([
+        XenBudgetItem.find(filter).sort({ date: -1, _id: -1 }).limit(limit + 1).lean(),
+        // Amounts in different currencies can't be added together (the same rule the
+        // summary route follows), so the total is per currency and the client shows one
+        // line each - which for almost every book is exactly one line.
+        wantsTotals ? XenBudgetItem.aggregate([
+          { $match: totalsFilter },
+          {
+            $group: {
+              _id: "$currency",
+              income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] } },
+              expense: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] } },
+              count: { $sum: 1 },
+            },
+          },
+          { $sort: { count: -1, _id: 1 } },
+        ]) : [],
+      ]);
+
+      const totals = totalsRows.map((row: any) => {
+        const income = roundMoney(row.income);
+        const expense = roundMoney(row.expense);
+        return {
+          currency: row._id,
+          income,
+          expense,
+          net: roundMoney(income - expense),
+          count: row.count,
+        };
+      });
 
       const hasMore = items.length > limit;
       const page = hasMore ? items.slice(0, limit) : items;
@@ -2776,7 +2816,7 @@ module.exports = function (app: any) {
       res.json({
         status: true,
         message: "Items retrieved",
-        data: { items: serializeItems(page, batchLabelById), next_cursor: nextCursor, has_more: hasMore },
+        data: { items: serializeItems(page, batchLabelById), totals, next_cursor: nextCursor, has_more: hasMore },
       });
     } catch (error) {
       console.error("Error fetching items:", error);

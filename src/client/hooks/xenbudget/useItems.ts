@@ -182,6 +182,9 @@ export function useXenBudgetItems(bookId: string, filters: ItemFilters = {}) {
 
     return {
         items: query.data?.pages.flatMap((p) => p.items) ?? [],
+        // Every page carries the same figure - it covers the whole filtered set, not the
+        // page - so the first one answers for all of them.
+        totals: query.data?.pages[0]?.totals ?? [],
         isLoading: query.isLoading,
         isError: query.isError,
         error: query.error,

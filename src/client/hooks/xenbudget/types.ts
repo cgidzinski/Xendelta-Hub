@@ -460,8 +460,23 @@ export interface XenBudgetSummary {
     totals: { expense: number; income: number; net: number; count: number };
 }
 
+/** In/Out/Net over every item matching the list's filters, for one currency. */
+export interface ItemsTotals {
+    currency: string;
+    income: number;
+    expense: number;
+    net: number;
+    count: number;
+}
+
 export interface ItemsPage {
     items: XenBudgetItem[];
+    /**
+     * The whole filtered set, not this page - one entry per currency present, busiest
+     * first. Only the first page carries it (the figure is the same for every page of a
+     * filter), so read it off page 0 rather than the page in hand.
+     */
+    totals: ItemsTotals[];
     next_cursor: string | null;
     has_more: boolean;
 }

@@ -1,28 +1,26 @@
-import { useMemo, useState } from "react";
-import { useSnackbar } from "notistack";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useOutletContext } from "react-router-dom";
+import { useSnackbar } from "notistack";
 import {
     Alert, Autocomplete, Avatar, Box, Button, Chip, Divider, IconButton, InputAdornment,
     MenuItem, Stack, TextField, Tooltip, Typography,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
-import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import AutorenewIcon from "@mui/icons-material/Autorenew";
 import DownloadIcon from "@mui/icons-material/Download";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
-import { startOfWeek, startOfYear, subWeeks, subDays, startOfMonth, endOfMonth } from "date-fns";
+import { startOfMonth } from "date-fns";
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetItems, exportItemsCsv, type ItemFilters } from "../../../hooks/xenbudget/useItems";
 import ItemListItem from "./components/ItemListItem";
 import { CategoryChip, FlagChip } from "./components/LabelChip";
-import DateFilterModal, {
-    dateFilterLabel, DEFAULT_DATE_FILTER, parseDateFilterValue, serializeDateFilterValue,
-    type DateFilterValue,
-} from "./components/DateFilterModal";
+import TimePeriodFilter, { itemQuickPicks } from "./components/TimePeriodFilter";
+import { resolvePeriod } from "./components/periodMode";
 import ReviewModal from "./components/ReviewModal";
+import ItemsTotalsBar from "./components/ItemsTotalsBar";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { groupByDay, dateOnlyToLocal } from "../../../utils/dateGrouping";
@@ -40,7 +38,7 @@ interface BudgetFilterSeed {
 /**
  * What the Recurring card and the merchant report hand over. Unlike a budget seed it
  * carries no window — the point of opening a merchant is to see its whole history, so it
- * clears the date filter rather than inheriting the one that happened to be remembered.
+ * widens the shared period to "all" rather than inheriting whatever was last set.
  */
 interface MerchantSeed {
     merchant: string;
@@ -61,85 +59,55 @@ const PERSON_PREFIX = "__person__";
 const FLAG_UNCATEGORISED = "Uncategorised";
 const FLAG_NEEDS_REVIEW = "Needs review";
 
-/** UTC midnight of a local-midnight Date's calendar day — item dates are date-only UTC. */
-function startOfDayUtc(d: Date): string {
-    return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString();
-}
-
-/** The end of a calendar day in UTC, so an inclusive `$lte` still covers the whole day. */
-function endOfDayUtc(d: Date): string {
-    return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999)).toISOString();
-}
-
-function dateRange(value: DateFilterValue): { from?: string; to?: string } {
-    const now = new Date();
-    switch (value.preset) {
-        case "thisWeek":
-            return { from: startOfDayUtc(startOfWeek(now)) };
-        case "lastWeek":
-            return {
-                from: startOfDayUtc(startOfWeek(subWeeks(now, 1))),
-                to: endOfDayUtc(subDays(startOfWeek(now), 1)),
-            };
-        case "thisYear":
-            return { from: startOfDayUtc(startOfYear(now)) };
-        case "custom":
-            return {
-                from: value.from ? startOfDayUtc(value.from) : undefined,
-                to: value.to ? endOfDayUtc(value.to) : undefined,
-            };
-        default:
-            return {};
-    }
-}
-
 export default function BookItems() {
-    const { book, onPreviewItem } = useOutletContext<BookDetailContext>();
+    const {
+        book, onPreviewItem, period, onPeriodChange,
+    } = useOutletContext<BookDetailContext>();
     // "View items" on a budget hands over that budget's scope and window, so the tab opens
-    // showing the items the bar was measuring rather than everything in the book.
+    // showing the items the bar was measuring rather than everything in the book. It moves
+    // the shared window rather than shadowing it, so the Overview you came from and the
+    // Report agree with what's on screen here.
     const navigationState = useLocation().state as {
         budgetFilter?: BudgetFilterSeed;
         merchantSeed?: MerchantSeed;
     } | null;
     const seed = navigationState?.budgetFilter;
+    const merchantSeed = navigationState?.merchantSeed;
     const [search, setSearch] = useState("");
     // Held as its own filter rather than dropped into the search box: the merchant name is
-    // normalised, so as literal search text it would match nothing at all.
-    const [merchant, setMerchant] = useState<string | null>(
-        navigationState?.merchantSeed?.merchant ?? null,
-    );
-    // Remembered per book, so leaving and coming back to Items picks up the same date
-    // filter — except a budget's "View items" seed always wins, since that's a deliberate
-    // navigation into a specific window, not a preference to fall back on.
-    const dateLsKey = `xenbudget_dateFilter_items_${book._id}`;
-    const [dateValue, setDateValueState] = useState<DateFilterValue>(() => {
-        // A merchant seed wants the whole history, so it clears the window rather than
-        // landing inside a remembered "this month" that hides most of the charges.
-        if (navigationState?.merchantSeed) return DEFAULT_DATE_FILTER;
-        if (!seed) return parseDateFilterValue(localStorage.getItem(dateLsKey)) ?? DEFAULT_DATE_FILTER;
-        // A monthly budget's window is one whole calendar month, so name it as that month
-        // rather than an "Aug 1 – Aug 31" day range. Every other period keeps its exact
-        // window as a custom day range.
-        if (seed.period === "monthly") {
-            const monthStart = startOfMonth(dateOnlyToLocal(seed.from));
-            return { preset: "custom", from: monthStart, to: endOfMonth(monthStart) };
-        }
-        return {
-            preset: "custom",
-            from: dateOnlyToLocal(seed.from),
-            // The budget's window ends exclusively; the date filter's end is inclusive of
-            // that whole day, so it steps back an instant to name the last covered day.
-            to: dateOnlyToLocal(new Date(new Date(seed.to).getTime() - 1)),
-        };
-    });
-    const setDateValue = (next: DateFilterValue) => {
-        setDateValueState(next);
-        localStorage.setItem(dateLsKey, serializeDateFilterValue(next));
-    };
-    const [dateModalOpen, setDateModalOpen] = useState(false);
+    // normalised ("NETFLIX.COM 8829472" -> "NETFLIX COM"), so as literal search text it
+    // would match nothing at all.
+    const [merchant, setMerchant] = useState<string | null>(merchantSeed?.merchant ?? null);
+    // A merchant is opened to see its whole history, so it widens the shared window. Same
+    // shape as the budget seed's effect below: it moves the shared period rather than
+    // shadowing it, so the card you came from and this list agree.
+    useEffect(() => {
+        if (!merchantSeed) return;
+        setMerchant(merchantSeed.merchant);
+        onPeriodChange({ kind: "all" });
+        // Only when a fresh seed arrives — otherwise this would fight the period button.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [merchantSeed?.merchant]);
+    useEffect(() => {
+        if (!seed) return;
+        // A monthly budget's window is one whole calendar month, so carry it as that month
+        // — an anchor that stays named "August 2026" rather than a frozen day range.
+        // Every other period keeps its exact window as a custom range.
+        onPeriodChange(seed.period === "monthly"
+            ? { kind: "month", anchor: startOfMonth(dateOnlyToLocal(seed.from)) }
+            : {
+                kind: "custom",
+                from: dateOnlyToLocal(seed.from),
+                // The budget's window ends exclusively; a period's end is inclusive of that
+                // whole day, so it steps back an instant to name the last covered day.
+                to: dateOnlyToLocal(new Date(new Date(seed.to).getTime() - 1)),
+            });
+        // Only when a fresh seed arrives — otherwise this would fight the period button.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [seed?.from, seed?.to, seed?.period]);
+    const [reviewOpen, setReviewOpen] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const { enqueueSnackbar } = useSnackbar();
-    const [reviewOpen, setReviewOpen] = useState(false);
     // Which source/card the list is narrowed to: "all", "manual", "csv", or "card:<id>".
     const [sourceFilter, setSourceFilter] = useState("all");
     // Seeded categories (from a budget's "View items") start pre-selected in the dropdown.
@@ -180,8 +148,11 @@ export default function BookItems() {
             ? undefined
             : (sourceFilter as ItemFilters["source"] || undefined);
         const card = sourceFilter.startsWith("card:") ? sourceFilter.slice(5) : undefined;
+        // "All time" drops the date bounds entirely rather than widening them — cheaper,
+        // and the same query the list ran before every tab shared one window.
+        const { from, to, bounded } = resolvePeriod(period);
         return {
-            ...dateRange(dateValue),
+            ...(bounded ? { from: from.toISOString(), to: to.toISOString() } : {}),
             q: search.trim() || undefined,
             categories: selectedCategories.length ? selectedCategories : undefined,
             people: selectedPeople.length ? selectedPeople : undefined,
@@ -197,10 +168,10 @@ export default function BookItems() {
             card,
             merchant: merchant ?? undefined,
         };
-    }, [dateValue, search, selectedFilters, sourceFilter, merchant]);
+    }, [period, search, selectedFilters, sourceFilter, merchant]);
 
     const {
-        items, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
+        items, totals, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
     } = useXenBudgetItems(book._id, filters);
 
     const dayGroups = useMemo(() => groupByDay(items, (i) => i.date, "UTC"), [items]);
@@ -292,11 +263,29 @@ export default function BookItems() {
                             },
                         }}
                     />
-                    <Stack direction="row" spacing={1}>
+                    {/* One row from sm up; on a phone Filters takes the whole first line
+                    and Source and the period pill share the one below.
+
+                    #128 deliberately went the other way and put this back on a single
+                    row, so this is not that decision being undone by accident. What
+                    changed under it is the period button's label: it used to read "All"
+                    by default, and now the window is shared across the tabs it reads
+                    "August 2026", or "Last 3 months". Measured at 360px, the row needs
+                    the button at ~99px to fit and those labels take 135-152, so a single
+                    row now scrolls the page sideways. #128's real fix - collapsing the
+                    input's min-width and padding, just below - is untouched and still
+                    what keeps a lone chip on one 40px line at every width. */}
+                    <Stack
+                        useFlexGap direction="row" spacing={1}
+                        alignItems="flex-start" sx={{ flexWrap: "wrap" }}
+                    >
                         <TextField
                             select size="small" label="Source" value={sourceFilter}
                             onChange={(e) => setSourceFilter(e.target.value)}
-                            sx={{ flexShrink: 0, "& .MuiInputBase-root": { width: "auto" } }}
+                            sx={{
+                                flexShrink: 0, order: { xs: 2, sm: 0 },
+                                "& .MuiInputBase-root": { width: "auto" },
+                            }}
                         >
                             <MenuItem value="all">All</MenuItem>
                             <MenuItem value="manual">Manual</MenuItem>
@@ -307,8 +296,42 @@ export default function BookItems() {
                             ))}
                         </TextField>
                         <Autocomplete
-                            multiple disableCloseOnSelect size="small" fullWidth options={filterOptions}
+                            multiple disableCloseOnSelect size="small" options={filterOptions}
                             value={selectedFilters} onChange={(_, v) => setSelectedFilters(v)}
+                            sx={{
+                                flexGrow: 1, minWidth: 0,
+                                flexBasis: { xs: "100%", sm: 0 },
+                                order: { xs: 1, sm: 0 },
+                                /* The text input MUI puts inside the field is flex-grow
+                                with a 30px min-width and 12px of horizontal padding, so on
+                                a phone it couldn't fit in what a chip left over and wrapped
+                                onto a line of its own - a blank strip under a single chip,
+                                which is what this collapses. Both have to go: the padding
+                                is on a content-box, so it sets a floor of its own even at
+                                zero width. The chips still wrap when THEY need the room,
+                                which is the only time the field should grow.
+
+                                Only while chips are present - an empty field is all input,
+                                and wants its padding to sit the placeholder off the edge.
+                                Focus restores both, so there is somewhere to type once you
+                                are actually typing.
+
+                                `!important` rather than a longer selector: MUI sets these
+                                two from different places at three and four classes deep,
+                                and a plain override silently loses to whichever is deeper
+                                instead of failing loudly. */
+                                ...(selectedFilters.length > 0 && {
+                                    "& .MuiAutocomplete-input": {
+                                        minWidth: "0 !important",
+                                        paddingLeft: "0 !important",
+                                        paddingRight: "0 !important",
+                                    },
+                                    "&:focus-within .MuiAutocomplete-input": {
+                                        minWidth: "60px !important",
+                                        paddingLeft: "8px !important",
+                                    },
+                                }),
+                            }}
                             groupBy={(o) => (
                                 o === TYPE_EXPENSE || o === TYPE_INCOME ? "Type"
                                     : o === NEED_FILTER || o === WANT_FILTER ? "Need / Want"
@@ -401,18 +424,23 @@ export default function BookItems() {
                                 />
                             )}
                         />
-                        <Button
-                            size="small" variant="outlined" startIcon={<CalendarMonthIcon />}
-                            onClick={() => setDateModalOpen(true)} sx={{ flexShrink: 0 }}
-                        >
-                            {dateFilterLabel(dateValue)}
-                        </Button>
+<TimePeriodFilter
+                            mode={period} onModeChange={onPeriodChange}
+                            quickPicks={itemQuickPicks()}
+                            /* A small Button is 30px and a small TextField is 40, so the
+                            row's default stretch was quietly sizing this to match - and
+                            stretching it to two lines tall whenever the filters wrapped.
+                            Pinned to the fields' height instead, so it matches them and
+                            stays put. */
+                            sx={{ height: 40, order: { xs: 3, sm: 0 } }}
+                        />
                         <Tooltip title="Export this view as CSV">
                             {/* A span, because a disabled button fires no events and the
                             tooltip would have nothing to listen to. */}
-                            <span>
+                            <span style={{ order: 4 }}>
                                 <IconButton
                                     size="small"
+                                    sx={{ height: 40, width: 40 }}
                                     disabled={isExporting || items.length === 0}
                                     onClick={async () => {
                                         setIsExporting(true);
@@ -430,6 +458,7 @@ export default function BookItems() {
                             </span>
                         </Tooltip>
                     </Stack>
+                    {!isLoading && <ItemsTotalsBar totals={totals} />}
                 </Stack>
             </Box>
 
@@ -445,7 +474,7 @@ export default function BookItems() {
                         </Box>
                         <Typography variant="subtitle1">Nothing here</Typography>
                         <Typography variant="body2" color="text.secondary">
-                            {search || dateValue.preset !== "all" || merchant
+                            {search || period.kind !== "all" || merchant
                                 || selectedFilters.length > 0 || sourceFilter !== "all"
                                 ? "No items match those filters."
                                 : "Add your first item, or import a CSV from your bank."}
@@ -481,10 +510,6 @@ export default function BookItems() {
                 )}
             </Box>
 
-            <DateFilterModal
-                open={dateModalOpen} onClose={() => setDateModalOpen(false)}
-                value={dateValue} onChange={setDateValue}
-            />
             <ReviewModal
                 open={reviewOpen} onClose={() => setReviewOpen(false)}
                 book={book}

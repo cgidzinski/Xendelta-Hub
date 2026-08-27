@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
     Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
-    Stack, TextField, Typography,
+    Stack, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
@@ -27,6 +27,7 @@ export default function SavedMappings() {
     const { book } = useOutletContext<BookDetailContext>();
     const { updatePresetAsync, deletePresetAsync } = useXenBudgetImport(book._id);
     const { enqueueSnackbar } = useSnackbar();
+    const isMobile = useMediaQuery("(max-width:600px)");
     const [editing, setEditing] = useState<EditDraft | null>(null);
     const [deleting, setDeleting] = useState<XenBudgetImportPreset | null>(null);
 
@@ -109,7 +110,14 @@ export default function SavedMappings() {
                 </Stack>
             ))}
 
-            <Dialog open={!!editing} onClose={() => setEditing(null)} fullWidth maxWidth="md">
+            {/* Full-screen on a phone like the import wizard, the other place this same
+            MapStep is hosted - it adapts itself to a narrow width, but only if it's given
+            one. The delete confirm below stays a small centred dialog. */}
+            <Dialog
+                open={!!editing} onClose={() => setEditing(null)} fullWidth maxWidth="md"
+                fullScreen={isMobile}
+                slotProps={{ paper: { sx: { borderRadius: isMobile ? 0 : 2 } } }}
+            >
                 <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     Edit mapping
                     <IconButton size="small" onClick={() => setEditing(null)} aria-label="Close">

@@ -77,17 +77,30 @@ export default function BudgetBar({
                 />
             )}
             {showPace && (
-                <Tooltip title="Even pace for this period">
+                // The rule itself is 1px, which is nothing to aim a finger at. The tooltip
+                // hangs off a transparent strip centred on it instead, so the marker is
+                // actually reachable on a touch screen.
+                <Tooltip title="Even pace for this period" enterTouchDelay={0}>
                     <Box
                         sx={{
                             position: "absolute",
                             left: `${pacePct}%`,
+                            transform: "translateX(-50%)",
                             top: 0,
                             bottom: 0,
-                            width: "1px",
-                            bgcolor: (theme) => alpha(theme.palette.text.primary, 0.45),
+                            width: 14,
+                            display: "flex",
+                            justifyContent: "center",
                         }}
-                    />
+                    >
+                        <Box
+                            sx={{
+                                width: "1px",
+                                alignSelf: "stretch",
+                                bgcolor: (theme) => alpha(theme.palette.text.primary, 0.45),
+                            }}
+                        />
+                    </Box>
                 </Tooltip>
             )}
         </Box>
