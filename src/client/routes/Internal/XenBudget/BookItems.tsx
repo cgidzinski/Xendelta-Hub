@@ -255,19 +255,11 @@ export default function BookItems() {
                             },
                         }}
                     />
-                    {/* Source and the date button are both fixed-width, so on a phone
-                    they left the Filters field about 170px - too little for a chip and
-                    MUI's text input side by side, which dropped the input onto a second
-                    line and grew the field by a blank row. So Filters takes a line of its
-                    own below them there, and goes back to sitting between them from sm up
-                    (via `order`), where there is width to share. */}
-                    <Box sx={{
-                        display: "flex", flexWrap: "wrap", gap: 1, alignItems: "flex-start",
-                    }}>
+                    <Stack direction="row" spacing={1} alignItems="flex-start">
                         <TextField
                             select size="small" label="Source" value={sourceFilter}
                             onChange={(e) => setSourceFilter(e.target.value)}
-                            sx={{ flexShrink: 0, order: 1, "& .MuiInputBase-root": { width: "auto" } }}
+                            sx={{ flexShrink: 0, "& .MuiInputBase-root": { width: "auto" } }}
                         >
                             <MenuItem value="all">All</MenuItem>
                             <MenuItem value="manual">Manual</MenuItem>
@@ -278,13 +270,38 @@ export default function BookItems() {
                             ))}
                         </TextField>
                         <Autocomplete
-                            multiple disableCloseOnSelect size="small" options={filterOptions}
+                            multiple disableCloseOnSelect size="small" fullWidth options={filterOptions}
                             value={selectedFilters} onChange={(_, v) => setSelectedFilters(v)}
                             sx={{
-                                // A whole line to itself on xs; back in the row from sm up.
-                                order: { xs: 3, sm: 2 },
-                                flexGrow: 1,
-                                flexBasis: { xs: "100%", sm: 0 },
+                                /* The text input MUI puts inside the field is flex-grow
+                                with a 30px min-width and 12px of horizontal padding, so on
+                                a phone it couldn't fit in what a chip left over and wrapped
+                                onto a line of its own - a blank strip under a single chip,
+                                which is what this collapses. Both have to go: the padding
+                                is on a content-box, so it sets a floor of its own even at
+                                zero width. The chips still wrap when THEY need the room,
+                                which is the only time the field should grow.
+
+                                Only while chips are present - an empty field is all input,
+                                and wants its padding to sit the placeholder off the edge.
+                                Focus restores both, so there is somewhere to type once you
+                                are actually typing.
+
+                                `!important` rather than a longer selector: MUI sets these
+                                two from different places at three and four classes deep,
+                                and a plain override silently loses to whichever is deeper
+                                instead of failing loudly. */
+                                ...(selectedFilters.length > 0 && {
+                                    "& .MuiAutocomplete-input": {
+                                        minWidth: "0 !important",
+                                        paddingLeft: "0 !important",
+                                        paddingRight: "0 !important",
+                                    },
+                                    "&:focus-within .MuiAutocomplete-input": {
+                                        minWidth: "60px !important",
+                                        paddingLeft: "8px !important",
+                                    },
+                                }),
                             }}
                             groupBy={(o) => (
                                 o === TYPE_EXPENSE || o === TYPE_INCOME ? "Type"
@@ -381,11 +398,16 @@ export default function BookItems() {
                         <Button
                             size="small" variant="outlined" startIcon={<CalendarMonthIcon />}
                             onClick={() => setDateModalOpen(true)}
-                            sx={{ flexShrink: 0, order: { xs: 2, sm: 3 } }}
+                            /* A small Button is 30px and a small TextField is 40, so the
+                            row's default stretch was quietly sizing this to match - and
+                            stretching it to two lines tall whenever the filters wrapped.
+                            Pinned to the fields' height instead, so it matches them and
+                            stays put. */
+                            sx={{ flexShrink: 0, height: 40 }}
                         >
                             {dateFilterLabel(dateValue)}
                         </Button>
-                    </Box>
+                    </Stack>
                     {!isLoading && <ItemsTotalsBar totals={totals} />}
                 </Stack>
             </Box>
