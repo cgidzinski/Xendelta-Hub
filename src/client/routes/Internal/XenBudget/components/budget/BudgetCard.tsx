@@ -25,11 +25,6 @@ const MAX_CHIPS = 3;
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** Single-letter badge for the budget's period. */
-const PERIOD_INITIALS: Record<string, string> = {
-    weekly: "W", monthly: "M", quarterly: "Q", yearly: "Y", custom: "C",
-};
-
 interface BudgetCardProps {
     budget: BudgetStatus;
     currency: string;
@@ -90,8 +85,6 @@ export default function BudgetCard({
     const periodOver = periodAmount !== undefined && periodSpent > periodAmount;
     const showWholePeriod = periodAmount !== undefined && periodAmount > headlineAmount;
 
-    const periodInitial = PERIOD_INITIALS[budget.period] ?? "?";
-
     const heading = (
         <Stack
             direction="row" alignItems="center"
@@ -103,9 +96,13 @@ export default function BudgetCard({
             {extra > 0 && (
                 <Chip size="small" label={`+${extra}`} sx={{ height: 20, fontSize: 11 }} />
             )}
-            <Tooltip title={capitalize(periodWord(budget.period))}>
-                <Chip size="small" label={periodInitial} sx={{ height: 20, fontSize: 11 }} />
-            </Tooltip>
+            {/* The word, not an initial. "M" only ever meant "monthly" via a hover
+            tooltip, which is nothing at all on a touch screen. */}
+            <Chip
+                size="small"
+                label={capitalize(periodWord(budget.period))}
+                sx={{ height: 20, fontSize: 11 }}
+            />
             {hasOverall && (
                 <Tooltip title="Shared limit">
                     <PublicIcon sx={{ fontSize: 14, color: "text.disabled" }} />
