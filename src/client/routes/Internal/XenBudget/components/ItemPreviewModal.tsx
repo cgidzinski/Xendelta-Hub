@@ -1,9 +1,10 @@
 import { useState } from "react";
 import {
-    Avatar, AvatarGroup, Box, Button, Dialog, DialogContent,
-    DialogTitle, IconButton, Stack, Typography, alpha,
+    Avatar, AvatarGroup, Box, Dialog, DialogContent,
+    DialogTitle, IconButton, Stack, Tooltip, Typography, alpha,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import EditIcon from "@mui/icons-material/Edit";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
@@ -67,9 +68,11 @@ export default function ItemPreviewModal({ open, onClose, book, item, onEdit, on
                 scroll away from the item it edits on a phone. */}
                 <Stack direction="row" alignItems="center" spacing={0.5}>
                     {item && (
-                        <Button size="small" variant="contained" onClick={() => onEdit(item)}>
-                            Edit
-                        </Button>
+                        <Tooltip title="Edit">
+                            <IconButton onClick={() => onEdit(item)} size="small" aria-label="Edit item">
+                                <EditIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
                     )}
                     <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
                 </Stack>

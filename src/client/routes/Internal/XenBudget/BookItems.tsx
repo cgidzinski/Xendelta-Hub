@@ -255,11 +255,19 @@ export default function BookItems() {
                             },
                         }}
                     />
-                    <Stack direction="row" spacing={1}>
+                    {/* Source and the date button are both fixed-width, so on a phone
+                    they left the Filters field about 170px - too little for a chip and
+                    MUI's text input side by side, which dropped the input onto a second
+                    line and grew the field by a blank row. So Filters takes a line of its
+                    own below them there, and goes back to sitting between them from sm up
+                    (via `order`), where there is width to share. */}
+                    <Box sx={{
+                        display: "flex", flexWrap: "wrap", gap: 1, alignItems: "flex-start",
+                    }}>
                         <TextField
                             select size="small" label="Source" value={sourceFilter}
                             onChange={(e) => setSourceFilter(e.target.value)}
-                            sx={{ flexShrink: 0, "& .MuiInputBase-root": { width: "auto" } }}
+                            sx={{ flexShrink: 0, order: 1, "& .MuiInputBase-root": { width: "auto" } }}
                         >
                             <MenuItem value="all">All</MenuItem>
                             <MenuItem value="manual">Manual</MenuItem>
@@ -270,18 +278,13 @@ export default function BookItems() {
                             ))}
                         </TextField>
                         <Autocomplete
-                            multiple disableCloseOnSelect size="small" fullWidth options={filterOptions}
+                            multiple disableCloseOnSelect size="small" options={filterOptions}
                             value={selectedFilters} onChange={(_, v) => setSelectedFilters(v)}
-                            /* MUI reserves 56px at the right end for the clear and popup
-                            indicators together, on EVERY wrapped line - so each row of
-                            chips stops well short of the X. The dropdown arrow earns none
-                            of that here (clicking the field opens the list anyway), so it
-                            goes, and the reservation drops to what the clear X itself
-                            needs - any less and a full row of chips slides under it. */
-                            forcePopupIcon={false}
                             sx={{
-                                "& .MuiAutocomplete-inputRoot": { pr: "38px !important" },
-                                "& .MuiAutocomplete-input": { minWidth: 20 },
+                                // A whole line to itself on xs; back in the row from sm up.
+                                order: { xs: 3, sm: 2 },
+                                flexGrow: 1,
+                                flexBasis: { xs: "100%", sm: 0 },
                             }}
                             groupBy={(o) => (
                                 o === TYPE_EXPENSE || o === TYPE_INCOME ? "Type"
@@ -377,11 +380,12 @@ export default function BookItems() {
                         />
                         <Button
                             size="small" variant="outlined" startIcon={<CalendarMonthIcon />}
-                            onClick={() => setDateModalOpen(true)} sx={{ flexShrink: 0 }}
+                            onClick={() => setDateModalOpen(true)}
+                            sx={{ flexShrink: 0, order: { xs: 2, sm: 3 } }}
                         >
                             {dateFilterLabel(dateValue)}
                         </Button>
-                    </Stack>
+                    </Box>
                     {!isLoading && <ItemsTotalsBar totals={totals} />}
                 </Stack>
             </Box>
