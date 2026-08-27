@@ -51,6 +51,7 @@ import {
 import {
   detectRecurring, monthlyCommitted, normalizeMerchant, merchantMatchPattern,
 } from "../utils/xenBudgetRecurring";
+import { coverageByMerchant } from "../utils/xenBudgetCoverage";
 import { serializeBookFor, serializeBooksFor, serializeItem, serializeItems } from "../utils/xenBudgetSerializer";
 import { notify } from "../utils/notificationUtils";
 import { csvLine } from "../utils/csvWriter";
@@ -2421,25 +2422,44 @@ module.exports = function (app: any) {
   }
 
   /**
-   * The rows both analyses read: expenses only, in one currency, over the window.
+   * The rows both analyses read, each paired with the merchant it belongs to.
    *
    * Goes through baseItemMatch so "Off budget" stays excluded here exactly as it is
    * everywhere else — a row deliberately set aside must not come back as a subscription.
-   * The { book_id, date } index covers this, and the projection is lean because a long
-   * book is tens of thousands of rows.
+   * The { book_id, date } index covers this.
+   *
+   * The merchant is resolved ONCE, here, from the PRE-RULE text. Both matter:
+   *   - once, because normalizeMerchant is real string work and both analyses plus the
+   *     rule-coverage pass would otherwise each redo it over every row;
+   *   - pre-rule, because a rule's set_description rewrite is a tidy-up for humans, and
+   *     grouping on it would hide who was actually paid. It is also the text the rules
+   *     engine itself sees on a fresh import (stripRuleEffects restores it), so a merchant
+   *     name means the same thing to the recurring card, the merchant list, the items
+   *     filter and the coverage check.
    */
-  function analysisItems(book: any, scope: { currency: string; from: Date; to: Date }) {
+  async function analysisRows(
+    book: any, scope: { currency: string; from: Date; to: Date },
+  ): Promise<{ item: any; merchant: string }[]> {
     const match = baseItemMatch(book._id, {
       currency: scope.currency,
       from: scope.from.toISOString(),
       to: scope.to.toISOString(),
       type: "expense",
     });
-    return XenBudgetItem.find(match)
-      .select("date amount description original_description categories.name")
+    // Wider than the two rollups strictly need: the coverage pass runs the real rules
+    // engine, and a condition can test type, flags, category, source or date. A projection
+    // that omitted them would silently evaluate rules against half an item.
+    const items = await XenBudgetItem.find(match)
+      .select("date amount type description original_description categories flags "
+        + "category_split_type rule_categories rule_flags applied_rule_ids source")
       .sort({ date: -1 })
       .limit(MAX_ANALYSIS_ITEMS)
       .lean();
+
+    return (items as any[]).map((item) => ({
+      item,
+      merchant: normalizeMerchant(item.original_description || item.description || ""),
+    }));
   }
 
   // GET /api/xenbudget/books/:bookId/recurring?currency&lookback_months&from&to
@@ -2467,17 +2487,30 @@ module.exports = function (app: any) {
           });
         }
 
-        const items = await analysisItems(book, scope);
+        const rows = await analysisRows(book, scope);
         // `now` is passed in rather than read inside the detector, so every status in one
         // response is measured against the same instant.
+        //
+        // The detector normalises the description itself; handing it the same PRE-RULE text
+        // analysisRows keyed on is what makes a series' merchant name identical to the one
+        // on the merchant list and in the items filter.
         const series = detectRecurring(
-          (items as any[]).map((item) => ({
+          rows.map(({ item }) => ({
             date: item.date,
             amount: item.amount,
-            description: item.description || "",
+            description: item.original_description || item.description || "",
             categories: item.categories || [],
           })),
           new Date(),
+        );
+
+        // Composed here rather than inside detectRecurring: that module is pure and knows
+        // nothing about rules, and it should stay that way.
+        const seriesMerchants = new Set(series.map((s) => s.merchant));
+        const coverage = coverageByMerchant(
+          rows.filter((r) => seriesMerchants.has(r.merchant))
+            .map(({ merchant, item }) => ({ merchant, draft: toDraft(item) })),
+          plainRules(book),
         );
 
         res.json({
@@ -2488,7 +2521,7 @@ module.exports = function (app: any) {
             currencies: scope.currencies,
             from: scope.from.toISOString(),
             to: scope.to.toISOString(),
-            series,
+            series: series.map((s) => ({ ...s, rule_coverage: coverage.get(s.merchant) })),
             monthly_committed: monthlyCommitted(series),
           },
         });
@@ -2526,7 +2559,7 @@ module.exports = function (app: any) {
           });
         }
 
-        const items = await analysisItems(book, scope);
+        const rows = await analysisRows(book, scope);
 
         // Grouped in JS rather than in an aggregation pipeline: normalizeMerchant is real
         // string logic (stacked processor prefixes, reference numbers), not something
@@ -2539,11 +2572,7 @@ module.exports = function (app: any) {
         const groups = new Map<string, MerchantGroup>();
         let total = 0;
 
-        for (const item of items as any[]) {
-          // The pre-rule text when there is one: a rule's set_description rewrite is a
-          // tidy-up for humans, and grouping on it would hide who was actually paid.
-          const raw = item.original_description || item.description || "";
-          const merchant = normalizeMerchant(raw);
+        for (const { item, merchant } of rows) {
           if (!merchant) continue;
           total += item.amount || 0;
 
@@ -2554,7 +2583,8 @@ module.exports = function (app: any) {
             count: 0,
             // Items arrive newest first, so the first one seen is the most recent.
             last_date: item.date,
-            sample_description: raw,
+            // The pre-rule text, so the row can show what this looks like on a statement.
+            sample_description: item.original_description || item.description || "",
             categories: [],
           };
           group.total += item.amount || 0;
@@ -2568,6 +2598,17 @@ module.exports = function (app: any) {
         }
 
         const ranked = [...groups.values()].sort((a, b) => b.total - a.total);
+        const page = ranked.slice(0, limit);
+
+        // Only the merchants actually being returned: running the rules engine over every
+        // row of a long book to answer a question about 25 rows would be waste. Ranking has
+        // to finish first, so this can't fold into the grouping pass above.
+        const shown = new Set(page.map((g) => g.merchant));
+        const coverage = coverageByMerchant(
+          rows.filter((r) => shown.has(r.merchant))
+            .map(({ merchant, item }) => ({ merchant, draft: toDraft(item) })),
+          plainRules(book),
+        );
 
         res.json({
           status: true,
@@ -2580,7 +2621,7 @@ module.exports = function (app: any) {
             // The full count, so the UI can say what the tail it isn't showing amounts to.
             merchant_count: ranked.length,
             total: roundMoney(total),
-            merchants: ranked.slice(0, limit).map((g) => ({
+            merchants: page.map((g) => ({
               merchant: g.merchant,
               sample_description: g.sample_description,
               total: roundMoney(g.total),
@@ -2588,6 +2629,7 @@ module.exports = function (app: any) {
               average: roundMoney(g.total / g.count),
               last_date: new Date(g.last_date).toISOString(),
               categories: g.categories,
+              rule_coverage: coverage.get(g.merchant),
             })),
           },
         });

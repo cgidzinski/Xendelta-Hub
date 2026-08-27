@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useSnackbar } from "notistack";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import {
     Box, Button, Card, MenuItem, Stack, TextField, Typography, useMediaQuery,
@@ -11,11 +10,10 @@ import {
     Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import type { BookDetailContext } from "./BookDetail";
-import type { RuleInput, XenBudgetMerchant } from "../../../hooks/xenbudget/types";
+import type { XenBudgetMerchant } from "../../../hooks/xenbudget/types";
 import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
 import { useXenBudgetMerchants } from "../../../hooks/xenbudget/useRecurring";
-import { useXenBudgetRules } from "../../../hooks/xenbudget/useRules";
 import TimePeriodFilter, {
     defaultYearMode, parsePeriodMode, resolvePeriod, serializePeriodMode, type PeriodMode,
 } from "./components/TimePeriodFilter";
@@ -26,7 +24,7 @@ import { sortBudgets } from "./components/budget/sortBudgets";
 import CategoryReportTable from "./components/report/CategoryReportTable";
 import MoversStrip from "./components/report/MoversStrip";
 import MerchantsCard from "./components/report/MerchantsCard";
-import RuleForm from "./components/RuleForm";
+import { useRuleEditor } from "./components/rules/useRuleEditor";
 import { buildMovers } from "./components/report/movers";
 import {
     allowanceByPeriod, buildCategoryReport,
@@ -146,23 +144,8 @@ export default function BookReport() {
         to: range.to.toISOString(),
     });
 
-    // "Make a rule" on a merchant row opens the same form the review queue uses, prefilled.
-    const { enqueueSnackbar } = useSnackbar();
-    const { createRuleAsync, isCreatingRule } = useXenBudgetRules(book._id);
-    const [rulePrefill, setRulePrefill] = useState<RuleInput | null>(null);
-    const [ruleFormOpen, setRuleFormOpen] = useState(false);
-
-    const handleMakeRule = (merchant: XenBudgetMerchant) => {
-        setRulePrefill({
-            name: merchant.merchant.slice(0, 100),
-            match: {
-                mode: "all",
-                conditions: [{ field: "description", op: "contains", value: merchant.merchant }],
-            },
-            actions: { set_categories: merchant.categories.slice(0, 1) },
-        });
-        setRuleFormOpen(true);
-    };
+    // One rule dialog for the page, shared with the merchant rows' rule control.
+    const ruleEditor = useRuleEditor(book);
 
     const goToMerchant = (merchant: XenBudgetMerchant) => navigate(
         `/internal/xenbudget/books/${book._id}/items`,
@@ -495,7 +478,9 @@ export default function BookReport() {
                             currency={merchantData.currency}
                             categoryRegistry={book.categories}
                             onViewItems={goToMerchant}
-                            onMakeRule={handleMakeRule}
+                            onMakeRule={(m) => ruleEditor.openForMerchant(m.merchant, m.categories)}
+                            onOpenRule={ruleEditor.openExistingRule}
+                            rules={book.rules}
                         />
                     )}
 
@@ -674,21 +659,7 @@ export default function BookReport() {
                 </Stack>
             </Box>
 
-            <RuleForm
-                open={ruleFormOpen}
-                onClose={() => setRuleFormOpen(false)}
-                book={book}
-                rule={rulePrefill}
-                isSubmitting={isCreatingRule}
-                onSubmit={async (input) => {
-                    await createRuleAsync(input);
-                    // Deliberately no re-apply sweep here, unlike the review queue: a rule
-                    // written from the report is about what gets imported next, and
-                    // rewriting months of history from a chart is not what the wand
-                    // promised. The rules tab offers "Re-apply" when that IS wanted.
-                    enqueueSnackbar("Rule saved — it will tag items from now on", { variant: "success" });
-                }}
-            />
+            {ruleEditor.dialog}
         </Box>
     );
 }

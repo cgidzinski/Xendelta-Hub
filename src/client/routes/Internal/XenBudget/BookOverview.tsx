@@ -11,6 +11,7 @@ import { useXenBudgetRecurring } from "../../../hooks/xenbudget/useRecurring";
 import { CategoryChip } from "./components/LabelChip";
 import BudgetCard from "./components/budget/BudgetCard";
 import RecurringCard from "./components/recurring/RecurringCard";
+import { useRuleEditor } from "./components/rules/useRuleEditor";
 import ProjectionCard from "./components/budget/ProjectionCard";
 import { projectBook } from "./components/budget/bookPace";
 import { commitmentTotal } from "./components/recurring/recurringDisplay";
@@ -64,6 +65,8 @@ export default function BookOverview() {
     // at August or at the year. Detection needs a long run of history to see a cadence at
     // all, which a one-month window would never contain.
     const { recurring } = useXenBudgetRecurring(book._id, { currency });
+    // One rule dialog for the page, shared with the recurring rows' rule control.
+    const ruleEditor = useRuleEditor(book);
     // Balanced columns: each card goes into the shortest column, and the result is locked
     // so expanding a card only grows its own column - cards never reshuffle.
     const isSm = useMediaQuery("(min-width:600px)");
@@ -273,6 +276,9 @@ export default function BookOverview() {
                             `/internal/xenbudget/books/${book._id}/items`,
                             { state: { merchantSeed: { merchant: s.merchant } } },
                         )}
+                        onMakeRule={(s) => ruleEditor.openForMerchant(s.merchant, s.categories)}
+                        onOpenRule={ruleEditor.openExistingRule}
+                        rules={book.rules}
                     />
                 )}
 
@@ -329,6 +335,8 @@ export default function BookOverview() {
                     </Stack>
                 )}
             </Box>
+
+            {ruleEditor.dialog}
         </Box>
     );
 }

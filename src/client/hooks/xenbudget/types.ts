@@ -481,6 +481,25 @@ export type RecurringFrequency =
  */
 export type RecurringStatus = "active" | "missing" | "ended";
 
+/**
+ * Whether an existing auto-tag rule already fires on a merchant's items.
+ *
+ * Computed against the CURRENT rule set, not read off stored items — a rule added since
+ * the last re-apply sweep has touched nothing yet but will tag everything from now on,
+ * and that is exactly the case worth knowing about before writing another rule.
+ *
+ * A rule firing at all counts, whether it sets a category, adds a flag or marks the row
+ * off-budget.
+ */
+export interface RuleCoverage {
+    /** Items an existing rule fires on. */
+    matched: number;
+    /** Items considered. */
+    total: number;
+    /** Rules that fired, most items first. Resolve names from `book.rules`. */
+    rule_ids: string[];
+}
+
 export interface RecurringPriceChange {
     /** The first occurrence charged at the new amount. */
     date: string;
@@ -507,6 +526,8 @@ export interface XenBudgetRecurringSeries {
     categories: string[];
     status: RecurringStatus;
     price_changes: RecurringPriceChange[];
+    /** Absent when the book has no rules, or on a payload cached before this existed. */
+    rule_coverage?: RuleCoverage;
 }
 
 export interface XenBudgetRecurring {
@@ -527,6 +548,8 @@ export interface XenBudgetMerchant {
     average: number;
     last_date: string;
     categories: string[];
+    /** Absent when the book has no rules, or on a payload cached before this existed. */
+    rule_coverage?: RuleCoverage;
 }
 
 export interface XenBudgetMerchants {

@@ -6,8 +6,9 @@ import AutorenewIcon from "@mui/icons-material/Autorenew";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import type {
-    XenBudgetLabel, XenBudgetRecurringSeries,
+    XenBudgetLabel, XenBudgetRecurringSeries, XenBudgetRule,
 } from "../../../../../hooks/xenbudget/types";
+import RuleCoverageAction from "../rules/RuleCoverageAction";
 import { CategoryChip } from "../LabelChip";
 import { formatCurrency } from "../../currency";
 import { cardSx, sectionLabelSx } from "../../../../../components/ui/surfaceStyles";
@@ -25,6 +26,12 @@ interface RecurringCardProps {
     categoryRegistry: XenBudgetLabel[];
     /** Opens the Items tab filtered to this merchant. */
     onViewItems: (series: XenBudgetRecurringSeries) => void;
+    /** Opens the rule form prefilled to match this series' merchant. */
+    onMakeRule: (series: XenBudgetRecurringSeries) => void;
+    /** Opens an existing rule. False when the id no longer resolves. */
+    onOpenRule: (ruleId: string) => boolean;
+    /** The book's rules, for naming whichever already covers a series. */
+    rules: XenBudgetRule[];
 }
 
 /**
@@ -37,6 +44,7 @@ interface RecurringCardProps {
  */
 export default function RecurringCard({
     series, monthlyCommitted, currency, categoryRegistry, onViewItems,
+    onMakeRule, onOpenRule, rules,
 }: RecurringCardProps) {
     const [expanded, setExpanded] = useState(false);
     // One instant for the whole render, so two rows can't be classified against
@@ -141,6 +149,14 @@ export default function RecurringCard({
                                         /mo
                                     </Typography>
                                 </Box>
+
+                                <RuleCoverageAction
+                                    merchant={item.merchant}
+                                    coverage={item.rule_coverage}
+                                    rules={rules}
+                                    onMakeRule={() => onMakeRule(item)}
+                                    onOpenRule={onOpenRule}
+                                />
                             </Stack>
                         </Box>
                     );

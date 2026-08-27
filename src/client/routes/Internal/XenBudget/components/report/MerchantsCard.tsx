@@ -1,12 +1,10 @@
 import { useState } from "react";
-import {
-    Box, Button, Card, IconButton, Stack, Tooltip, Typography,
-} from "@mui/material";
-import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
+import { Box, Button, Card, Stack, Typography } from "@mui/material";
 import StorefrontIcon from "@mui/icons-material/Storefront";
 import type {
-    XenBudgetLabel, XenBudgetMerchant,
+    XenBudgetLabel, XenBudgetMerchant, XenBudgetRule,
 } from "../../../../../hooks/xenbudget/types";
+import RuleCoverageAction from "../rules/RuleCoverageAction";
 import { CategoryChip } from "../LabelChip";
 import { formatCurrency } from "../../currency";
 import { MAGNITUDE_COLOR } from "../../../../../components/ui/chartColors";
@@ -24,6 +22,10 @@ interface MerchantsCardProps {
     onViewItems: (merchant: XenBudgetMerchant) => void;
     /** Opens the rule form prefilled to match this merchant. */
     onMakeRule: (merchant: XenBudgetMerchant) => void;
+    /** Opens an existing rule. False when the id no longer resolves. */
+    onOpenRule: (ruleId: string) => boolean;
+    /** The book's rules, for naming whichever already covers a merchant. */
+    rules: XenBudgetRule[];
 }
 
 /**
@@ -36,6 +38,7 @@ interface MerchantsCardProps {
  */
 export default function MerchantsCard({
     merchants, merchantCount, currency, categoryRegistry, onViewItems, onMakeRule,
+    onOpenRule, rules,
 }: MerchantsCardProps) {
     const [expanded, setExpanded] = useState(false);
     if (merchants.length === 0) return null;
@@ -92,15 +95,13 @@ export default function MerchantsCard({
                             <Typography variant="body2" noWrap sx={{ fontWeight: 600, flexShrink: 0 }}>
                                 {formatCurrency(merchant.total, currency)}
                             </Typography>
-                            <Tooltip title={`Make a rule for ${merchant.merchant}`}>
-                                <IconButton
-                                    size="small"
-                                    onClick={() => onMakeRule(merchant)}
-                                    sx={{ flexShrink: 0 }}
-                                >
-                                    <AutoFixHighIcon sx={{ fontSize: 15 }} />
-                                </IconButton>
-                            </Tooltip>
+                            <RuleCoverageAction
+                                merchant={merchant.merchant}
+                                coverage={merchant.rule_coverage}
+                                rules={rules}
+                                onMakeRule={() => onMakeRule(merchant)}
+                                onOpenRule={onOpenRule}
+                            />
                         </Stack>
                         <Box sx={{
                             height: 5, borderRadius: 1, overflow: "hidden",
