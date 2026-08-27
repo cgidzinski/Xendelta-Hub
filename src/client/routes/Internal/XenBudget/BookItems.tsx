@@ -19,6 +19,7 @@ import DateFilterModal, {
     type DateFilterValue,
 } from "./components/DateFilterModal";
 import ReviewModal from "./components/ReviewModal";
+import ItemsTotalsBar from "./components/ItemsTotalsBar";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { groupByDay, dateOnlyToLocal } from "../../../utils/dateGrouping";
@@ -172,7 +173,7 @@ export default function BookItems() {
     }, [dateValue, search, selectedFilters, sourceFilter]);
 
     const {
-        items, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
+        items, totals, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
     } = useXenBudgetItems(book._id, filters);
 
     const dayGroups = useMemo(() => groupByDay(items, (i) => i.date, "UTC"), [items]);
@@ -254,7 +255,7 @@ export default function BookItems() {
                             },
                         }}
                     />
-                    <Stack direction="row" spacing={1}>
+                    <Stack direction="row" spacing={1} alignItems="flex-start">
                         <TextField
                             select size="small" label="Source" value={sourceFilter}
                             onChange={(e) => setSourceFilter(e.target.value)}
@@ -271,6 +272,37 @@ export default function BookItems() {
                         <Autocomplete
                             multiple disableCloseOnSelect size="small" fullWidth options={filterOptions}
                             value={selectedFilters} onChange={(_, v) => setSelectedFilters(v)}
+                            sx={{
+                                /* The text input MUI puts inside the field is flex-grow
+                                with a 30px min-width and 12px of horizontal padding, so on
+                                a phone it couldn't fit in what a chip left over and wrapped
+                                onto a line of its own - a blank strip under a single chip,
+                                which is what this collapses. Both have to go: the padding
+                                is on a content-box, so it sets a floor of its own even at
+                                zero width. The chips still wrap when THEY need the room,
+                                which is the only time the field should grow.
+
+                                Only while chips are present - an empty field is all input,
+                                and wants its padding to sit the placeholder off the edge.
+                                Focus restores both, so there is somewhere to type once you
+                                are actually typing.
+
+                                `!important` rather than a longer selector: MUI sets these
+                                two from different places at three and four classes deep,
+                                and a plain override silently loses to whichever is deeper
+                                instead of failing loudly. */
+                                ...(selectedFilters.length > 0 && {
+                                    "& .MuiAutocomplete-input": {
+                                        minWidth: "0 !important",
+                                        paddingLeft: "0 !important",
+                                        paddingRight: "0 !important",
+                                    },
+                                    "&:focus-within .MuiAutocomplete-input": {
+                                        minWidth: "60px !important",
+                                        paddingLeft: "8px !important",
+                                    },
+                                }),
+                            }}
                             groupBy={(o) => (
                                 o === TYPE_EXPENSE || o === TYPE_INCOME ? "Type"
                                     : o === NEED_FILTER || o === WANT_FILTER ? "Need / Want"
@@ -365,11 +397,18 @@ export default function BookItems() {
                         />
                         <Button
                             size="small" variant="outlined" startIcon={<CalendarMonthIcon />}
-                            onClick={() => setDateModalOpen(true)} sx={{ flexShrink: 0 }}
+                            onClick={() => setDateModalOpen(true)}
+                            /* A small Button is 30px and a small TextField is 40, so the
+                            row's default stretch was quietly sizing this to match - and
+                            stretching it to two lines tall whenever the filters wrapped.
+                            Pinned to the fields' height instead, so it matches them and
+                            stays put. */
+                            sx={{ flexShrink: 0, height: 40 }}
                         >
                             {dateFilterLabel(dateValue)}
                         </Button>
                     </Stack>
+                    {!isLoading && <ItemsTotalsBar totals={totals} />}
                 </Stack>
             </Box>
 
