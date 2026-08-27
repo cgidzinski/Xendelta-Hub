@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
+import { invalidateItemDerived } from "./invalidate";
 import type { XenBudgetItem, ItemsPage, CreateItemInput, UpdateItemInput } from "./types";
 
 export interface ItemFilters {
@@ -22,6 +23,38 @@ export interface ItemFilters {
     /** Only items imported under this saved mapping (preset id). */
     card?: string;
     q?: string;
+    /**
+     * One merchant, as the recurring and merchant analyses group them. Distinct from `q`:
+     * the name is normalised, so the server turns it back into a pattern that tolerates
+     * the punctuation and reference numbers normalisation dropped.
+     */
+    merchant?: string;
+}
+
+/**
+ * Downloads the CURRENT view as CSV.
+ *
+ * The same filters, sent to the same endpoint with format=csv, so the file is exactly the
+ * list on screen — the server applies them once and streams the whole result. Exporting
+ * what the client happens to have loaded would quietly produce a partial file, since the
+ * list is paginated.
+ *
+ * Uses the shared axios client rather than a plain link so the request carries the auth
+ * header; a bare <a href> would hit the API unauthenticated.
+ */
+export async function exportItemsCsv(
+    bookId: string, filters: ItemFilters, bookName: string,
+): Promise<void> {
+    const res = await apiClient.get(`/api/xenbudget/books/${bookId}/items`, {
+        params: { ...toParams(filters), format: "csv" },
+        responseType: "blob",
+    });
+    const url = URL.createObjectURL(res.data as Blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `xenbudget-${bookName.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-items-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
 }
 
 function toParams(filters: ItemFilters): Record<string, string> {
@@ -40,6 +73,7 @@ function toParams(filters: ItemFilters): Record<string, string> {
     if (filters.source) params.source = filters.source;
     if (filters.card) params.card = filters.card;
     if (filters.q) params.q = filters.q;
+    if (filters.merchant) params.merchant = filters.merchant;
     return params;
 }
 
@@ -53,12 +87,7 @@ function toParams(filters: ItemFilters): Record<string, string> {
 export function useXenBudgetItemMutations(bookId: string) {
     const queryClient = useQueryClient();
 
-    const invalidate = () => {
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "items", bookId] });
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "summary", bookId] });
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "budget-status", bookId] });
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
-    };
+    const invalidate = () => invalidateItemDerived(queryClient, bookId);
 
     const createMutation = useMutation({
         mutationFn: async (input: CreateItemInput) => {

@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useOutletContext } from "react-router-dom";
+import { useSnackbar } from "notistack";
 import {
-    Alert, Autocomplete, Avatar, Box, Button, Chip, Divider, InputAdornment, MenuItem, Stack, TextField, Typography,
+    Alert, Autocomplete, Avatar, Box, Button, Chip, Divider, IconButton, InputAdornment,
+    MenuItem, Stack, TextField, Tooltip, Typography,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
+import AutorenewIcon from "@mui/icons-material/Autorenew";
+import DownloadIcon from "@mui/icons-material/Download";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import { startOfMonth } from "date-fns";
 import type { BookDetailContext } from "./BookDetail";
-import { useXenBudgetItems, type ItemFilters } from "../../../hooks/xenbudget/useItems";
+import { useXenBudgetItems, exportItemsCsv, type ItemFilters } from "../../../hooks/xenbudget/useItems";
 import ItemListItem from "./components/ItemListItem";
 import { CategoryChip, FlagChip } from "./components/LabelChip";
 import TimePeriodFilter, { itemQuickPicks } from "./components/TimePeriodFilter";
@@ -29,6 +33,15 @@ interface BudgetFilterSeed {
     from: string;
     to: string;
     period: string;
+}
+
+/**
+ * What the Recurring card and the merchant report hand over. Unlike a budget seed it
+ * carries no window — the point of opening a merchant is to see its whole history, so it
+ * widens the shared period to "all" rather than inheriting whatever was last set.
+ */
+interface MerchantSeed {
+    merchant: string;
 }
 
 // Synthetic options in the filters dropdown below — not real flags or fields on the item.
@@ -54,8 +67,27 @@ export default function BookItems() {
     // showing the items the bar was measuring rather than everything in the book. It moves
     // the shared window rather than shadowing it, so the Overview you came from and the
     // Report agree with what's on screen here.
-    const seed = (useLocation().state as { budgetFilter?: BudgetFilterSeed } | null)?.budgetFilter;
+    const navigationState = useLocation().state as {
+        budgetFilter?: BudgetFilterSeed;
+        merchantSeed?: MerchantSeed;
+    } | null;
+    const seed = navigationState?.budgetFilter;
+    const merchantSeed = navigationState?.merchantSeed;
     const [search, setSearch] = useState("");
+    // Held as its own filter rather than dropped into the search box: the merchant name is
+    // normalised ("NETFLIX.COM 8829472" -> "NETFLIX COM"), so as literal search text it
+    // would match nothing at all.
+    const [merchant, setMerchant] = useState<string | null>(merchantSeed?.merchant ?? null);
+    // A merchant is opened to see its whole history, so it widens the shared window. Same
+    // shape as the budget seed's effect below: it moves the shared period rather than
+    // shadowing it, so the card you came from and this list agree.
+    useEffect(() => {
+        if (!merchantSeed) return;
+        setMerchant(merchantSeed.merchant);
+        onPeriodChange({ kind: "all" });
+        // Only when a fresh seed arrives — otherwise this would fight the period button.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [merchantSeed?.merchant]);
     useEffect(() => {
         if (!seed) return;
         // A monthly budget's window is one whole calendar month, so carry it as that month
@@ -74,6 +106,8 @@ export default function BookItems() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [seed?.from, seed?.to, seed?.period]);
     const [reviewOpen, setReviewOpen] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
+    const { enqueueSnackbar } = useSnackbar();
     // Which source/card the list is narrowed to: "all", "manual", "csv", or "card:<id>".
     const [sourceFilter, setSourceFilter] = useState("all");
     // Seeded categories (from a budget's "View items") start pre-selected in the dropdown.
@@ -132,8 +166,9 @@ export default function BookItems() {
             excluded: selectedFilters.includes(FLAG_OFF_BUDGET) ? "all" : "hidden",
             source,
             card,
+            merchant: merchant ?? undefined,
         };
-    }, [period, search, selectedFilters, sourceFilter]);
+    }, [period, search, selectedFilters, sourceFilter, merchant]);
 
     const {
         items, totals, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
@@ -206,6 +241,16 @@ export default function BookItems() {
                         >
                             {reviewCount} Missing Category
                         </Alert>
+                    )}
+                    {merchant && (
+                        <Chip
+                            size="small"
+                            variant="outlined"
+                            icon={<AutorenewIcon sx={{ fontSize: 14 }} />}
+                            label={`Merchant: ${merchant}`}
+                            onDelete={() => setMerchant(null)}
+                            sx={{ alignSelf: "flex-start" }}
+                        />
                     )}
                     <TextField
                         size="small" fullWidth placeholder="Search descriptions"
@@ -389,6 +434,29 @@ export default function BookItems() {
                             stays put. */
                             sx={{ height: 40, order: { xs: 3, sm: 0 } }}
                         />
+                        <Tooltip title="Export this view as CSV">
+                            {/* A span, because a disabled button fires no events and the
+                            tooltip would have nothing to listen to. */}
+                            <span style={{ order: 4 }}>
+                                <IconButton
+                                    size="small"
+                                    sx={{ height: 40, width: 40 }}
+                                    disabled={isExporting || items.length === 0}
+                                    onClick={async () => {
+                                        setIsExporting(true);
+                                        try {
+                                            await exportItemsCsv(book._id, filters, book.name);
+                                        } catch {
+                                            enqueueSnackbar("Could not export these items", { variant: "error" });
+                                        } finally {
+                                            setIsExporting(false);
+                                        }
+                                    }}
+                                >
+                                    <DownloadIcon fontSize="small" />
+                                </IconButton>
+                            </span>
+                        </Tooltip>
                     </Stack>
                     {!isLoading && <ItemsTotalsBar totals={totals} />}
                 </Stack>
@@ -406,7 +474,7 @@ export default function BookItems() {
                         </Box>
                         <Typography variant="subtitle1">Nothing here</Typography>
                         <Typography variant="body2" color="text.secondary">
-                            {search || period.kind !== "all"
+                            {search || period.kind !== "all" || merchant
                                 || selectedFilters.length > 0 || sourceFilter !== "all"
                                 ? "No items match those filters."
                                 : "Add your first item, or import a CSV from your bank."}

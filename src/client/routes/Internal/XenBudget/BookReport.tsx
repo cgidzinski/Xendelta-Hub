@@ -10,8 +10,10 @@ import {
     Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import type { BookDetailContext } from "./BookDetail";
+import type { XenBudgetMerchant } from "../../../hooks/xenbudget/types";
 import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
+import { useXenBudgetMerchants } from "../../../hooks/xenbudget/useRecurring";
 import TimePeriodFilter, { summaryQuickPicks } from "./components/TimePeriodFilter";
 import { resolvePeriod } from "./components/periodMode";
 import TotalsSummary from "./components/TotalsSummary";
@@ -19,6 +21,10 @@ import BudgetCard from "./components/budget/BudgetCard";
 import { useBalancedColumns } from "./components/budget/useBalancedColumns";
 import { sortBudgets } from "./components/budget/sortBudgets";
 import CategoryReportTable from "./components/report/CategoryReportTable";
+import MoversStrip from "./components/report/MoversStrip";
+import MerchantsCard from "./components/report/MerchantsCard";
+import { useRuleEditor } from "./components/rules/useRuleEditor";
+import { buildMovers } from "./components/report/movers";
 import {
     allowanceByPeriod, buildCategoryReport,
     type CategoryReportRow, type PeriodTotals,
@@ -110,6 +116,33 @@ export default function BookReport() {
         rangeFrom: range.from,
         rangeTo: range.to,
     }), [summary, budgets, book.categories, range.from, range.to]);
+
+    // What changed between the last two buckets. Built from by_category_period rather than
+    // from the table's cells: those are only filled when the table is pivoted into columns,
+    // so deriving from them would hide the strip on exactly the wide ranges it suits.
+    //
+    // Day buckets are excluded on purpose — a day-over-day category delta is noise, and a
+    // month grouped by day would render 31 buckets of it.
+    const movers = useMemo(
+        () => (range.groupBy === "day"
+            ? null
+            : buildMovers(summary?.by_category_period ?? [], (summary?.by_period ?? []).map((p) => p.key))),
+        [summary, range.groupBy],
+    );
+
+    const { merchants: merchantData } = useXenBudgetMerchants(book._id, {
+        currency,
+        from: range.from.toISOString(),
+        to: range.to.toISOString(),
+    });
+
+    // One rule dialog for the page, shared with the merchant rows' rule control.
+    const ruleEditor = useRuleEditor(book);
+
+    const goToMerchant = (merchant: XenBudgetMerchant) => navigate(
+        `/internal/xenbudget/books/${book._id}/items`,
+        { state: { merchantSeed: { merchant: merchant.merchant } } },
+    );
 
     const periodData = useMemo(() => (summary?.by_period ?? []).map((p) => ({
         key: p.key,
@@ -405,6 +438,14 @@ export default function BookReport() {
                         />
                     )}
 
+                    {movers && summary.totals.count > 0 && (
+                        <MoversStrip
+                            movers={movers}
+                            currency={summary.currency}
+                            categoryRegistry={book.categories}
+                        />
+                    )}
+
                     {summary.totals.count === 0 ? (
                         <Box sx={emptyStateSx}>
                             <Box sx={emptyStateIconCircleSx}><InsightsIcon color="disabled" /></Box>
@@ -419,6 +460,19 @@ export default function BookReport() {
                         <TotalsSummary
                             income={summary.totals.income} expense={summary.totals.expense} net={summary.totals.net}
                             currency={summary.currency}
+                        />
+                    )}
+
+                    {summary.totals.count > 0 && merchantData && (
+                        <MerchantsCard
+                            merchants={merchantData.merchants}
+                            merchantCount={merchantData.merchant_count}
+                            currency={merchantData.currency}
+                            categoryRegistry={book.categories}
+                            onViewItems={goToMerchant}
+                            onMakeRule={(m) => ruleEditor.openForMerchant(m.merchant, m.categories)}
+                            onOpenRule={ruleEditor.openExistingRule}
+                            rules={book.rules}
                         />
                     )}
 
@@ -596,6 +650,8 @@ export default function BookReport() {
                     )}
                 </Stack>
             </Box>
+
+            {ruleEditor.dialog}
         </Box>
     );
 }

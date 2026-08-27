@@ -480,3 +480,100 @@ export interface ItemsPage {
     next_cursor: string | null;
     has_more: boolean;
 }
+
+/**
+ * How often a recurring charge lands. Mirrors ScheduleFrequency in
+ * src/server/utils/scheduleUtils.ts, which is what supplies the next-expected date.
+ */
+export type RecurringFrequency =
+    | "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+
+/**
+ * What a series' next charge is doing.
+ *   active  - it landed when it was due, or isn't due yet
+ *   missing - overdue: a bill that hasn't posted, or a subscription that just stopped
+ *   ended   - silent for more than two of its own periods; no longer a commitment
+ */
+export type RecurringStatus = "active" | "missing" | "ended";
+
+/**
+ * Whether an existing auto-tag rule already fires on a merchant's items.
+ *
+ * Computed against the CURRENT rule set, not read off stored items — a rule added since
+ * the last re-apply sweep has touched nothing yet but will tag everything from now on,
+ * and that is exactly the case worth knowing about before writing another rule.
+ *
+ * A rule firing at all counts, whether it sets a category, adds a flag or marks the row
+ * off-budget.
+ */
+export interface RuleCoverage {
+    /** Items an existing rule fires on. */
+    matched: number;
+    /** Items considered. */
+    total: number;
+    /** Rules that fired, most items first. Resolve names from `book.rules`. */
+    rule_ids: string[];
+}
+
+export interface RecurringPriceChange {
+    /** The first occurrence charged at the new amount. */
+    date: string;
+    from: number;
+    to: number;
+}
+
+/** One recurring charge, derived from imported history rather than stored. */
+export interface XenBudgetRecurringSeries {
+    key: string;
+    /** The normalised merchant the series was grouped on. */
+    merchant: string;
+    /** The most recent raw description, so the UI can show what it looks like on a statement. */
+    sample_description: string;
+    /** What it costs NOW — the latest price level, not an average across a rise. */
+    amount: number;
+    frequency: RecurringFrequency;
+    occurrences: number;
+    first_date: string;
+    last_date: string;
+    next_expected: string;
+    /** What this series costs per month, whatever its cadence. */
+    monthly_equivalent: number;
+    categories: string[];
+    status: RecurringStatus;
+    price_changes: RecurringPriceChange[];
+    /** Absent when the book has no rules, or on a payload cached before this existed. */
+    rule_coverage?: RuleCoverage;
+}
+
+export interface XenBudgetRecurring {
+    currency: string;
+    currencies: string[];
+    from: string | null;
+    to: string | null;
+    series: XenBudgetRecurringSeries[];
+    /** What the live series cost per month, together. Excludes ended ones. */
+    monthly_committed: number;
+}
+
+export interface XenBudgetMerchant {
+    merchant: string;
+    sample_description: string;
+    total: number;
+    count: number;
+    average: number;
+    last_date: string;
+    categories: string[];
+    /** Absent when the book has no rules, or on a payload cached before this existed. */
+    rule_coverage?: RuleCoverage;
+}
+
+export interface XenBudgetMerchants {
+    currency: string;
+    currencies: string[];
+    from: string | null;
+    to: string | null;
+    merchants: XenBudgetMerchant[];
+    /** Every merchant in the window, not just the ones returned — the tail is countable. */
+    merchant_count: number;
+    total: number;
+}

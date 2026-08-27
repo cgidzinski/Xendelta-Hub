@@ -7,8 +7,14 @@ import InsightsIcon from "@mui/icons-material/Insights";
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
+import { useXenBudgetRecurring } from "../../../hooks/xenbudget/useRecurring";
 import { CategoryChip } from "./components/LabelChip";
 import BudgetCard from "./components/budget/BudgetCard";
+import RecurringCard from "./components/recurring/RecurringCard";
+import { useRuleEditor } from "./components/rules/useRuleEditor";
+import ProjectionCard from "./components/budget/ProjectionCard";
+import { projectBook } from "./components/budget/bookPace";
+import { commitmentTotal } from "./components/recurring/recurringDisplay";
 import { useBalancedColumns } from "./components/budget/useBalancedColumns";
 import { sortBudgets, overCount, metCount } from "./components/budget/sortBudgets";
 import TimePeriodFilter, { summaryQuickPicks } from "./components/TimePeriodFilter";
@@ -28,7 +34,7 @@ export default function BookOverview() {
     const navigate = useNavigate();
 
     // The window is the book's, not this tab's — see BookDetail.
-    const { from, to, groupBy, label } = useMemo(() => resolvePeriod(period), [period]);
+    const { from, to, groupBy, label, bounded } = useMemo(() => resolvePeriod(period), [period]);
 
     const { summary, isLoading, isError, error } = useXenBudgetSummary(book._id, {
         currency, from: from.toISOString(), to: to.toISOString(), group_by: groupBy,
@@ -46,6 +52,13 @@ export default function BookOverview() {
         () => sortBudgets(budgetStatus),
         [budgetStatus],
     );
+    // Deliberately NOT scoped to the selected period: a subscription is a standing
+    // commitment, so "what do I pay every month" is the same answer whether you're looking
+    // at August or at the year. Detection needs a long run of history to see a cadence at
+    // all, which a one-month window would never contain.
+    const { recurring } = useXenBudgetRecurring(book._id, { currency });
+    // One rule dialog for the page, shared with the recurring rows' rule control.
+    const ruleEditor = useRuleEditor(book);
     // Balanced columns: each card goes into the shortest column, and the result is locked
     // so expanding a card only grows its own column - cards never reshuffle.
     const isSm = useMediaQuery("(min-width:600px)");
@@ -62,6 +75,25 @@ export default function BookOverview() {
     // The figures were measured in whatever currency /budget-status used, which is not
     // necessarily the one the summary settled on - label them with the one they're in.
     const budgetCurrency = budgetStatusResponse?.currency ?? currency;
+
+    // Where the book lands by the end of the selected window. The commitments feeding it
+    // are only the charges still TO COME — one already posted is inside the spend figure,
+    // and adding it again would inflate the projection by a month of subscriptions.
+    const projection = useMemo(() => {
+        if (!summary) return null;
+        // "All time" runs from the epoch to today, so there is no end to project towards —
+        // the figure would read "100% through All time" and restate the actuals. A
+        // projection only means something inside a window that actually closes.
+        if (!bounded) return null;
+        return projectBook({
+            periodFrom: from.toISOString(),
+            periodTo: to.toISOString(),
+            asOf: new Date().toISOString(),
+            expense: summary.totals.expense,
+            income: summary.totals.income,
+            committed: commitmentTotal(recurring?.series ?? [], new Date(), to),
+        });
+    }, [summary, recurring, from, to, bounded]);
 
     const categoryRows = useMemo(() => {
         if (!summary) return [];
@@ -123,6 +155,14 @@ export default function BookOverview() {
                     income={totals.income} expense={totals.expense} net={totals.net}
                     currency={summary.currency} sx={{ mb: 2 }}
                 />
+
+                {!nothingYet && projection && (
+                    <ProjectionCard
+                        projection={projection}
+                        currency={summary.currency}
+                        periodLabel={label}
+                    />
+                )}
 
                 <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
                     <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>
@@ -223,6 +263,22 @@ export default function BookOverview() {
                     </Card>
                 )}
 
+                {recurring && recurring.series.length > 0 && (
+                    <RecurringCard
+                        series={recurring.series}
+                        monthlyCommitted={recurring.monthly_committed}
+                        currency={recurring.currency}
+                        categoryRegistry={book.categories}
+                        onViewItems={(s) => navigate(
+                            `/internal/xenbudget/books/${book._id}/items`,
+                            { state: { merchantSeed: { merchant: s.merchant } } },
+                        )}
+                        onMakeRule={(s) => ruleEditor.openForMerchant(s.merchant, s.categories)}
+                        onOpenRule={ruleEditor.openExistingRule}
+                        rules={book.rules}
+                    />
+                )}
+
                 {nothingYet ? (
                     <Box sx={emptyStateSx}>
                         <Box sx={emptyStateIconCircleSx}><InsightsIcon color="disabled" /></Box>
@@ -276,6 +332,8 @@ export default function BookOverview() {
                     </Stack>
                 )}
             </Box>
+
+            {ruleEditor.dialog}
         </Box>
     );
 }
