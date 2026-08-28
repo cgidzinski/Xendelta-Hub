@@ -45,6 +45,33 @@ describe("resolvePeriod", () => {
         expect(r.to.getTime()).toBeGreaterThan(NOW.getTime());
     });
 
+    it("shortens every label for the pill on a phone", () => {
+        // The pill has to fit beside Source and Filters on one 360px row, so every mode
+        // needs a form that stays well under the full label's width.
+        expect(resolvePeriod({ kind: "all" }).shortLabel).toBe("All");
+        expect(resolvePeriod({ kind: "month", anchor: new Date(2026, 7, 1) }).shortLabel).toBe("Aug 26");
+        expect(resolvePeriod({ kind: "year", anchor: new Date(2025, 0, 1) }).shortLabel).toBe("2025");
+        expect(resolvePeriod({ kind: "preset", preset: "thisWeek" }).shortLabel).toBe("This wk");
+        expect(resolvePeriod({ kind: "preset", preset: "lastWeek" }).shortLabel).toBe("Last wk");
+        expect(resolvePeriod({ kind: "preset", preset: "last3" }).shortLabel).toBe("Last 3m");
+        expect(resolvePeriod({ kind: "preset", preset: "last6" }).shortLabel).toBe("Last 6m");
+        expect(resolvePeriod({ kind: "preset", preset: "thisQuarter" }).shortLabel).toBe("Quarter");
+    });
+
+    it("shortens a whole-month custom range to that month, and any other to 'Custom'", () => {
+        const wholeMonth = resolvePeriod({
+            kind: "custom", from: new Date(2026, 7, 1), to: new Date(2026, 7, 31, 23, 59, 59, 999),
+        });
+        expect(wholeMonth.label).toBe("August 2026");
+        expect(wholeMonth.shortLabel).toBe("Aug 26");
+
+        const range = resolvePeriod({
+            kind: "custom", from: new Date(2026, 7, 3), to: new Date(2026, 8, 9),
+        });
+        expect(range.label).toBe("Aug 3 – Sep 9");
+        expect(range.shortLabel).toBe("Custom");
+    });
+
     it("every other mode is bounded", () => {
         const modes: PeriodMode[] = [
             { kind: "month", anchor: NOW },

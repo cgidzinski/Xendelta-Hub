@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button } from "@mui/material";
+import { Button, useMediaQuery, useTheme } from "@mui/material";
 import type { SxProps, Theme } from "@mui/material";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import PeriodPickerDialog, { type QuickPick } from "./PeriodPickerDialog";
@@ -50,6 +50,12 @@ export default function TimePeriodFilter({
     mode, onModeChange, quickPicks, sx,
 }: TimePeriodFilterProps) {
     const [open, setOpen] = useState(false);
+    const theme = useTheme();
+    // The shared pill, so every tab shortens together — the whole point of one window is
+    // that Items and Overview name it the same way. Items is the tab that needs it: its
+    // row has to hold Source and Filters beside this at 360px.
+    const compact = useMediaQuery(theme.breakpoints.down("sm"));
+    const resolved = resolvePeriod(mode);
 
     return (
         <>
@@ -58,7 +64,7 @@ export default function TimePeriodFilter({
                 onClick={() => setOpen(true)}
                 sx={{ flexShrink: 0, ...sx }}
             >
-                {resolvePeriod(mode).label}
+                {compact ? resolved.shortLabel : resolved.label}
             </Button>
 
             <PeriodPickerDialog

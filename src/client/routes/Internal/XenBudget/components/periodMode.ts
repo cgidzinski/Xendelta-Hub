@@ -31,14 +31,20 @@ export interface ResolvedPeriod {
     bounded: boolean;
     groupBy: "day" | "week" | "month";
     label: string;
+    /**
+     * The same window named in as few characters as possible, for the period pill on a
+     * phone. "August 2026" is ~150px of button, which is most of a 360px row on its own —
+     * and the item list needs Source, Filters and the pill to share that row.
+     */
+    shortLabel: string;
 }
 
-const PRESET_LABELS: Record<PeriodPreset, string> = {
-    thisWeek: "This week",
-    lastWeek: "Last week",
-    last3: "Last 3 months",
-    last6: "Last 6 months",
-    thisQuarter: "This quarter",
+const PRESET_LABELS: Record<PeriodPreset, { label: string; short: string }> = {
+    thisWeek: { label: "This week", short: "This wk" },
+    lastWeek: { label: "Last week", short: "Last wk" },
+    last3: { label: "Last 3 months", short: "Last 3m" },
+    last6: { label: "Last 6 months", short: "Last 6m" },
+    thisQuarter: { label: "This quarter", short: "Quarter" },
 };
 
 const PRESET_VALUES = Object.keys(PRESET_LABELS) as PeriodPreset[];
@@ -70,21 +76,21 @@ export function resolvePeriod(mode: PeriodMode): ResolvedPeriod {
     if (mode.kind === "all") {
         return {
             from: EPOCH, to: utcEndOfDay(now), bounded: false,
-            groupBy: "month", label: "All time",
+            groupBy: "month", label: "All time", shortLabel: "All",
         };
     }
     if (mode.kind === "month") {
         const from = startOfMonth(mode.anchor);
         return {
             from: utcDay(from), to: utcEndOfDay(endOfMonth(mode.anchor)), bounded: true,
-            groupBy: "day", label: format(from, "MMMM yyyy"),
+            groupBy: "day", label: format(from, "MMMM yyyy"), shortLabel: format(from, "MMM yy"),
         };
     }
     if (mode.kind === "year") {
         const from = startOfYear(mode.anchor);
         return {
             from: utcDay(from), to: utcEndOfDay(endOfYear(mode.anchor)), bounded: true,
-            groupBy: "month", label: format(from, "yyyy"),
+            groupBy: "month", label: format(from, "yyyy"), shortLabel: format(from, "yyyy"),
         };
     }
     if (mode.kind === "preset") {
@@ -93,43 +99,52 @@ export function resolvePeriod(mode: PeriodMode): ResolvedPeriod {
         if (mode.preset === "thisWeek") {
             return {
                 from: utcDay(startOfWeek(now)), to: utcEndOfDay(endOfWeek(now)), bounded: true,
-                groupBy: "day", label: PRESET_LABELS.thisWeek,
+                groupBy: "day",
+                label: PRESET_LABELS.thisWeek.label, shortLabel: PRESET_LABELS.thisWeek.short,
             };
         }
         if (mode.preset === "lastWeek") {
             return {
                 from: utcDay(startOfWeek(subWeeks(now, 1))),
                 to: utcEndOfDay(subDays(startOfWeek(now), 1)),
-                bounded: true, groupBy: "day", label: PRESET_LABELS.lastWeek,
+                bounded: true, groupBy: "day",
+                label: PRESET_LABELS.lastWeek.label, shortLabel: PRESET_LABELS.lastWeek.short,
             };
         }
         if (mode.preset === "last3") {
             return {
                 from: utcDay(startOfMonth(subMonths(now, 2))), to: utcEndOfDay(endOfMonth(now)),
-                bounded: true, groupBy: "month", label: PRESET_LABELS.last3,
+                bounded: true, groupBy: "month",
+                label: PRESET_LABELS.last3.label, shortLabel: PRESET_LABELS.last3.short,
             };
         }
         if (mode.preset === "last6") {
             return {
                 from: utcDay(startOfMonth(subMonths(now, 5))), to: utcEndOfDay(endOfMonth(now)),
-                bounded: true, groupBy: "month", label: PRESET_LABELS.last6,
+                bounded: true, groupBy: "month",
+                label: PRESET_LABELS.last6.label, shortLabel: PRESET_LABELS.last6.short,
             };
         }
         return {
             from: utcDay(startOfQuarter(now)), to: utcEndOfDay(now),
-            bounded: true, groupBy: "week", label: PRESET_LABELS.thisQuarter,
+            bounded: true, groupBy: "week",
+            label: PRESET_LABELS.thisQuarter.label, shortLabel: PRESET_LABELS.thisQuarter.short,
         };
     }
 
     const days = (mode.to.getTime() - mode.from.getTime()) / 86400000;
+    const wholeMonth = isWholeMonth(mode.from, mode.to);
     return {
         from: utcDay(mode.from), to: utcEndOfDay(mode.to), bounded: true,
         groupBy: days > 180 ? "month" : days > 45 ? "week" : "day",
         // A range that is exactly one calendar month reads better as its name than as a
         // start/end pair — which is what picking a month from the grid produces.
-        label: isWholeMonth(mode.from, mode.to)
+        label: wholeMonth
             ? format(mode.from, "MMMM yyyy")
             : `${format(mode.from, "MMM d")} – ${format(mode.to, "MMM d")}`,
+        // No abbreviation of a date pair is both short enough for the pill and readable,
+        // so an arbitrary range says what it is and the dialog says which one.
+        shortLabel: wholeMonth ? format(mode.from, "MMM yy") : "Custom",
     };
 }
 
