@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Box, Dialog, IconButton, useMediaQuery, useTheme } from "@mui/material";
 import {
   Close as CloseIcon,
@@ -9,16 +9,43 @@ import {
 
 interface ImageGalleryProps {
   images: string[];
-  dense?: boolean; // If true, uses 128x128 instead of default size
-  onDelete?: (imageUrl: string) => void; // Optional delete handler
+  dense?: boolean; // Smaller tiles, for step-level galleries
+  onDelete?: (imageUrl: string) => void;
 }
 
+const overlayButtonSx = {
+  zIndex: 1,
+  color: "white",
+  backgroundColor: "rgba(0, 0, 0, 0.5)",
+  "&:hover": { backgroundColor: "rgba(0, 0, 0, 0.7)" },
+};
+
 export default function ImageGallery({ images, dense = false, onDelete }: ImageGalleryProps) {
-  const finalImageSize = dense ? 128 : 256;
   const [open, setOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
+
+  const handleClose = useCallback(() => setOpen(false), []);
+  const handlePrevious = useCallback(
+    () => setSelectedIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1)),
+    [images.length],
+  );
+  const handleNext = useCallback(
+    () => setSelectedIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1)),
+    [images.length],
+  );
+
+  // Arrow keys page through the lightbox; MUI's Dialog only gives us Escape for free.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") handlePrevious();
+      else if (e.key === "ArrowRight") handleNext();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, handlePrevious, handleNext]);
 
   if (!images || images.length === 0) {
     return null;
@@ -29,76 +56,49 @@ export default function ImageGallery({ images, dense = false, onDelete }: ImageG
     setOpen(true);
   };
 
-  const handleClose = () => {
-    setOpen(false);
-  };
-
-  const handlePrevious = () => {
-    setSelectedIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
-  };
-
-  const handleNext = () => {
-    setSelectedIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
-  };
-
   return (
     <>
       <Box
         sx={{
-          display: "flex",
-          flexWrap: "wrap",
-          flexDirection: "row",
+          // Fluid tracks bounded on both ends: tiles never overflow a narrow phone and
+          // never blow up to fill a wide desktop.
+          display: "grid",
+          gridTemplateColumns: dense
+            ? "repeat(auto-fill, minmax(88px, 128px))"
+            : "repeat(auto-fill, minmax(150px, 256px))",
           gap: 2,
-          justifyContent: "flex-start",
-          alignItems: "flex-start",
         }}
       >
         {images.map((image, index) => (
           <Box
-            key={index}
+            key={`${image}-${index}`}
             sx={{
-              width: `${finalImageSize}px`,
-              height: `${finalImageSize}px`,
-              flexShrink: 0,
-              borderRadius: "8px",
+              position: "relative",
+              aspectRatio: "1 / 1",
+              borderRadius: 2,
               overflow: "hidden",
               cursor: "pointer",
-              position: "relative",
-              "&:hover": {
-                opacity: 0.8,
-              },
+              "&:hover": { opacity: 0.85 },
             }}
             onClick={() => handleImageClick(index)}
           >
-            <img
+            <Box
+              component="img"
               src={image}
               alt={`Image ${index + 1}`}
               loading="lazy"
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                borderRadius: "8px",
-              }}
+              sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
             />
             {onDelete && (
               <IconButton
                 size="small"
                 color="error"
+                aria-label="Remove image"
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(image);
                 }}
-                sx={{
-                  position: "absolute",
-                  top: 8,
-                  right: 8,
-                  zIndex: 1,
-                  backgroundColor: "rgba(0,0,0,0.5)",
-                  "&:hover": {
-                    backgroundColor: "rgba(0,0,0,0.7)",
-                  },
-                }}
+                sx={{ position: "absolute", top: 4, right: 4, ...overlayButtonSx }}
               >
                 <DeleteIcon fontSize="small" />
               </IconButton>
@@ -112,33 +112,22 @@ export default function ImageGallery({ images, dense = false, onDelete }: ImageG
         onClose={handleClose}
         fullScreen={fullScreen}
         maxWidth={false}
-        PaperProps={{
-          sx: {
-            backgroundColor: "rgba(0, 0, 0, 0.9)",
-            position: "relative",
-            margin: 0,
-            maxWidth: "100vw",
-            maxHeight: "100vh",
-            width: "100%",
-            height: "100%",
-            overflow: "hidden",
+        slotProps={{
+          paper: {
+            sx: {
+              backgroundColor: "rgba(0, 0, 0, 0.9)",
+              position: "relative",
+              margin: 0,
+              maxWidth: "100vw",
+              maxHeight: "100vh",
+              width: "100%",
+              height: "100%",
+              overflow: "hidden",
+            },
           },
         }}
       >
-        <IconButton
-          onClick={handleClose}
-          sx={{
-            position: "absolute",
-            top: 16,
-            right: 16,
-            zIndex: 1,
-            color: "white",
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            "&:hover": {
-              backgroundColor: "rgba(0, 0, 0, 0.7)",
-            },
-          }}
-        >
+        <IconButton onClick={handleClose} aria-label="Close" sx={{ position: "absolute", top: 16, right: 16, ...overlayButtonSx }}>
           <CloseIcon />
         </IconButton>
 
@@ -146,35 +135,15 @@ export default function ImageGallery({ images, dense = false, onDelete }: ImageG
           <>
             <IconButton
               onClick={handlePrevious}
-              sx={{
-                position: "absolute",
-                left: 16,
-                top: "50%",
-                transform: "translateY(-50%)",
-                zIndex: 1,
-                color: "white",
-                backgroundColor: "rgba(0, 0, 0, 0.5)",
-                "&:hover": {
-                  backgroundColor: "rgba(0, 0, 0, 0.7)",
-                },
-              }}
+              aria-label="Previous image"
+              sx={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", ...overlayButtonSx }}
             >
               <ChevronLeftIcon />
             </IconButton>
             <IconButton
               onClick={handleNext}
-              sx={{
-                position: "absolute",
-                right: 16,
-                top: "50%",
-                transform: "translateY(-50%)",
-                zIndex: 1,
-                color: "white",
-                backgroundColor: "rgba(0, 0, 0, 0.5)",
-                "&:hover": {
-                  backgroundColor: "rgba(0, 0, 0, 0.7)",
-                },
-              }}
+              aria-label="Next image"
+              sx={{ position: "absolute", right: 16, top: "50%", transform: "translateY(-50%)", ...overlayButtonSx }}
             >
               <ChevronRightIcon />
             </IconButton>
@@ -194,16 +163,11 @@ export default function ImageGallery({ images, dense = false, onDelete }: ImageG
           }}
           onClick={handleClose}
         >
-          <img
+          <Box
+            component="img"
             src={images[selectedIndex]}
             alt={`Image ${selectedIndex + 1}`}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "contain",
-              borderRadius: "8px",
-            }}
-            onClick={handleClose}
+            sx={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 2 }}
           />
         </Box>
 
@@ -219,9 +183,9 @@ export default function ImageGallery({ images, dense = false, onDelete }: ImageG
               zIndex: 1,
             }}
           >
-            {images.map((_, index) => (
+            {images.map((image, index) => (
               <Box
-                key={index}
+                key={`${image}-${index}`}
                 sx={{
                   width: 8,
                   height: 8,

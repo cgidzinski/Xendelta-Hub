@@ -189,7 +189,7 @@ export default function RecipeForm({
           </Typography>
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mb: 2 }}>
             {showcase.map((url, index) => (
-              <Box key={url} sx={{ position: "relative" }}>
+              <Box key={`${url}-${index}`} sx={{ position: "relative" }}>
                 <img
                   src={url}
                   alt={`Showcase ${index + 1}`}
