@@ -323,81 +323,9 @@ module.exports = function (app: express.Application) {
     });
   });
 
-  // Delete recipe
-  app.delete("/api/recipaint/:id", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const userId = (req as AuthenticatedRequest).user!._id;
-    const recipeId = req.params.id;
-
-    const recipe = await Recipe.findById(recipeId).exec();
-
-    if (!recipe) {
-      return res.status(404).json({
-        status: false,
-        message: "Recipe not found",
-      });
-    }
-
-    // Check if user is the owner
-    const ownerId = recipe.owner?.toString() || String(recipe.owner);
-    if (ownerId !== userId) {
-      return res.status(403).json({
-        status: false,
-        message: "Access denied",
-      });
-    }
-
-    // Delete the recipe's images - showcase and every step's - along with their thumbnails.
-    const assetUrls: string[] = [
-      ...(recipe.showcase || []),
-      ...(recipe.steps || []).flatMap((step: any) =>
-        step && typeof step === "object" && Array.isArray(step.images) ? step.images : [],
-      ),
-    ].filter((url: unknown): url is string => typeof url === "string" && url.startsWith("http"));
-
-    await Promise.all(assetUrls.map((url) => deleteRecipaintAssetByUrl(url)));
-
-    await Recipe.findByIdAndDelete(recipeId).exec();
-    // Nobody's progress can refer to this recipe any more.
-    await RecipeProgress.deleteMany({ recipe: new ObjectId(recipeId) }).exec();
-
-    return res.json({
-      status: true,
-      message: "Recipe deleted successfully",
-    });
-  });
-
-  // Upload recipaint asset endpoint
-  app.post(
-    "/api/recipaint/upload-asset",
-    authenticateToken,
-    multerUploadRecipaintAsset.single("asset"),
-    async function (req: express.Request, res: express.Response) {
-      if (!req.file) {
-        return res.status(400).json({
-          status: false,
-          message: "No asset file provided",
-        });
-      }
-
-      // Generate unique filename
-      const filename = generateUniqueFilename(req.file.originalname);
-
-      // Upload to public GCS bucket (returns public URL)
-      const assetData = await uploadRecipaintAsset(req.file, filename);
-
-      return res.json({
-        status: true,
-        message: "Asset uploaded successfully",
-        data: {
-          url: assetData.url,
-          filename: assetData.filename,
-          mimeType: assetData.mimeType,
-          size: assetData.size,
-        },
-      });
-    },
-  );
-
+  // Registered before DELETE /api/recipaint/:id - Express matches in registration order,
+  // so with the routes the other way round this path was swallowed as a recipe id of
+  // "asset", which then failed to cast to an ObjectId and 500ed. Asset deletion never ran.
   // Delete recipaint asset endpoint
   app.delete("/api/recipaint/asset", authenticateToken, async function (req: express.Request, res: express.Response) {
     const assetUrl = req.query.assetUrl as string;
@@ -486,6 +414,81 @@ module.exports = function (app: express.Application) {
       return res.json({
         status: true,
         data: { completedSteps: saved.completedSteps || [] },
+      });
+    },
+  );
+
+  // Delete recipe
+  app.delete("/api/recipaint/:id", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const userId = (req as AuthenticatedRequest).user!._id;
+    const recipeId = req.params.id;
+
+    const recipe = await Recipe.findById(recipeId).exec();
+
+    if (!recipe) {
+      return res.status(404).json({
+        status: false,
+        message: "Recipe not found",
+      });
+    }
+
+    // Check if user is the owner
+    const ownerId = recipe.owner?.toString() || String(recipe.owner);
+    if (ownerId !== userId) {
+      return res.status(403).json({
+        status: false,
+        message: "Access denied",
+      });
+    }
+
+    // Delete the recipe's images - showcase and every step's - along with their thumbnails.
+    const assetUrls: string[] = [
+      ...(recipe.showcase || []),
+      ...(recipe.steps || []).flatMap((step: any) =>
+        step && typeof step === "object" && Array.isArray(step.images) ? step.images : [],
+      ),
+    ].filter((url: unknown): url is string => typeof url === "string" && url.startsWith("http"));
+
+    await Promise.all(assetUrls.map((url) => deleteRecipaintAssetByUrl(url)));
+
+    await Recipe.findByIdAndDelete(recipeId).exec();
+    // Nobody's progress can refer to this recipe any more.
+    await RecipeProgress.deleteMany({ recipe: new ObjectId(recipeId) }).exec();
+
+    return res.json({
+      status: true,
+      message: "Recipe deleted successfully",
+    });
+  });
+
+  // Upload recipaint asset endpoint
+  app.post(
+    "/api/recipaint/upload-asset",
+    authenticateToken,
+    multerUploadRecipaintAsset.single("asset"),
+    async function (req: express.Request, res: express.Response) {
+      if (!req.file) {
+        return res.status(400).json({
+          status: false,
+          message: "No asset file provided",
+        });
+      }
+
+      // Generate unique filename
+      const filename = generateUniqueFilename(req.file.originalname);
+
+      // Upload to public GCS bucket (returns public URL)
+      const assetData = await uploadRecipaintAsset(req.file, filename);
+
+      return res.json({
+        status: true,
+        message: "Asset uploaded successfully",
+        data: {
+          url: assetData.url,
+          filename: assetData.filename,
+          mimeType: assetData.mimeType,
+          size: assetData.size,
+        },
       });
     },
   );
