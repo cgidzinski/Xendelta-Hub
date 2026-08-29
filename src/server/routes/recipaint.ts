@@ -7,7 +7,9 @@ import {
   deleteRecipaintAssetByUrl,
 } from "../utils/mediaUtils";
 import { AuthenticatedRequest } from "../types";
+import { sanitizeCompletedSteps } from "../../shared/recipaint/progress";
 const { Recipe } = require("../models/recipe");
+const { RecipeProgress } = require("../models/recipeProgress");
 const mongoose = require("mongoose");
 const {
   Types: { ObjectId },
@@ -355,6 +357,8 @@ module.exports = function (app: express.Application) {
     await Promise.all(assetUrls.map((url) => deleteRecipaintAssetByUrl(url)));
 
     await Recipe.findByIdAndDelete(recipeId).exec();
+    // Nobody's progress can refer to this recipe any more.
+    await RecipeProgress.deleteMany({ recipe: new ObjectId(recipeId) }).exec();
 
     return res.json({
       status: true,
@@ -412,6 +416,79 @@ module.exports = function (app: express.Application) {
       message: "Asset deleted successfully",
     });
   });
+
+  // --- Paint-along progress -------------------------------------------------------------
+  // Progress is per user per recipe, so you can put a mini down for a week and pick it up.
+
+  /** You may track progress on your own recipe, or on anyone's public one. */
+  async function canTrackProgress(recipeId: string, userId: string): Promise<boolean> {
+    const recipe = await Recipe.findById(recipeId).select("owner isPublic").lean().exec();
+    if (!recipe) return false;
+    if (recipe.isPublic) return true;
+    return new ObjectId(recipe.owner).equals(new ObjectId(userId));
+  }
+
+  app.get(
+    "/api/recipaint/:id/progress",
+    authenticateToken,
+    async function (req: express.Request, res: express.Response) {
+      const userId = (req as AuthenticatedRequest).user!._id;
+      const recipeId = req.params.id;
+
+      if (!(await canTrackProgress(recipeId, userId))) {
+        return res.status(404).json({ status: false, message: "Recipe not found" });
+      }
+
+      const progress = await RecipeProgress.findOne({
+        user: new ObjectId(userId),
+        recipe: new ObjectId(recipeId),
+      })
+        .lean()
+        .exec();
+
+      return res.json({
+        status: true,
+        data: { completedSteps: progress?.completedSteps || [] },
+      });
+    },
+  );
+
+  app.put(
+    "/api/recipaint/:id/progress",
+    authenticateToken,
+    async function (req: express.Request, res: express.Response) {
+      const userId = (req as AuthenticatedRequest).user!._id;
+      const recipeId = req.params.id;
+      const { completedSteps } = req.body;
+
+      if (!Array.isArray(completedSteps)) {
+        return res.status(400).json({ status: false, message: "completedSteps must be an array" });
+      }
+
+      const recipe = await Recipe.findById(recipeId).select("owner isPublic steps").lean().exec();
+      if (!recipe) {
+        return res.status(404).json({ status: false, message: "Recipe not found" });
+      }
+      if (!recipe.isPublic && !new ObjectId(recipe.owner).equals(new ObjectId(userId))) {
+        return res.status(403).json({ status: false, message: "Access denied" });
+      }
+
+      const cleaned = sanitizeCompletedSteps(completedSteps, (recipe.steps || []).length);
+
+      const saved = await RecipeProgress.findOneAndUpdate(
+        { user: new ObjectId(userId), recipe: new ObjectId(recipeId) },
+        { $set: { completedSteps: cleaned, updatedAt: new Date() } },
+        { upsert: true, new: true },
+      )
+        .lean()
+        .exec();
+
+      return res.json({
+        status: true,
+        data: { completedSteps: saved.completedSteps || [] },
+      });
+    },
+  );
 
   // Clone recipe endpoint
   app.post("/api/recipaint/:id/clone", authenticateToken, async function (req: express.Request, res: express.Response) {

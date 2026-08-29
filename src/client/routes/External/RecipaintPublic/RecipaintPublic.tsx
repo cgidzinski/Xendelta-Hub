@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Box, Button, Card, Container, Stack, Typography } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -7,6 +6,7 @@ import { useSnackbar } from "notistack";
 import { useTitle } from "../../../hooks/useTitle";
 import { usePublicRecipaintRecipe, useCloneRecipe } from "../../../hooks/recipaint/useRecipaint";
 import { useAuth } from "../../../contexts/AuthContext";
+import { useRecipeProgress } from "../../../hooks/recipaint/useRecipeProgress";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { cardSx } from "../../../components/ui/surfaceStyles";
@@ -19,18 +19,9 @@ export default function RecipaintPublic() {
   const { isAuthenticated } = useAuth();
   const { recipe, isLoading, isError, error, refetch } = usePublicRecipaintRecipe(id);
   const cloneRecipe = useCloneRecipe();
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const { completedSteps, toggleStep, resetProgress } = useRecipeProgress(id);
 
   useTitle(recipe?.title || "Recipe");
-
-  const handleStepToggle = (index: number) => {
-    setCompletedSteps((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      return next;
-    });
-  };
 
   // Signed out, send them through login and land them on this recipe inside the hub, where
   // the Clone button is waiting - rather than inventing a deferred post-login action.
@@ -119,8 +110,8 @@ export default function RecipaintPublic() {
             <RecipeView
               recipe={recipe}
               completedSteps={completedSteps}
-              onStepToggle={handleStepToggle}
-              onResetProgress={() => setCompletedSteps(new Set())}
+              onStepToggle={toggleStep}
+              onResetProgress={resetProgress}
               actions={
                 <Button
                   variant="contained"

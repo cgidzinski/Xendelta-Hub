@@ -16,6 +16,7 @@ import {
   Edit as EditIcon,
   ContentCopy as CloneIcon,
   Share as ShareIcon,
+  Brush as BrushIcon,
 } from "@mui/icons-material";
 import { useTitle } from "../../../hooks/useTitle";
 import {
@@ -28,6 +29,7 @@ import { useSnackbar } from "notistack";
 import { useAuth } from "../../../contexts/AuthContext";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
+import { useRecipeProgress } from "../../../hooks/recipaint/useRecipeProgress";
 import RecipeForm, { RecipeFormData } from "./components/RecipeForm";
 import RecipeView from "./components/RecipeView";
 
@@ -43,7 +45,7 @@ export default function RecipeDetail() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isFormDirty, setIsFormDirty] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const { completedSteps, toggleStep, resetProgress } = useRecipeProgress(id);
 
   const isOwner =
     recipe &&
@@ -120,15 +122,6 @@ export default function RecipeDetail() {
     });
   };
 
-  const handleStepToggle = (index: number) => {
-    setCompletedSteps((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      return next;
-    });
-  };
-
   if (isLoading) {
     return <LoadingSpinner message="Loading recipe..." />;
   }
@@ -188,8 +181,8 @@ export default function RecipeDetail() {
       <RecipeView
         recipe={recipe}
         completedSteps={completedSteps}
-        onStepToggle={handleStepToggle}
-        onResetProgress={() => setCompletedSteps(new Set())}
+        onStepToggle={toggleStep}
+        onResetProgress={resetProgress}
         showVisibility
         originalRecipeHref={recipe.originalRecipeId ? `/internal/recipaint/${recipe.originalRecipeId}` : null}
         leading={
@@ -199,6 +192,15 @@ export default function RecipeDetail() {
         }
         actions={
           <>
+            {recipe.steps.length > 0 && (
+              <Button
+                variant="outlined"
+                startIcon={<BrushIcon />}
+                onClick={() => navigate(`/internal/recipaint/${id}/paint`)}
+              >
+                Paint along
+              </Button>
+            )}
             <Tooltip title="Copy share link">
               <IconButton onClick={handleShare} aria-label="Copy share link">
                 <ShareIcon />
