@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Box, Dialog, IconButton, useMediaQuery, useTheme } from "@mui/material";
+import { thumbUrlFor } from "../../../../../shared/recipaint/assetUrls";
 import {
   Close as CloseIcon,
   ChevronLeft as ChevronLeftIcon,
@@ -84,7 +85,7 @@ export default function ImageGallery({ images, dense = false, onDelete }: ImageG
           >
             <Box
               component="img"
-              src={image}
+              src={thumbUrlFor(image)}
               alt={`Image ${index + 1}`}
               loading="lazy"
               sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}

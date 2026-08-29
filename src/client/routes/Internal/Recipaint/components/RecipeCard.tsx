@@ -4,6 +4,7 @@ import LayersIcon from "@mui/icons-material/Layers";
 import { format } from "date-fns";
 import { RecipeSummary } from "../../../../types/Recipe";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
+import { thumbUrlFor } from "../../../../../shared/recipaint/assetUrls";
 
 interface RecipeCardProps {
   recipe: RecipeSummary;
@@ -46,7 +47,7 @@ export default function RecipeCard({ recipe, onClick }: RecipeCardProps) {
           {cover ? (
             <Box
               component="img"
-              src={cover}
+              src={thumbUrlFor(cover)}
               alt=""
               loading="lazy"
               sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}

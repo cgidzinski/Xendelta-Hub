@@ -1,10 +1,9 @@
 import { memo } from "react";
-import { Box, TextField, Button, IconButton, Card, CardContent, Typography, Chip } from "@mui/material";
+import { Box, TextField, IconButton, Card, CardContent, Typography, Chip } from "@mui/material";
 import { Delete as DeleteIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon } from "@mui/icons-material";
 import { RecipeStep } from "../../../../types/RecipeStep";
-import { useRecipaintAssets } from "../../../../hooks/recipaint/useRecipaint";
 import type { StepAction } from "./RecipeForm";
-import ImageGallery from "./ImageGallery";
+import ImageUploader from "./ImageUploader";
 
 interface StepEditorProps {
   step: RecipeStep;
@@ -22,18 +21,11 @@ interface StepEditorProps {
  * reordering. Memoized so a keystroke in one step doesn't re-render the whole list.
  */
 function StepEditor({ step, index, canMoveUp, canMoveDown, dispatch, onAssetRemoved }: StepEditorProps) {
-  const { uploadAsset, isUploadingAsset } = useRecipaintAssets();
-
   const update = (updates: Partial<RecipeStep>) => {
     dispatch({ type: "update", index, step: { ...step, ...updates } });
   };
 
-  const handleImageUpload = async (file: File) => {
-    const result = await uploadAsset(file);
-    update({ images: [...(step.images || []), result.url] });
-  };
-
-  const handleImageDelete = (url: string) => {
+  const handleImageRemove = (url: string) => {
     onAssetRemoved(url);
     update({ images: (step.images || []).filter((u) => u !== url) });
   };
@@ -102,30 +94,14 @@ function StepEditor({ step, index, canMoveUp, canMoveDown, dispatch, onAssetRemo
 
         <Box sx={{ mb: 0 }}>
           <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
-            Example Images
+            Example images
           </Typography>
-          {step.images && step.images.length > 0 && (
-            <Box sx={{ mb: 1.5 }}>
-              <ImageGallery images={step.images} dense onDelete={handleImageDelete} />
-            </Box>
-          )}
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                handleImageUpload(file);
-              }
-            }}
-            style={{ display: "none" }}
-            id={`step-image-upload-${index}`}
+          <ImageUploader
+            images={step.images || []}
+            onChange={(images) => update({ images })}
+            onRemove={handleImageRemove}
+            dense
           />
-          <label htmlFor={`step-image-upload-${index}`}>
-            <Button variant="outlined" component="span" size="small" disabled={isUploadingAsset}>
-              {isUploadingAsset ? "Uploading..." : "Add Image"}
-            </Button>
-          </label>
         </Box>
       </CardContent>
     </Card>

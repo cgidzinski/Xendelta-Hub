@@ -4,7 +4,9 @@ import { Delete as DeleteIcon, Save as SaveIcon } from "@mui/icons-material";
 import { Recipe } from "../../../../types/Recipe";
 import { RecipeStep } from "../../../../types/RecipeStep";
 import { useRecipaintAssets } from "../../../../hooks/recipaint/useRecipaint";
+import ImageUploader from "./ImageUploader";
 import StepEditor from "./StepEditor";
+import { cardSx } from "../../../../components/ui/surfaceStyles";
 
 export interface RecipeFormData {
   title: string;
@@ -81,7 +83,7 @@ export default function RecipeForm({
   const [showcase, setShowcase] = useState<string[]>(recipe.showcase || []);
   const [steps, dispatchSteps] = useReducer(stepsReducer, recipe.steps || []);
   const [isPublic, setIsPublic] = useState(recipe.isPublic || false);
-  const { uploadAsset, isUploadingAsset, deleteAsset } = useRecipaintAssets();
+  const { deleteAsset } = useRecipaintAssets();
 
   // Images the user removed in this editing session. They are only destroyed once the
   // save lands: deleting on click meant abandoning the edit left the saved recipe
@@ -111,11 +113,6 @@ export default function RecipeForm({
   useEffect(() => {
     onDirtyChange?.(isDirty);
   }, [isDirty, onDirtyChange]);
-
-  const handleShowcaseUpload = async (file: File) => {
-    const result = await uploadAsset(file);
-    setShowcase((prev) => [...prev, result.url]);
-  };
 
   const handleAssetRemoved = (url: string) => {
     pendingDeletions.current.push(url);
@@ -182,58 +179,23 @@ export default function RecipeForm({
         sx={{ mb: 3 }}
       />
 
-      <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, mb: 3 }}>
+      <Card variant="outlined" sx={{ ...cardSx, mb: 3 }}>
         <CardContent>
-          <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-            Showcase Images
+          <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
+            Showcase images
           </Typography>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mb: 2 }}>
-            {showcase.map((url, index) => (
-              <Box key={`${url}-${index}`} sx={{ position: "relative" }}>
-                <img
-                  src={url}
-                  alt={`Showcase ${index + 1}`}
-                  style={{
-                    width: "150px",
-                    height: "150px",
-                    objectFit: "cover",
-                    borderRadius: "8px",
-                  }}
-                />
-                <Button
-                  size="small"
-                  color="error"
-                  onClick={() => handleShowcaseDelete(url)}
-                  sx={{ position: "absolute", top: 0, right: 0 }}
-                >
-                  <DeleteIcon fontSize="small" />
-                </Button>
-              </Box>
-            ))}
-          </Box>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                handleShowcaseUpload(file);
-              }
-            }}
-            style={{ display: "none" }}
-            id="showcase-upload"
+          <ImageUploader
+            images={showcase}
+            onChange={setShowcase}
+            onRemove={handleShowcaseDelete}
+            hint="The first image is the cover on your recipe card. Drop, paste or pick images; drag to reorder."
           />
-          <label htmlFor="showcase-upload">
-            <Button variant="outlined" component="span" disabled={isUploadingAsset}>
-              {isUploadingAsset ? "Uploading..." : "Add Image"}
-            </Button>
-          </label>
         </CardContent>
       </Card>
 
-      <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, mb: 3 }}>
+      <Card variant="outlined" sx={{ ...cardSx, mb: 3 }}>
         <CardContent>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
             Steps
           </Typography>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 2 }}>

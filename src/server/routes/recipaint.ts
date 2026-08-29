@@ -1,8 +1,11 @@
 import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { uploadRecipaintAsset as multerUploadRecipaintAsset } from "../config/multer";
-import { uploadRecipaintAsset, generateUniqueFilename } from "../utils/mediaUtils";
-import { deleteFromGCS } from "../utils/gcsUtils";
+import {
+  uploadRecipaintAsset,
+  generateUniqueFilename,
+  deleteRecipaintAssetByUrl,
+} from "../utils/mediaUtils";
 import { AuthenticatedRequest } from "../types";
 const { Recipe } = require("../models/recipe");
 const mongoose = require("mongoose");
@@ -306,37 +309,15 @@ module.exports = function (app: express.Application) {
       });
     }
 
-    // Delete associated assets from public GCS
-    if (recipe.showcase && recipe.showcase.length > 0) {
-      for (const assetUrl of recipe.showcase) {
-        if (assetUrl && assetUrl.startsWith("http")) {
-          const urlParts = assetUrl.split("/");
-          const filename = urlParts[urlParts.length - 1];
-          const gcsPath = `recipaint-assets/${filename}`;
-          await deleteFromGCS(gcsPath).catch(() => {
-            // Ignore errors if file doesn't exist
-          });
-        }
-      }
-    }
+    // Delete the recipe's images - showcase and every step's - along with their thumbnails.
+    const assetUrls: string[] = [
+      ...(recipe.showcase || []),
+      ...(recipe.steps || []).flatMap((step: any) =>
+        step && typeof step === "object" && Array.isArray(step.images) ? step.images : [],
+      ),
+    ].filter((url: unknown): url is string => typeof url === "string" && url.startsWith("http"));
 
-    // Delete step images
-    if (recipe.steps && recipe.steps.length > 0) {
-      for (const step of recipe.steps) {
-        if (step && typeof step === "object" && "images" in step && Array.isArray(step.images)) {
-          for (const imageUrl of step.images) {
-            if (imageUrl && typeof imageUrl === "string" && imageUrl.startsWith("http")) {
-              const urlParts = imageUrl.split("/");
-              const filename = urlParts[urlParts.length - 1];
-              const gcsPath = `recipaint-assets/${filename}`;
-              await deleteFromGCS(gcsPath).catch(() => {
-                // Ignore errors if file doesn't exist
-              });
-            }
-          }
-        }
-      }
-    }
+    await Promise.all(assetUrls.map((url) => deleteRecipaintAssetByUrl(url)));
 
     await Recipe.findByIdAndDelete(recipeId).exec();
 
@@ -389,21 +370,7 @@ module.exports = function (app: express.Application) {
       });
     }
 
-    // Delete from public GCS bucket
-    // assetUrl is a public URL, extract the path
-    if (assetUrl.startsWith("http")) {
-      const urlParts = assetUrl.split("/");
-      const filename = urlParts[urlParts.length - 1];
-      const gcsPath = `recipaint-assets/${filename}`;
-      await deleteFromGCS(gcsPath, false).catch(() => {
-        // Ignore errors if file doesn't exist
-      });
-    } else {
-      // If it's already a GCS path, use it directly
-      await deleteFromGCS(assetUrl, false).catch(() => {
-        // Ignore errors if file doesn't exist
-      });
-    }
+    await deleteRecipaintAssetByUrl(assetUrl);
 
     return res.json({
       status: true,
