@@ -54,7 +54,15 @@ export default function RecipeSteps({ steps, completedSteps, onStepToggle, onRes
         variant="determinate"
         value={percent}
         color={doneCount === steps.length ? "success" : "primary"}
-        sx={{ height: 6, borderRadius: 3, mb: 2 }}
+        // Neutral track: MUI's default determinate track is a tint of the bar colour, which
+        // made an empty bar read as a full one.
+        sx={{
+          height: 6,
+          borderRadius: 3,
+          mb: 2,
+          bgcolor: "action.hover",
+          "& .MuiLinearProgress-bar": { borderRadius: 3 },
+        }}
       />
 
       <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
