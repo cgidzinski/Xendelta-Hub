@@ -59,7 +59,12 @@ module.exports = function (app: express.Application) {
 
     const query: any = { owner: new ObjectId(userId) };
     if (search) {
-      query.$or = [{ title: { $regex: search, $options: "i" } }, { description: { $regex: search, $options: "i" } }];
+      query.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+        { "steps.paints.name": { $regex: search, $options: "i" } },
+        { "steps.paints.brand": { $regex: search, $options: "i" } },
+      ];
     }
 
     const recipes = await findRecipeSummaries(query, limit, offset);
@@ -117,6 +122,36 @@ module.exports = function (app: express.Application) {
       data: {
         recipe,
       },
+    });
+  });
+
+  // Distinct paints the user has already used, to seed the paint editor's autocomplete.
+  // Registered before /api/recipaint/:id so "paints" isn't parsed as a recipe id.
+  app.get("/api/recipaint/paints", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const userId = (req as AuthenticatedRequest).user!._id;
+
+    const rows = await Recipe.aggregate([
+      { $match: { owner: new ObjectId(userId) } },
+      { $unwind: "$steps" },
+      { $unwind: "$steps.paints" },
+      {
+        $group: {
+          // Case-insensitive identity, but keep the spelling the user actually typed.
+          _id: { brand: { $toLower: "$steps.paints.brand" }, name: { $toLower: "$steps.paints.name" } },
+          brand: { $first: "$steps.paints.brand" },
+          name: { $first: "$steps.paints.name" },
+          hex: { $first: "$steps.paints.hex" },
+          type: { $first: "$steps.paints.type" },
+        },
+      },
+      { $sort: { brand: 1, name: 1 } },
+      { $limit: 500 },
+      { $project: { _id: 0, brand: 1, name: 1, hex: 1, type: 1 } },
+    ]).exec();
+
+    return res.json({
+      status: true,
+      data: { paints: rows },
     });
   });
 

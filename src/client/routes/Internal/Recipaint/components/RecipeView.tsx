@@ -5,7 +5,10 @@ import { Link } from "react-router-dom";
 import { Recipe } from "../../../../types/Recipe";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
 import ImageGallery from "./ImageGallery";
+import PaintChip from "./PaintChip";
 import RecipeSteps from "./RecipeSteps";
+import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
+import { aggregatePaints } from "../../../../../shared/recipaint/paints";
 
 interface RecipeViewProps {
   recipe: Recipe;
@@ -36,6 +39,8 @@ export default function RecipeView({
 }: RecipeViewProps) {
   const author = recipe.author;
   const hasIntro = Boolean((recipe.showcase && recipe.showcase.length > 0) || recipe.description);
+  // The recipe's whole palette, de-duplicated across steps - effectively the shopping list.
+  const palette = aggregatePaints(recipe.steps || []);
 
   return (
     <>
@@ -101,6 +106,19 @@ export default function RecipeView({
             </Typography>
           )}
         </Card>
+      )}
+
+      {palette.length > 0 && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="caption" sx={sectionLabelSx} gutterBottom>
+            Paints used
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1, mt: 1 }}>
+            {palette.map((paint, i) => (
+              <PaintChip key={i} paint={paint} />
+            ))}
+          </Stack>
+        </Box>
       )}
 
       <RecipeSteps

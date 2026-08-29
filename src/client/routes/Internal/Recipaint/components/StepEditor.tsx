@@ -4,6 +4,7 @@ import { Delete as DeleteIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as Arro
 import { RecipeStep } from "../../../../types/RecipeStep";
 import type { StepAction } from "./RecipeForm";
 import ImageUploader from "./ImageUploader";
+import PaintListEditor from "./PaintListEditor";
 
 interface StepEditorProps {
   step: RecipeStep;
@@ -83,14 +84,9 @@ function StepEditor({ step, index, canMoveUp, canMoveDown, dispatch, onAssetRemo
           sx={{ mb: 1.5 }}
         />
 
-        <TextField
-          fullWidth
-          label="Paints (e.g., Citadel: ghostly green)"
-          value={step.paints || ""}
-          onChange={(e) => update({ paints: e.target.value })}
-          size="small"
-          sx={{ mb: 1.5 }}
-        />
+        <Box sx={{ mb: 2 }}>
+          <PaintListEditor paints={step.paints || []} onChange={(paints) => update({ paints })} />
+        </Box>
 
         <Box sx={{ mb: 0 }}>
           <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>

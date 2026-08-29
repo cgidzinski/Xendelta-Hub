@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 import { Recipe, RecipeSummary } from "../../types/Recipe";
+import { RecipePaint } from "../../../shared/recipaint/paints";
 
 // Asset upload types
 interface RecipaintAssetUploadResponse {
@@ -46,6 +47,7 @@ export const recipaintKeys = {
   public: () => [...recipaintKeys.all, "public"] as const,
   publicDetails: () => [...recipaintKeys.all, "publicDetail"] as const,
   publicDetail: (id: string) => [...recipaintKeys.publicDetails(), id] as const,
+  paints: () => [...recipaintKeys.all, "paints"] as const,
 };
 
 // The list endpoints page their results; these are the sizes the UI asks for.
@@ -237,6 +239,7 @@ export const useUpdateRecipe = () => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: recipaintKeys.lists() });
       queryClient.invalidateQueries({ queryKey: recipaintKeys.detail(data._id) });
+      queryClient.invalidateQueries({ queryKey: recipaintKeys.paints() });
     },
   });
 };
@@ -284,4 +287,23 @@ export const useRecipaintAssets = () => {
     deleteAsset: (assetUrl: string) => deleteAsset(assetUrl),
     isDeletingAsset,
   };
+};
+
+const fetchPaintSuggestions = async (): Promise<RecipePaint[]> => {
+  const response = await apiClient.get<ApiResponse<{ paints: RecipePaint[] }>>("/api/recipaint/paints");
+  return response.data.data!.paints;
+};
+
+/** Every paint the user has already recorded, for the paint editor's autocompletes. */
+export const usePaintSuggestions = () => {
+  const { data } = useQuery({
+    queryKey: recipaintKeys.paints(),
+    queryFn: fetchPaintSuggestions,
+    // Suggestions are a convenience: a stale list is fine, and a failure just means
+    // free-text entry with no dropdown.
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  return { paints: data || [] };
 };

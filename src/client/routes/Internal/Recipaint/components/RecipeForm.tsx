@@ -4,6 +4,7 @@ import { Delete as DeleteIcon, Save as SaveIcon } from "@mui/icons-material";
 import { Recipe } from "../../../../types/Recipe";
 import { RecipeStep } from "../../../../types/RecipeStep";
 import { useRecipaintAssets } from "../../../../hooks/recipaint/useRecipaint";
+import { cleanPaints } from "../../../../../shared/recipaint/paints";
 import ImageUploader from "./ImageUploader";
 import StepEditor from "./StepEditor";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
@@ -39,7 +40,7 @@ const emptyStep = (index: number): RecipeStep => ({
   method: "",
   images: [],
   text: "",
-  paints: "",
+  paints: [],
 });
 
 // `index` is persisted on each step, so anything that shifts positions has to renumber.
@@ -124,8 +125,10 @@ export default function RecipeForm({
   };
 
   const handleSave = async () => {
+    // Half-typed paint rows are editor state, not data - drop them at the boundary.
+    const cleanedSteps = steps.map((step) => ({ ...step, paints: cleanPaints(step.paints) }));
     try {
-      await onSave({ title, description, showcase, steps, isPublic });
+      await onSave({ title, description, showcase, steps: cleanedSteps, isPublic });
     } catch {
       // onSave surfaces its own error. Keep the pending deletions so a later successful
       // save still cleans up, and leave the removed images in place until then.
