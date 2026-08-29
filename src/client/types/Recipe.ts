@@ -17,3 +17,12 @@ export interface Recipe {
   owner: UserInfo | null;
   originalRecipeId: string | null;
 }
+
+/**
+ * What the list endpoints (`/api/recipaint`, `/api/recipaint/public`) return.
+ * Steps are omitted - they carry every step's image array, which made the list
+ * response grow without bound - and replaced by the count the cards actually need.
+ */
+export interface RecipeSummary extends Omit<Recipe, "steps"> {
+  stepCount: number;
+}

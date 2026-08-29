@@ -1,9 +1,9 @@
 import { Card, CardContent, CardMedia, Typography, Box, CardHeader, Chip, Avatar } from "@mui/material";
 import { format } from "date-fns";
-import { Recipe } from "../../../../types/Recipe";
+import { RecipeSummary } from "../../../../types/Recipe";
 
 interface RecipeCardProps {
-  recipe: Recipe;
+  recipe: RecipeSummary;
   onClick: () => void;
 }
 

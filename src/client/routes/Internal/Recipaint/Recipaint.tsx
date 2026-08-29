@@ -6,16 +6,12 @@ import {
   TextField,
   InputAdornment,
   Box,
-  CircularProgress,
-  Alert,
   Button,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   IconButton,
-  Card,
-  CardContent,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import AddIcon from "@mui/icons-material/Add";
@@ -23,7 +19,6 @@ import CloseIcon from "@mui/icons-material/Close";
 import { useTitle } from "../../../hooks/useTitle";
 import { useRecipaint, usePublicRecipes, useCreateRecipe } from "../../../hooks/recipaint/useRecipaint";
 import { useSnackbar } from "notistack";
-import RecipeCard from "./components/RecipeCard";
 import RecipieList from "./components/RecipieList";
 
 export default function Recipaint() {

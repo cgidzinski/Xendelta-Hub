@@ -10,23 +10,56 @@ const {
   Types: { ObjectId },
 } = mongoose;
 
+const DEFAULT_LIST_LIMIT = 24;
+const MAX_LIST_LIMIT = 100;
+
+/**
+ * Parse ?limit / ?offset into a sane, bounded page. A junk value falls back to the
+ * default rather than erroring - these are list endpoints, not form submissions.
+ */
+function parsePaging(req: express.Request): { limit: number; offset: number } {
+  const rawLimit = Number(req.query.limit);
+  const rawOffset = Number(req.query.offset);
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.floor(rawLimit), MAX_LIST_LIMIT) : DEFAULT_LIST_LIMIT;
+  const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? Math.floor(rawOffset) : 0;
+  return { limit, offset };
+}
+
+/**
+ * Fetch a page of recipe summaries: newest first, with `steps` replaced by a `stepCount`.
+ * List views only need the count, and a recipe's steps carry every step's image array -
+ * shipping them made the list response grow without bound.
+ */
+async function findRecipeSummaries(match: any, limit: number, offset: number) {
+  const recipes = await Recipe.aggregate([
+    { $match: match },
+    { $sort: { dateUpdated: -1 } },
+    { $skip: offset },
+    { $limit: limit },
+    { $addFields: { stepCount: { $size: { $ifNull: ["$steps", []] } } } },
+    { $project: { steps: 0 } },
+  ]).exec();
+
+  // $lookup would need two more stages per field; populate() on plain objects is clearer.
+  return Recipe.populate(recipes, [
+    { path: "author", select: "username avatar" },
+    { path: "owner", select: "username avatar" },
+  ]);
+}
+
 module.exports = function (app: express.Application) {
   // Get all recipes for authenticated user
   app.get("/api/recipaint", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = (req as AuthenticatedRequest).user!._id;
     const search = req.query.search as string;
+    const { limit, offset } = parsePaging(req);
 
-    const query: any = { owner: userId };
+    const query: any = { owner: new ObjectId(userId) };
     if (search) {
       query.$or = [{ title: { $regex: search, $options: "i" } }, { description: { $regex: search, $options: "i" } }];
     }
 
-    const recipes = await Recipe.find(query)
-      .populate("author", "username avatar")
-      .populate("owner", "username avatar")
-      .sort({ dateUpdated: -1 })
-      .lean()
-      .exec();
+    const recipes = await findRecipeSummaries(query, limit, offset);
 
     return res.json({
       status: true,
@@ -37,16 +70,13 @@ module.exports = function (app: express.Application) {
   // Get public recipes from other users
   app.get("/api/recipaint/public", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = (req as AuthenticatedRequest).user!._id;
+    const { limit, offset } = parsePaging(req);
 
-    const recipes = await Recipe.find({
-      isPublic: true,
-      owner: { $ne: userId },
-    })
-      .populate("author", "username avatar")
-      .populate("owner", "username avatar")
-      .sort({ dateUpdated: -1 })
-      .lean()
-      .exec();
+    const recipes = await findRecipeSummaries(
+      { isPublic: true, owner: { $ne: new ObjectId(userId) } },
+      limit,
+      offset,
+    );
 
     return res.json({
       status: true,
@@ -104,7 +134,6 @@ module.exports = function (app: express.Application) {
         message: "Recipe not found",
       });
     }
-    console.log(recipe);
     // If recipe is public, allow access to anyone
     if (recipe.isPublic) {
       return res.json({

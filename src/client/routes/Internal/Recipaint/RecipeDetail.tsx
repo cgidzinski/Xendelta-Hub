@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   Container,
@@ -12,7 +12,6 @@ import {
   CardContent,
   Avatar,
   Chip,
-  Badge,
 } from "@mui/material";
 import {
   ArrowBack as ArrowBackIcon,
@@ -30,7 +29,7 @@ import {
 import { useSnackbar } from "notistack";
 import { useAuth } from "../../../contexts/AuthContext";
 import RecipeSteps from "./components/RecipeSteps";
-import RecipeForm from "./components/RecipeForm";
+import RecipeForm, { RecipeFormData } from "./components/RecipeForm";
 import ImageGallery from "./components/ImageGallery";
 import ShareIcon from "@mui/icons-material/Share";
 export default function RecipeDetail() {
@@ -43,6 +42,7 @@ export default function RecipeDetail() {
   const deleteRecipe = useDeleteRecipe();
   const cloneRecipe = useCloneRecipe();
   const [isEditMode, setIsEditMode] = useState(false);
+  const [isFormDirty, setIsFormDirty] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
 
   // Check if current user is the owner
@@ -56,6 +56,10 @@ export default function RecipeDetail() {
 
   const handleBackClick = () => {
     if (isEditMode) {
+      if (isFormDirty && !window.confirm("You have unsaved changes. Discard them?")) {
+        return;
+      }
+      setIsFormDirty(false);
       setIsEditMode(false);
       return;
     }
@@ -80,24 +84,20 @@ export default function RecipeDetail() {
     });
   };
 
-  const handleSave = async (formData: any) => {
+  // Returns a promise so RecipeForm can wait for the save to land before destroying
+  // the images the user removed. Rejecting on failure keeps those images alive.
+  const handleSave = async (formData: RecipeFormData) => {
     if (!id) return;
 
-    updateRecipe.mutate(
-      {
-        id,
-        data: formData,
-      },
-      {
-        onSuccess: () => {
-          setIsEditMode(false);
-          enqueueSnackbar("Recipe updated successfully", { variant: "success" });
-        },
-        onError: (error: Error) => {
-          enqueueSnackbar(error.message || "Failed to update recipe", { variant: "error" });
-        },
-      },
-    );
+    try {
+      await updateRecipe.mutateAsync({ id, data: formData });
+      setIsFormDirty(false);
+      setIsEditMode(false);
+      enqueueSnackbar("Recipe updated successfully", { variant: "success" });
+    } catch (error) {
+      enqueueSnackbar(error instanceof Error ? error.message : "Failed to update recipe", { variant: "error" });
+      throw error;
+    }
   };
 
   const handleDelete = async () => {
@@ -167,6 +167,7 @@ export default function RecipeDetail() {
           recipe={recipe}
           onSave={handleSave}
           onDelete={handleDelete}
+          onDirtyChange={setIsFormDirty}
           isSaving={updateRecipe.isPending}
           isDeleting={deleteRecipe.isPending}
         />

@@ -1,10 +1,10 @@
 import { Box, Typography, Card, CardContent, CircularProgress, Alert } from "@mui/material";
-import { Recipe } from "../../../../types/Recipe";
+import { RecipeSummary } from "../../../../types/Recipe";
 import RecipeCard from "./RecipeCard";
 
 interface RecipieListProps {
   title: string;
-  recipes: Recipe[];
+  recipes: RecipeSummary[];
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
