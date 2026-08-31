@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { Autocomplete, Box, Button, Chip, IconButton, Stack, TextField, Tooltip, Typography } from "@mui/material";
+import { Autocomplete, Box, Chip, IconButton, Stack, TextField, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
-import { RecipePaint, formatPaint, paintKey } from "../../../../../shared/recipaint/paints";
+import { RecipePaint, catalogueKey, formatPaint, paintKey } from "../../../../../shared/recipaint/paints";
 import { CollectionPaint, usePaints } from "../../../../hooks/recipaint/usePaints";
+import { usePaintCatalogueSearch } from "../../../../hooks/recipaint/usePaintCatalogue";
 import PaintFormDialog from "./PaintFormDialog";
 
 interface PaintListEditorProps {
@@ -11,21 +12,50 @@ interface PaintListEditorProps {
   onChange: (paints: RecipePaint[]) => void;
 }
 
+const OWNED_GROUP = "Your paints";
+const CATALOGUE_GROUP = "All paints";
+
+interface PickerOption {
+  /** Unique within the option list: the React key and the equality test. */
+  id: string;
+  kind: "owned" | "catalogue" | "unowned" | "create";
+  brand: string;
+  name: string;
+  range: string;
+  hex: string;
+  type: RecipePaint["type"];
+}
+
+const EMPTY_PAINT: RecipePaint = { brand: "", name: "", hex: "", type: "" };
+
+const isBlank = (paint: RecipePaint) => !paint.name.trim() && !paint.brand.trim();
+
 /** A step stores a snapshot, not a reference - that is what keeps a shared recipe readable. */
-const toStepPaint = (paint: CollectionPaint): RecipePaint => ({
-  brand: paint.brand,
-  name: paint.name,
-  hex: paint.hex,
-  type: paint.type,
+const toStepPaint = (option: PickerOption): RecipePaint => ({
+  brand: option.brand,
+  name: option.name,
+  hex: option.hex,
+  type: option.type,
 });
 
-export default function PaintListEditor({ paints, onChange }: PaintListEditorProps) {
-  const { paints: collection, isLoading } = usePaints();
-  const [dialogOpenFor, setDialogOpenFor] = useState<number | null>(null);
+const labelFor = (option: PickerOption) => {
+  if (option.kind === "create") return option.name;
+  const base = formatPaint(option);
+  return option.range ? `${base} (${option.range})` : base;
+};
 
-  // A step paint is "known" when the collection holds the same brand+name. Matching by key
-  // rather than by id is what lets a cloned recipe light up against your own shelf.
-  const collectionByKey = useMemo(() => {
+export default function PaintListEditor({ paints, onChange }: PaintListEditorProps) {
+  const { paints: collection } = usePaints();
+  const [query, setQuery] = useState("");
+  const [createFor, setCreateFor] = useState<{ index: number; name: string } | null>(null);
+
+  // Only the row being typed into queries the catalogue; every row renders the same option
+  // list, which is correct because only one can have focus.
+  const { paints: catalogueResults, isSearching } = usePaintCatalogueSearch(query);
+
+  // Matching a step's snapshot to your shelf goes through paintKey (brand+name) because a
+  // step carries no range.
+  const ownedByPaintKey = useMemo(() => {
     const map = new Map<string, CollectionPaint>();
     for (const paint of collection) {
       map.set(paintKey({ brand: paint.brand, name: paint.name, hex: "", type: "" }), paint);
@@ -33,13 +63,105 @@ export default function PaintListEditor({ paints, onChange }: PaintListEditorPro
     return map;
   }, [collection]);
 
-  const replaceAt = (index: number, paint: RecipePaint) => {
-    onChange(paints.map((existing, i) => (i === index ? paint : existing)));
+  const options = useMemo<PickerOption[]>(() => {
+    const needle = query.trim().toLowerCase();
+
+    const owned: PickerOption[] = collection
+      .filter((paint) => !needle || `${paint.brand} ${paint.range} ${paint.name}`.toLowerCase().includes(needle))
+      .map((paint) => ({
+        id: `owned:${paint._id}`,
+        kind: "owned",
+        brand: paint.brand,
+        name: paint.name,
+        range: paint.range,
+        hex: paint.hex,
+        type: paint.type,
+      }));
+
+    // A paint already on the shelf must not appear twice; the owned entry wins.
+    const ownedIdentities = new Set(
+      collection.flatMap((paint) => [
+        paint.catalogueKey,
+        catalogueKey({ brand: paint.brand, range: paint.range, name: paint.name }),
+      ]),
+    );
+
+    const catalogue: PickerOption[] = catalogueResults
+      .filter((entry) => !ownedIdentities.has(entry.key))
+      .map((entry) => ({
+        id: `catalogue:${entry.key}`,
+        kind: "catalogue",
+        brand: entry.brand,
+        name: entry.name,
+        range: entry.range,
+        hex: entry.hex,
+        type: entry.type,
+      }));
+
+    const combined = [...owned, ...catalogue];
+
+    // "New paint" is a last resort: it only appears once nothing owned or in the catalogue
+    // matches what has been typed.
+    if (needle && combined.length === 0) {
+      combined.push({
+        id: "create",
+        kind: "create",
+        brand: "",
+        name: query.trim(),
+        range: "",
+        hex: "",
+        type: "",
+      });
+    }
+
+    return combined;
+  }, [collection, catalogueResults, query]);
+
+  /** The option a row currently shows. Built from the step's own snapshot so a paint that is
+   *  neither owned nor in the current search results still displays. */
+  const valueFor = (paint: RecipePaint): PickerOption | null => {
+    if (isBlank(paint)) return null;
+    const owned = ownedByPaintKey.get(paintKey(paint));
+    if (owned) {
+      return {
+        id: `owned:${owned._id}`,
+        kind: "owned",
+        brand: owned.brand,
+        name: owned.name,
+        range: owned.range,
+        hex: owned.hex,
+        type: owned.type,
+      };
+    }
+    return {
+      id: `unowned:${paintKey(paint)}`,
+      kind: "unowned",
+      brand: paint.brand,
+      name: paint.name,
+      range: "",
+      hex: paint.hex,
+      type: paint.type,
+    };
   };
 
-  const removeAt = (index: number) => onChange(paints.filter((_, i) => i !== index));
+  /**
+   * Rows are implicit: the list always ends in one blank picker, so filling the last row grows
+   * the list and clearing a row removes it. There is no add or remove button to hunt for.
+   */
+  const rows = [...paints, EMPTY_PAINT];
 
-  const addRow = () => onChange([...paints, { brand: "", name: "", hex: "", type: "" }]);
+  const setRow = (index: number, paint: RecipePaint | null) => {
+    const next = [...paints];
+    if (!paint || isBlank(paint)) {
+      // Clearing an existing row drops it; clearing the trailing blank does nothing.
+      if (index < paints.length) next.splice(index, 1);
+    } else if (index < paints.length) {
+      next[index] = paint;
+    } else {
+      next.push(paint);
+    }
+    onChange(next);
+  };
 
   return (
     <Box>
@@ -48,135 +170,128 @@ export default function PaintListEditor({ paints, onChange }: PaintListEditorPro
       </Typography>
 
       <Stack spacing={1}>
-        {paints.map((paint, index) => {
-          const key = paintKey(paint);
-          const owned = collectionByKey.get(key);
-          const isEmptyRow = !paint.name.trim() && !paint.brand.trim();
-          // A paint from a cloned or older recipe that isn't on your shelf: shown as it was
-          // saved, but not editable here - the collection is the place to manage paints.
-          const isUnknown = !isEmptyRow && !owned;
+        {rows.map((paint, index) => {
+          const isTrailing = index === paints.length;
+          const value = valueFor(paint);
 
           return (
             <Stack key={index} direction="row" spacing={1} alignItems="center">
-              {isUnknown ? (
-                <Box
-                  sx={{
-                    flexGrow: 1,
-                    minWidth: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1,
-                    py: 0.75,
-                    px: 1.5,
-                    border: "1px solid",
-                    borderColor: "divider",
-                    borderRadius: 1,
-                  }}
-                >
-                  <Box
-                    sx={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: "50%",
-                      flexShrink: 0,
-                      border: "1px solid",
-                      borderColor: "divider",
-                      backgroundColor: paint.hex || "transparent",
-                    }}
-                  />
-                  <Typography variant="body2" noWrap sx={{ minWidth: 0, flexGrow: 1 }}>
-                    {formatPaint(paint)}
-                  </Typography>
-                  <Tooltip title="This paint isn't in your collection">
-                    <Chip size="small" variant="outlined" label="not owned" sx={{ flexShrink: 0 }} />
-                  </Tooltip>
-                </Box>
-              ) : (
-                <Autocomplete
-                  size="small"
-                  sx={{ flexGrow: 1, minWidth: 0 }}
-                  options={collection}
-                  loading={isLoading}
-                  value={owned ?? null}
-                  isOptionEqualToValue={(option, selected) => option._id === selected._id}
-                  getOptionLabel={(option) => (option.range ? `${formatPaint(option)} (${option.range})` : formatPaint(option))}
-                  onChange={(_, selected) => replaceAt(index, selected ? toStepPaint(selected) : { brand: "", name: "", hex: "", type: "" })}
-                  renderOption={(props, option) => {
-                    const { key: _labelKey, ...optionProps } = props as typeof props & { key: string };
-                    return (
-                      // Keyed on the document id, not MUI's label-derived key: two owned pots
-                      // can share a brand and name across ranges.
-                      <Box component="li" key={option._id} {...optionProps} sx={{ display: "flex", gap: 1 }}>
-                        <Box
-                          sx={{
-                            width: 14,
-                            height: 14,
-                            borderRadius: "50%",
-                            flexShrink: 0,
-                            border: "1px solid",
-                            borderColor: "divider",
-                            backgroundColor: option.hex || "transparent",
-                          }}
-                        />
-                        <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                          <Typography variant="body2" noWrap>
-                            {formatPaint(option)}
+              <Autocomplete
+                size="small"
+                sx={{ flexGrow: 1, minWidth: 0 }}
+                options={options}
+                loading={isSearching}
+                value={value}
+                // Filtering happens above, over the owned list and the server's results.
+                filterOptions={(all) => all}
+                groupBy={(option) => (option.kind === "owned" ? OWNED_GROUP : option.kind === "catalogue" ? CATALOGUE_GROUP : "")}
+                isOptionEqualToValue={(option, selected) => option.id === selected.id}
+                getOptionLabel={labelFor}
+                onInputChange={(_, text, reason) => {
+                  if (reason === "input") setQuery(text);
+                }}
+                onChange={(_, selected) => {
+                  if (selected?.kind === "create") {
+                    setCreateFor({ index, name: selected.name });
+                    return;
+                  }
+                  setRow(index, selected ? toStepPaint(selected) : null);
+                  setQuery("");
+                }}
+                renderOption={(props, option) => {
+                  const { key: _labelKey, ...optionProps } = props as typeof props & { key: string };
+                  return (
+                    // Keyed on our own id: two paints can share a brand and name across ranges,
+                    // and MUI's default key comes from the label.
+                    <Box component="li" key={option.id} {...optionProps} sx={{ display: "flex", gap: 1 }}>
+                      {option.kind === "create" ? (
+                        <>
+                          <AddIcon fontSize="small" color="primary" />
+                          <Typography variant="body2">
+                            Add &quot;{option.name}&quot; as a new paint
                           </Typography>
-                          {option.range && (
+                        </>
+                      ) : (
+                        <>
+                          <Box
+                            sx={{
+                              width: 14,
+                              height: 14,
+                              borderRadius: "50%",
+                              flexShrink: 0,
+                              border: "1px solid",
+                              borderColor: "divider",
+                              backgroundColor: option.hex || "transparent",
+                            }}
+                          />
+                          <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                            <Typography variant="body2" noWrap>
+                              {option.name}
+                            </Typography>
                             <Typography variant="caption" color="text.secondary" noWrap>
-                              {option.range}
+                              {option.brand}
+                              {option.range ? ` - ${option.range}` : ""}
+                            </Typography>
+                          </Box>
+                          {option.type && (
+                            <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+                              {option.type}
                             </Typography>
                           )}
-                        </Box>
-                        {option.type && (
-                          <Typography variant="caption" color="text.secondary">
-                            {option.type}
-                          </Typography>
-                        )}
-                      </Box>
-                    );
-                  }}
-                  renderInput={(params) => (
-                    <TextField {...params} label="Paint" placeholder="Pick from your collection" />
-                  )}
-                  noOptionsText="No paints yet - add one below"
-                />
+                        </>
+                      )}
+                    </Box>
+                  );
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label={isTrailing ? "Add a paint" : "Paint"}
+                    placeholder="Search your paints and the catalogue..."
+                  />
+                )}
+                noOptionsText={query ? "No matching paints" : "Start typing to search"}
+              />
+
+              {/* A paint you do not own still reads clearly - useful on a cloned recipe. */}
+              {value?.kind === "unowned" && (
+                <Chip size="small" variant="outlined" label="not owned" sx={{ flexShrink: 0 }} />
               )}
 
-              <IconButton
-                size="small"
-                color="error"
-                aria-label={`Remove paint ${index + 1}`}
-                onClick={() => removeAt(index)}
-                sx={{ flexShrink: 0 }}
-              >
-                <DeleteIcon fontSize="small" />
-              </IconButton>
+              {!isTrailing && (
+                <IconButton
+                  size="small"
+                  color="error"
+                  aria-label={`Remove paint ${index + 1}`}
+                  onClick={() => setRow(index, null)}
+                  sx={{ flexShrink: 0 }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              )}
             </Stack>
           );
         })}
       </Stack>
 
-      <Stack direction="row" spacing={1} sx={{ mt: paints.length ? 1 : 0 }}>
-        <Button size="small" startIcon={<AddIcon />} onClick={addRow} sx={{ textTransform: "none" }}>
-          Add paint
-        </Button>
-        <Button size="small" onClick={() => setDialogOpenFor(paints.length)} sx={{ textTransform: "none" }}>
-          New paint...
-        </Button>
-      </Stack>
-
-      {/* Adds to the collection and drops straight into the step, so a paint you have just
-          opened doesn't need a detour to the paints page. */}
+      {/* Reached only from the "Add ... as a new paint" option, so it opens on the custom form:
+          the catalogue has already been searched and came up empty. */}
       <PaintFormDialog
-        open={dialogOpenFor !== null}
-        onClose={() => setDialogOpenFor(null)}
+        open={createFor !== null}
+        onClose={() => setCreateFor(null)}
+        initialName={createFor?.name}
+        defaultTab="custom"
         onSaved={(created) => {
-          const index = dialogOpenFor ?? paints.length;
-          const next = [...paints];
-          next[index] = toStepPaint(created);
-          onChange(next);
-          setDialogOpenFor(null);
+          if (createFor) {
+            setRow(createFor.index, {
+              brand: created.brand,
+              name: created.name,
+              hex: created.hex,
+              type: created.type,
+            });
+          }
+          setCreateFor(null);
+          setQuery("");
         }}
       />
     </Box>

@@ -28,6 +28,9 @@ interface PaintFormDialogProps {
   onSaved?: (paint: CollectionPaint) => void;
   /** Prefill the name, e.g. from what was typed into the recipe's paint picker. */
   initialName?: string;
+  /** Which tab to open on. The recipe picker opens "custom": it only offers to create a paint
+   *  once the catalogue search has already come up empty, so the catalogue tab is a dead end. */
+  defaultTab?: "catalogue" | "custom";
 }
 
 const EMPTY_DRAFT: PaintDraft = { brand: "", name: "", range: "", hex: "", type: "", quantity: 1, catalogueKey: "" };
@@ -42,7 +45,14 @@ const fromCatalogue = (entry: CataloguePaint, quantity: number): PaintDraft => (
   catalogueKey: entry.key,
 });
 
-export default function PaintFormDialog({ open, onClose, paint, onSaved, initialName }: PaintFormDialogProps) {
+export default function PaintFormDialog({
+  open,
+  onClose,
+  paint,
+  onSaved,
+  initialName,
+  defaultTab = "catalogue",
+}: PaintFormDialogProps) {
   const { enqueueSnackbar } = useSnackbar();
   const { paints } = usePaints();
   const { createPaint, isCreating, updatePaint, isUpdating } = usePaintMutations();
@@ -81,8 +91,8 @@ export default function PaintFormDialog({ open, onClose, paint, onSaved, initial
     setCatalogueQuery(initialName || "");
     // Editing is always the manual form: the paint already exists, and its identity should not
     // silently change because a catalogue row happened to match.
-    setTab(paint ? "custom" : "catalogue");
-  }, [open, paint, initialName]);
+    setTab(paint ? "custom" : defaultTab);
+  }, [open, paint, initialName, defaultTab]);
 
   const set = (patch: Partial<PaintDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
 
