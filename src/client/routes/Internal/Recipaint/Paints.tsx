@@ -55,7 +55,7 @@ export default function Paints() {
   const visible = useMemo(() => {
     const needle = debouncedSearch.trim().toLowerCase();
     if (!needle) return paints;
-    return paints.filter((p) => `${p.brand} ${p.name} ${p.type}`.toLowerCase().includes(needle));
+    return paints.filter((p) => `${p.brand} ${p.name} ${p.range} ${p.type}`.toLowerCase().includes(needle));
   }, [paints, debouncedSearch]);
 
   // Grouped by brand, since that is how a paint rack is actually organised.
@@ -191,9 +191,9 @@ export default function Paints() {
                     <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
                       {paint.name}
                     </Typography>
-                    {paint.type && (
-                      <Typography variant="caption" color="text.secondary">
-                        {paint.type}
+                    {(paint.range || paint.type) && (
+                      <Typography variant="caption" color="text.secondary" noWrap>
+                        {[paint.range, paint.type].filter(Boolean).join(" - ")}
                       </Typography>
                     )}
                   </Box>

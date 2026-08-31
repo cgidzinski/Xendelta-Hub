@@ -39,6 +39,8 @@ module.exports = function (app: express.Application) {
   app.post("/api/paints", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = (req as AuthenticatedRequest).user!._id;
 
+    // normalizePaintInput takes brand/name/range/hex/type/quantity/catalogueKey and derives
+    // the range-aware dedupe key; anything else in the body is ignored.
     const normalized = normalizePaintInput(req.body);
     if (!normalized) {
       return res.status(400).json({
@@ -85,9 +87,11 @@ module.exports = function (app: express.Application) {
     const normalized = normalizePaintInput({
       brand: req.body.brand ?? paint.brand,
       name: req.body.name ?? paint.name,
+      range: req.body.range ?? paint.range,
       hex: req.body.hex ?? paint.hex,
       type: req.body.type ?? paint.type,
       quantity: req.body.quantity ?? paint.quantity,
+      catalogueKey: req.body.catalogueKey ?? paint.catalogueKey,
     });
     if (!normalized) {
       return res.status(400).json({ status: false, message: "A paint needs a name" });
@@ -101,7 +105,7 @@ module.exports = function (app: express.Application) {
       if (error?.code === DUPLICATE_KEY) {
         return res.status(409).json({
           status: false,
-          message: "Another paint in your collection already has that brand and name",
+          message: "Another paint in your collection already has that brand, range and name",
         });
       }
       throw error;

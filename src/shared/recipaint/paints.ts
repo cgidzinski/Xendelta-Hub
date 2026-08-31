@@ -94,18 +94,28 @@ export const PAINT_METHODS = [
 export interface PaintInput {
   brand?: string | null;
   name?: string | null;
+  /** The commercial range, e.g. "Warpaints Air". Part of a paint's identity. */
+  range?: string | null;
   hex?: string | null;
   type?: string | null;
   quantity?: number | null;
+  /** Set when the paint came from the shared catalogue; absent for a custom colour. */
+  catalogueKey?: string | null;
 }
 
 export interface NormalizedPaint {
   brand: string;
   name: string;
+  range: string;
   hex: string;
   type: PaintType | "";
   quantity: number;
-  /** Dedupe identity, matching paintKey(). The collection's unique index is built on this. */
+  catalogueKey: string;
+  /**
+   * Dedupe identity, matching catalogueKey(). The library's unique index is built on this.
+   * Includes the range because ranges reuse names: a painter can own Army Painter's "Warlock
+   * Purple" in both Warpaints and Warpaints Air, and they are different colours.
+   */
   key: string;
 }
 
@@ -119,6 +129,7 @@ export function normalizePaintInput(input: PaintInput | null | undefined): Norma
 
   const brand = (input.brand || "").trim();
   const name = (input.name || "").trim();
+  const range = (input.range || "").trim();
   if (!name) return null;
 
   const type = PAINT_TYPES.includes(input.type as PaintType) ? (input.type as PaintType) : "";
@@ -129,9 +140,60 @@ export function normalizePaintInput(input: PaintInput | null | undefined): Norma
   return {
     brand,
     name,
+    range,
     hex: (input.hex || "").trim(),
     type,
     quantity,
-    key: paintKey({ brand, name, hex: "", type: "" }),
+    catalogueKey: (input.catalogueKey || "").trim(),
+    key: catalogueKey({ brand, range, name }),
   };
+}
+
+// --- Catalogue identity -----------------------------------------------------------------
+//
+// A paint's identity in the catalogue (and in a user's library) is brand + range + name, not
+// brand + name. Ranges genuinely reuse names for different colours - Army Painter's "Warlock
+// Purple" exists in both Warpaints and Warpaints Air with different hex values - and keying
+// without the range collapses 437 of the 2,176 catalogue paints into each other.
+//
+// Deliberately NOT the same thing as paintKey(). A recipe step stores no range and does not
+// need one: it only asks "do I own something called this?".
+
+export interface CataloguePaintIdentity {
+  brand: string;
+  range: string;
+  name: string;
+}
+
+export function catalogueKey(paint: CataloguePaintIdentity): string {
+  const part = (value: string) => (value || "").trim().toLowerCase();
+  // Same NUL separator as paintKey, and for the same reason: it cannot occur in a brand or
+  // range, so "a b"/"c" can never collide with "a"/"b c".
+  return [part(paint.brand), part(paint.range), part(paint.name)].join("\u0000");
+}
+
+/**
+ * Map the source dataset's vocabulary onto our narrower PAINT_TYPES.
+ *
+ * The dataset carries both a `set` (the commercial range: Base, Layer, Warpaints Air) and a
+ * coarse `type` ("standard" | "metallic" | "ink" | "wash" | "other"). The range is the more
+ * specific signal where it names a Citadel-style category, so it wins; the coarse type is the
+ * fallback. Anything unrecognised yields "" rather than a value the schema enum would reject.
+ */
+export function paintTypeFromDataset(set: string | null | undefined, datasetType?: string | null): PaintType | "" {
+  const range = (set || "").trim().toLowerCase();
+
+  if (range.includes("contrast") || range.includes("speedpaint")) return "contrast";
+  if (range.includes("technical")) return "technical";
+  if (range.includes("shade") || range.includes("wash")) return "wash";
+  if (range.includes("metallic")) return "metallic";
+  // Exact matches, checked last so a compound range like "Warpaints Air" does not match here.
+  if (range === "base") return "base";
+  if (range === "layer") return "layer";
+
+  const coarse = (datasetType || "").trim().toLowerCase();
+  if (coarse === "metallic") return "metallic";
+  if (coarse === "wash" || coarse === "ink") return "wash";
+
+  return "";
 }

@@ -5,8 +5,11 @@ import {
   cleanPaints,
   formatPaint,
   isBlankPaint,
+  catalogueKey,
   normalizePaintInput,
   paintKey,
+  paintTypeFromDataset,
+  PAINT_TYPES,
 } from "./paints";
 
 const paint = (over: Partial<RecipePaint> = {}): RecipePaint => ({
@@ -124,15 +127,32 @@ describe("cleanPaints", () => {
 
 describe("normalizePaintInput", () => {
   it("trims and derives the dedupe key", () => {
-    const out = normalizePaintInput({ brand: "  Citadel ", name: " Nuln Oil ", hex: " #14171a ", type: "wash", quantity: 2 });
+    const out = normalizePaintInput({
+      brand: "  Citadel ",
+      name: " Nuln Oil ",
+      range: " Shade ",
+      hex: " #14171a ",
+      type: "wash",
+      quantity: 2,
+      catalogueKey: " cat-key ",
+    });
     expect(out).toEqual({
       brand: "Citadel",
       name: "Nuln Oil",
+      range: "Shade",
       hex: "#14171a",
       type: "wash",
       quantity: 2,
-      key: paintKey({ brand: "Citadel", name: "Nuln Oil", hex: "", type: "" }),
+      catalogueKey: "cat-key",
+      // Range-aware, so two ranges sharing a name stay distinct.
+      key: catalogueKey({ brand: "Citadel", range: "Shade", name: "Nuln Oil" }),
     });
+  });
+
+  it("separates two library paints that share a name across ranges", () => {
+    const warpaints = normalizePaintInput({ brand: "Army Painter", name: "Warlock Purple", range: "Warpaints" });
+    const air = normalizePaintInput({ brand: "Army Painter", name: "Warlock Purple", range: "Warpaints Air" });
+    expect(warpaints!.key).not.toBe(air!.key);
   });
 
   // The property the collection's unique index relies on.
@@ -168,5 +188,75 @@ describe("normalizePaintInput", () => {
     expect(normalizePaintInput({ name: "X", quantity: -5 })!.quantity).toBe(0);
     expect(normalizePaintInput({ name: "X", quantity: NaN })!.quantity).toBe(0);
     expect(normalizePaintInput({ name: "X", quantity: null })!.quantity).toBe(0);
+  });
+});
+
+describe("catalogueKey", () => {
+  const warpaints = { brand: "Army Painter", range: "Warpaints", name: "Warlock Purple" };
+  const air = { brand: "Army Painter", range: "Warpaints Air", name: "Warlock Purple" };
+
+  // The whole reason the range is part of a paint's identity: these are different colours.
+  it("separates one name that exists in two ranges", () => {
+    expect(catalogueKey(warpaints)).not.toBe(catalogueKey(air));
+  });
+
+  it("collapses casing and whitespace variants of one paint", () => {
+    expect(catalogueKey({ brand: " ARMY painter ", range: "  warpaints ", name: "WARLOCK purple" })).toBe(
+      catalogueKey(warpaints),
+    );
+  });
+
+  it("does not collide across the brand/range/name boundaries", () => {
+    expect(catalogueKey({ brand: "a b", range: "c", name: "d" })).not.toBe(
+      catalogueKey({ brand: "a", range: "b c", name: "d" }),
+    );
+    expect(catalogueKey({ brand: "a", range: "b", name: "c d" })).not.toBe(
+      catalogueKey({ brand: "a", range: "b c", name: "d" }),
+    );
+  });
+
+  it("is a different identity from paintKey", () => {
+    // A recipe step keys on brand+name and carries no range; the two must not be conflated.
+    expect(catalogueKey(warpaints)).not.toBe(paintKey({ brand: "Army Painter", name: "Warlock Purple", hex: "", type: "" }));
+  });
+
+  it("tolerates a missing range", () => {
+    expect(catalogueKey({ brand: "Citadel", range: "", name: "Nuln Oil" })).toBe(
+      catalogueKey({ brand: "Citadel", range: "  ", name: "Nuln Oil" }),
+    );
+  });
+});
+
+describe("paintTypeFromDataset", () => {
+  it("maps the Citadel-style ranges onto our enum", () => {
+    expect(paintTypeFromDataset("Base", "standard")).toBe("base");
+    expect(paintTypeFromDataset("Layer", "standard")).toBe("layer");
+    expect(paintTypeFromDataset("Shade", "wash")).toBe("wash");
+    expect(paintTypeFromDataset("Contrast", "standard")).toBe("contrast");
+    expect(paintTypeFromDataset("Technical", "standard")).toBe("technical");
+  });
+
+  it("recognises the same categories inside a longer range name", () => {
+    expect(paintTypeFromDataset("Quickshade Washes Set", "standard")).toBe("wash");
+    expect(paintTypeFromDataset("Metallic Colours Paint Set", "standard")).toBe("metallic");
+    expect(paintTypeFromDataset("Speedpaint Set", "standard")).toBe("contrast");
+  });
+
+  it("does not let a compound range match an exact category", () => {
+    // "Warpaints Air" must not be read as the Citadel "Base"/"Layer" categories.
+    expect(paintTypeFromDataset("Warpaints Air", "standard")).toBe("");
+  });
+
+  it("falls back to the coarse dataset type", () => {
+    expect(paintTypeFromDataset("Model Air", "metallic")).toBe("metallic");
+    expect(paintTypeFromDataset("Game Color", "ink")).toBe("wash");
+  });
+
+  it("yields an empty type rather than something the schema enum would reject", () => {
+    for (const value of ["Dry", "Spray", "Glaze", "Model Color", "", null, undefined]) {
+      const out = paintTypeFromDataset(value, "standard");
+      expect([...PAINT_TYPES, ""], `range=${value}`).toContain(out);
+    }
+    expect(paintTypeFromDataset("Dry", "standard")).toBe("");
   });
 });

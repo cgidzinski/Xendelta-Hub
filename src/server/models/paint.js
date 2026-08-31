@@ -11,6 +11,9 @@ var paintSchema = new mongoose.Schema({
   owner: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
   brand: { type: String, default: "" },
   name: { type: String, required: true },
+  // The commercial range, e.g. "Warpaints Air". Part of the paint's identity, not decoration:
+  // ranges reuse names for different colours.
+  range: { type: String, default: "" },
   hex: { type: String, default: "" }, // swatch colour, "" when unset
   type: {
     type: String,
@@ -18,9 +21,14 @@ var paintSchema = new mongoose.Schema({
     default: "",
   },
   quantity: { type: Number, default: 1, min: 0 },
-  // Normalised brand+name, produced by normalizePaintInput (shared/recipaint/paints.ts).
+  // Set when the paint was picked from the shared catalogue (src/server/data/paintCatalogue.json);
+  // empty for a custom colour. A plain string, since the catalogue is a file, not a collection.
+  catalogueKey: { type: String, default: "" },
+  // Normalised brand+range+name, produced by normalizePaintInput (shared/recipaint/paints.ts).
   // Stored rather than derived so the unique index below can be case-insensitive without a
-  // collation, and so it stays identical to the key the palette aggregation uses.
+  // collation. It must include the range: keying on brand+name alone collapses 437 of the
+  // 2,164 catalogue paints into each other, so a painter could not own both "Warlock Purple"
+  // pots.
   key: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
@@ -29,6 +37,7 @@ var paintSchema = new mongoose.Schema({
 // One entry per paint per user. The POST route turns a violation into a 409.
 paintSchema.index({ owner: 1, key: 1 }, { unique: true });
 paintSchema.index({ owner: 1, brand: 1, name: 1 });
+paintSchema.index({ owner: 1, catalogueKey: 1 });
 
 paintSchema.pre("save", function (next) {
   this.updatedAt = Date.now();

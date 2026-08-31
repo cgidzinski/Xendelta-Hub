@@ -99,12 +99,14 @@ export default function PaintListEditor({ paints, onChange }: PaintListEditorPro
                   loading={isLoading}
                   value={owned ?? null}
                   isOptionEqualToValue={(option, selected) => option._id === selected._id}
-                  getOptionLabel={(option) => formatPaint(option)}
+                  getOptionLabel={(option) => (option.range ? `${formatPaint(option)} (${option.range})` : formatPaint(option))}
                   onChange={(_, selected) => replaceAt(index, selected ? toStepPaint(selected) : { brand: "", name: "", hex: "", type: "" })}
                   renderOption={(props, option) => {
-                    const { key: optionKey, ...optionProps } = props as typeof props & { key: string };
+                    const { key: _labelKey, ...optionProps } = props as typeof props & { key: string };
                     return (
-                      <Box component="li" key={optionKey} {...optionProps} sx={{ display: "flex", gap: 1 }}>
+                      // Keyed on the document id, not MUI's label-derived key: two owned pots
+                      // can share a brand and name across ranges.
+                      <Box component="li" key={option._id} {...optionProps} sx={{ display: "flex", gap: 1 }}>
                         <Box
                           sx={{
                             width: 14,
@@ -116,9 +118,16 @@ export default function PaintListEditor({ paints, onChange }: PaintListEditorPro
                             backgroundColor: option.hex || "transparent",
                           }}
                         />
-                        <Typography variant="body2" sx={{ flexGrow: 1 }}>
-                          {formatPaint(option)}
-                        </Typography>
+                        <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                          <Typography variant="body2" noWrap>
+                            {formatPaint(option)}
+                          </Typography>
+                          {option.range && (
+                            <Typography variant="caption" color="text.secondary" noWrap>
+                              {option.range}
+                            </Typography>
+                          )}
+                        </Box>
                         {option.type && (
                           <Typography variant="caption" color="text.secondary">
                             {option.type}

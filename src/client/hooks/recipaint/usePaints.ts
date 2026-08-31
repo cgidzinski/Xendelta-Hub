@@ -8,9 +8,13 @@ export interface CollectionPaint {
   _id: string;
   brand: string;
   name: string;
+  /** The commercial range, e.g. "Warpaints Air". Empty for a custom colour. */
+  range: string;
   hex: string;
   type: PaintType | "";
   quantity: number;
+  /** Set when the paint came from the shared catalogue. */
+  catalogueKey: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -18,9 +22,11 @@ export interface CollectionPaint {
 export interface PaintDraft {
   brand: string;
   name: string;
+  range: string;
   hex: string;
   type: PaintType | "";
   quantity: number;
+  catalogueKey: string;
 }
 
 export const paintKeys = {
