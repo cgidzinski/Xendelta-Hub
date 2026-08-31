@@ -8,6 +8,7 @@ import {
 } from "../utils/mediaUtils";
 import { AuthenticatedRequest } from "../types";
 import { sanitizeCompletedSteps } from "../../shared/recipaint/progress";
+import { isSameId } from "../utils/objectId";
 const { Recipe } = require("../models/recipe");
 const { RecipeProgress } = require("../models/recipeProgress");
 const mongoose = require("mongoose");
@@ -191,20 +192,8 @@ module.exports = function (app: express.Application) {
         message: "Authentication required",
       });
     }
-    // Check if user is the owner
-    let ownerObjectId: typeof ObjectId;
-    if (recipe.owner && typeof recipe.owner === "object" && "_id" in recipe.owner) {
-      // Populated owner
-      ownerObjectId = new ObjectId(recipe.owner._id);
-    } else {
-      // Unpopulated owner
-      ownerObjectId = new ObjectId(recipe.owner);
-    }
-
-    const userObjectId = new ObjectId(userId);
-    const isOwner = ownerObjectId.equals(userObjectId);
-
-    if (!isOwner) {
+    // isSameId reaches through a populated owner to the id it carries.
+    if (!isSameId(recipe.owner, userId)) {
       return res.status(403).json({
         status: false,
         message: "Access denied",
@@ -271,11 +260,8 @@ module.exports = function (app: express.Application) {
       });
     }
 
-    // Check if user is the owner using ObjectId comparison
-    const ownerObjectId = new ObjectId(recipe.owner);
-    const userObjectId = new ObjectId(userId);
-
-    if (!ownerObjectId.equals(userObjectId)) {
+    // Check if user is the owner
+    if (!isSameId(recipe.owner, userId)) {
       return res.status(403).json({
         status: false,
         message: "Access denied",
@@ -353,7 +339,7 @@ module.exports = function (app: express.Application) {
     const recipe = await Recipe.findById(recipeId).select("owner isPublic").lean().exec();
     if (!recipe) return false;
     if (recipe.isPublic) return true;
-    return new ObjectId(recipe.owner).equals(new ObjectId(userId));
+    return isSameId(recipe.owner, userId);
   }
 
   app.get(
@@ -397,7 +383,7 @@ module.exports = function (app: express.Application) {
       if (!recipe) {
         return res.status(404).json({ status: false, message: "Recipe not found" });
       }
-      if (!recipe.isPublic && !new ObjectId(recipe.owner).equals(new ObjectId(userId))) {
+      if (!recipe.isPublic && !isSameId(recipe.owner, userId)) {
         return res.status(403).json({ status: false, message: "Access denied" });
       }
 
@@ -433,8 +419,7 @@ module.exports = function (app: express.Application) {
     }
 
     // Check if user is the owner
-    const ownerId = recipe.owner?.toString() || String(recipe.owner);
-    if (ownerId !== userId) {
+    if (!isSameId(recipe.owner, userId)) {
       return res.status(403).json({
         status: false,
         message: "Access denied",
@@ -509,14 +494,7 @@ module.exports = function (app: express.Application) {
 
     // If recipe is private, check if user is the owner
     if (!originalRecipe.isPublic) {
-      let ownerObjectId: typeof ObjectId;
-      if (originalRecipe.owner && typeof originalRecipe.owner === "object" && "_id" in originalRecipe.owner) {
-        ownerObjectId = new ObjectId(originalRecipe.owner._id);
-      } else {
-        ownerObjectId = new ObjectId(originalRecipe.owner);
-      }
-      const userObjectId = new ObjectId(userId);
-      if (!ownerObjectId.equals(userObjectId)) {
+      if (!isSameId(originalRecipe.owner, userId)) {
         return res.status(403).json({
           status: false,
           message: "Access denied",
