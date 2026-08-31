@@ -1,7 +1,8 @@
 import { memo } from "react";
-import { Box, TextField, IconButton, Card, CardContent, Typography, Chip } from "@mui/material";
+import { Autocomplete, Box, TextField, IconButton, Card, CardContent, Typography, Chip } from "@mui/material";
 import { Delete as DeleteIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon } from "@mui/icons-material";
 import { RecipeStep } from "../../../../types/RecipeStep";
+import { PAINT_METHODS } from "../../../../../shared/recipaint/paints";
 import type { StepAction } from "./RecipeForm";
 import ImageUploader from "./ImageUploader";
 import PaintListEditor from "./PaintListEditor";
@@ -63,14 +64,15 @@ function StepEditor({ step, index, canMoveUp, canMoveDown, dispatch, onAssetRemo
           placeholder="e.g., Base Coat, Highlights"
         />
 
-        <TextField
-          fullWidth
-          label="Method (e.g., Dry brush, Wash)"
-          value={step.method || ""}
-          onChange={(e) => update({ method: e.target.value })}
+        {/* freeSolo: the presets are a starting point, not a closed set - anything can be typed. */}
+        <Autocomplete
+          freeSolo
           size="small"
+          options={[...PAINT_METHODS]}
+          value={step.method || ""}
+          onInputChange={(_, value) => update({ method: value })}
           sx={{ mb: 1.5 }}
-          placeholder="e.g., Dry brush, Wash, Layering"
+          renderInput={(params) => <TextField {...params} label="Method" placeholder="Drybrush, Wash, Layer..." />}
         />
 
         <TextField

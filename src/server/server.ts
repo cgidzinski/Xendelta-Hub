@@ -110,6 +110,7 @@ require("./routes/admin/messages.ts")(app);
 require("./routes/admin/casino.ts")(app);
 require("./routes/admin/debug.ts")(app);
 require("./routes/recipaint.ts")(app);
+require("./routes/paints.ts")(app);
 require("./routes/xenbox.ts")(app);
 require("./routes/xenlink.ts")(app);
 require("./routes/xensplit")(app);

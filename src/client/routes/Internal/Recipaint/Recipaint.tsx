@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
+  Container,
   Chip,
   Dialog,
   DialogActions,
@@ -18,6 +19,7 @@ import {
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import AddIcon from "@mui/icons-material/Add";
+import PaletteIcon from "@mui/icons-material/Palette";
 import ClearIcon from "@mui/icons-material/Clear";
 import SortIcon from "@mui/icons-material/Sort";
 import { useTitle } from "../../../hooks/useTitle";
@@ -91,20 +93,28 @@ export default function Recipaint() {
   };
 
   return (
-    <Box sx={{ p: 2, width: "100%" }}>
+    <Container maxWidth="lg" sx={{ py: 4 }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
         <Typography variant="h6">Recipaint</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => {
-            setCreateDialogOpen(true);
-            setRecipeName("");
-          }}
-          sx={{ flexShrink: 0 }}
-        >
-          New recipe
-        </Button>
+        <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+          <Button
+            variant="outlined"
+            startIcon={<PaletteIcon />}
+            onClick={() => navigate("/internal/recipaint/paints")}
+          >
+            My paints
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setCreateDialogOpen(true);
+              setRecipeName("");
+            }}
+          >
+            New recipe
+          </Button>
+        </Stack>
       </Stack>
 
       <TextField
@@ -221,6 +231,6 @@ export default function Recipaint() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </Container>
   );
 }

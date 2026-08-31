@@ -1,25 +1,45 @@
-import { Autocomplete, Box, Button, IconButton, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { useMemo, useState } from "react";
+import { Autocomplete, Box, Button, Chip, IconButton, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
-import { EMPTY_PAINT, PAINT_TYPES, RecipePaint } from "../../../../../shared/recipaint/paints";
-import { usePaintSuggestions } from "../../../../hooks/recipaint/useRecipaint";
+import { RecipePaint, formatPaint, paintKey } from "../../../../../shared/recipaint/paints";
+import { CollectionPaint, usePaints } from "../../../../hooks/recipaint/usePaints";
+import PaintFormDialog from "./PaintFormDialog";
 
 interface PaintListEditorProps {
   paints: RecipePaint[];
   onChange: (paints: RecipePaint[]) => void;
 }
 
-/** Distinct values across everything the painter has used before, for the autocompletes. */
-const distinct = (values: string[]): string[] =>
-  [...new Set(values.map((v) => v.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+/** A step stores a snapshot, not a reference - that is what keeps a shared recipe readable. */
+const toStepPaint = (paint: CollectionPaint): RecipePaint => ({
+  brand: paint.brand,
+  name: paint.name,
+  hex: paint.hex,
+  type: paint.type,
+});
 
 export default function PaintListEditor({ paints, onChange }: PaintListEditorProps) {
-  const { paints: suggestions } = usePaintSuggestions();
+  const { paints: collection, isLoading } = usePaints();
+  const [dialogOpenFor, setDialogOpenFor] = useState<number | null>(null);
 
-  const brandOptions = distinct(suggestions.map((p) => p.brand));
-  const update = (index: number, patch: Partial<RecipePaint>) => {
-    onChange(paints.map((paint, i) => (i === index ? { ...paint, ...patch } : paint)));
+  // A step paint is "known" when the collection holds the same brand+name. Matching by key
+  // rather than by id is what lets a cloned recipe light up against your own shelf.
+  const collectionByKey = useMemo(() => {
+    const map = new Map<string, CollectionPaint>();
+    for (const paint of collection) {
+      map.set(paintKey({ brand: paint.brand, name: paint.name, hex: "", type: "" }), paint);
+    }
+    return map;
+  }, [collection]);
+
+  const replaceAt = (index: number, paint: RecipePaint) => {
+    onChange(paints.map((existing, i) => (i === index ? paint : existing)));
   };
+
+  const removeAt = (index: number) => onChange(paints.filter((_, i) => i !== index));
+
+  const addRow = () => onChange([...paints, { brand: "", name: "", hex: "", type: "" }]);
 
   return (
     <Box>
@@ -29,108 +49,127 @@ export default function PaintListEditor({ paints, onChange }: PaintListEditorPro
 
       <Stack spacing={1}>
         {paints.map((paint, index) => {
-          // Once a brand is chosen, only suggest names from that brand's range.
-          const nameOptions = distinct(
-            suggestions.filter((p) => !paint.brand || p.brand === paint.brand).map((p) => p.name),
-          );
+          const key = paintKey(paint);
+          const owned = collectionByKey.get(key);
+          const isEmptyRow = !paint.name.trim() && !paint.brand.trim();
+          // A paint from a cloned or older recipe that isn't on your shelf: shown as it was
+          // saved, but not editable here - the collection is the place to manage paints.
+          const isUnknown = !isEmptyRow && !owned;
 
           return (
-            <Stack
-              key={index}
-              direction={{ xs: "column", sm: "row" }}
-              spacing={1}
-              alignItems={{ xs: "stretch", sm: "center" }}
-            >
-              <Autocomplete
-                freeSolo
-                size="small"
-                options={brandOptions}
-                value={paint.brand}
-                onInputChange={(_, value) => update(index, { brand: value })}
-                sx={{ flex: 1, minWidth: 0 }}
-                renderInput={(params) => <TextField {...params} label="Brand" placeholder="Citadel" />}
-              />
-              <Autocomplete
-                freeSolo
-                size="small"
-                options={nameOptions}
-                value={paint.name}
-                onInputChange={(_, value) => {
-                  // Picking a known paint carries its recorded swatch and type across.
-                  const known = suggestions.find(
-                    (p) => p.name === value && (!paint.brand || p.brand === paint.brand),
-                  );
-                  update(index, {
-                    name: value,
-                    ...(known && !paint.hex && known.hex ? { hex: known.hex } : {}),
-                    ...(known && !paint.type && known.type ? { type: known.type } : {}),
-                    ...(known && !paint.brand && known.brand ? { brand: known.brand } : {}),
-                  });
-                }}
-                sx={{ flex: 1.4, minWidth: 0 }}
-                renderInput={(params) => <TextField {...params} label="Paint" placeholder="Nuln Oil" />}
-              />
-              <TextField
-                select
-                size="small"
-                label="Type"
-                value={paint.type}
-                onChange={(e) => update(index, { type: e.target.value as RecipePaint["type"] })}
-                sx={{ width: { xs: "100%", sm: 130 }, flexShrink: 0 }}
-              >
-                <MenuItem value="">
-                  <em>Unspecified</em>
-                </MenuItem>
-                {PAINT_TYPES.map((type) => (
-                  <MenuItem key={type} value={type}>
-                    {type}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexShrink: 0 }}>
+            <Stack key={index} direction="row" spacing={1} alignItems="center">
+              {isUnknown ? (
                 <Box
-                  component="input"
-                  type="color"
-                  aria-label={`Swatch colour for paint ${index + 1}`}
-                  title={paint.hex || "No colour picked"}
-                  value={paint.hex || "#000000"}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(index, { hex: e.target.value })}
                   sx={{
-                    width: 38,
-                    height: 38,
-                    p: 0,
+                    flexGrow: 1,
+                    minWidth: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    py: 0.75,
+                    px: 1.5,
                     border: "1px solid",
                     borderColor: "divider",
                     borderRadius: 1,
-                    background: "none",
-                    cursor: "pointer",
-                    // A colour input can't render "unset", and its black default reads as a
-                    // deliberate black. Dim it until the painter actually picks something.
-                    opacity: paint.hex ? 1 : 0.4,
                   }}
-                />
-                <IconButton
-                  size="small"
-                  color="error"
-                  aria-label={`Remove paint ${index + 1}`}
-                  onClick={() => onChange(paints.filter((_, i) => i !== index))}
                 >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </Stack>
+                  <Box
+                    sx={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: "50%",
+                      flexShrink: 0,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      backgroundColor: paint.hex || "transparent",
+                    }}
+                  />
+                  <Typography variant="body2" noWrap sx={{ minWidth: 0, flexGrow: 1 }}>
+                    {formatPaint(paint)}
+                  </Typography>
+                  <Tooltip title="This paint isn't in your collection">
+                    <Chip size="small" variant="outlined" label="not owned" sx={{ flexShrink: 0 }} />
+                  </Tooltip>
+                </Box>
+              ) : (
+                <Autocomplete
+                  size="small"
+                  sx={{ flexGrow: 1, minWidth: 0 }}
+                  options={collection}
+                  loading={isLoading}
+                  value={owned ?? null}
+                  isOptionEqualToValue={(option, selected) => option._id === selected._id}
+                  getOptionLabel={(option) => formatPaint(option)}
+                  onChange={(_, selected) => replaceAt(index, selected ? toStepPaint(selected) : { brand: "", name: "", hex: "", type: "" })}
+                  renderOption={(props, option) => {
+                    const { key: optionKey, ...optionProps } = props as typeof props & { key: string };
+                    return (
+                      <Box component="li" key={optionKey} {...optionProps} sx={{ display: "flex", gap: 1 }}>
+                        <Box
+                          sx={{
+                            width: 14,
+                            height: 14,
+                            borderRadius: "50%",
+                            flexShrink: 0,
+                            border: "1px solid",
+                            borderColor: "divider",
+                            backgroundColor: option.hex || "transparent",
+                          }}
+                        />
+                        <Typography variant="body2" sx={{ flexGrow: 1 }}>
+                          {formatPaint(option)}
+                        </Typography>
+                        {option.type && (
+                          <Typography variant="caption" color="text.secondary">
+                            {option.type}
+                          </Typography>
+                        )}
+                      </Box>
+                    );
+                  }}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Paint" placeholder="Pick from your collection" />
+                  )}
+                  noOptionsText="No paints yet - add one below"
+                />
+              )}
+
+              <IconButton
+                size="small"
+                color="error"
+                aria-label={`Remove paint ${index + 1}`}
+                onClick={() => removeAt(index)}
+                sx={{ flexShrink: 0 }}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
             </Stack>
           );
         })}
       </Stack>
 
-      <Button
-        size="small"
-        startIcon={<AddIcon />}
-        onClick={() => onChange([...paints, { ...EMPTY_PAINT }])}
-        sx={{ mt: paints.length ? 1 : 0, textTransform: "none" }}
-      >
-        Add paint
-      </Button>
+      <Stack direction="row" spacing={1} sx={{ mt: paints.length ? 1 : 0 }}>
+        <Button size="small" startIcon={<AddIcon />} onClick={addRow} sx={{ textTransform: "none" }}>
+          Add paint
+        </Button>
+        <Button size="small" onClick={() => setDialogOpenFor(paints.length)} sx={{ textTransform: "none" }}>
+          New paint...
+        </Button>
+      </Stack>
+
+      {/* Adds to the collection and drops straight into the step, so a paint you have just
+          opened doesn't need a detour to the paints page. */}
+      <PaintFormDialog
+        open={dialogOpenFor !== null}
+        onClose={() => setDialogOpenFor(null)}
+        onSaved={(created) => {
+          const index = dialogOpenFor ?? paints.length;
+          const next = [...paints];
+          next[index] = toStepPaint(created);
+          onChange(next);
+          setDialogOpenFor(null);
+        }}
+      />
     </Box>
   );
 }

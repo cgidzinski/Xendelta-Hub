@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogActions,
   Tooltip,
+  Container,
 } from "@mui/material";
 import {
   ArrowBack as ArrowBackIcon,
@@ -84,10 +85,7 @@ export default function RecipeDetail() {
     const shareUrl = `${window.location.origin}/recipaint/${id}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
-      enqueueSnackbar(
-        recipe?.isPublic ? "Link copied to clipboard" : "Link copied - make the recipe public so others can open it",
-        { variant: recipe?.isPublic ? "success" : "info" },
-      );
+      enqueueSnackbar("Link copied to clipboard", { variant: "success" });
     } catch {
       enqueueSnackbar("Couldn't copy the link", { variant: "error" });
     }
@@ -128,20 +126,20 @@ export default function RecipeDetail() {
 
   if (isError || !recipe) {
     return (
-      <Box sx={{ p: 2, width: "100%" }}>
+      <Container maxWidth="lg" sx={{ py: 4 }}>
         <ErrorDisplay error={error} title="Couldn't load this recipe" onRetry={() => refetch()} />
         <Box sx={{ display: "flex", justifyContent: "center" }}>
           <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/internal/recipaint")}>
             Back to recipes
           </Button>
         </Box>
-      </Box>
+      </Container>
     );
   }
 
   if (isEditMode) {
     return (
-      <Box sx={{ p: 2, width: "100%" }}>
+      <Container maxWidth="lg" sx={{ py: 4 }}>
         <Box sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
           <IconButton onClick={handleBackClick} aria-label="Back">
             <ArrowBackIcon />
@@ -172,12 +170,12 @@ export default function RecipeDetail() {
             </Button>
           </DialogActions>
         </Dialog>
-      </Box>
+      </Container>
     );
   }
 
   return (
-    <Box sx={{ p: 2, width: "100%" }}>
+    <Container maxWidth="lg" sx={{ py: 4 }}>
       <RecipeView
         recipe={recipe}
         completedSteps={completedSteps}
@@ -190,6 +188,23 @@ export default function RecipeDetail() {
             <ArrowBackIcon />
           </IconButton>
         }
+        titleActions={
+          // A private link opens for nobody but its owner, so offering to copy one is a dead
+          // end - grey it out and say why. A disabled IconButton swallows pointer events, so
+          // the span is what the Tooltip listens on.
+          <Tooltip title={recipe.isPublic ? "Copy share link" : "Make the recipe public to share it"}>
+            <span>
+              <IconButton
+                onClick={handleShare}
+                aria-label="Copy share link"
+                disabled={!recipe.isPublic}
+                size="small"
+              >
+                <ShareIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        }
         actions={
           <>
             {recipe.steps.length > 0 && (
@@ -201,11 +216,6 @@ export default function RecipeDetail() {
                 Paint along
               </Button>
             )}
-            <Tooltip title="Copy share link">
-              <IconButton onClick={handleShare} aria-label="Copy share link">
-                <ShareIcon />
-              </IconButton>
-            </Tooltip>
             {isOwner ? (
               <Button variant="contained" startIcon={<EditIcon />} onClick={() => setIsEditMode(true)}>
                 Edit
@@ -223,6 +233,6 @@ export default function RecipeDetail() {
           </>
         }
       />
-    </Box>
+    </Container>
   );
 }

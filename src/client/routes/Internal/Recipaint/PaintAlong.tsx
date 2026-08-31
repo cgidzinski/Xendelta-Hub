@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Box, Button, Chip, IconButton, LinearProgress, Stack, Tooltip, Typography } from "@mui/material";
+import { Box, Button, Chip, Container, IconButton, LinearProgress, Stack, Tooltip, Typography } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
@@ -77,7 +77,10 @@ export default function PaintAlong() {
   const paints = cleanPaints(step.paints);
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh", p: 2, gap: 2 }}>
+    <Container
+      maxWidth="lg"
+      sx={{ display: "flex", flexDirection: "column", minHeight: "100vh", py: 4, gap: 2 }}
+    >
       <Stack direction="row" alignItems="center" spacing={1}>
         <Typography variant="subtitle1" sx={{ fontWeight: 600, flexGrow: 1, minWidth: 0 }} noWrap>
           {recipe.title}
@@ -185,6 +188,6 @@ export default function PaintAlong() {
           <ChevronRightIcon />
         </IconButton>
       </Stack>
-    </Box>
+    </Container>
   );
 }

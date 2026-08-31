@@ -19,6 +19,8 @@ interface RecipeViewProps {
   actions?: ReactNode;
   /** Leading control, e.g. the back arrow. Omitted on the public page. */
   leading?: ReactNode;
+  /** Controls that belong with the title rather than the right-hand actions, e.g. share. */
+  titleActions?: ReactNode;
   showVisibility?: boolean;
   originalRecipeHref?: string | null;
 }
@@ -34,6 +36,7 @@ export default function RecipeView({
   onResetProgress,
   actions,
   leading,
+  titleActions,
   showVisibility = false,
   originalRecipeHref,
 }: RecipeViewProps) {
@@ -67,6 +70,7 @@ export default function RecipeView({
               sx={{ flexShrink: 0 }}
             />
           )}
+          {titleActions}
         </Stack>
         {actions && (
           <Stack direction="row" spacing={1} sx={{ flexShrink: 0, justifyContent: { xs: "flex-end", sm: "initial" } }}>

@@ -47,6 +47,7 @@ import InternalBlogPostDetail from "./routes/Internal/Blog/InternalBlogPostDetai
 import Recipaint from "./routes/Internal/Recipaint/Recipaint";
 import RecipeDetail from "./routes/Internal/Recipaint/RecipeDetail";
 import PaintAlong from "./routes/Internal/Recipaint/PaintAlong";
+import Paints from "./routes/Internal/Recipaint/Paints";
 import XenBox from "./routes/Internal/XenBox/XenBox";
 import FileDetail from "./routes/Internal/XenBox/FileDetail";
 import Shop from "./routes/Internal/Shop/Shop";
@@ -195,6 +196,7 @@ const router = createBrowserRouter(
         <Route path="blog" element={<InternalBlog />} />
         <Route path="blog/:slug" element={<InternalBlogPostDetail />} />
         <Route path="recipaint" element={<Recipaint />} />
+        <Route path="recipaint/paints" element={<Paints />} />
         <Route path="recipaint/:id" element={<RecipeDetail />} />
         <Route path="recipaint/:id/paint" element={<PaintAlong />} />
         <Route path="xenbox" element={<XenBox />} />
