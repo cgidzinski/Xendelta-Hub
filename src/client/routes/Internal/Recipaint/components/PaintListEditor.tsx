@@ -1,8 +1,16 @@
 import { useMemo, useState } from "react";
-import { Autocomplete, Box, Chip, IconButton, Stack, TextField, Typography } from "@mui/material";
+import { Autocomplete, Box, IconButton, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import CheckIcon from "@mui/icons-material/Check";
 import DeleteIcon from "@mui/icons-material/Delete";
-import { RecipePaint, catalogueKey, formatPaint, paintKey } from "../../../../../shared/recipaint/paints";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import {
+  RecipePaint,
+  catalogueKey,
+  describePaintDetail,
+  formatPaint,
+  paintKey,
+} from "../../../../../shared/recipaint/paints";
 import { CollectionPaint, usePaints } from "../../../../hooks/recipaint/usePaints";
 import { usePaintCatalogueSearch } from "../../../../hooks/recipaint/usePaintCatalogue";
 import PaintFormDialog from "./PaintFormDialog";
@@ -175,7 +183,7 @@ export default function PaintListEditor({ paints, onChange }: PaintListEditorPro
           const value = valueFor(paint);
 
           return (
-            <Stack key={index} direction="row" spacing={1} alignItems="center">
+            <Stack key={index} direction="row" spacing={0.5} alignItems="center">
               <Autocomplete
                 size="small"
                 sx={{ flexGrow: 1, minWidth: 0 }}
@@ -203,7 +211,7 @@ export default function PaintListEditor({ paints, onChange }: PaintListEditorPro
                   return (
                     // Keyed on our own id: two paints can share a brand and name across ranges,
                     // and MUI's default key comes from the label.
-                    <Box component="li" key={option.id} {...optionProps} sx={{ display: "flex", gap: 1 }}>
+                    <Box component="li" key={option.id} {...optionProps} sx={{ display: "flex", gap: 1, alignItems: "flex-start", minWidth: 0 }}>
                       {option.kind === "create" ? (
                         <>
                           <AddIcon fontSize="small" color="primary" />
@@ -219,24 +227,24 @@ export default function PaintListEditor({ paints, onChange }: PaintListEditorPro
                               height: 14,
                               borderRadius: "50%",
                               flexShrink: 0,
+                              mt: 0.25,
                               border: "1px solid",
                               borderColor: "divider",
                               backgroundColor: option.hex || "transparent",
                             }}
                           />
-                          <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                          {/* Stacked, and everything after the name is one truncated caption:
+                              on a phone a brand, range and type side by side do not fit. */}
+                          <Box sx={{ minWidth: 0, flexGrow: 1, overflow: "hidden" }}>
                             <Typography variant="body2" noWrap>
                               {option.name}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary" noWrap>
-                              {option.brand}
-                              {option.range ? ` - ${option.range}` : ""}
+                            <Typography variant="caption" color="text.secondary" noWrap component="div">
+                              {describePaintDetail(option)}
                             </Typography>
                           </Box>
-                          {option.type && (
-                            <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
-                              {option.type}
-                            </Typography>
+                          {option.kind === "owned" && (
+                            <CheckIcon fontSize="small" color="success" sx={{ flexShrink: 0, mt: 0.25 }} />
                           )}
                         </>
                       )}
@@ -253,9 +261,12 @@ export default function PaintListEditor({ paints, onChange }: PaintListEditorPro
                 noOptionsText={query ? "No matching paints" : "Start typing to search"}
               />
 
-              {/* A paint you do not own still reads clearly - useful on a cloned recipe. */}
+              {/* A paint you do not own still reads clearly - useful on a cloned recipe - but as
+                  a 16px marker rather than a chip, which ate most of a phone's row width. */}
               {value?.kind === "unowned" && (
-                <Chip size="small" variant="outlined" label="not owned" sx={{ flexShrink: 0 }} />
+                <Tooltip title="Not in your paints">
+                  <ErrorOutlineIcon fontSize="small" color="disabled" sx={{ flexShrink: 0 }} />
+                </Tooltip>
               )}
 
               {!isTrailing && (

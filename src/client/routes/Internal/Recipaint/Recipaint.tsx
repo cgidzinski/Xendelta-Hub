@@ -15,6 +15,7 @@ import {
   MenuItem,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
@@ -97,13 +98,15 @@ export default function Recipaint() {
       <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
         <Typography variant="h6">Recipaint</Typography>
         <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
-          <Button
-            variant="outlined"
-            startIcon={<PaletteIcon />}
-            onClick={() => navigate("/internal/recipaint/paints")}
-          >
-            My paints
-          </Button>
+          <Tooltip title="My paints">
+            <IconButton
+              aria-label="My paints"
+              onClick={() => navigate("/internal/recipaint/paints")}
+              sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1 }}
+            >
+              <PaletteIcon />
+            </IconButton>
+          </Tooltip>
           <Button
             variant="contained"
             startIcon={<AddIcon />}

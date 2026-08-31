@@ -9,6 +9,7 @@ import {
   normalizePaintInput,
   paintKey,
   paintTypeFromDataset,
+  describePaintDetail,
   PAINT_TYPES,
 } from "./paints";
 
@@ -258,5 +259,26 @@ describe("paintTypeFromDataset", () => {
       expect([...PAINT_TYPES, ""], `range=${value}`).toContain(out);
     }
     expect(paintTypeFromDataset("Dry", "standard")).toBe("");
+  });
+});
+
+describe("describePaintDetail", () => {
+  it("joins the parts that carry information", () => {
+    expect(describePaintDetail({ brand: "Vallejo", range: "Model Color", type: "base" })).toBe(
+      "Vallejo - Model Color - base",
+    );
+  });
+
+  // Citadel names its ranges after the type they contain, so a naive join reads
+  // "Citadel Colour - Base - base".
+  it("drops a type that just repeats the range", () => {
+    expect(describePaintDetail({ brand: "Citadel Colour", range: "Base", type: "base" })).toBe("Citadel Colour - Base");
+    expect(describePaintDetail({ range: "Layer", type: "layer" })).toBe("Layer");
+    expect(describePaintDetail({ range: "Shade", type: "wash" })).toBe("Shade - wash");
+  });
+
+  it("skips blanks and trims", () => {
+    expect(describePaintDetail({ brand: " Citadel ", range: "", type: "  " })).toBe("Citadel");
+    expect(describePaintDetail({})).toBe("");
   });
 });

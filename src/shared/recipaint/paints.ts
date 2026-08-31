@@ -197,3 +197,25 @@ export function paintTypeFromDataset(set: string | null | undefined, datasetType
 
   return "";
 }
+
+/**
+ * The secondary line under a paint's name: brand, range and type, joined and de-duplicated.
+ *
+ * Citadel's ranges are named after the type they contain, so a naive join reads
+ * "Citadel Colour - Base - base". Anything that repeats a part already shown is dropped.
+ */
+export function describePaintDetail(parts: { brand?: string; range?: string; type?: string }): string {
+  const seen = new Set<string>();
+  const kept: string[] = [];
+
+  for (const part of [parts.brand, parts.range, parts.type]) {
+    const value = (part || "").trim();
+    if (!value) continue;
+    const normalised = value.toLowerCase();
+    if (seen.has(normalised)) continue;
+    seen.add(normalised);
+    kept.push(value);
+  }
+
+  return kept.join(" - ");
+}

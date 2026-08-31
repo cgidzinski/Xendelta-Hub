@@ -30,7 +30,7 @@ import { CollectionPaint, usePaintMutations, usePaints } from "../../../hooks/re
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { cardSx, emptyStateSx, emptyStateIconCircleSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
-import { formatPaint } from "../../../../shared/recipaint/paints";
+import { describePaintDetail, formatPaint } from "../../../../shared/recipaint/paints";
 import PaintFormDialog from "./components/PaintFormDialog";
 
 export default function Paints() {
@@ -193,7 +193,7 @@ export default function Paints() {
                     </Typography>
                     {(paint.range || paint.type) && (
                       <Typography variant="caption" color="text.secondary" noWrap>
-                        {[paint.range, paint.type].filter(Boolean).join(" - ")}
+                        {describePaintDetail({ range: paint.range, type: paint.type })}
                       </Typography>
                     )}
                   </Box>
