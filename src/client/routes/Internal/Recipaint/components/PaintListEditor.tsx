@@ -292,6 +292,7 @@ export default function PaintListEditor({ paints, onChange }: PaintListEditorPro
         onClose={() => setCreateFor(null)}
         initialName={createFor?.name}
         defaultTab="custom"
+        closeAfterSave
         onSaved={(created) => {
           if (createFor) {
             setRow(createFor.index, {

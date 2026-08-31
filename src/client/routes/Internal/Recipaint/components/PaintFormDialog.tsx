@@ -15,7 +15,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useSnackbar } from "notistack";
-import { PAINT_TYPES } from "../../../../../shared/recipaint/paints";
+import { PAINT_TYPES, formatPaint } from "../../../../../shared/recipaint/paints";
 import { CollectionPaint, PaintDraft, usePaintMutations, usePaints } from "../../../../hooks/recipaint/usePaints";
 import { CataloguePaint, usePaintCatalogueSearch } from "../../../../hooks/recipaint/usePaintCatalogue";
 
@@ -31,6 +31,9 @@ interface PaintFormDialogProps {
   /** Which tab to open on. The recipe picker opens "custom": it only offers to create a paint
    *  once the catalogue search has already come up empty, so the catalogue tab is a dead end. */
   defaultTab?: "catalogue" | "custom";
+  /** Close once a paint is added instead of staying open for the next one. The recipe picker
+   *  sets this: it is creating one paint to drop into a step, not stocking a shelf. */
+  closeAfterSave?: boolean;
 }
 
 const EMPTY_DRAFT: PaintDraft = { brand: "", name: "", range: "", hex: "", type: "", quantity: 1, catalogueKey: "" };
@@ -52,6 +55,7 @@ export default function PaintFormDialog({
   onSaved,
   initialName,
   defaultTab = "catalogue",
+  closeAfterSave = false,
 }: PaintFormDialogProps) {
   const { enqueueSnackbar } = useSnackbar();
   const { paints } = usePaints();
@@ -96,22 +100,27 @@ export default function PaintFormDialog({
 
   const set = (patch: Partial<PaintDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
 
-  const save = async (addAnother: boolean) => {
+  const save = async () => {
     const payload = tab === "catalogue" && selected ? fromCatalogue(selected, draft.quantity) : draft;
 
     try {
       const saved = paint ? await updatePaint({ id: paint._id, data: payload }) : await createPaint(payload);
       onSaved?.(saved);
 
-      if (addAnother) {
-        // Keep brand and type: paints are added a range at a time, and retyping "Citadel" for
-        // every pot is the friction this button exists to remove.
-        setDraft((prev) => ({ ...EMPTY_DRAFT, brand: prev.brand, type: prev.type }));
-        setSelected(null);
-        setCatalogueQuery("");
+      if (isEditing || closeAfterSave) {
+        onClose();
         return;
       }
-      onClose();
+
+      // Adding stays open, ready for the next pot - stocking a shelf is a repetitive job, and
+      // reopening the dialog for each paint was the friction the old second button papered
+      // over. Brand and type carry across, since paints are added a range at a time.
+      // The snackbar matters here: with the dialog still open and the fields cleared, nothing
+      // else on screen confirms the paint landed.
+      enqueueSnackbar(`Added ${formatPaint(saved) || saved.name}`, { variant: "success" });
+      setDraft((prev) => ({ ...EMPTY_DRAFT, brand: prev.brand, type: prev.type }));
+      setSelected(null);
+      setCatalogueQuery("");
     } catch (error: any) {
       // The server answers a duplicate with a 409 and a readable message; surface that rather
       // than a generic failure.
@@ -226,7 +235,7 @@ export default function PaintFormDialog({
               value={draft.name}
               onChange={(e) => set({ name: e.target.value })}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && canSave) save(false);
+                if (e.key === "Enter" && canSave) save();
               }}
             />
             <TextField
@@ -284,14 +293,9 @@ export default function PaintFormDialog({
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        {!isEditing && (
-          <Button onClick={() => save(true)} disabled={!canSave}>
-            Save &amp; add another
-          </Button>
-        )}
-        <Button variant="contained" onClick={() => save(false)} disabled={!canSave}>
-          {isSaving ? "Saving..." : "Save"}
+        <Button onClick={onClose}>{isEditing || closeAfterSave ? "Cancel" : "Done"}</Button>
+        <Button variant="contained" onClick={save} disabled={!canSave}>
+          {isSaving ? "Saving..." : isEditing ? "Save" : "Add"}
         </Button>
       </DialogActions>
     </Dialog>
