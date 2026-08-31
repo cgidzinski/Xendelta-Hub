@@ -150,16 +150,29 @@ export default function PaintFormDialog({
 
   const canSave = (tab === "catalogue" && !isEditing ? Boolean(selected) : Boolean(draft.name.trim())) && !isSaving;
 
+  // The count with a +1 beside it. Quantity starts at 0, so the common gesture is "I have one
+  // of these" - a tap, rather than selecting the field and typing.
   const quantityField = (
-    <TextField
-      size="small"
-      type="number"
-      label="Owned"
-      value={draft.quantity}
-      onChange={(e) => set({ quantity: Math.max(0, Number(e.target.value) || 0) })}
-      slotProps={{ htmlInput: { min: 0, step: 1 } }}
-      sx={{ width: 96 }}
-    />
+    <Stack direction="row" spacing={1} alignItems="center">
+      <TextField
+        size="small"
+        type="number"
+        label="Owned"
+        value={draft.quantity}
+        onChange={(e) => set({ quantity: Math.max(0, Number(e.target.value) || 0) })}
+        slotProps={{ htmlInput: { min: 0, step: 1 } }}
+        sx={{ width: 96 }}
+      />
+      <Button
+        size="small"
+        variant="outlined"
+        aria-label="Add one to the owned count"
+        onClick={() => set({ quantity: draft.quantity + 1 })}
+        sx={{ minWidth: 48, flexShrink: 0 }}
+      >
+        +1
+      </Button>
+    </Stack>
   );
 
   return (
@@ -271,12 +284,6 @@ export default function PaintFormDialog({
             />
             <Stack direction="row" spacing={2} alignItems="center">
               {quantityField}
-              {selected && (
-                <Typography variant="caption" color="text.secondary">
-                  {selected.range || "No range"}
-                  {selected.type ? ` - ${selected.type}` : ""}
-                </Typography>
-              )}
             </Stack>
           </Stack>
         ) : (
@@ -316,7 +323,7 @@ export default function PaintFormDialog({
                 label="Type"
                 value={draft.type}
                 onChange={(e) => set({ type: e.target.value as PaintDraft["type"] })}
-                sx={{ flex: 1 }}
+                sx={{ flex: 1, minWidth: 0 }}
               >
                 <MenuItem value="">
                   <em>Unspecified</em>
@@ -327,7 +334,6 @@ export default function PaintFormDialog({
                   </MenuItem>
                 ))}
               </TextField>
-              {quantityField}
               <Box
                 component="input"
                 type="color"
@@ -351,6 +357,7 @@ export default function PaintFormDialog({
                 }}
               />
             </Stack>
+            {quantityField}
           </Stack>
         )}
       </DialogContent>
