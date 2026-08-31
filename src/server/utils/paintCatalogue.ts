@@ -28,7 +28,25 @@ const CATALOGUE = catalogueJson as CataloguePaint[];
 
 const BY_KEY = new Map(CATALOGUE.map((paint) => [paint.key, paint]));
 
-const BRANDS = [...new Set(CATALOGUE.map((paint) => paint.brand))].sort((a, b) => a.localeCompare(b));
+export interface CatalogueBrand {
+  name: string;
+  ranges: string[];
+}
+
+// Brands with their ranges, so the filter's second dropdown needs no extra request.
+// A type filter would be useless here: 1,815 of the 2,164 entries have no type, because the
+// source only labels the Citadel-style categories. Range is the axis that actually divides
+// the catalogue - "Citadel Contrast", "Vallejo Model Air" - and there are 9 to 16 per brand.
+const BRANDS: CatalogueBrand[] = (() => {
+  const byBrand = new Map<string, Set<string>>();
+  for (const paint of CATALOGUE) {
+    if (!byBrand.has(paint.brand)) byBrand.set(paint.brand, new Set());
+    if (paint.range) byBrand.get(paint.brand)!.add(paint.range);
+  }
+  return [...byBrand.entries()]
+    .map(([name, ranges]) => ({ name, ranges: [...ranges].sort((a, b) => a.localeCompare(b)) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+})();
 
 export const DEFAULT_SEARCH_LIMIT = 25;
 export const MAX_SEARCH_LIMIT = 100;
@@ -36,6 +54,7 @@ export const MAX_SEARCH_LIMIT = 100;
 export interface SearchOptions {
   q?: string;
   brand?: string;
+  range?: string;
   limit?: number;
 }
 
@@ -45,9 +64,10 @@ export interface SearchOptions {
  * An empty query returns the first page rather than everything, so the endpoint can never be
  * used to pull the whole catalogue in one request.
  */
-export function searchCatalogue({ q, brand, limit }: SearchOptions = {}): CataloguePaint[] {
+export function searchCatalogue({ q, brand, range, limit }: SearchOptions = {}): CataloguePaint[] {
   const needle = (q || "").trim().toLowerCase();
   const wantedBrand = (brand || "").trim().toLowerCase();
+  const wantedRange = (range || "").trim().toLowerCase();
   // Same shape as parsePaging() in routes/recipaint.ts: a junk, zero or negative limit falls
   // back to the default rather than being clamped to some arbitrary edge value.
   const cap =
@@ -58,6 +78,7 @@ export function searchCatalogue({ q, brand, limit }: SearchOptions = {}): Catalo
   const results: CataloguePaint[] = [];
   for (const paint of CATALOGUE) {
     if (wantedBrand && paint.brand.toLowerCase() !== wantedBrand) continue;
+    if (wantedRange && paint.range.toLowerCase() !== wantedRange) continue;
     if (needle && !paint.search.includes(needle)) continue;
     results.push(paint);
     if (results.length >= cap) break;
@@ -69,7 +90,7 @@ export function getCataloguePaint(key: string): CataloguePaint | null {
   return BY_KEY.get(key) || null;
 }
 
-export function listCatalogueBrands(): string[] {
+export function listCatalogueBrands(): CatalogueBrand[] {
   return BRANDS;
 }
 

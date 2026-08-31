@@ -39,8 +39,16 @@ describe("the committed catalogue", () => {
     expect(wrong.slice(0, 5)).toEqual([]);
   });
 
-  it("carries the brands that were selected", () => {
-    expect(listCatalogueBrands()).toEqual(["Army Painter", "Citadel Colour", "Scale75", "Vallejo"]);
+  it("carries the brands that were selected, each with its ranges", () => {
+    const brands = listCatalogueBrands();
+    expect(brands.map((b) => b.name)).toEqual(["Army Painter", "Citadel Colour", "Scale75", "Vallejo"]);
+    // Range is the filter axis, so every brand must actually offer some.
+    for (const brand of brands) {
+      expect(brand.ranges.length, brand.name).toBeGreaterThan(1);
+      expect(brand.ranges, brand.name).toEqual([...brand.ranges].sort((a, b) => a.localeCompare(b)));
+      expect(brand.ranges, brand.name).not.toContain("");
+    }
+    expect(brands.find((b) => b.name === "Citadel Colour")!.ranges).toContain("Contrast");
   });
 
   it("only uses types the Paint schema enum accepts", () => {
@@ -91,6 +99,26 @@ describe("searchCatalogue", () => {
     const results = searchCatalogue({ brand: "Citadel Colour", limit: 50 });
     expect(results.length).toBeGreaterThan(0);
     expect(results.every((p) => p.brand === "Citadel Colour")).toBe(true);
+  });
+
+  it("filters by range", () => {
+    const results = searchCatalogue({ brand: "Citadel Colour", range: "Contrast", limit: 100 });
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.every((p) => p.brand === "Citadel Colour" && p.range === "Contrast")).toBe(true);
+  });
+
+  it("combines a range filter with a query", () => {
+    const results = searchCatalogue({ brand: "Army Painter", range: "Warpaints Air", q: "purple", limit: 100 });
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.every((p) => p.range === "Warpaints Air" && p.search.includes("purple"))).toBe(true);
+    // The same name in the sibling range must be excluded, which is the point of the filter.
+    expect(results.every((p) => p.range !== "Warpaints")).toBe(true);
+  });
+
+  it("matches a range case-insensitively", () => {
+    const lower = searchCatalogue({ brand: "Citadel Colour", range: "contrast", limit: 100 });
+    const exact = searchCatalogue({ brand: "Citadel Colour", range: "Contrast", limit: 100 });
+    expect(lower.map((p) => p.key)).toEqual(exact.map((p) => p.key));
   });
 
   it("respects the limit and never returns the whole catalogue", () => {

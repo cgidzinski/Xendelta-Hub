@@ -17,7 +17,11 @@ import {
 import { useSnackbar } from "notistack";
 import { PAINT_TYPES, formatPaint } from "../../../../../shared/recipaint/paints";
 import { CollectionPaint, PaintDraft, usePaintMutations, usePaints } from "../../../../hooks/recipaint/usePaints";
-import { CataloguePaint, usePaintCatalogueSearch } from "../../../../hooks/recipaint/usePaintCatalogue";
+import {
+  CataloguePaint,
+  usePaintCatalogueBrands,
+  usePaintCatalogueSearch,
+} from "../../../../hooks/recipaint/usePaintCatalogue";
 
 interface PaintFormDialogProps {
   open: boolean;
@@ -36,7 +40,10 @@ interface PaintFormDialogProps {
   closeAfterSave?: boolean;
 }
 
-const EMPTY_DRAFT: PaintDraft = { brand: "", name: "", range: "", hex: "", type: "", quantity: 1, catalogueKey: "" };
+// Quantity starts at 0, not 1. Adding a paint is as often "I want this" as "I have this" -
+// building a shopping list is a first-class use - and the paints page filters owned vs not
+// owned off this number.
+const EMPTY_DRAFT: PaintDraft = { brand: "", name: "", range: "", hex: "", type: "", quantity: 0, catalogueKey: "" };
 
 const fromCatalogue = (entry: CataloguePaint, quantity: number): PaintDraft => ({
   brand: entry.brand,
@@ -65,11 +72,21 @@ export default function PaintFormDialog({
   const [tab, setTab] = useState<"catalogue" | "custom">("catalogue");
   const [catalogueQuery, setCatalogueQuery] = useState("");
   const [selected, setSelected] = useState<CataloguePaint | null>(null);
+  const [brandFilter, setBrandFilter] = useState("");
+  const [rangeFilter, setRangeFilter] = useState("");
 
   const isEditing = Boolean(paint);
   const isSaving = isCreating || isUpdating;
   // Only query while the catalogue tab is actually on screen.
-  const { paints: results, isSearching } = usePaintCatalogueSearch(catalogueQuery, "", open && tab === "catalogue");
+  const onCatalogueTab = open && tab === "catalogue" && !isEditing;
+  const { paints: results, isSearching } = usePaintCatalogueSearch(
+    catalogueQuery,
+    brandFilter,
+    rangeFilter,
+    onCatalogueTab,
+  );
+  const { brands: catalogueBrands } = usePaintCatalogueBrands(onCatalogueTab);
+  const rangeOptions = catalogueBrands.find((b) => b.name === brandFilter)?.ranges || [];
 
   // Brands the user already owns, so a custom range is typed once and picked thereafter.
   const brandOptions = [...new Set(paints.map((p) => p.brand.trim()).filter(Boolean))].sort((a, b) =>
@@ -93,6 +110,8 @@ export default function PaintFormDialog({
     );
     setSelected(null);
     setCatalogueQuery(initialName || "");
+    setBrandFilter("");
+    setRangeFilter("");
     // Editing is always the manual form: the paint already exists, and its identity should not
     // silently change because a catalogue row happened to match.
     setTab(paint ? "custom" : defaultTab);
@@ -157,6 +176,50 @@ export default function PaintFormDialog({
       <DialogContent>
         {!isEditing && tab === "catalogue" ? (
           <Stack spacing={2} sx={{ mt: 0.5 }}>
+            {/* Brand then range. Not type: the source only labels the Citadel-style
+                categories, so 1,815 of the 2,164 entries have none and filtering by it would
+                hide most of the catalogue. */}
+            <Stack direction="row" spacing={1}>
+              <TextField
+                select
+                size="small"
+                label="Brand"
+                value={brandFilter}
+                onChange={(e) => {
+                  setBrandFilter(e.target.value);
+                  // Ranges belong to a brand, so a stale one would silently match nothing.
+                  setRangeFilter("");
+                }}
+                sx={{ flex: 1, minWidth: 0 }}
+              >
+                <MenuItem value="">
+                  <em>Any brand</em>
+                </MenuItem>
+                {catalogueBrands.map((brand) => (
+                  <MenuItem key={brand.name} value={brand.name}>
+                    {brand.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                size="small"
+                label="Range"
+                value={rangeFilter}
+                disabled={!brandFilter}
+                onChange={(e) => setRangeFilter(e.target.value)}
+                sx={{ flex: 1, minWidth: 0 }}
+              >
+                <MenuItem value="">
+                  <em>Any range</em>
+                </MenuItem>
+                {rangeOptions.map((range) => (
+                  <MenuItem key={range} value={range}>
+                    {range}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Stack>
             <Autocomplete
               autoFocus
               size="small"
@@ -204,7 +267,7 @@ export default function PaintFormDialog({
               renderInput={(params) => (
                 <TextField {...params} label="Search paints" placeholder="Type a few letters..." />
               )}
-              noOptionsText={catalogueQuery ? "No matching paints" : "Start typing to search"}
+              noOptionsText={catalogueQuery || brandFilter ? "No matching paints" : "Start typing, or pick a brand"}
             />
             <Stack direction="row" spacing={2} alignItems="center">
               {quantityField}

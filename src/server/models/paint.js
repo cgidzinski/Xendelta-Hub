@@ -20,7 +20,9 @@ var paintSchema = new mongoose.Schema({
     enum: ["base", "layer", "wash", "contrast", "metallic", "technical", ""],
     default: "",
   },
-  quantity: { type: Number, default: 1, min: 0 },
+  // Defaults to 0, not 1: adding a paint is as often "I want this" as "I have this", and the
+  // paints page filters owned vs not owned off this number.
+  quantity: { type: Number, default: 0, min: 0 },
   // Set when the paint was picked from the shared catalogue (src/server/data/paintCatalogue.json);
   // empty for a custom colour. A plain string, since the catalogue is a file, not a collection.
   catalogueKey: { type: String, default: "" },

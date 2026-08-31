@@ -14,15 +14,28 @@ export interface CataloguePaint {
   type: PaintType | "";
 }
 
+/** A brand and the ranges it publishes, for the filter's second dropdown. */
+export interface CatalogueBrand {
+  name: string;
+  ranges: string[];
+}
+
 export const paintCatalogueKeys = {
   all: ["paint-catalogue"] as const,
-  search: (q: string, brand: string) => [...paintCatalogueKeys.all, "search", { q, brand }] as const,
+  search: (q: string, brand: string, range: string) =>
+    [...paintCatalogueKeys.all, "search", { q, brand, range }] as const,
   brands: () => [...paintCatalogueKeys.all, "brands"] as const,
 };
 
-const searchCatalogue = async (q: string, brand: string): Promise<CataloguePaint[]> => {
+const searchCatalogue = async (q: string, brand: string, range: string): Promise<CataloguePaint[]> => {
   const response = await apiClient.get<ApiResponse<{ paints: CataloguePaint[] }>>("/api/paint-catalogue", {
-    params: { ...(q ? { q } : {}), ...(brand ? { brand } : {}) },
+    params: {
+      ...(q ? { q } : {}),
+      ...(brand ? { brand } : {}),
+      ...(range ? { range } : {}),
+      // Browsing a whole range with no query needs more than a default page.
+      limit: 50,
+    },
   });
   return response.data.data!.paints;
 };
@@ -33,7 +46,7 @@ const searchCatalogue = async (q: string, brand: string): Promise<CataloguePaint
  * Debounced for the same reason as the recipe search: without it this fires a request per
  * keystroke. Search runs on the server, so the 2,164-entry catalogue never reaches the bundle.
  */
-export function usePaintCatalogueSearch(query: string, brand = "", enabled = true) {
+export function usePaintCatalogueSearch(query: string, brand = "", range = "", enabled = true) {
   const [debounced, setDebounced] = useState(query);
 
   useEffect(() => {
@@ -42,8 +55,8 @@ export function usePaintCatalogueSearch(query: string, brand = "", enabled = tru
   }, [query]);
 
   const { data, isFetching } = useQuery({
-    queryKey: paintCatalogueKeys.search(debounced, brand),
-    queryFn: () => searchCatalogue(debounced, brand),
+    queryKey: paintCatalogueKeys.search(debounced, brand, range),
+    queryFn: () => searchCatalogue(debounced, brand, range),
     enabled,
     // The catalogue is a static file; a given query always returns the same rows.
     staleTime: 30 * 60 * 1000,
@@ -54,14 +67,16 @@ export function usePaintCatalogueSearch(query: string, brand = "", enabled = tru
   return { paints: data || [], isSearching: isFetching };
 }
 
-export function usePaintCatalogueBrands() {
+export function usePaintCatalogueBrands(enabled = true) {
   const { data } = useQuery({
     queryKey: paintCatalogueKeys.brands(),
     queryFn: async () => {
-      const response = await apiClient.get<ApiResponse<{ brands: string[] }>>("/api/paint-catalogue/brands");
+      const response = await apiClient.get<ApiResponse<{ brands: CatalogueBrand[] }>>("/api/paint-catalogue/brands");
       return response.data.data!.brands;
     },
-    staleTime: 30 * 60 * 1000,
+    enabled,
+    // Generated from a committed file - it only changes when the app is redeployed.
+    staleTime: Infinity,
     retry: false,
   });
 

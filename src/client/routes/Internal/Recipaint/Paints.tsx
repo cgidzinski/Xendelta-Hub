@@ -42,6 +42,7 @@ export default function Paints() {
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [ownership, setOwnership] = useState<"all" | "owned" | "wanted">("all");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CollectionPaint | null>(null);
   const [pendingDelete, setPendingDelete] = useState<CollectionPaint | null>(null);
@@ -54,9 +55,16 @@ export default function Paints() {
   // Filtering is over the already-fetched collection - it is small and entirely local.
   const visible = useMemo(() => {
     const needle = debouncedSearch.trim().toLowerCase();
-    if (!needle) return paints;
-    return paints.filter((p) => `${p.brand} ${p.name} ${p.range} ${p.type}`.toLowerCase().includes(needle));
-  }, [paints, debouncedSearch]);
+    return paints.filter((p) => {
+      // A quantity of 0 is a paint on the list but not on the shelf - a shopping list entry.
+      if (ownership === "owned" && p.quantity <= 0) return false;
+      if (ownership === "wanted" && p.quantity > 0) return false;
+      if (!needle) return true;
+      return `${p.brand} ${p.name} ${p.range} ${p.type}`.toLowerCase().includes(needle);
+    });
+  }, [paints, debouncedSearch, ownership]);
+
+  const ownedCount = useMemo(() => paints.filter((p) => p.quantity > 0).length, [paints]);
 
   // Grouped by brand, since that is how a paint rack is actually organised.
   const byBrand = useMemo(() => {
@@ -120,7 +128,7 @@ export default function Paints() {
         placeholder="Search by name, brand or type..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        sx={{ mb: 3 }}
+        sx={{ mb: 1.5 }}
         slotProps={{
           input: {
             startAdornment: (
@@ -138,6 +146,25 @@ export default function Paints() {
           },
         }}
       />
+
+      <Stack direction="row" spacing={1} sx={{ mb: 3, flexWrap: "wrap", rowGap: 1 }}>
+        {(
+          [
+            ["all", `All (${paints.length})`],
+            ["owned", `Owned (${ownedCount})`],
+            ["wanted", `Not owned (${paints.length - ownedCount})`],
+          ] as const
+        ).map(([value, label]) => (
+          <Chip
+            key={value}
+            label={label}
+            size="small"
+            variant={ownership === value ? "filled" : "outlined"}
+            color={ownership === value ? "primary" : "default"}
+            onClick={() => setOwnership(value)}
+          />
+        ))}
+      </Stack>
 
       {isLoading && <LoadingSpinner message="Loading your paints..." />}
 

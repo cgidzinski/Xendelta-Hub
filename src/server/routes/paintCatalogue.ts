@@ -17,6 +17,7 @@ module.exports = function (app: express.Application) {
     const paints = searchCatalogue({
       q: req.query.q as string | undefined,
       brand: req.query.brand as string | undefined,
+      range: req.query.range as string | undefined,
       limit: req.query.limit === undefined ? undefined : Number(req.query.limit),
     });
 
