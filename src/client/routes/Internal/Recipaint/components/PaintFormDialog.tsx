@@ -7,6 +7,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  InputAdornment,
   MenuItem,
   Stack,
   Tab,
@@ -14,8 +15,11 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import FilterListIcon from "@mui/icons-material/FilterList";
+import SearchIcon from "@mui/icons-material/Search";
 import { useSnackbar } from "notistack";
 import { PAINT_TYPES, formatPaint } from "../../../../../shared/recipaint/paints";
+import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { CollectionPaint, PaintDraft, usePaintMutations, usePaints } from "../../../../hooks/recipaint/usePaints";
 import {
   CataloguePaint,
@@ -87,6 +91,11 @@ export default function PaintFormDialog({
   );
   const { brands: catalogueBrands } = usePaintCatalogueBrands(onCatalogueTab);
   const rangeOptions = catalogueBrands.find((b) => b.name === brandFilter)?.ranges || [];
+  // Restates the active filter on the picker, so a short result list never looks like a bug -
+  // it is the filter, and it says so.
+  const activeFilterLabel = brandFilter
+    ? `Showing ${brandFilter}${rangeFilter ? ` - ${rangeFilter}` : ""}`
+    : " ";
 
   // Brands the user already owns, so a custom range is typed once and picked thereafter.
   const brandOptions = [...new Set(paints.map((p) => p.brand.trim()).filter(Boolean))].sort((a, b) =>
@@ -153,7 +162,9 @@ export default function PaintFormDialog({
   // The count with a +1 beside it. Quantity starts at 0, so the common gesture is "I have one
   // of these" - a tap, rather than selecting the field and typing.
   const quantityField = (
-    <Stack direction="row" spacing={1} alignItems="center">
+    // alignItems stretch rather than a hard-coded height: the button then tracks whatever
+    // the text field measures.
+    <Stack direction="row" spacing={1} alignItems="stretch">
       <TextField
         size="small"
         type="number"
@@ -168,7 +179,7 @@ export default function PaintFormDialog({
         variant="outlined"
         aria-label="Add one to the owned count"
         onClick={() => set({ quantity: draft.quantity + 1 })}
-        sx={{ minWidth: 48, flexShrink: 0 }}
+        sx={{ minWidth: 48, flexShrink: 0, alignSelf: "stretch" }}
       >
         +1
       </Button>
@@ -189,10 +200,32 @@ export default function PaintFormDialog({
       <DialogContent>
         {!isEditing && tab === "catalogue" ? (
           <Stack spacing={2} sx={{ mt: 0.5 }}>
-            {/* Brand then range. Not type: the source only labels the Citadel-style
-                categories, so 1,815 of the 2,164 entries have none and filtering by it would
-                hide most of the catalogue. */}
-            <Stack direction="row" spacing={1}>
+            {/* Filters first, then the picker - you narrow, then you choose. The picker is the
+                only full-size control, so it is obvious at a glance which one selects a paint
+                and which two act on the list it offers. */}
+            {/* Tinted and labelled so these read as controls acting on the picker below, rather
+                than as two more things to pick from. */}
+            <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, p: 1.5, bgcolor: "action.hover" }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+                <FilterListIcon fontSize="small" sx={{ color: "text.disabled" }} />
+                <Typography variant="caption" sx={{ ...sectionLabelSx, flexGrow: 1 }}>
+                  Narrow the catalogue
+                </Typography>
+                {(brandFilter || rangeFilter) && (
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      setBrandFilter("");
+                      setRangeFilter("");
+                    }}
+                    sx={{ textTransform: "none", minWidth: 0, py: 0 }}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </Stack>
+              <Stack direction="row" spacing={1}>
+
               <TextField
                 select
                 size="small"
@@ -232,10 +265,10 @@ export default function PaintFormDialog({
                   </MenuItem>
                 ))}
               </TextField>
-            </Stack>
+              </Stack>
+            </Box>
             <Autocomplete
-              autoFocus
-              size="small"
+              size="medium"
               options={results}
               loading={isSearching}
               value={selected}
@@ -278,10 +311,30 @@ export default function PaintFormDialog({
                 );
               }}
               renderInput={(params) => (
-                <TextField {...params} label="Search paints" placeholder="Type a few letters..." />
+                <TextField
+                  {...params}
+                  autoFocus
+                  label="Pick a paint"
+                  placeholder="Type a few letters..."
+                  helperText={activeFilterLabel}
+                  slotProps={{
+                    input: {
+                      ...params.InputProps,
+                      startAdornment: (
+                        <>
+                          <InputAdornment position="start">
+                            <SearchIcon fontSize="small" />
+                          </InputAdornment>
+                          {params.InputProps.startAdornment}
+                        </>
+                      ),
+                    },
+                  }}
+                />
               )}
-              noOptionsText={catalogueQuery || brandFilter ? "No matching paints" : "Start typing, or pick a brand"}
+              noOptionsText={catalogueQuery || brandFilter ? "No matching paints" : "Start typing, or filter below"}
             />
+
             <Stack direction="row" spacing={2} alignItems="center">
               {quantityField}
             </Stack>
