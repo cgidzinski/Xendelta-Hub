@@ -94,7 +94,7 @@ export default function RecipeCard({ recipe, onClick }: RecipeCardProps) {
                 <Avatar src={author.avatar} alt={author.username} sx={{ width: 20, height: 20, fontSize: 11 }}>
                   {author.username.charAt(0).toUpperCase()}
                 </Avatar>
-                <Typography variant="caption" color="text.secondary" noWrap sx={{ minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ minWidth: 0 }}>
                   {author.username}
                 </Typography>
               </>

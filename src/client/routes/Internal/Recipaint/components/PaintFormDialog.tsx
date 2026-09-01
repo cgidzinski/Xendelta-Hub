@@ -269,7 +269,7 @@ export default function PaintFormDialog({
                       <Typography variant="body2" noWrap>
                         {option.name}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" noWrap>
+                      <Typography variant="caption" color="text.secondary" noWrap component="div">
                         {option.brand}
                         {option.range ? ` - ${option.range}` : ""}
                       </Typography>

@@ -201,7 +201,19 @@ export default function Paints() {
               {brandPaints.map((paint) => (
                 <Box
                   key={paint._id}
-                  sx={{ ...cardSx, px: 1.5, py: 1, display: "flex", alignItems: "center", gap: 1.5 }}
+                  sx={{
+                    ...cardSx,
+                    px: 1.5,
+                    py: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1.5,
+                    // On a phone the stepper and two icon buttons leave almost nothing for a
+                    // name like "D&D Nolzur's Marvelous Pigments Wash", so they drop to their
+                    // own line instead of squeezing it.
+                    flexWrap: { xs: "wrap", sm: "nowrap" },
+                    rowGap: 0.5,
+                  }}
                 >
                   <Box
                     sx={{
@@ -214,18 +226,23 @@ export default function Paints() {
                       backgroundColor: paint.hex || "transparent",
                     }}
                   />
-                  <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                  <Box sx={{ minWidth: 0, flexGrow: 1, flexBasis: { xs: "60%", sm: "auto" } }}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
                       {paint.name}
                     </Typography>
                     {(paint.range || paint.type) && (
-                      <Typography variant="caption" color="text.secondary" noWrap>
+                      <Typography variant="caption" color="text.secondary" noWrap component="div">
                         {describePaintDetail({ range: paint.range, type: paint.type })}
                       </Typography>
                     )}
                   </Box>
 
-                  <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexShrink: 0 }}>
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    spacing={0.5}
+                    sx={{ flexShrink: 0, ml: { xs: "auto", sm: 0 } }}
+                  >
                     <IconButton
                       size="small"
                       aria-label={`Fewer ${paint.name}`}
