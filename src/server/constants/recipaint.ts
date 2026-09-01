@@ -1,2 +1,3 @@
-// Recipaint-specific constants
-export const MAX_RECIPAINT_ASSET_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+// Recipaint-specific constants.
+// The size ceiling lives in shared/ so the upload form and multer enforce the same number.
+export { MAX_RECIPAINT_ASSET_SIZE } from "../../shared/recipaint/assetUrls";

@@ -31,9 +31,16 @@ app.use(express.urlencoded({ extended: false, limit: '100mb' }));
 app.use(cookieParser());
 app.use(passport.initialize());
 app.use("/avatars", express.static("src/server/public/avatars"));
-if (process.env.NODE_ENV === "production") {
-  ViteExpress.config({ mode: "production" });
-}
+
+// The transformer runs on every SPA HTML response; it passes everything but a public
+// /recipaint/:id share link straight through, so OG crawlers get a real preview without
+// putting a Mongo read in front of any other page. Spread the mode rather than passing
+// `undefined`, which would clobber vite-express's own default in development.
+const { recipaintHtmlTransformer } = require("./utils/recipaintOgMeta");
+ViteExpress.config({
+  ...(process.env.NODE_ENV === "production" ? { mode: "production" as const } : {}),
+  transformer: recipaintHtmlTransformer,
+});
 
 const port = process.env.PORT || "3000";
 
@@ -103,6 +110,8 @@ require("./routes/admin/messages.ts")(app);
 require("./routes/admin/casino.ts")(app);
 require("./routes/admin/debug.ts")(app);
 require("./routes/recipaint.ts")(app);
+require("./routes/paints.ts")(app);
+require("./routes/paintCatalogue.ts")(app);
 require("./routes/xenbox.ts")(app);
 require("./routes/xenlink.ts")(app);
 require("./routes/xensplit")(app);

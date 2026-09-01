@@ -1,24 +1,23 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import {
-  Container,
   Box,
   Button,
   IconButton,
   Typography,
-  CircularProgress,
-  Alert,
-  Card,
-  CardContent,
-  Avatar,
-  Chip,
-  Badge,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Tooltip,
+  Container,
 } from "@mui/material";
 import {
   ArrowBack as ArrowBackIcon,
   Edit as EditIcon,
   ContentCopy as CloneIcon,
-  Link as LinkIcon,
+  Share as ShareIcon,
+  Brush as BrushIcon,
 } from "@mui/icons-material";
 import { useTitle } from "../../../hooks/useTitle";
 import {
@@ -29,23 +28,26 @@ import {
 } from "../../../hooks/recipaint/useRecipaint";
 import { useSnackbar } from "notistack";
 import { useAuth } from "../../../contexts/AuthContext";
-import RecipeSteps from "./components/RecipeSteps";
-import RecipeForm from "./components/RecipeForm";
-import ImageGallery from "./components/ImageGallery";
-import ShareIcon from "@mui/icons-material/Share";
+import LoadingSpinner from "../../../components/LoadingSpinner";
+import ErrorDisplay from "../../../components/ErrorDisplay";
+import { useRecipeProgress } from "../../../hooks/recipaint/useRecipeProgress";
+import RecipeForm, { RecipeFormData } from "./components/RecipeForm";
+import RecipeView from "./components/RecipeView";
+
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const { user } = useAuth();
-  const { recipe, isLoading, isError, error } = useRecipaintRecipe(id);
+  const { recipe, isLoading, isError, error, refetch } = useRecipaintRecipe(id);
   const updateRecipe = useUpdateRecipe();
   const deleteRecipe = useDeleteRecipe();
   const cloneRecipe = useCloneRecipe();
   const [isEditMode, setIsEditMode] = useState(false);
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const [isFormDirty, setIsFormDirty] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const { completedSteps, toggleStep, resetProgress } = useRecipeProgress(id);
 
-  // Check if current user is the owner
   const isOwner =
     recipe &&
     user &&
@@ -56,22 +58,21 @@ export default function RecipeDetail() {
 
   const handleBackClick = () => {
     if (isEditMode) {
+      if (isFormDirty && !window.confirm("You have unsaved changes. Discard them?")) {
+        return;
+      }
+      setIsFormDirty(false);
       setIsEditMode(false);
       return;
     }
     navigate("/internal/recipaint");
   };
 
-  const handleEditClick = () => {
-    setIsEditMode(true);
-  };
-
-  const handleCloneClick = async () => {
+  const handleCloneClick = () => {
     if (!id) return;
-
     cloneRecipe.mutate(id, {
       onSuccess: (clonedRecipe) => {
-        enqueueSnackbar("Recipe cloned successfully", { variant: "success" });
+        enqueueSnackbar("Recipe cloned", { variant: "success" });
         navigate(`/internal/recipaint/${clonedRecipe._id}`);
       },
       onError: (error: Error) => {
@@ -80,35 +81,37 @@ export default function RecipeDetail() {
     });
   };
 
-  const handleSave = async (formData: any) => {
-    if (!id) return;
-
-    updateRecipe.mutate(
-      {
-        id,
-        data: formData,
-      },
-      {
-        onSuccess: () => {
-          setIsEditMode(false);
-          enqueueSnackbar("Recipe updated successfully", { variant: "success" });
-        },
-        onError: (error: Error) => {
-          enqueueSnackbar(error.message || "Failed to update recipe", { variant: "error" });
-        },
-      },
-    );
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}/recipaint/${id}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      enqueueSnackbar("Link copied to clipboard", { variant: "success" });
+    } catch {
+      enqueueSnackbar("Couldn't copy the link", { variant: "error" });
+    }
   };
 
-  const handleDelete = async () => {
+  // Returns a promise so RecipeForm can wait for the save to land before destroying
+  // the images the user removed. Rejecting on failure keeps those images alive.
+  const handleSave = async (formData: RecipeFormData) => {
     if (!id) return;
-    if (!window.confirm("Are you sure you want to delete this recipe?")) {
-      return;
+    try {
+      await updateRecipe.mutateAsync({ id, data: formData });
+      setIsFormDirty(false);
+      setIsEditMode(false);
+      enqueueSnackbar("Recipe updated", { variant: "success" });
+    } catch (error) {
+      enqueueSnackbar(error instanceof Error ? error.message : "Failed to update recipe", { variant: "error" });
+      throw error;
     }
+  };
 
+  const handleDelete = () => {
+    if (!id) return;
     deleteRecipe.mutate(id, {
       onSuccess: () => {
-        enqueueSnackbar("Recipe deleted successfully", { variant: "success" });
+        setDeleteDialogOpen(false);
+        enqueueSnackbar("Recipe deleted", { variant: "success" });
         navigate("/internal/recipaint");
       },
       onError: (error: Error) => {
@@ -117,37 +120,19 @@ export default function RecipeDetail() {
     });
   };
 
-  const handleStepToggle = (index: number) => {
-    setCompletedSteps((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(index)) {
-        newSet.delete(index);
-      } else {
-        newSet.add(index);
-      }
-      return newSet;
-    });
-  };
-
   if (isLoading) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "400px" }}>
-          <CircularProgress />
-        </Box>
-      </Container>
-    );
+    return <LoadingSpinner message="Loading recipe..." />;
   }
 
   if (isError || !recipe) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Alert severity="error" sx={{ mb: 4 }}>
-          {error?.message || "Failed to load recipe"}
-        </Alert>
-        <Button startIcon={<ArrowBackIcon />} onClick={handleBackClick}>
-          Back to Recipes
-        </Button>
+        <ErrorDisplay error={error} title="Couldn't load this recipe" onRetry={() => refetch()} />
+        <Box sx={{ display: "flex", justifyContent: "center" }}>
+          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/internal/recipaint")}>
+            Back to recipes
+          </Button>
+        </Box>
       </Container>
     );
   }
@@ -155,129 +140,99 @@ export default function RecipeDetail() {
   if (isEditMode) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Box sx={{ mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
-          <IconButton onClick={handleBackClick}>
+        <Box sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+          <IconButton onClick={handleBackClick} aria-label="Back">
             <ArrowBackIcon />
           </IconButton>
-          <Typography variant="h5" sx={{ flexGrow: 1, fontWeight: 700 }}>
-            Edit Recipe
+          <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 700 }}>
+            Edit recipe
           </Typography>
         </Box>
         <RecipeForm
           recipe={recipe}
           onSave={handleSave}
-          onDelete={handleDelete}
+          onDelete={() => setDeleteDialogOpen(true)}
+          onDirtyChange={setIsFormDirty}
           isSaving={updateRecipe.isPending}
           isDeleting={deleteRecipe.isPending}
         />
+        <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="xs" fullWidth>
+          <DialogTitle>Delete recipe</DialogTitle>
+          <DialogContent>
+            <Typography>
+              Delete "{recipe.title}"? Its steps and images go with it. This can't be undone.
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleDelete} color="error" variant="contained" disabled={deleteRecipe.isPending}>
+              {deleteRecipe.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Container>
     );
   }
 
-  const author = recipe.author;
-  const originalRecipeId = recipe.originalRecipeId;
-
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
-        <IconButton onClick={handleBackClick}>
-          <ArrowBackIcon />
-        </IconButton>
-        <Typography variant="h4" sx={{ flexGrow: 1, fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
-          {recipe.title}
-          <IconButton
-            onClick={() => {
-              const baseUrl = window.location.origin;
-              const shareUrl = `${baseUrl}/recipaint/${id}`;
-              navigator.clipboard.writeText(shareUrl);
-              enqueueSnackbar("Link copied to clipboard", { variant: "success" });
-            }}
-          >
-            <ShareIcon />
+      <RecipeView
+        recipe={recipe}
+        completedSteps={completedSteps}
+        onStepToggle={toggleStep}
+        onResetProgress={resetProgress}
+        showVisibility
+        originalRecipeHref={recipe.originalRecipeId ? `/internal/recipaint/${recipe.originalRecipeId}` : null}
+        leading={
+          <IconButton onClick={handleBackClick} aria-label="Back" edge="start">
+            <ArrowBackIcon />
           </IconButton>
-          <Chip
-            color={recipe.isPublic ? "success" : "error"}
-            label={recipe.isPublic ? "Public" : "Private"}
-            variant="outlined"
-          />
-        </Typography>
-        {isOwner ? (
-          <Button variant="contained" startIcon={<EditIcon />} onClick={handleEditClick}>
-            Edit
-          </Button>
-        ) : (
-          <Button
-            variant="contained"
-            startIcon={<CloneIcon />}
-            onClick={handleCloneClick}
-            disabled={cloneRecipe.isPending}
-          >
-            {cloneRecipe.isPending ? "Cloning..." : "Clone"}
-          </Button>
-        )}
-      </Box>
-
-      {/* Author and Original Recipe Link */}
-      <Box sx={{ mb: 3, display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
-        {author && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <Avatar src={author.avatar} alt={author.username} sx={{ width: 32, height: 32 }}>
-              {author.username.charAt(0).toUpperCase()}
-            </Avatar>
-            <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              Created by <strong>{author.username}</strong>
-            </Typography>
-          </Box>
-        )}
-        {originalRecipeId && (
-          <Button
-            component={Link}
-            to={`/internal/recipaint/${originalRecipeId}`}
-            size="small"
-            startIcon={<LinkIcon />}
-            variant="outlined"
-          >
-            View Original Recipe
-          </Button>
-        )}
-      </Box>
-
-      {(recipe.showcase && recipe.showcase.length > 0) || recipe.description ? (
-        <Card
-          elevation={0}
-          sx={{
-            mb: 4,
-            border: "1px solid",
-            borderColor: "divider",
-            borderRadius: 3,
-            overflow: "hidden",
-          }}
-        >
-          <CardContent sx={{ p: 3 }}>
-            {recipe.showcase && recipe.showcase.length > 0 && (
-              <Box sx={{ mb: recipe.description ? 3 : 0 }}>
-                <ImageGallery images={recipe.showcase} />
-              </Box>
-            )}
-            {recipe.description && (
-              <Typography
-                variant="body1"
-                sx={{
-                  color: "text.primary",
-                  lineHeight: 1.8,
-                  fontSize: "1.1rem",
-                }}
+        }
+        titleActions={
+          // A private link opens for nobody but its owner, so offering to copy one is a dead
+          // end - grey it out and say why. A disabled IconButton swallows pointer events, so
+          // the span is what the Tooltip listens on.
+          <Tooltip title={recipe.isPublic ? "Copy share link" : "Make the recipe public to share it"}>
+            <span>
+              <IconButton
+                onClick={handleShare}
+                aria-label="Copy share link"
+                disabled={!recipe.isPublic}
+                size="small"
               >
-                {recipe.description}
-              </Typography>
+                <ShareIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        }
+        actions={
+          <>
+            {recipe.steps.length > 0 && (
+              <Button
+                variant="outlined"
+                startIcon={<BrushIcon />}
+                onClick={() => navigate(`/internal/recipaint/${id}/paint`)}
+              >
+                Paint along
+              </Button>
             )}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <Box>
-        <RecipeSteps steps={recipe.steps} completedSteps={completedSteps} onStepToggle={handleStepToggle} />
-      </Box>
+            {isOwner ? (
+              <Button variant="contained" startIcon={<EditIcon />} onClick={() => setIsEditMode(true)}>
+                Edit
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                startIcon={<CloneIcon />}
+                onClick={handleCloneClick}
+                disabled={cloneRecipe.isPending}
+              >
+                {cloneRecipe.isPending ? "Cloning..." : "Clone"}
+              </Button>
+            )}
+          </>
+        }
+      />
     </Container>
   );
 }

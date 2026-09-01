@@ -1,93 +1,116 @@
-import { Card, CardContent, CardMedia, Typography, Box, CardHeader, Chip, Avatar } from "@mui/material";
+import { Box, Card, CardActionArea, Typography, Chip, Avatar, Stack } from "@mui/material";
+import BrushIcon from "@mui/icons-material/Brush";
+import LayersIcon from "@mui/icons-material/Layers";
 import { format } from "date-fns";
-import { Recipe } from "../../../../types/Recipe";
+import { RecipeSummary } from "../../../../types/Recipe";
+import { cardSx } from "../../../../components/ui/surfaceStyles";
+import { thumbUrlFor } from "../../../../../shared/recipaint/assetUrls";
 
 interface RecipeCardProps {
-  recipe: Recipe;
+  recipe: RecipeSummary;
   onClick: () => void;
 }
 
 export default function RecipeCard({ recipe, onClick }: RecipeCardProps) {
-  const firstImage = recipe.showcase && recipe.showcase.length > 0 ? recipe.showcase[0] : null;
-  const hasImage = !!firstImage;
+  const cover = recipe.showcase?.[0];
   const author = recipe.author;
 
   return (
     <Card
+      variant="outlined"
       sx={{
-        width: 345,
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 3,
-        transition: "all 0.3s ease",
-        cursor: "pointer",
-        "&:hover": {
-          transform: "translateY(-4px)",
-          boxShadow: "0 8px 16px rgba(0,0,0,0.1)",
-          borderColor: "primary.main",
-        },
+        ...cardSx,
+        // Fills its grid track. It used to be pinned to 345px, which overflowed a 360px phone.
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+        transition: "border-color 0.2s ease",
+        "&:hover": { borderColor: "primary.main" },
       }}
-      onClick={onClick}
     >
-      <CardHeader
-        title={recipe.title}
-        subheader={
-          <Box
-            sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, flexWrap: "wrap" }}
-          >
-            <Typography variant="body2" component="span" sx={{ color: "text.secondary" }}>
-              {format(new Date(recipe.dateUpdated), "MMM d, yyyy")}
-            </Typography>
-            <Chip
-              label={recipe.isPublic ? "Public" : "Private"}
-              size="small"
-              color={recipe.isPublic ? "success" : "error"}
-              sx={{ height: "20px", fontSize: "0.7rem" }}
-            />
-          </Box>
-        }
-      />
-
-      {hasImage ? (
-        <CardMedia
-          component="img"
-          height="256px"
-          width="345px"
-          image={firstImage}
-          alt={recipe.title}
-          sx={{ objectFit: "cover" }}
-        />
-      ) : (
+      <CardActionArea
+        onClick={onClick}
+        sx={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "stretch" }}
+      >
         <Box
           sx={{
-            width: "345px",
-            height: "256px",
-            backgroundColor: "grey.700",
+            position: "relative",
+            width: "100%",
+            aspectRatio: "4 / 3",
+            bgcolor: "action.hover",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "hidden",
           }}
-        />
-      )}
-      <CardContent>
-        {author && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-            <Avatar
-              src={author.avatar}
-              alt={author.username}
-              sx={{ width: 24, height: 24 }}
-            >
-              {author.username.charAt(0).toUpperCase()}
-            </Avatar>
-            <Typography variant="caption" sx={{ color: "text.secondary" }}>
-              by {author.username}
+        >
+          {cover ? (
+            <Box
+              component="img"
+              src={thumbUrlFor(cover)}
+              alt=""
+              loading="lazy"
+              sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            />
+          ) : (
+            <BrushIcon sx={{ fontSize: 40, color: "text.disabled" }} />
+          )}
+          <Chip
+            label={recipe.isPublic ? "Public" : "Private"}
+            size="small"
+            color={recipe.isPublic ? "success" : "default"}
+            sx={{ position: "absolute", top: 8, right: 8, height: 22, fontSize: "0.7rem" }}
+          />
+        </Box>
+
+        <Box sx={{ p: 1.5, flexGrow: 1, display: "flex", flexDirection: "column", gap: 0.75, minWidth: 0 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.3 }} noWrap>
+            {recipe.title}
+          </Typography>
+
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{
+              // Clamp to two lines so cards in a row line up instead of ragging.
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              minHeight: "2.5em",
+            }}
+          >
+            {recipe.description || "No description"}
+          </Typography>
+
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1}
+            sx={{ mt: "auto", pt: 0.5, minWidth: 0 }}
+          >
+            {author && (
+              <>
+                <Avatar src={author.avatar} alt={author.username} sx={{ width: 20, height: 20, fontSize: 11 }}>
+                  {author.username.charAt(0).toUpperCase()}
+                </Avatar>
+                <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ minWidth: 0 }}>
+                  {author.username}
+                </Typography>
+              </>
+            )}
+            <Box sx={{ flexGrow: 1 }} />
+            <LayersIcon sx={{ fontSize: 14, color: "text.disabled" }} />
+            <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+              {recipe.stepCount}
             </Typography>
-          </Box>
-        )}
-        <Typography variant="body2" sx={{ color: "text.secondary" }}>
-          {recipe.description || "No description"}
-        </Typography>
-        <Typography variant="caption" sx={{ color: "text.secondary" }}>
-          Last updated {format(new Date(recipe.dateUpdated), "MMM d, yyyy")}
-        </Typography>
-      </CardContent>
+          </Stack>
+
+          <Typography variant="caption" color="text.disabled">
+            Updated {format(new Date(recipe.dateUpdated), "MMM d, yyyy")}
+          </Typography>
+        </Box>
+      </CardActionArea>
     </Card>
   );
 }

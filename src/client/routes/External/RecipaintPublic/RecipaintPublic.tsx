@@ -1,111 +1,148 @@
-import { useState } from "react";
-import { useParams } from "react-router-dom";
-import { Container, Box, Typography, CircularProgress, Alert, Card, CardContent, Avatar } from "@mui/material";
+import { useNavigate, useParams } from "react-router-dom";
+import { Box, Button, Card, Container, Stack, Typography } from "@mui/material";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import BrushIcon from "@mui/icons-material/Brush";
+import { useSnackbar } from "notistack";
 import { useTitle } from "../../../hooks/useTitle";
-import { usePublicRecipaintRecipe } from "../../../hooks/recipaint/useRecipaint";
-import RecipeSteps from "../../Internal/Recipaint/components/RecipeSteps";
-import ImageGallery from "../../Internal/Recipaint/components/ImageGallery";
+import { usePublicRecipaintRecipe, useCloneRecipe } from "../../../hooks/recipaint/useRecipaint";
+import { useAuth } from "../../../contexts/AuthContext";
+import { useRecipeProgress } from "../../../hooks/recipaint/useRecipeProgress";
+import LoadingSpinner from "../../../components/LoadingSpinner";
+import ErrorDisplay from "../../../components/ErrorDisplay";
+import { cardSx } from "../../../components/ui/surfaceStyles";
+import RecipeView from "../../Internal/Recipaint/components/RecipeView";
 
 export default function RecipaintPublic() {
   const { id } = useParams<{ id: string }>();
-  const { recipe, isLoading, isError, error } = usePublicRecipaintRecipe(id);
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const navigate = useNavigate();
+  const { enqueueSnackbar } = useSnackbar();
+  const { isAuthenticated } = useAuth();
+  const { recipe, isLoading, isError, error, refetch } = usePublicRecipaintRecipe(id);
+  const cloneRecipe = useCloneRecipe();
+  const { completedSteps, toggleStep, resetProgress } = useRecipeProgress(id);
 
   useTitle(recipe?.title || "Recipe");
 
-  const handleStepToggle = (index: number) => {
-    setCompletedSteps((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(index)) {
-        newSet.delete(index);
-      } else {
-        newSet.add(index);
-      }
-      return newSet;
+  // Signed out, send them through login and land them on this recipe inside the hub, where
+  // the Clone button is waiting - rather than inventing a deferred post-login action.
+  const handleClone = () => {
+    if (!id) return;
+    if (!isAuthenticated) {
+      navigate("/login", { state: { from: { pathname: `/internal/recipaint/${id}` } } });
+      return;
+    }
+    cloneRecipe.mutate(id, {
+      onSuccess: (cloned) => {
+        enqueueSnackbar("Recipe cloned to your account", { variant: "success" });
+        navigate(`/internal/recipaint/${cloned._id}`);
+      },
+      onError: (err: Error) => {
+        enqueueSnackbar(err.message || "Failed to clone recipe", { variant: "error" });
+      },
     });
   };
 
-  if (isLoading) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "400px" }}>
-          <CircularProgress />
-        </Box>
-      </Container>
-    );
-  }
-
-  if (isError || !recipe) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Alert severity="error" sx={{ mb: 4 }}>
-          {error?.message || "Failed to load recipe"}
-        </Alert>
-      </Container>
-    );
-  }
-
-  const author = recipe.author;
-  const originalRecipeId = recipe.originalRecipeId;
+  const cloneLabel = !isAuthenticated
+    ? "Sign in to clone"
+    : cloneRecipe.isPending
+      ? "Cloning..."
+      : "Clone to my account";
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
-        <Typography variant="h4" sx={{ flexGrow: 1, fontWeight: 700 }}>
-          {recipe.title}
-        </Typography>
-      </Box>
-
-      {/* Author and Original Recipe Link */}
-      <Box sx={{ mb: 3, display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
-        {author && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <Avatar src={author.avatar} alt={author.username} sx={{ width: 32, height: 32 }}>
-              {author.username.charAt(0).toUpperCase()}
-            </Avatar>
-            <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              Created by <strong>{author.username}</strong>
-            </Typography>
-          </Box>
-        )}
-      </Box>
-
-      {(recipe.showcase && recipe.showcase.length > 0) || recipe.description ? (
-        <Card
-          elevation={0}
-          sx={{
-            mb: 4,
-            border: "1px solid",
-            borderColor: "divider",
-            borderRadius: 3,
-            overflow: "hidden",
-          }}
+    <Box sx={{ minHeight: "100vh" }}>
+      <Box
+        component="header"
+        sx={{
+          position: "sticky",
+          top: 0,
+          zIndex: 1000,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          backdropFilter: "blur(10px)",
+          backgroundColor: "rgba(18, 18, 18, 0.8)",
+        }}
+      >
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          spacing={2}
+          sx={{ maxWidth: 900, mx: "auto", px: { xs: 2, sm: 3 }, py: 1.5 }}
         >
-          <CardContent sx={{ p: 3 }}>
-            {recipe.showcase && recipe.showcase.length > 0 && (
-              <Box sx={{ mb: recipe.description ? 3 : 0 }}>
-                <ImageGallery images={recipe.showcase} />
-              </Box>
-            )}
-            {recipe.description && (
-              <Typography
-                variant="body1"
-                sx={{
-                  color: "text.primary",
-                  lineHeight: 1.8,
-                  fontSize: "1.1rem",
-                }}
-              >
-                {recipe.description}
-              </Typography>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <Box>
-        <RecipeSteps steps={recipe.steps} completedSteps={completedSteps} onStepToggle={handleStepToggle} />
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
+            <BrushIcon sx={{ color: "primary.main" }} />
+            <Typography
+              variant="h6"
+              onClick={() => navigate("/")}
+              sx={{
+                fontWeight: 700,
+                cursor: "pointer",
+                background: "linear-gradient(90deg, #2196f3 0%, #1e88e5 50%, #1976d2 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+                "&:hover": { opacity: 0.8 },
+              }}
+              noWrap
+            >
+              Recipaint
+            </Typography>
+          </Stack>
+          <Button size="small" onClick={() => navigate(isAuthenticated ? "/internal/recipaint" : "/")}>
+            {isAuthenticated ? "My recipes" : "Xendelta Hub"}
+          </Button>
+        </Stack>
       </Box>
-    </Container>
+
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        {isLoading && <LoadingSpinner message="Loading recipe..." />}
+
+        {!isLoading && (isError || !recipe) && (
+          <ErrorDisplay
+            error={error}
+            title="This recipe isn't available"
+            onRetry={() => refetch()}
+          />
+        )}
+
+        {!isLoading && !isError && recipe && (
+          <>
+            <RecipeView
+              recipe={recipe}
+              completedSteps={completedSteps}
+              onStepToggle={toggleStep}
+              onResetProgress={resetProgress}
+              actions={
+                <Button
+                  variant="contained"
+                  startIcon={<ContentCopyIcon />}
+                  onClick={handleClone}
+                  disabled={cloneRecipe.isPending}
+                >
+                  {cloneLabel}
+                </Button>
+              }
+            />
+
+            <Card variant="outlined" sx={{ ...cardSx, p: 3, mt: 4, textAlign: "center" }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5 }}>
+                Painting this one?
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Clone it into your own account to tweak the steps and keep your progress.
+              </Typography>
+              <Button
+                variant="contained"
+                startIcon={<ContentCopyIcon />}
+                onClick={handleClone}
+                disabled={cloneRecipe.isPending}
+              >
+                {cloneLabel}
+              </Button>
+            </Card>
+          </>
+        )}
+      </Container>
+    </Box>
   );
 }

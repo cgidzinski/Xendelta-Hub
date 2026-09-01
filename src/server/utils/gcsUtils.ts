@@ -17,7 +17,10 @@ export async function uploadToGCS(
   buffer: Buffer,
   destinationPath: string,
   contentType: string,
-  isPrivate: boolean = false
+  isPrivate: boolean = false,
+  // Defaults to the historical no-store behaviour. Callers whose object names are unique
+  // per upload (and so never rewritten) can pass an immutable policy instead.
+  cacheControl: string = "no-cache, no-store, must-revalidate"
 ): Promise<string | void> {
   const bucket = isPrivate ? privateBucket : publicBucket;
   const file = bucket.file(destinationPath);
@@ -25,7 +28,7 @@ export async function uploadToGCS(
   await file.save(buffer, {
     metadata: {
       contentType,
-      cacheControl: "no-cache, no-store, must-revalidate",
+      cacheControl,
     },
   });
 

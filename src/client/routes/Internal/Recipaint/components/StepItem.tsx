@@ -1,11 +1,9 @@
-import {
-  Box,
-  Typography,
-  Checkbox,
-  Chip,
-} from "@mui/material";
+import { Box, Typography, Checkbox, Chip, Stack, Tooltip } from "@mui/material";
 import { RecipeStep } from "../../../../types/RecipeStep";
+import { cardSx } from "../../../../components/ui/surfaceStyles";
 import ImageGallery from "./ImageGallery";
+import PaintChip from "./PaintChip";
+import { cleanPaints, formatPaint } from "../../../../../shared/recipaint/paints";
 
 interface StepItemProps {
   step: RecipeStep;
@@ -14,113 +12,103 @@ interface StepItemProps {
   onToggle: () => void;
 }
 
+/** The technique line: how it's applied, plus the paints as swatches. */
+function StepTechnique({ step, compact = false }: { step: RecipeStep; compact?: boolean }) {
+  const paints = cleanPaints(step.paints);
+  if (!step.method && paints.length === 0) return null;
+
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      spacing={0.5}
+      sx={{ flexWrap: "wrap", rowGap: 0.5, justifyContent: { sm: "flex-end" } }}
+    >
+      {step.method && (
+        <Typography variant="caption" sx={{ fontStyle: "italic", color: "primary.main", fontWeight: 500 }}>
+          {step.method}
+        </Typography>
+      )}
+      {/* A collapsed row shows swatches only - the names are already above it in full. */}
+      {compact
+        ? paints.map((paint, i) => (
+            <Tooltip key={i} title={formatPaint(paint)}>
+              <Box
+                sx={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: "50%",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  backgroundColor: paint.hex || "transparent",
+                }}
+              />
+            </Tooltip>
+          ))
+        : paints.map((paint, i) => <PaintChip key={i} paint={paint} />)}
+    </Stack>
+  );
+}
+
 export default function StepItem({ step, index, isCompleted, onToggle }: StepItemProps) {
+  // Completed steps collapse to a single line so the remaining work stays in view.
   if (isCompleted) {
-    // Compact layout when completed - single line
     return (
       <Box
         sx={{
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 2,
-          py: 1,
-          px: 2,
+          ...cardSx,
+          py: 0.5,
+          px: 1,
           backgroundColor: "action.selected",
           display: "flex",
           alignItems: "center",
           gap: 1,
+          flexWrap: "wrap",
         }}
       >
-        <Checkbox checked={isCompleted} onChange={onToggle} color="success" />
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexGrow: 1 }}>
-          <Chip
-            label={`Step ${index + 1}`}
-            size="small"
-            sx={{
-              borderRadius: 1,
-              fontWeight: 600,
-              height: "24px",
-            }}
-          />
-          {step.stepName && (
-            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-              {step.stepName}
-            </Typography>
-          )}
-        </Box>
-        {(step.method || step.paints) && (
-          <Typography 
-            variant="caption" 
-            sx={{ 
-              fontStyle: "italic",
-              color: "primary.main",
-              fontWeight: 500,
-            }}
-          >
-            {step.method || ""}
-            {step.method && step.paints && " "}
-            {step.paints && `(${step.paints})`}
-          </Typography>
-        )}
+        <Checkbox checked onChange={onToggle} color="success" size="small" />
+        <Chip label={index + 1} size="small" sx={{ borderRadius: 1, fontWeight: 600, height: 22, minWidth: 28 }} />
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, flexGrow: 1, minWidth: 0 }} noWrap>
+          {step.stepName || step.text || `Step ${index + 1}`}
+        </Typography>
+        <StepTechnique step={step} compact />
       </Box>
     );
   }
 
-  // Full expanded layout when not completed
   return (
-    <Box
-      sx={{
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 2,
-        p: 2,
-        backgroundColor: "transparent",
-      }}
-    >
-      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
-        <Checkbox checked={isCompleted} onChange={onToggle} color="success" sx={{ mt: 0.5 }} />
-        <Box sx={{ flexGrow: 1 }}>
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+    <Box sx={{ ...cardSx, p: 2 }}>
+      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+        <Checkbox checked={false} onChange={onToggle} color="success" sx={{ mt: -0.5, ml: -1 }} />
+        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            alignItems={{ xs: "flex-start", sm: "center" }}
+            justifyContent="space-between"
+            spacing={0.5}
+            sx={{ mb: 1 }}
+          >
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
               <Chip
-                label={`Step ${index + 1}`}
+                label={index + 1}
                 size="small"
-                sx={{
-                  borderRadius: 1,
-                  fontWeight: 600,
-                  height: "24px",
-                }}
+                sx={{ borderRadius: 1, fontWeight: 600, height: 22, minWidth: 28 }}
               />
               {step.stepName && (
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                   {step.stepName}
                 </Typography>
               )}
-            </Box>
-            {(step.method || step.paints) && (
-              <Typography 
-                variant="caption" 
-                sx={{ 
-                  fontStyle: "italic",
-                  color: "primary.main",
-                  fontWeight: 500,
-                }}
-              >
-                {step.method || ""}
-                {step.method && step.paints && " "}
-                {step.paints && `(${step.paints})`}
-              </Typography>
-            )}
-          </Box>
-          <Typography 
-            variant="body1" 
-            sx={{ 
-              mb: step.images && step.images.length > 0 ? 2 : 0,
-              textDecoration: isCompleted ? "line-through" : "none",
-            }}
-          >
-            {step.text}
-          </Typography>
+            </Stack>
+            <StepTechnique step={step} />
+          </Stack>
+
+          {step.text && (
+            <Typography variant="body1" sx={{ whiteSpace: "pre-wrap" }}>
+              {step.text}
+            </Typography>
+          )}
+
           {step.images && step.images.length > 0 && (
             <Box sx={{ mt: 2 }}>
               <ImageGallery images={step.images} dense />

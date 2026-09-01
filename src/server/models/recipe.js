@@ -1,6 +1,23 @@
 var mongoose = require("mongoose");
 var Schema = mongoose.Schema;
 
+// PAINT SCHEMA (embedded in a step)
+// The paint list drives the swatches on each step, the recipe's "Paints used" panel and
+// search-by-paint. PAINT_TYPES is shared with the client so both ends agree on the enum.
+var paintSchema = new mongoose.Schema(
+  {
+    brand: { type: String, default: "" }, // e.g., "Citadel"
+    name: { type: String, default: "" }, // e.g., "Nuln Oil"
+    hex: { type: String, default: "" }, // swatch colour, "" when unset
+    type: {
+      type: String,
+      enum: ["base", "layer", "wash", "contrast", "metallic", "technical", ""],
+      default: "",
+    },
+  },
+  { _id: false }
+);
+
 // STEP SCHEMA (embedded in Recipe)
 var stepSchema = new mongoose.Schema(
   {
@@ -9,7 +26,7 @@ var stepSchema = new mongoose.Schema(
     method: { type: String }, // Method (e.g., "Dry brush", "Wash", etc.)
     images: [{ type: String }], // Array of public GCS URLs
     text: { type: String },
-    paints: { type: String }, // e.g., "Citadel: ghostly green"
+    paints: [paintSchema],
   },
   { _id: false }
 );
@@ -33,6 +50,7 @@ recipeSchema.index({ author: 1 });
 recipeSchema.index({ owner: 1 });
 recipeSchema.index({ isPublic: 1 });
 recipeSchema.index({ dateUpdated: -1 });
+recipeSchema.index({ "steps.paints.name": 1 });
 
 // Update dateUpdated before saving
 recipeSchema.pre("save", function (next) {

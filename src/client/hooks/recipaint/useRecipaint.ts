@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
-import { Recipe } from "../../types/Recipe";
+import { Recipe, RecipeSummary } from "../../types/Recipe";
 
 // Asset upload types
 interface RecipaintAssetUploadResponse {
@@ -13,7 +13,7 @@ interface RecipaintAssetUploadResponse {
 
 // Types
 interface RecipesResponse {
-  recipes: Recipe[];
+  recipes: RecipeSummary[];
 }
 
 interface RecipeResponse {
@@ -48,15 +48,22 @@ export const recipaintKeys = {
   publicDetail: (id: string) => [...recipaintKeys.publicDetails(), id] as const,
 };
 
+// The list endpoints page their results; these are the sizes the UI asks for.
+const MY_RECIPES_LIMIT = 100;
+const PUBLIC_RECIPES_LIMIT = 24;
+
 // API functions
-const fetchRecipes = async (search?: string): Promise<Recipe[]> => {
-  const params = search ? { search } : {};
+const fetchRecipes = async (search?: string): Promise<RecipeSummary[]> => {
+  const params: Record<string, string | number> = { limit: MY_RECIPES_LIMIT };
+  if (search) params.search = search;
   const response = await apiClient.get<ApiResponse<RecipesResponse>>("/api/recipaint", { params });
   return response.data.data!.recipes;
 };
 
-const fetchPublicRecipes = async (): Promise<Recipe[]> => {
-  const response = await apiClient.get<ApiResponse<RecipesResponse>>("/api/recipaint/public");
+const fetchPublicRecipes = async (): Promise<RecipeSummary[]> => {
+  const response = await apiClient.get<ApiResponse<RecipesResponse>>("/api/recipaint/public", {
+    params: { limit: PUBLIC_RECIPES_LIMIT },
+  });
   return response.data.data!.recipes;
 };
 
