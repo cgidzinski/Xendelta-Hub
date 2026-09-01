@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useOutletContext } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import {
-    Alert, Autocomplete, Avatar, Box, Button, Chip, Divider, IconButton, InputAdornment,
+    Alert, Box, Button, Chip, Divider, IconButton, InputAdornment,
     MenuItem, Stack, TextField, Tooltip, Typography,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
@@ -10,13 +10,15 @@ import AutorenewIcon from "@mui/icons-material/Autorenew";
 import DownloadIcon from "@mui/icons-material/Download";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import { startOfMonth } from "date-fns";
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetItems, exportItemsCsv, type ItemFilters } from "../../../hooks/xenbudget/useItems";
 import ItemListItem from "./components/ItemListItem";
-import { CategoryChip, FlagChip } from "./components/LabelChip";
+import ItemFilterSelect from "./components/ItemFilterSelect";
+import {
+    CATEGORY_PREFIX, PERSON_PREFIX, TYPE_EXPENSE, TYPE_INCOME, NEED_FILTER, WANT_FILTER,
+    FLAG_NEEDS_REVIEW, FLAG_UNCATEGORISED, buildFilterOptions,
+} from "./components/itemFilterOptions";
 import TimePeriodFilter, { itemQuickPicks } from "./components/TimePeriodFilter";
 import { resolvePeriod } from "./components/periodMode";
 import ReviewModal from "./components/ReviewModal";
@@ -43,21 +45,6 @@ interface BudgetFilterSeed {
 interface MerchantSeed {
     merchant: string;
 }
-
-// Synthetic options in the filters dropdown below — not real flags or fields on the item.
-const TYPE_EXPENSE = "__type_expense__";
-const TYPE_INCOME = "__type_income__";
-const NEED_FILTER = "__need__";
-const WANT_FILTER = "__want__";
-// Categories are prefixed so a category name can never collide with a flag name in the
-// shared dropdown (both registries allow the same string).
-const CATEGORY_PREFIX = "__category__";
-// People are prefixed so a member's name can never collide with a category/flag name.
-const PERSON_PREFIX = "__person__";
-// The built-in flag the importer uses to say "nothing matched" — special-cased below so
-// selecting it also catches items with no category that were never run through an import.
-const FLAG_UNCATEGORISED = "Uncategorised";
-const FLAG_NEEDS_REVIEW = "Needs review";
 
 export default function BookItems() {
     const {
@@ -115,15 +102,7 @@ export default function BookItems() {
         (seed?.categories ?? []).map((name) => CATEGORY_PREFIX + name),
     );
 
-    const filterOptions = useMemo(
-        () => [
-            TYPE_EXPENSE, TYPE_INCOME, NEED_FILTER, WANT_FILTER,
-            ...book.categories.map((c) => CATEGORY_PREFIX + c.name),
-            ...book.members.map((m) => PERSON_PREFIX + m.user_id),
-            ...book.flags.map((f) => f.name),
-        ],
-        [book.categories, book.members, book.flags],
-    );
+    const filterOptions = useMemo(() => buildFilterOptions(book), [book]);
 
     // Filtering happens server-side (the list is paginated), so the filter object is part
     // of the query key rather than a useMemo over an already-loaded array.
@@ -187,18 +166,16 @@ export default function BookItems() {
                 : [...prev, FLAG_NEEDS_REVIEW],
         );
 
-    // Label for a filter option value. People show their username; categories drop the
-    // prefix; everything else is a fixed label or the raw value.
-    const optionLabel = (o: string) => (
-        o === TYPE_EXPENSE ? "Expenses"
-            : o === TYPE_INCOME ? "Income"
-                : o === NEED_FILTER ? "Need"
-                    : o === WANT_FILTER ? "Want"
-                        : o.startsWith(CATEGORY_PREFIX) ? o.slice(CATEGORY_PREFIX.length)
-                            : o.startsWith(PERSON_PREFIX)
-                                ? (book.members.find((m) => m.user_id === o.slice(PERSON_PREFIX.length))?.username ?? o.slice(PERSON_PREFIX.length))
-                                : o
-    );
+    const exportView = async () => {
+        setIsExporting(true);
+        try {
+            await exportItemsCsv(book._id, filters, book.name);
+        } catch {
+            enqueueSnackbar("Could not export these items", { variant: "error" });
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
     return (
         <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
@@ -252,39 +229,63 @@ export default function BookItems() {
                             sx={{ alignSelf: "flex-start" }}
                         />
                     )}
-                    <TextField
-                        size="small" fullWidth placeholder="Search descriptions"
-                        value={search} onChange={(e) => setSearch(e.target.value)}
-                        slotProps={{
-                            input: {
-                                startAdornment: (
-                                    <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
-                                ),
-                            },
-                        }}
-                    />
-                    {/* One row from sm up; on a phone Filters takes the whole first line
-                    and Source and the period pill share the one below.
+                    {/* Search and export share a line: export acts on the view rather
+                    than describing it, and the filter row below needs its whole width for
+                    the three filters. */}
+                    <Stack direction="row" spacing={1} alignItems="center">
+                        <TextField
+                            size="small" placeholder="Search descriptions"
+                            value={search} onChange={(e) => setSearch(e.target.value)}
+                            sx={{ flexGrow: 1, minWidth: 0 }}
+                            slotProps={{
+                                input: {
+                                    startAdornment: (
+                                        <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
+                                    ),
+                                },
+                            }}
+                        />
+                        <Tooltip title="Export this view as CSV">
+                            {/* A span, because a disabled button fires no events and the
+                            tooltip would have nothing to listen to. */}
+                            <span>
+                                <IconButton
+                                    size="small"
+                                    sx={{ height: 40, width: 40, flexShrink: 0 }}
+                                    disabled={isExporting || items.length === 0}
+                                    onClick={exportView}
+                                >
+                                    <DownloadIcon fontSize="small" />
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+                    </Stack>
+                    {/* One row at every width, phones included - which is what #128 was
+                    after and #129 had to give up on.
 
-                    #128 deliberately went the other way and put this back on a single
-                    row, so this is not that decision being undone by accident. What
-                    changed under it is the period button's label: it used to read "All"
-                    by default, and now the window is shared across the tabs it reads
-                    "August 2026", or "Last 3 months". Measured at 360px, the row needs
-                    the button at ~99px to fit and those labels take 135-152, so a single
-                    row now scrolls the page sideways. #128's real fix - collapsing the
-                    input's min-width and padding, just below - is untouched and still
-                    what keeps a lone chip on one 40px line at every width. */}
+                    Neither of those fixes is being reverted here; what they were working
+                    around is gone. #128 collapsed the Autocomplete input's min-width and
+                    padding with !important so a lone chip would not wrap the field onto a
+                    second line, and #129 gave Filters the whole first mobile line once the
+                    shared window made the period button read "August 2026" (135-152px)
+                    instead of "All". The filter is a trigger button now: it renders a
+                    summary ("All", "3", "Groceries +2"), never chips, so it cannot grow -
+                    and the period pill shortens to "Aug 26" under sm. Measured at 360px
+                    the three come to ~270 of the 312px the row has. */}
                     <Stack
                         useFlexGap direction="row" spacing={1}
-                        alignItems="flex-start" sx={{ flexWrap: "wrap" }}
+                        alignItems="center" sx={{ flexWrap: "nowrap", minWidth: 0 }}
                     >
                         <TextField
                             select size="small" label="Source" value={sourceFilter}
                             onChange={(e) => setSourceFilter(e.target.value)}
                             sx={{
-                                flexShrink: 0, order: { xs: 2, sm: 0 },
-                                "& .MuiInputBase-root": { width: "auto" },
+                                /* Sizes to its value rather than the default 180px, but
+                                capped on a phone: a saved card can be named anything, and
+                                the row never wraps, so an unbounded Source would push the
+                                page sideways instead. It ellipsises past the cap. */
+                                flexShrink: 1, minWidth: 0, maxWidth: { xs: 124, sm: "none" },
+                                "& .MuiInputBase-root": { width: "auto", maxWidth: "100%" },
                             }}
                         >
                             <MenuItem value="all">All</MenuItem>
@@ -295,168 +296,23 @@ export default function BookItems() {
                                 <MenuItem key={p._id} value={`card:${p._id}`}>{p.name}</MenuItem>
                             ))}
                         </TextField>
-                        <Autocomplete
-                            multiple disableCloseOnSelect size="small" options={filterOptions}
-                            value={selectedFilters} onChange={(_, v) => setSelectedFilters(v)}
-                            sx={{
-                                flexGrow: 1, minWidth: 0,
-                                flexBasis: { xs: "100%", sm: 0 },
-                                order: { xs: 1, sm: 0 },
-                                /* The text input MUI puts inside the field is flex-grow
-                                with a 30px min-width and 12px of horizontal padding, so on
-                                a phone it couldn't fit in what a chip left over and wrapped
-                                onto a line of its own - a blank strip under a single chip,
-                                which is what this collapses. Both have to go: the padding
-                                is on a content-box, so it sets a floor of its own even at
-                                zero width. The chips still wrap when THEY need the room,
-                                which is the only time the field should grow.
-
-                                Only while chips are present - an empty field is all input,
-                                and wants its padding to sit the placeholder off the edge.
-                                Focus restores both, so there is somewhere to type once you
-                                are actually typing.
-
-                                `!important` rather than a longer selector: MUI sets these
-                                two from different places at three and four classes deep,
-                                and a plain override silently loses to whichever is deeper
-                                instead of failing loudly. */
-                                ...(selectedFilters.length > 0 && {
-                                    "& .MuiAutocomplete-input": {
-                                        minWidth: "0 !important",
-                                        paddingLeft: "0 !important",
-                                        paddingRight: "0 !important",
-                                    },
-                                    "&:focus-within .MuiAutocomplete-input": {
-                                        minWidth: "60px !important",
-                                        paddingLeft: "8px !important",
-                                    },
-                                }),
-                            }}
-                            groupBy={(o) => (
-                                o === TYPE_EXPENSE || o === TYPE_INCOME ? "Type"
-                                    : o === NEED_FILTER || o === WANT_FILTER ? "Need / Want"
-                                        : o.startsWith(CATEGORY_PREFIX) ? "Categories"
-                                            : o.startsWith(PERSON_PREFIX) ? "People"
-                                                : "Flags"
-                            )}
-                            getOptionLabel={optionLabel}
-                            renderOption={(props, option) => {
-                                const { key, ...optionProps } = props;
-                                if (option.startsWith(PERSON_PREFIX)) {
-                                    const member = book.members.find(
-                                        (m) => m.user_id === option.slice(PERSON_PREFIX.length),
-                                    );
-                                    return (
-                                        <Box component="li" key={key} {...optionProps} sx={{ gap: 1 }}>
-                                            <Avatar
-                                                src={member?.avatar || undefined}
-                                                alt={member?.username}
-                                                sx={{ width: 20, height: 20, fontSize: 10 }}
-                                            >
-                                                {member?.username[0]?.toUpperCase()}
-                                            </Avatar>
-                                            {member?.username ?? option.slice(PERSON_PREFIX.length)}
-                                        </Box>
-                                    );
-                                }
-                                return (
-                                    <Box component="li" key={key} {...optionProps}>
-                                        {optionLabel(option)}
-                                    </Box>
-                                );
-                            }}
-                            renderTags={(value, getTagProps) => value.map((option, index) => {
-                                const { key, ...tagProps } = getTagProps({ index });
-                                if (option === TYPE_EXPENSE) {
-                                    return (
-                                        <Chip
-                                            key={key} size="small" label="Expenses"
-                                            icon={<TrendingDownIcon fontSize="small" />} {...tagProps}
-                                        />
-                                    );
-                                }
-                                if (option === TYPE_INCOME) {
-                                    return (
-                                        <Chip
-                                            key={key} size="small" label="Income" color="success"
-                                            icon={<TrendingUpIcon fontSize="small" />} {...tagProps}
-                                        />
-                                    );
-                                }
-                                if (option === NEED_FILTER) {
-                                    return <Chip key={key} size="small" label="Need" {...tagProps} />;
-                                }
-                                if (option === WANT_FILTER) {
-                                    return <Chip key={key} size="small" label="Want" {...tagProps} />;
-                                }
-                                if (option.startsWith(CATEGORY_PREFIX)) {
-                                    return (
-                                        <CategoryChip
-                                            key={key}
-                                            name={option.slice(CATEGORY_PREFIX.length)}
-                                            registry={book.categories}
-                                            {...tagProps}
-                                        />
-                                    );
-                                }
-                                if (option.startsWith(PERSON_PREFIX)) {
-                                    const member = book.members.find(
-                                        (m) => m.user_id === option.slice(PERSON_PREFIX.length),
-                                    );
-                                    return (
-                                        <Chip
-                                            key={key}
-                                            size="small"
-                                            label={member?.username ?? option.slice(PERSON_PREFIX.length)}
-                                            avatar={member?.avatar
-                                                ? <Avatar src={member.avatar} sx={{ width: 16, height: 16, fontSize: 10 }} />
-                                                : undefined}
-                                            {...tagProps}
-                                        />
-                                    );
-                                }
-                                return <FlagChip key={key} name={option} registry={book.flags} {...tagProps} />;
-                            })}
-                            renderInput={(params) => (
-                                <TextField
-                                    {...params} label="Filters"
-                                    placeholder={selectedFilters.length ? undefined : "Filter items"}
-                                />
-                            )}
+                        <ItemFilterSelect
+                            options={filterOptions}
+                            value={selectedFilters}
+                            onChange={setSelectedFilters}
+                            members={book.members}
+                            categories={book.categories}
+                            flags={book.flags}
                         />
-<TimePeriodFilter
+                        <TimePeriodFilter
                             mode={period} onModeChange={onPeriodChange}
                             quickPicks={itemQuickPicks()}
-                            /* A small Button is 30px and a small TextField is 40, so the
-                            row's default stretch was quietly sizing this to match - and
-                            stretching it to two lines tall whenever the filters wrapped.
-                            Pinned to the fields' height instead, so it matches them and
-                            stays put. */
-                            sx={{ height: 40, order: { xs: 3, sm: 0 } }}
+                            /* A small Button is 30px and a small TextField is 40, so
+                            without this the pill sits two thirds the height of Source
+                            beside it. Pinned to the fields' height, same as the filter
+                            button. */
+                            sx={{ height: 40 }}
                         />
-                        <Tooltip title="Export this view as CSV">
-                            {/* A span, because a disabled button fires no events and the
-                            tooltip would have nothing to listen to. */}
-                            <span style={{ order: 4 }}>
-                                <IconButton
-                                    size="small"
-                                    sx={{ height: 40, width: 40 }}
-                                    disabled={isExporting || items.length === 0}
-                                    onClick={async () => {
-                                        setIsExporting(true);
-                                        try {
-                                            await exportItemsCsv(book._id, filters, book.name);
-                                        } catch {
-                                            enqueueSnackbar("Could not export these items", { variant: "error" });
-                                        } finally {
-                                            setIsExporting(false);
-                                        }
-                                    }}
-                                >
-                                    <DownloadIcon fontSize="small" />
-                                </IconButton>
-                            </span>
-                        </Tooltip>
                     </Stack>
                     {!isLoading && <ItemsTotalsBar totals={totals} />}
                 </Stack>
