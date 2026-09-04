@@ -57,6 +57,12 @@ export const STARTER_CATEGORIES: { name: string; color: string }[] = [
   { name: "Pet Care", color: "#059669" },
   { name: "Travel", color: "#92400e" },
   { name: "Savings", color: "#10b981" },
+  // Where a savings goal's contributions land by default (see GoalForm). Kept apart from
+  // "Savings" so a monthly savings-minimum budget on that category measures the standing
+  // commitment on its own - putting both here would let an opportunistic top-up to a goal
+  // silently satisfy the every-month floor. A book that WANTS them counted together just
+  // lists both categories on the budget.
+  { name: "Savings Goals", color: "#14b8a6" },
   { name: "Payment", color: "#6366f1" },
   { name: "Income", color: "#22c55e" },
   { name: "Exchange", color: "#f59e0b" },

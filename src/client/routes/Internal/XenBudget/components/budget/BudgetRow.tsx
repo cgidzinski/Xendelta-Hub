@@ -48,7 +48,7 @@ export default function BudgetRow({
                         ))}
                     {budget.kind === "goal" && (
                         <Chip
-                            size="small" label="Savings goal"
+                            size="small" label="Savings minimum"
                             sx={{ height: 20, fontSize: 11, color: INCOME_COLOR, borderColor: INCOME_COLOR }}
                             variant="outlined"
                         />

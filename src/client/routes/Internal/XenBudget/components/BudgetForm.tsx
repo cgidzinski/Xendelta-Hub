@@ -94,7 +94,7 @@ export default function BudgetForm({
         [subs],
     );
     const allocated = validSubs.reduce((sum, s) => sum + parseFloat(s.amount), 0);
-    // Only a worry on a cap. Per-person targets adding up past a savings goal just means
+    // Only a worry on a cap. Per-person minimums adding up past a savings minimum means
     // the household would save more than it set out to, which is not a mistake.
     const overAllocated = kind === "cap" && numericAmount > 0 && allocated > numericAmount;
     const isGoal = kind === "goal";
@@ -162,11 +162,11 @@ export default function BudgetForm({
                             onChange={(_, v) => v && setKind(v as BudgetKind)}
                         >
                             <ToggleButton value="cap">Spending cap</ToggleButton>
-                            <ToggleButton value="goal">Savings goal</ToggleButton>
+                            <ToggleButton value="goal">Savings minimum</ToggleButton>
                         </ToggleButtonGroup>
                         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>
                             {isGoal
-                                ? "Money going into these categories counts toward the target. Reaching it is the point — going past it is better."
+                                ? "Money into these categories, every period. Falling short is the warning — going past it is better."
                                 : "Spending in these categories counts against the limit. Going past it is flagged."}
                         </Typography>
                     </Box>
@@ -185,14 +185,14 @@ export default function BudgetForm({
                     />
 
                     <TextField
-                        fullWidth label={isGoal ? "Overall target" : "Overall amount"} value={amount}
+                        fullWidth label={isGoal ? "Overall minimum" : "Overall amount"} value={amount}
                         onChange={(e) => {
                             const clean = sanitizeAmount(e.target.value);
                             if (clean !== null) setAmount(clean);
                         }}
                         helperText={[
                             isGoal
-                                ? "The target for everyone together. Leave empty to set targets only for the people below."
+                                ? "The minimum for everyone together. Leave empty to set minimums only for the people below."
                                 : "The limit for everyone together. Leave empty to cap only the people below.",
                             monthlyAmount !== undefined
                                 ? `≈ ${formatCurrency(monthlyAmount, currency)}/mo`
@@ -212,7 +212,7 @@ export default function BudgetForm({
 
                     <Box>
                         <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-                            {isGoal ? "Per-person targets" : "Per-person limits"}
+                            {isGoal ? "Per-person minimums" : "Per-person limits"}
                         </Typography>
                         <Stack spacing={1.5}>
                             {subs.map((sub, index) => (
@@ -289,7 +289,7 @@ export default function BudgetForm({
                         onChange={(e) => setPeriod(e.target.value as BudgetPeriod)}
                         helperText={[
                             isGoal
-                                ? "Per-person targets use this same period."
+                                ? "Per-person minimums use this same period."
                                 : "Per-person limits use this same period.",
                             previewWindowLabel ? `Current window: ${previewWindowLabel}` : undefined,
                         ].filter(Boolean).join(" · ")}

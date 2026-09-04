@@ -12,8 +12,7 @@ import { useXenBudgetRecurring } from "../../../hooks/xenbudget/useRecurring";
 import { CategoryChip } from "./components/LabelChip";
 import BudgetCard from "./components/budget/BudgetCard";
 import BudgetBar from "./components/budget/BudgetBar";
-import { limitCaption } from "./components/budget/budgetKind";
-import { goalProgress, sortGoals } from "./components/goals/goalProgress";
+import { goalCaption, goalProgress, sortGoals } from "./components/goals/goalProgress";
 import RecurringCard from "./components/recurring/RecurringCard";
 import { useRuleEditor } from "./components/rules/useRuleEditor";
 import ProjectionCard from "./components/budget/ProjectionCard";
@@ -77,7 +76,7 @@ export default function BookOverview() {
     const { columns: budgetColumns, measureRef } = useBalancedColumns(visibleBudgets, columnCount);
     // Counts every limit past its cap, the shared one and each person's, so the header
     // agrees with the red bars actually on screen rather than with the unfiltered book.
-    // Savings goals are counted separately and the other way up: passing one is the point.
+    // Savings minimums are counted separately and the other way up: passing one is the point.
     const overBudgetCount = visibleBudgets.reduce((sum, b) => sum + overCount(b), 0);
     const goalsMetCount = visibleBudgets.reduce((sum, b) => sum + metCount(b), 0);
     const asOf = budgetStatusResponse?.as_of ?? new Date().toISOString();
@@ -305,7 +304,7 @@ export default function BookOverview() {
                                         <Stack direction="row" alignItems="baseline" justifyContent="space-between" spacing={1} sx={{ mb: 0.5 }}>
                                             <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>{goal.name}</Typography>
                                             <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
-                                                {limitCaption("goal", remaining, percent, (v) => formatCurrency(v, goal.currency))}
+                                                {goalCaption(remaining, percent, (v) => formatCurrency(v, goal.currency))}
                                             </Typography>
                                         </Stack>
                                         <BudgetBar

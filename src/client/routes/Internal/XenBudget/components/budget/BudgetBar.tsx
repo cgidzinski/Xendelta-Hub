@@ -32,7 +32,7 @@ interface BudgetBarProps {
  * it readable for anyone who can't separate the two hues.
  *
  * Which colour that excess takes is the only thing direction changes here: past a cap is
- * a failure, past a savings goal is the point of the exercise.
+ * a failure, past a savings minimum is the point of the exercise.
  */
 export default function BudgetBar({
     spent, amount, percent, over, kind, color, height = 8, pace, label,

@@ -91,11 +91,11 @@ describe("limitCaption", () => {
     });
 
     it("celebrates a goal that went past its target", () => {
-        expect(limitCaption("goal", -60, 130, money)).toBe("$60 past goal · 130%");
+        expect(limitCaption("goal", -60, 130, money)).toBe("$60 past minimum · 130%");
     });
 
     it("reads a goal landing exactly on target as reached, not as owing nothing", () => {
-        expect(limitCaption("goal", 0, 100, money)).toBe("$0 past goal · 100%");
+        expect(limitCaption("goal", 0, 100, money)).toBe("$0 past minimum · 100%");
     });
 
     it("reads a cap spent exactly to the limit as nothing left, not as over", () => {
@@ -106,7 +106,7 @@ describe("limitCaption", () => {
 describe("limitNoun / aheadIsGood", () => {
     it("names the thing being measured", () => {
         expect(limitNoun("cap")).toBe("limit");
-        expect(limitNoun("goal")).toBe("goal");
+        expect(limitNoun("goal")).toBe("minimum");
     });
 
     it("knows that outrunning the pace is only good on a goal", () => {

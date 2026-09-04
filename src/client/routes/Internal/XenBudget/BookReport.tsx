@@ -338,7 +338,7 @@ export default function BookReport() {
             ] : []),
             [],
             summaryCsvRow("Savings — Save", categoryReport.summary.saved),
-            summaryCsvRow("Savings — Goal", categoryReport.summary.goals),
+            summaryCsvRow("Savings — Minimum", categoryReport.summary.goals),
             summaryCsvRow("Savings — Left to save", minusTotals(categoryReport.summary.goals, categoryReport.summary.saved)),
             summaryCsvRow("Budget — Spend", minusTotals(categoryReport.summary.capped, categoryReport.summary.capsLeft)),
             summaryCsvRow("Budget — Cap", categoryReport.summary.capped),

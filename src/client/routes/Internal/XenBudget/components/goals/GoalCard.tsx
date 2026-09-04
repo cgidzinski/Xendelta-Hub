@@ -12,11 +12,11 @@ import type {
 } from "../../../../../hooks/xenbudget/types";
 import { CategoryChip } from "../LabelChip";
 import BudgetBar from "../budget/BudgetBar";
-import { limitCaption, limitColor, limitState } from "../budget/budgetKind";
+import { limitColor, limitState } from "../budget/budgetKind";
 import { cardSx } from "../../../../../components/ui/surfaceStyles";
 import { INCOME_COLOR } from "../../../../../components/ui/chartColors";
 import { formatCurrency } from "../../currency";
-import { goalProgress } from "./goalProgress";
+import { goalCaption, goalProgress } from "./goalProgress";
 import ContributionList from "./ContributionList";
 
 interface GoalCardProps {
@@ -50,7 +50,7 @@ export default function GoalCard({
     // No pace: a savings goal has no deadline to fall behind, so there is nothing to
     // compare progress against but the target itself.
     const state = limitState("goal", percent);
-    const caption = limitCaption("goal", remaining, percent, (v) => formatCurrency(v, goal.currency));
+    const caption = goalCaption(remaining, percent, (v) => formatCurrency(v, goal.currency));
     const closed = goal.status !== "active";
 
     const closeMenu = () => setMenuAnchor(null);

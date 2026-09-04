@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { goalProgress, sortGoals, goalTotals } from "./goalProgress";
+import { goalProgress, goalCaption, sortGoals, goalTotals } from "./goalProgress";
 import type { XenBudgetSavingsGoal } from "../../../../../hooks/xenbudget/types";
 
 function goal(over: Partial<XenBudgetSavingsGoal> = {}): XenBudgetSavingsGoal {
@@ -42,6 +42,24 @@ describe("goalProgress", () => {
 
     it("rounds remaining to cents rather than carrying float drift", () => {
         expect(goalProgress(0.1, 0.3).remaining).toBe(0.2);
+    });
+});
+
+describe("goalCaption", () => {
+    const money = (v: number) => `$${v}`;
+
+    it("says what is still owed while the target is short", () => {
+        expect(goalCaption(15500, 23, money)).toBe("$15500 to go · 23%");
+    });
+
+    it("says TARGET, not minimum - the word the budget floor uses", () => {
+        // The whole reason this lives here and not in budgetKind: renaming the budget's
+        // wording must never retitle a savings goal's card.
+        expect(goalCaption(-1000, 105, money)).toBe("$1000 past target · 105%");
+    });
+
+    it("reads exactly on target as past it, not as still owing", () => {
+        expect(goalCaption(0, 100, money)).toBe("$0 past target · 100%");
     });
 });
 

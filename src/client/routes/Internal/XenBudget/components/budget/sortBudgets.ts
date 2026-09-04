@@ -19,7 +19,7 @@ function percents(budget: BudgetStatus): number[] {
  *
  * For a cap that is simply the highest percentage in it. For a goal it has to be
  * inverted - a goal at 20% is the one in trouble and a goal at 120% is done - so the
- * *lowest* progress becomes the highest concern. Without this a savings goal would sort
+ * *lowest* progress becomes the highest concern. Without this a savings minimum would sort
  * as if being nearly unfunded were the safest possible state.
  */
 export function troublePercent(budget: BudgetStatus): number {
@@ -39,7 +39,7 @@ export function worstPercent(budget: BudgetStatus): number {
 
 /**
  * Whether a CAP has been breached - never a goal, where passing the amount is the point.
- * This is what the Overview header counts, so a well-funded savings goal can't show up as
+ * This is what the Overview header counts, so a well-funded savings minimum can't show up as
  * a problem.
  */
 export function isOverCap(budget: BudgetStatus): boolean {
@@ -69,7 +69,7 @@ export function budgetLabel(budget: BudgetStatus): string {
  * Sorting purely by percentage would reshuffle the list every time a purchase lands, so
  * budgets are bucketed - in trouble, close to it, fine - and ordered by name inside each
  * bucket. What needs attention rises to the top; everything else stays where the reader
- * last saw it. A savings goal joins the same bands read the right way up: badly behind is
+ * last saw it. A savings minimum joins the same bands read the right way up: badly behind is
  * trouble, nearly there is fine, and met is the best state rather than the worst.
  */
 export function sortBudgets(budgets: BudgetStatus[]): BudgetStatus[] {

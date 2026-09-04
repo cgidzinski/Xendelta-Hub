@@ -226,7 +226,7 @@ export default function BudgetCard({
                 <Box sx={{ ...cardSx, mt: 1.5, p: 1.25 }}>
                     <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
                         {budget.kind === "goal"
-                            ? (budget.amount === undefined ? "Per-person targets" : "Per-person sub targets")
+                            ? (budget.amount === undefined ? "Per-person minimums" : "Per-person sub minimums")
                             : (budget.amount === undefined ? "Per-person limits" : "Per-person sub limits")}
                     </Typography>
                     <Stack spacing={1.25}>

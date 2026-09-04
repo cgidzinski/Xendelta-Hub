@@ -8,8 +8,15 @@ import type { XenBudgetBook, GoalInput, XenBudgetSavingsGoal } from "../../../..
 import { getCurrencySymbol } from "../../currency";
 import { sanitizeAmount } from "../../../../../utils/currencyUtils";
 
-/** The category a new goal's transactions default to, when the book still has it. */
-const DEFAULT_CATEGORY = "Savings";
+/**
+ * The categories a new goal's transactions default to, best first.
+ *
+ * "Savings Goals" is the one seeded for this; "Savings" is the fallback for a book made
+ * before it existed and not re-seeded since (Settings - General - re-seed adds it). Without
+ * that fallback an older book would default to nothing and quietly file contributions as
+ * uncategorised.
+ */
+const DEFAULT_CATEGORIES = ["Savings Goals", "Savings"];
 
 interface GoalFormProps {
     open: boolean;
@@ -51,7 +58,8 @@ export default function GoalForm({
             // book precisely so savings has somewhere to land, and a goal with no category
             // silently books its transactions as uncategorised.
             setCategory(
-                book.categories.some((c) => c.name === DEFAULT_CATEGORY) ? DEFAULT_CATEGORY : null,
+                DEFAULT_CATEGORIES.find((name) => book.categories.some((c) => c.name === name))
+                ?? null,
             );
         }
     }, [open, goal, book]);
@@ -113,7 +121,7 @@ export default function GoalForm({
                         renderInput={(params) => (
                             <TextField
                                 {...params} label="Category"
-                                helperText="Used when a contribution is also recorded as a transaction."
+                                helperText="Tags the transactions a contribution creates. A savings minimum on this category counts them."
                             />
                         )}
                     />

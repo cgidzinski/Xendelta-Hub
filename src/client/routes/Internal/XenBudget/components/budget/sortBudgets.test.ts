@@ -98,12 +98,12 @@ describe("sortBudgets", () => {
     });
 });
 
-describe("savings goals", () => {
+describe("savings minimums", () => {
     const goal = (patch: Partial<BudgetStatus> = {}) =>
         budget({ kind: "goal", categories: ["Savings"], ...patch });
 
     it("reads a goal's trouble upside down from a cap's", () => {
-        // 20% of a cap is comfortable; 20% of a savings goal is the one to worry about.
+        // 20% of a cap is comfortable; 20% of a savings minimum is the one to worry about.
         expect(troublePercent(budget({ percent: 20 }))).toBe(20);
         expect(troublePercent(goal({ percent: 20 }))).toBe(80);
     });

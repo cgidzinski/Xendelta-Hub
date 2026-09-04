@@ -29,6 +29,24 @@ export function goalProgress(saved: number, target: number): GoalProgress {
     };
 }
 
+/**
+ * The line under a goal's bar.
+ *
+ * Deliberately NOT budgetKind's limitCaption, which the goal cards used to call with
+ * kind="goal". That function serves the budget floor as well, and the two want different
+ * nouns: a floor on a category is a MINIMUM, a floor on a named fund is a TARGET. Sharing
+ * one formatter meant renaming the budget's wording silently retitled these cards. The
+ * direction logic (limitState, limitColor, BudgetBar) is still shared - it is the words
+ * that are not common, not the maths.
+ */
+export function goalCaption(
+    remaining: number, percent: number, money: (v: number) => string,
+): string {
+    return remaining > 0
+        ? `${money(remaining)} to go · ${percent}%`
+        : `${money(-remaining)} past target · ${percent}%`;
+}
+
 /** Active first, then completed, then archived - a finished goal isn't what you came for. */
 const STATUS_ORDER: Record<GoalStatus, number> = { active: 0, completed: 1, archived: 2 };
 
