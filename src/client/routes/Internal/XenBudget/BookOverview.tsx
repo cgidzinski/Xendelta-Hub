@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import {
-    Avatar, Box, Card, Link, MenuItem, Stack, TextField, Typography, useMediaQuery,
+    Avatar, Box, Button, Card, Link, MenuItem, Stack, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import InsightsIcon from "@mui/icons-material/Insights";
+import SavingsIcon from "@mui/icons-material/Savings";
 import type { BookDetailContext } from "./BookDetail";
 import { useXenBudgetSummary } from "../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../hooks/xenbudget/useBudgets";
@@ -150,11 +151,22 @@ export default function BookOverview() {
                             {summary.currencies.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
                         </TextField>
                     )}
-                    <TimePeriodFilter
-                        mode={period} onModeChange={onPeriodChange}
-                        quickPicks={summaryQuickPicks()}
-                        sx={{ alignSelf: "flex-end" }}
-                    />
+                    {/* Goals on the left, the period on the right. Goals is somewhere you
+                    GO — it is not scoped to the window this page is showing — so it sits
+                    apart from the control that changes that window rather than beside it. */}
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                        <Button
+                            size="small" variant="outlined" startIcon={<SavingsIcon />}
+                            onClick={() => navigate(`/internal/xenbudget/books/${book._id}/goals`)}
+                        >
+                            Savings goals
+                        </Button>
+                        <Box sx={{ flexGrow: 1 }} />
+                        <TimePeriodFilter
+                            mode={period} onModeChange={onPeriodChange}
+                            quickPicks={summaryQuickPicks()}
+                        />
+                    </Stack>
                 </Stack>
             </Box>
 

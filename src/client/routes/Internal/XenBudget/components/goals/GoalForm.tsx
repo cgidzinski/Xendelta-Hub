@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import {
     Autocomplete, Button, Dialog, DialogActions, DialogContent, DialogTitle,
-    InputAdornment, MenuItem, Stack, TextField, useMediaQuery,
+    InputAdornment, Stack, TextField, useMediaQuery,
 } from "@mui/material";
 import { useSnackbar } from "notistack";
 import type { XenBudgetBook, GoalInput, XenBudgetSavingsGoal } from "../../../../../hooks/xenbudget/types";
 import { getCurrencySymbol } from "../../currency";
-import { sanitizeAmount, ALL_CURRENCIES, STABLE_CURRENCY_MENU_PROPS } from "../../../../../utils/currencyUtils";
+import { sanitizeAmount } from "../../../../../utils/currencyUtils";
 
 /** The category a new goal's transactions default to, when the book still has it. */
 const DEFAULT_CATEGORY = "Savings";
@@ -29,8 +29,12 @@ export default function GoalForm({
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
     const [target, setTarget] = useState("");
-    const [currency, setCurrency] = useState(book.default_currency);
     const [category, setCategory] = useState<string | null>(null);
+
+    // A goal is denominated in the book's currency, not picked per goal: a book keeps one
+    // default, and an existing goal keeps whatever it was stamped with, since the money
+    // already saved was saved in that.
+    const currency = goal?.currency ?? book.default_currency;
 
     useEffect(() => {
         if (!open) return;
@@ -38,13 +42,11 @@ export default function GoalForm({
             setName(goal.name);
             setDescription(goal.description || "");
             setTarget(String(goal.target_amount));
-            setCurrency(goal.currency);
             setCategory(goal.category || null);
         } else {
             setName("");
             setDescription("");
             setTarget("");
-            setCurrency(book.default_currency);
             // Pre-picked rather than left blank: the starter category is seeded into every
             // book precisely so savings has somewhere to land, and a goal with no category
             // silently books its transactions as uncategorised.
@@ -63,7 +65,6 @@ export default function GoalForm({
                 name: name.trim(),
                 description: description.trim() || undefined,
                 target_amount: numericTarget,
-                currency,
                 category: category || undefined,
             });
             onClose();
@@ -89,32 +90,22 @@ export default function GoalForm({
                         slotProps={{ htmlInput: { maxLength: 500 } }}
                         helperText="Optional — what you're saving for."
                     />
-                    <Stack direction="row" spacing={1}>
-                        <TextField
-                            fullWidth label="Target" value={target}
-                            onChange={(e) => {
-                                const clean = sanitizeAmount(e.target.value);
-                                if (clean !== null) setTarget(clean);
-                            }}
-                            slotProps={{
-                                input: {
-                                    startAdornment: (
-                                        <InputAdornment position="start">
-                                            {getCurrencySymbol(currency)}
-                                        </InputAdornment>
-                                    ),
-                                },
-                            }}
-                        />
-                        <TextField
-                            select label="Currency" value={currency}
-                            onChange={(e) => setCurrency(e.target.value)}
-                            sx={{ width: 110, flexShrink: 0 }}
-                            slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
-                        >
-                            {ALL_CURRENCIES.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-                        </TextField>
-                    </Stack>
+                    <TextField
+                        fullWidth label="Target" value={target}
+                        onChange={(e) => {
+                            const clean = sanitizeAmount(e.target.value);
+                            if (clean !== null) setTarget(clean);
+                        }}
+                        slotProps={{
+                            input: {
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        {getCurrencySymbol(currency)}
+                                    </InputAdornment>
+                                ),
+                            },
+                        }}
+                    />
                     <Autocomplete
                         options={book.categories.map((c) => c.name)}
                         value={category}

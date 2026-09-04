@@ -8,16 +8,21 @@ describe("top-level tab matching", () => {
     it("selects the tab for a plain tab URL", () => {
         expect(activeIndex(`${base}/overview`, TAB_PATHS)).toBe(0);
         expect(activeIndex(`${base}/items`, TAB_PATHS)).toBe(1);
-        expect(activeIndex(`${base}/goals`, TAB_PATHS)).toBe(2);
-        expect(activeIndex(`${base}/report`, TAB_PATHS)).toBe(3);
-        expect(activeIndex(`${base}/settings`, TAB_PATHS)).toBe(4);
+        expect(activeIndex(`${base}/report`, TAB_PATHS)).toBe(2);
+        expect(activeIndex(`${base}/settings`, TAB_PATHS)).toBe(3);
+    });
+
+    it("leaves every tab unselected on the goals page, which is not a tab", () => {
+        // Reached from a button on the Overview, so the bar has nothing to highlight -
+        // and MUI wants `false` for that, not the -1 a bare findIndex would give.
+        expect(activeIndex(`${base}/goals`, TAB_PATHS)).toBe(false);
     });
 
     it("keeps Settings selected while inside any of its sections", () => {
         // The regression this file exists for: a suffix match returns nothing here, and
         // the tab bar renders with no tab highlighted.
         for (const section of sectionPaths) {
-            expect(activeIndex(`${base}/settings/${section}`, TAB_PATHS)).toBe(4);
+            expect(activeIndex(`${base}/settings/${section}`, TAB_PATHS)).toBe(3);
         }
     });
 

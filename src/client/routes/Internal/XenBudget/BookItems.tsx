@@ -303,6 +303,11 @@ export default function BookItems() {
                             members={book.members}
                             categories={book.categories}
                             flags={book.flags}
+                            /* Takes whatever the two fixed-width neighbours leave, so the
+                            row has no ragged gap in the middle. It still never shrinks
+                            below its summary (flexShrink stays 0 in the component), which
+                            is what keeps the three on one line on a phone. */
+                            sx={{ flexGrow: 1 }}
                         />
                         <TimePeriodFilter
                             mode={period} onModeChange={onPeriodChange}

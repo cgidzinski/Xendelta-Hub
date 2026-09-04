@@ -5,7 +5,6 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import InsightsIcon from "@mui/icons-material/Insights";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-import SavingsIcon from "@mui/icons-material/Savings";
 import SettingsIcon from "@mui/icons-material/Settings";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
@@ -186,7 +185,6 @@ export default function BookDetail() {
                 >
                     <Tab icon={<InsightsIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Overview"} aria-label="Overview" />
                     <Tab icon={<ReceiptLongIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Items"} aria-label="Items" />
-                    <Tab icon={<SavingsIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Goals"} aria-label="Goals" />
                     <Tab icon={<BarChartIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Report"} aria-label="Report" />
                     <Tab icon={<SettingsIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Settings"} aria-label="Settings" />
                 </Tabs>

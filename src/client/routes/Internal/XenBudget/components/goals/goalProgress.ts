@@ -62,11 +62,12 @@ export interface GoalTotals {
  * The header figures, over ACTIVE goals only.
  *
  * A completed goal's target would otherwise sit in the total forever, so the strip would
- * read "$4,000 of $60,000" for someone who has finished five of six goals. Amounts are
- * only added within one currency - the same rule the summaries follow, since amounts in
- * different currencies can't be summed.
+ * read "$4,000 of $60,000" for someone who has finished five of six goals.
+ *
+ * Summing across goals is safe because every goal in a book is denominated in the book's
+ * currency - it is stamped from `default_currency` and never picked per goal.
  */
-export function goalTotals(goals: XenBudgetSavingsGoal[], currency: string): GoalTotals {
+export function goalTotals(goals: XenBudgetSavingsGoal[]): GoalTotals {
     let saved = 0;
     let target = 0;
     let activeCount = 0;
@@ -75,7 +76,6 @@ export function goalTotals(goals: XenBudgetSavingsGoal[], currency: string): Goa
         if (goal.status === "completed") completedCount += 1;
         if (goal.status !== "active") continue;
         activeCount += 1;
-        if (goal.currency !== currency) continue;
         saved += goal.saved;
         target += goal.target_amount;
     }

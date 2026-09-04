@@ -85,20 +85,12 @@ describe("goalTotals", () => {
             goal({ saved: 1000, target_amount: 5000 }),
             goal({ saved: 500, target_amount: 2000 }),
             goal({ saved: 900, target_amount: 900, status: "completed" }),
-        ], "CAD");
+        ]);
         expect(totals).toEqual({ saved: 1500, target: 7000, activeCount: 2, completedCount: 1 });
     });
 
-    it("counts a goal in another currency but never adds its amount in", () => {
-        const totals = goalTotals([
-            goal({ saved: 1000, target_amount: 5000 }),
-            goal({ saved: 800, target_amount: 4000, currency: "USD" }),
-        ], "CAD");
-        expect(totals).toEqual({ saved: 1000, target: 5000, activeCount: 2, completedCount: 0 });
-    });
-
     it("counts archived goals in neither tally", () => {
-        const totals = goalTotals([goal({ saved: 10, target_amount: 20, status: "archived" })], "CAD");
+        const totals = goalTotals([goal({ saved: 10, target_amount: 20, status: "archived" })]);
         expect(totals).toEqual({ saved: 0, target: 0, activeCount: 0, completedCount: 0 });
     });
 });

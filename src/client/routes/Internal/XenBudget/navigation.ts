@@ -5,8 +5,16 @@
  * wrong and the tab bar simply shows nothing selected, with no error to notice.
  */
 
-/** Top-level tabs, in the order they render. */
-export const TAB_PATHS = ["overview", "items", "goals", "report", "settings"] as const;
+/**
+ * Top-level tabs, in the order they render.
+ *
+ * Savings goals are deliberately NOT here. They are reached from a button on the Overview
+ * instead: a fifth tab crowded the bar (on a phone the labels drop to icons alone), and
+ * goals are somewhere you go now and then rather than one of the views you switch between.
+ * /goals is still a real route, so it deep-links and the back button works — it just
+ * leaves no tab selected, which is why it carries its own way back to the Overview.
+ */
+export const TAB_PATHS = ["overview", "items", "report", "settings"] as const;
 
 /** Settings sections, in the order they render. */
 export const SETTINGS_SECTIONS = [
