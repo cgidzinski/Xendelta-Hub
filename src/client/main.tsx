@@ -89,6 +89,7 @@ import XenBudgetBooksList from "./routes/Internal/XenBudget/BooksList";
 import XenBudgetBookDetail from "./routes/Internal/XenBudget/BookDetail";
 import XenBudgetBookOverview from "./routes/Internal/XenBudget/BookOverview";
 import XenBudgetBookItems from "./routes/Internal/XenBudget/BookItems";
+import XenBudgetBookGoals from "./routes/Internal/XenBudget/BookGoals";
 import XenBudgetBookReport from "./routes/Internal/XenBudget/BookReport";
 import XenBudgetBookSettings from "./routes/Internal/XenBudget/BookSettings";
 import XenBudgetGeneralSection from "./routes/Internal/XenBudget/settings/GeneralSection";
@@ -245,6 +246,7 @@ const router = createBrowserRouter(
             <Route index element={<Navigate to="overview" replace />} />
             <Route path="overview" element={<XenBudgetBookOverview />} />
             <Route path="items" element={<XenBudgetBookItems />} />
+            <Route path="goals" element={<XenBudgetBookGoals />} />
             <Route path="report" element={<XenBudgetBookReport />} />
             <Route path="settings" element={<XenBudgetBookSettings />}>
               <Route index element={<Navigate to="general" replace />} />

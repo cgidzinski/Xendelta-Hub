@@ -56,6 +56,81 @@ export interface XenBudgetBudget {
     active: boolean;
 }
 
+/**
+ * One movement in or out of a savings goal.
+ *
+ * `amount` is SIGNED - positive put money in, negative took it back out - so a goal's
+ * balance is a plain sum of its ledger. Requests send a positive amount plus a direction
+ * instead (see ContributionInput); the sign is the server's.
+ */
+export interface XenBudgetGoalContribution {
+    _id: string;
+    amount: number;
+    date: string;
+    note?: string;
+    /** Who moved it. */
+    user_id: string;
+    /** The book item this contribution also created, when it was recorded as one. */
+    item_id?: string;
+    created_at: string;
+}
+
+export type GoalStatus = "active" | "completed" | "archived";
+
+/**
+ * A thing being saved FOR: a new car, a trip.
+ *
+ * Distinct from a budget of kind "goal", which is a per-period floor on a category and
+ * forgets everything once the period rolls over. A savings goal carries its own ledger, so
+ * its balance accumulates across months and "how close am I?" has an answer.
+ */
+export interface XenBudgetSavingsGoal {
+    _id: string;
+    name: string;
+    description?: string;
+    target_amount: number;
+    /** Amounts in different currencies can't be added, so a goal is in exactly one. */
+    currency: string;
+    /** Which category a mirrored transaction is tagged with, if the goal names one. */
+    category?: string;
+    status: GoalStatus;
+    completed_at?: string;
+    /** Server-computed: the signed sum of the ledger. Always present, list view included. */
+    saved: number;
+    contribution_count: number;
+    last_contribution_at?: string;
+    /** Who put it in, biggest first. */
+    by_person: { user_id: string; amount: number }[];
+    /**
+     * The ledger itself. Present on the single-book endpoint only - the books LIST omits
+     * it, since no screen there draws a contribution. Read `saved` for the balance rather
+     * than summing this, which would report every goal as empty on that list.
+     */
+    contributions?: XenBudgetGoalContribution[];
+    created_by: string;
+    created_at: string;
+}
+
+export interface GoalInput {
+    name?: string;
+    description?: string;
+    target_amount?: number;
+    currency?: string;
+    category?: string;
+    status?: GoalStatus;
+}
+
+export interface ContributionInput {
+    /** Always positive; `direction` carries the sign. */
+    amount: number;
+    /** Omitted means money going in. */
+    direction?: "in" | "out";
+    date?: string;
+    note?: string;
+    /** Also write a matching book item, so the money shows in the book's cash flow. */
+    record_item?: boolean;
+}
+
 export type RuleField =
     | "description" | "amount" | "flags" | "category" | "type" | "date" | "source";
 export type RuleOp =
@@ -106,6 +181,7 @@ export interface XenBudgetBook {
     categories: XenBudgetLabel[];
     flags: XenBudgetLabel[];
     budgets: XenBudgetBudget[];
+    savings_goals: XenBudgetSavingsGoal[];
     rules: XenBudgetRule[];
     import_presets: XenBudgetImportPreset[];
     archived: boolean;

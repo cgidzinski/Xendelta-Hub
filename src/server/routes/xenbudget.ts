@@ -16,6 +16,12 @@ import {
   updateXenBudgetLabelSchema,
   createXenBudgetBudgetSchema,
   updateXenBudgetBudgetSchema,
+  createXenBudgetGoalSchema,
+  updateXenBudgetGoalSchema,
+  createXenBudgetContributionSchema,
+  updateXenBudgetContributionSchema,
+  xenBudgetGoalParamSchema,
+  xenBudgetContributionParamSchema,
   xenBudgetBookIdParamSchema,
   xenBudgetItemParamSchema,
   xenBudgetItemImageParamSchema,
@@ -53,6 +59,7 @@ import {
 } from "../utils/xenBudgetRecurring";
 import { coverageByMerchant } from "../utils/xenBudgetCoverage";
 import { serializeBookFor, serializeBooksFor, serializeItem, serializeItems } from "../utils/xenBudgetSerializer";
+import { summarizeGoal } from "../utils/xenBudgetGoals";
 import { notify } from "../utils/notificationUtils";
 import { csvLine } from "../utils/csvWriter";
 const mongoose = require("mongoose");
@@ -286,6 +293,20 @@ function remapBudgets(budgets: any[], idMap: Map<string, string>): any[] {
   }));
 }
 
+// A goal's ledger records WHO moved each amount, so those ids are walked too. The link to
+// the book item is dropped rather than remapped: restored items are inserted fresh, so an
+// id carried over from the source deployment would point at nothing here - or, worse, at
+// something else entirely, which a later delete would take with it.
+function remapGoals(goals: any[], idMap: Map<string, string>): any[] {
+  return goals.map((g: any) => ({
+    ...g,
+    contributions: (g.contributions || []).map((c: any) => {
+      const { _id, item_id, ...rest } = c || {};
+      return { ...rest, user_id: remapUser(c.user_id, idMap) };
+    }),
+  }));
+}
+
 function remapRules(rules: any[], idMap: Map<string, string>): any[] {
   return rules.map((r: any) => ({
     ...r,
@@ -304,6 +325,7 @@ async function applyConfig(book: any, payload: any, idMap: Map<string, string>):
   book.flags = mergeLabelsByName(book.flags, payload.book.flags);
   ensureSystemLabels(book);
   book.budgets = remapBudgets(stripIds(payload.book.budgets), idMap);
+  book.savings_goals = remapGoals(stripIds(payload.book.savings_goals), idMap);
   book.rules = remapRules(stripIds(payload.book.rules), idMap);
   book.import_presets = stripIds(payload.book.import_presets);
   await book.save();
@@ -858,6 +880,95 @@ function resolveBatchLabel(batch: any, book: any): string | undefined {
   }
   return batch.source_label || undefined;
 }
+
+// --- Savings goals ----------------------------------------------------------
+
+// A goal's category has to exist in this book, for the same reason a budget's target
+// does: a name nothing else uses would tag every mirrored transaction into a category
+// that appears in no report and no budget.
+function validateGoalCategory(body: any, book: any): string | null {
+  if (!body.category) return null;
+  const known = (book.categories || []).some((c: any) => c.name === body.category);
+  return known ? null : "That category is not in this book";
+}
+
+// Only the fields the request actually carried, so the card's small edits (Mark complete,
+// Archive) can PUT a status on its own without resending a goal they never loaded whole.
+function toGoalFields(body: any, book: any, existing?: any): Record<string, any> {
+  const fields: Record<string, any> = {};
+  if (body.name !== undefined) fields.name = body.name;
+  if (body.description !== undefined) fields.description = body.description;
+  if (body.target_amount !== undefined) fields.target_amount = roundMoney(body.target_amount);
+  if (body.currency !== undefined) fields.currency = body.currency;
+  if (body.category !== undefined) fields.category = body.category;
+  if (body.status !== undefined) {
+    fields.status = body.status;
+    // Stamped when the goal is marked done and cleared when it is reopened, so a card can
+    // say WHEN it landed rather than only that it did.
+    if (body.status === "completed") {
+      fields.completed_at = existing?.completed_at || new Date();
+    } else {
+      fields.completed_at = undefined;
+    }
+  }
+  if (!existing) {
+    fields.currency = fields.currency || book.default_currency;
+    fields.status = fields.status || "active";
+  }
+  return fields;
+}
+
+/**
+ * The book item that mirrors a contribution, when one was asked for.
+ *
+ * Money put into a goal has LEFT the account it was sitting in, so it books as an expense;
+ * a withdrawal brings it back and books as income. Auto-tagging rules are deliberately not
+ * run over it - the goal already decides what this money is, and a rule re-tagging it
+ * would file the car fund under groceries.
+ */
+async function createGoalItem(
+  book: any, goal: any, userId: string, magnitude: number, out: boolean, date: Date, note?: string,
+): Promise<any> {
+  const description = note || `${out ? "From savings" : "Savings"}: ${goal.name}`;
+  const item = new XenBudgetItem({
+    book_id: book._id,
+    type: out ? "income" : "expense",
+    amount: magnitude,
+    currency: goal.currency || book.default_currency,
+    date,
+    description,
+    categories: goal.category ? evenCategoryWeights([goal.category], magnitude) : [],
+    category_split_type: "equal",
+    // Attributed to whoever moved the money, the same way the goal's own per-person
+    // breakdown is.
+    ...buildShares(
+      { amount: magnitude, share_type: "exact", shares: [{ user_id: userId, amount: magnitude }] },
+      book,
+    ),
+    source: "manual",
+    // A re-apply sweep skips hand-edited items, which is exactly what this is: the goal
+    // decided its category, and a later sweep must not move it somewhere else.
+    manually_edited: true,
+    import_hash: computeImportHash(date, magnitude, description),
+    created_by: userId,
+  });
+  await item.save();
+  return item;
+}
+
+/** The item a contribution created, if it still exists. */
+async function linkedItem(book: any, contribution: any): Promise<any | null> {
+  if (!contribution.item_id) return null;
+  return XenBudgetItem.findOne({ _id: contribution.item_id, book_id: book._id });
+}
+
+async function saveAndRespondGoals(req: Request, res: Response, book: any, message: string) {
+  await book.save();
+  await book.populate("members", "username avatar");
+  broadcastBook(book);
+  res.json({ status: true, message, data: serializeBookFor(book, callerId(req)) });
+}
+
 
 module.exports = function (app: any) {
   // Auth for every XenBudget route
@@ -1453,6 +1564,7 @@ module.exports = function (app: any) {
           categories: book.categories,
           flags: book.flags,
           budgets: book.budgets,
+          savings_goals: book.savings_goals,
           rules: book.rules,
           import_presets: book.import_presets,
           // Both id and username: the id is exact when the same users still exist, and
@@ -1500,6 +1612,7 @@ module.exports = function (app: any) {
           categories: stripIds(payload.book.categories),
           flags: stripIds(payload.book.flags),
           budgets: remapBudgets(stripIds(payload.book.budgets), idMap),
+          savings_goals: remapGoals(stripIds(payload.book.savings_goals), idMap),
           rules: remapRules(stripIds(payload.book.rules), idMap),
           import_presets: stripIds(payload.book.import_presets),
         });
@@ -1951,6 +2064,206 @@ module.exports = function (app: any) {
       } catch (error) {
         console.error("Error deleting budget:", error);
         res.status(500).json({ status: false, message: "Failed to delete budget" });
+      }
+    });
+
+  // --- Savings goals -------------------------------------------------------
+  //
+  // A savings goal is a thing being saved FOR, with its own ledger: unlike a budget of
+  // kind "goal" - a per-period floor that forgets everything when the period rolls over -
+  // its balance accumulates, so "how close am I to the new car?" has an answer. Every
+  // route here answers with the whole book, the way the budget routes do, so one response
+  // refreshes the client and one socket broadcast reaches everyone else in the book.
+
+  app.post("/api/xenbudget/books/:bookId/goals",
+    validateParams(xenBudgetBookIdParamSchema), validate(createXenBudgetGoalSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const error = validateGoalCategory(req.body, book);
+        if (error) return res.status(400).json({ status: false, message: error });
+
+        book.savings_goals.push({
+          ...toGoalFields(req.body, book),
+          created_by: callerId(req),
+        });
+        await saveAndRespondGoals(req, res, book, "Goal created");
+      } catch (error) {
+        console.error("Error creating goal:", error);
+        res.status(500).json({ status: false, message: "Failed to create goal" });
+      }
+    });
+
+  app.put("/api/xenbudget/books/:bookId/goals/:goalId",
+    validateParams(xenBudgetGoalParamSchema), validate(updateXenBudgetGoalSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const goal = book.savings_goals.id(req.params.goalId);
+        if (!goal) return res.status(404).json({ status: false, message: "Goal not found" });
+        const error = validateGoalCategory(req.body, book);
+        if (error) return res.status(400).json({ status: false, message: error });
+
+        Object.assign(goal, toGoalFields(req.body, book, goal));
+        await saveAndRespondGoals(req, res, book, "Goal updated");
+      } catch (error) {
+        console.error("Error updating goal:", error);
+        res.status(500).json({ status: false, message: "Failed to update goal" });
+      }
+    });
+
+  // Deleting a goal takes its ledger but LEAVES the transactions it created: those are
+  // real money movements that already happened, and silently removing a year of them
+  // because a target was abandoned would rewrite the book's history.
+  app.delete("/api/xenbudget/books/:bookId/goals/:goalId",
+    validateParams(xenBudgetGoalParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const goal = book.savings_goals.id(req.params.goalId);
+        if (!goal) return res.status(404).json({ status: false, message: "Goal not found" });
+
+        // Counted rather than inferred from the ledger: an item may have been deleted
+        // from the Items tab since, and promising to leave one behind that isn't there
+        // any more would be a lie in the only message the user gets about it.
+        const linkedIds = (goal.contributions || []).map((c: any) => c.item_id).filter(Boolean);
+        const kept = linkedIds.length === 0 ? 0 : await XenBudgetItem.countDocuments({
+          _id: { $in: linkedIds }, book_id: book._id,
+        });
+        book.savings_goals.pull({ _id: goal._id });
+        await saveAndRespondGoals(req, res, book, kept > 0
+          ? `Goal deleted — ${kept} transaction${kept === 1 ? "" : "s"} left in the book`
+          : "Goal deleted");
+      } catch (error) {
+        console.error("Error deleting goal:", error);
+        res.status(500).json({ status: false, message: "Failed to delete goal" });
+      }
+    });
+
+  // POST .../goals/:goalId/contributions - put money in, or take it back out
+  //
+  // `amount` is always positive and `direction` carries the sign, so a "contribute"
+  // button can't subtract by sending a minus. `record_item` additionally writes the
+  // matching book item; see createGoalItem for why it books the way round it does.
+  app.post("/api/xenbudget/books/:bookId/goals/:goalId/contributions",
+    validateParams(xenBudgetGoalParamSchema), validate(createXenBudgetContributionSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const goal = book.savings_goals.id(req.params.goalId);
+        if (!goal) return res.status(404).json({ status: false, message: "Goal not found" });
+
+        const userId = callerId(req);
+        const magnitude = roundMoney(req.body.amount);
+        const out = req.body.direction === "out";
+        // A goal that owes money is a balance nobody can act on, so a withdrawal is capped
+        // at what is actually in there rather than allowed to go negative.
+        if (out && magnitude > summarizeGoal(goal).saved) {
+          return res.status(400).json({ status: false, message: "That's more than this goal holds" });
+        }
+        const date = bookDateToUtc(req.body.date || new Date());
+
+        let item = null;
+        if (req.body.record_item) {
+          try {
+            item = await createGoalItem(book, goal, userId, magnitude, out, date, req.body.note);
+          } catch (e: any) {
+            return res.status(400).json({ status: false, message: e.message });
+          }
+        }
+
+        goal.contributions.push({
+          amount: out ? -magnitude : magnitude,
+          date,
+          note: req.body.note,
+          user_id: userId,
+          item_id: item ? item._id : undefined,
+        });
+        await saveAndRespondGoals(req, res, book, out ? "Withdrawn" : "Contribution added");
+      } catch (error) {
+        console.error("Error adding contribution:", error);
+        res.status(500).json({ status: false, message: "Failed to add contribution" });
+      }
+    });
+
+  // Editing a contribution keeps its linked transaction in step, so the two can never
+  // disagree about what moved. Its DIRECTION is fixed: a deposit that becomes a withdrawal
+  // is a different movement, and turning one into the other in place would leave the
+  // linked item booked the wrong way round.
+  app.put("/api/xenbudget/books/:bookId/goals/:goalId/contributions/:contributionId",
+    validateParams(xenBudgetContributionParamSchema), validate(updateXenBudgetContributionSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const goal = book.savings_goals.id(req.params.goalId);
+        if (!goal) return res.status(404).json({ status: false, message: "Goal not found" });
+        const contribution = goal.contributions.id(req.params.contributionId);
+        if (!contribution) {
+          return res.status(404).json({ status: false, message: "Contribution not found" });
+        }
+
+        const out = contribution.amount < 0;
+        const magnitude = req.body.amount === undefined
+          ? Math.abs(contribution.amount)
+          : roundMoney(req.body.amount);
+        if (out) {
+          const otherSaved = summarizeGoal(goal).saved + Math.abs(contribution.amount);
+          if (magnitude > otherSaved) {
+            return res.status(400).json({ status: false, message: "That's more than this goal holds" });
+          }
+        }
+
+        contribution.amount = out ? -magnitude : magnitude;
+        if (req.body.date !== undefined) contribution.date = bookDateToUtc(req.body.date);
+        if (req.body.note !== undefined) contribution.note = req.body.note;
+
+        const item = await linkedItem(book, contribution);
+        if (item) {
+          item.amount = magnitude;
+          item.date = contribution.date;
+          item.description = contribution.note || `${out ? "From savings" : "Savings"}: ${goal.name}`;
+          item.categories = goal.category ? evenCategoryWeights([goal.category], magnitude) : [];
+          item.shares = resolveShares("exact", magnitude,
+            [{ user_id: contribution.user_id, amount: magnitude }], memberIds(book));
+          item.manually_edited = true;
+          await item.save();
+        }
+
+        await saveAndRespondGoals(req, res, book, "Contribution updated");
+      } catch (error) {
+        console.error("Error updating contribution:", error);
+        res.status(500).json({ status: false, message: "Failed to update contribution" });
+      }
+    });
+
+  // The linked transaction goes with it: it only existed to mirror this contribution, and
+  // leaving it behind would double-count the money against the book's spending.
+  app.delete("/api/xenbudget/books/:bookId/goals/:goalId/contributions/:contributionId",
+    validateParams(xenBudgetContributionParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const goal = book.savings_goals.id(req.params.goalId);
+        if (!goal) return res.status(404).json({ status: false, message: "Goal not found" });
+        const contribution = goal.contributions.id(req.params.contributionId);
+        if (!contribution) {
+          return res.status(404).json({ status: false, message: "Contribution not found" });
+        }
+
+        const item = await linkedItem(book, contribution);
+        if (item) await XenBudgetItem.deleteOne({ _id: item._id });
+        goal.contributions.pull({ _id: contribution._id });
+        await saveAndRespondGoals(req, res, book,
+          item ? "Contribution and its transaction removed" : "Contribution removed");
+      } catch (error) {
+        console.error("Error deleting contribution:", error);
+        res.status(500).json({ status: false, message: "Failed to delete contribution" });
       }
     });
 

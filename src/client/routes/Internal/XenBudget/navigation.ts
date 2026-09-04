@@ -6,7 +6,7 @@
  */
 
 /** Top-level tabs, in the order they render. */
-export const TAB_PATHS = ["overview", "items", "report", "settings"] as const;
+export const TAB_PATHS = ["overview", "items", "goals", "report", "settings"] as const;
 
 /** Settings sections, in the order they render. */
 export const SETTINGS_SECTIONS = [
