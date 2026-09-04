@@ -1,11 +1,9 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useOutletContext } from "react-router-dom";
+import { useOutletContext } from "react-router-dom";
 import {
-    Box, Button, Card, FormControlLabel, IconButton, Stack, Switch, Tooltip, Typography,
-    useMediaQuery,
+    Box, Button, Card, FormControlLabel, Stack, Switch, Typography, useMediaQuery,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SavingsIcon from "@mui/icons-material/Savings";
 import { useSnackbar } from "notistack";
 import type { BookDetailContext } from "./BookDetail";
@@ -34,12 +32,11 @@ interface ContributionTarget {
  * Its own page rather than a card on the Overview, but reached from a button there rather
  * than from the tab bar (see navigation.ts): a goal is not a figure for the period being
  * looked at — it accumulates across all of them — and its ledger needs room the Overview's
- * window-scoped cards don't have. Since no tab is lit while this is open, the header
- * carries its own way back.
+ * window-scoped cards don't have. No tab is lit while this is open, but the tab bar is
+ * still there above it, so leaving is a click on any of them.
  */
 export default function BookGoals() {
     const { book } = useOutletContext<BookDetailContext>();
-    const navigate = useNavigate();
     // The book's own currency, not the Overview's currency switcher: that picks which of
     // the currencies present in the ITEMS to tally, and a goal is always denominated in
     // the book's. Following the switcher would blank the header the moment someone looked
@@ -121,15 +118,6 @@ export default function BookGoals() {
         <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
             <Box sx={{ pl: 2, pr: { xs: 2, sm: 3.5 }, pt: 2, pb: 1.5, flexShrink: 0 }}>
                 <Stack direction="row" alignItems="center" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
-                    <Tooltip title="Back to overview">
-                        <IconButton
-                            size="small"
-                            onClick={() => navigate(`/internal/xenbudget/books/${book._id}/overview`)}
-                            aria-label="Back to overview"
-                        >
-                            <ArrowBackIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
                     <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                         <Typography variant="caption" sx={sectionLabelSx}>Saved so far</Typography>
                         <Typography variant="h6" noWrap>

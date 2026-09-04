@@ -156,7 +156,7 @@ export default function BookOverview() {
                     apart from the control that changes that window rather than beside it. */}
                     <Stack direction="row" alignItems="center" spacing={1}>
                         <Button
-                            size="small" variant="outlined" startIcon={<SavingsIcon />}
+                            size="small" variant="contained" startIcon={<SavingsIcon />}
                             onClick={() => navigate(`/internal/xenbudget/books/${book._id}/goals`)}
                         >
                             Savings goals

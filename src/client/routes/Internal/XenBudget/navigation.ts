@@ -12,7 +12,7 @@
  * instead: a fifth tab crowded the bar (on a phone the labels drop to icons alone), and
  * goals are somewhere you go now and then rather than one of the views you switch between.
  * /goals is still a real route, so it deep-links and the back button works — it just
- * leaves no tab selected, which is why it carries its own way back to the Overview.
+ * leaves no tab selected. The bar is still rendered above it, so any tab is a way out.
  */
 export const TAB_PATHS = ["overview", "items", "report", "settings"] as const;
 
