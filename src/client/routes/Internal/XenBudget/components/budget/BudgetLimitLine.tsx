@@ -1,9 +1,8 @@
 import type { ReactNode } from "react";
 import { Box, Stack, Typography } from "@mui/material";
-import type { BudgetKind } from "../../../../../hooks/xenbudget/types";
 import { formatCurrency } from "../../currency";
 import BudgetBar from "./BudgetBar";
-import { limitCaption, limitColor, limitState } from "./budgetKind";
+import { limitCaption, limitColor, limitState, type LimitDirection } from "./budgetKind";
 
 interface BudgetLimitLineProps {
     /** Who or what this limit is for - chips, an avatar, or an "Everyone" pill. */
@@ -12,7 +11,7 @@ interface BudgetLimitLineProps {
     spent: number;
     percent: number;
     over: boolean;
-    kind: BudgetKind;
+    direction: LimitDirection;
     currency: string;
     color: string;
     height?: number;
@@ -31,11 +30,11 @@ interface BudgetLimitLineProps {
  * told apart by more than a hue.
  */
 export default function BudgetLimitLine({
-    label, amount, spent, percent, over, kind, currency, color, height = 8, pace, itemCount, barLabel,
+    label, amount, spent, percent, over, direction, currency, color, height = 8, pace, itemCount, barLabel,
 }: BudgetLimitLineProps) {
     const money = (v: number) => formatCurrency(v, currency);
     const remaining = amount - spent;
-    const state = limitState(kind, percent, pace);
+    const state = limitState(direction, percent, pace);
     const stateColor = limitColor(state);
 
     return (
@@ -56,7 +55,7 @@ export default function BudgetLimitLine({
                 </Typography>
             </Stack>
             <BudgetBar
-                spent={spent} amount={amount} percent={percent} over={over} kind={kind}
+                spent={spent} amount={amount} percent={percent} over={over} direction={direction}
                 color={color} height={height} pace={pace} label={barLabel}
             />
             <Stack direction="row" alignItems="center" sx={{ mt: 0.375, minWidth: 0 }}>
@@ -70,7 +69,7 @@ export default function BudgetLimitLine({
                     noWrap
                     sx={{ flexGrow: 1, textAlign: "right", color: stateColor ?? "text.secondary" }}
                 >
-                    {limitCaption(kind, remaining, percent, money)}
+                    {limitCaption(direction, remaining, percent, money)}
                 </Typography>
             </Stack>
         </Box>

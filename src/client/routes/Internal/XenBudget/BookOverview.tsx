@@ -76,9 +76,9 @@ export default function BookOverview() {
     const { columns: budgetColumns, measureRef } = useBalancedColumns(visibleBudgets, columnCount);
     // Counts every limit past its cap, the shared one and each person's, so the header
     // agrees with the red bars actually on screen rather than with the unfiltered book.
-    // Savings minimums are counted separately and the other way up: passing one is the point.
+    // Income targets are counted separately and the other way up: passing one is the point.
     const overBudgetCount = visibleBudgets.reduce((sum, b) => sum + overCount(b), 0);
-    const goalsMetCount = visibleBudgets.reduce((sum, b) => sum + metCount(b), 0);
+    const targetsMetCount = visibleBudgets.reduce((sum, b) => sum + metCount(b), 0);
     const asOf = budgetStatusResponse?.as_of ?? new Date().toISOString();
     // The figures were measured in whatever currency /budget-status used, which is not
     // necessarily the one the summary settled on - label them with the one they're in.
@@ -231,9 +231,9 @@ export default function BookOverview() {
                         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
                             <Typography variant="caption" sx={sectionLabelSx}>Budgets</Typography>
                             <Stack direction="row" spacing={1} alignItems="center">
-                                {goalsMetCount > 0 && (
+                                {targetsMetCount > 0 && (
                                     <Typography variant="caption" sx={{ color: INCOME_COLOR }}>
-                                        {goalsMetCount} saved
+                                        {targetsMetCount} met
                                     </Typography>
                                 )}
                                 {overBudgetCount > 0 && (
@@ -312,7 +312,7 @@ export default function BookOverview() {
                                             amount={goal.target_amount}
                                             percent={percent}
                                             over={goal.saved > goal.target_amount}
-                                            kind="goal"
+                                            direction="floor"
                                             color={INCOME_COLOR}
                                             height={6}
                                             label={`${goal.name}: ${formatCurrency(goal.saved, goal.currency)} of ${formatCurrency(goal.target_amount, goal.currency)} saved`}

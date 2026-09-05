@@ -46,9 +46,9 @@ export default function BudgetRow({
                         : budget.categories.map((c) => (
                             <CategoryChip key={c} name={c} registry={categoryRegistry} />
                         ))}
-                    {budget.kind === "goal" && (
+                    {budget.measures === "income" && (
                         <Chip
-                            size="small" label="Savings minimum"
+                            size="small" label="Income"
                             sx={{ height: 20, fontSize: 11, color: INCOME_COLOR, borderColor: INCOME_COLOR }}
                             variant="outlined"
                         />

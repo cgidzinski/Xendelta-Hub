@@ -39,12 +39,15 @@ var subBudgetSchema = new Schema({
 
 var budgetSchema = new Schema({
   categories: { type: [String], default: [] },    // empty = every category
-  // Which way the amount points. A cap is a ceiling - passing it is the failure. A goal
-  // is a floor: money moved into a savings category, where reaching the amount is the
-  // whole point and passing it is better still. The measurement is identical either way;
-  // only the comparison and the colours differ, which is why this is one field and not a
-  // second kind of budget.
-  kind: { type: String, enum: ["cap", "goal"], default: "cap" },
+  // Which side of the book this budget watches, which is also what decides which way its
+  // amount points. Expenses are a ceiling - passing it is the failure. Income is a floor -
+  // falling short is. The measurement is identical either way; only the comparison and the
+  // colours differ, so direction is derived from this rather than configured separately.
+  //
+  // Replaced kind: "cap" | "goal", where "goal" was a floor on a savings category. Saving
+  // is savings goals' job now (see savingsGoalSchema); a document still carrying the old
+  // field just reads as an expense budget, which is why there is no migration.
+  measures: { type: String, enum: ["expense", "income"], default: "expense" },
   period: {
     type: String,
     enum: ["weekly", "monthly", "quarterly", "yearly", "custom"],
@@ -82,10 +85,10 @@ var goalContributionSchema = new Schema({
   created_at: { type: Date, default: Date.now },
 }, { _id: true });
 
-// A thing being saved FOR: a new car, a trip. Unlike a budget of kind "goal" - which is a
-// per-period floor on a category and forgets everything the moment the period rolls over -
-// a savings goal carries its own ledger, so its balance accumulates across months and the
-// question "how close am I?" has an answer.
+// A thing being saved FOR: a new car, a trip. Its own ledger, so the balance accumulates
+// across months and the question "how close am I?" has an answer - which a budget, measured
+// fresh over each period, can never answer. Saving is entirely this schema's job: budgets
+// no longer carry a savings direction.
 var savingsGoalSchema = new Schema({
   name: { type: String, required: true, maxlength: 100 },
   description: { type: String, maxlength: 500 },

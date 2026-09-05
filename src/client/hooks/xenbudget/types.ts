@@ -27,13 +27,16 @@ export interface XenBudgetLabel {
 export type BudgetPeriod = "weekly" | "monthly" | "quarterly" | "yearly" | "custom";
 
 /**
- * Which way a budget's amount points.
+ * Which side of the book a budget watches - and therefore which way its amount points.
  *
- * `cap` is a ceiling on spending - passing it is the failure. `goal` is a floor: money
- * moved into a savings category, where reaching the amount is the point and passing it is
- * better still. Both are measured identically; only the comparison and the colours differ.
+ * `expense` is a ceiling: passing it is the failure. `income` is a floor: falling short is.
+ * Both are measured identically; only the comparison and the colours differ, so direction
+ * is derived from this rather than being a second thing to configure.
+ *
+ * Replaced `BudgetKind = "cap" | "goal"`, whose "goal" was a floor on a savings category.
+ * Saving belongs to XenBudgetSavingsGoal now.
  */
-export type BudgetKind = "cap" | "goal";
+export type BudgetMeasures = "expense" | "income";
 
 /** One person's limit nested inside a budget, sharing its categories, period and window. */
 export interface XenBudgetSubBudget {
@@ -46,7 +49,7 @@ export interface XenBudgetBudget {
     _id: string;
     /** Empty = every category. */
     categories: string[];
-    kind: BudgetKind;
+    measures: BudgetMeasures;
     period: BudgetPeriod;
     /** The overall limit. Unset when the budget caps only the people in `sub_budgets`. */
     amount?: number;
@@ -421,9 +424,12 @@ export interface BudgetStatus {
     _id: string;
     /** Empty = every category. */
     categories: string[];
-    kind: BudgetKind;
+    measures: BudgetMeasures;
     period: BudgetPeriod;
-    /** What the scope spent this period, whether or not there is an overall limit. */
+    /**
+     * What the scope counted this period, whether or not there is an overall limit. Named
+     * for the common case: on an income budget it is what came IN, not what went out.
+     */
     spent: number;
     item_count: number;
     /**
@@ -435,7 +441,7 @@ export interface BudgetStatus {
     remaining?: number;
     /** Uncapped, so the bar can show how far past the amount it went. */
     percent?: number;
-    /** Literally `spent > amount`. Good on a goal, bad on a cap - see `kind`. */
+    /** Literally `spent > amount`. Good on income, bad on an expense - see `measures`. */
     over?: boolean;
     /** Who spent it, biggest first. Empty when nothing was spent. */
     by_person: BudgetPersonSpend[];
@@ -473,8 +479,8 @@ export interface BudgetStatusResponse {
 
 export interface BudgetInput {
     categories?: string[];
-    /** Omit for a spending cap. */
-    kind?: BudgetKind;
+    /** Omit for an expense budget. */
+    measures?: BudgetMeasures;
     period: BudgetPeriod;
     /** Omit to cap only the people in `sub_budgets`; one of the two is required. */
     amount?: number;

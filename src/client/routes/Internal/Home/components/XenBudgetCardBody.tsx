@@ -33,7 +33,7 @@ function mostRecentlyActive(books: XenBudgetBook[]): XenBudgetBook | undefined {
  * is tightest, never both, so the same dollars aren't counted twice within one budget.
  */
 function budgetAhead(budget: BudgetStatus): { ahead: number; amount: number } | null {
-    if (budget.kind === "goal") return null;
+    if (budget.measures === "income") return null;
     const tightestSub = [...budget.sub_budgets].sort((a, b) => b.percent - a.percent)[0];
     const useSub = budget.amount === undefined
         || (tightestSub && tightestSub.percent > (budget.percent ?? 0));

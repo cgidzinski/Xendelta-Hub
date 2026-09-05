@@ -9,7 +9,7 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { useSnackbar } from "notistack";
 import type {
-    XenBudgetBook, BudgetInput, BudgetKind, BudgetPeriod, BudgetStatus,
+    XenBudgetBook, BudgetInput, BudgetMeasures, BudgetPeriod, BudgetStatus,
 } from "../../../../hooks/xenbudget/types";
 import { formatCurrency, getCurrencySymbol } from "../currency";
 import { sanitizeAmount, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
@@ -56,7 +56,7 @@ export default function BudgetForm({
 }: BudgetFormProps) {
     const { enqueueSnackbar } = useSnackbar();
     const isMobile = useMediaQuery("(max-width:600px)");
-    const [kind, setKind] = useState<BudgetKind>("cap");
+    const [measures, setMeasures] = useState<BudgetMeasures>("expense");
     const [categories, setCategories] = useState<string[]>([]);
     const [period, setPeriod] = useState<BudgetPeriod>("monthly");
     const [amount, setAmount] = useState("");
@@ -67,7 +67,7 @@ export default function BudgetForm({
     useEffect(() => {
         if (!open) return;
         if (budget) {
-            setKind(budget.kind);
+            setMeasures(budget.measures);
             setCategories(budget.categories || []);
             setPeriod(budget.period);
             setAmount(budget.amount === undefined ? "" : String(budget.amount));
@@ -75,7 +75,7 @@ export default function BudgetForm({
             setStartDate(budget.period === "custom" ? new Date(budget.period_from) : new Date());
             setEndDate(budget.period === "custom" ? new Date(budget.period_to) : null);
         } else {
-            setKind("cap");
+            setMeasures("expense");
             setCategories([]);
             setPeriod("monthly");
             setAmount("");
@@ -94,10 +94,10 @@ export default function BudgetForm({
         [subs],
     );
     const allocated = validSubs.reduce((sum, s) => sum + parseFloat(s.amount), 0);
-    // Only a worry on a cap. Per-person minimums adding up past a savings minimum means
+    // Only a worry on an expense budget. Per-person targets adding up past an income one
     // the household would save more than it set out to, which is not a mistake.
-    const overAllocated = kind === "cap" && numericAmount > 0 && allocated > numericAmount;
-    const isGoal = kind === "goal";
+    const overAllocated = measures === "expense" && numericAmount > 0 && allocated > numericAmount;
+    const isIncome = measures === "income";
 
     // The window the chosen period currently covers (or the picked dates for a one-off),
     // for the live "per month" and current-window previews. A saved budget gets this back
@@ -133,7 +133,7 @@ export default function BudgetForm({
         try {
             await onSubmit({
                 categories,
-                kind,
+                measures,
                 period,
                 amount: numericAmount > 0 ? numericAmount : undefined,
                 sub_budgets: validSubs.map((s) => ({
@@ -154,19 +154,20 @@ export default function BudgetForm({
             <DialogTitle>{budget ? "Edit budget" : "New budget"}</DialogTitle>
             <DialogContent>
                 <Stack spacing={2} sx={{ pt: 1 }}>
-                    {/* Direction first: it changes what every field below means, so
-                    picking it after filling them in would read backwards. */}
+                    {/* What it measures comes first: it decides which way the amount
+                    points - a ceiling on expenses, a floor under income - so every field
+                    below reads differently, and picking it last would read backwards. */}
                     <Box>
                         <ToggleButtonGroup
-                            size="small" exclusive fullWidth value={kind}
-                            onChange={(_, v) => v && setKind(v as BudgetKind)}
+                            size="small" exclusive fullWidth value={measures}
+                            onChange={(_, v) => v && setMeasures(v as BudgetMeasures)}
                         >
-                            <ToggleButton value="cap">Spending cap</ToggleButton>
-                            <ToggleButton value="goal">Savings minimum</ToggleButton>
+                            <ToggleButton value="expense">Expenses</ToggleButton>
+                            <ToggleButton value="income">Income</ToggleButton>
                         </ToggleButtonGroup>
                         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>
-                            {isGoal
-                                ? "Money into these categories, every period. Falling short is the warning — going past it is better."
+                            {isIncome
+                                ? "Income in these categories counts toward the target. Falling short is the warning — going past it is better."
                                 : "Spending in these categories counts against the limit. Going past it is flagged."}
                         </Typography>
                     </Box>
@@ -185,14 +186,14 @@ export default function BudgetForm({
                     />
 
                     <TextField
-                        fullWidth label={isGoal ? "Overall minimum" : "Overall amount"} value={amount}
+                        fullWidth label={isIncome ? "Overall target" : "Overall amount"} value={amount}
                         onChange={(e) => {
                             const clean = sanitizeAmount(e.target.value);
                             if (clean !== null) setAmount(clean);
                         }}
                         helperText={[
-                            isGoal
-                                ? "The minimum for everyone together. Leave empty to set minimums only for the people below."
+                            isIncome
+                                ? "The target for everyone together. Leave empty to set targets only for the people below."
                                 : "The limit for everyone together. Leave empty to cap only the people below.",
                             monthlyAmount !== undefined
                                 ? `≈ ${formatCurrency(monthlyAmount, currency)}/mo`
@@ -212,7 +213,7 @@ export default function BudgetForm({
 
                     <Box>
                         <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-                            {isGoal ? "Per-person minimums" : "Per-person limits"}
+                            {isIncome ? "Per-person targets" : "Per-person limits"}
                         </Typography>
                         <Stack spacing={1.5}>
                             {subs.map((sub, index) => (
@@ -288,8 +289,8 @@ export default function BudgetForm({
                         select fullWidth label="Period" value={period}
                         onChange={(e) => setPeriod(e.target.value as BudgetPeriod)}
                         helperText={[
-                            isGoal
-                                ? "Per-person minimums use this same period."
+                            isIncome
+                                ? "Per-person targets use this same period."
                                 : "Per-person limits use this same period.",
                             previewWindowLabel ? `Current window: ${previewWindowLabel}` : undefined,
                         ].filter(Boolean).join(" · ")}

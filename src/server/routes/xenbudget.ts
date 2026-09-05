@@ -182,7 +182,7 @@ function validateBudgetTarget(body: any, book: any): string | null {
 function toBudgetFields(body: any): Record<string, any> {
   return {
     categories: Array.isArray(body.categories) ? body.categories : [],
-    kind: body.kind === "goal" ? "goal" : "cap",
+    measures: body.measures === "income" ? "income" : "expense",
     period: body.period,
     // Left undefined rather than 0 when unset: a budget with only per-person limits has
     // no overall cap, which is a different thing from a cap of nothing.
@@ -2317,11 +2317,13 @@ module.exports = function (app: any) {
         const unionFrom = new Date(Math.min(...union.map((r: any) => r.from.getTime())));
         const unionTo = new Date(Math.max(...union.map((r: any) => r.to.getTime())));
 
-        // Budgets cap spending, so income never counts against them.
+        // Both types are in scope here because different budgets in one book measure
+        // different things; each branch below narrows to its own. Widening the shared match
+        // is what lets an expense cap and an income target sit on the same category without
+        // either counting the other's items.
         const base = {
           book_id: book._id,
           currency,
-          type: "expense",
           flags: { $nin: [FLAG_OFF_BUDGET] },
           date: { $gte: unionFrom, $lt: unionTo },
         };
@@ -2335,10 +2337,13 @@ module.exports = function (app: any) {
           const cats = b.categories && b.categories.length > 0 ? b.categories : null;
 
           // What this budget's SCOPE counts of each item: the whole thing when it names no
-          // categories, otherwise only the weights of the ones it does name.
+          // categories, otherwise only the weights of the ones it does name. The type
+          // narrowing goes FIRST, ahead of the unwind, so an income budget never fans out
+          // the expense rows it is about to discard.
+          const measuresType = { $match: { type: b.measures === "income" ? "income" : "expense" } };
           const scopeStages: any[] = cats
-            ? [{ $unwind: "$categories" }, { $match: { "categories.name": { $in: cats } } }]
-            : [];
+            ? [measuresType, { $unwind: "$categories" }, { $match: { "categories.name": { $in: cats } } }]
+            : [measuresType];
           const scopeAmount: any = cats ? "$categories.amount" : "$amount";
           // One person's slice of that scope: their share of the item, prorated by the
           // category weight. A $100 item split 70/30 by category and 50/50 by person owes
@@ -2434,7 +2439,7 @@ module.exports = function (app: any) {
                 // The numbers below are the same either way - `over` means literally
                 // "past the amount". Whether that is a failure or the point of the
                 // budget is the client's call, and this is what it decides on.
-                kind: b.kind === "goal" ? "goal" : "cap",
+                measures: b.measures === "income" ? "income" : "expense",
                 period: b.period,
                 spent,
                 item_count: row?.count || 0,

@@ -1,12 +1,11 @@
 import { Box, Stack, Typography, alpha } from "@mui/material";
-import type { BudgetKind } from "../../../../../hooks/xenbudget/types";
 import type { BudgetPace } from "./budgetPace";
-import { aheadIsGood, limitColor, limitState, periodLabel } from "./budgetKind";
+import { aheadIsGood, limitColor, limitState, periodLabel, type LimitDirection } from "./budgetKind";
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 interface PaceSummaryProps {
-    kind: BudgetKind;
+    direction: LimitDirection;
     /** Raw period value off the budget, e.g. "monthly" or "custom". */
     period: string;
     /**
@@ -34,10 +33,10 @@ interface PaceSummaryProps {
  * rather than parsed out of a sentence.
  */
 export default function PaceSummary({
-    kind, period, periodLabel: labelOverride, windowLabel: window, rate, monthly,
+    direction, period, periodLabel: labelOverride, windowLabel: window, rate, monthly,
     pace, amount, spent, percent, money,
 }: PaceSummaryProps) {
-    const state = limitState(kind, percent, pace.elapsed);
+    const state = limitState(direction, percent, pace.elapsed);
     const stateColor = limitColor(state);
 
     return (
@@ -54,13 +53,13 @@ export default function PaceSummary({
                 </Typography>
                 <Typography variant="caption" sx={{ color: stateColor ?? "text.secondary" }}>
                     {pace.finished
-                        ? `Period ended · ${money(spent)} of ${money(amount)} ${kind === "goal" ? "saved" : "used"}`
+                        ? `Period ended · ${money(spent)} of ${money(amount)} ${direction === "floor" ? "received" : "used"}`
                         : [
                             Math.abs(pace.ahead) < 0.01
                                 ? "On pace"
                                 : pace.ahead > 0
-                                    ? `${money(pace.ahead)} ${aheadIsGood(kind) ? "ahead of pace" : "over pace"}`
-                                    : `${money(-pace.ahead)} ${aheadIsGood(kind) ? "behind pace" : "under pace"}`,
+                                    ? `${money(pace.ahead)} ${aheadIsGood(direction) ? "ahead of pace" : "over pace"}`
+                                    : `${money(-pace.ahead)} ${aheadIsGood(direction) ? "behind pace" : "under pace"}`,
                             spent > 0 ? `${money(pace.projected)} projected` : null,
                         ].filter(Boolean).join(" · ")}
                 </Typography>

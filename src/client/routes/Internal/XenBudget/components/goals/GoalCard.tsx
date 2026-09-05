@@ -49,7 +49,7 @@ export default function GoalCard({
     const { remaining, percent, reached } = goalProgress(goal.saved, goal.target_amount);
     // No pace: a savings goal has no deadline to fall behind, so there is nothing to
     // compare progress against but the target itself.
-    const state = limitState("goal", percent);
+    const state = limitState("floor", percent);
     const caption = goalCaption(remaining, percent, (v) => formatCurrency(v, goal.currency));
     const closed = goal.status !== "active";
 
@@ -91,7 +91,7 @@ export default function GoalCard({
                 amount={goal.target_amount}
                 percent={percent}
                 over={goal.saved > goal.target_amount}
-                kind="goal"
+                direction="floor"
                 color={INCOME_COLOR}
                 label={`${goal.name}: ${formatCurrency(goal.saved, goal.currency)} of ${formatCurrency(goal.target_amount, goal.currency)} saved`}
             />

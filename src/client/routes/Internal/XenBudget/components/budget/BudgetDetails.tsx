@@ -4,7 +4,7 @@ import type {
 } from "../../../../../hooks/xenbudget/types";
 import { formatCurrency } from "../../currency";
 import { budgetPace } from "./budgetPace";
-import { periodLabel } from "./budgetKind";
+import { directionOf, periodLabel } from "./budgetKind";
 import { periodNoun } from "./periodDisplay";
 import BudgetBreakdown from "./BudgetBreakdown";
 import PaceSummary from "./PaceSummary";
@@ -42,7 +42,7 @@ export default function BudgetDetails({
             <Stack spacing={1.25} sx={{ pt: 1.25 }}>
                 {focus.amount > 0 && (
                     <PaceSummary
-                        kind={budget.kind}
+                        direction={directionOf(budget.measures)}
                         period={budget.period}
                         periodLabel={labelOverride}
                         pace={pace}
@@ -80,7 +80,7 @@ export default function BudgetDetails({
                 {periodAmount !== undefined && periodAmount > 0 && (
                     <>
                         <PaceSummary
-                            kind={budget.kind}
+                            direction={directionOf(budget.measures)}
                             period={budget.period}
                             windowLabel={word}
                             rate={rate}
@@ -115,7 +115,7 @@ export default function BudgetDetails({
             {amount !== undefined && amount > 0 && (
                 <>
                     <PaceSummary
-                        kind={budget.kind}
+                        direction={directionOf(budget.measures)}
                         period={budget.period}
                         periodLabel={labelOverride}
                         pace={pace}

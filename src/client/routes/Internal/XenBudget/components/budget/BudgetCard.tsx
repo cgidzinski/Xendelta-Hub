@@ -16,7 +16,7 @@ import BudgetLimitLine from "./BudgetLimitLine";
 import BudgetDetails from "./BudgetDetails";
 import BudgetTarget from "./BudgetTarget";
 import { memberColor, scopeColor } from "./budgetColors";
-import { limitNoun, periodLabel as periodWord } from "./budgetKind";
+import { directionOf, limitNoun, periodLabel as periodWord } from "./budgetKind";
 import { budgetPace } from "./budgetPace";
 
 // Past three, the chips start wrapping to a third line on a phone and stop being a
@@ -170,14 +170,14 @@ export default function BudgetCard({
                         spent={headlineSpent}
                         percent={headlinePercent}
                         over={headlineOver}
-                        kind={budget.kind}
+                        direction={directionOf(budget.measures)}
                         currency={currency}
                         color={color}
                         height={8}
                         pace={pace.elapsed}
                         itemCount={budget.item_count}
                         barLabel={`${budget.categories.join(", ") || "Everything"}: ${formatCurrency(headlineSpent, currency)
-                            } of ${formatCurrency(headlineAmount, currency)}, ${headlinePercent}% of the ${limitNoun(budget.kind)}`}
+                            } of ${formatCurrency(headlineAmount, currency)}, ${headlinePercent}% of the ${limitNoun(directionOf(budget.measures))}`}
                     />
                 </Stack>
             </ButtonBase>
@@ -207,13 +207,13 @@ export default function BudgetCard({
                             spent={periodSpent}
                             percent={periodPercent}
                             over={periodOver}
-                            kind={budget.kind}
+                            direction={directionOf(budget.measures)}
                             currency={currency}
                             color={color}
                             height={6}
                             itemCount={budget.period_item_count}
                             barLabel={`${capitalize(periodWord(budget.period))}: ${formatCurrency(periodSpent, currency)
-                                } of ${formatCurrency(periodAmount, currency)}, ${periodPercent}% of the ${limitNoun(budget.kind)}`}
+                                } of ${formatCurrency(periodAmount, currency)}, ${periodPercent}% of the ${limitNoun(directionOf(budget.measures))}`}
                         />
                     </ButtonBase>
                     <Collapse in={open} unmountOnExit>
@@ -225,8 +225,8 @@ export default function BudgetCard({
             {budget.sub_budgets.length > 0 && (
                 <Box sx={{ ...cardSx, mt: 1.5, p: 1.25 }}>
                     <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-                        {budget.kind === "goal"
-                            ? (budget.amount === undefined ? "Per-person minimums" : "Per-person sub minimums")
+                        {budget.measures === "income"
+                            ? (budget.amount === undefined ? "Per-person targets" : "Per-person sub targets")
                             : (budget.amount === undefined ? "Per-person limits" : "Per-person sub limits")}
                     </Typography>
                     <Stack spacing={1.25}>
@@ -254,14 +254,14 @@ export default function BudgetCard({
                                                 spent={sub.spent}
                                                 percent={sub.percent}
                                                 over={sub.over}
-                                                kind={budget.kind}
+                                                direction={directionOf(budget.measures)}
                                                 currency={currency}
                                                 color={memberColor(sub.person_id, members)}
                                                 height={6}
                                                 pace={pace.elapsed}
                                                 itemCount={sub.item_count}
                                                 barLabel={`${sub.person_name}: ${formatCurrency(sub.spent, currency)
-                                                    } of ${formatCurrency(sub.amount, currency)}, ${sub.percent}% of their ${limitNoun(budget.kind)}`}
+                                                    } of ${formatCurrency(sub.amount, currency)}, ${sub.percent}% of their ${limitNoun(directionOf(budget.measures))}`}
                                             />
                                         </Box>
                                         {chevron(openSub === sub._id)}

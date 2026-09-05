@@ -34,7 +34,7 @@ export default function BudgetBreakdown({
             {breakdown.length > 0 && (
                 <Box sx={{ ...cardSx, p: 1.25 }}>
                     <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.75 }}>
-                        {budget.kind === "goal" ? "Who put it in" : "Who spent it"}
+                        {budget.measures === "income" ? "Who put it in" : "Who spent it"}
                     </Typography>
                     <Stack spacing={1}>
                         {breakdown.map((person) => {
