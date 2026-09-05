@@ -122,3 +122,102 @@ export function periodLabel(period: string): string {
 export function aheadIsGood(direction: LimitDirection): boolean {
     return direction === "floor";
 }
+
+/**
+ * What a budget did, once its window has closed.
+ *
+ * `limitState` above answers "how is this going" and is measured against pace, which is
+ * the only question worth asking while a period is still running. The moment the window
+ * closes that question stops meaning anything - there is no pace left to keep - and a
+ * different one takes over: did it pass? Keeping the two apart is what stops a finished
+ * August talking about itself in the present tense forever.
+ *
+ * Deliberately binary. There is no "passed by a hair" band: 98% and 78% are both simply
+ * a pass, and the margin in the caption is there for anyone who wants to know how close
+ * it was. Amber stays with the live `warn` state, where it already means "nearing the cap"
+ * - a third colour on a settled card would only make the two that matter harder to tell
+ * apart.
+ */
+
+export type VerdictKey =
+    /** The window is still running. `limitState` is the one to ask. */
+    | "open"
+    /** Inside a ceiling, or a floor that was reached. */
+    | "pass"
+    /** Past a ceiling, or a floor that fell short. */
+    | "miss"
+    /** Nothing was counted, so there is nothing to judge. */
+    | "quiet";
+
+export interface BudgetVerdict {
+    key: VerdictKey;
+    /** "Passed", "Missed", "Target met", "No activity", "In progress". */
+    word: string;
+    /** Undefined for `open` and `quiet`, so surrounding text is left alone. */
+    color?: string;
+}
+
+/**
+ * Whether a window has closed, by the same clock `budgetPace` uses.
+ *
+ * `periodTo` is exclusive, so a window is closed only once `asOf` has reached it - the
+ * instant a month ends is the instant the next begins, and a budget is not finished on
+ * its own last day.
+ */
+export function isSettled(periodTo: string, asOf: string): boolean {
+    return new Date(asOf).getTime() >= new Date(periodTo).getTime();
+}
+
+/**
+ * `itemCount` is what separates a real pass from an empty one. Spending $0 against an
+ * $800 cap satisfies it on paper and almost always means the import never ran, so it gets
+ * its own neutral state rather than being congratulated - an empty book should never
+ * report six passes.
+ */
+export function budgetVerdict(
+    direction: LimitDirection, percent: number, itemCount: number,
+    periodTo: string, asOf: string,
+): BudgetVerdict {
+    if (!isSettled(periodTo, asOf)) {
+        return { key: "open", word: "In progress" };
+    }
+    if (itemCount === 0) {
+        return { key: "quiet", word: "No activity" };
+    }
+    if (direction === "floor") {
+        return percent >= 100
+            ? { key: "pass", word: "Target met", color: INCOME_COLOR }
+            : { key: "miss", word: "Missed", color: "error.main" };
+    }
+    return percent > 100
+        ? { key: "miss", word: "Missed", color: "error.main" }
+        : { key: "pass", word: "Passed", color: INCOME_COLOR };
+}
+
+/**
+ * What a closed window with nothing in it says.
+ *
+ * Lives here rather than in the component so every place that words a verdict takes it
+ * from the same module - the whole point of this file.
+ */
+export const NO_ACTIVITY_CAPTION = "No activity · nothing to judge";
+
+/**
+ * The past-tense twin of `limitCaption`, for a window that has closed.
+ *
+ * Same figures, same directions, different tense - "$180 left" is a promise about a month
+ * that is still ahead of you, and reading it under a finished one is what made a closed
+ * budget indistinguishable from a live one at a glance.
+ */
+export function settledCaption(
+    direction: LimitDirection, remaining: number, percent: number, money: (v: number) => string,
+): string {
+    if (direction === "floor") {
+        return remaining <= 0
+            ? `Closed ${money(-remaining)} past target · ${percent}%`
+            : `Closed ${money(remaining)} short · ${percent}%`;
+    }
+    return remaining < 0
+        ? `Closed ${money(-remaining)} over · ${percent}%`
+        : `Closed ${money(remaining)} under · ${percent}%`;
+}

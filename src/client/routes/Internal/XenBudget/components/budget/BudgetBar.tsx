@@ -18,6 +18,13 @@ interface BudgetBarProps {
      * fill past it reads as "spending faster than this period allows" without a number.
      */
     pace?: number;
+    /**
+     * True once the window has closed. The bar then stops being a live one: no pace tick,
+     * squared ends, and a rule where the amount sat. That difference is deliberately a
+     * SHAPE rather than a colour, so a finished budget reads as finished even for someone
+     * who can't separate the two hues.
+     */
+    settled?: boolean;
     label: string;
 }
 
@@ -35,7 +42,7 @@ interface BudgetBarProps {
  * is a failure, past a floor is the point of the exercise.
  */
 export default function BudgetBar({
-    spent, amount, percent, over, direction, color, height = 8, pace, label,
+    spent, amount, percent, over, direction, color, height = 8, pace, settled, label,
 }: BudgetBarProps) {
     // Over budget the track is scaled to `spent`, so the limit sits part-way along it;
     // inside the limit the track is the limit and the fill is the share used.
@@ -47,7 +54,10 @@ export default function BudgetBar({
     // ("will this last the period?") has been settled - and a floor that is already met has
     // no pace left to keep.
     const pacePct = pace === undefined ? undefined : Math.min(100, Math.max(0, pace * 100));
-    const showPace = pacePct !== undefined && !over;
+    // A closed window has no pace left to keep, so the tick would sit pinned at the far
+    // end saying nothing. The rule that replaces it marks where the amount was instead.
+    const showPace = pacePct !== undefined && !over && !settled;
+    const showLimitRule = settled && !over && spent > 0;
 
     return (
         <Box
@@ -57,7 +67,7 @@ export default function BudgetBar({
                 position: "relative",
                 display: "flex",
                 height,
-                borderRadius: 999,
+                borderRadius: settled ? 0.75 : 999,
                 overflow: "hidden",
                 bgcolor: (theme) => alpha(theme.palette.text.primary, 0.08),
             }}
@@ -73,6 +83,20 @@ export default function BudgetBar({
                         // change that could pass for a gradient.
                         borderLeft: "2px solid",
                         borderColor: "background.paper",
+                    }}
+                />
+            )}
+            {showLimitRule && (
+                // The limit is the whole track here, so the rule sits at its far end - the
+                // same hard edge the overflow border draws when a budget goes past it.
+                <Box
+                    sx={{
+                        position: "absolute",
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: "2px",
+                        bgcolor: (theme) => alpha(theme.palette.text.primary, 0.45),
                     }}
                 />
             )}

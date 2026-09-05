@@ -19,7 +19,7 @@ import ProjectionCard from "./components/budget/ProjectionCard";
 import { projectBook } from "./components/budget/bookPace";
 import { commitmentTotal } from "./components/recurring/recurringDisplay";
 import { useBalancedColumns } from "./components/budget/useBalancedColumns";
-import { sortBudgets, overCount, metCount } from "./components/budget/sortBudgets";
+import { sortBudgets, overCount, metCount, verdictCounts } from "./components/budget/sortBudgets";
 import TimePeriodFilter, { summaryQuickPicks } from "./components/TimePeriodFilter";
 import { resolvePeriod } from "./components/periodMode";
 import TotalsSummary from "./components/TotalsSummary";
@@ -29,6 +29,10 @@ import { formatCurrency } from "./currency";
 import { STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
 import { INCOME_COLOR } from "../../../components/ui/chartColors";
 import { cardSx, sectionLabelSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
+
+// Past a dozen the pip row is no longer countable at a glance, and the figure beside
+// it already says the same thing.
+const MAX_SCORE_PIPS = 12;
 
 export default function BookOverview() {
     const {
@@ -48,8 +52,12 @@ export default function BookOverview() {
         () => ({ from: from.toISOString(), to: to.toISOString() }),
         [from, to],
     );
+    // Six of each budget's own periods for the margin strip in the expanded panel. Short
+    // rather than long here: the Overview polls this endpoint on every socket nudge, and
+    // history widens the server's scan - a year of it belongs on Report, which is where
+    // you go to look properly.
     const { status: budgetStatusResponse, budgets: budgetStatus } = useXenBudgetStatus(
-        book._id, currency, budgetRange,
+        book._id, currency, budgetRange, 6,
     );
     const visibleBudgets = useMemo(
         () => sortBudgets(budgetStatus),
@@ -80,6 +88,9 @@ export default function BookOverview() {
     const overBudgetCount = visibleBudgets.reduce((sum, b) => sum + overCount(b), 0);
     const targetsMetCount = visibleBudgets.reduce((sum, b) => sum + metCount(b), 0);
     const asOf = budgetStatusResponse?.as_of ?? new Date().toISOString();
+    // Once the selected window has closed the live counts stop being the interesting
+    // number - "1 over" says nothing about the five that didn't go over. The score does.
+    const scores = verdictCounts(visibleBudgets, asOf);
     // The figures were measured in whatever currency /budget-status used, which is not
     // necessarily the one the summary settled on - label them with the one they're in.
     const budgetCurrency = budgetStatusResponse?.currency ?? currency;
@@ -231,15 +242,45 @@ export default function BookOverview() {
                         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
                             <Typography variant="caption" sx={sectionLabelSx}>Budgets</Typography>
                             <Stack direction="row" spacing={1} alignItems="center">
-                                {targetsMetCount > 0 && (
-                                    <Typography variant="caption" sx={{ color: INCOME_COLOR }}>
-                                        {targetsMetCount} met
-                                    </Typography>
-                                )}
-                                {overBudgetCount > 0 && (
-                                    <Typography variant="caption" color="error.main">
-                                        {overBudgetCount} over
-                                    </Typography>
+                                {scores.judged > 0 ? (
+                                    <>
+                                        <Typography
+                                            variant="caption"
+                                            sx={{ color: scores.missed === 0 ? INCOME_COLOR : "text.secondary" }}
+                                        >
+                                            {scores.passed} of {scores.judged} passed
+                                        </Typography>
+                                        {/* The same score as shape, so the header isn't
+                                        carried by colour alone. Dropped past a dozen: a
+                                        long row of pips stops being countable at a glance
+                                        and starts crowding the section title. */}
+                                        {scores.judged <= MAX_SCORE_PIPS && (
+                                            <Stack direction="row" spacing={0.375}>
+                                                {Array.from({ length: scores.judged }, (_, i) => (
+                                                    <Box
+                                                        key={i}
+                                                        sx={{
+                                                            width: 8, height: 8, borderRadius: 0.5,
+                                                            bgcolor: i < scores.passed ? INCOME_COLOR : "error.main",
+                                                        }}
+                                                    />
+                                                ))}
+                                            </Stack>
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        {targetsMetCount > 0 && (
+                                            <Typography variant="caption" sx={{ color: INCOME_COLOR }}>
+                                                {targetsMetCount} met
+                                            </Typography>
+                                        )}
+                                        {overBudgetCount > 0 && (
+                                            <Typography variant="caption" color="error.main">
+                                                {overBudgetCount} over
+                                            </Typography>
+                                        )}
+                                    </>
                                 )}
                             </Stack>
                         </Stack>

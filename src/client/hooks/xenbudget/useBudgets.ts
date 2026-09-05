@@ -16,18 +16,24 @@ export interface BudgetStatusRange {
  *
  * Pass `range` to measure every budget over one shared window instead - what the report
  * page needs, since a budget's own month says nothing about the year being reported on.
+ * Pass `history` to also get the last N of each budget's OWN periods back on `periods`,
+ * for the margin strip. It widens the server's scan, so it is opt-in per page rather than
+ * always on.
  * The amounts come back per-period either way, so the range case rescales them HERE
  * rather than at the call site: a per-period cap sitting next to a range's worth of spend
  * is the one mistake this hook exists to make impossible.
  */
-export function useXenBudgetStatus(bookId: string, currency?: string, range?: BudgetStatusRange) {
+export function useXenBudgetStatus(
+    bookId: string, currency?: string, range?: BudgetStatusRange, history?: number,
+) {
     const { data, isLoading, isError, error } = useQuery({
-        queryKey: ["xenbudget", "budget-status", bookId, currency, range?.from, range?.to],
+        queryKey: ["xenbudget", "budget-status", bookId, currency, range?.from, range?.to, history],
         queryFn: async () => {
             const res = await apiClient.get(`/api/xenbudget/books/${bookId}/budget-status`, {
                 params: {
                     ...(currency ? { currency } : {}),
                     ...(range ? { from: range.from, to: range.to } : {}),
+                    ...(history ? { history } : {}),
                 },
             });
             return res.data.data as BudgetStatusResponse;

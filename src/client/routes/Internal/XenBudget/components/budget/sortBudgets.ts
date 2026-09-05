@@ -1,5 +1,5 @@
 import type { BudgetStatus } from "../../../../../hooks/xenbudget/types";
-import { NEAR_LIMIT_PERCENT, directionOf } from "./budgetKind";
+import { NEAR_LIMIT_PERCENT, budgetVerdict, directionOf } from "./budgetKind";
 
 export { NEAR_LIMIT_PERCENT };
 
@@ -84,4 +84,46 @@ export function sortBudgets(budgets: BudgetStatus[]): BudgetStatus[] {
         if (byLabel !== 0) return byLabel;
         return a.period.localeCompare(b.period);
     });
+}
+
+export interface VerdictCounts {
+    passed: number;
+    missed: number;
+    /** passed + missed. Excludes limits with nothing in them, which are not results. */
+    judged: number;
+}
+
+/**
+ * How a closed window went, counted the same way `overCount` counts a live one: every
+ * separate limit in every budget, the shared one and each person's.
+ *
+ * Only limits with an amount to judge against and items to judge are counted, so "4 of 6"
+ * never quietly includes a category nobody spent in - a book with no imports would
+ * otherwise report a clean sweep.
+ */
+export function verdictCounts(budgets: BudgetStatus[], asOf: string): VerdictCounts {
+    let passed = 0;
+    let missed = 0;
+
+    const tally = (
+        direction: ReturnType<typeof directionOf>,
+        percent: number | undefined,
+        itemCount: number,
+        periodTo: string,
+    ) => {
+        if (percent === undefined) return;
+        const { key } = budgetVerdict(direction, percent, itemCount, periodTo, asOf);
+        if (key === "pass") passed++;
+        else if (key === "miss") missed++;
+    };
+
+    for (const b of budgets) {
+        const direction = directionOf(b.measures);
+        tally(direction, b.percent, b.item_count, b.period_to);
+        for (const sub of b.sub_budgets) {
+            tally(direction, sub.percent, sub.item_count, b.period_to);
+        }
+    }
+
+    return { passed, missed, judged: passed + missed };
 }

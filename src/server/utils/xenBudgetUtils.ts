@@ -190,6 +190,55 @@ export function budgetPeriodRange(
   };
 }
 
+/**
+ * The last `count` of a budget's own periods, oldest first, ending with the one `asOf`
+ * falls in.
+ *
+ * Nothing about a closed period is stored - budgets are recomputed on every request - so
+ * a history strip has to be measured, and this is the set of windows to measure over. The
+ * windows are the budget's OWN, never the range a caller asked for: "how did each month
+ * go" is a question about months, and answering it over an arbitrary report range would
+ * silently change what a column means.
+ *
+ * A one-off `custom` budget has no repeating window and so has no history; it returns
+ * empty rather than inventing one. `count` at or below zero returns empty too, which is
+ * what makes `?history=0` the free default on the wire.
+ */
+export function previousPeriodRanges(
+  budget: BudgetLike,
+  asOf: Date,
+  count: number,
+): PeriodRange[] {
+  if (budget.period === "custom" || count <= 0) return [];
+
+  const current = budgetPeriodRange(budget, asOf);
+
+  if (budget.period === "weekly") {
+    const week = 7 * 86400000;
+    const ranges: PeriodRange[] = [];
+    for (let i = count - 1; i >= 0; i--) {
+      const from = new Date(current.from.getTime() - i * week);
+      ranges.push({ from, to: new Date(from.getTime() + week) });
+    }
+    return ranges;
+  }
+
+  // Month-aligned periods step by whole calendar months, not by a fixed number of days -
+  // subtracting 30 days from March 1st lands in January and would misfile a whole month.
+  const step = MONTHS_PER_PERIOD[budget.period] ?? 1;
+  const start = parseWallKey(current.from.toISOString().slice(0, 10));
+  const ranges: PeriodRange[] = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const f = addMonths(start.year, start.month, -i * step);
+    const t = addMonths(f.year, f.month, step);
+    ranges.push({
+      from: new Date(`${wallKey(f.year, f.month, 1)}T00:00:00.000Z`),
+      to: new Date(`${wallKey(t.year, t.month, 1)}T00:00:00.000Z`),
+    });
+  }
+  return ranges;
+}
+
 // --- Period bucket seeding --------------------------------------------------
 
 export type GroupBy = "day" | "week" | "month";

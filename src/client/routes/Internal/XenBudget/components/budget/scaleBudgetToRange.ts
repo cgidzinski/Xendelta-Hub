@@ -14,6 +14,10 @@ const round = (v: number) => Math.round(v * 100) / 100;
  *
  * `amount === undefined` is left alone: it means "this budget caps only named people", and
  * the whole client keys "is there an overall bar" off that.
+ *
+ * `periods` is left alone too, and deliberately: those are the budget's OWN whole periods,
+ * each already measured against its own amount. Scaling them to the range would be wrong
+ * twice over - the spend is not the range's, and the amount is not the range's either.
  */
 export function scaleBudgetToRange(
     budget: BudgetStatus, rangeFrom: Date, rangeTo: Date,
