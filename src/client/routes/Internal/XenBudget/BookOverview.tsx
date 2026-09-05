@@ -12,7 +12,7 @@ import { useXenBudgetRecurring } from "../../../hooks/xenbudget/useRecurring";
 import { CategoryChip } from "./components/LabelChip";
 import BudgetCard from "./components/budget/BudgetCard";
 import BudgetBar from "./components/budget/BudgetBar";
-import { goalCaption, goalProgress, sortGoals } from "./components/goals/goalProgress";
+import { bankCaption, bankProgress, sortPiggyBanks } from "./components/piggyBank/piggyBankProgress";
 import RecurringCard from "./components/recurring/RecurringCard";
 import { useRuleEditor } from "./components/rules/useRuleEditor";
 import ProjectionCard from "./components/budget/ProjectionCard";
@@ -55,10 +55,10 @@ export default function BookOverview() {
         () => sortBudgets(budgetStatus),
         [budgetStatus],
     );
-    // Nearest to done first, so the strip leads with the goal about to land.
-    const activeGoals = useMemo(
-        () => sortGoals((book.savings_goals ?? []).filter((g) => g.status === "active")),
-        [book.savings_goals],
+    // Nearest to done first, so the strip leads with the bank about to land.
+    const activeBanks = useMemo(
+        () => sortPiggyBanks((book.piggy_banks ?? []).filter((g) => g.status === "active")),
+        [book.piggy_banks],
     );
     // Deliberately NOT scoped to the selected period: a subscription is a standing
     // commitment, so "what do I pay every month" is the same answer whether you're looking
@@ -150,15 +150,15 @@ export default function BookOverview() {
                             {summary.currencies.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
                         </TextField>
                     )}
-                    {/* Goals on the left, the period on the right. Goals is somewhere you
+                    {/* Banks on the left, the period on the right. Banks is somewhere you
                     GO — it is not scoped to the window this page is showing — so it sits
                     apart from the control that changes that window rather than beside it. */}
                     <Stack direction="row" alignItems="center" spacing={1}>
                         <Button
                             size="small" variant="contained" startIcon={<SavingsIcon />}
-                            onClick={() => navigate(`/internal/xenbudget/books/${book._id}/goals`)}
+                            onClick={() => navigate(`/internal/xenbudget/books/${book._id}/piggy-banks`)}
                         >
-                            Savings goals
+                            Piggy banks
                         </Button>
                         <Box sx={{ flexGrow: 1 }} />
                         <TimePeriodFilter
@@ -282,47 +282,47 @@ export default function BookOverview() {
                     </Card>
                 )}
 
-                {activeGoals.length > 0 && (
+                {activeBanks.length > 0 && (
                     <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
                         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                            <Typography variant="caption" sx={sectionLabelSx}>Savings goals</Typography>
+                            <Typography variant="caption" sx={sectionLabelSx}>Piggy banks</Typography>
                             <Link
                                 component="button" variant="caption" underline="hover"
-                                onClick={() => navigate(`/internal/xenbudget/books/${book._id}/goals`)}
+                                onClick={() => navigate(`/internal/xenbudget/books/${book._id}/piggy-banks`)}
                             >
                                 View all
                             </Link>
                         </Stack>
-                        {/* Not scoped to the selected period, and deliberately: a goal
+                        {/* Not scoped to the selected period, and deliberately: a bank
                         accumulates across every window, so "how close am I to the car?" has
                         the same answer whether August or the year is on screen. */}
                         <Stack spacing={1.25}>
-                            {activeGoals.slice(0, 3).map((goal) => {
-                                const { percent, remaining } = goalProgress(goal.saved, goal.target_amount);
+                            {activeBanks.slice(0, 3).map((bank) => {
+                                const { percent, remaining } = bankProgress(bank.saved, bank.target_amount);
                                 return (
-                                    <Box key={goal._id}>
+                                    <Box key={bank._id}>
                                         <Stack direction="row" alignItems="baseline" justifyContent="space-between" spacing={1} sx={{ mb: 0.5 }}>
-                                            <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>{goal.name}</Typography>
+                                            <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>{bank.name}</Typography>
                                             <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
-                                                {goalCaption(remaining, percent, (v) => formatCurrency(v, goal.currency))}
+                                                {bankCaption(remaining, percent, (v) => formatCurrency(v, bank.currency))}
                                             </Typography>
                                         </Stack>
                                         <BudgetBar
-                                            spent={Math.max(0, goal.saved)}
-                                            amount={goal.target_amount}
+                                            spent={Math.max(0, bank.saved)}
+                                            amount={bank.target_amount}
                                             percent={percent}
-                                            over={goal.saved > goal.target_amount}
+                                            over={bank.saved > bank.target_amount}
                                             direction="floor"
                                             color={INCOME_COLOR}
                                             height={6}
-                                            label={`${goal.name}: ${formatCurrency(goal.saved, goal.currency)} of ${formatCurrency(goal.target_amount, goal.currency)} saved`}
+                                            label={`${bank.name}: ${formatCurrency(bank.saved, bank.currency)} of ${formatCurrency(bank.target_amount, bank.currency)} saved`}
                                         />
                                     </Box>
                                 );
                             })}
-                            {activeGoals.length > 3 && (
+                            {activeBanks.length > 3 && (
                                 <Typography variant="caption" color="text.secondary">
-                                    {activeGoals.length - 3} more on the Goals tab.
+                                    {activeBanks.length - 3} more on the Banks tab.
                                 </Typography>
                             )}
                         </Stack>

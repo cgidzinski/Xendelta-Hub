@@ -1,7 +1,7 @@
 // Wire shapes for XenBudget. Route handlers never return raw mongoose docs - the same
 // convention as xenSplitSerializer.ts - so the client contract stays in one place.
 
-import { serializeGoals } from "./xenBudgetGoals";
+import { serializePiggyBanks } from "./xenBudgetPiggyBanks";
 
 /** Flattens populated User refs into { user_id, username, avatar }. */
 export function transformMembers(obj: any): any {
@@ -22,19 +22,19 @@ export function transformMembers(obj: any): any {
  * `item_count` is optional because the list view counts items in one batched query rather
  * than per book.
  *
- * `withGoalLedgers` is false for the books list only: a goal's totals are always sent, but
+ * `withPiggyBankLedgers` is false for the books list only: a goal's totals are always sent, but
  * shipping every goal's whole contribution history for every book would be a lot of
  * payload for a screen that never draws one.
  */
 export function serializeBook(
   book: any, itemCount?: number, reviewCount?: number, needsReviewCount?: number, lastItemAt?: Date,
-  withGoalLedgers = true,
+  withPiggyBankLedgers = true,
 ): any {
   const obj = typeof book.toObject === "function" ? book.toObject() : book;
   return {
     ...transformMembers(obj),
     _id: obj._id.toString(),
-    savings_goals: serializeGoals(obj.savings_goals, withGoalLedgers),
+    piggy_banks: serializePiggyBanks(obj.piggy_banks, withPiggyBankLedgers),
     is_creator: undefined,  // filled in per-request by the route; see serializeBookFor
     ...(itemCount === undefined ? {} : { item_count: itemCount }),
     ...(reviewCount === undefined ? {} : { review_count: reviewCount }),
@@ -49,9 +49,9 @@ export function serializeBook(
  */
 export function serializeBookFor(
   book: any, userId: string, itemCount?: number, reviewCount?: number, needsReviewCount?: number, lastItemAt?: Date,
-  withGoalLedgers = true,
+  withPiggyBankLedgers = true,
 ): any {
-  const obj = serializeBook(book, itemCount, reviewCount, needsReviewCount, lastItemAt, withGoalLedgers);
+  const obj = serializeBook(book, itemCount, reviewCount, needsReviewCount, lastItemAt, withPiggyBankLedgers);
   obj.is_creator = obj.created_by === userId;
   return obj;
 }

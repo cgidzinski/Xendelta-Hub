@@ -11,14 +11,13 @@ import { INCOME_COLOR } from "../../../../../components/ui/chartColors";
  * a colour or a sentence goes through this module.
  *
  * The direction is deliberately its OWN type rather than the budget's `measures`, because
- * two unrelated things point downward: an income budget, and a savings goal on the Goals
- * page. Keying these on `measures` would force a car fund to describe itself as income to
- * get the right colours. Callers map their own concept onto it - `directionOf` for a
- * budget, the literal "floor" for a goal.
+ * two unrelated things point downward: an income budget, and a piggy bank. Keying these
+ * on `measures` would force a telescope fund to describe itself as income to get the right
+ * colours. Callers map their own concept onto it - `directionOf` for a budget, the literal
+ * "floor" for a piggy bank.
  *
- * Goals share the maths here but bring their own WORDS (see goalProgress.ts): a floor on a
- * category has a target, a named fund has a target of its own, and one formatter serving
- * both is what once made renaming a budget retitle a goal card.
+ * Piggy banks share the maths here but bring their own WORDS (see piggyBankProgress.ts):
+ * one formatter serving both is what once made renaming a budget retitle a bank's card.
  */
 
 /** Whether the amount is a ceiling not to cross, or a floor to reach. */

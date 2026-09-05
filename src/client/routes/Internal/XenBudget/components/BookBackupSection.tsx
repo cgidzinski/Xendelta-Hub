@@ -17,7 +17,7 @@ interface BookBackupSectionProps {
 
 /**
  * Per-book backup. Distinct from the report page's CSV export, which is for analysis and
- * is lossy: this JSON round-trips flags, budgets, savings goals, rules, presets, shares
+ * is lossy: this JSON round-trips flags, budgets, piggy banks, rules, presets, shares
  * and exclusions.
  */
 export default function BookBackupSection({ book, isCreator }: BookBackupSectionProps) {
@@ -73,7 +73,7 @@ export default function BookBackupSection({ book, isCreator }: BookBackupSection
     return (
         <Box>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                A full backup of this book — items, flags, budgets, savings goals, rules and
+                A full backup of this book — items, flags, budgets, piggy banks, rules and
                 saved import mappings — as one JSON file.
             </Typography>
             <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
@@ -113,20 +113,20 @@ export default function BookBackupSection({ book, isCreator }: BookBackupSection
                         {target === "items" && (
                             <Alert severity="info">
                                 Items this book already has are skipped, so restoring over live data
-                                won&rsquo;t double anything. Budgets, savings goals, categories, flags and
+                                won&rsquo;t double anything. Budgets, piggy banks, categories, flags and
                                 rules are left untouched.
                             </Alert>
                         )}
                         {target === "config" && (
                             <Alert severity="info">
-                                Budgets, savings goals, tagging rules and saved import mappings are
+                                Budgets, piggy banks, tagging rules and saved import mappings are
                                 replaced by the backup&rsquo;s; categories and flags are merged by name.
                                 Items are left untouched.
                             </Alert>
                         )}
                         {target === "everything" && (
                             <Alert severity="warning">
-                                Every item, budget, savings goal, rule and saved import mapping in
+                                Every item, budget, piggy bank, rule and saved import mapping in
                                 &ldquo;{book.name}&rdquo; is deleted and replaced by the backup; categories and
                                 flags are merged by name. This cannot be undone.
                             </Alert>

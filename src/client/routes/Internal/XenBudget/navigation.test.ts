@@ -12,10 +12,10 @@ describe("top-level tab matching", () => {
         expect(activeIndex(`${base}/settings`, TAB_PATHS)).toBe(3);
     });
 
-    it("leaves every tab unselected on the goals page, which is not a tab", () => {
+    it("leaves every tab unselected on the piggy banks page, which is not a tab", () => {
         // Reached from a button on the Overview, so the bar has nothing to highlight -
         // and MUI wants `false` for that, not the -1 a bare findIndex would give.
-        expect(activeIndex(`${base}/goals`, TAB_PATHS)).toBe(false);
+        expect(activeIndex(`${base}/piggy-banks`, TAB_PATHS)).toBe(false);
     });
 
     it("keeps Settings selected while inside any of its sections", () => {

@@ -477,7 +477,7 @@ export const xenBudgetRestoreSchema = z.object({
     categories: z.array(z.any()).max(500).optional(),
     flags: z.array(z.any()).max(500).optional(),
     budgets: z.array(z.any()).max(500).optional(),
-    savings_goals: z.array(z.any()).max(500).optional(),
+    piggy_banks: z.array(z.any()).max(500).optional(),
     rules: z.array(z.any()).max(500).optional(),
     import_presets: z.array(z.any()).max(200).optional(),
     members: z.array(z.object({
@@ -703,33 +703,34 @@ export const updateXenBudgetBudgetSchema = budgetRefinements(z.object(budgetShap
 
 // --- Savings goals ---------------------------------------------------------
 
-export const xenBudgetGoalParamSchema = z.object({
+export const xenBudgetPiggyBankParamSchema = z.object({
   bookId: objectIdSchema,
-  goalId: objectIdSchema,
+  bankId: objectIdSchema,
 });
 
 export const xenBudgetContributionParamSchema = z.object({
   bookId: objectIdSchema,
-  goalId: objectIdSchema,
+  bankId: objectIdSchema,
   contributionId: objectIdSchema,
 });
 
-const goalShape = {
+const piggyBankShape = {
   name: z.string().min(1, "A name is required").max(100, "Name too long"),
   description: z.string().max(500, "Description too long").optional(),
   target_amount: z.number("Target must be a number").positive("Target must be positive"),
   currency: z.string().max(10).optional(),
-  // Which category a mirrored transaction is tagged with. That the name EXISTS in this
-  // book is checked in the route, the way a budget's target is.
-  category: z.string().max(50).optional(),
+  // Which category every contribution books under. Required - a contribution IS an
+  // expense now, and one with nowhere to book would land uncategorised. That the name
+  // EXISTS in this book is checked in the route, the way a budget's target is.
+  category: z.string().min(1, "Pick a category").max(50),
   status: z.enum(["active", "completed", "archived"]).optional(),
 };
 
-export const createXenBudgetGoalSchema = z.object(goalShape);
+export const createXenBudgetPiggyBankSchema = z.object(piggyBankShape);
 
 // Every field optional: the card edits status on its own (Mark complete, Archive) without
-// resending the whole goal.
-export const updateXenBudgetGoalSchema = z.object(goalShape).partial();
+// resending the whole piggy bank.
+export const updateXenBudgetPiggyBankSchema = z.object(piggyBankShape).partial();
 
 const contributionShape = {
   // Always positive on the wire; `direction` carries the sign, the same way an item's
@@ -739,8 +740,6 @@ const contributionShape = {
   direction: z.enum(["in", "out"]).optional(),
   date: z.string().datetime().optional(),
   note: z.string().max(200, "Note too long").optional(),
-  /** Also write a matching book item, so the money shows up in the book's cash flow. */
-  record_item: z.boolean().optional(),
 };
 
 export const createXenBudgetContributionSchema = z.object(contributionShape);

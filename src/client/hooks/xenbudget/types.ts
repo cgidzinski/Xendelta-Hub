@@ -66,13 +66,13 @@ export interface XenBudgetBudget {
 }
 
 /**
- * One movement in or out of a savings goal.
+ * One movement in or out of a piggy bank.
  *
- * `amount` is SIGNED - positive put money in, negative took it back out - so a goal's
+ * `amount` is SIGNED - positive put money in, negative took it back out - so a bank's
  * balance is a plain sum of its ledger. Requests send a positive amount plus a direction
  * instead (see ContributionInput); the sign is the server's.
  */
-export interface XenBudgetGoalContribution {
+export interface XenBudgetPiggyBankContribution {
     _id: string;
     amount: number;
     date: string;
@@ -84,25 +84,26 @@ export interface XenBudgetGoalContribution {
     created_at: string;
 }
 
-export type GoalStatus = "active" | "completed" | "archived";
+export type PiggyBankStatus = "active" | "completed" | "archived";
 
 /**
- * A thing being saved FOR: a new car, a trip.
+ * Surplus budget set aside toward a future purchase.
  *
- * Distinct from a budget of kind "goal", which is a per-period floor on a category and
- * forgets everything once the period rolls over. A savings goal carries its own ledger, so
- * its balance accumulates across months and "how close am I?" has an answer.
+ * Deliberately not savings: nothing moves between accounts. Underspend on Hobbies, put $50
+ * into "New telescope", and that $50 books as a Hobbies expense - the budget line it came
+ * from. The ledger is what makes the balance accumulate across periods, which a budget,
+ * measured fresh each period, can never do.
  */
-export interface XenBudgetSavingsGoal {
+export interface XenBudgetPiggyBank {
     _id: string;
     name: string;
     description?: string;
     target_amount: number;
-    /** Amounts in different currencies can't be added, so a goal is in exactly one. */
+    /** Amounts in different currencies can't be added, so a bank is in exactly one. */
     currency: string;
-    /** Which category a mirrored transaction is tagged with, if the goal names one. */
+    /** The category every contribution books its expense under. */
     category?: string;
-    status: GoalStatus;
+    status: PiggyBankStatus;
     completed_at?: string;
     /** Server-computed: the signed sum of the ledger. Always present, list view included. */
     saved: number;
@@ -113,20 +114,20 @@ export interface XenBudgetSavingsGoal {
     /**
      * The ledger itself. Present on the single-book endpoint only - the books LIST omits
      * it, since no screen there draws a contribution. Read `saved` for the balance rather
-     * than summing this, which would report every goal as empty on that list.
+     * than summing this, which would report every bank as empty on that list.
      */
-    contributions?: XenBudgetGoalContribution[];
+    contributions?: XenBudgetPiggyBankContribution[];
     created_by: string;
     created_at: string;
 }
 
-export interface GoalInput {
+export interface PiggyBankInput {
     name?: string;
     description?: string;
     target_amount?: number;
     currency?: string;
     category?: string;
-    status?: GoalStatus;
+    status?: PiggyBankStatus;
 }
 
 export interface ContributionInput {
@@ -136,8 +137,6 @@ export interface ContributionInput {
     direction?: "in" | "out";
     date?: string;
     note?: string;
-    /** Also write a matching book item, so the money shows in the book's cash flow. */
-    record_item?: boolean;
 }
 
 export type RuleField =
@@ -190,7 +189,7 @@ export interface XenBudgetBook {
     categories: XenBudgetLabel[];
     flags: XenBudgetLabel[];
     budgets: XenBudgetBudget[];
-    savings_goals: XenBudgetSavingsGoal[];
+    piggy_banks: XenBudgetPiggyBank[];
     rules: XenBudgetRule[];
     import_presets: XenBudgetImportPreset[];
     archived: boolean;

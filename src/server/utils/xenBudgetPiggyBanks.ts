@@ -1,24 +1,24 @@
-// Derived figures for savings goals, and their wire shape.
+// Derived figures for piggy banks, and their wire shape.
 //
-// A goal's balance is the sum of its ledger, and that sum is computed HERE rather than on
-// the client for one reason: the books-list endpoint ships goals without their
-// contributions (see serializeGoals), so a client that summed for itself would report
-// every goal as empty on that screen. The client is handed `saved` and derives only the
+// A bank's balance is the sum of its ledger, and that sum is computed HERE rather than on
+// the client for one reason: the books-list endpoint ships banks without their
+// contributions (see serializePiggyBanks), so a client that summed for itself would report
+// every bank as empty on that screen. The client is handed `saved` and derives only the
 // percentage from it.
 
 import { roundMoney } from "./xenBudgetUtils";
 
 /** What one person has put into a goal, net of anything they took back out. */
-export interface GoalPersonSaved {
+export interface PiggyBankPersonSaved {
   user_id: string;
   amount: number;
 }
 
-export interface GoalSummary {
+export interface PiggyBankSummary {
   saved: number;
   contribution_count: number;
   last_contribution_at?: string;
-  by_person: GoalPersonSaved[];
+  by_person: PiggyBankPersonSaved[];
 }
 
 /**
@@ -28,7 +28,7 @@ export interface GoalSummary {
  * the card. `by_person` is biggest first and mirrors BudgetPersonSpend, so the two can be
  * rendered by the same kind of row.
  */
-export function summarizeGoal(goal: any): GoalSummary {
+export function summarizePiggyBank(goal: any): PiggyBankSummary {
   const contributions: any[] = goal?.contributions || [];
   let saved = 0;
   let last: Date | undefined;
@@ -67,11 +67,11 @@ function serializeContribution(c: any): any {
 /**
  * One goal on the wire. `includeContributions` is false for the books list, where a year
  * of ledgers across every book would be a lot of payload for a screen that only draws a
- * count - the totals from summarizeGoal are always present either way.
+ * count - the totals from summarizePiggyBank are always present either way.
  */
-export function serializeGoal(goal: any, includeContributions: boolean): any {
+export function serializePiggyBank(goal: any, includeContributions: boolean): any {
   const obj = typeof goal.toObject === "function" ? goal.toObject() : goal;
-  const summary = summarizeGoal(obj);
+  const summary = summarizePiggyBank(obj);
   const { contributions, ...rest } = obj;
   return {
     ...rest,
@@ -86,6 +86,6 @@ export function serializeGoal(goal: any, includeContributions: boolean): any {
   };
 }
 
-export function serializeGoals(goals: any[] | undefined, includeContributions: boolean): any[] {
-  return (goals || []).map((g) => serializeGoal(g, includeContributions));
+export function serializePiggyBanks(goals: any[] | undefined, includeContributions: boolean): any[] {
+  return (goals || []).map((g) => serializePiggyBank(g, includeContributions));
 }
