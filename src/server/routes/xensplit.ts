@@ -30,7 +30,7 @@ import { notify } from "../utils/notificationUtils";
 import { advanceDate, applyAdvance } from "../utils/scheduleUtils";
 import { dispatchTask } from "../infrastructure/TaskDispatcher";
 import { XENSPLIT_RECURRING_TASK_TYPE } from "../utils/xensplitRecurringHandler";
-import { serializeXenSplitGroup, serializeXenSplitGroups } from "../utils/xenSplitSerializer";
+import { serializeXenSplitGroup, serializeXenSplitGroups, serializeEtransfer, MEMBER_FIELDS } from "../utils/xenSplitSerializer";
 const mongoose = require("mongoose");
 const ScheduledTask = require("../models/scheduledTask");
 
@@ -50,7 +50,7 @@ module.exports = function (app: any) {
     try {
       const userId = (req.user as any)._id.toString();
       const groups = await XenSplit.find({ members: userId })
-        .populate("members", "username avatar")
+        .populate("members", MEMBER_FIELDS)
         .sort({ created_at: -1 });
 
       const data = await serializeXenSplitGroups(groups);
@@ -92,7 +92,7 @@ module.exports = function (app: any) {
       });
 
       await group.save();
-      await group.populate("members", "username avatar");
+      await group.populate("members", MEMBER_FIELDS);
       const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
       SocketManager.getInstance().notifyXenSplitGroupsUpdated(allMemberIds);
       res.json({ status: true, message: "Group created", data: await serializeXenSplitGroup(group) });
@@ -118,7 +118,7 @@ module.exports = function (app: any) {
         return res.status(403).json({ status: false, message: "Not a member of this group" });
       }
 
-      await group.populate("members", "username avatar");
+      await group.populate("members", MEMBER_FIELDS);
       const groupObj = await serializeXenSplitGroup(group);
       const memberMap: any = {};
       for (const m of groupObj.members) {
@@ -159,7 +159,7 @@ module.exports = function (app: any) {
         group.secondary_currencies = sanitizeSecondaryCurrencies(group.default_currency, secondary_currencies ?? group.secondary_currencies);
       }
       await group.save();
-      await group.populate("members", "username avatar");
+      await group.populate("members", MEMBER_FIELDS);
 
       const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
       SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
@@ -193,7 +193,7 @@ module.exports = function (app: any) {
       const { url } = await uploadXenSplitGroupImageFile(req.file, groupId);
       group.image_url = url;
       await group.save();
-      await group.populate("members", "username avatar");
+      await group.populate("members", MEMBER_FIELDS);
 
       const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
       SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
@@ -258,7 +258,7 @@ module.exports = function (app: any) {
 
       group.created_by = newOwnerId;
       await group.save();
-      await group.populate("members", "username avatar");
+      await group.populate("members", MEMBER_FIELDS);
 
       const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
       SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
@@ -301,7 +301,7 @@ module.exports = function (app: any) {
       }
 
       await group.save();
-      await group.populate("members", "username avatar");
+      await group.populate("members", MEMBER_FIELDS);
 
       const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
       SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
@@ -359,7 +359,7 @@ module.exports = function (app: any) {
 
       group.members = group.members.filter((m: any) => m.toString() !== targetUserId);
       await group.save();
-      await group.populate("members", "username avatar");
+      await group.populate("members", MEMBER_FIELDS);
 
       // Notify removed user if they were removed by someone else (not a voluntary leave)
       if (targetUserId !== userId) {
@@ -452,7 +452,7 @@ module.exports = function (app: any) {
             pending_expense: expense,
           },
         });
-        await group.populate("members", "username avatar");
+        await group.populate("members", MEMBER_FIELDS);
         const scheduledMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
         SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, scheduledMemberIds);
         return res.json({ status: true, message: "Recurring expense scheduled", data: { group: await serializeXenSplitGroup(group), newExpenseId: null } });
@@ -484,7 +484,7 @@ module.exports = function (app: any) {
         const generated = await dispatchTask(task);
         if (generated > 0) respGroup = await XenSplit.findById(groupId);
       }
-      await respGroup.populate("members", "username avatar");
+      await respGroup.populate("members", MEMBER_FIELDS);
 
       const actor = (respGroup.members as any[]).find((m: any) => m._id.toString() === userId);
       const actorName = actor?.username || "Someone";
@@ -610,7 +610,7 @@ module.exports = function (app: any) {
         const generated = await dispatchTask(series);
         if (generated > 0) respGroup = await XenSplit.findById(groupId);
       }
-      await respGroup.populate("members", "username avatar");
+      await respGroup.populate("members", MEMBER_FIELDS);
 
       const actor = (respGroup.members as any[]).find((m: any) => m._id.toString() === userId);
       const actorName = actor?.username || "Someone";
@@ -675,7 +675,7 @@ module.exports = function (app: any) {
 
       group.expenses.splice(expenseIndex, 1);
       await group.save();
-      await group.populate("members", "username avatar");
+      await group.populate("members", MEMBER_FIELDS);
 
       const deletedMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
       SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, deletedMemberIds);
@@ -714,7 +714,7 @@ module.exports = function (app: any) {
       }
 
       await series.deleteOne();
-      await group.populate("members", "username avatar");
+      await group.populate("members", MEMBER_FIELDS);
 
       const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
       SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
@@ -767,7 +767,7 @@ module.exports = function (app: any) {
       }
 
       await group.save();
-      await group.populate("members", "username avatar");
+      await group.populate("members", MEMBER_FIELDS);
 
       const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
       SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
@@ -808,7 +808,7 @@ module.exports = function (app: any) {
       await deleteFromGCS(image.gcs_path, true).catch(() => { });
       expense.images.splice(imageIndex, 1);
       await group.save();
-      await group.populate("members", "username avatar");
+      await group.populate("members", MEMBER_FIELDS);
 
       const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
       SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
@@ -904,7 +904,7 @@ module.exports = function (app: any) {
         return res.status(403).json({ status: false, message: "Not a member of this group" });
       }
 
-      await group.populate("members", "username avatar");
+      await group.populate("members", MEMBER_FIELDS);
       const populatedMembers: any[] = group.members;
       const userMap: any = {};
       populatedMembers.forEach((m: any) => { userMap[m._id.toString()] = m; });
@@ -914,19 +914,32 @@ module.exports = function (app: any) {
       const balances = calculateBalances(groupForCalc);
       const settlements = calculateMinimumTransfers(balances);
 
-      // Enrich with user details
+      // Enrich with user details. The payer needs somewhere to send the money, so each
+      // side carries its e-transfer destination — picked out of the populated member
+      // document rather than spreading the whole thing.
+      const enrichedUser = (uid: string) => {
+        const m = userMap[uid];
+        if (!m) return { _id: uid, username: "Unknown", avatar: null, etransfer: null };
+        return {
+          _id: m._id,
+          username: m.username,
+          avatar: m.avatar || null,
+          etransfer: serializeEtransfer(m.etransfer),
+        };
+      };
+
       const enrichedBalances: any = {};
       for (const [uid, currencyBalances] of Object.entries(balances)) {
         enrichedBalances[uid] = {
-          user: userMap[uid] || { _id: uid, username: "Unknown", avatar: null },
+          user: enrichedUser(uid),
           balances: currencyBalances,
         };
       }
 
       const enrichedSettlements = settlements.map((s: any) => ({
         ...s,
-        fromUser: userMap[s.from] || { _id: s.from, username: "Unknown", avatar: null },
-        toUser: userMap[s.to] || { _id: s.to, username: "Unknown", avatar: null },
+        fromUser: enrichedUser(s.from),
+        toUser: enrichedUser(s.to),
       }));
 
       res.json({
@@ -975,7 +988,7 @@ module.exports = function (app: any) {
       });
 
       await group.save();
-      await group.populate("members", "username avatar");
+      await group.populate("members", MEMBER_FIELDS);
 
       const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
       SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
@@ -1019,7 +1032,7 @@ module.exports = function (app: any) {
 
       group.settlements.splice(settlementIndex, 1);
       await group.save();
-      await group.populate("members", "username avatar");
+      await group.populate("members", MEMBER_FIELDS);
 
       const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
       SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
@@ -1074,7 +1087,7 @@ module.exports = function (app: any) {
       } as any);
 
       await group.save();
-      await group.populate("members", "username avatar");
+      await group.populate("members", MEMBER_FIELDS);
 
       const actor = (group.members as any[]).find((m: any) => m._id.toString() === userId);
       const actorName = actor?.username || "Someone";
@@ -1121,7 +1134,7 @@ module.exports = function (app: any) {
 
       group.exchanges.splice(exchangeIndex, 1);
       await group.save();
-      await group.populate("members", "username avatar");
+      await group.populate("members", MEMBER_FIELDS);
 
       const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
       SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
