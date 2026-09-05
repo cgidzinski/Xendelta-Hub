@@ -11,7 +11,7 @@ const TO = new Date(Date.UTC(2026, 8, 1));
 
 function budget(patch: Partial<BudgetStatus> = {}): BudgetStatus {
     return {
-        _id: "b1", categories: ["Groceries"], kind: "cap", period: "monthly",
+        _id: "b1", categories: ["Groceries"], measures: "expense", period: "monthly",
         spent: 0, item_count: 0, amount: 800, remaining: 800, percent: 0, over: false,
         by_person: [], sub_budgets: [],
         period_from: FROM.toISOString(), period_to: TO.toISOString(),
@@ -413,7 +413,7 @@ describe("every category gets a row", () => {
     });
 });
 
-describe("savings goals", () => {
+describe("income targets", () => {
     const MONTHS = ["2026-01", "2026-02", "2026-03"];
 
     const withSavings = {
@@ -438,55 +438,78 @@ describe("savings goals", () => {
         rangeTo: new Date(Date.UTC(2026, 3, 1)),
     };
 
-    const goal = (patch = {}) =>
-        budget({ kind: "goal" as const, categories: ["Savings"], amount: 500, ...patch });
+    const incomeTarget = (patch = {}) =>
+        budget({ measures: "income" as const, categories: ["Savings"], amount: 500, ...patch });
 
     it("marks the row so the table can flip its meaning", () => {
-        const { rows } = buildCategoryReport({ ...withSavings, budgets: [goal()] });
+        const { rows } = buildCategoryReport({ ...withSavings, budgets: [incomeTarget()] });
         const savings = rows.find((r) => r.label === "Savings");
-        expect(savings?.kind).toBe("goal");
+        expect(savings?.measures).toBe("income");
         expect(savings?.budgeted).toBeCloseTo(1500, 6);
     });
 
     it("leaves a capped row marked as a cap", () => {
         const { rows } = buildCategoryReport({
-            ...withSavings, budgets: [budget({ amount: 800 }), goal()],
+            ...withSavings, budgets: [budget({ amount: 800 }), incomeTarget()],
         });
-        expect(rows.find((r) => r.label === "Groceries")?.kind).toBe("cap");
+        expect(rows.find((r) => r.label === "Groceries")?.measures).toBe("expense");
     });
 
-    it("never adds a savings target to a spending cap", () => {
-        const { totalCapped, totalGoal } = buildCategoryReport({
-            ...withSavings, budgets: [budget({ amount: 800 }), goal()],
+    it("keeps opposing budgets on ONE category apart, rather than adding them", () => {
+        // The case the direction split exists for: an expense cap and an income target can
+        // both name "Savings", and summing them would produce a figure that means nothing.
+        // The first direction seen holds the cell; the other still counts in its own total.
+        const { totalCapped, totalTarget } = buildCategoryReport({
+            ...withSavings,
+            budgets: [budget({ categories: ["Savings"], amount: 800 }), incomeTarget()],
         });
         expect(totalCapped).toBeCloseTo(2400, 6);
-        expect(totalGoal).toBeCloseTo(1500, 6);
+        expect(totalTarget).toBeCloseTo(1500, 6);
+    });
+
+    it("counts a savings budget as a target, not as a cap", () => {
+        // It counts expense items like a cap does, so the only thing keeping it out of the
+        // cap column is that the report asks directionOf rather than checking for income.
+        const { totalCapped, totalTarget } = buildCategoryReport({
+            ...withSavings,
+            budgets: [budget({ measures: "saving" as const, categories: ["Savings"], amount: 500 })],
+        });
+        expect(totalTarget).toBeCloseTo(1500, 6);
+        expect(totalCapped).toBe(0);
+    });
+
+    it("never adds an income target to a spending cap", () => {
+        const { totalCapped, totalTarget } = buildCategoryReport({
+            ...withSavings, budgets: [budget({ amount: 800 }), incomeTarget()],
+        });
+        expect(totalCapped).toBeCloseTo(2400, 6);
+        expect(totalTarget).toBeCloseTo(1500, 6);
     });
 
     it("reports what was actually saved against the target", () => {
-        const { summary, goalSaved } = buildCategoryReport({ ...withSavings, budgets: [goal()] });
-        expect(goalSaved).toBe(900);
-        expect(summary.saved.total).toBe(900);
-        expect(summary.saved.byPeriod).toEqual({ "2026-01": 300, "2026-02": 300, "2026-03": 300 });
-        expect(summary.goals.byPeriod).toEqual({ "2026-01": 500, "2026-02": 500, "2026-03": 500 });
+        const { summary, towardTargets } = buildCategoryReport({ ...withSavings, budgets: [incomeTarget()] });
+        expect(towardTargets).toBe(900);
+        expect(summary.towardTargets.total).toBe(900);
+        expect(summary.towardTargets.byPeriod).toEqual({ "2026-01": 300, "2026-02": 300, "2026-03": 300 });
+        expect(summary.targets.byPeriod).toEqual({ "2026-01": 500, "2026-02": 500, "2026-03": 500 });
     });
 
     it("keeps savings out of the caps comparison entirely", () => {
         const { summary } = buildCategoryReport({
-            ...withSavings, budgets: [budget({ amount: 800 }), goal()],
+            ...withSavings, budgets: [budget({ amount: 800 }), incomeTarget()],
         });
         // Caps left weighs the Groceries cap against Groceries spending - the $900 put
         // into Savings is not an overspend against anything.
         expect(summary.capsLeft.total).toBeCloseTo(2400 - 620, 6);
     });
 
-    it("flags that goals exist so the table can title its columns", () => {
-        expect(buildCategoryReport({ ...withSavings, budgets: [goal()] }).hasGoals).toBe(true);
-        expect(buildCategoryReport({ ...withSavings, budgets: [budget()] }).hasGoals).toBe(false);
+    it("flags that income targets exist so the table can title its columns", () => {
+        expect(buildCategoryReport({ ...withSavings, budgets: [incomeTarget()] }).hasTargets).toBe(true);
+        expect(buildCategoryReport({ ...withSavings, budgets: [budget()] }).hasTargets).toBe(false);
     });
 
     it("still counts savings in total spending, since that is what it is", () => {
-        const { summary } = buildCategoryReport({ ...withSavings, budgets: [goal()] });
+        const { summary } = buildCategoryReport({ ...withSavings, budgets: [incomeTarget()] });
         expect(summary.spent.total).toBe(2700);
     });
 });

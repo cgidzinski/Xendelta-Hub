@@ -3,6 +3,7 @@ import type { BudgetStatus, XenBudgetMember } from "../../../../../hooks/xenbudg
 import { formatCurrency } from "../../currency";
 import { cardSx, sectionLabelSx } from "../../../../../components/ui/surfaceStyles";
 import { memberColor } from "./budgetColors";
+import { directionOf } from "./budgetKind";
 import BudgetTarget from "./BudgetTarget";
 
 interface BudgetBreakdownProps {
@@ -34,7 +35,7 @@ export default function BudgetBreakdown({
             {breakdown.length > 0 && (
                 <Box sx={{ ...cardSx, p: 1.25 }}>
                     <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.75 }}>
-                        {budget.kind === "goal" ? "Who put it in" : "Who spent it"}
+                        {directionOf(budget.measures) === "floor" ? "Who put it in" : "Who spent it"}
                     </Typography>
                     <Stack spacing={1}>
                         {breakdown.map((person) => {

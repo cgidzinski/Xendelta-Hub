@@ -4,7 +4,7 @@ import {
 import type { SxProps, Theme } from "@mui/material";
 import type { CategoryReport, CategoryReportRow, PeriodTotals } from "./categoryReportRows";
 import { isCurrentPeriod, periodColumnLabels } from "./periodColumns";
-import { limitState, limitColor } from "../budget/budgetKind";
+import { directionOf, limitState, limitColor } from "../budget/budgetKind";
 import { CategoryChip } from "../LabelChip";
 import type { XenBudgetLabel } from "../../../../../hooks/xenbudget/types";
 import { cardSx, sectionLabelSx } from "../../../../../components/ui/surfaceStyles";
@@ -36,7 +36,7 @@ interface CategoryReportTableProps {
 export default function CategoryReportTable({
     report, money, round, categoryRegistry, rangeLabel,
 }: CategoryReportTableProps) {
-    const { rows, spanning, wholeBook, hasBudgets, hasGoals, periodKeys, periodCount, summary } = report;
+    const { rows, spanning, wholeBook, hasBudgets, hasTargets, periodKeys, periodCount, summary } = report;
     const pivoted = periodKeys.length > 0;
     const columnLabels = periodColumnLabels(periodKeys);
     const avg = (v: number) => (periodCount > 0 ? v / periodCount : v);
@@ -58,10 +58,10 @@ export default function CategoryReportTable({
             return <TableCell align="right" sx={{ color: "text.disabled" }}>—</TableCell>;
         }
         const left = row.budgeted - row.spent;
-        // Same arithmetic, opposite news: a cap in deficit has been overspent, a goal in
+        // Same arithmetic, opposite news: a cap in deficit has been overspent, a target in
         // deficit has been oversaved. The colour comes from the state, not the sign.
         const percent = row.budgeted > 0 ? (row.spent / row.budgeted) * 100 : 0;
-        const state = limitState(row.kind ?? "cap", percent);
+        const state = limitState(directionOf(row.measures ?? "expense"), percent);
         return (
             <TableCell align="right" sx={{ color: limitColor(state) ?? "text.secondary" }}>
                 {left < 0 ? `−${round(-left)}` : round(left)}
@@ -232,7 +232,7 @@ export default function CategoryReportTable({
                             {pivoted && <TableCell align="right">Average</TableCell>}
                             <TableCell align="right">{pivoted ? "Total" : "Spent"}</TableCell>
                             {hasBudgets && <TableCell align="right">Budgeted</TableCell>}
-                            {hasBudgets && <TableCell align="right">{hasGoals ? "Left / to go" : "Left"}</TableCell>}
+                            {hasBudgets && <TableCell align="right">{hasTargets ? "Left / to go" : "Left"}</TableCell>}
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -261,13 +261,14 @@ export default function CategoryReportTable({
                         )}
 
                         {/* The bottom line, grouped into three sections, each a heading
-                        and three lines, always shown even before any budget or goal
-                        exists. Savings and Budget stay apart deliberately: adding a
-                        spending ceiling to a savings floor means nothing. */}
-                        {sectionHeader("Savings", true)}
-                        {totalRow("Save", summary.saved, { color: INCOME_COLOR })}
-                        {totalRow("Goal", summary.goals)}
-                        {totalRow("Left to save", minus(summary.goals, summary.saved), { negative: "green" })}
+                        and three lines, always shown even before any budget or target
+                        exists. Targets and Budget stay apart deliberately: adding a
+                        spending ceiling to a floor means nothing - and both income and
+                        savings budgets are floors, so they share this section. */}
+                        {sectionHeader("Targets", true)}
+                        {totalRow("Counted", summary.towardTargets, { color: INCOME_COLOR })}
+                        {totalRow("Target", summary.targets)}
+                        {totalRow("Short by", minus(summary.targets, summary.towardTargets), { negative: "green" })}
                         {sectionHeader("Budget", false)}
                         {totalRow("Spend", minus(summary.capped, summary.capsLeft))}
                         {totalRow("Cap", summary.capped)}

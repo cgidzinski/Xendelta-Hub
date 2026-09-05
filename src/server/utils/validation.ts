@@ -477,6 +477,7 @@ export const xenBudgetRestoreSchema = z.object({
     categories: z.array(z.any()).max(500).optional(),
     flags: z.array(z.any()).max(500).optional(),
     budgets: z.array(z.any()).max(500).optional(),
+    savings_goals: z.array(z.any()).max(500).optional(),
     rules: z.array(z.any()).max(500).optional(),
     import_presets: z.array(z.any()).max(200).optional(),
     members: z.array(z.object({
@@ -667,8 +668,8 @@ const subBudgetShape = z.object({
 
 const budgetShape = {
   categories: z.array(z.string().max(50)).max(20, "Too many categories").optional(),
-  // Omitted means a cap, so every budget stored before goals existed keeps its meaning.
-  kind: z.enum(["cap", "goal"]).optional(),
+  // Omitted means expenses, so every budget stored before this existed keeps its meaning.
+  measures: z.enum(["expense", "income", "saving"]).optional(),
   period: z.enum(["weekly", "monthly", "quarterly", "yearly", "custom"]),
   // Optional, unlike the per-person amounts below: a budget may cap only named people.
   amount: z.number("Amount must be a number").positive("Amount must be positive").optional(),
@@ -699,6 +700,51 @@ const budgetRefinements = (schema: z.ZodType<any>) => schema
 export const createXenBudgetBudgetSchema = budgetRefinements(z.object(budgetShape));
 
 export const updateXenBudgetBudgetSchema = budgetRefinements(z.object(budgetShape));
+
+// --- Savings goals ---------------------------------------------------------
+
+export const xenBudgetGoalParamSchema = z.object({
+  bookId: objectIdSchema,
+  goalId: objectIdSchema,
+});
+
+export const xenBudgetContributionParamSchema = z.object({
+  bookId: objectIdSchema,
+  goalId: objectIdSchema,
+  contributionId: objectIdSchema,
+});
+
+const goalShape = {
+  name: z.string().min(1, "A name is required").max(100, "Name too long"),
+  description: z.string().max(500, "Description too long").optional(),
+  target_amount: z.number("Target must be a number").positive("Target must be positive"),
+  currency: z.string().max(10).optional(),
+  // Which category a mirrored transaction is tagged with. That the name EXISTS in this
+  // book is checked in the route, the way a budget's target is.
+  category: z.string().max(50).optional(),
+  status: z.enum(["active", "completed", "archived"]).optional(),
+};
+
+export const createXenBudgetGoalSchema = z.object(goalShape);
+
+// Every field optional: the card edits status on its own (Mark complete, Archive) without
+// resending the whole goal.
+export const updateXenBudgetGoalSchema = z.object(goalShape).partial();
+
+const contributionShape = {
+  // Always positive on the wire; `direction` carries the sign, the same way an item's
+  // `type` does. A signed amount posted straight through would let a "contribute" button
+  // subtract by passing a minus sign.
+  amount: z.number("Amount must be a number").positive("Amount must be positive"),
+  direction: z.enum(["in", "out"]).optional(),
+  date: z.string().datetime().optional(),
+  note: z.string().max(200, "Note too long").optional(),
+  /** Also write a matching book item, so the money shows up in the book's cash flow. */
+  record_item: z.boolean().optional(),
+};
+
+export const createXenBudgetContributionSchema = z.object(contributionShape);
+export const updateXenBudgetContributionSchema = z.object(contributionShape).partial();
 
 // One shape for both label registries — categories and flags differ in meaning, not form.
 export const xenBudgetLabelParamSchema = z.object({

@@ -5,6 +5,7 @@ import { useXenBudgetBook } from "../../../../hooks/xenbudget/useBook";
 import { useXenBudgetSummary } from "../../../../hooks/xenbudget/useSummary";
 import { useXenBudgetStatus } from "../../../../hooks/xenbudget/useBudgets";
 import { budgetPace } from "../../XenBudget/components/budget/budgetPace";
+import { directionOf } from "../../XenBudget/components/budget/budgetKind";
 import TotalsSummary from "../../XenBudget/components/TotalsSummary";
 import { formatCurrency } from "../../XenBudget/currency";
 import { cardSx, sectionLabelSx } from "../../../../components/ui/surfaceStyles";
@@ -33,7 +34,7 @@ function mostRecentlyActive(books: XenBudgetBook[]): XenBudgetBook | undefined {
  * is tightest, never both, so the same dollars aren't counted twice within one budget.
  */
 function budgetAhead(budget: BudgetStatus): { ahead: number; amount: number } | null {
-    if (budget.kind === "goal") return null;
+    if (directionOf(budget.measures) === "floor") return null;
     const tightestSub = [...budget.sub_budgets].sort((a, b) => b.percent - a.percent)[0];
     const useSub = budget.amount === undefined
         || (tightestSub && tightestSub.percent > (budget.percent ?? 0));

@@ -27,13 +27,22 @@ export interface XenBudgetLabel {
 export type BudgetPeriod = "weekly" | "monthly" | "quarterly" | "yearly" | "custom";
 
 /**
- * Which way a budget's amount points.
+ * What a budget watches - and therefore which way its amount points.
  *
- * `cap` is a ceiling on spending - passing it is the failure. `goal` is a floor: money
- * moved into a savings category, where reaching the amount is the point and passing it is
- * better still. Both are measured identically; only the comparison and the colours differ.
+ *   expense - spending, a ceiling. Passing it is the failure.
+ *   income  - money coming in, a floor. Falling short is.
+ *   saving  - money moved into a savings category. Counts the same EXPENSE items a cap
+ *             would, but reads as a floor: "put away at least this much".
+ *
+ * All three are measured identically; only the comparison and the colours differ, so
+ * direction is derived from this (see directionOf) rather than being a second thing to
+ * configure. One question with three answers is what keeps a nonsense pairing - income
+ * with a ceiling - unexpressable.
+ *
+ * Note that direction is NOT the same question as which item type is counted: `saving`
+ * points like `income` but counts like `expense`.
  */
-export type BudgetKind = "cap" | "goal";
+export type BudgetMeasures = "expense" | "income" | "saving";
 
 /** One person's limit nested inside a budget, sharing its categories, period and window. */
 export interface XenBudgetSubBudget {
@@ -46,7 +55,7 @@ export interface XenBudgetBudget {
     _id: string;
     /** Empty = every category. */
     categories: string[];
-    kind: BudgetKind;
+    measures: BudgetMeasures;
     period: BudgetPeriod;
     /** The overall limit. Unset when the budget caps only the people in `sub_budgets`. */
     amount?: number;
@@ -54,6 +63,81 @@ export interface XenBudgetBudget {
     start_date?: string;
     end_date?: string;
     active: boolean;
+}
+
+/**
+ * One movement in or out of a savings goal.
+ *
+ * `amount` is SIGNED - positive put money in, negative took it back out - so a goal's
+ * balance is a plain sum of its ledger. Requests send a positive amount plus a direction
+ * instead (see ContributionInput); the sign is the server's.
+ */
+export interface XenBudgetGoalContribution {
+    _id: string;
+    amount: number;
+    date: string;
+    note?: string;
+    /** Who moved it. */
+    user_id: string;
+    /** The book item this contribution also created, when it was recorded as one. */
+    item_id?: string;
+    created_at: string;
+}
+
+export type GoalStatus = "active" | "completed" | "archived";
+
+/**
+ * A thing being saved FOR: a new car, a trip.
+ *
+ * Distinct from a budget of kind "goal", which is a per-period floor on a category and
+ * forgets everything once the period rolls over. A savings goal carries its own ledger, so
+ * its balance accumulates across months and "how close am I?" has an answer.
+ */
+export interface XenBudgetSavingsGoal {
+    _id: string;
+    name: string;
+    description?: string;
+    target_amount: number;
+    /** Amounts in different currencies can't be added, so a goal is in exactly one. */
+    currency: string;
+    /** Which category a mirrored transaction is tagged with, if the goal names one. */
+    category?: string;
+    status: GoalStatus;
+    completed_at?: string;
+    /** Server-computed: the signed sum of the ledger. Always present, list view included. */
+    saved: number;
+    contribution_count: number;
+    last_contribution_at?: string;
+    /** Who put it in, biggest first. */
+    by_person: { user_id: string; amount: number }[];
+    /**
+     * The ledger itself. Present on the single-book endpoint only - the books LIST omits
+     * it, since no screen there draws a contribution. Read `saved` for the balance rather
+     * than summing this, which would report every goal as empty on that list.
+     */
+    contributions?: XenBudgetGoalContribution[];
+    created_by: string;
+    created_at: string;
+}
+
+export interface GoalInput {
+    name?: string;
+    description?: string;
+    target_amount?: number;
+    currency?: string;
+    category?: string;
+    status?: GoalStatus;
+}
+
+export interface ContributionInput {
+    /** Always positive; `direction` carries the sign. */
+    amount: number;
+    /** Omitted means money going in. */
+    direction?: "in" | "out";
+    date?: string;
+    note?: string;
+    /** Also write a matching book item, so the money shows in the book's cash flow. */
+    record_item?: boolean;
 }
 
 export type RuleField =
@@ -106,6 +190,7 @@ export interface XenBudgetBook {
     categories: XenBudgetLabel[];
     flags: XenBudgetLabel[];
     budgets: XenBudgetBudget[];
+    savings_goals: XenBudgetSavingsGoal[];
     rules: XenBudgetRule[];
     import_presets: XenBudgetImportPreset[];
     archived: boolean;
@@ -345,9 +430,13 @@ export interface BudgetStatus {
     _id: string;
     /** Empty = every category. */
     categories: string[];
-    kind: BudgetKind;
+    measures: BudgetMeasures;
     period: BudgetPeriod;
-    /** What the scope spent this period, whether or not there is an overall limit. */
+    /**
+     * What the scope counted this period, whether or not there is an overall limit. Named
+     * for the common case: on an income budget it is what came IN, and on a saving one it
+     * is what was put away.
+     */
     spent: number;
     item_count: number;
     /**
@@ -359,7 +448,7 @@ export interface BudgetStatus {
     remaining?: number;
     /** Uncapped, so the bar can show how far past the amount it went. */
     percent?: number;
-    /** Literally `spent > amount`. Good on a goal, bad on a cap - see `kind`. */
+    /** Literally `spent > amount`. Good on a floor, bad on a ceiling - see `measures`. */
     over?: boolean;
     /** Who spent it, biggest first. Empty when nothing was spent. */
     by_person: BudgetPersonSpend[];
@@ -397,8 +486,8 @@ export interface BudgetStatusResponse {
 
 export interface BudgetInput {
     categories?: string[];
-    /** Omit for a spending cap. */
-    kind?: BudgetKind;
+    /** Omit for an expense budget. */
+    measures?: BudgetMeasures;
     period: BudgetPeriod;
     /** Omit to cap only the people in `sub_budgets`; one of the two is required. */
     amount?: number;

@@ -1,40 +1,67 @@
-import type { BudgetKind } from "../../../../../hooks/xenbudget/types";
+import type { BudgetMeasures } from "../../../../../hooks/xenbudget/types";
 import { INCOME_COLOR } from "../../../../../components/ui/chartColors";
 
 /**
- * Which way a budget's amount points, in one place.
+ * Which way an amount points, in one place.
  *
- * A cap and a goal are measured identically - same aggregation, same weighted split, same
- * period window - and differ only in what crossing the amount MEANS. Keeping that
- * judgement here rather than in each component is what stops the two directions drifting
- * apart: `over` on the wire is the bare fact `spent > amount`, and everything that turns
- * it into a colour or a sentence goes through this module.
+ * A ceiling and a floor are measured identically - same aggregation, same weighted split,
+ * same window - and differ only in what crossing the amount MEANS. Keeping that judgement
+ * here rather than in each component is what stops the two directions drifting apart:
+ * `over` on the wire is the bare fact `spent > amount`, and everything that turns it into
+ * a colour or a sentence goes through this module.
+ *
+ * The direction is deliberately its OWN type rather than the budget's `measures`, because
+ * two unrelated things point downward: an income budget, and a savings goal on the Goals
+ * page. Keying these on `measures` would force a car fund to describe itself as income to
+ * get the right colours. Callers map their own concept onto it - `directionOf` for a
+ * budget, the literal "floor" for a goal.
+ *
+ * Goals share the maths here but bring their own WORDS (see goalProgress.ts): a floor on a
+ * category has a target, a named fund has a target of its own, and one formatter serving
+ * both is what once made renaming a budget retitle a goal card.
  */
 
-/** Everything at or past this share of a CAP is worth looking at before the rest. */
+/** Whether the amount is a ceiling not to cross, or a floor to reach. */
+export type LimitDirection = "ceiling" | "floor";
+
+/**
+ * You want to stay under your spending, and over both your income and your saving.
+ *
+ * Note what this is NOT: the item type a budget counts. `saving` points downward like
+ * income but counts expense items - money put away has left your account. Every "is this a
+ * floor?" test goes through here rather than checking for "income", which would quietly
+ * treat a savings budget as a cap and report being behind on it as comfortable.
+ */
+export function directionOf(measures: BudgetMeasures): LimitDirection {
+    return measures === "expense" ? "ceiling" : "floor";
+}
+
+/** Everything at or past this share of a CEILING is worth looking at before the rest. */
 export const NEAR_LIMIT_PERCENT = 80;
 
 export type LimitState =
-    /** Comfortably inside a cap, or a goal still on track. */
+    /** Comfortably inside a ceiling, or a floor still on track. */
     | "ok"
-    /** Nearing a cap, or a goal that has fallen behind the pace it needs. */
+    /** Nearing a ceiling, or a floor that has fallen behind the pace it needs. */
     | "warn"
-    /** Past a cap. The failure state. */
+    /** Past a ceiling. The failure state. */
     | "over"
-    /** Reached a goal. The success state. */
+    /** Reached a floor. The success state. */
     | "met";
 
 /**
  * `pace` is the elapsed fraction of the period, 0-1.
  *
- * A cap warns on level: 80% used is worth knowing whatever day it is. A goal can't warn
- * on level, because 40% saved is fine on day 12 and hopeless on day 28 - so it warns when
- * progress trails the pace it would need to arrive, which is the same signal measured the
- * only way that means anything for a floor. With no pace to compare against, a goal short
- * of its amount is simply in progress.
+ * A ceiling warns on level: 80% used is worth knowing whatever day it is. A floor can't
+ * warn on level, because 40% of the way there is fine on day 12 and hopeless on day 28 -
+ * so it warns when progress trails the pace it would need to arrive, which is the same
+ * signal measured the only way that means anything for a floor. With no pace to compare
+ * against, a floor short of its amount is simply in progress.
  */
-export function limitState(kind: BudgetKind, percent: number, pace?: number): LimitState {
-    if (kind === "goal") {
+export function limitState(
+    direction: LimitDirection, percent: number, pace?: number,
+): LimitState {
+    if (direction === "floor") {
         if (percent >= 100) return "met";
         if (pace !== undefined && percent < pace * 100) return "warn";
         return "ok";
@@ -56,25 +83,25 @@ export function limitColor(state: LimitState): string | undefined {
 /**
  * The sentence under a bar.
  *
- * `remaining` is `amount - spent` in both directions, so it is what is left of a cap and
- * what is still owed to a goal - the wording is what separates them.
+ * `remaining` is `amount - spent` in both directions, so it is what is left of a ceiling
+ * and what is still owed to a floor - the wording is what separates them.
  */
 export function limitCaption(
-    kind: BudgetKind, remaining: number, percent: number, money: (v: number) => string,
+    direction: LimitDirection, remaining: number, percent: number, money: (v: number) => string,
 ): string {
-    if (kind === "goal") {
+    if (direction === "floor") {
         return remaining > 0
             ? `${money(remaining)} to go · ${percent}%`
-            : `${money(-remaining)} past goal · ${percent}%`;
+            : `${money(-remaining)} past target · ${percent}%`;
     }
     return remaining < 0
         ? `${money(-remaining)} over · ${percent}%`
         : `${money(remaining)} left · ${percent}%`;
 }
 
-/** "of the limit" / "of the goal", for screen-reader descriptions. */
-export function limitNoun(kind: BudgetKind): string {
-    return kind === "goal" ? "goal" : "limit";
+/** "of the limit" / "of the target", for screen-reader descriptions. */
+export function limitNoun(direction: LimitDirection): string {
+    return direction === "floor" ? "target" : "limit";
 }
 
 const PERIOD_LABELS: Record<string, string> = {
@@ -88,10 +115,11 @@ export function periodLabel(period: string): string {
 }
 
 /**
- * Whether spending faster than an even pace is a problem.
+ * Whether running ahead of an even pace is a problem.
  *
- * On a cap it is the warning the pace tick exists for; on a goal it means arriving early.
+ * On a ceiling it is the warning the pace tick exists for; on a floor it means arriving
+ * early.
  */
-export function aheadIsGood(kind: BudgetKind): boolean {
-    return kind === "goal";
+export function aheadIsGood(direction: LimitDirection): boolean {
+    return direction === "floor";
 }
