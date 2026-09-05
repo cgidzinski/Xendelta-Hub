@@ -3,7 +3,7 @@ import { currenciesInGroup, computeDirectDebts, computeBalanceBreakdown } from "
 import type { XenSplit, XenSplitExpense, XenSplitSettlement, XenSplitExchange, XenSplitMember } from "../hooks/xensplit/types";
 
 function member(user_id: string, username: string): XenSplitMember {
-  return { user_id, username, avatar: null, joined_at: "2025-01-01T00:00:00.000Z" };
+  return { user_id, username, avatar: null, etransfer: null, joined_at: "2025-01-01T00:00:00.000Z" };
 }
 
 function expense(overrides: Partial<XenSplitExpense> & Pick<XenSplitExpense, "paid_by" | "amount" | "currency" | "splits">): XenSplitExpense {

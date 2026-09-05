@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import {
   Box,
   Container,
@@ -31,17 +31,31 @@ import HelpModal from "./components/HelpModal";
 import { useAuth } from "../../../contexts/AuthContext";
 import { ALL_CURRENCIES, withoutCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
 import SecondaryCurrenciesSelect from "./components/SecondaryCurrenciesSelect";
+import EtransferPromptDialog, { isEtransferPromptDismissed } from "./components/EtransferPromptDialog";
+import { useUserProfile } from "../../../hooks/user/useUserProfile";
 
 export default function GroupsList() {
   useTitle("Xensplit");
   useXenSplitGroupsSocket();
   const { groups, isLoading, isError, error, createGroup, isCreating } = useXenSplits();
   const { user } = useAuth();
+  const { profile } = useUserProfile();
+  const [showEtransferPrompt, setShowEtransferPrompt] = useState(false);
+  const etransferPromptShown = useRef(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [primaryCurrency, setPrimaryCurrency] = useState("CAD");
   const [secondaryCurrencies, setSecondaryCurrencies] = useState<string[]>([]);
+
+  // Fires once per visit to XenSplit — the profile arrives after the first render, and
+  // the ref keeps dismissing it from immediately reopening.
+  useEffect(() => {
+    if (!profile || etransferPromptShown.current) return;
+    if (profile.etransfer?.handle || isEtransferPromptDismissed()) return;
+    etransferPromptShown.current = true;
+    setShowEtransferPrompt(true);
+  }, [profile]);
 
   const handlePrimaryCurrencyChange = (next: string) => {
     setPrimaryCurrency(next);
@@ -226,6 +240,8 @@ export default function GroupsList() {
       </Dialog>
 
       <HelpModal open={showHelpModal} onClose={() => setShowHelpModal(false)} />
+
+      <EtransferPromptDialog open={showEtransferPrompt} onClose={() => setShowEtransferPrompt(false)} />
     </Box>
   );
 }

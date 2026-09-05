@@ -1,5 +1,19 @@
 const ScheduledTask = require("../models/scheduledTask");
 import { XENSPLIT_RECURRING_TASK_TYPE } from "./xensplitRecurringHandler";
+import { DEFAULT_CURRENCY } from "../../shared/currencies";
+
+/**
+ * The member fields a group is populated with. Members settle up with each other, so
+ * each one's e-transfer destination travels with the group — it goes no further than
+ * the groups they belong to.
+ */
+export const MEMBER_FIELDS = "username avatar etransfer";
+
+/** Null rather than a blank handle, so the UI has one thing to check before rendering. */
+export function serializeEtransfer(etransfer: any): { handle: string; currency: string } | null {
+  if (!etransfer?.handle) return null;
+  return { handle: etransfer.handle, currency: etransfer.currency || DEFAULT_CURRENCY };
+}
 
 export function transformMembers(obj: any): any {
   return {
@@ -7,8 +21,13 @@ export function transformMembers(obj: any): any {
     members: Array.isArray(obj.members)
       ? obj.members.map((m: any) =>
         m._id
-          ? { user_id: m._id.toString(), username: m.username || "Unknown", avatar: m.avatar || null }
-          : { user_id: m.toString(), username: "Unknown", avatar: null }
+          ? {
+            user_id: m._id.toString(),
+            username: m.username || "Unknown",
+            avatar: m.avatar || null,
+            etransfer: serializeEtransfer(m.etransfer),
+          }
+          : { user_id: m.toString(), username: "Unknown", avatar: null, etransfer: null }
       )
       : obj.members,
   };
@@ -38,7 +57,7 @@ export function taskToRecurringSeries(task: any): any {
 /**
  * Group response payload: member transform + recurring series hydrated from
  * ScheduledTask (the embedded recurring_expenses array is deprecated).
- * The group must already be populate("members", "username avatar")-ed.
+ * The group must already be populate("members", MEMBER_FIELDS)-ed.
  */
 export async function serializeXenSplitGroup(group: any): Promise<any> {
   const [obj] = await serializeXenSplitGroups([group]);

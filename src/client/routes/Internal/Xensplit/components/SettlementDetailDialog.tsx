@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useSnackbar } from "notistack";
 import { Box, Typography, Button, Avatar, Dialog, DialogContent, DialogActions, TextField, InputAdornment, IconButton } from "@mui/material";
+import type { SxProps, Theme } from "@mui/material";
 import EastIcon from "@mui/icons-material/East";
 import UndoIcon from "@mui/icons-material/Undo";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import LockIcon from "@mui/icons-material/Lock";
-import type { XenSplitSettlement, XenSplitSettlementTransfer, SettleDebtInput } from "../../../../hooks/xensplit/types";
+import type { EtransferInfo, XenSplitSettlement, XenSplitSettlementTransfer, SettleDebtInput } from "../../../../hooks/xensplit/types";
 import { formatCurrency, sanitizeAmount } from "../../../../utils/currencyUtils";
 
 export function PersonStack({ avatar, name }: { avatar?: string | null; name: string }) {
@@ -18,6 +19,26 @@ export function PersonStack({ avatar, name }: { avatar?: string | null; name: st
             <Typography variant="caption" noWrap sx={{ maxWidth: "100%", textTransform: "capitalize", lineHeight: 1.2, color: "text.secondary" }}>
                 {name}
             </Typography>
+        </Box>
+    );
+}
+
+/**
+ * Where the person being paid wants their money. Their handle may only accept one
+ * currency, so a settlement in anything else says so rather than quietly misleading.
+ */
+function EtransferNote({ etransfer, settlementCurrency, sx }: { etransfer?: EtransferInfo | null; settlementCurrency: string; sx?: SxProps<Theme> }) {
+    if (!etransfer?.handle) return null;
+    return (
+        <Box sx={[{ textAlign: "center" }, ...(Array.isArray(sx) ? sx : [sx])]}>
+            <Typography variant="caption" color="text.secondary">
+                E-transfer ({etransfer.currency}) &bull; {etransfer.handle}
+            </Typography>
+            {etransfer.currency !== settlementCurrency && (
+                <Typography variant="caption" color="text.disabled" sx={{ display: "block" }}>
+                    accepts {etransfer.currency}
+                </Typography>
+            )}
         </Box>
     );
 }
@@ -92,6 +113,8 @@ export function PendingSettlementDialog({ settlement, onClose, userId, settleDeb
                     <PersonStack avatar={s.toUser.avatar} name={s.toUser.username} />
                 </Box>
 
+                <EtransferNote etransfer={s.toUser.etransfer} settlementCurrency={s.currency} />
+
                 {isInvolved && (
                     <>
                         <TextField
@@ -151,7 +174,7 @@ export function PendingSettlementDialog({ settlement, onClose, userId, settleDeb
 interface CompletedProps {
     settlement: XenSplitSettlement | null;
     onClose: () => void;
-    getMember: (userId: string) => { avatar?: string | null; username: string } | undefined;
+    getMember: (userId: string) => { avatar?: string | null; username: string; etransfer?: EtransferInfo | null } | undefined;
     userId: string;
     deleteSettlement: (id: string) => void;
     isDeletingSettlement: boolean;
@@ -201,6 +224,8 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
                         <EastIcon sx={{ fontSize: 20, color: "text.disabled" }} />
                         <PersonStack avatar={toMember?.avatar} name={toMember?.username ?? "?"} />
                     </Box>
+
+                    <EtransferNote etransfer={toMember?.etransfer} settlementCurrency={s.currency} sx={{ mb: 2 }} />
 
                     <Box sx={{ bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
                         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, fontSize: "0.65rem" }}>

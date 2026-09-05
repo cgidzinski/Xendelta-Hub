@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
+import type { EtransferInfo } from "../../../shared/etransfer";
 
 // Types
 export interface UserProfile {
@@ -19,6 +20,8 @@ export interface UserProfile {
   timezone: string;
   /** Whether the account receives emailed notifications (opt-out; default true). */
   emailNotifications: boolean;
+  /** Where XenSplit tells others to send this user's settlements. Blank handle means unset. */
+  etransfer: EtransferInfo;
   xenbox: {
     fileCount: number;
     spaceUsed: number;
@@ -32,6 +35,8 @@ export interface UpdateProfileData {
   /** "" clears the preference and falls back to the browser's zone. */
   timezone?: string;
   emailNotifications?: boolean;
+  /** A blank handle clears it. */
+  etransfer?: EtransferInfo;
 }
 
 interface UseUserProfileReturn {

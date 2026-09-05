@@ -23,6 +23,7 @@ import {
   Security,
   Person,
   Public,
+  AccountBalanceWallet,
   Settings as SettingsIcon,
   Notifications,
   Palette,
@@ -41,6 +42,7 @@ import { useUserAvatar } from "../../../hooks/user/useUserAvatar";
 import ProfileHeader from "./components/ProfileHeader";
 import AvatarUploadSection from "./components/AvatarUploadSection";
 import TimezoneSection from "./components/TimezoneSection";
+import ETransferSection from "./components/ETransferSection";
 import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
 import { usePushNotifications } from "../../../pwa/hooks/usePushNotifications";
 
@@ -254,6 +256,15 @@ export default function Profile() {
                       {isSavingUsername ? "Saving..." : "Save"}
                     </Button>
                   </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid size={{ xs: 12 }}>
+              <Card variant="outlined" sx={cardSx}>
+                <CardContent sx={{ p: 3 }}>
+                  <SectionHeader icon={<AccountBalanceWallet fontSize="small" />} label="E-Transfer" />
+                  <ETransferSection />
                 </CardContent>
               </Card>
             </Grid>

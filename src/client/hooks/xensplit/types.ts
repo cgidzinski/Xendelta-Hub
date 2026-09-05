@@ -1,7 +1,12 @@
+import type { EtransferInfo } from "../../../shared/etransfer";
+
+export type { EtransferInfo };
+
 export interface XenSplitMember {
   user_id: string;
   username: string;
   avatar: string | null;
+  etransfer: EtransferInfo | null;
   joined_at: string;
 }
 
@@ -118,11 +123,13 @@ export interface XenSplitSettlementTransfer {
     _id: string;
     username: string;
     avatar: string | null;
+    etransfer: EtransferInfo | null;
   };
   toUser: {
     _id: string;
     username: string;
     avatar: string | null;
+    etransfer: EtransferInfo | null;
   };
 }
 

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import mongoose from "mongoose";
 import { VALIDATION_LIMITS } from "../constants";
+import { ALL_CURRENCIES } from "../../shared/currencies";
+import { ETRANSFER_MAX, isValidEtransfer } from "../../shared/etransfer";
 
 // Helper to validate MongoDB ObjectId
 const objectIdSchema = z.string().refine(
@@ -50,6 +52,14 @@ export const updateProfileSchema = z.object({
     .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores")
     .optional(),
   emailNotifications: z.boolean().optional(),
+  // An empty handle clears the whole thing, the same way "" clears the timezone.
+  etransfer: z.object({
+    handle: z.union([
+      z.string().max(ETRANSFER_MAX).refine(isValidEtransfer, "Enter a valid email or phone number"),
+      z.literal(""),
+    ]),
+    currency: z.enum(ALL_CURRENCIES).optional(),
+  }).optional(),
 });
 
 // Message validation schemas

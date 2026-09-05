@@ -9,6 +9,16 @@ import { deleteFromGCS } from "../utils/gcsUtils";
 import { validate, updateProfileSchema } from "../utils/validation";
 import { upload } from "../config/multer";
 import { AuthenticatedRequest } from "../types";
+import { DEFAULT_CURRENCY } from "../../shared/currencies";
+import { normalizeEtransfer } from "../../shared/etransfer";
+
+/** The profile's e-transfer destination on the wire: always present, blank handle when unset. */
+function etransferPayload(user: any) {
+  return {
+    handle: user.etransfer?.handle || "",
+    currency: user.etransfer?.currency || DEFAULT_CURRENCY,
+  };
+}
 
 module.exports = function (app: express.Application) {
   app.get("/api/user/profile", authenticateToken, async function (req: express.Request, res: express.Response) {
@@ -52,6 +62,7 @@ module.exports = function (app: express.Application) {
           pinnedApps: user.pinnedApps || [],
           timezone: user.timezone || "",
           emailNotifications: user.notificationPrefs?.email !== false,
+          etransfer: etransferPayload(user),
           xenbox: {
             fileCount: fileCount,
             spaceUsed: spaceUsed,
@@ -68,7 +79,7 @@ module.exports = function (app: express.Application) {
     validate(updateProfileSchema),
     async function (req: express.Request, res: express.Response) {
       const userId = (req as AuthenticatedRequest).user!._id;
-      const { username, timezone, emailNotifications } = req.body;
+      const { username, timezone, emailNotifications, etransfer } = req.body;
       const user = await User.findOne({ _id: userId }).exec();
 
       if (timezone !== undefined) {
@@ -79,6 +90,14 @@ module.exports = function (app: express.Application) {
 
       if (emailNotifications !== undefined) {
         user.notificationPrefs = { ...(user.notificationPrefs || {}), email: emailNotifications };
+        await user.save();
+      }
+
+      if (etransfer !== undefined) {
+        // A blank handle drops the whole thing — a currency on its own means nothing.
+        user.etransfer = etransfer.handle
+          ? { handle: normalizeEtransfer(etransfer.handle), currency: etransfer.currency || DEFAULT_CURRENCY }
+          : undefined;
         await user.save();
       }
 
@@ -119,6 +138,7 @@ module.exports = function (app: express.Application) {
             avatar: user.avatar || "/avatars/default-avatar.png",
             timezone: user.timezone || "",
             emailNotifications: user.notificationPrefs?.email !== false,
+            etransfer: etransferPayload(user),
             unread_messages: false,
             unread_notifications: true,
             has_new_notifications: true,
