@@ -225,7 +225,7 @@ export default function BudgetCard({
             {budget.sub_budgets.length > 0 && (
                 <Box sx={{ ...cardSx, mt: 1.5, p: 1.25 }}>
                     <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-                        {budget.measures === "income"
+                        {directionOf(budget.measures) === "floor"
                             ? (budget.amount === undefined ? "Per-person targets" : "Per-person sub targets")
                             : (budget.amount === undefined ? "Per-person limits" : "Per-person sub limits")}
                     </Typography>

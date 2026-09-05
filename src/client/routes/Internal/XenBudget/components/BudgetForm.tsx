@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
     Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,
-    IconButton, InputAdornment, MenuItem, Stack, TextField, ToggleButton,
-    ToggleButtonGroup, Typography, useMediaQuery,
+    IconButton, InputAdornment, MenuItem, Stack, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -15,7 +14,25 @@ import { formatCurrency, getCurrencySymbol } from "../currency";
 import { sanitizeAmount, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { budgetPeriodWindow } from "./budget/budgetForRange";
+import { directionOf } from "./budget/budgetKind";
 import { monthlyEquivalent, windowLabel } from "./budget/periodDisplay";
+
+/**
+ * What a budget watches. Three values on one axis rather than a type plus a direction: a
+ * savings budget counts the same expense items a cap does and differs only in reading as a
+ * floor, and pairing those separately would let someone ask for income with a ceiling.
+ */
+const MEASURES: { value: BudgetMeasures; label: string }[] = [
+    { value: "expense", label: "Expenses" },
+    { value: "income", label: "Income" },
+    { value: "saving", label: "Savings" },
+];
+
+const MEASURES_HELP: Record<BudgetMeasures, string> = {
+    expense: "Spending in these categories counts against the limit. Going past it is flagged.",
+    income: "Income in these categories counts toward the target. Falling short is the warning.",
+    saving: "Money you move into these categories counts toward the target. Falling short is the warning.",
+};
 
 const PERIODS: { value: BudgetPeriod; label: string }[] = [
     { value: "weekly", label: "Weekly" },
@@ -96,8 +113,8 @@ export default function BudgetForm({
     const allocated = validSubs.reduce((sum, s) => sum + parseFloat(s.amount), 0);
     // Only a worry on an expense budget. Per-person targets adding up past an income one
     // the household would save more than it set out to, which is not a mistake.
-    const overAllocated = measures === "expense" && numericAmount > 0 && allocated > numericAmount;
-    const isIncome = measures === "income";
+    const overAllocated = directionOf(measures) === "ceiling" && numericAmount > 0 && allocated > numericAmount;
+    const isFloor = directionOf(measures) === "floor";
 
     // The window the chosen period currently covers (or the picked dates for a one-off),
     // for the live "per month" and current-window previews. A saved budget gets this back
@@ -154,23 +171,19 @@ export default function BudgetForm({
             <DialogTitle>{budget ? "Edit budget" : "New budget"}</DialogTitle>
             <DialogContent>
                 <Stack spacing={2} sx={{ pt: 1 }}>
-                    {/* What it measures comes first: it decides which way the amount
-                    points - a ceiling on expenses, a floor under income - so every field
+                    {/* Type comes first: it decides which way the amount points - a
+                    ceiling on spending, a floor under income and saving - so every field
                     below reads differently, and picking it last would read backwards. */}
-                    <Box>
-                        <ToggleButtonGroup
-                            size="small" exclusive fullWidth value={measures}
-                            onChange={(_, v) => v && setMeasures(v as BudgetMeasures)}
-                        >
-                            <ToggleButton value="expense">Expenses</ToggleButton>
-                            <ToggleButton value="income">Income</ToggleButton>
-                        </ToggleButtonGroup>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>
-                            {isIncome
-                                ? "Income in these categories counts toward the target. Falling short is the warning — going past it is better."
-                                : "Spending in these categories counts against the limit. Going past it is flagged."}
-                        </Typography>
-                    </Box>
+                    <TextField
+                        select fullWidth label="Type" value={measures}
+                        onChange={(e) => setMeasures(e.target.value as BudgetMeasures)}
+                        helperText={MEASURES_HELP[measures]}
+                        slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
+                    >
+                        {MEASURES.map((m) => (
+                            <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>
+                        ))}
+                    </TextField>
 
                     <Autocomplete
                         multiple freeSolo
@@ -186,13 +199,13 @@ export default function BudgetForm({
                     />
 
                     <TextField
-                        fullWidth label={isIncome ? "Overall target" : "Overall amount"} value={amount}
+                        fullWidth label={isFloor ? "Overall target" : "Overall amount"} value={amount}
                         onChange={(e) => {
                             const clean = sanitizeAmount(e.target.value);
                             if (clean !== null) setAmount(clean);
                         }}
                         helperText={[
-                            isIncome
+                            isFloor
                                 ? "The target for everyone together. Leave empty to set targets only for the people below."
                                 : "The limit for everyone together. Leave empty to cap only the people below.",
                             monthlyAmount !== undefined
@@ -213,7 +226,7 @@ export default function BudgetForm({
 
                     <Box>
                         <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-                            {isIncome ? "Per-person targets" : "Per-person limits"}
+                            {isFloor ? "Per-person targets" : "Per-person limits"}
                         </Typography>
                         <Stack spacing={1.5}>
                             {subs.map((sub, index) => (
@@ -289,7 +302,7 @@ export default function BudgetForm({
                         select fullWidth label="Period" value={period}
                         onChange={(e) => setPeriod(e.target.value as BudgetPeriod)}
                         helperText={[
-                            isIncome
+                            isFloor
                                 ? "Per-person targets use this same period."
                                 : "Per-person limits use this same period.",
                             previewWindowLabel ? `Current window: ${previewWindowLabel}` : undefined,

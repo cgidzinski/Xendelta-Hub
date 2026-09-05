@@ -46,9 +46,12 @@ export default function BudgetRow({
                         : budget.categories.map((c) => (
                             <CategoryChip key={c} name={c} registry={categoryRegistry} />
                         ))}
-                    {budget.measures === "income" && (
+                    {/* Names the type, so this is one of the few places keyed on the
+                    VALUE rather than the direction. An expense budget is the default and
+                    goes unlabelled; the other two say which they are. */}
+                    {budget.measures !== "expense" && (
                         <Chip
-                            size="small" label="Income"
+                            size="small" label={budget.measures === "income" ? "Income" : "Savings"}
                             sx={{ height: 20, fontSize: 11, color: INCOME_COLOR, borderColor: INCOME_COLOR }}
                             variant="outlined"
                         />

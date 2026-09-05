@@ -1,5 +1,5 @@
 import type { BudgetStatus } from "../../../../../hooks/xenbudget/types";
-import { NEAR_LIMIT_PERCENT } from "./budgetKind";
+import { NEAR_LIMIT_PERCENT, directionOf } from "./budgetKind";
 
 export { NEAR_LIMIT_PERCENT };
 
@@ -25,7 +25,7 @@ function percents(budget: BudgetStatus): number[] {
 export function troublePercent(budget: BudgetStatus): number {
     const all = percents(budget);
     if (all.length === 0) return 0;
-    if (budget.measures !== "income") return Math.max(...all);
+    if (directionOf(budget.measures) === "ceiling") return Math.max(...all);
     // Clamped at zero: a target that has been beaten is as untroubled as a budget gets,
     // and a negative concern would sort it below one that is exactly on target.
     return Math.max(0, 100 - Math.min(...all));
@@ -43,19 +43,19 @@ export function worstPercent(budget: BudgetStatus): number {
  * a problem.
  */
 export function isOverCap(budget: BudgetStatus): boolean {
-    if (budget.measures === "income") return false;
+    if (directionOf(budget.measures) === "floor") return false;
     return budget.over === true || budget.sub_budgets.some((s) => s.over);
 }
 
 /** How many separate caps in this budget are past their limit. */
 export function overCount(budget: BudgetStatus): number {
-    if (budget.measures === "income") return 0;
+    if (directionOf(budget.measures) === "floor") return 0;
     return (budget.over ? 1 : 0) + budget.sub_budgets.filter((s) => s.over).length;
 }
 
 /** How many separate savings targets in this budget have been reached. */
 export function metCount(budget: BudgetStatus): number {
-    if (budget.measures !== "income") return 0;
+    if (directionOf(budget.measures) === "ceiling") return 0;
     return (budget.over ? 1 : 0) + budget.sub_budgets.filter((s) => s.over).length;
 }
 

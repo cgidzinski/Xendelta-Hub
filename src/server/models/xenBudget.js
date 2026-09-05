@@ -39,15 +39,19 @@ var subBudgetSchema = new Schema({
 
 var budgetSchema = new Schema({
   categories: { type: [String], default: [] },    // empty = every category
-  // Which side of the book this budget watches, which is also what decides which way its
-  // amount points. Expenses are a ceiling - passing it is the failure. Income is a floor -
-  // falling short is. The measurement is identical either way; only the comparison and the
-  // colours differ, so direction is derived from this rather than configured separately.
+  // What this budget watches, which is also what decides which way its amount points:
+  //   expense - spending, a ceiling. Passing it is the failure.
+  //   income  - money coming in, a floor. Falling short is.
+  //   saving  - money moved into a savings category. Counts the same EXPENSE items as a
+  //             cap would, but reads as a floor: "put away at least this much".
+  // The measurement is identical in every case; only the comparison and the colours
+  // differ, so direction is derived from this rather than configured separately. One
+  // question with three answers means a nonsense pairing - income with a ceiling - can't
+  // be expressed, which is what made the old cap/goal toggle confusing.
   //
-  // Replaced kind: "cap" | "goal", where "goal" was a floor on a savings category. Saving
-  // is savings goals' job now (see savingsGoalSchema); a document still carrying the old
-  // field just reads as an expense budget, which is why there is no migration.
-  measures: { type: String, enum: ["expense", "income"], default: "expense" },
+  // Replaced kind: "cap" | "goal". A document still carrying that field reads as an
+  // expense budget, which is why there is no migration.
+  measures: { type: String, enum: ["expense", "income", "saving"], default: "expense" },
   period: {
     type: String,
     enum: ["weekly", "monthly", "quarterly", "yearly", "custom"],

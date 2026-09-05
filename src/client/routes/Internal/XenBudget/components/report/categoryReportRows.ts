@@ -2,6 +2,7 @@ import type {
     BudgetMeasures, BudgetStatus, SummaryCategory, SummaryCategoryPeriod, SummaryPeriod,
 } from "../../../../../hooks/xenbudget/types";
 import { budgetedForRange } from "../budget/budgetForRange";
+import { directionOf } from "../budget/budgetKind";
 import { periodKeyRange, shouldPivot } from "./periodColumns";
 
 /** One line of the budget-vs-actual table. */
@@ -156,14 +157,14 @@ export function buildCategoryReport({
             rangeFrom, rangeTo,
         );
         if (budgeted <= 0) continue;
-        if (budget.measures === "income") {
+        if (directionOf(budget.measures) === "floor") {
             hasTargets = true;
             totalTarget += budgeted;
         } else {
             totalCapped += budgeted;
         }
         for (const name of budget.categories) {
-            (budget.measures === "income" ? targetNames : cappedNames).add(key(name));
+            (directionOf(budget.measures) === "floor" ? targetNames : cappedNames).add(key(name));
         }
 
         if (budget.categories.length === 0) {
@@ -326,7 +327,7 @@ export function allowanceByPeriod(
                 from, to,
             );
             if (value <= 0) continue;
-            const bucketFor = budget.measures === "income" ? targets : capped;
+            const bucketFor = directionOf(budget.measures) === "floor" ? targets : capped;
             bucketFor[periodKey] = (bucketFor[periodKey] ?? 0) + value;
         }
     }

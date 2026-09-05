@@ -1,9 +1,21 @@
 import { describe, it, expect } from "vitest";
 import {
-    limitState, limitColor, limitCaption, limitNoun, aheadIsGood, NEAR_LIMIT_PERCENT,
+    limitState, limitColor, limitCaption, limitNoun, aheadIsGood, directionOf,
+    NEAR_LIMIT_PERCENT,
 } from "./budgetKind";
 
 const money = (v: number) => `$${v}`;
+
+describe("directionOf", () => {
+    it("points expenses at a ceiling and both of the others at a floor", () => {
+        expect(directionOf("expense")).toBe("ceiling");
+        expect(directionOf("income")).toBe("floor");
+        // The whole reason the third value exists: saving counts EXPENSE items, so a test
+        // for "income" would quietly hand it ceiling treatment and report being behind on
+        // it as comfortable.
+        expect(directionOf("saving")).toBe("floor");
+    });
+});
 
 describe("limitState — caps", () => {
     it("is fine well inside the cap", () => {

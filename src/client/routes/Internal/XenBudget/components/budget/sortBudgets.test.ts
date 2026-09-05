@@ -98,6 +98,29 @@ describe("sortBudgets", () => {
     });
 });
 
+describe("savings budgets", () => {
+    // A savings budget is a floor that counts expense items. Every "is this a floor?" test
+    // in sortBudgets has to go through directionOf for that to hold - each assertion here
+    // fails if one of them is left checking for "income".
+    const saving = (patch: Partial<BudgetStatus> = {}) =>
+        budget({ measures: "saving", categories: ["Savings"], ...patch });
+
+    it("treats being barely funded as trouble, the way an income target is", () => {
+        expect(troublePercent(saving({ percent: 20 }))).toBe(80);
+        expect(troublePercent(saving({ percent: 100 }))).toBe(0);
+    });
+
+    it("never counts one that was beaten as over budget", () => {
+        const s = saving({ percent: 140, over: true, sub_budgets: [sub(200, true)] });
+        expect(isOverCap(s)).toBe(false);
+        expect(overCount(s)).toBe(0);
+    });
+
+    it("counts a beaten one as met", () => {
+        expect(metCount(saving({ percent: 140, over: true }))).toBe(1);
+    });
+});
+
 describe("income targets", () => {
     const incomeTarget = (patch: Partial<BudgetStatus> = {}) =>
         budget({ measures: "income", categories: ["Savings"], ...patch });

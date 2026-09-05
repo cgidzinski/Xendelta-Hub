@@ -168,6 +168,25 @@ function baseItemMatch(bookId: any, q: Record<string, string>): Record<string, a
   return filter;
 }
 
+const BUDGET_MEASURES = ["expense", "income", "saving"];
+
+/** Anything unrecognised - including a doc still carrying the old `kind` - is an expense. */
+function normalizeMeasures(value: any): string {
+  return BUDGET_MEASURES.includes(value) ? value : "expense";
+}
+
+/**
+ * Which item type a budget counts.
+ *
+ * "saving" counts the same EXPENSE items a cap would - money moved into a savings category
+ * has left the account it was sitting in - and differs only in reading as a floor. That
+ * split is the whole point of the third value: direction and item type stop being the same
+ * question.
+ */
+function itemTypeFor(measures: any): string {
+  return normalizeMeasures(measures) === "income" ? "income" : "expense";
+}
+
 // A budget's target has to exist in this book, or it would silently never match: a
 // person who isn't a member has no shares here, and a misspelled category is on no item.
 function validateBudgetTarget(body: any, book: any): string | null {
@@ -182,7 +201,7 @@ function validateBudgetTarget(body: any, book: any): string | null {
 function toBudgetFields(body: any): Record<string, any> {
   return {
     categories: Array.isArray(body.categories) ? body.categories : [],
-    measures: body.measures === "income" ? "income" : "expense",
+    measures: normalizeMeasures(body.measures),
     period: body.period,
     // Left undefined rather than 0 when unset: a budget with only per-person limits has
     // no overall cap, which is a different thing from a cap of nothing.
@@ -2340,7 +2359,7 @@ module.exports = function (app: any) {
           // categories, otherwise only the weights of the ones it does name. The type
           // narrowing goes FIRST, ahead of the unwind, so an income budget never fans out
           // the expense rows it is about to discard.
-          const measuresType = { $match: { type: b.measures === "income" ? "income" : "expense" } };
+          const measuresType = { $match: { type: itemTypeFor(b.measures) } };
           const scopeStages: any[] = cats
             ? [measuresType, { $unwind: "$categories" }, { $match: { "categories.name": { $in: cats } } }]
             : [measuresType];
@@ -2439,7 +2458,7 @@ module.exports = function (app: any) {
                 // The numbers below are the same either way - `over` means literally
                 // "past the amount". Whether that is a failure or the point of the
                 // budget is the client's call, and this is what it decides on.
-                measures: b.measures === "income" ? "income" : "expense",
+                measures: normalizeMeasures(b.measures),
                 period: b.period,
                 spent,
                 item_count: row?.count || 0,

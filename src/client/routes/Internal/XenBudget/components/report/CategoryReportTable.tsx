@@ -262,10 +262,11 @@ export default function CategoryReportTable({
 
                         {/* The bottom line, grouped into three sections, each a heading
                         and three lines, always shown even before any budget or target
-                        exists. Income and Budget stay apart deliberately: adding a
-                        spending ceiling to an income floor means nothing. */}
-                        {sectionHeader("Income", true)}
-                        {totalRow("Received", summary.towardTargets, { color: INCOME_COLOR })}
+                        exists. Targets and Budget stay apart deliberately: adding a
+                        spending ceiling to a floor means nothing - and both income and
+                        savings budgets are floors, so they share this section. */}
+                        {sectionHeader("Targets", true)}
+                        {totalRow("Counted", summary.towardTargets, { color: INCOME_COLOR })}
                         {totalRow("Target", summary.targets)}
                         {totalRow("Short by", minus(summary.targets, summary.towardTargets), { negative: "green" })}
                         {sectionHeader("Budget", false)}

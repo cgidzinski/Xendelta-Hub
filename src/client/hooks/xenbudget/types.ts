@@ -27,16 +27,22 @@ export interface XenBudgetLabel {
 export type BudgetPeriod = "weekly" | "monthly" | "quarterly" | "yearly" | "custom";
 
 /**
- * Which side of the book a budget watches - and therefore which way its amount points.
+ * What a budget watches - and therefore which way its amount points.
  *
- * `expense` is a ceiling: passing it is the failure. `income` is a floor: falling short is.
- * Both are measured identically; only the comparison and the colours differ, so direction
- * is derived from this rather than being a second thing to configure.
+ *   expense - spending, a ceiling. Passing it is the failure.
+ *   income  - money coming in, a floor. Falling short is.
+ *   saving  - money moved into a savings category. Counts the same EXPENSE items a cap
+ *             would, but reads as a floor: "put away at least this much".
  *
- * Replaced `BudgetKind = "cap" | "goal"`, whose "goal" was a floor on a savings category.
- * Saving belongs to XenBudgetSavingsGoal now.
+ * All three are measured identically; only the comparison and the colours differ, so
+ * direction is derived from this (see directionOf) rather than being a second thing to
+ * configure. One question with three answers is what keeps a nonsense pairing - income
+ * with a ceiling - unexpressable.
+ *
+ * Note that direction is NOT the same question as which item type is counted: `saving`
+ * points like `income` but counts like `expense`.
  */
-export type BudgetMeasures = "expense" | "income";
+export type BudgetMeasures = "expense" | "income" | "saving";
 
 /** One person's limit nested inside a budget, sharing its categories, period and window. */
 export interface XenBudgetSubBudget {
@@ -428,7 +434,8 @@ export interface BudgetStatus {
     period: BudgetPeriod;
     /**
      * What the scope counted this period, whether or not there is an overall limit. Named
-     * for the common case: on an income budget it is what came IN, not what went out.
+     * for the common case: on an income budget it is what came IN, and on a saving one it
+     * is what was put away.
      */
     spent: number;
     item_count: number;
@@ -441,7 +448,7 @@ export interface BudgetStatus {
     remaining?: number;
     /** Uncapped, so the bar can show how far past the amount it went. */
     percent?: number;
-    /** Literally `spent > amount`. Good on income, bad on an expense - see `measures`. */
+    /** Literally `spent > amount`. Good on a floor, bad on a ceiling - see `measures`. */
     over?: boolean;
     /** Who spent it, biggest first. Empty when nothing was spent. */
     by_person: BudgetPersonSpend[];

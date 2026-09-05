@@ -467,6 +467,17 @@ describe("income targets", () => {
         expect(totalTarget).toBeCloseTo(1500, 6);
     });
 
+    it("counts a savings budget as a target, not as a cap", () => {
+        // It counts expense items like a cap does, so the only thing keeping it out of the
+        // cap column is that the report asks directionOf rather than checking for income.
+        const { totalCapped, totalTarget } = buildCategoryReport({
+            ...withSavings,
+            budgets: [budget({ measures: "saving" as const, categories: ["Savings"], amount: 500 })],
+        });
+        expect(totalTarget).toBeCloseTo(1500, 6);
+        expect(totalCapped).toBe(0);
+    });
+
     it("never adds an income target to a spending cap", () => {
         const { totalCapped, totalTarget } = buildCategoryReport({
             ...withSavings, budgets: [budget({ amount: 800 }), incomeTarget()],

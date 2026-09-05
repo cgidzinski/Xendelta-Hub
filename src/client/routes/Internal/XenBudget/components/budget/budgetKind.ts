@@ -24,9 +24,16 @@ import { INCOME_COLOR } from "../../../../../components/ui/chartColors";
 /** Whether the amount is a ceiling not to cross, or a floor to reach. */
 export type LimitDirection = "ceiling" | "floor";
 
-/** You want to stay under your expenses and over your income. */
+/**
+ * You want to stay under your spending, and over both your income and your saving.
+ *
+ * Note what this is NOT: the item type a budget counts. `saving` points downward like
+ * income but counts expense items - money put away has left your account. Every "is this a
+ * floor?" test goes through here rather than checking for "income", which would quietly
+ * treat a savings budget as a cap and report being behind on it as comfortable.
+ */
 export function directionOf(measures: BudgetMeasures): LimitDirection {
-    return measures === "income" ? "floor" : "ceiling";
+    return measures === "expense" ? "ceiling" : "floor";
 }
 
 /** Everything at or past this share of a CEILING is worth looking at before the rest. */
