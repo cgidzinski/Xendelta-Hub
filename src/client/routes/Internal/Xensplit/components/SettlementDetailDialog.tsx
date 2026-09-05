@@ -32,13 +32,9 @@ function EtransferNote({ etransfer, settlementCurrency, sx }: { etransfer?: Etra
     return (
         <Box sx={[{ textAlign: "center" }, ...(Array.isArray(sx) ? sx : [sx])]}>
             <Typography variant="caption" color="text.secondary">
-                E-transfer ({etransfer.currency}) &bull; {etransfer.handle}
+                E-transfer &bull; {etransfer.handle}
+                {etransfer.currency !== settlementCurrency && ` (${etransfer.currency} only)`}
             </Typography>
-            {etransfer.currency !== settlementCurrency && (
-                <Typography variant="caption" color="text.disabled" sx={{ display: "block" }}>
-                    accepts {etransfer.currency}
-                </Typography>
-            )}
         </Box>
     );
 }
