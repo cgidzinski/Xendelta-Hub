@@ -3,22 +3,22 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditIcon from "@mui/icons-material/Edit";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import type {
-    XenBudgetGoalContribution, XenBudgetMember,
+    XenBudgetPiggyBankContribution, XenBudgetMember,
 } from "../../../../../hooks/xenbudget/types";
 import { formatCurrency } from "../../currency";
 import { INCOME_COLOR } from "../../../../../components/ui/chartColors";
 
 interface ContributionListProps {
-    contributions: XenBudgetGoalContribution[];
+    contributions: XenBudgetPiggyBankContribution[];
     currency: string;
     members: XenBudgetMember[];
-    onEdit: (contribution: XenBudgetGoalContribution) => void;
-    onDelete: (contribution: XenBudgetGoalContribution) => void;
+    onEdit: (contribution: XenBudgetPiggyBankContribution) => void;
+    onDelete: (contribution: XenBudgetPiggyBankContribution) => void;
     isBusy: boolean;
 }
 
 /**
- * A goal's ledger, newest first.
+ * A bank's ledger, newest first.
  *
  * Deposits and withdrawals share the list rather than being split into two: the running
  * balance is the two read together, and a withdrawal hidden on another tab is exactly the

@@ -71,44 +71,48 @@ var budgetSchema = new Schema({
   created_at: { type: Date, default: Date.now },
 }, { _id: true });
 
-// --- Savings goals ----------------------------------------------------------
+// --- Piggy banks ------------------------------------------------------------
 
-// One movement in or out of a goal. The amount is SIGNED - positive puts money in,
-// negative takes it back out - rather than an amount plus a direction flag, so a goal's
-// balance is a plain sum and a withdrawal can never be read as a deposit by a caller that
-// forgot to check the flag.
-var goalContributionSchema = new Schema({
+// One movement in or out of a piggy bank. The amount is SIGNED - positive puts money in,
+// negative takes it back out - rather than an amount plus a direction flag, so the balance
+// is a plain sum and a withdrawal can never be read as a deposit by a caller that forgot to
+// check the flag.
+var piggyBankContributionSchema = new Schema({
   amount: { type: Number, required: true },
   date: { type: Date, default: Date.now },
   note: { type: String, maxlength: 200 },
   // Who moved it. A shared book shows the split, the same way an item's shares do.
   user_id: { type: String, required: true },
-  // The book item this contribution also created, when it was recorded as a transaction.
-  // Kept so an edit can keep the two in step and a delete can take both.
+  // The book item this contribution created. Always set now that contributing IS booking
+  // an expense; kept so an edit keeps the two in step and a delete takes both.
   item_id: { type: Schema.Types.ObjectId },
   created_at: { type: Date, default: Date.now },
 }, { _id: true });
 
-// A thing being saved FOR: a new car, a trip. Its own ledger, so the balance accumulates
-// across months and the question "how close am I?" has an answer - which a budget, measured
-// fresh over each period, can never answer. Saving is entirely this schema's job: budgets
-// no longer carry a savings direction.
-var savingsGoalSchema = new Schema({
+// Surplus budget set aside toward a future purchase - a piggy bank.
+//
+// Deliberately NOT savings: nothing moves between accounts. Underspend on Hobbies, move $50
+// of it into "New telescope", and that $50 books as a Hobbies expense, because that is the
+// budget line it came from. The ledger is what makes the balance accumulate across periods,
+// which a budget - measured fresh each period - can never do.
+var piggyBankSchema = new Schema({
   name: { type: String, required: true, maxlength: 100 },
   description: { type: String, maxlength: 500 },
   target_amount: { type: Number, required: true },
   // A book can hold items in several currencies, and amounts in different ones can't be
   // added - so a goal is denominated in exactly one.
   currency: { type: String, default: "CAD" },
-  // Which category a mirrored book item is tagged with, when a contribution asks to be
-  // recorded as a transaction. Defaults to the "Savings" starter category.
-  category: { type: String, maxlength: 50 },
+  // Which category every contribution books its expense under - and the point of the
+  // whole thing: a piggy bank is surplus from one budget line set aside, so "New telescope"
+  // names Hobbies and each contribution spends against Hobbies. Required, because there is
+  // no such thing as a contribution that books nowhere.
+  category: { type: String, required: true, maxlength: 50 },
   // User-controlled, deliberately: reaching the target is shown on the card, but flipping
   // the status automatically would toggle the goal every time money crossed the line in
   // either direction.
   status: { type: String, enum: ["active", "completed", "archived"], default: "active" },
   completed_at: { type: Date },
-  contributions: [goalContributionSchema],
+  contributions: [piggyBankContributionSchema],
   created_by: { type: String },
   created_at: { type: Date, default: Date.now },
 }, { _id: true });
@@ -226,7 +230,7 @@ var bookSchema = new Schema({
   categories: [labelSchema],
   flags: [labelSchema],
   budgets: [budgetSchema],
-  savings_goals: [savingsGoalSchema],
+  piggy_banks: [piggyBankSchema],
   rules: [ruleSchema],
   import_presets: [importPresetSchema],
   import_batches: [importBatchSchema],
