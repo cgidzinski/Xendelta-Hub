@@ -53,7 +53,10 @@ export default function PaceSummary({
                 </Typography>
                 <Typography variant="caption" sx={{ color: stateColor ?? "text.secondary" }}>
                     {pace.finished
-                        ? `Period ended · ${money(spent)} of ${money(amount)} ${direction === "floor" ? "received" : "used"}`
+                        // "Closed", matching the verdict chip and the caption on the
+                        // card - three places saying the same thing about the same window
+                        // should not each pick their own word for it.
+                        ? `Closed · ${money(spent)} of ${money(amount)} ${direction === "floor" ? "received" : "used"}`
                         : [
                             Math.abs(pace.ahead) < 0.01
                                 ? "On pace"

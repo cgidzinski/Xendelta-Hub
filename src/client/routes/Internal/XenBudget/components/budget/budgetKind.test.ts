@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
     limitState, limitColor, limitCaption, limitNoun, aheadIsGood, directionOf,
-    NEAR_LIMIT_PERCENT,
+    NEAR_LIMIT_PERCENT, budgetVerdict, isSettled, settledCaption,
 } from "./budgetKind";
 
 const money = (v: number) => `$${v}`;
@@ -124,5 +124,107 @@ describe("limitNoun / aheadIsGood", () => {
     it("knows that outrunning the pace is only good on a floor", () => {
         expect(aheadIsGood("floor")).toBe(true);
         expect(aheadIsGood("ceiling")).toBe(false);
+    });
+});
+
+describe("isSettled", () => {
+    const to = "2026-09-01T00:00:00.000Z";
+
+    it("is not settled part-way through the window", () => {
+        expect(isSettled(to, "2026-08-20T12:00:00.000Z")).toBe(false);
+    });
+
+    it("is settled the instant the window ends, since `to` is exclusive", () => {
+        expect(isSettled(to, to)).toBe(true);
+    });
+
+    it("is not settled on the window's own last day", () => {
+        expect(isSettled(to, "2026-08-31T23:59:59.000Z")).toBe(false);
+    });
+});
+
+describe("budgetVerdict", () => {
+    const closed = "2026-09-01T00:00:00.000Z";
+    const during = "2026-08-20T00:00:00.000Z";
+    const after = "2026-09-05T00:00:00.000Z";
+
+    it("has no verdict while the window is still open", () => {
+        expect(budgetVerdict("ceiling", 140, 12, closed, during)).toEqual({
+            key: "open", word: "In progress",
+        });
+    });
+
+    it("leaves an open verdict uncoloured, so the live state keeps the card", () => {
+        expect(budgetVerdict("ceiling", 140, 12, closed, during).color).toBeUndefined();
+    });
+
+    it("passes a cap that stayed inside its limit", () => {
+        expect(budgetVerdict("ceiling", 78, 41, closed, after).key).toBe("pass");
+    });
+
+    it("passes a cap spent exactly to the limit - `over` means past it, not on it", () => {
+        expect(budgetVerdict("ceiling", 100, 41, closed, after).key).toBe("pass");
+    });
+
+    it("misses a cap that went past its limit", () => {
+        expect(budgetVerdict("ceiling", 112, 53, closed, after).key).toBe("miss");
+    });
+
+    it("has no near-miss band: a cap that closed at 98% simply passed", () => {
+        const tight = budgetVerdict("ceiling", 98, 47, closed, after);
+        expect(tight.key).toBe("pass");
+        expect(tight.color).toBe(budgetVerdict("ceiling", 40, 47, closed, after).color);
+    });
+
+    it("passes a floor that reached its target, which is the opposite of a cap", () => {
+        expect(budgetVerdict("floor", 116, 3, closed, after).key).toBe("pass");
+        expect(budgetVerdict("floor", 100, 3, closed, after).key).toBe("pass");
+    });
+
+    it("misses a floor that fell short", () => {
+        expect(budgetVerdict("floor", 66, 3, closed, after).key).toBe("miss");
+    });
+
+    it("names a met floor a target rather than a pass", () => {
+        expect(budgetVerdict("floor", 116, 3, closed, after).word).toBe("Target met");
+        expect(budgetVerdict("ceiling", 78, 41, closed, after).word).toBe("Passed");
+    });
+
+    it("refuses to congratulate a window with no items in it", () => {
+        const empty = budgetVerdict("ceiling", 0, 0, closed, after);
+        expect(empty.key).toBe("quiet");
+        expect(empty.color).toBeUndefined();
+    });
+
+    it("calls an empty floor no activity too, rather than a miss", () => {
+        expect(budgetVerdict("floor", 0, 0, closed, after).key).toBe("quiet");
+    });
+});
+
+describe("settledCaption", () => {
+    const money = (v: number) => `$${v.toFixed(0)}`;
+
+    it("reports a cap that came in under", () => {
+        expect(settledCaption("ceiling", 180, 78, money)).toBe("Closed $180 under · 78%");
+    });
+
+    it("reports a cap that went over", () => {
+        expect(settledCaption("ceiling", -92, 112, money)).toBe("Closed $92 over · 112%");
+    });
+
+    it("reports a floor that was beaten", () => {
+        expect(settledCaption("floor", -65, 116, money)).toBe("Closed $65 past target · 116%");
+    });
+
+    it("reports a floor that fell short", () => {
+        expect(settledCaption("floor", 135, 66, money)).toBe("Closed $135 short · 66%");
+    });
+
+    it("reads a floor landing exactly on target as reached, not as short", () => {
+        expect(settledCaption("floor", 0, 100, money)).toBe("Closed $0 past target · 100%");
+    });
+
+    it("reads a cap spent exactly to the limit as under, not as over", () => {
+        expect(settledCaption("ceiling", 0, 100, money)).toBe("Closed $0 under · 100%");
     });
 });

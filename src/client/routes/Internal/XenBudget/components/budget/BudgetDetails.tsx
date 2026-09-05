@@ -7,6 +7,7 @@ import { budgetPace } from "./budgetPace";
 import { directionOf, periodLabel } from "./budgetKind";
 import { periodNoun } from "./periodDisplay";
 import BudgetBreakdown from "./BudgetBreakdown";
+import BudgetHistoryStrip from "./BudgetHistoryStrip";
 import PaceSummary from "./PaceSummary";
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -124,6 +125,18 @@ export default function BudgetDetails({
                         percent={percent}
                         money={money}
                     />
+                    {/* Between the pace box and the breakdown on purpose: both of those
+                    are about THIS window, and the strip is the one thing here that puts
+                    it against the others. It draws the budget's own periods, so it is
+                    unaffected by whatever range the figures above were restated for. */}
+                    {budget.periods && budget.periods.length > 1 && (
+                        <BudgetHistoryStrip
+                            periods={budget.periods}
+                            direction={directionOf(budget.measures)}
+                            currency={currency}
+                            asOf={asOf}
+                        />
+                    )}
                     <BudgetBreakdown budget={budget} currency={currency} members={members} />
                 </>
             )}

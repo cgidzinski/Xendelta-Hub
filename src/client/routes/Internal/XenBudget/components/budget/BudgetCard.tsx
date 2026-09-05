@@ -16,8 +16,9 @@ import BudgetLimitLine from "./BudgetLimitLine";
 import BudgetDetails from "./BudgetDetails";
 import BudgetTarget from "./BudgetTarget";
 import { memberColor, scopeColor } from "./budgetColors";
-import { directionOf, limitNoun, periodLabel as periodWord } from "./budgetKind";
+import { budgetVerdict, directionOf, limitNoun, periodLabel as periodWord } from "./budgetKind";
 import { budgetPace } from "./budgetPace";
+import VerdictChip from "./VerdictChip";
 
 // Past three, the chips start wrapping to a third line on a phone and stop being a
 // glanceable heading. The rest are named in the expanded panel.
@@ -84,6 +85,18 @@ export default function BudgetCard({
         ? Math.round((periodSpent / periodAmount) * 100) : 0;
     const periodOver = periodAmount !== undefined && periodSpent > periodAmount;
     const showWholePeriod = periodAmount !== undefined && periodAmount > headlineAmount;
+    const direction = directionOf(budget.measures);
+    // The headline bar is measured over whatever window was asked for, so it is judged
+    // against THAT window's end. The whole-period bar below is judged against the budget's
+    // own - "the selected range has closed" and "the budget's own month has closed" are
+    // different questions, and on a report range they routinely disagree.
+    const verdict = budgetVerdict(
+        direction, headlinePercent, budget.item_count, budget.period_to, asOf,
+    );
+    const periodVerdict = budgetVerdict(
+        direction, periodPercent, budget.period_item_count ?? 0,
+        budget.own_period_to ?? budget.period_to, asOf,
+    );
 
     const heading = (
         <Stack
@@ -103,6 +116,7 @@ export default function BudgetCard({
                 label={capitalize(periodWord(budget.period))}
                 sx={{ height: 20, fontSize: 11 }}
             />
+            <VerdictChip verdict={verdict} />
             {hasOverall && (
                 <Tooltip title="Shared limit">
                     <PublicIcon sx={{ fontSize: 14, color: "text.disabled" }} />
@@ -142,7 +156,17 @@ export default function BudgetCard({
     return (
         <Card
             variant="outlined"
-            sx={{ ...cardSx, p: 1.5, borderWidth: 4, ...(open ? { cursor: "pointer" } : {}) }}
+            sx={{
+                ...cardSx,
+                p: 1.5,
+                borderWidth: 4,
+                // The rail: only the LEFT edge takes the verdict's colour, so a column of
+                // cards gains a spine you can run your eye down without reading any of
+                // them. Colouring all four sides (or glowing) puts the same signal on
+                // twelve cards at once and stops being a signal at all.
+                ...(verdict.color ? { borderLeftColor: verdict.color } : {}),
+                ...(open ? { cursor: "pointer" } : {}),
+            }}
             onClick={() => { if (open) setOpen(false); }}
         >
             {/* One click expands both periods, each with its detail under its own bar. */}
@@ -170,14 +194,15 @@ export default function BudgetCard({
                         spent={headlineSpent}
                         percent={headlinePercent}
                         over={headlineOver}
-                        direction={directionOf(budget.measures)}
+                        direction={direction}
                         currency={currency}
                         color={color}
                         height={8}
                         pace={pace.elapsed}
+                        verdict={verdict}
                         itemCount={budget.item_count}
                         barLabel={`${budget.categories.join(", ") || "Everything"}: ${formatCurrency(headlineSpent, currency)
-                            } of ${formatCurrency(headlineAmount, currency)}, ${headlinePercent}% of the ${limitNoun(directionOf(budget.measures))}`}
+                            } of ${formatCurrency(headlineAmount, currency)}, ${headlinePercent}% of the ${limitNoun(direction)}`}
                     />
                 </Stack>
             </ButtonBase>
@@ -207,13 +232,14 @@ export default function BudgetCard({
                             spent={periodSpent}
                             percent={periodPercent}
                             over={periodOver}
-                            direction={directionOf(budget.measures)}
+                            direction={direction}
                             currency={currency}
                             color={color}
                             height={6}
+                            verdict={periodVerdict}
                             itemCount={budget.period_item_count}
                             barLabel={`${capitalize(periodWord(budget.period))}: ${formatCurrency(periodSpent, currency)
-                                } of ${formatCurrency(periodAmount, currency)}, ${periodPercent}% of the ${limitNoun(directionOf(budget.measures))}`}
+                                } of ${formatCurrency(periodAmount, currency)}, ${periodPercent}% of the ${limitNoun(direction)}`}
                         />
                     </ButtonBase>
                     <Collapse in={open} unmountOnExit>
@@ -225,7 +251,7 @@ export default function BudgetCard({
             {budget.sub_budgets.length > 0 && (
                 <Box sx={{ ...cardSx, mt: 1.5, p: 1.25 }}>
                     <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-                        {directionOf(budget.measures) === "floor"
+                        {direction === "floor"
                             ? (budget.amount === undefined ? "Per-person targets" : "Per-person sub targets")
                             : (budget.amount === undefined ? "Per-person limits" : "Per-person sub limits")}
                     </Typography>
@@ -254,14 +280,23 @@ export default function BudgetCard({
                                                 spent={sub.spent}
                                                 percent={sub.percent}
                                                 over={sub.over}
-                                                direction={directionOf(budget.measures)}
+                                                direction={direction}
                                                 currency={currency}
                                                 color={memberColor(sub.person_id, members)}
                                                 height={6}
                                                 pace={pace.elapsed}
+                                                // Judged over the parent's window, since a
+                                                // sub-limit is measured over exactly it.
+                                                // It can disagree with the headline - the
+                                                // shared cap holding while one person's
+                                                // didn't is a real and useful result.
+                                                verdict={budgetVerdict(
+                                                    direction, sub.percent, sub.item_count,
+                                                    budget.period_to, asOf,
+                                                )}
                                                 itemCount={sub.item_count}
                                                 barLabel={`${sub.person_name}: ${formatCurrency(sub.spent, currency)
-                                                    } of ${formatCurrency(sub.amount, currency)}, ${sub.percent}% of their ${limitNoun(directionOf(budget.measures))}`}
+                                                    } of ${formatCurrency(sub.amount, currency)}, ${sub.percent}% of their ${limitNoun(direction)}`}
                                             />
                                         </Box>
                                         {chevron(openSub === sub._id)}

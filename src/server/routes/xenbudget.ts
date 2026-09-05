@@ -43,6 +43,7 @@ import {
 import {
   resolveShares, resolveCategories, computeImportHash, roundMoney, seedPeriods,
   budgetPeriodRange,
+  previousPeriodRanges,
 } from "../utils/xenBudgetUtils";
 import {
   SYSTEM_FLAGS, STARTER_CATEGORIES, FLAG_UNCATEGORISED, FLAG_POSSIBLE_DUPLICATE,
@@ -2328,15 +2329,30 @@ module.exports = function (app: any) {
           && !isNaN(rangeFrom.getTime()) && !isNaN(rangeTo.getTime())
           && rangeTo.getTime() > rangeFrom.getTime();
 
+        // How many of each budget's own past periods to measure, for the history strip.
+        // Opt-in and clamped: it widens the scan from one period to `history` of them, and
+        // the Overview polls this endpoint often enough that every caller should not pay
+        // for a year of history it isn't drawing.
+        const history = Math.min(24, Math.max(0, parseInt(q.history, 10) || 0));
+
         // Each budget's own current-period window, always computed so the response can
         // carry "whole period" figures alongside whatever range the caller asked for.
         const ownRanges = budgets.map((b: any) => budgetPeriodRange(b, asOf));
+        // Oldest first, ending with the window `asOf` is in. Empty when history wasn't
+        // asked for, or for a one-off budget, which has no repeating window to look back
+        // over.
+        const historyRanges = budgets.map((b: any) => previousPeriodRanges(b, asOf, history));
         const ranges = budgets.map((b: any, i: number) => (useRange
           ? { from: rangeFrom as Date, to: rangeTo as Date }
           : ownRanges[i]));
         // The base match has to cover both the requested window and each budget's own
         // period, or a whole-period bar would be clipped to the requested range.
-        const union = useRange ? [...ranges, ...ownRanges] : ranges;
+        // History windows go into the union too, or the base $match below clips them and
+        // every bucket comes back empty.
+        const union = [
+          ...(useRange ? [...ranges, ...ownRanges] : ranges),
+          ...historyRanges.flat(),
+        ];
         const unionFrom = new Date(Math.min(...union.map((r: any) => r.from.getTime())));
         const unionTo = new Date(Math.max(...union.map((r: any) => r.to.getTime())));
 
@@ -2420,6 +2436,29 @@ module.exports = function (app: any) {
             { $group: { _id: "$shares.user_id", total: { $sum: personAmount } } },
             { $sort: { total: -1 } },
           ];
+
+          // The same scope over each of the budget's own past periods, in one pass.
+          // $bucket on the window boundaries rather than a $dateToString key: "%Y-%m" has
+          // no quarterly form, and folding months into quarters in JS afterwards is
+          // exactly where this would drift out of step with the figures above it.
+          const hist = historyRanges[i];
+          if (hist.length > 0) {
+            facet[`b${i}h`] = [
+              { $match: { date: { $gte: hist[0].from, $lt: hist[hist.length - 1].to } } },
+              ...scopeStages,
+              ...(cats
+                ? [{ $group: { _id: "$_id", date: { $first: "$date" }, total: { $sum: scopeAmount } } }]
+                : []),
+              {
+                $bucket: {
+                  groupBy: "$date",
+                  boundaries: [...hist.map((r: any) => r.from), hist[hist.length - 1].to],
+                  default: "other",
+                  output: { total: { $sum: cats ? "$total" : scopeAmount }, count: { $sum: 1 } },
+                },
+              },
+            ];
+          }
 
           // One pipeline per per-person limit. Same scope, same window - the nesting is
           // what guarantees a sub-limit is measured over exactly the parent's items.
@@ -2509,6 +2548,32 @@ module.exports = function (app: any) {
                 period_to: ranges[i].to.toISOString(),
                 own_period_from: ownRanges[i].from.toISOString(),
                 own_period_to: ownRanges[i].to.toISOString(),
+                // One entry per own-period, oldest first. Absent entirely unless history
+                // was asked for, so the default response is byte-identical to before.
+                // These figures are per whole period and are never scaled to a requested
+                // range - a column means "that month", whatever window is on screen.
+                ...(historyRanges[i].length === 0 ? {} : {
+                  periods: historyRanges[i].map((r: any, k: number) => {
+                    // $bucket keys each bucket by its lower boundary and omits empty ones
+                    // entirely, so a month with no items has to be filled back in as a
+                    // zero rather than shifting every later column left.
+                    const bucket = (results?.[`b${i}h`] || [])
+                      .find((row: any) => row._id instanceof Date
+                        && row._id.getTime() === r.from.getTime());
+                    const periodSpentHere = roundMoney(bucket?.total || 0);
+                    return {
+                      from: r.from.toISOString(),
+                      to: r.to.toISOString(),
+                      spent: periodSpentHere,
+                      item_count: bucket?.count || 0,
+                      ...(amount === undefined ? {} : {
+                        amount,
+                        percent: amount > 0 ? Math.round((periodSpentHere / amount) * 100) : 0,
+                        over: periodSpentHere > amount,
+                      }),
+                    };
+                  }),
+                }),
               };
             }),
           },

@@ -3,6 +3,7 @@ import {
   resolveShares,
   resolveCategories,
   budgetPeriodRange,
+  previousPeriodRanges,
   computeImportHash,
   normalizeDescription,
   roundMoney,
@@ -296,5 +297,101 @@ describe("roundMoney", () => {
   it("pins float arithmetic to cents", () => {
     expect(roundMoney(0.1 + 0.2)).toBe(0.3);
     expect(roundMoney(10 / 3)).toBe(3.33);
+  });
+});
+
+describe("previousPeriodRanges", () => {
+  const iso = (r: { from: Date; to: Date }) =>
+    [r.from.toISOString().slice(0, 10), r.to.toISOString().slice(0, 10)];
+
+  it("walks back whole calendar months, oldest first", () => {
+    const ranges = previousPeriodRanges(
+      { period: "monthly" }, new Date("2026-08-14T00:00:00.000Z"), 3,
+    );
+    expect(ranges.map(iso)).toEqual([
+      ["2026-06-01", "2026-07-01"],
+      ["2026-07-01", "2026-08-01"],
+      ["2026-08-01", "2026-09-01"],
+    ]);
+  });
+
+  it("ends with the window `asOf` falls in, so the last column is the live one", () => {
+    const ranges = previousPeriodRanges(
+      { period: "monthly" }, new Date("2026-08-14T00:00:00.000Z"), 6,
+    );
+    expect(iso(ranges[ranges.length - 1])).toEqual(["2026-08-01", "2026-09-01"]);
+  });
+
+  it("crosses a year boundary without drifting", () => {
+    const ranges = previousPeriodRanges(
+      { period: "monthly" }, new Date("2026-01-20T00:00:00.000Z"), 3,
+    );
+    expect(ranges.map(iso)).toEqual([
+      ["2025-11-01", "2025-12-01"],
+      ["2025-12-01", "2026-01-01"],
+      ["2026-01-01", "2026-02-01"],
+    ]);
+  });
+
+  it("steps a quarterly budget three months at a time", () => {
+    const ranges = previousPeriodRanges(
+      { period: "quarterly" }, new Date("2026-08-14T00:00:00.000Z"), 3,
+    );
+    expect(ranges.map(iso)).toEqual([
+      ["2026-01-01", "2026-04-01"],
+      ["2026-04-01", "2026-07-01"],
+      ["2026-07-01", "2026-10-01"],
+    ]);
+  });
+
+  it("steps a yearly budget a year at a time", () => {
+    const ranges = previousPeriodRanges(
+      { period: "yearly" }, new Date("2026-08-14T00:00:00.000Z"), 2,
+    );
+    expect(ranges.map(iso)).toEqual([
+      ["2025-01-01", "2026-01-01"],
+      ["2026-01-01", "2027-01-01"],
+    ]);
+  });
+
+  it("steps a weekly budget Monday to Monday", () => {
+    // 2026-08-14 is a Friday; its ISO week starts Monday the 10th.
+    const ranges = previousPeriodRanges(
+      { period: "weekly" }, new Date("2026-08-14T00:00:00.000Z"), 3,
+    );
+    expect(ranges.map(iso)).toEqual([
+      ["2026-07-27", "2026-08-03"],
+      ["2026-08-03", "2026-08-10"],
+      ["2026-08-10", "2026-08-17"],
+    ]);
+  });
+
+  it("agrees with budgetPeriodRange on the window it shares with it", () => {
+    const asOf = new Date("2026-08-14T00:00:00.000Z");
+    const ranges = previousPeriodRanges({ period: "monthly" }, asOf, 4);
+    const current = budgetPeriodRange({ period: "monthly" }, asOf);
+    expect(iso(ranges[ranges.length - 1])).toEqual(iso(current));
+  });
+
+  it("gives a one-off budget no history, since it has no repeating window", () => {
+    expect(previousPeriodRanges(
+      { period: "custom", start_date: "2026-01-01", end_date: "2026-03-01" },
+      new Date("2026-08-14T00:00:00.000Z"), 6,
+    )).toEqual([]);
+  });
+
+  it("returns nothing for a count of zero, which is what makes history opt-in", () => {
+    expect(previousPeriodRanges({ period: "monthly" }, new Date(), 0)).toEqual([]);
+    expect(previousPeriodRanges({ period: "monthly" }, new Date(), -3)).toEqual([]);
+  });
+
+  it("hands back exactly `count` windows, with no gaps between them", () => {
+    const ranges = previousPeriodRanges(
+      { period: "monthly" }, new Date("2026-08-14T00:00:00.000Z"), 12,
+    );
+    expect(ranges).toHaveLength(12);
+    ranges.slice(1).forEach((r, i) => {
+      expect(r.from.getTime()).toBe(ranges[i].to.getTime());
+    });
   });
 });

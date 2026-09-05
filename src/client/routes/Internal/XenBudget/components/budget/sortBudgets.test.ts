@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { BudgetStatus, SubBudgetStatus } from "../../../../../hooks/xenbudget/types";
 import {
     sortBudgets, worstPercent, troublePercent, isOverCap, overCount, metCount, budgetLabel,
+    verdictCounts,
 } from "./sortBudgets";
 
 function sub(percent: number, over = false): SubBudgetStatus {
@@ -166,5 +167,60 @@ describe("income targets", () => {
 
     it("keeps worstPercent as raw progress, whatever the direction", () => {
         expect(worstPercent(incomeTarget({ percent: 20 }))).toBe(20);
+    });
+});
+
+describe("verdictCounts", () => {
+    // The fixture's window is August, so this is the month after it.
+    const after = "2026-09-05T00:00:00.000Z";
+    const during = "2026-08-20T00:00:00.000Z";
+
+    it("counts nothing while the window is still open", () => {
+        expect(verdictCounts([budget({ percent: 140 })], during))
+            .toEqual({ passed: 0, missed: 0, judged: 0 });
+    });
+
+    it("passes a cap that stayed inside its limit", () => {
+        expect(verdictCounts([budget({ percent: 78 })], after))
+            .toEqual({ passed: 1, missed: 0, judged: 1 });
+    });
+
+    it("misses a cap that went past it", () => {
+        expect(verdictCounts([budget({ percent: 112 })], after))
+            .toEqual({ passed: 0, missed: 1, judged: 1 });
+    });
+
+    it("reads a savings target the other way up - going over is the pass", () => {
+        expect(verdictCounts([budget({ measures: "saving", percent: 116 })], after))
+            .toEqual({ passed: 1, missed: 0, judged: 1 });
+        expect(verdictCounts([budget({ measures: "saving", percent: 66 })], after))
+            .toEqual({ passed: 0, missed: 1, judged: 1 });
+    });
+
+    it("counts every person's limit as its own result, not just the shared one", () => {
+        const b = budget({ percent: 50, sub_budgets: [sub(40), sub(130)] });
+        expect(verdictCounts([b], after)).toEqual({ passed: 2, missed: 1, judged: 3 });
+    });
+
+    it("leaves out a limit with nothing in it, so an unimported month isn't a clean sweep", () => {
+        expect(verdictCounts([budget({ percent: 0, item_count: 0 })], after))
+            .toEqual({ passed: 0, missed: 0, judged: 0 });
+    });
+
+    it("skips a budget with no overall amount, counting only its people", () => {
+        const personalOnly = budget({
+            amount: undefined, remaining: undefined, percent: undefined, over: undefined,
+            sub_budgets: [sub(70)],
+        });
+        expect(verdictCounts([personalOnly], after)).toEqual({ passed: 1, missed: 0, judged: 1 });
+    });
+
+    it("adds up across budgets", () => {
+        const budgets = [
+            budget({ _id: "a", percent: 78 }),
+            budget({ _id: "b", percent: 112 }),
+            budget({ _id: "c", percent: 40 }),
+        ];
+        expect(verdictCounts(budgets, after)).toEqual({ passed: 2, missed: 1, judged: 3 });
     });
 });

@@ -425,6 +425,26 @@ export interface SubBudgetStatus {
     item_count: number;
 }
 
+/**
+ * One of the budget's OWN past periods, measured whole.
+ *
+ * Never scaled to a requested range, unlike the figures on `BudgetStatus` itself: a column
+ * means "that month" whatever window the page happens to be showing, which is the only
+ * reading under which a run of them says anything. Only present when the caller asked for
+ * `history`, and never for a one-off `custom` budget, which has no repeating window.
+ */
+export interface BudgetPeriodResult {
+    from: string;
+    to: string;
+    spent: number;
+    item_count: number;
+    /** All three absent together when the budget caps only named people. */
+    amount?: number;
+    /** Uncapped, matching `BudgetStatus.percent`. */
+    percent?: number;
+    over?: boolean;
+}
+
 export interface BudgetStatus {
     _id: string;
     /** Empty = every category. */
@@ -475,6 +495,9 @@ export interface BudgetStatus {
     own_period_to?: string;
     /** Server-provided: who spent over the budget's own current period. */
     period_by_person?: BudgetPersonSpend[];
+    /** Server-provided when `history` was requested: the budget's own past periods,
+     *  oldest first, ending with the one in progress. Whole periods, never range-scaled. */
+    periods?: BudgetPeriodResult[];
 }
 
 export interface BudgetStatusResponse {
