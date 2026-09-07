@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import {
     Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
-    Divider, IconButton, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
+    Divider, IconButton, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -12,7 +12,7 @@ import type { XenBudgetBook, XenBudgetLabel } from "../../../../hooks/xenbudget/
 import { useXenBudgetLabels, type LabelKind } from "../../../../hooks/xenbudget/useLabels";
 import LabelChip, { resolveLabelColor } from "./LabelChip";
 import LabelColorPicker from "./LabelColorPicker";
-import { emptyStateSx } from "../../../../components/ui/surfaceStyles";
+import EmptyState from "../../../../components/ui/EmptyState";
 
 interface LabelManagerProps {
     book: XenBudgetBook;
@@ -176,9 +176,7 @@ export default function LabelManager({ book, kind, itemCounts }: LabelManagerPro
             <Divider sx={{ mb: 1.5 }} />
 
             {labels.length === 0 ? (
-                <Box sx={{ ...emptyStateSx, py: 3 }}>
-                    <Typography variant="body2" color="text.secondary">{copy.empty}</Typography>
-                </Box>
+                <EmptyState description={copy.empty} sx={{ py: 3 }} />
             ) : (
                 <Stack spacing={kind === "categories" ? 0 : 0.25}>
                     {labels.map((label, i) => {

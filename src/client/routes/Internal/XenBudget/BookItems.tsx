@@ -28,7 +28,8 @@ import ItemsTotalsBar from "./components/ItemsTotalsBar";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import ListSkeleton from "../../../components/ui/ListSkeleton";
 import { groupByDay, dateOnlyToLocal } from "../../../utils/dateGrouping";
-import { emptyStateSx, emptyStateIconCircleSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
+import { sectionLabelSx } from "../../../components/ui/surfaceStyles";
+import EmptyState from "../../../components/ui/EmptyState";
 import { FLAG_OFF_BUDGET } from "../../../constants/xenbudget";
 
 /** What a budget hands over when its "View items" action navigates here. */
@@ -356,18 +357,16 @@ export default function BookItems() {
                 ) : isLoading ? (
                     <ListSkeleton rows={6} height={56} gap={1} />
                 ) : items.length === 0 ? (
-                    <Box sx={emptyStateSx}>
-                        <Box sx={emptyStateIconCircleSx}>
-                            <ReceiptLongIcon color="disabled" />
-                        </Box>
-                        <Typography variant="subtitle1">Nothing here</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            {search || period.kind !== "all" || merchant
+                    <EmptyState
+                        icon={<ReceiptLongIcon />}
+                        title="Nothing here"
+                        description={
+                            search || period.kind !== "all" || merchant
                                 || selectedFilters.length > 0 || sourceFilter !== "all"
                                 ? "No items match those filters."
-                                : "Add your first item, or import a CSV from your bank."}
-                        </Typography>
-                    </Box>
+                                : "Add your first item, or import a CSV from your bank."
+                        }
+                    />
                 ) : (
                     <Stack spacing={2}>
                         {dayGroups ? (
