@@ -10,7 +10,7 @@ import { PointsIcon } from "../../../components/icons/PointsIcon";
 const CATEGORIES = ["All", "Roles", "Items", "Perks"];
 
 export default function Shop() {
-    const { pointsShopItems, isLoading, isError, error, buyPointsItemMutation, isBuyingPointsItem, buyPointsItemError } = usePointsShopItems();
+    const { pointsShopItems, isLoading, isError, error, refetch, buyPointsItemMutation, isBuyingPointsItem, buyPointsItemError } = usePointsShopItems();
     const { profile } = useUserProfile();
     const [showBuyModal, setShowBuyModal] = useState<boolean>(false);
     const [selectedItem, setSelectedItem] = useState<PointsShopItem | null>(null);
@@ -21,7 +21,7 @@ export default function Shop() {
     }
 
     if (isError) {
-        return <ErrorDisplay error={error} />;
+        return <ErrorDisplay error={error} onRetry={() => refetch()} />;
     }
 
     const handleBuyItem = async (item: PointsShopItem) => {

@@ -43,7 +43,7 @@ export default function BookOverview() {
     // The window is the book's, not this tab's — see BookDetail.
     const { from, to, groupBy, label, bounded } = useMemo(() => resolvePeriod(period), [period]);
 
-    const { summary, isLoading, isError, error } = useXenBudgetSummary(book._id, {
+    const { summary, isLoading, isError, error, refetch } = useXenBudgetSummary(book._id, {
         currency, from: from.toISOString(), to: to.toISOString(), group_by: groupBy,
     });
     // Measured over the selected period, not each budget's own - picking "Year" showing
@@ -140,7 +140,7 @@ export default function BookOverview() {
     }, [summary, book.members]);
 
     if (isLoading && !summary) return <LoadingSpinner message="Adding it up..." />;
-    if (isError) return <ErrorDisplay error={error} />;
+    if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
     if (!summary) return null;
 
     const { totals } = summary;

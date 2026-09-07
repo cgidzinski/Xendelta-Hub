@@ -33,7 +33,7 @@ export default function XenBox() {
   const emptyXenLink: XenLink = { _id: "", name: "", url: "", slug: "", createdAt: new Date(), updatedAt: new Date() };
   const [selectedLink, setSelectedLink] = useState<XenLink>(emptyXenLink);
 
-  const { links, isLoading, isError, error } = useXenLink(search || undefined);
+  const { links, isLoading, isError, error, refetch } = useXenLink(search || undefined);
   const { mutateAsync: updateXenLink, isPending: isUpdating } = useUpdateXenLink();
   const { mutateAsync: createXenLink } = useCreateXenLink();
   const { mutateAsync: deleteXenLink } = useDeleteXenLink();
@@ -197,6 +197,7 @@ export default function XenBox() {
         isLoading={isLoading}
         isError={isError}
         error={error}
+        onRetry={() => refetch()}
       />
     </Container>
   );

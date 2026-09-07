@@ -37,7 +37,7 @@ import { useUserProfile } from "../../../hooks/user/useUserProfile";
 export default function GroupsList() {
   useTitle("Xensplit");
   useXenSplitGroupsSocket();
-  const { groups, isLoading, isError, error, createGroup, isCreating } = useXenSplits();
+  const { groups, isLoading, isError, error, refetch, createGroup, isCreating } = useXenSplits();
   const { user } = useAuth();
   const { profile } = useUserProfile();
   const [showEtransferPrompt, setShowEtransferPrompt] = useState(false);
@@ -81,7 +81,7 @@ export default function GroupsList() {
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorDisplay error={error} />;
+  if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
 
   return (
     <Box>

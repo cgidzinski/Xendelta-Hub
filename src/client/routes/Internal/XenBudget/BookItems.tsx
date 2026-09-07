@@ -150,7 +150,7 @@ export default function BookItems() {
     }, [period, search, selectedFilters, sourceFilter, merchant]);
 
     const {
-        items, totals, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
+        items, totals, isLoading, isError, error, refetch, hasMore, loadMore, isLoadingMore,
     } = useXenBudgetItems(book._id, filters);
 
     const dayGroups = useMemo(() => groupByDay(items, (i) => i.date, "UTC"), [items]);
@@ -325,7 +325,7 @@ export default function BookItems() {
 
             <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pl: 2, pr: { xs: 2, sm: 3.5 }, pb: 2 }}>
                 {isError ? (
-                    <ErrorDisplay error={error} />
+                    <ErrorDisplay error={error} onRetry={() => refetch()} />
                 ) : isLoading ? (
                     <LoadingSpinner message="Loading items..." />
                 ) : items.length === 0 ? (

@@ -20,7 +20,7 @@ export default function BooksList() {
     useXenBudgetBooksSocket();
     const navigate = useNavigate();
     const { enqueueSnackbar } = useSnackbar();
-    const { books, isLoading, isError, error, createBookAsync, isCreating } = useXenBudgetBooks();
+    const { books, isLoading, isError, error, refetch, createBookAsync, isCreating } = useXenBudgetBooks();
 
     const [createOpen, setCreateOpen] = useState(false);
     const [name, setName] = useState("");
@@ -37,7 +37,7 @@ export default function BooksList() {
     };
 
     if (isLoading) return <LoadingSpinner message="Loading your books..." />;
-    if (isError) return <ErrorDisplay error={error} />;
+    if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
 
     return (
         <Box sx={{ p: 2, width: "100%" }}>

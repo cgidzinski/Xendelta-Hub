@@ -75,7 +75,7 @@ export default function BookReport() {
     // The window is the book's, not this tab's — see BookDetail.
     const range = useMemo(() => resolvePeriod(period), [period]);
 
-    const { summary, isLoading, isError, error } = useXenBudgetSummary(book._id, {
+    const { summary, isLoading, isError, error, refetch } = useXenBudgetSummary(book._id, {
         from: range.from.toISOString(),
         to: range.to.toISOString(),
         group_by: range.groupBy,
@@ -358,7 +358,7 @@ export default function BookReport() {
     };
 
     if (isLoading && !summary) return <LoadingSpinner message="Building the report..." />;
-    if (isError) return <ErrorDisplay error={error} />;
+    if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
     if (!summary) return null;
 
     const money = (v: number) => formatCurrency(v, summary.currency);

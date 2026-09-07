@@ -24,17 +24,17 @@ export const sectionLabelSx = {
 } satisfies SxProps<Theme>;
 
 // Centered empty-state column (icon-in-a-circle + heading + helper text).
-export const emptyStateSx: SxProps<Theme> = {
+export const emptyStateSx = {
   textAlign: "center",
   py: 8,
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
   gap: 1.5,
-};
+} satisfies SxProps<Theme>;
 
 // The 64x64 tinted circle that wraps the empty-state icon.
-export const emptyStateIconCircleSx: SxProps<Theme> = {
+export const emptyStateIconCircleSx = {
   width: 64,
   height: 64,
   borderRadius: "50%",
@@ -43,4 +43,4 @@ export const emptyStateIconCircleSx: SxProps<Theme> = {
   alignItems: "center",
   justifyContent: "center",
   mb: 0.5,
-};
+} satisfies SxProps<Theme>;

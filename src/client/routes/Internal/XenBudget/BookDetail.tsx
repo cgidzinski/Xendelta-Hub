@@ -68,7 +68,7 @@ export default function BookDetail() {
     const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
     const {
-        book, isLoading, isError, error,
+        book, isLoading, isError, error, refetch,
         updateBook, isUpdating,
         addMembersAsync, isAddingMembers, removeMember,
         deleteBookAsync, isDeletingBook,
@@ -107,7 +107,7 @@ export default function BookDetail() {
     const activeTab = activeIndex(location.pathname, TAB_PATHS);
 
     if (isLoading && !book) return <LoadingSpinner message="Loading book..." />;
-    if (isError) return <ErrorDisplay error={error} />;
+    if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
     if (!book) return null;
 
     const outletContext: BookDetailContext = {

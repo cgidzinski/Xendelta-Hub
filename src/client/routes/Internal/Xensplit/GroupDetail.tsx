@@ -96,7 +96,7 @@ export default function GroupDetail() {
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
-  const { group, isLoading, isError, error, addMembers, isAddingMembers, removeMember, isRemovingMember, updateGroup, isUpdating, uploadGroupImage, isUploadingImage } = useXenSplit(groupId!);
+  const { group, isLoading, isError, error, refetch, addMembers, isAddingMembers, removeMember, isRemovingMember, updateGroup, isUpdating, uploadGroupImage, isUploadingImage } = useXenSplit(groupId!);
   useTitle("Xensplit");
   const { deleteGroup } = useXenSplits();
   const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useXenSplitBalances(groupId!);
@@ -204,7 +204,7 @@ export default function GroupDetail() {
 
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorDisplay error={error} />;
+  if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
   if (!group) return null;
 
   const isCreator = group.created_by === user?.id;

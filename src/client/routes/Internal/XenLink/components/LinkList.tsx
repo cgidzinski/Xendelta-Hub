@@ -3,6 +3,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useSnackbar } from "notistack";
 import { format } from "date-fns";
 import { XenLink } from "../../../../hooks/xenlink/useXenlink";
+import ErrorDisplay from "../../../../components/ErrorDisplay";
 
 interface LinkListProps {
   links: XenLink[] | undefined;
@@ -10,9 +11,10 @@ interface LinkListProps {
   isLoading: boolean;
   isError?: boolean;
   error?: Error | null;
+  onRetry?: () => void;
 }
 
-export default function LinkList({ links, handleLinkClick, isLoading, isError, error }: LinkListProps) {
+export default function LinkList({ links, handleLinkClick, isLoading, isError, error, onRetry }: LinkListProps) {
   const { enqueueSnackbar } = useSnackbar();
 
   const handleCopyUrl = (e: React.MouseEvent, link: XenLink) => {
@@ -34,7 +36,7 @@ export default function LinkList({ links, handleLinkClick, isLoading, isError, e
   }
 
   if (isError) {
-    return <Alert severity="error">{error?.message || "Failed to load links"}</Alert>;
+    return <ErrorDisplay error={error ?? null} title="Couldn't load your links" onRetry={onRetry} />;
   }
 
   if (!links || links.length === 0) {
