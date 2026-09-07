@@ -99,6 +99,17 @@ export default function CategoryReportTable({
             )}
             <TableCell align="right" sx={{ fontWeight: pivoted ? 600 : 400 }}>
                 {pivoted ? round(row.spent) : money(row.spent)}
+                {/* The figure above is net of anything that came back into the category,
+                which can't be checked against a statement on its own - so the two halves
+                behind it are spelled out wherever there is one. */}
+                {row.returned > 0 && (
+                    <Typography
+                        variant="caption" color="text.secondary" noWrap
+                        sx={{ display: "block", fontWeight: 400 }}
+                    >
+                        {round(row.out)} out · {round(row.returned)} in
+                    </Typography>
+                )}
             </TableCell>
             {hasBudgets && (
                 <TableCell align="right">
@@ -276,6 +287,10 @@ export default function CategoryReportTable({
                         {sectionHeader("Overall", false)}
                         {totalRow("Income", summary.income, { color: INCOME_COLOR })}
                         {totalRow("Spent", summary.spent, { color: EXPENSE_COLOR })}
+                        {/* The rows above are net; this is what was netted off them, so
+                        they still reconcile with the gross Spent figure. */}
+                        {summary.returned.total > 0
+                            && totalRow("Back into a category", summary.returned, { color: INCOME_COLOR })}
                         {totalRow("Balance", summary.net, { signed: true, strong: true })}
                     </TableBody>
                 </Table>

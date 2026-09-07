@@ -35,6 +35,17 @@ export function directionOf(measures: BudgetMeasures): LimitDirection {
     return measures === "expense" ? "ceiling" : "floor";
 }
 
+/**
+ * The other half of the same question: which item type a budget actually counts.
+ *
+ * Mirrors the server's `itemTypeFor`. Two floors count opposite things - a savings budget
+ * measures money LEAVING for a savings category, an income target measures money ARRIVING -
+ * so anything summing "what has gone toward this" needs this as well as the direction.
+ */
+export function countsItemType(measures: BudgetMeasures): "expense" | "income" {
+    return measures === "income" ? "income" : "expense";
+}
+
 /** Everything at or past this share of a CEILING is worth looking at before the rest. */
 export const NEAR_LIMIT_PERCENT = 80;
 

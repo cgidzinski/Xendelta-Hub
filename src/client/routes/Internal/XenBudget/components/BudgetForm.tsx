@@ -79,6 +79,14 @@ export default function BudgetForm({
     const [amount, setAmount] = useState("");
     const [subs, setSubs] = useState<SubDraft[]>([]);
     const [startDate, setStartDate] = useState<Date | null>(new Date());
+
+    // The registry, plus anything this budget already names that the registry no longer
+    // has - a category can be deleted out from under an existing budget, and the picker
+    // must still show what is on it rather than dropping it on the next save.
+    const categoryOptions = useMemo(() => {
+        const registry = book.categories.map((c) => c.name);
+        return [...registry, ...categories.filter((c) => !registry.includes(c))];
+    }, [book.categories, categories]);
     const [endDate, setEndDate] = useState<Date | null>(null);
 
     useEffect(() => {
@@ -185,11 +193,15 @@ export default function BudgetForm({
                         ))}
                     </TextField>
 
+                    {/* Closed, not freeSolo: a budget on a category nothing is filed under
+                    silently measures nothing, which is the worst way for this to fail.
+                    Categories are registered in Settings and picked here. */}
                     <Autocomplete
-                        multiple freeSolo
-                        options={book.categories.map((c) => c.name)}
+                        multiple
+                        options={categoryOptions}
                         value={categories}
                         onChange={(_, v) => setCategories(v)}
+                        noOptionsText="No categories left to add"
                         renderInput={(params) => (
                             <TextField
                                 {...params} label="Categories"

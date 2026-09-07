@@ -53,7 +53,8 @@ import { uploadXenBudgetImages } from "../config/multer";
 import { uploadToGCS, deleteFromGCS, generateSignedUrl } from "../utils/gcsUtils";
 import { generateUniqueFilename } from "../utils/mediaUtils";
 import {
-  applyRules, ruleMatches, stripRuleEffects, type DraftItem, type Rule,
+  applyRules, ruleMatches, stripRuleEffects, normalizeFlagNames, withDerivedUncategorised,
+  type DraftItem, type Rule,
 } from "../utils/xenBudgetRules";
 import {
   detectRecurring, monthlyCommitted, normalizeMerchant, merchantMatchPattern,
@@ -379,6 +380,14 @@ async function insertRestoredItems(
     if (mode === "merge" && existingHashes.has(hash)) continue;
     existingHashes.add(hash);
 
+    const categories = resolveCategories(
+      raw.category_split_type || "equal",
+      amount,
+      (Array.isArray(raw.categories) ? raw.categories : [])
+        .map((c: any) => (typeof c === "string" ? { name: c } : c))
+        .filter((c: any) => c && c.name),
+    );
+
     docs.push({
       book_id: book._id,
       type: raw.type === "income" ? "income" : "expense",
@@ -391,16 +400,12 @@ async function insertRestoredItems(
       // Always re-resolved rather than trusted as stored. A backup that predates
       // weighting carries bare names, and an entry with no amount would sum as undefined
       // in the per-category rollup - wrong in a way nothing would surface.
-      categories: resolveCategories(
-        raw.category_split_type || "equal",
-        amount,
-        (Array.isArray(raw.categories) ? raw.categories : [])
-          .map((c: any) => (typeof c === "string" ? { name: c } : c))
-          .filter((c: any) => c && c.name),
-      ),
+      categories,
       category_split_type: raw.category_split_type || "equal",
       rule_categories: Array.isArray(raw.rule_categories) ? raw.rule_categories : [],
-      flags: Array.isArray(raw.flags) ? raw.flags : [],
+      // Derived, not restored: a backup taken while the two could disagree would otherwise
+      // carry the contradiction back in.
+      flags: withDerivedUncategorised(raw.flags, categories),
       rule_flags: Array.isArray(raw.rule_flags) ? raw.rule_flags : [],
       share_type: raw.share_type || "equal",
       // Share user ids are remapped where a person resolved to a different account, so
@@ -840,7 +845,9 @@ function draftFromRow(row: any, book: any): DraftItem {
     description: String(row.description || "").slice(0, 500),
     notes: String(row.notes || "").slice(0, 1000) || undefined,
     categories: Array.isArray(row.categories) ? [...row.categories] : [],
-    flags: Array.isArray(row.flags) ? [...row.flags] : [],
+    // Normalised here rather than trusted: a manual add carries whatever the free-solo
+    // flag picker produced, which is raw typed text.
+    flags: normalizeFlagNames(row.flags),
     applied_rule_ids: [],
     rule_categories: [],
     rule_flags: [],
@@ -1452,6 +1459,11 @@ module.exports = function (app: any) {
           // skipBecomesOffBudget: a "skip" rule can't retroactively delete an item that
           // already exists, so on a sweep it becomes "Off budget". Nothing is destroyed.
           const { item: after } = applyRules(stripRuleEffects(before), rules, { skipBecomesOffBudget: true });
+          // Before the diff, so the dry run shows the same thing the sweep writes. This is
+          // the path that used to leave "Uncategorised" on a row a rule had just
+          // categorised: the flag isn't rule-contributed, so stripRuleEffects never took
+          // it off, and nothing else here looked at it.
+          after.flags = withDerivedUncategorised(after.flags, after.categories);
           const diff = describeChange(item, before, after);
           if (!diff) continue;
           changes.push(diff);
@@ -1539,7 +1551,9 @@ module.exports = function (app: any) {
               description: result.item.description,
               notes: result.item.notes,
               categories: result.item.categories,
-              flags: result.item.flags,
+              // Derived here too, so the preview shows the flags the import will actually
+              // write rather than the draft's own idea of them.
+              flags: withDerivedUncategorised(result.item.flags, result.item.categories),
             },
           };
         });
@@ -1833,11 +1847,10 @@ module.exports = function (app: any) {
           }
           // Applied by the importer, not by a rule, so these go into `flags` and NOT into
           // `rule_flags`: a later re-apply sweep must not strip a marker that was true at
-          // import time.
-          const importFlags = [...ruled.flags];
-          if (ruled.categories.length === 0 && !importFlags.includes(FLAG_UNCATEGORISED)) {
-            importFlags.push(FLAG_UNCATEGORISED);
-          }
+          // import time. "Uncategorised" is the exception and goes through the shared
+          // helper - it is derived state, and a sweep SHOULD take it off once a rule
+          // finally categorises the row.
+          const importFlags = withDerivedUncategorised(ruled.flags, ruled.categories);
           if (seenBefore.has(incomingHashes[index]) && !importFlags.includes(FLAG_POSSIBLE_DUPLICATE)) {
             importFlags.push(FLAG_POSSIBLE_DUPLICATE);
           }
@@ -2376,25 +2389,35 @@ module.exports = function (app: any) {
           const cats = b.categories && b.categories.length > 0 ? b.categories : null;
 
           // What this budget's SCOPE counts of each item: the whole thing when it names no
-          // categories, otherwise only the weights of the ones it does name. The type
-          // narrowing goes FIRST, ahead of the unwind, so an income budget never fans out
-          // the expense rows it is about to discard.
-          const measuresType = { $match: { type: itemTypeFor(b.measures) } };
+          // categories, otherwise only the weights of the ones it does name.
+          //
+          // A budget over NAMED categories counts both directions and nets them: money
+          // that came back into one of those categories - a refund, a repayment, a
+          // transfer reversed - is not spending, and counting only the outgoing half left
+          // a category that had been paid back in full sitting at its cap.
+          //
+          // A budget naming NO categories keeps the single-type narrowing, ahead of the
+          // unwind so an income budget never fans out the expense rows it is about to
+          // discard. Salary is not a refund of a whole-book cap.
+          const counted = itemTypeFor(b.measures);
+          const signed = (expr: any): any => ({
+            $cond: [{ $eq: ["$type", counted] }, expr, { $multiply: [-1, expr] }],
+          });
           const scopeStages: any[] = cats
-            ? [measuresType, { $unwind: "$categories" }, { $match: { "categories.name": { $in: cats } } }]
-            : [measuresType];
-          const scopeAmount: any = cats ? "$categories.amount" : "$amount";
+            ? [{ $unwind: "$categories" }, { $match: { "categories.name": { $in: cats } } }]
+            : [{ $match: { type: counted } }];
+          const scopeAmount: any = cats ? signed("$categories.amount") : "$amount";
           // One person's slice of that scope: their share of the item, prorated by the
           // category weight. A $100 item split 70/30 by category and 50/50 by person owes
           // a Groceries budget $35 - 50% of the $70 weight, not $70 and not $100.
           const personAmount: any = cats
-            ? {
+            ? signed({
               $cond: [
                 { $eq: ["$amount", 0] },
                 0,
                 { $divide: [{ $multiply: ["$categories.amount", "$shares.amount"] }, "$amount"] },
               ],
-            }
+            })
             : "$shares.amount";
 
           // The scope's own spend, computed whether or not there is an overall limit to
@@ -2665,10 +2688,22 @@ module.exports = function (app: any) {
               // item's full amount. Unwinding and summing $amount - which is what the old
               // tags array did - counts an item once per label, so anything carrying two of
               // them inflated the totals.
+              //
+              // Both directions are counted, kept apart: money that came back INTO a named
+              // category (a refund, a repayment, an internal transfer) offsets what went out
+              // of it, and a rollup that only ever saw expenses reported the gross outgoings
+              // of a category that had been paid back in full. `total` stays gross so the
+              // charts that can't draw a negative slice keep working; the client nets.
               byCategory: [
-                expenseOnly,
                 { $unwind: "$categories" },
-                { $group: { _id: "$categories.name", total: { $sum: categoryTotalExpr }, count: { $sum: 1 } } },
+                {
+                  $group: {
+                    _id: "$categories.name",
+                    total: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, categoryTotalExpr, 0] } },
+                    income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, categoryTotalExpr, 0] } },
+                    count: { $sum: 1 },
+                  },
+                },
                 { $sort: { total: -1 } },
               ],
               byPerson: [
@@ -2689,7 +2724,6 @@ module.exports = function (app: any) {
               // split purchase correctly, and re-deriving it from the flat by_category
               // rows is impossible: those have already been summed across time.
               byCategoryPeriod: [
-                expenseOnly,
                 { $unwind: "$categories" },
                 {
                   $group: {
@@ -2697,10 +2731,15 @@ module.exports = function (app: any) {
                       category: "$categories.name",
                       period: { $dateToString: { format, date: "$date" } },
                     },
-                    total: { $sum: categoryTotalExpr },
+                    total: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, categoryTotalExpr, 0] } },
+                    income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, categoryTotalExpr, 0] } },
                   },
                 },
               ],
+              // Deliberately still expense-only, unlike the two facets above: netting is
+              // something a category opts into by being NAMED. An uncategorised paycheque
+              // is not a refund of uncategorised spending, and letting it offset one would
+              // swamp the row with salary.
               uncategorised: [
                 expenseOnly,
                 { $match: { $or: [{ categories: { $size: 0 } }, { categories: { $exists: false } }] } },
@@ -2762,11 +2801,20 @@ module.exports = function (app: any) {
               const income = roundMoney(row?.income || 0);
               return { key, expense, income, net: roundMoney(income - expense), count: row?.count || 0 };
             }),
-            by_category: byCategory.map((r: any) => ({ category: r._id, total: roundMoney(r.total), count: r.count })),
+            // `total` is what went OUT of the category, `income` what came back in. Kept
+            // apart rather than pre-netted: a pie or a stacked area can't draw a negative
+            // slice, so the charts read the gross and the figures read the difference.
+            by_category: byCategory.map((r: any) => ({
+              category: r._id,
+              total: roundMoney(r.total),
+              income: roundMoney(r.income || 0),
+              count: r.count,
+            })),
             by_category_period: (facets?.byCategoryPeriod ?? []).map((r: any) => ({
               category: r._id.category,
               key: r._id.period,
               total: roundMoney(r.total),
+              income: roundMoney(r.income || 0),
             })),
             uncategorised_by_period: (facets?.uncategorisedByPeriod ?? []).map((r: any) => ({
               key: r._id,
@@ -3140,7 +3188,7 @@ module.exports = function (app: any) {
             (item.categories || []).map((c: any) => (
               c.percentage != null && c.percentage < 100 ? `${c.name} (${c.percentage}%)` : c.name
             )).join("; "),
-            (item.flags || []).join("; "),
+            withDerivedUncategorised(item.flags, item.categories).join("; "),
             (item.shares || []).map((s: any) => usernameById.get(s.user_id) || s.user_id).join("; "),
             item.notes || "",
             item.source || "manual",
@@ -3292,7 +3340,7 @@ module.exports = function (app: any) {
             ? (ruled.category_split_type ?? "equal")
             : (body.category_split_type || "equal"),
           rule_categories: ruled.rule_categories,
-          flags: ruled.flags,
+          flags: withDerivedUncategorised(ruled.flags, manualCategories),
           rule_flags: ruled.rule_flags,
           applied_rule_ids: ruled.applied_rule_ids,
           share_type: shares.share_type,
@@ -3327,7 +3375,15 @@ module.exports = function (app: any) {
         if (body.date !== undefined) item.date = bookDateToUtc(new Date(body.date));
         if (body.description !== undefined) item.description = body.description;
         if (body.notes !== undefined) item.notes = body.notes;
-        if (body.flags !== undefined) item.flags = body.flags;
+        if (body.flags !== undefined) {
+          item.flags = normalizeFlagNames(body.flags);
+          // Provenance has to follow the hand edit. `rule_flags` is what a re-apply sweep
+          // strips before running the rules again (stripRuleEffects), so a name left in it
+          // after the user removed - or deliberately re-added - that flag is a flag the
+          // next sweep silently deletes.
+          item.rule_flags = (item.rule_flags || []).filter((f: string) =>
+            item.flags.some((n: string) => n.toLowerCase() === f.toLowerCase()));
+        }
         if (body.categories !== undefined || body.category_split_type !== undefined
           || body.amount !== undefined) {
           // Weights have to be recomputed whenever the amount or the split changes, or
@@ -3337,11 +3393,12 @@ module.exports = function (app: any) {
             : item.categories.map((c: any) => ({ name: c.name, amount: c.amount, percentage: c.percentage }));
           item.category_split_type = body.category_split_type || item.category_split_type || "equal";
           item.categories = resolveCategories(item.category_split_type, item.amount, requested);
-          // A hand-categorised item is no longer the importer's "nothing matched" case.
-          if (item.categories.length > 0) {
-            item.flags = (item.flags || []).filter((t: string) => t !== FLAG_UNCATEGORISED);
-          }
         }
+        // Both directions, after the categories are settled: a hand-categorised item is no
+        // longer the importer's "nothing matched" case, and one whose last category was
+        // just removed is again. Unconditional, so an edit that only touches the flags
+        // can't reintroduce the contradiction the form was showing.
+        item.flags = withDerivedUncategorised(item.flags, item.categories);
 
         // Shares have to be recomputed whenever the amount or the split changes, or the
         // per-person totals stop reconciling with the item.

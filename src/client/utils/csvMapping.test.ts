@@ -212,23 +212,26 @@ describe("applyMapping", () => {
         expect(mapped[0].index).toBe(1);
     });
 
-    it("splits a category column and merges the preset's defaults", () => {
+    it("takes categories from the preset's defaults only", () => {
+        // A file's own category column is deliberately not mappable: it would create
+        // whatever the file said, and a category that exists on items but not in the
+        // book's registry counts towards totals while appearing in no filter or budget.
         const { rows: mapped } = applyMapping(
             [{ Date: "2026-08-01", Payee: "X", Amount: "-5", Cat: "food; coffee" }],
             signed({
-                column_map: { date: "Date", description: "Payee", amount: "Amount", categories: "Cat" },
+                column_map: { date: "Date", description: "Payee", amount: "Amount" },
                 default_categories: ["imported"],
             }),
         );
-        expect(mapped[0].categories).toEqual(["imported", "food", "coffee"]);
+        expect(mapped[0].categories).toEqual(["imported"]);
     });
 
-    it("does not duplicate a default category the row already carries", () => {
+    it("does not duplicate a default category listed twice", () => {
         const { rows: mapped } = applyMapping(
-            [{ Date: "2026-08-01", Payee: "X", Amount: "-5", Cat: "Imported" }],
+            [{ Date: "2026-08-01", Payee: "X", Amount: "-5" }],
             signed({
-                column_map: { date: "Date", description: "Payee", amount: "Amount", categories: "Cat" },
-                default_categories: ["imported"],
+                column_map: { date: "Date", description: "Payee", amount: "Amount" },
+                default_categories: ["imported", "Imported"],
             }),
         );
         expect(mapped[0].categories).toEqual(["imported"]);

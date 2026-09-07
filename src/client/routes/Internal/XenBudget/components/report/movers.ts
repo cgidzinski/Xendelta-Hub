@@ -55,16 +55,19 @@ export function buildMovers(
     const currentKey = periodKeys[periodKeys.length - 1];
     const previousKey = periodKeys[periodKeys.length - 2];
 
+    // Net of anything that came back into the category, the same figure the table and the
+    // overview card show - a bill refunded in the current bucket is not a rise in spending.
     const totals = new Map<string, { previous: number; current: number }>();
     let currentTotal = 0;
     for (const cell of byCategoryPeriod) {
         if (cell.key !== currentKey && cell.key !== previousKey) continue;
+        const net = cell.total - cell.income;
         const row = totals.get(cell.category) ?? { previous: 0, current: 0 };
         if (cell.key === currentKey) {
-            row.current += cell.total;
-            currentTotal += cell.total;
+            row.current += net;
+            currentTotal += net;
         } else {
-            row.previous += cell.total;
+            row.previous += net;
         }
         totals.set(cell.category, row);
     }

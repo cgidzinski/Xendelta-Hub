@@ -2,6 +2,7 @@
 // convention as xenSplitSerializer.ts - so the client contract stays in one place.
 
 import { serializePiggyBanks } from "./xenBudgetPiggyBanks";
+import { withDerivedUncategorised } from "./xenBudgetRules";
 
 /** Flattens populated User refs into { user_id, username, avatar }. */
 export function transformMembers(obj: any): any {
@@ -74,6 +75,10 @@ export function serializeItem(item: any, batchLabelById?: Map<string, string>): 
     _id: obj._id.toString(),
     book_id: obj.book_id?.toString(),
     import_batch_id: batchId,
+    // "Uncategorised" is derived from the categories rather than trusted from the document:
+    // the write paths keep the stored copy right, and doing it here as well means an item
+    // written before they did reads correctly without a migration.
+    flags: withDerivedUncategorised(obj.flags, obj.categories),
     applied_rule_ids: (obj.applied_rule_ids || []).map((id: any) => id.toString()),
     images: Array.isArray(obj.images)
       ? obj.images.map((img: any) => ({

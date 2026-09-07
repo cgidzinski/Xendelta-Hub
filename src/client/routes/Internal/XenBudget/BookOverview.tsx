@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import {
-    Avatar, Box, Button, Card, Link, MenuItem, Stack, TextField, Typography, useMediaQuery,
+    alpha, Avatar, Box, Button, Card, Link, MenuItem, Stack, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import InsightsIcon from "@mui/icons-material/Insights";
 import SavingsIcon from "@mui/icons-material/Savings";
@@ -114,15 +114,33 @@ export default function BookOverview() {
         });
     }, [summary, recurring, from, to, bounded]);
 
+    // Net of anything that came back in. A category used for both directions - a shared
+    // bill paid then repaid, a card cleared and refunded - was reading its gross outgoings,
+    // so a category that had been settled in full still showed thousands against it.
+    //
+    // The gross pair is kept on the row and shown underneath, because the netted figure on
+    // its own can't be checked against a statement. Uncategorised has no `income` half by
+    // design (see the summary endpoint): an uncategorised paycheque isn't a refund.
     const categoryRows = useMemo(() => {
         if (!summary) return [];
         const rows = summary.by_category.map((c) => ({
-            label: c.category, total: c.total, category: c.category,
+            label: c.category,
+            category: c.category,
+            out: c.total,
+            returned: c.income,
+            total: c.total - c.income,
         }));
         if (summary.uncategorised.count > 0) {
-            rows.push({ label: "Uncategorised", total: summary.uncategorised.total, category: "" });
+            rows.push({
+                label: "Uncategorised",
+                category: "",
+                out: summary.uncategorised.total,
+                returned: 0,
+                total: summary.uncategorised.total,
+            });
         }
-        return rows;
+        // The server sorts by gross; netting reorders them.
+        return rows.sort((a, b) => b.total - a.total);
     }, [summary]);
 
     // Every member appears in the per-person card, defaulting to zero rather than being
@@ -412,25 +430,50 @@ export default function BookOverview() {
                                     alignItems: "start",
                                 }}>
                                     {categoryRows.map((row) => {
+                                        // Share of the book's gross outgoings, so the
+                                        // percentages still add up to 100 across the card.
+                                        // Dropped on a netted row: "$72 · 82%" reads as a
+                                        // contradiction, and the two figures answer
+                                        // different questions.
                                         const percent = totals.expense > 0
-                                            ? Math.round((row.total / totals.expense) * 100)
+                                            ? Math.round((row.out / totals.expense) * 100)
                                             : 0;
                                         return (
-                                            <Stack
-                                                key={row.label}
-                                                direction="row" alignItems="center" justifyContent="space-between" spacing={1}
-                                                sx={{ minWidth: 0 }}
-                                            >
-                                                {row.category
-                                                    ? <CategoryChip name={row.category} registry={book.categories} />
-                                                    : <Typography variant="caption" color="text.secondary">Uncategorised</Typography>}
-                                                <Typography variant="body2" noWrap sx={{ flexShrink: 0 }}>
-                                                    {formatCurrency(row.total, summary.currency)}
-                                                    <Typography component="span" variant="body2" color="text.secondary">
-                                                        {" · "}{percent}%
+                                            <Box key={row.label} sx={{ minWidth: 0 }}>
+                                                <Stack
+                                                    direction="row" alignItems="center" justifyContent="space-between" spacing={1}
+                                                    sx={{ minWidth: 0 }}
+                                                >
+                                                    {row.category
+                                                        ? <CategoryChip name={row.category} registry={book.categories} />
+                                                        : <Typography variant="caption" color="text.secondary">Uncategorised</Typography>}
+                                                    <Typography variant="body2" noWrap sx={{ flexShrink: 0 }}>
+                                                        {formatCurrency(row.total, summary.currency)}
+                                                        {row.returned <= 0 && (
+                                                            <Typography component="span" variant="body2" color="text.secondary">
+                                                                {" · "}{percent}%
+                                                            </Typography>
+                                                        )}
                                                     </Typography>
-                                                </Typography>
-                                            </Stack>
+                                                </Stack>
+                                                {row.returned > 0 && (
+                                                    <Box sx={{
+                                                        mt: 0.5,
+                                                        px: 1,
+                                                        py: 0.25,
+                                                        borderRadius: 1,
+                                                        border: 1,
+                                                        borderColor: "divider",
+                                                        bgcolor: (theme) => alpha(theme.palette.text.primary, 0.04),
+                                                    }}>
+                                                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                                                            {formatCurrency(row.out, summary.currency)} out
+                                                            {" · "}
+                                                            {formatCurrency(row.returned, summary.currency)} back in
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                            </Box>
                                         );
                                     })}
                                 </Box>

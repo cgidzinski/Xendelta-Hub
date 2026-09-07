@@ -17,6 +17,7 @@ import { formatCurrency } from "../currency";
 import { formatDateOnly } from "../../../../utils/dateGrouping";
 import { CategoryChip, FlagChip } from "./LabelChip";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
+import { FLAG_UNCATEGORISED } from "../../../../constants/xenbudget";
 
 interface ItemPreviewModalProps {
     open: boolean;
@@ -117,10 +118,16 @@ export default function ItemPreviewModal({ open, onClose, book, item, onEdit, on
                                 {item.categories.map((c) => (
                                     <CategoryChip key={c.name} name={c.name} registry={book.categories} />
                                 ))}
+                                {/* "Uncategorised" is derived from the categories, so it
+                                gets no delete affordance - removing it would only make the
+                                server put it straight back. It goes away by categorising
+                                the item, which is what the Edit button is for. */}
                                 {item.flags.map((t) => (
                                     <FlagChip
                                         key={t} name={t} registry={book.flags}
-                                        onDelete={() => handleRemoveFlag(t)}
+                                        onDelete={t === FLAG_UNCATEGORISED
+                                            ? undefined
+                                            : () => handleRemoveFlag(t)}
                                         disabled={removingFlag !== null}
                                     />
                                 ))}

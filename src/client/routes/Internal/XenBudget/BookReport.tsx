@@ -161,6 +161,10 @@ export default function BookReport() {
         return [...head, { name: `Other (${sorted.length - MAX_BARS + 1})`, total: Math.round(rest * 100) / 100 }];
     };
 
+    // Deliberately the GROSS outgoings (`c.total`), not the netted figure the table shows:
+    // a pie divides a whole into parts, and a category that was paid back in full is a
+    // slice of nothing - or, once it goes past, a negative slice the shape can't draw.
+    //
     // Colored to match each category's chip everywhere else in the book, rather than a
     // flat hue - the folded tail and "Uncategorised" carry no real category, so they get
     // the same neutral the budget-vs-actual chart uses for its own quiet backdrop colour.
@@ -180,7 +184,8 @@ export default function BookReport() {
 
     // Needs vs wants: every category folds into its classification, with unclassified
     // categories and uncategorised money gathered into "Other". Only rendered when at
-    // least one category is actually classified need or want.
+    // least one category is actually classified need or want. Gross, for the same reason
+    // the pie above is.
     const needWantData = useMemo(() => {
         if (!summary) return [];
         const kindByName: Record<string, "need" | "want" | "none"> = {};
@@ -264,6 +269,7 @@ export default function BookReport() {
 
     // Where the money went, bucket by bucket. Identity is carried by hue here (unlike the
     // magnitude bars), which is why the series are capped at what the palette can separate.
+    // Gross again: a stacked area has no way to draw a bucket that came back in.
     const compositionData = useMemo(() => {
         const periods = summary?.by_period ?? [];
         if (!summary || periods.length < 2) return { rows: [], series: [] as string[] };

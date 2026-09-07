@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
     CATEGORY_PREFIX, PERSON_PREFIX, TYPE_EXPENSE, TYPE_INCOME, NEED_FILTER, WANT_FILTER,
-    FLAG_UNCATEGORISED, filterGroupOf, optionLabel, summariseFilters,
+    FLAG_UNCATEGORISED, buildFilterOptions, filterGroupOf, optionLabel, summariseFilters,
 } from "./itemFilterOptions";
-import type { XenBudgetMember } from "../../../../hooks/xenbudget/types";
+import type { XenBudgetBook, XenBudgetMember } from "../../../../hooks/xenbudget/types";
 
 const members: XenBudgetMember[] = [
     { user_id: "u1", username: "ada", avatar: null },
@@ -27,6 +27,39 @@ describe("filterGroupOf", () => {
     it("keeps a category named after a flag on the categories side", () => {
         // The prefix decides, not the name — both registries allow the same string.
         expect(filterGroupOf(CATEGORY_PREFIX + FLAG_UNCATEGORISED)).toBe("Categories");
+    });
+});
+
+describe("buildFilterOptions", () => {
+    const book = (categories: string[], flags: string[] = []) => ({
+        categories: categories.map((name, i) => ({ _id: `c${i}`, name })),
+        flags: flags.map((name, i) => ({ _id: `f${i}`, name })),
+        members,
+    } as XenBudgetBook);
+
+    const categoriesIn = (options: string[]) => options
+        .filter((o) => o.startsWith(CATEGORY_PREFIX))
+        .map((o) => o.slice(CATEGORY_PREFIX.length));
+
+    it("sorts categories by name, not by when they were added", () => {
+        const options = buildFilterOptions(book(["Travel", "dining", "Groceries"]));
+        expect(categoriesIn(options)).toEqual(["dining", "Groceries", "Travel"]);
+    });
+
+    it("leaves flags in registry order — the built-ins are a fixed, learnable list", () => {
+        const flags = ["Needs review", "Uncategorised", "Off budget"];
+        const options = buildFilterOptions(book(["Groceries"], flags));
+        expect(options.slice(-flags.length)).toEqual(flags);
+    });
+
+    it("keeps the groups in order, with the synthetic options first", () => {
+        const options = buildFilterOptions(book(["Groceries"], ["Ignored"]));
+        expect(options).toEqual([
+            TYPE_EXPENSE, TYPE_INCOME, NEED_FILTER, WANT_FILTER,
+            CATEGORY_PREFIX + "Groceries",
+            PERSON_PREFIX + "u1", PERSON_PREFIX + "u2",
+            "Ignored",
+        ]);
     });
 });
 
