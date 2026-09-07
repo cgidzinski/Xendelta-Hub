@@ -19,7 +19,7 @@ import { emptyStateSx, emptyStateIconCircleSx } from "../../../../components/ui/
 
 export default function BookBudgets() {
     const { book, currency } = useOutletContext<BookDetailContext>();
-    const { budgets, isLoading, isError, error } = useXenBudgetStatus(book._id, currency);
+    const { budgets, isLoading, isError, error, refetch } = useXenBudgetStatus(book._id, currency);
     const {
         createBudgetAsync, isCreatingBudget, updateBudgetAsync, isUpdatingBudget, deleteBudgetAsync,
     } = useXenBudgetBudgets(book._id);
@@ -30,7 +30,7 @@ export default function BookBudgets() {
     const [sortOrder, setSortOrder] = useState<BudgetSortOrder>("priority");
 
     if (isLoading && budgets.length === 0) return <LoadingSpinner message="Checking budgets..." />;
-    if (isError) return <ErrorDisplay error={error} />;
+    if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
 
     const query = search.trim().toLowerCase();
     const filtered = query

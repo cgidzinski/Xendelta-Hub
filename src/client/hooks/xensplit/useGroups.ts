@@ -8,7 +8,7 @@ import type {
 export function useXenSplits() {
   const queryClient = useQueryClient();
 
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["xensplit", "groups"],
     queryFn: async () => {
       const res = await apiClient.get("/api/xensplit/groups");
@@ -40,6 +40,7 @@ export function useXenSplits() {
     isLoading,
     isError,
     error,
+    refetch,
     createGroup: createMutation.mutate,
     isCreating: createMutation.isPending,
     deleteGroup: deleteMutation.mutate,

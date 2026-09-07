@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import ListSkeleton from "../../../../components/ui/ListSkeleton";
+import ErrorDisplay from "../../../../components/ErrorDisplay";
 import {
   Box,
   Typography,
@@ -24,9 +25,10 @@ interface FileListProps {
   isLoading: boolean;
   isError?: boolean;
   error?: Error | null;
+  onRetry?: () => void;
 }
 
-export default function FileList({ files, isLoading, isError, error }: FileListProps) {
+export default function FileList({ files, isLoading, isError, error, onRetry }: FileListProps) {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
 
@@ -77,9 +79,7 @@ export default function FileList({ files, isLoading, isError, error }: FileListP
 
   if (isError) {
     return (
-      <Alert severity="error">
-        {error?.message || "Failed to load files"}
-      </Alert>
+      <ErrorDisplay error={error ?? null} title="Couldn't load your files" onRetry={onRetry} />
     );
   }
 

@@ -5,7 +5,7 @@ import type { XenBudgetBook, CreateBookInput } from "./types";
 export function useXenBudgetBooks() {
     const queryClient = useQueryClient();
 
-    const { data, isLoading, isError, error } = useQuery({
+    const { data, isLoading, isError, error, refetch } = useQuery({
         queryKey: ["xenbudget", "books"],
         queryFn: async () => {
             const res = await apiClient.get("/api/xenbudget/books");
@@ -37,6 +37,7 @@ export function useXenBudgetBooks() {
         isLoading,
         isError,
         error,
+        refetch,
         createBook: createMutation.mutate,
         createBookAsync: createMutation.mutateAsync,
         isCreating: createMutation.isPending,

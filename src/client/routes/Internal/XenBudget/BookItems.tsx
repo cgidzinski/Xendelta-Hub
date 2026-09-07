@@ -154,7 +154,7 @@ export default function BookItems() {
     }, [period, search, selectedFilters, sourceFilter, merchant, sortMode]);
 
     const {
-        items, totals, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
+        items, totals, isLoading, isError, error, refetch, hasMore, loadMore, isLoadingMore,
     } = useXenBudgetItems(book._id, filters);
 
     // Day-section headers make sense reading either newest-first or oldest-first — only the
@@ -352,7 +352,7 @@ export default function BookItems() {
 
             <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pl: 2, pr: { xs: 2, sm: 3.5 }, pb: 2 }}>
                 {isError ? (
-                    <ErrorDisplay error={error} />
+                    <ErrorDisplay error={error} onRetry={() => refetch()} />
                 ) : isLoading ? (
                     <ListSkeleton rows={6} height={56} gap={1} />
                 ) : items.length === 0 ? (

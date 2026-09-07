@@ -39,7 +39,7 @@ export default function XenBox() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const { data: files, isLoading, isError, error } = useXenboxFiles(search || undefined);
+  const { data: files, isLoading, isError, error, refetch } = useXenboxFiles(search || undefined);
   const { uploadFile, isUploading } = useXenboxUpload();
 
   const handleOpenUploadDialog = () => {
@@ -210,13 +210,7 @@ export default function XenBox() {
         sx={{ mb: 4 }}
       />
 
-      {isError && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error?.message || "Failed to load files"}
-        </Alert>
-      )}
-
-      <FileList files={files} isLoading={isLoading} isError={isError} error={error} />
+      <FileList files={files} isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} />
     </Container>
   );
 }

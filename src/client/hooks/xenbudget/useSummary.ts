@@ -18,7 +18,7 @@ export interface SummaryParams {
  * Defaults to the current UTC month.
  */
 export function useXenBudgetSummary(bookId: string, params: SummaryParams = {}) {
-    const { data, isLoading, isError, error, isFetching } = useQuery({
+    const { data, isLoading, isError, error, isFetching, refetch } = useQuery({
         queryKey: ["xenbudget", "summary", bookId, params],
         queryFn: async () => {
             const res = await apiClient.get(`/api/xenbudget/books/${bookId}/summary`, {
@@ -41,5 +41,5 @@ export function useXenBudgetSummary(bookId: string, params: SummaryParams = {}) 
         placeholderData: (prev) => prev,
     });
 
-    return { summary: data, isLoading, isFetching, isError, error };
+    return { summary: data, isLoading, isFetching, isError, error, refetch };
 }
