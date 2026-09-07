@@ -30,7 +30,7 @@ import DoneAllIcon from "@mui/icons-material/DoneAll";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import { formatDistance } from "date-fns";
 import CssBaseline from "@mui/material/CssBaseline";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useRef } from "react";
 import ProfileListItem from "../ProfileListItem";
 import ShopListItem from "../ShopListItem";
@@ -107,6 +107,7 @@ export default function BaseNavBar({
   children,
 }: BaseNavBarProps) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const { profile } = useUserProfile();
@@ -162,7 +163,7 @@ export default function BaseNavBar({
       >
         <ListItemButton
           onClick={() => handleNavItemClick(item.path)}
-          selected={item.isSelected(window.location.pathname)}
+          selected={item.isSelected(pathname)}
           sx={item.indent ? { pl: 4 } : {}}
         >
           <ListItemIcon>{item.icon}</ListItemIcon>
@@ -321,7 +322,7 @@ export default function BaseNavBar({
                   <ListItem key={item.key} disablePadding>
                     <ListItemButton
                       onClick={() => handleNavItemClick(item.path)}
-                      selected={item.isSelected(window.location.pathname)}
+                      selected={item.isSelected(pathname)}
                     >
                       <ListItemIcon>{item.icon}</ListItemIcon>
                       <ListItemText primary={item.label} />

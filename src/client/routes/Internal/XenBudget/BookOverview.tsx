@@ -28,7 +28,8 @@ import ErrorDisplay from "../../../components/ErrorDisplay";
 import { formatCurrency } from "./currency";
 import { STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
 import { INCOME_COLOR } from "../../../components/ui/chartColors";
-import { cardSx, sectionLabelSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
+import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
+import EmptyState from "../../../components/ui/EmptyState";
 
 // Past a dozen the pip row is no longer countable at a glance, and the figure beside
 // it already says the same thing.
@@ -43,7 +44,7 @@ export default function BookOverview() {
     // The window is the book's, not this tab's — see BookDetail.
     const { from, to, groupBy, label, bounded } = useMemo(() => resolvePeriod(period), [period]);
 
-    const { summary, isLoading, isError, error } = useXenBudgetSummary(book._id, {
+    const { summary, isLoading, isError, error, refetch } = useXenBudgetSummary(book._id, {
         currency, from: from.toISOString(), to: to.toISOString(), group_by: groupBy,
     });
     // Measured over the selected period, not each budget's own - picking "Year" showing
@@ -140,7 +141,7 @@ export default function BookOverview() {
     }, [summary, book.members]);
 
     if (isLoading && !summary) return <LoadingSpinner message="Adding it up..." />;
-    if (isError) return <ErrorDisplay error={error} />;
+    if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
     if (!summary) return null;
 
     const { totals } = summary;
@@ -387,13 +388,11 @@ export default function BookOverview() {
                 )}
 
                 {nothingYet ? (
-                    <Box sx={emptyStateSx}>
-                        <Box sx={emptyStateIconCircleSx}><InsightsIcon color="disabled" /></Box>
-                        <Typography variant="subtitle1">Nothing in {label} yet</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Add an item and the tally updates for everyone in the book.
-                        </Typography>
-                    </Box>
+                    <EmptyState
+                        icon={<InsightsIcon />}
+                        title={`Nothing in ${label} yet`}
+                        description="Add an item and the tally updates for everyone in the book."
+                    />
                 ) : (
                     <Stack spacing={2}>
                         {categoryRows.length > 0 && (

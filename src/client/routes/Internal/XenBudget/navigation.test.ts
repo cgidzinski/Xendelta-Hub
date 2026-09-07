@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { activeIndex, TAB_PATHS, SETTINGS_SECTIONS } from "./navigation";
+import { activeIndex, TAB_PATHS, TAB_LABELS, SETTINGS_SECTIONS } from "./navigation";
 
 const base = "/internal/xenbudget/books/68abc123";
 const sectionPaths = SETTINGS_SECTIONS.map((s) => s.path);
@@ -61,5 +61,27 @@ describe("the two lists must not collide", () => {
     it("has no duplicates within either list", () => {
         expect(new Set(TAB_PATHS).size).toBe(TAB_PATHS.length);
         expect(new Set(sectionPaths).size).toBe(sectionPaths.length);
+    });
+});
+
+describe("breadcrumb labels", () => {
+    it("names every tab", () => {
+        // The breadcrumb looks a segment up in TAB_LABELS. A tab added to TAB_PATHS but
+        // not here renders an empty crumb rather than erroring - exactly the silent
+        // failure the rest of this file exists to catch.
+        for (const path of TAB_PATHS) {
+            expect(TAB_LABELS[path]).toBeTruthy();
+        }
+    });
+
+    it("names piggy banks, which is a place you can be but not a tab", () => {
+        expect(TAB_LABELS["piggy-banks"]).toBeTruthy();
+    });
+
+    it("does not collide with a settings section name", () => {
+        // A label key matching a section would make the breadcrumb treat that section as
+        // a top-level tab and drop the Settings crumb.
+        const sections: readonly string[] = SETTINGS_SECTIONS.map((s) => s.path);
+        expect(Object.keys(TAB_LABELS).filter((k) => sections.includes(k))).toEqual([]);
     });
 });

@@ -1,8 +1,7 @@
 import { Fragment } from "react";
 import * as ReactDOM from "react-dom/client";
 import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route, Navigate } from "react-router-dom";
-import CssBaseline from "@mui/material/CssBaseline";
-import { ThemeProvider, createTheme } from "@mui/material/styles";
+import AppThemeProvider from "./theme/AppThemeProvider";
 import { SnackbarProvider } from "notistack";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -15,6 +14,7 @@ import { ErrorBoundary } from "./config/bugsnag";
 import ErrorPage from "./components/ErrorPage";
 import NavBar from "./components/navbars/NavBar";
 import PWA from "./pwa/PWA";
+import ConfirmProvider from "./components/ui/ConfirmProvider";
 import ProtectedRoute from "./components/routeguards/ProtectedRoute";
 import UnprotectedRoute from "./components/routeguards/UnprotectedRoute";
 import AdminRoute from "./components/routeguards/AdminRoute";
@@ -92,6 +92,7 @@ import XenBudgetBookItems from "./routes/Internal/XenBudget/BookItems";
 import XenBudgetBookPiggyBanks from "./routes/Internal/XenBudget/BookPiggyBanks";
 import XenBudgetBookReport from "./routes/Internal/XenBudget/BookReport";
 import XenBudgetBookSettings from "./routes/Internal/XenBudget/BookSettings";
+import SettingsIndexRedirect from "./routes/Internal/XenBudget/settings/SettingsIndexRedirect";
 import XenBudgetGeneralSection from "./routes/Internal/XenBudget/settings/GeneralSection";
 import XenBudgetCategoriesSection from "./routes/Internal/XenBudget/settings/CategoriesSection";
 import XenBudgetFlagsSection from "./routes/Internal/XenBudget/settings/FlagsSection";
@@ -249,7 +250,7 @@ const router = createBrowserRouter(
             <Route path="piggy-banks" element={<XenBudgetBookPiggyBanks />} />
             <Route path="report" element={<XenBudgetBookReport />} />
             <Route path="settings" element={<XenBudgetBookSettings />}>
-              <Route index element={<Navigate to="general" replace />} />
+              <Route index element={<SettingsIndexRedirect />} />
               <Route path="general" element={<XenBudgetGeneralSection />} />
               <Route path="categories" element={<XenBudgetCategoriesSection />} />
               <Route path="flags" element={<XenBudgetFlagsSection />} />
@@ -292,17 +293,6 @@ const router = createBrowserRouter(
   ),
 );
 
-const theme = createTheme({
-  palette: {
-    mode: "dark",
-    primary: {
-      main: "#2196f3",
-      light: "#42a5f5",
-      dark: "#1976d2",
-    },
-  },
-});
-
 // Create a client
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -331,9 +321,11 @@ ReactDOM.createRoot(rootElement).render(
   <AppErrorBoundary>
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider theme={theme}>
-          <CssBaseline />
-          <AuthProvider>
+        {/* AuthProvider is now OUTSIDE the theme: AppThemeProvider reads the signed-in
+            user's theme preference, so it has to sit below both the query client and
+            auth. It renders CssBaseline itself, once the palette is resolved. */}
+        <AuthProvider>
+          <AppThemeProvider>
             <SocketProvider>
               <NavBarProvider>
                 <SnackbarProvider
@@ -341,13 +333,15 @@ ReactDOM.createRoot(rootElement).render(
                   autoHideDuration={6000}
                   anchorOrigin={{ vertical: "top", horizontal: "right" }}
                 >
-                  <RouterProvider router={router} />
-                  <PWA />
+                  <ConfirmProvider>
+                    <RouterProvider router={router} />
+                    <PWA />
+                  </ConfirmProvider>
                 </SnackbarProvider>
               </NavBarProvider>
             </SocketProvider>
-          </AuthProvider>
-        </ThemeProvider>
+          </AppThemeProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </LocalizationProvider>
   </AppErrorBoundary>,

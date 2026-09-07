@@ -6,6 +6,7 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import SavingsIcon from "@mui/icons-material/Savings";
 import { useSnackbar } from "notistack";
+import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import type { BookDetailContext } from "./BookDetail";
 import type {
     ContributionInput, PiggyBankInput, XenBudgetPiggyBankContribution, XenBudgetPiggyBank,
@@ -17,7 +18,8 @@ import ContributionForm from "./components/piggyBank/ContributionForm";
 import { bankTotals, sortPiggyBanks } from "./components/piggyBank/piggyBankProgress";
 import { useBalancedColumns } from "./components/budget/useBalancedColumns";
 import { formatCurrency } from "./currency";
-import { cardSx, emptyStateSx, emptyStateIconCircleSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
+import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
+import EmptyState from "../../../components/ui/EmptyState";
 
 /** Which bank a contribution dialog is open for, and which way the money is going. */
 interface ContributionTarget {
@@ -43,6 +45,7 @@ export default function BookPiggyBanks() {
     // at their USD spending.
     const currency = book.default_currency;
     const { enqueueSnackbar } = useSnackbar();
+    const confirm = useConfirm();
 
     const {
         createBankAsync, isCreatingBank,
@@ -103,10 +106,14 @@ export default function BookPiggyBanks() {
     const handleDeleteContribution = async (
         bank: XenBudgetPiggyBank, contribution: XenBudgetPiggyBankContribution,
     ) => {
-        const warning = contribution.item_id
-            ? "Remove this entry? The transaction it created is deleted too."
-            : "Remove this entry?";
-        if (!window.confirm(warning)) return;
+        const ok = await confirm({
+            title: "Remove this entry?",
+            message: contribution.item_id
+                ? "The transaction it created is deleted too."
+                : "It will be taken off this bank\u2019s total.",
+            confirmLabel: "Remove",
+        });
+        if (!ok) return;
         try {
             await deleteContributionAsync({ bankId: bank._id, contributionId: contribution._id });
         } catch (e) {
@@ -144,15 +151,11 @@ export default function BookPiggyBanks() {
 
             <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pl: 2, pr: { xs: 2, sm: 3.5 }, pb: 2 }}>
                 {visible.length === 0 ? (
-                    <Box sx={emptyStateSx}>
-                        <Box sx={emptyStateIconCircleSx}><SavingsIcon color="disabled" /></Box>
-                        <Typography variant="subtitle1">
-                            {banks.length === 0 ? "Nothing being saved for yet" : "No banks in progress"}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Add a bank — a new car, a trip — and put money into it whenever you like.
-                        </Typography>
-                    </Box>
+                    <EmptyState
+                        icon={<SavingsIcon />}
+                        title={banks.length === 0 ? "Nothing being saved for yet" : "No banks in progress"}
+                        description="Add a bank — a new car, a trip — and put money into it whenever you like."
+                    />
                 ) : (
                     <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
                         <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>

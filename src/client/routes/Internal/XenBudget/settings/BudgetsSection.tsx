@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Box, Button, Stack, Typography } from "@mui/material";
+import { Button, Stack } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import SavingsIcon from "@mui/icons-material/Savings";
 import type { BookDetailContext } from "../BookDetail";
@@ -12,11 +12,11 @@ import BudgetForm from "../components/BudgetForm";
 import SectionCard from "./SectionCard";
 import LoadingSpinner from "../../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
-import { emptyStateSx, emptyStateIconCircleSx } from "../../../../components/ui/surfaceStyles";
+import EmptyState from "../../../../components/ui/EmptyState";
 
 export default function BookBudgets() {
     const { book, currency } = useOutletContext<BookDetailContext>();
-    const { budgets, isLoading, isError, error } = useXenBudgetStatus(book._id, currency);
+    const { budgets, isLoading, isError, error, refetch } = useXenBudgetStatus(book._id, currency);
     const {
         createBudgetAsync, isCreatingBudget, updateBudgetAsync, isUpdatingBudget, deleteBudgetAsync,
     } = useXenBudgetBudgets(book._id);
@@ -25,7 +25,7 @@ export default function BookBudgets() {
     const [editing, setEditing] = useState<BudgetStatus | null>(null);
 
     if (isLoading && budgets.length === 0) return <LoadingSpinner message="Checking budgets..." />;
-    if (isError) return <ErrorDisplay error={error} />;
+    if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
 
     return (
         <Stack spacing={2}>
@@ -43,13 +43,11 @@ export default function BookBudgets() {
                 </Stack>
 
                 {budgets.length === 0 ? (
-                    <Box sx={emptyStateSx}>
-                        <Box sx={emptyStateIconCircleSx}><SavingsIcon color="disabled" /></Box>
-                        <Typography variant="subtitle1">No budgets yet</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Add your first budget to start capping spending.
-                        </Typography>
-                    </Box>
+                    <EmptyState
+                        icon={<SavingsIcon />}
+                        title="No budgets yet"
+                        description="Add your first budget to start capping spending."
+                    />
                 ) : (
                     /* One card per budget rather than one card holding them all: on this page
                     every budget is its own editable thing, so each needs its own target. */

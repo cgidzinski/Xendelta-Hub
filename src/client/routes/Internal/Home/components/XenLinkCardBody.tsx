@@ -4,7 +4,7 @@ import { useXenLink } from "../../../../hooks/xenlink/useXenlink";
 export default function XenLinkCardBody() {
     const { links, isLoading } = useXenLink();
 
-    if (isLoading) return <Skeleton variant="rectangular" height={72} sx={{ borderRadius: 1 }} />;
+    if (isLoading) return <Skeleton variant="rectangular" height={72} sx={{ borderRadius: 2 }} />;
 
     const recent = [...links]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())

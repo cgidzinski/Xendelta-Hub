@@ -17,11 +17,13 @@ import BugReportIcon from "@mui/icons-material/BugReport";
 import { useTitle } from "../../hooks/useTitle";
 import { useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
+import { useConfirm } from "../../components/ui/ConfirmProvider";
 import { useAdmin } from "../../hooks/admin/useAdmin";
 
 export default function Admin() {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+  const confirm = useConfirm();
   const {
     verifyAdminRole,
     sendNotificationToAll,
@@ -79,9 +81,12 @@ export default function Admin() {
   };
 
   const handleDeleteAllMessages = async () => {
-    if (!window.confirm("Are you sure you want to delete ALL messages and ALL conversations? This action cannot be undone.")) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Delete all messages?",
+      message: "This deletes ALL messages and ALL conversations for every user. This cannot be undone.",
+      confirmLabel: "Delete everything",
+    });
+    if (!ok) return;
 
     deleteAllMessages(undefined, {
       onSuccess: (data) => {

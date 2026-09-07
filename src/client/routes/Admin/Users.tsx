@@ -43,6 +43,7 @@ import StarsIcon from "@mui/icons-material/Stars";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import SendIcon from "@mui/icons-material/Send";
 import { useSnackbar } from "notistack";
+import ListSkeleton from "../../components/ui/ListSkeleton";
 import { useTitle } from "../../hooks/useTitle";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { useAdminUsers, User, NotifyChannel } from "../../hooks/admin/useAdminUsers";
@@ -301,8 +302,8 @@ export default function Users() {
   if (isLoading) {
     return (
       <Container maxWidth="lg">
-        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "400px" }}>
-          <CircularProgress />
+        <Box sx={{ py: 4 }}>
+          <ListSkeleton rows={8} height={52} gap={1} />
         </Box>
       </Container>
     );

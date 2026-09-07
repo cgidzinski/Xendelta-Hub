@@ -23,10 +23,11 @@ import TimePeriodFilter, { itemQuickPicks } from "./components/TimePeriodFilter"
 import { resolvePeriod } from "./components/periodMode";
 import ReviewModal from "./components/ReviewModal";
 import ItemsTotalsBar from "./components/ItemsTotalsBar";
-import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
+import ListSkeleton from "../../../components/ui/ListSkeleton";
 import { groupByDay, dateOnlyToLocal } from "../../../utils/dateGrouping";
-import { emptyStateSx, emptyStateIconCircleSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
+import { sectionLabelSx } from "../../../components/ui/surfaceStyles";
+import EmptyState from "../../../components/ui/EmptyState";
 import { FLAG_OFF_BUDGET } from "../../../constants/xenbudget";
 
 /** What a budget hands over when its "View items" action navigates here. */
@@ -150,7 +151,7 @@ export default function BookItems() {
     }, [period, search, selectedFilters, sourceFilter, merchant]);
 
     const {
-        items, totals, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
+        items, totals, isLoading, isError, error, refetch, hasMore, loadMore, isLoadingMore,
     } = useXenBudgetItems(book._id, filters);
 
     const dayGroups = useMemo(() => groupByDay(items, (i) => i.date, "UTC"), [items]);
@@ -325,22 +326,20 @@ export default function BookItems() {
 
             <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pl: 2, pr: { xs: 2, sm: 3.5 }, pb: 2 }}>
                 {isError ? (
-                    <ErrorDisplay error={error} />
+                    <ErrorDisplay error={error} onRetry={() => refetch()} />
                 ) : isLoading ? (
-                    <LoadingSpinner message="Loading items..." />
+                    <ListSkeleton rows={6} height={56} gap={1} />
                 ) : items.length === 0 ? (
-                    <Box sx={emptyStateSx}>
-                        <Box sx={emptyStateIconCircleSx}>
-                            <ReceiptLongIcon color="disabled" />
-                        </Box>
-                        <Typography variant="subtitle1">Nothing here</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            {search || period.kind !== "all" || merchant
+                    <EmptyState
+                        icon={<ReceiptLongIcon />}
+                        title="Nothing here"
+                        description={
+                            search || period.kind !== "all" || merchant
                                 || selectedFilters.length > 0 || sourceFilter !== "all"
                                 ? "No items match those filters."
-                                : "Add your first item, or import a CSV from your bank."}
-                        </Typography>
-                    </Box>
+                                : "Add your first item, or import a CSV from your bank."
+                        }
+                    />
                 ) : (
                     <Stack spacing={2}>
                         {dayGroups.map((group) => (

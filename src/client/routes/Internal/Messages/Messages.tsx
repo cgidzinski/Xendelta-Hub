@@ -27,7 +27,8 @@ import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import { useTitle } from "../../../hooks/useTitle";
-import LoadingSpinner from "../../../components/LoadingSpinner";
+import ErrorDisplay from "../../../components/ErrorDisplay";
+import ListSkeleton from "../../../components/ui/ListSkeleton";
 import { useUserMessages, Conversation } from "../../../hooks/user/useUserMessages";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
 import { useUsers, User } from "../../../hooks/user/useUsers";
@@ -41,7 +42,7 @@ export default function Messages() {
   useTitle("Messages");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { conversations, isLoading, isError, error, createConversation, isCreatingConversation } = useUserMessages();
+  const { conversations, isLoading, isError, error, refetch, createConversation, isCreatingConversation } = useUserMessages();
   const { profile, refetch: refetchProfile } = useUserProfile();
   const { socket } = useSocket();
   const { enqueueSnackbar } = useSnackbar();
@@ -131,17 +132,17 @@ export default function Messages() {
         <Card elevation={0} sx={{ backgroundColor: "transparent" }}>
           <Box>
             {isLoading && (
-              <Box sx={{ py: 3, display: "flex", justifyContent: "center" }}>
-                <LoadingSpinner />
+              <Box sx={{ p: 1 }}>
+                <ListSkeleton rows={5} height={68} gap={1} />
               </Box>
             )}
 
             {isError && (
-              <Box sx={{ py: 3, textAlign: "center" }}>
-                <Typography variant="body2" color="error">
-                  {error?.message || "Failed to load conversations"}
-                </Typography>
-              </Box>
+              <ErrorDisplay
+                error={error ?? null}
+                title="Couldn't load your conversations"
+                onRetry={() => refetch()}
+              />
             )}
 
             {!isLoading && !isError && (

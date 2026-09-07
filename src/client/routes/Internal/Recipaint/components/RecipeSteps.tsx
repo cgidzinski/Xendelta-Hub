@@ -3,7 +3,8 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import ChecklistIcon from "@mui/icons-material/Checklist";
 import StepItem from "./StepItem";
 import { RecipeStep } from "../../../../types/RecipeStep";
-import { cardSx, sectionLabelSx, emptyStateSx, emptyStateIconCircleSx } from "../../../../components/ui/surfaceStyles";
+import { cardSx, sectionLabelSx } from "../../../../components/ui/surfaceStyles";
+import EmptyState from "../../../../components/ui/EmptyState";
 
 interface RecipeStepsProps {
   steps: RecipeStep[];
@@ -16,15 +17,11 @@ export default function RecipeSteps({ steps, completedSteps, onStepToggle, onRes
   if (!steps || steps.length === 0) {
     return (
       <Card variant="outlined" sx={cardSx}>
-        <Box sx={emptyStateSx}>
-          <Box sx={emptyStateIconCircleSx}>
-            <ChecklistIcon color="disabled" />
-          </Box>
-          <Typography variant="subtitle1">No steps yet</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Steps are the paint scheme: base coat, wash, highlights.
-          </Typography>
-        </Box>
+        <EmptyState
+          icon={<ChecklistIcon />}
+          title="No steps yet"
+          description="Steps are the paint scheme: base coat, wash, highlights."
+        />
       </Card>
     );
   }

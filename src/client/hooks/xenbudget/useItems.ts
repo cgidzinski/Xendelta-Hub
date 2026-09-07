@@ -188,6 +188,7 @@ export function useXenBudgetItems(bookId: string, filters: ItemFilters = {}) {
         isLoading: query.isLoading,
         isError: query.isError,
         error: query.error,
+        refetch: query.refetch,
         hasMore: query.hasNextPage,
         loadMore: query.fetchNextPage,
         isLoadingMore: query.isFetchingNextPage,

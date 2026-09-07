@@ -2,7 +2,8 @@ import { Box, Typography, Skeleton, Stack } from "@mui/material";
 import BrushIcon from "@mui/icons-material/Brush";
 import { RecipeSummary } from "../../../../types/Recipe";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
-import { sectionLabelSx, emptyStateSx, emptyStateIconCircleSx } from "../../../../components/ui/surfaceStyles";
+import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
+import EmptyState from "../../../../components/ui/EmptyState";
 import RecipeCard from "./RecipeCard";
 
 interface RecipeListProps {
@@ -58,15 +59,7 @@ export default function RecipeList({
       {isError && <ErrorDisplay error={error} title="Couldn't load recipes" />}
 
       {!isLoading && !isError && recipes.length === 0 && (
-        <Box sx={emptyStateSx}>
-          <Box sx={emptyStateIconCircleSx}>
-            <BrushIcon color="disabled" />
-          </Box>
-          <Typography variant="subtitle1">{emptyTitle}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {emptyHint}
-          </Typography>
-        </Box>
+        <EmptyState icon={<BrushIcon />} title={emptyTitle} description={emptyHint} />
       )}
 
       {!isLoading && !isError && recipes.length > 0 && (

@@ -1,4 +1,5 @@
 import { Box, Typography, Button } from "@mui/material";
+import { emptyStateSx, emptyStateIconCircleSx } from "./ui/surfaceStyles";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import RefreshIcon from "@mui/icons-material/Refresh";
 
@@ -24,24 +25,16 @@ export default function ErrorDisplay({
   return (
     <Box
       sx={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 2,
-        p: 3,
+        ...emptyStateSx,
         ...(fullHeight && {
           minHeight: "50vh",
+          justifyContent: "center",
         }),
       }}
     >
-      <ErrorOutlineIcon 
-        sx={{ 
-          fontSize: 48, 
-          color: "error.main",
-          opacity: 0.8,
-        }} 
-      />
+      <Box sx={emptyStateIconCircleSx}>
+        <ErrorOutlineIcon sx={{ fontSize: 32, color: "error.main" }} />
+      </Box>
       <Typography variant="h6" component="h2" color="text.primary">
         {title}
       </Typography>

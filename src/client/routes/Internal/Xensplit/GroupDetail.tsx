@@ -3,6 +3,7 @@ import { formatCurrency, getGroupCurrencies } from "../../../utils/currencyUtils
 import { useQueryClient } from "@tanstack/react-query";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useSnackbar } from "notistack";
+import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import { useParams, useNavigate, useLocation, Outlet } from "react-router-dom";
 import {
   Box,
@@ -95,8 +96,9 @@ export default function GroupDetail() {
   const isMobile = useMediaQuery("(max-width:600px)");
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
-  const { group, isLoading, isError, error, addMembers, isAddingMembers, removeMember, isRemovingMember, updateGroup, isUpdating, uploadGroupImage, isUploadingImage } = useXenSplit(groupId!);
+  const { group, isLoading, isError, error, refetch, addMembers, isAddingMembers, removeMember, isRemovingMember, updateGroup, isUpdating, uploadGroupImage, isUploadingImage } = useXenSplit(groupId!);
   useTitle("Xensplit");
   const { deleteGroup } = useXenSplits();
   const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useXenSplitBalances(groupId!);
@@ -204,7 +206,7 @@ export default function GroupDetail() {
 
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorDisplay error={error} />;
+  if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
   if (!group) return null;
 
   const isCreator = group.created_by === user?.id;
@@ -832,10 +834,13 @@ export default function GroupDetail() {
               size="small"
               onClick={async () => {
                 if (!selectedExpense) return;
-                const confirmText = selectedExpenseSeries
-                  ? "Delete this expense? This also stops its recurring schedule. Already-created expenses will be kept."
-                  : "Delete this expense? This cannot be undone.";
-                if (window.confirm(confirmText)) {
+                const ok = await confirm({
+                  title: "Delete this expense?",
+                  message: selectedExpenseSeries
+                    ? "This also stops its recurring schedule. Already-created expenses are kept."
+                    : "This cannot be undone.",
+                });
+                if (ok) {
                   await new Promise<void>((resolve) => {
                     deleteExpense(selectedExpense._id, {
                       onSuccess: () => {
@@ -1099,8 +1104,12 @@ export default function GroupDetail() {
                             color="error"
                             startIcon={<DeleteIcon />}
                             disabled={isDeletingExpense}
-                            onClick={() => {
-                              if (window.confirm("Delete this occurrence? The recurring schedule is unaffected — future occurrences will still be created.")) {
+                            onClick={async () => {
+                              const ok = await confirm({
+                                title: "Delete this occurrence?",
+                                message: "The recurring schedule is unaffected — future occurrences will still be created.",
+                              });
+                              if (ok) {
                                 deleteExpense(e._id, {
                                   onSuccess: () => {
                                     enqueueSnackbar("Expense deleted", { variant: "success" });

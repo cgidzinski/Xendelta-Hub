@@ -6,14 +6,14 @@ import HouseBalanceBanner from "./components/HouseBalanceBanner";
 import { formatCheddar } from "./utils/currency";
 
 export default function Ledger() {
-    const { entries, isLoading, isError, error } = useCasinoLedger();
+    const { entries, isLoading, isError, error, refetch } = useCasinoLedger();
 
     if (isLoading) {
         return <LoadingSpinner />;
     }
 
     if (isError) {
-        return <ErrorDisplay error={error} />;
+        return <ErrorDisplay error={error} onRetry={() => refetch()} />;
     }
 
     if (entries.length === 0) {

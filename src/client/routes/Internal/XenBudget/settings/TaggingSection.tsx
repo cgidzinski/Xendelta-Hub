@@ -15,7 +15,8 @@ import SectionCard from "./SectionCard";
 import RuleForm from "../components/RuleForm";
 import ReapplyRulesDialog from "../components/ReapplyRulesDialog";
 import { CategoryChip, FlagChip } from "../components/LabelChip";
-import { cardSx, emptyStateSx, emptyStateIconCircleSx } from "../../../../components/ui/surfaceStyles";
+import { cardSx } from "../../../../components/ui/surfaceStyles";
+import EmptyState from "../../../../components/ui/EmptyState";
 
 export default function TaggingSection() {
     const { book } = useOutletContext<BookDetailContext>();
@@ -70,15 +71,11 @@ export default function TaggingSection() {
                     </Stack>
 
                     {rules.length === 0 ? (
-                        <Box sx={emptyStateSx}>
-                            <Box sx={emptyStateIconCircleSx}><AutoFixHighIcon color="disabled" /></Box>
-                            <Typography variant="subtitle1">No rules yet</Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                Rules categorise, flag and filter items automatically as they arrive — by
-                                hand or from a CSV import.
-                            </Typography>
-
-                        </Box>
+                        <EmptyState
+                            icon={<AutoFixHighIcon />}
+                            title="No rules yet"
+                            description="Rules categorise, flag and filter items automatically as they arrive — by hand or from a CSV import."
+                        />
                     ) : (
                         <Stack spacing={1}>
                             {rules.map((rule, index) => (

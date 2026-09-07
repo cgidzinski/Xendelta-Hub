@@ -10,6 +10,7 @@ import ExpenseListItem, { FREQUENCY_LABELS, computeFinalExpenseIds } from "./com
 import { formatCurrency } from "../../../utils/currencyUtils";
 import { groupByDay } from "../../../utils/dateGrouping";
 import { xsCardSx, xsBadgeSx } from "./components/rowStyles";
+import { useConfirm } from "../../../components/ui/ConfirmProvider";
 
 type DateFilter = "all" | "thisWeek" | "lastWeek" | "thisMonth" | "thisYear";
 
@@ -30,6 +31,7 @@ const PROPERTY_FILTERS: { label: string; value: FilterKey }[] = [
 
 export default function GroupExpenses() {
     const { group, onViewExpense, user, cancelRecurring, isCancellingRecurring } = useOutletContext<GroupDetailContext>();
+    const confirm = useConfirm();
     const [search, setSearch] = useState("");
     const [dateFilter, setDateFilter] = useState<DateFilter>("all");
     const [activeFilter, setActiveFilter] = useState<FilterKey | null>(null);
@@ -198,10 +200,14 @@ export default function GroupExpenses() {
                                             <IconButton
                                                 size="small"
                                                 disabled={isCancellingRecurring}
-                                                onClick={() => {
-                                                    if (window.confirm("Cancel this upcoming recurring expense? No expenses have been created yet.")) {
-                                                        cancelRecurring(series._id);
-                                                    }
+                                                onClick={async () => {
+                                                    const ok = await confirm({
+                                                        title: "Cancel this recurring expense?",
+                                                        message: "No expenses have been created from it yet.",
+                                                        confirmLabel: "Cancel series",
+                                                        cancelLabel: "Keep it",
+                                                    });
+                                                    if (ok) cancelRecurring(series._id);
                                                 }}
                                             >
                                                 <CloseIcon sx={{ fontSize: 16 }} />

@@ -1,9 +1,10 @@
 import { useNavigate } from "react-router-dom";
+import ErrorDisplay from "../../../../components/ErrorDisplay";
+import ListSkeleton from "../../../../components/ui/ListSkeleton";
+import EmptyState from "../../../../components/ui/EmptyState";
 import {
   Box,
   Typography,
-  CircularProgress,
-  Alert,
   Chip,
   Stack,
   Card,
@@ -11,6 +12,7 @@ import {
   CardActionArea,
   IconButton,
 } from "@mui/material";
+import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import LockIcon from "@mui/icons-material/Lock";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -24,9 +26,10 @@ interface FileListProps {
   isLoading: boolean;
   isError?: boolean;
   error?: Error | null;
+  onRetry?: () => void;
 }
 
-export default function FileList({ files, isLoading, isError, error }: FileListProps) {
+export default function FileList({ files, isLoading, isError, error, onRetry }: FileListProps) {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
 
@@ -72,24 +75,22 @@ export default function FileList({ files, isLoading, isError, error }: FileListP
   };
 
   if (isLoading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <ListSkeleton rows={5} height={92} gap={2} />;
   }
 
   if (isError) {
     return (
-      <Alert severity="error">
-        {error?.message || "Failed to load files"}
-      </Alert>
+      <ErrorDisplay error={error ?? null} title="Couldn't load your files" onRetry={onRetry} />
     );
   }
 
   if (!files || files.length === 0) {
     return (
-      <Alert severity="info">No files found. Upload your first file to get started.</Alert>
+      <EmptyState
+        icon={<InsertDriveFileIcon />}
+        title="No files yet"
+        description="Upload your first file to get started."
+      />
     );
   }
 

@@ -24,7 +24,7 @@ import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import { useXenSplits } from "../../../hooks/xensplit/useGroups";
 import { useXenSplitGroupsSocket } from "../../../hooks/xensplit/useXenSplitSocket";
 import { useTitle } from "../../../hooks/useTitle";
-import LoadingSpinner from "../../../components/LoadingSpinner";
+import ListSkeleton from "../../../components/ui/ListSkeleton";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import GroupCard from "./components/GroupCard";
 import HelpModal from "./components/HelpModal";
@@ -37,7 +37,7 @@ import { useUserProfile } from "../../../hooks/user/useUserProfile";
 export default function GroupsList() {
   useTitle("Xensplit");
   useXenSplitGroupsSocket();
-  const { groups, isLoading, isError, error, createGroup, isCreating } = useXenSplits();
+  const { groups, isLoading, isError, error, refetch, createGroup, isCreating } = useXenSplits();
   const { user } = useAuth();
   const { profile } = useUserProfile();
   const [showEtransferPrompt, setShowEtransferPrompt] = useState(false);
@@ -80,8 +80,14 @@ export default function GroupsList() {
     });
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorDisplay error={error} />;
+  if (isLoading) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: { xs: 2, sm: 4 }, mb: 4, px: { xs: 1.5, sm: 3 } }}>
+        <ListSkeleton rows={4} height={88} />
+      </Container>
+    );
+  }
+  if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
 
   return (
     <Box>

@@ -29,7 +29,8 @@ import { useTitle } from "../../../hooks/useTitle";
 import { CollectionPaint, usePaintMutations, usePaints } from "../../../hooks/recipaint/usePaints";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
-import { cardSx, emptyStateSx, emptyStateIconCircleSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
+import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
+import EmptyState from "../../../components/ui/EmptyState";
 import { describePaintDetail, formatPaint } from "../../../../shared/recipaint/paints";
 import PaintFormDialog from "./components/PaintFormDialog";
 
@@ -171,17 +172,15 @@ export default function Paints() {
       {isError && <ErrorDisplay error={error} title="Couldn't load your paints" onRetry={() => refetch()} />}
 
       {!isLoading && !isError && visible.length === 0 && (
-        <Box sx={emptyStateSx}>
-          <Box sx={emptyStateIconCircleSx}>
-            <PaletteIcon color="disabled" />
-          </Box>
-          <Typography variant="subtitle1">{paints.length === 0 ? "No paints yet" : "Nothing matches"}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {paints.length === 0
+        <EmptyState
+          icon={<PaletteIcon />}
+          title={paints.length === 0 ? "No paints yet" : "Nothing matches"}
+          description={
+            paints.length === 0
               ? "Add the pots on your shelf and recipes can pick from them."
-              : "Try a different search."}
-          </Typography>
-        </Box>
+              : "Try a different search."
+          }
+        />
       )}
 
       {!isLoading &&

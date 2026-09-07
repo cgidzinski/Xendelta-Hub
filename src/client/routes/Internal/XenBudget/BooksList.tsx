@@ -11,16 +11,17 @@ import { useSnackbar } from "notistack";
 import { useTitle } from "../../../hooks/useTitle";
 import { useXenBudgetBooks } from "../../../hooks/xenbudget/useBooks";
 import { useXenBudgetBooksSocket } from "../../../hooks/xenbudget/useXenBudgetSocket";
-import LoadingSpinner from "../../../components/LoadingSpinner";
+import ListSkeleton from "../../../components/ui/ListSkeleton";
 import ErrorDisplay from "../../../components/ErrorDisplay";
-import { cardSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
+import { cardSx } from "../../../components/ui/surfaceStyles";
+import EmptyState from "../../../components/ui/EmptyState";
 
 export default function BooksList() {
     useTitle("XenBudget");
     useXenBudgetBooksSocket();
     const navigate = useNavigate();
     const { enqueueSnackbar } = useSnackbar();
-    const { books, isLoading, isError, error, createBookAsync, isCreating } = useXenBudgetBooks();
+    const { books, isLoading, isError, error, refetch, createBookAsync, isCreating } = useXenBudgetBooks();
 
     const [createOpen, setCreateOpen] = useState(false);
     const [name, setName] = useState("");
@@ -36,8 +37,8 @@ export default function BooksList() {
         }
     };
 
-    if (isLoading) return <LoadingSpinner message="Loading your books..." />;
-    if (isError) return <ErrorDisplay error={error} />;
+    if (isLoading) return <Box sx={{ p: 2, width: "100%" }}><ListSkeleton rows={4} height={64} /></Box>;
+    if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
 
     return (
         <Box sx={{ p: 2, width: "100%" }}>
@@ -49,15 +50,11 @@ export default function BooksList() {
             </Stack>
 
             {books.length === 0 ? (
-                <Box sx={emptyStateSx}>
-                    <Box sx={emptyStateIconCircleSx}>
-                        <AccountBalanceWalletIcon color="disabled" />
-                    </Box>
-                    <Typography variant="subtitle1">No books yet</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        A book holds your spending, your people and your budgets.
-                    </Typography>
-                </Box>
+                <EmptyState
+                    icon={<AccountBalanceWalletIcon />}
+                    title="No books yet"
+                    description="A book holds your spending, your people and your budgets."
+                />
             ) : (
                 <Stack spacing={1.25}>
                     {books.map((book) => (

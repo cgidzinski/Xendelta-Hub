@@ -5,7 +5,7 @@ import type { XenSplit } from "./types";
 export function useXenSplit(groupId: string) {
   const queryClient = useQueryClient();
 
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["xensplit", "group", groupId],
     queryFn: async () => {
       const res = await apiClient.get(`/api/xensplit/groups/${groupId}`);
@@ -67,6 +67,7 @@ export function useXenSplit(groupId: string) {
     isLoading,
     isError,
     error,
+    refetch,
     updateGroup: updateMutation.mutate,
     isUpdating: updateMutation.isPending,
     uploadGroupImage: uploadGroupImageMutation.mutate,
