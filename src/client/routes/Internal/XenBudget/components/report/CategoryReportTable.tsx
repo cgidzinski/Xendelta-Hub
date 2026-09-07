@@ -101,14 +101,14 @@ export default function CategoryReportTable({
                 {pivoted ? round(row.spent) : money(row.spent)}
                 {/* The figure above is net of anything that came back into the category,
                 which can't be checked against a statement on its own - so the two halves
-                behind it are spelled out wherever there is one. */}
+                behind it are spelled out wherever there is one. Colour (matching the
+                Income/Spent rows below) carries the direction instead of a word. */}
                 {row.returned > 0 && (
-                    <Typography
-                        variant="caption" color="text.secondary" noWrap
-                        sx={{ display: "block", fontWeight: 400 }}
-                    >
-                        {round(row.out)} out · {round(row.returned)} in
-                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, fontWeight: 400 }}>
+                        <Typography variant="caption" noWrap sx={{ color: EXPENSE_COLOR }}>{round(row.out)}</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ flex: 1, textAlign: "center" }}>·</Typography>
+                        <Typography variant="caption" noWrap sx={{ color: INCOME_COLOR }}>{round(row.returned)}</Typography>
+                    </Box>
                 )}
             </TableCell>
             {hasBudgets && (
