@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import {
-    alpha, Avatar, Box, Button, Card, Link, MenuItem, Stack, TextField, Typography, useMediaQuery,
+    Avatar, Box, Button, Card, Link, MenuItem, Stack, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import InsightsIcon from "@mui/icons-material/Insights";
 import SavingsIcon from "@mui/icons-material/Savings";
@@ -27,7 +27,7 @@ import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { formatCurrency } from "./currency";
 import { STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
-import { INCOME_COLOR } from "../../../components/ui/chartColors";
+import { EXPENSE_RED, INCOME_COLOR } from "../../../components/ui/chartColors";
 import { cardSx, sectionLabelSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
 
 // Past a dozen the pip row is no longer countable at a glance, and the figure beside
@@ -426,53 +426,75 @@ export default function BookOverview() {
                                 <Box sx={{
                                     display: "grid",
                                     gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
-                                    gap: 1.25,
+                                    gap: 1,
                                     alignItems: "start",
                                 }}>
                                     {categoryRows.map((row) => {
                                         // Share of the book's gross outgoings, so the
-                                        // percentages still add up to 100 across the card.
-                                        // Dropped on a netted row: "$72 · 82%" reads as a
-                                        // contradiction, and the two figures answer
-                                        // different questions.
+                                        // percentages still add up to 100 across the card
+                                        // even on a netted row - it answers "how much of
+                                        // what went out was this", which stays true
+                                        // whatever came back in.
                                         const percent = totals.expense > 0
                                             ? Math.round((row.out / totals.expense) * 100)
                                             : 0;
                                         return (
-                                            <Box key={row.label} sx={{ minWidth: 0 }}>
+                                            // Bordered rather than left to the grid gap alone: rows vary in height
+                                            // once one of them grows the out/in line below it, and an even gap
+                                            // between boxes of uneven height reads as no gap at all next to a
+                                            // taller neighbour - a border is what actually says where one ends.
+                                            <Box key={row.label} sx={{
+                                                minWidth: 0, p: 1, borderRadius: 1,
+                                                border: 1, borderColor: "divider",
+                                            }}>
                                                 <Stack
                                                     direction="row" alignItems="center" justifyContent="space-between" spacing={1}
                                                     sx={{ minWidth: 0 }}
                                                 >
-                                                    {row.category
-                                                        ? <CategoryChip name={row.category} registry={book.categories} />
-                                                        : <Typography variant="caption" color="text.secondary">Uncategorised</Typography>}
+                                                    {/* minWidth: 0 overrides the flex default of "auto", which for a
+                                                    Chip (whose label never wraps) equals the full text width - without
+                                                    it a long category name couldn't shrink at all, and its overflow
+                                                    ran into the figure on the right instead of eliding. */}
+                                                    <Box sx={{ minWidth: 0, overflow: "hidden" }}>
+                                                        {row.category
+                                                            ? <CategoryChip name={row.category} registry={book.categories} sx={{ maxWidth: "100%" }} />
+                                                            : <Typography variant="caption" color="text.secondary" noWrap>Uncategorised</Typography>}
+                                                    </Box>
                                                     <Typography variant="body2" noWrap sx={{ flexShrink: 0 }}>
                                                         {formatCurrency(row.total, summary.currency)}
-                                                        {row.returned <= 0 && (
-                                                            <Typography component="span" variant="body2" color="text.secondary">
-                                                                {" · "}{percent}%
-                                                            </Typography>
-                                                        )}
+                                                        <Typography component="span" variant="body2" color="text.secondary">
+                                                            {" · "}{percent}%
+                                                        </Typography>
                                                     </Typography>
                                                 </Stack>
-                                                {row.returned > 0 && (
-                                                    <Box sx={{
-                                                        mt: 0.5,
-                                                        px: 1,
-                                                        py: 0.25,
-                                                        borderRadius: 1,
-                                                        border: 1,
-                                                        borderColor: "divider",
-                                                        bgcolor: (theme) => alpha(theme.palette.text.primary, 0.04),
-                                                    }}>
-                                                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
-                                                            {formatCurrency(row.out, summary.currency)} out
-                                                            {" · "}
-                                                            {formatCurrency(row.returned, summary.currency)} back in
-                                                        </Typography>
-                                                    </Box>
-                                                )}
+                                                {/* Always shown, even when `returned` is 0 - every row keeping the
+                                                same shape is what makes the border above read as one category's
+                                                worth of information rather than a variable-height fragment, and a
+                                                zero here still answers a real question ("did anything come back").
+                                                A hairline top border rather than its own bordered box: the row
+                                                already has one, and nesting a second read as a box inside a box. */}
+                                                <Box sx={{
+                                                    mt: 0.75,
+                                                    pt: 0.5,
+                                                    borderTop: 1,
+                                                    borderColor: "divider",
+                                                    display: "flex", alignItems: "baseline", gap: 1,
+                                                }}>
+                                                    {/* Colour carries the direction instead of the word - "out"/
+                                                    "back in" beside two dollar figures read as noise once you
+                                                    already know which is which. Spread like a ledger: out at the
+                                                    left edge, in flush with the total above it on the right, the
+                                                    separator centered in whatever space is left between them. */}
+                                                    <Typography variant="caption" noWrap sx={{ color: EXPENSE_RED, flexShrink: 0 }}>
+                                                        {formatCurrency(row.out, summary.currency)}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary" sx={{ flex: 1, textAlign: "center" }}>
+                                                        ·
+                                                    </Typography>
+                                                    <Typography variant="caption" noWrap sx={{ color: INCOME_COLOR, flexShrink: 0 }}>
+                                                        {formatCurrency(row.returned, summary.currency)}
+                                                    </Typography>
+                                                </Box>
                                             </Box>
                                         );
                                     })}
