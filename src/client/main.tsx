@@ -1,9 +1,7 @@
 import { Fragment } from "react";
 import * as ReactDOM from "react-dom/client";
 import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route, Navigate } from "react-router-dom";
-import CssBaseline from "@mui/material/CssBaseline";
-import { ThemeProvider } from "@mui/material/styles";
-import { createAppTheme } from "./theme";
+import AppThemeProvider from "./theme/AppThemeProvider";
 import { SnackbarProvider } from "notistack";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -294,8 +292,6 @@ const router = createBrowserRouter(
   ),
 );
 
-const theme = createAppTheme("dark");
-
 // Create a client
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -324,9 +320,11 @@ ReactDOM.createRoot(rootElement).render(
   <AppErrorBoundary>
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider theme={theme}>
-          <CssBaseline />
-          <AuthProvider>
+        {/* AuthProvider is now OUTSIDE the theme: AppThemeProvider reads the signed-in
+            user's theme preference, so it has to sit below both the query client and
+            auth. It renders CssBaseline itself, once the palette is resolved. */}
+        <AuthProvider>
+          <AppThemeProvider>
             <SocketProvider>
               <NavBarProvider>
                 <SnackbarProvider
@@ -341,8 +339,8 @@ ReactDOM.createRoot(rootElement).render(
                 </SnackbarProvider>
               </NavBarProvider>
             </SocketProvider>
-          </AuthProvider>
-        </ThemeProvider>
+          </AppThemeProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </LocalizationProvider>
   </AppErrorBoundary>,

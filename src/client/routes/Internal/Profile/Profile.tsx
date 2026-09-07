@@ -42,6 +42,7 @@ import { useUserAvatar } from "../../../hooks/user/useUserAvatar";
 import ProfileHeader from "./components/ProfileHeader";
 import AvatarUploadSection from "./components/AvatarUploadSection";
 import TimezoneSection from "./components/TimezoneSection";
+import AppearanceSection from "./components/AppearanceSection";
 import ETransferSection from "./components/ETransferSection";
 import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
 import { usePushNotifications } from "../../../pwa/hooks/usePushNotifications";
@@ -274,6 +275,15 @@ export default function Profile() {
                 <CardContent sx={{ p: 3 }}>
                   <SectionHeader icon={<Public fontSize="small" />} label="Timezone" />
                   <TimezoneSection />
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid size={{ xs: 12 }}>
+              <Card variant="outlined" sx={cardSx}>
+                <CardContent sx={{ p: 3 }}>
+                  <SectionHeader icon={<Palette fontSize="small" />} label="Appearance" />
+                  <AppearanceSection />
                 </CardContent>
               </Card>
             </Grid>
