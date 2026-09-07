@@ -1,9 +1,10 @@
-import { Box, Typography, CircularProgress, Card, CardContent, CardActionArea, IconButton } from "@mui/material";
+import { Box, Typography, Card, CardContent, CardActionArea, IconButton } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useSnackbar } from "notistack";
 import { format } from "date-fns";
 import { XenLink } from "../../../../hooks/xenlink/useXenlink";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
+import ListSkeleton from "../../../../components/ui/ListSkeleton";
 import EmptyState from "../../../../components/ui/EmptyState";
 import LinkIcon from "@mui/icons-material/Link";
 
@@ -30,11 +31,7 @@ export default function LinkList({ links, handleLinkClick, isLoading, isError, e
   };
 
   if (isLoading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <ListSkeleton rows={5} height={92} gap={2} />;
   }
 
   if (isError) {

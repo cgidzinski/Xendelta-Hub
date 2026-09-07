@@ -18,6 +18,7 @@ import {
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
+import ListSkeleton from "../../components/ui/ListSkeleton";
 import { useConfirm } from "../../components/ui/ConfirmProvider";
 import { format } from "date-fns";
 import { useTitle } from "../../hooks/useTitle";
@@ -63,8 +64,8 @@ export default function Blog() {
       </Box>
 
       {isLoading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "400px" }}>
-          <CircularProgress />
+        <Box sx={{ py: 4 }}>
+          <ListSkeleton rows={6} height={52} gap={1} />
         </Box>
       ) : (
         <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider" }}>

@@ -1,10 +1,10 @@
 import { useNavigate } from "react-router-dom";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
+import ListSkeleton from "../../../../components/ui/ListSkeleton";
 import EmptyState from "../../../../components/ui/EmptyState";
 import {
   Box,
   Typography,
-  CircularProgress,
   Chip,
   Stack,
   Card,
@@ -75,11 +75,7 @@ export default function FileList({ files, isLoading, isError, error, onRetry }: 
   };
 
   if (isLoading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <ListSkeleton rows={5} height={92} gap={2} />;
   }
 
   if (isError) {

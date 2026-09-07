@@ -11,7 +11,7 @@ import { useSnackbar } from "notistack";
 import { useTitle } from "../../../hooks/useTitle";
 import { useXenBudgetBooks } from "../../../hooks/xenbudget/useBooks";
 import { useXenBudgetBooksSocket } from "../../../hooks/xenbudget/useXenBudgetSocket";
-import LoadingSpinner from "../../../components/LoadingSpinner";
+import ListSkeleton from "../../../components/ui/ListSkeleton";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { cardSx } from "../../../components/ui/surfaceStyles";
 import EmptyState from "../../../components/ui/EmptyState";
@@ -37,7 +37,7 @@ export default function BooksList() {
         }
     };
 
-    if (isLoading) return <LoadingSpinner message="Loading your books..." />;
+    if (isLoading) return <Box sx={{ p: 2, width: "100%" }}><ListSkeleton rows={4} height={64} /></Box>;
     if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
 
     return (
