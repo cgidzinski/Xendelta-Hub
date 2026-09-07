@@ -6,6 +6,7 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import SavingsIcon from "@mui/icons-material/Savings";
 import { useSnackbar } from "notistack";
+import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import type { BookDetailContext } from "./BookDetail";
 import type {
     ContributionInput, PiggyBankInput, XenBudgetPiggyBankContribution, XenBudgetPiggyBank,
@@ -44,6 +45,7 @@ export default function BookPiggyBanks() {
     // at their USD spending.
     const currency = book.default_currency;
     const { enqueueSnackbar } = useSnackbar();
+    const confirm = useConfirm();
 
     const {
         createBankAsync, isCreatingBank,
@@ -104,10 +106,14 @@ export default function BookPiggyBanks() {
     const handleDeleteContribution = async (
         bank: XenBudgetPiggyBank, contribution: XenBudgetPiggyBankContribution,
     ) => {
-        const warning = contribution.item_id
-            ? "Remove this entry? The transaction it created is deleted too."
-            : "Remove this entry?";
-        if (!window.confirm(warning)) return;
+        const ok = await confirm({
+            title: "Remove this entry?",
+            message: contribution.item_id
+                ? "The transaction it created is deleted too."
+                : "It will be taken off this bank\u2019s total.",
+            confirmLabel: "Remove",
+        });
+        if (!ok) return;
         try {
             await deleteContributionAsync({ bankId: bank._id, contributionId: contribution._id });
         } catch (e) {

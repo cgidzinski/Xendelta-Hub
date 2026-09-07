@@ -27,6 +27,7 @@ import {
   useCloneRecipe,
 } from "../../../hooks/recipaint/useRecipaint";
 import { useSnackbar } from "notistack";
+import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -38,6 +39,7 @@ export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+  const confirm = useConfirm();
   const { user } = useAuth();
   const { recipe, isLoading, isError, error, refetch } = useRecipaintRecipe(id);
   const updateRecipe = useUpdateRecipe();
@@ -56,10 +58,17 @@ export default function RecipeDetail() {
 
   useTitle(recipe?.title || "Recipe");
 
-  const handleBackClick = () => {
+  const handleBackClick = async () => {
     if (isEditMode) {
-      if (isFormDirty && !window.confirm("You have unsaved changes. Discard them?")) {
-        return;
+      if (isFormDirty) {
+        const ok = await confirm({
+          title: "Discard unsaved changes?",
+          message: "Your edits to this recipe will be lost.",
+          confirmLabel: "Discard",
+          cancelLabel: "Keep editing",
+          destructive: false,
+        });
+        if (!ok) return;
       }
       setIsFormDirty(false);
       setIsEditMode(false);

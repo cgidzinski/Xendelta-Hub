@@ -18,6 +18,7 @@ import {
 } from "@mui/icons-material";
 import { useNavigate, useParams } from "react-router-dom";
 import { useSnackbar } from "notistack";
+import { useConfirm } from "../../components/ui/ConfirmProvider";
 import { BlogAssetWithMetadata } from "../../types/BlogAssetWithMetadata";
 import { useAdminBlog } from "../../hooks/admin/useAdminBlog";
 import FormFields from "./BlogPostForm/components/FormFields";
@@ -38,6 +39,7 @@ export default function BlogPostForm() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+  const confirm = useConfirm();
   const {
     posts,
     isLoading: isLoadingPosts,
@@ -263,9 +265,11 @@ export default function BlogPostForm() {
       return;
     }
 
-    if (!window.confirm("Are you sure you want to delete this blog post? This action cannot be undone.")) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Delete this blog post?",
+      message: "This cannot be undone.",
+    });
+    if (!ok) return;
 
     deletePost(id);
     enqueueSnackbar("Blog post deleted successfully", { variant: "success" });

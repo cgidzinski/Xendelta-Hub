@@ -15,6 +15,7 @@ import { ErrorBoundary } from "./config/bugsnag";
 import ErrorPage from "./components/ErrorPage";
 import NavBar from "./components/navbars/NavBar";
 import PWA from "./pwa/PWA";
+import ConfirmProvider from "./components/ui/ConfirmProvider";
 import ProtectedRoute from "./components/routeguards/ProtectedRoute";
 import UnprotectedRoute from "./components/routeguards/UnprotectedRoute";
 import AdminRoute from "./components/routeguards/AdminRoute";
@@ -341,8 +342,10 @@ ReactDOM.createRoot(rootElement).render(
                   autoHideDuration={6000}
                   anchorOrigin={{ vertical: "top", horizontal: "right" }}
                 >
-                  <RouterProvider router={router} />
-                  <PWA />
+                  <ConfirmProvider>
+                    <RouterProvider router={router} />
+                    <PWA />
+                  </ConfirmProvider>
                 </SnackbarProvider>
               </NavBarProvider>
             </SocketProvider>
