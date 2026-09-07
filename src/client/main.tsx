@@ -2,7 +2,8 @@ import { Fragment } from "react";
 import * as ReactDOM from "react-dom/client";
 import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route, Navigate } from "react-router-dom";
 import CssBaseline from "@mui/material/CssBaseline";
-import { ThemeProvider, createTheme } from "@mui/material/styles";
+import { ThemeProvider } from "@mui/material/styles";
+import { createAppTheme } from "./theme";
 import { SnackbarProvider } from "notistack";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -293,16 +294,7 @@ const router = createBrowserRouter(
   ),
 );
 
-const theme = createTheme({
-  palette: {
-    mode: "dark",
-    primary: {
-      main: "#2196f3",
-      light: "#42a5f5",
-      dark: "#1976d2",
-    },
-  },
-});
+const theme = createAppTheme("dark");
 
 // Create a client
 const queryClient = new QueryClient({
