@@ -1,4 +1,5 @@
 import { Box, CircularProgress, Typography } from "@mui/material";
+import type { Theme } from "@mui/material/styles";
 
 interface LoadingSpinnerProps {
   size?: number;
@@ -31,7 +32,9 @@ export function LoadingSpinner({
           width: "100vw",
           height: "100vh",
           zIndex: 9999,
-          backgroundColor: "rgba(0, 0, 0, 0.5)",
+          // Tracks the palette instead of always washing the screen black.
+          bgcolor: (theme: Theme) =>
+            theme.palette.mode === "dark" ? "rgba(0, 0, 0, 0.5)" : "rgba(255, 255, 255, 0.7)",
         }),
         ...(overlay &&
           !fullScreen && {
@@ -40,7 +43,8 @@ export function LoadingSpinner({
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.3)",
+            bgcolor: (theme: Theme) =>
+              theme.palette.mode === "dark" ? "rgba(0, 0, 0, 0.3)" : "rgba(255, 255, 255, 0.6)",
             zIndex: 1000,
           }),
       }}

@@ -52,6 +52,8 @@ export const updateProfileSchema = z.object({
     .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores")
     .optional(),
   emailNotifications: z.boolean().optional(),
+  // "" clears the preference and falls back to the OS setting, as timezone does.
+  theme: z.union([z.enum(["light", "dark"]), z.literal("")]).optional(),
   // An empty handle clears the whole thing, the same way "" clears the timezone.
   etransfer: z.object({
     handle: z.union([
