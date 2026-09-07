@@ -23,8 +23,8 @@ import TimePeriodFilter, { itemQuickPicks } from "./components/TimePeriodFilter"
 import { resolvePeriod } from "./components/periodMode";
 import ReviewModal from "./components/ReviewModal";
 import ItemsTotalsBar from "./components/ItemsTotalsBar";
-import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
+import ListSkeleton from "../../../components/ui/ListSkeleton";
 import { groupByDay, dateOnlyToLocal } from "../../../utils/dateGrouping";
 import { emptyStateSx, emptyStateIconCircleSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
 import { FLAG_OFF_BUDGET } from "../../../constants/xenbudget";
@@ -327,7 +327,7 @@ export default function BookItems() {
                 {isError ? (
                     <ErrorDisplay error={error} />
                 ) : isLoading ? (
-                    <LoadingSpinner message="Loading items..." />
+                    <ListSkeleton rows={6} height={56} gap={1} />
                 ) : items.length === 0 ? (
                     <Box sx={emptyStateSx}>
                         <Box sx={emptyStateIconCircleSx}>

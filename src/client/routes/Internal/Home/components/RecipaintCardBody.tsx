@@ -4,7 +4,7 @@ import { useRecipaint } from "../../../../hooks/recipaint/useRecipaint";
 export default function RecipaintCardBody() {
     const { recipes, isLoading } = useRecipaint();
 
-    if (isLoading) return <Skeleton variant="rectangular" height={72} sx={{ borderRadius: 1 }} />;
+    if (isLoading) return <Skeleton variant="rectangular" height={72} sx={{ borderRadius: 2 }} />;
 
     const recent = [...recipes]
         .sort((a, b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime())

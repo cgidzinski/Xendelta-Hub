@@ -1,8 +1,8 @@
 import { useNavigate } from "react-router-dom";
+import ListSkeleton from "../../../../components/ui/ListSkeleton";
 import {
   Box,
   Typography,
-  CircularProgress,
   Alert,
   Chip,
   Stack,
@@ -72,11 +72,7 @@ export default function FileList({ files, isLoading, isError, error }: FileListP
   };
 
   if (isLoading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <ListSkeleton rows={5} height={92} gap={2} />;
   }
 
   if (isError) {

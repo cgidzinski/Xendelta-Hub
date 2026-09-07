@@ -1,8 +1,9 @@
-import { Box, Typography, CircularProgress, Alert, Card, CardContent, CardActionArea, IconButton } from "@mui/material";
+import { Box, Typography, Alert, Card, CardContent, CardActionArea, IconButton } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useSnackbar } from "notistack";
 import { format } from "date-fns";
 import { XenLink } from "../../../../hooks/xenlink/useXenlink";
+import ListSkeleton from "../../../../components/ui/ListSkeleton";
 
 interface LinkListProps {
   links: XenLink[] | undefined;
@@ -26,11 +27,7 @@ export default function LinkList({ links, handleLinkClick, isLoading, isError, e
   };
 
   if (isLoading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <ListSkeleton rows={5} height={92} gap={2} />;
   }
 
   if (isError) {
