@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Box, Button, Stack, Typography } from "@mui/material";
+import {
+    Box, Button, InputAdornment, MenuItem, Stack, TextField, Typography,
+} from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import SavingsIcon from "@mui/icons-material/Savings";
+import SearchIcon from "@mui/icons-material/Search";
 import type { BookDetailContext } from "../BookDetail";
 import type { BudgetStatus } from "../../../../hooks/xenbudget/types";
 import { useXenBudgetStatus, useXenBudgetBudgets } from "../../../../hooks/xenbudget/useBudgets";
 import BudgetRow from "../components/budget/BudgetRow";
-import { sortBudgets } from "../components/budget/sortBudgets";
+import { sortBudgets, budgetLabel, type BudgetSortOrder } from "../components/budget/sortBudgets";
 import BudgetForm from "../components/BudgetForm";
 import SectionCard from "./SectionCard";
 import LoadingSpinner from "../../../../components/LoadingSpinner";
@@ -23,9 +26,17 @@ export default function BookBudgets() {
 
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState<BudgetStatus | null>(null);
+    const [search, setSearch] = useState("");
+    const [sortOrder, setSortOrder] = useState<BudgetSortOrder>("priority");
 
     if (isLoading && budgets.length === 0) return <LoadingSpinner message="Checking budgets..." />;
     if (isError) return <ErrorDisplay error={error} />;
+
+    const query = search.trim().toLowerCase();
+    const filtered = query
+        ? budgets.filter((b) => budgetLabel(b).toLowerCase().includes(query))
+        : budgets;
+    const visible = sortBudgets(filtered, sortOrder);
 
     return (
         <Stack spacing={2}>
@@ -42,6 +53,32 @@ export default function BookBudgets() {
                     </Button>
                 </Stack>
 
+                {budgets.length > 0 && (
+                    <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+                        <TextField
+                            size="small" placeholder="Search budgets"
+                            value={search} onChange={(e) => setSearch(e.target.value)}
+                            sx={{ flexGrow: 1 }}
+                            slotProps={{
+                                input: {
+                                    startAdornment: (
+                                        <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
+                                    ),
+                                },
+                            }}
+                        />
+                        <TextField
+                            select size="small" label="Sort" value={sortOrder}
+                            onChange={(e) => setSortOrder(e.target.value as BudgetSortOrder)}
+                            sx={{ minWidth: 160, flexShrink: 0 }}
+                        >
+                            <MenuItem value="priority">Priority</MenuItem>
+                            <MenuItem value="name_asc">Name (A-Z)</MenuItem>
+                            <MenuItem value="name_desc">Name (Z-A)</MenuItem>
+                        </TextField>
+                    </Stack>
+                )}
+
                 {budgets.length === 0 ? (
                     <Box sx={emptyStateSx}>
                         <Box sx={emptyStateIconCircleSx}><SavingsIcon color="disabled" /></Box>
@@ -50,11 +87,15 @@ export default function BookBudgets() {
                             Add your first budget to start capping spending.
                         </Typography>
                     </Box>
+                ) : visible.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 2 }}>
+                        No budgets match "{search.trim()}".
+                    </Typography>
                 ) : (
                     /* One card per budget rather than one card holding them all: on this page
                     every budget is its own editable thing, so each needs its own target. */
                     <Stack spacing={1}>
-                        {sortBudgets(budgets).map((budget) => (
+                        {visible.map((budget) => (
                             <BudgetRow
                                 key={budget._id}
                                 budget={budget}

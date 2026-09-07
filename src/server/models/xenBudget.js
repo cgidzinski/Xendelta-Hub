@@ -315,6 +315,11 @@ itemSchema.index({ book_id: 1, "categories.name": 1 });
 itemSchema.index({ book_id: 1, flags: 1 });
 itemSchema.index({ book_id: 1, import_hash: 1 });
 itemSchema.index({ book_id: 1, import_batch_id: 1 });
+// Support the Items page's amount/name sort modes at CSV-import scale.
+itemSchema.index({ book_id: 1, amount: 1 });
+// Collation must match the query's collation (locale "en", strength 2) or Mongo won't pick
+// this index for the case-insensitive name sort and will fall back to an in-memory sort.
+itemSchema.index({ book_id: 1, description: 1 }, { collation: { locale: "en", strength: 2 } });
 
 var XenBudgetBook = mongoose.model("XenBudgetBook", bookSchema);
 var XenBudgetItem = mongoose.model("XenBudgetItem", itemSchema);

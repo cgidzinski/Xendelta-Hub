@@ -12,7 +12,9 @@ import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 import { startOfMonth } from "date-fns";
 import type { BookDetailContext } from "./BookDetail";
-import { useXenBudgetItems, exportItemsCsv, type ItemFilters } from "../../../hooks/xenbudget/useItems";
+import {
+    useXenBudgetItems, exportItemsCsv, type ItemFilters, type ItemSortMode,
+} from "../../../hooks/xenbudget/useItems";
 import ItemListItem from "./components/ItemListItem";
 import ItemFilterSelect from "./components/ItemFilterSelect";
 import {
@@ -94,6 +96,7 @@ export default function BookItems() {
     }, [seed?.from, seed?.to, seed?.period]);
     const [reviewOpen, setReviewOpen] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [sortMode, setSortMode] = useState<ItemSortMode>("date_desc");
     const { enqueueSnackbar } = useSnackbar();
     // Which source/card the list is narrowed to: "all", "manual", "csv", or "card:<id>".
     const [sourceFilter, setSourceFilter] = useState("all");
@@ -146,14 +149,22 @@ export default function BookItems() {
             source,
             card,
             merchant: merchant ?? undefined,
+            sort: sortMode,
         };
-    }, [period, search, selectedFilters, sourceFilter, merchant]);
+    }, [period, search, selectedFilters, sourceFilter, merchant, sortMode]);
 
     const {
         items, totals, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
     } = useXenBudgetItems(book._id, filters);
 
-    const dayGroups = useMemo(() => groupByDay(items, (i) => i.date, "UTC"), [items]);
+    // Day-section headers make sense reading either newest-first or oldest-first — only the
+    // amount/name sorts break the "same-day items stay contiguous" assumption groupByDay
+    // relies on, so only those fall back to a flat list.
+    const isDateSort = sortMode === "date_desc" || sortMode === "date_asc";
+    const dayGroups = useMemo(
+        () => (isDateSort ? groupByDay(items, (i) => i.date, "UTC") : null),
+        [items, isDateSort],
+    );
 
     const reviewCount = book.review_count ?? 0;
     const needsReviewCount = book.needs_review_count ?? 0;
@@ -229,9 +240,10 @@ export default function BookItems() {
                             sx={{ alignSelf: "flex-start" }}
                         />
                     )}
-                    {/* Search and export share a line: export acts on the view rather
+                    {/* Search, sort and export share a line: export acts on the view rather
                     than describing it, and the filter row below needs its whole width for
-                    the three filters. */}
+                    the three filters — the mobile-width tuning there (see the note below)
+                    leaves no slack for a fourth control. */}
                     <Stack direction="row" spacing={1} alignItems="center">
                         <TextField
                             size="small" placeholder="Search descriptions"
@@ -245,6 +257,21 @@ export default function BookItems() {
                                 },
                             }}
                         />
+                        <TextField
+                            select size="small" label="Sort" value={sortMode}
+                            onChange={(e) => setSortMode(e.target.value as ItemSortMode)}
+                            sx={{
+                                flexShrink: 0, minWidth: 0, maxWidth: { xs: 108, sm: "none" },
+                                "& .MuiInputBase-root": { width: "auto", maxWidth: "100%" },
+                            }}
+                        >
+                            <MenuItem value="date_desc">Newest first</MenuItem>
+                            <MenuItem value="date_asc">Oldest first</MenuItem>
+                            <MenuItem value="amount_desc">Amount: High to Low</MenuItem>
+                            <MenuItem value="amount_asc">Amount: Low to High</MenuItem>
+                            <MenuItem value="description_asc">Name: A to Z</MenuItem>
+                            <MenuItem value="description_desc">Name: Z to A</MenuItem>
+                        </TextField>
                         <Tooltip title="Export this view as CSV">
                             {/* A span, because a disabled button fires no events and the
                             tooltip would have nothing to listen to. */}
@@ -343,25 +370,40 @@ export default function BookItems() {
                     </Box>
                 ) : (
                     <Stack spacing={2}>
-                        {dayGroups.map((group) => (
-                            <Box key={group.key}>
-                                <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.75 }}>
-                                    {group.label}
-                                </Typography>
-                                <Stack spacing={0.75}>
-                                    {group.items.map((item) => (
-                                        <ItemListItem
-                                            key={item._id}
-                                            item={item}
-                                            members={book.members}
-                                            categoryRegistry={book.categories}
-                                            flagRegistry={book.flags}
-                                            onClick={onPreviewItem}
-                                        />
-                                    ))}
-                                </Stack>
-                            </Box>
-                        ))}
+                        {dayGroups ? (
+                            dayGroups.map((group) => (
+                                <Box key={group.key}>
+                                    <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.75 }}>
+                                        {group.label}
+                                    </Typography>
+                                    <Stack spacing={0.75}>
+                                        {group.items.map((item) => (
+                                            <ItemListItem
+                                                key={item._id}
+                                                item={item}
+                                                members={book.members}
+                                                categoryRegistry={book.categories}
+                                                flagRegistry={book.flags}
+                                                onClick={onPreviewItem}
+                                            />
+                                        ))}
+                                    </Stack>
+                                </Box>
+                            ))
+                        ) : (
+                            <Stack spacing={0.75}>
+                                {items.map((item) => (
+                                    <ItemListItem
+                                        key={item._id}
+                                        item={item}
+                                        members={book.members}
+                                        categoryRegistry={book.categories}
+                                        flagRegistry={book.flags}
+                                        onClick={onPreviewItem}
+                                    />
+                                ))}
+                            </Stack>
+                        )}
                         {hasMore && (
                             <Button onClick={() => loadMore()} disabled={isLoadingMore} sx={{ alignSelf: "center" }}>
                                 {isLoadingMore ? "Loading..." : "Load more"}

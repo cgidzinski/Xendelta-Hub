@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import type { XenBudgetBook } from "./types";
 
@@ -66,6 +66,26 @@ export function useXenBudgetLabels(bookId: string, kind: LabelKind) {
 
 export const useXenBudgetCategories = (bookId: string) => useXenBudgetLabels(bookId, "categories");
 export const useXenBudgetFlags = (bookId: string) => useXenBudgetLabels(bookId, "flags");
+
+/**
+ * How many items currently carry each category, keyed by name — for the count shown next
+ * to a chip in Settings > Categories, and to decide whether deleting one needs a
+ * confirmation. Not part of `useXenBudgetLabels`'s invalidation set: it's a display-only
+ * figure that refetches whenever the Categories settings page is opened, rather than being
+ * wired into every item mutation's invalidation list.
+ */
+export function useXenBudgetCategoryItemCounts(bookId: string) {
+    const query = useQuery({
+        queryKey: ["xenbudget", "category-item-counts", bookId],
+        queryFn: async () => {
+            const res = await apiClient.get(`/api/xenbudget/books/${bookId}/categories/counts`);
+            return res.data.data as Record<string, number>;
+        },
+        enabled: !!bookId,
+    });
+
+    return { counts: query.data ?? {}, isLoading: query.isLoading };
+}
 
 /**
  * Re-seeds a book's missing starter categories and built-in flags in one call. Additive

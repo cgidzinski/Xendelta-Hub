@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
-    Box, Button, IconButton, Stack, TextField, ToggleButton, ToggleButtonGroup,
-    Tooltip, Typography,
+    Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
+    IconButton, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -17,6 +17,10 @@ import { emptyStateSx } from "../../../../components/ui/surfaceStyles";
 interface LabelManagerProps {
     book: XenBudgetBook;
     kind: LabelKind;
+    /** How many items currently carry each label, keyed by name. Categories only today —
+     *  when present, a count shows beside the chip and deleting a label that's in use asks
+     *  for confirmation first instead of stripping it from those items silently. */
+    itemCounts?: Record<string, number>;
 }
 
 const COPY = {
@@ -39,15 +43,16 @@ const COPY = {
  * identically. A built-in flag shows its colour but no rename or delete, with the reason
  * stated — a disabled control nobody can explain is worse than no control.
  */
-export default function LabelManager({ book, kind }: LabelManagerProps) {
+export default function LabelManager({ book, kind, itemCounts }: LabelManagerProps) {
     const { enqueueSnackbar } = useSnackbar();
-    const { createLabelAsync, isCreating, updateLabelAsync, deleteLabelAsync } =
+    const { createLabelAsync, isCreating, updateLabelAsync, deleteLabelAsync, isDeleting } =
         useXenBudgetLabels(book._id, kind);
     const labels = book[kind] || [];
     const copy = COPY[kind];
 
     const [draft, setDraft] = useState("");
     const [editing, setEditing] = useState<{ id: string; name: string } | null>(null);
+    const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string; count: number } | null>(null);
 
     const run = async (fn: () => Promise<unknown>, fallback: string) => {
         try {
@@ -55,6 +60,21 @@ export default function LabelManager({ book, kind }: LabelManagerProps) {
         } catch (e) {
             enqueueSnackbar(e instanceof Error ? e.message : fallback, { variant: "error" });
         }
+    };
+
+    // A label with items on it deletes silently otherwise — asked for confirmation instead
+    // of stripping it from every one of them without warning. One with nothing on it (or a
+    // kind with no counts at all, i.e. flags) keeps today's instant delete.
+    const handleDeleteClick = (label: { _id: string; name: string }) => {
+        const count = itemCounts?.[label.name] ?? 0;
+        if (count > 0) setConfirmDelete({ id: label._id, name: label.name, count });
+        else run(() => deleteLabelAsync(label._id), "Could not delete that");
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!confirmDelete) return;
+        await run(() => deleteLabelAsync(confirmDelete.id), "Could not delete that");
+        setConfirmDelete(null);
     };
 
     const handleAdd = async () => {
@@ -125,9 +145,14 @@ export default function LabelManager({ book, kind }: LabelManagerProps) {
                                     sx={{ flexGrow: 1 }}
                                 />
                             ) : (
-                                <Box sx={{ flexGrow: 1 }}>
+                                <Stack direction="row" alignItems="center" spacing={1} sx={{ flexGrow: 1, minWidth: 0 }}>
                                     <LabelChip name={label.name} registry={labels} variant2={copy.chip} />
-                                </Box>
+                                    {itemCounts && (
+                                        <Typography variant="caption" color="text.secondary">
+                                            {itemCounts[label.name] ?? 0} item{(itemCounts[label.name] ?? 0) === 1 ? "" : "s"}
+                                        </Typography>
+                                    )}
+                                </Stack>
                             )}
 
                             {kind === "categories" && (
@@ -174,7 +199,7 @@ export default function LabelManager({ book, kind }: LabelManagerProps) {
                                     <Tooltip title="Delete and strip from every item">
                                         <IconButton
                                             size="small"
-                                            onClick={() => run(() => deleteLabelAsync(label._id), "Could not delete that")}
+                                            onClick={() => handleDeleteClick(label)}
                                         >
                                             <DeleteIcon fontSize="small" />
                                         </IconButton>
@@ -185,6 +210,20 @@ export default function LabelManager({ book, kind }: LabelManagerProps) {
                     ))}
                 </Stack>
             )}
+
+            <Dialog open={!!confirmDelete} onClose={() => setConfirmDelete(null)}>
+                <DialogTitle>Delete &ldquo;{confirmDelete?.name}&rdquo;?</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        This removes it from {confirmDelete?.count} item{confirmDelete?.count === 1 ? "" : "s"} —
+                        they keep everything else, they just lose this {copy.chip}. This cannot be undone.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setConfirmDelete(null)}>Cancel</Button>
+                    <Button color="error" disabled={isDeleting} onClick={handleConfirmDelete}>Delete</Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }
