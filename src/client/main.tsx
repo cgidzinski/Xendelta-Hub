@@ -92,6 +92,7 @@ import XenBudgetBookItems from "./routes/Internal/XenBudget/BookItems";
 import XenBudgetBookPiggyBanks from "./routes/Internal/XenBudget/BookPiggyBanks";
 import XenBudgetBookReport from "./routes/Internal/XenBudget/BookReport";
 import XenBudgetBookSettings from "./routes/Internal/XenBudget/BookSettings";
+import SettingsIndexRedirect from "./routes/Internal/XenBudget/settings/SettingsIndexRedirect";
 import XenBudgetGeneralSection from "./routes/Internal/XenBudget/settings/GeneralSection";
 import XenBudgetCategoriesSection from "./routes/Internal/XenBudget/settings/CategoriesSection";
 import XenBudgetFlagsSection from "./routes/Internal/XenBudget/settings/FlagsSection";
@@ -249,7 +250,7 @@ const router = createBrowserRouter(
             <Route path="piggy-banks" element={<XenBudgetBookPiggyBanks />} />
             <Route path="report" element={<XenBudgetBookReport />} />
             <Route path="settings" element={<XenBudgetBookSettings />}>
-              <Route index element={<Navigate to="general" replace />} />
+              <Route index element={<SettingsIndexRedirect />} />
               <Route path="general" element={<XenBudgetGeneralSection />} />
               <Route path="categories" element={<XenBudgetCategoriesSection />} />
               <Route path="flags" element={<XenBudgetFlagsSection />} />

@@ -24,6 +24,7 @@ import { useSnackbar } from "notistack";
 import { TAB_PATHS, activeIndex } from "./navigation";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
+import BookBreadcrumbs from "./components/BookBreadcrumbs";
 
 /**
  * Everything the child tabs need. BookDetail is a "fat" layout route in the same shape as
@@ -158,7 +159,8 @@ export default function BookDetail() {
     return (
         <Box sx={{ height: { xs: "calc(100dvh - 56px)", sm: "calc(100dvh - 64px)" }, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <Box sx={{ borderBottom: 1, borderColor: "divider", flexShrink: 0 }}>
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, pt: 1.5, pb: 1 }}>
+                {!isMobile && <BookBreadcrumbs bookId={bookId} bookName={book.name} />}
+                <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, pt: isMobile ? 1.5 : 0.5, pb: 1 }}>
                     <Tooltip title="All books">
                         <IconButton size="small" onClick={() => navigate("/internal/xenbudget/books")}>
                             <ArrowBackIcon fontSize="small" />

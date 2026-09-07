@@ -17,6 +17,19 @@
  */
 export const TAB_PATHS = ["overview", "items", "report", "settings"] as const;
 
+/**
+ * Display names for those paths. Breadcrumbs need the label without the icon, so it lives
+ * here rather than only inside the Tab elements that render it.
+ */
+export const TAB_LABELS: Record<string, string> = {
+    overview: "Overview",
+    items: "Items",
+    report: "Report",
+    settings: "Settings",
+    // Not a tab (see above), but still a place you can be, and a crumb should say so.
+    "piggy-banks": "Piggy banks",
+};
+
 /** Settings sections, in the order they render. */
 export const SETTINGS_SECTIONS = [
     { path: "general", label: "General" },
