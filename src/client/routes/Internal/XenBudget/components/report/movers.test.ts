@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { buildMovers } from "./movers";
 import type { SummaryCategoryPeriod } from "../../../../../hooks/xenbudget/types";
 
-const cell = (category: string, key: string, total: number): SummaryCategoryPeriod =>
-    ({ category, key, total });
+const cell = (category: string, key: string, total: number, income = 0): SummaryCategoryPeriod =>
+    ({ category, key, total, income });
 
 describe("buildMovers", () => {
     it("subtracts the last two periods", () => {
@@ -18,6 +18,18 @@ describe("buildMovers", () => {
         expect(movers?.previousKey).toBe("2026-07");
         expect(movers?.up).toMatchObject([{ category: "Groceries", delta: 142 }]);
         expect(movers?.down).toMatchObject([{ category: "Travel", delta: -800 }]);
+    });
+
+    it("nets money that came back into the category", () => {
+        // 542 out but 500 of it refunded is a fall, not a rise: the gross figure alone
+        // would have reported Groceries as the month's biggest riser.
+        const movers = buildMovers([
+            cell("Groceries", "2026-07", 400),
+            cell("Groceries", "2026-08", 542, 500),
+        ], ["2026-07", "2026-08"]);
+
+        expect(movers?.up).toEqual([]);
+        expect(movers?.down).toMatchObject([{ category: "Groceries", current: 42, delta: -358 }]);
     });
 
     it("compares only the last two buckets of a longer range", () => {

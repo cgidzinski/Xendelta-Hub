@@ -9,7 +9,7 @@
 // an endpoint rather than shipping a second copy of this to the browser, so what the
 // preview shows and what the import writes can never drift apart.
 
-import { FLAG_OFF_BUDGET } from "../constants/xenbudget";
+import { FLAG_OFF_BUDGET, FLAG_UNCATEGORISED } from "../constants/xenbudget";
 
 export type RuleField =
   | "description" | "amount" | "flags" | "category" | "type" | "date" | "source";
@@ -227,6 +227,47 @@ export function ruleMatches(rule: Rule, item: DraftItem): boolean {
 
 function addUnique(list: string[], name: string) {
   if (!list.some((n) => n.toLowerCase() === name.toLowerCase())) list.push(name);
+}
+
+/**
+ * The same rules `addFlag` applies, for flag names that arrive from somewhere other than a
+ * rule - the free-solo picker on the item form, a CSV column, an API caller.
+ *
+ * Flags are matched BY NAME everywhere (filters, rule conditions, the off-budget check), so
+ * an untrimmed or case-varied duplicate is not a cosmetic problem: "Refund " and "refund"
+ * become two flags that no single filter can select.
+ */
+export function normalizeFlagNames(names: unknown): string[] {
+  if (!Array.isArray(names)) return [];
+  const out: string[] = [];
+  for (const raw of names) {
+    if (typeof raw !== "string") continue;
+    const clean = raw.trim();
+    if (clean) addUnique(out, clean);
+  }
+  return out;
+}
+
+/**
+ * "Uncategorised" is STATE, not history: it is on an item exactly when nothing has
+ * categorised it, and off the moment something has.
+ *
+ * It used to be a marker the importer stamped on and only the item form took back off,
+ * which let the two disagree - a re-apply sweep that finally categorised a row left the
+ * flag sitting on it, and the filter offering that flag means "has no category", so the
+ * item displayed a label no filter could find it by.
+ *
+ * Applied on the way OUT as well as on the way in (see serializeItem), so an item stored
+ * in the old contradictory state reads correctly without a migration.
+ */
+export function withDerivedUncategorised(flags: unknown, categories: unknown): string[] {
+  const list = Array.isArray(flags) ? flags.filter((f): f is string => typeof f === "string") : [];
+  const categorised = Array.isArray(categories) && categories.length > 0;
+  const without = list.filter((f) => f.toLowerCase() !== FLAG_UNCATEGORISED.toLowerCase());
+  if (categorised) return without;
+  // Appended rather than inserted in place: the flag order is what the chips render in,
+  // and a derived label belongs after the ones somebody chose.
+  return [...without, FLAG_UNCATEGORISED];
 }
 
 function addFlag(item: DraftItem, flag: string, fromRule: boolean) {

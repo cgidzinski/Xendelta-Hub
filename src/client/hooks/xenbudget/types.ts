@@ -528,9 +528,16 @@ export interface SummaryPeriod {
     count: number;
 }
 
+/**
+ * One category, both directions. `total` is what went OUT of it and `income` what came
+ * back IN - a refund, a repayment, an internal transfer. They are kept apart rather than
+ * pre-netted because a pie or a stacked area can't draw a negative slice: charts read the
+ * gross, figures read the difference.
+ */
 export interface SummaryCategory {
     category: string;
     total: number;
+    income: number;
     count: number;
 }
 
@@ -540,6 +547,7 @@ export interface SummaryCategoryPeriod {
     /** Matches a `by_period` key, so the two line up column for column. */
     key: string;
     total: number;
+    income: number;
 }
 
 export interface SummaryPerson {

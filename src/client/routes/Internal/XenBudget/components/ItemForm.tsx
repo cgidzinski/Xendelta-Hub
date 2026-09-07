@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
     Autocomplete, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
     Divider, FormControlLabel, IconButton, InputAdornment, Stack, Step, StepLabel, Stepper, TextField,
@@ -22,6 +22,7 @@ import { getCurrencySymbol } from "../currency";
 import { dateOnlyToLocal } from "../../../../utils/dateGrouping";
 import { sanitizeAmount } from "../../../../utils/currencyUtils";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
+import { FLAG_UNCATEGORISED } from "../../../../constants/xenbudget";
 import { EXPENSE_COLOR, INCOME_COLOR } from "../../../../components/ui/chartColors";
 
 const STEPS = ["Details", "Images", "More"] as const;
@@ -79,8 +80,22 @@ export default function ItemForm({
     const soloBook = book.members.length <= 1;
 
     // Re-seed whenever the dialog opens, so a cancelled edit doesn't leak into the next one.
+    //
+    // Once per OPEN, not once per render of these props. `book` is a react-query object
+    // with staleTime 0, and every item mutation, import, rules sweep and incoming socket
+    // update invalidates its key - so a refetch while this dialog is open used to re-run
+    // the seed and throw away whatever was half-typed, flags included, on top of jumping
+    // back to the first step. The dependency list stays honest; the ref is what decides
+    // whether this is a NEW edit or the same one still in progress.
+    const seeded = useRef<string | null>(null);
     useEffect(() => {
-        if (!open) return;
+        if (!open) {
+            seeded.current = null;
+            return;
+        }
+        const key = item?._id ?? "new";
+        if (seeded.current === key) return;
+        seeded.current = key;
         setStep(0);
         if (item) {
             setType(item.type);
@@ -89,7 +104,9 @@ export default function ItemForm({
             setDate(dateOnlyToLocal(item.date));
             setDescription(item.description);
             setNotes(item.notes || "");
-            setFlags(item.flags || []);
+            // Minus the derived one: it isn't editable here, and leaving it in the value
+            // would render a chip whose delete button the server would undo.
+            setFlags((item.flags || []).filter((f) => f !== FLAG_UNCATEGORISED));
             setCategorySplitType(item.category_split_type || "equal");
             setCategories((item.categories || []).map((c) => ({
                 key: c.name,
@@ -116,6 +133,17 @@ export default function ItemForm({
             setSkipRules(false);
         }
     }, [open, item, book, user]);
+
+    // "Uncategorised" is derived from the categories, not chosen - offering it here would
+    // be a control that does nothing, since the server recomputes it on save. Anything
+    // already on the item that the registry doesn't know about (a flag typed before the
+    // picker was closed) stays listed, so it can still be taken off.
+    const flagOptions = useMemo(() => {
+        const registry = book.flags
+            .map((t) => t.name)
+            .filter((name) => name !== FLAG_UNCATEGORISED);
+        return [...registry, ...flags.filter((f) => !registry.includes(f))];
+    }, [book.flags, flags]);
 
     const numericAmount = parseFloat(amount) || 0;
     const canSubmit = description.trim().length > 0 && numericAmount > 0 && shares.length > 0;
@@ -156,7 +184,10 @@ export default function ItemForm({
             currency,
             date: dateOnlyIso(date || new Date()),
             description: description.trim(),
-            notes: notes.trim() || undefined,
+            // An emptied note has to go out as "" when editing: the PUT only writes fields
+            // it was actually sent, so `undefined` reads as "leave it alone" and the old
+            // note would survive being deleted. On an add the two are the same thing.
+            notes: item ? notes.trim() : (notes.trim() || undefined),
             flags,
             skip_rules: skipRules || undefined,
             category_split_type: categorySplitType,
@@ -391,11 +422,15 @@ export default function ItemForm({
 
                 {STEPS[step] === "More" && (
                     <Stack spacing={2}>
+                        {/* Closed, not freeSolo: a typed name would be stored on the item
+                        and nowhere else - invisible to the filter, to Settings and to every
+                        rule - so flags come from the book's registry and are managed there. */}
                         <Autocomplete
-                            multiple freeSolo
-                            options={book.flags.map((t) => t.name)}
+                            multiple
+                            options={flagOptions}
                             value={flags}
-                            onChange={(_, v) => setFlags(v as string[])}
+                            onChange={(_, v) => setFlags(v)}
+                            noOptionsText="No flags left to add"
                             renderTags={(value, getTagProps) =>
                                 value.map((option, index) => {
                                     const { key, ...rest } = getTagProps({ index });
@@ -404,8 +439,11 @@ export default function ItemForm({
                             }
                             renderInput={(params) => (
                                 <TextField
-                                    {...params} label="Flags" placeholder="Anything needing attention?"
-                                    helperText="For things to come back to — not what the purchase was."
+                                    {...params} label="Flags"
+                                    placeholder={flagOptions.length > 0 ? "Anything needing attention?" : undefined}
+                                    helperText={flagOptions.length > 0
+                                        ? "For things to come back to — not what the purchase was."
+                                        : "Add flags in Settings → Flags to use them here."}
                                 />
                             )}
                         />

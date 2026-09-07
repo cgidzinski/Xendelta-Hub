@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   applyRules, ruleMatches, stripRuleEffects, safeRegexTest, MAX_REGEX_LENGTH,
+  normalizeFlagNames, withDerivedUncategorised,
   type Rule, type DraftItem, type RuleCondition,
 } from "./xenBudgetRules";
-import { FLAG_OFF_BUDGET } from "../constants/xenbudget";
+import { FLAG_OFF_BUDGET, FLAG_UNCATEGORISED } from "../constants/xenbudget";
 
 function draft(over: Partial<DraftItem> = {}): DraftItem {
   return {
@@ -357,5 +358,58 @@ describe("re-apply semantics", () => {
     const result = applyRules(draft(), [skipper], { skipBecomesOffBudget: true });
     expect(result.skipped).toBe(false);
     expect(result.item.flags).toContain(FLAG_OFF_BUDGET);
+  });
+});
+
+describe("normalizeFlagNames", () => {
+  it("trims, drops empties and dedupes case-insensitively", () => {
+    // Flags are matched BY NAME everywhere, so "Refund " and "refund" would otherwise
+    // become two flags no single filter can select.
+    expect(normalizeFlagNames([" Refund ", "refund", "", "   ", "Check"]))
+      .toEqual(["Refund", "Check"]);
+  });
+
+  it("keeps the first spelling seen, rather than lowercasing the label", () => {
+    expect(normalizeFlagNames(["Needs review", "NEEDS REVIEW"])).toEqual(["Needs review"]);
+  });
+
+  it("survives anything that isn't a list of strings", () => {
+    expect(normalizeFlagNames(undefined)).toEqual([]);
+    expect(normalizeFlagNames("Refund")).toEqual([]);
+    expect(normalizeFlagNames([1, null, "Check"])).toEqual(["Check"]);
+  });
+});
+
+describe("withDerivedUncategorised", () => {
+  const CAT = [{ name: "Groceries", amount: 10 }];
+
+  it("takes the flag off an item that has a category", () => {
+    // The reported bug: a sweep that finally categorised an imported row left the flag
+    // behind, and the filter offering it means "has no category" - so the item showed a
+    // label nothing could find it by.
+    expect(withDerivedUncategorised(["Check", FLAG_UNCATEGORISED], CAT)).toEqual(["Check"]);
+  });
+
+  it("puts it on an item that has none", () => {
+    expect(withDerivedUncategorised(["Check"], [])).toEqual(["Check", FLAG_UNCATEGORISED]);
+  });
+
+  it("is idempotent in both directions", () => {
+    expect(withDerivedUncategorised([FLAG_UNCATEGORISED], [])).toEqual([FLAG_UNCATEGORISED]);
+    expect(withDerivedUncategorised(["Check"], CAT)).toEqual(["Check"]);
+  });
+
+  it("matches the name case-insensitively, so a hand-typed spelling can't duplicate it", () => {
+    expect(withDerivedUncategorised(["uncategorised"], CAT)).toEqual([]);
+    expect(withDerivedUncategorised(["UNCATEGORISED"], [])).toEqual([FLAG_UNCATEGORISED]);
+  });
+
+  it("leaves every other flag alone, in order", () => {
+    const flags = ["Needs review", "Off budget", "Possible duplicate"];
+    expect(withDerivedUncategorised(flags, CAT)).toEqual(flags);
+  });
+
+  it("survives a document with no flags or categories stored at all", () => {
+    expect(withDerivedUncategorised(undefined, undefined)).toEqual([FLAG_UNCATEGORISED]);
   });
 });

@@ -109,6 +109,10 @@ export default function MapStep({
     const rawParsed = rawPreviewLines.map(splitCsvLine);
     const rawColCount = rawParsed.reduce((m, r) => Math.max(m, r.length), 0);
 
+    // No Category role on purpose. Categories exist only in the book's registry, and a
+    // column mapped to one would create whatever the file happened to say - a category
+    // that counts towards totals while appearing in no filter, no budget and no rule.
+    // Categorising an import is the rules engine's job, or the default categories below it.
     const roleOptions: { value: keyof ColumnMap | "skip"; label: string }[] = [
         { value: "skip", label: "Skip" },
         { value: "date", label: "Date" },
@@ -117,7 +121,6 @@ export default function MapStep({
         { value: "amount", label: "Amount" },
         { value: "debit", label: "Debit (money out)" },
         { value: "credit", label: "Credit (money in)" },
-        { value: "categories", label: "Category" },
     ];
 
     // column_map is field -> header, so a column's current role is whichever field (if
@@ -125,7 +128,10 @@ export default function MapStep({
     const roleForHeader = (header: string): string => {
         const entry = (Object.entries(config.column_map) as [keyof ColumnMap, string | undefined][])
             .find(([, v]) => v === header);
-        return entry ? entry[0] : "skip";
+        // A preset saved before Category was withdrawn still names that role. It no longer
+        // maps to anything, so it reads as Skip rather than as a value with no option.
+        if (!entry || !roleOptions.some((o) => o.value === entry[0])) return "skip";
+        return entry[0];
     };
 
     const assignRole = (header: string, role: string) => {

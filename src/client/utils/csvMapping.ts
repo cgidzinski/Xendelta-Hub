@@ -16,7 +16,6 @@ export interface ColumnMap {
     amount?: string;
     debit?: string;
     credit?: string;
-    categories?: string;
     memo?: string;
     people?: string;
 }
@@ -191,11 +190,6 @@ export function looksLikeDataRow(cells: string[]): boolean {
     return dataSignals > 0 && headerSignals === 0;
 }
 
-function splitList(raw: string | undefined): string[] {
-    if (!raw) return [];
-    return String(raw).split(/[,;|]/).map((s) => s.trim()).filter(Boolean);
-}
-
 /**
  * Maps parsed CSV rows onto item drafts.
  *
@@ -268,10 +262,12 @@ export function applyMapping(rows: CsvRow[], config: MappingConfig): MappingResu
             date: date.toISOString(),
             description: description.slice(0, 500),
             notes: memoText ? memoText.slice(0, 1000) : undefined,
-            categories: [
-                ...(config.default_categories || []),
-                ...splitList(map.categories ? row[map.categories] : undefined),
-            ].filter((c, i, arr) => arr.findIndex((x) => x.toLowerCase() === c.toLowerCase()) === i),
+            // Only the import's own defaults, which are picked from the book's registry.
+            // A file's category column is deliberately not mappable: it would create
+            // whatever the file said, and a category that exists on items but not in the
+            // registry shows up in totals while appearing in no filter, budget or rule.
+            categories: [...(config.default_categories || [])]
+                .filter((c, i, arr) => arr.findIndex((x) => x.toLowerCase() === c.toLowerCase()) === i),
         });
     });
 

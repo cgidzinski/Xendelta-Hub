@@ -35,8 +35,8 @@ const base = {
     // the registry-driven rows get their own block at the end.
     allCategories: ["Groceries", "Dining"],
     byCategory: [
-        { category: "Groceries", total: 620, count: 12 },
-        { category: "Dining", total: 240, count: 5 },
+        { category: "Groceries", total: 620, income: 0, count: 12 },
+        { category: "Dining", total: 240, income: 0, count: 5 },
     ],
     byCategoryPeriod: [],
     uncategorised: { total: 0, count: 0 },
@@ -169,9 +169,9 @@ describe("period columns", () => {
         ...base,
         byPeriod: MONTHS.map((k) => period(k, k === "2026-01" ? 300 : k === "2026-02" ? 560 : 0)),
         byCategoryPeriod: [
-            { category: "Groceries", key: "2026-01", total: 300 },
-            { category: "Groceries", key: "2026-02", total: 320 },
-            { category: "Dining", key: "2026-02", total: 240 },
+            { category: "Groceries", key: "2026-01", total: 300, income: 0 },
+            { category: "Groceries", key: "2026-02", total: 320, income: 0 },
+            { category: "Dining", key: "2026-02", total: 240, income: 0 },
         ],
         rangeFrom: new Date(Date.UTC(2026, 0, 1)),
         rangeTo: new Date(Date.UTC(2027, 0, 1)),
@@ -189,7 +189,7 @@ describe("period columns", () => {
         const days = Array.from({ length: 31 }, (_, i) => `2026-08-${String(i + 1).padStart(2, "0")}`);
         const { periodKeys, rows } = buildCategoryReport({
             ...base, budgets: [], byPeriod: days.map((k) => period(k, 10)),
-            byCategoryPeriod: [{ category: "Groceries", key: "2026-08-01", total: 50 }],
+            byCategoryPeriod: [{ category: "Groceries", key: "2026-08-01", total: 50, income: 0 }],
         });
         expect(periodKeys).toEqual([]);
         // And the cells aren't built at all, rather than built and discarded.
@@ -214,7 +214,7 @@ describe("period columns", () => {
     it("matches cross-tab rows to categories case-insensitively", () => {
         const { rows } = buildCategoryReport({
             ...yearly,
-            byCategoryPeriod: [{ category: "groceries", key: "2026-01", total: 300 }],
+            byCategoryPeriod: [{ category: "groceries", key: "2026-01", total: 300, income: 0 }],
             budgets: [],
         });
         expect(rows.find((r) => r.label === "Groceries")?.byPeriod).toEqual({ "2026-01": 300 });
@@ -249,9 +249,9 @@ describe("summary rows", () => {
         // Groceries cells add up to the 620 that base.byCategory reports, so the
         // column-versus-total assertions below actually mean something.
         byCategoryPeriod: [
-            { category: "Groceries", key: "2026-01", total: 200 },
-            { category: "Groceries", key: "2026-02", total: 300 },
-            { category: "Groceries", key: "2026-03", total: 120 },
+            { category: "Groceries", key: "2026-01", total: 200, income: 0 },
+            { category: "Groceries", key: "2026-02", total: 300, income: 0 },
+            { category: "Groceries", key: "2026-03", total: 120, income: 0 },
         ],
         rangeFrom: new Date(Date.UTC(2026, 0, 1)),
         rangeTo: new Date(Date.UTC(2026, 3, 1)),
@@ -373,8 +373,8 @@ describe("every category gets a row", () => {
             ...base,
             allCategories: ["Groceries"],
             byCategory: [
-                { category: "Groceries", total: 620, count: 12 },
-                { category: "Surprise", total: 40, count: 1 },
+                { category: "Groceries", total: 620, income: 0, count: 12 },
+                { category: "Surprise", total: 40, income: 0, count: 1 },
             ],
             budgets: [],
         });
@@ -385,7 +385,7 @@ describe("every category gets a row", () => {
         const { rows } = buildCategoryReport({
             ...base,
             allCategories: ["Groceries"],
-            byCategory: [{ category: "GROCERIES", total: 620, count: 12 }],
+            byCategory: [{ category: "GROCERIES", total: 620, income: 0, count: 12 }],
             budgets: [],
         });
         const matches = rows.filter((r) => r.label.toLowerCase() === "groceries");
@@ -400,6 +400,63 @@ describe("every category gets a row", () => {
             budgets: [budget({ categories: ["Travel"], amount: 500 })],
         });
         expect(rows.find((r) => r.label === "Travel")).toMatchObject({ spent: 0, budgeted: 500 });
+    });
+
+    it("nets money that came back into a category", () => {
+        // The reported case: a category used in both directions was reporting its gross
+        // outgoings, so one that had been repaid in full still showed thousands against it.
+        const { rows, summary } = buildCategoryReport({
+            ...base,
+            byCategory: [
+                { category: "Groceries", total: 620, income: 0, count: 12 },
+                { category: "Transfers", total: 5372, income: 5300, count: 40 },
+            ],
+            budgets: [],
+        });
+        expect(rows.find((r) => r.label === "Transfers")).toMatchObject({
+            spent: 72, out: 5372, returned: 5300,
+        });
+        // The gross outgoings are untouched, and the difference is on its own line - so the
+        // rows still reconcile with the book's bottom line.
+        expect(summary.spent.total).toBe(860);
+        expect(summary.returned.total).toBe(5300);
+    });
+
+    it("nets against a cap, so a refunded purchase stops counting", () => {
+        const { rows } = buildCategoryReport({
+            ...base,
+            byCategory: [{ category: "Groceries", total: 620, income: 200, count: 12 }],
+            budgets: [budget()],
+        });
+        expect(rows.find((r) => r.label === "Groceries")).toMatchObject({ spent: 420, budgeted: 800 });
+    });
+
+    it("nets each period cell, not just the range total", () => {
+        const { rows } = buildCategoryReport({
+            ...base,
+            byPeriod: [period("2026-01", 300, 0), period("2026-02", 320, 250)],
+            byCategory: [{ category: "Groceries", total: 620, income: 250, count: 12 }],
+            byCategoryPeriod: [
+                { category: "Groceries", key: "2026-01", total: 300, income: 0 },
+                { category: "Groceries", key: "2026-02", total: 320, income: 250 },
+            ],
+            budgets: [],
+            rangeFrom: new Date(Date.UTC(2026, 0, 1)),
+            rangeTo: new Date(Date.UTC(2026, 2, 1)),
+        });
+        expect(rows.find((r) => r.label === "Groceries")?.byPeriod).toEqual({
+            "2026-01": 300, "2026-02": 70,
+        });
+    });
+
+    it("leaves uncategorised gross - an uncategorised paycheque is not a refund", () => {
+        const { rows, summary } = buildCategoryReport({
+            ...base, budgets: [], uncategorised: { total: 95, count: 3 },
+        });
+        expect(rows.find((r) => r.label === "Uncategorised")).toMatchObject({
+            spent: 95, out: 95, returned: 0,
+        });
+        expect(summary.returned.total).toBe(0);
     });
 
     it("leaves uncategorised at the very bottom", () => {
@@ -420,9 +477,9 @@ describe("income targets", () => {
         ...base,
         allCategories: ["Groceries", "Dining", "Savings"],
         byCategory: [
-            { category: "Groceries", total: 620, count: 12 },
-            { category: "Dining", total: 240, count: 5 },
-            { category: "Savings", total: 900, count: 3 },
+            { category: "Groceries", total: 620, income: 0, count: 12 },
+            { category: "Dining", total: 240, income: 0, count: 5 },
+            { category: "Savings", total: 900, income: 0, count: 3 },
         ],
         byPeriod: [
             period("2026-01", 900, 4000),
@@ -430,9 +487,9 @@ describe("income targets", () => {
             period("2026-03", 1100, 4000),
         ],
         byCategoryPeriod: [
-            { category: "Savings", key: "2026-01", total: 300 },
-            { category: "Savings", key: "2026-02", total: 300 },
-            { category: "Savings", key: "2026-03", total: 300 },
+            { category: "Savings", key: "2026-01", total: 300, income: 0 },
+            { category: "Savings", key: "2026-02", total: 300, income: 0 },
+            { category: "Savings", key: "2026-03", total: 300, income: 0 },
         ],
         rangeFrom: new Date(Date.UTC(2026, 0, 1)),
         rangeTo: new Date(Date.UTC(2026, 3, 1)),
@@ -486,12 +543,36 @@ describe("income targets", () => {
         expect(totalTarget).toBeCloseTo(1500, 6);
     });
 
-    it("reports what was actually saved against the target", () => {
-        const { summary, towardTargets } = buildCategoryReport({ ...withSavings, budgets: [incomeTarget()] });
+    it("reports what was actually saved against a savings target", () => {
+        // A savings budget counts EXPENSE items - money put away has left the account -
+        // so what has gone toward it is the spending in its categories.
+        const savingTarget = budget({ measures: "saving" as const, categories: ["Savings"], amount: 500 });
+        const { summary, towardTargets } = buildCategoryReport({ ...withSavings, budgets: [savingTarget] });
         expect(towardTargets).toBe(900);
         expect(summary.towardTargets.total).toBe(900);
         expect(summary.towardTargets.byPeriod).toEqual({ "2026-01": 300, "2026-02": 300, "2026-03": 300 });
         expect(summary.targets.byPeriod).toEqual({ "2026-01": 500, "2026-02": 500, "2026-03": 500 });
+    });
+
+    it("counts the money that ARRIVED against an income target", () => {
+        // The bug this replaced: an income target read its progress out of the expense-only
+        // rollup, so however much came in it always reported nothing.
+        const earning = {
+            ...withSavings,
+            byCategory: [{ category: "Freelance", total: 100, income: 1200, count: 4 }],
+            byCategoryPeriod: [
+                { category: "Freelance", key: "2026-01", total: 0, income: 400 },
+                { category: "Freelance", key: "2026-02", total: 100, income: 400 },
+                { category: "Freelance", key: "2026-03", total: 0, income: 400 },
+            ],
+        };
+        const { summary, towardTargets } = buildCategoryReport({
+            ...earning,
+            budgets: [incomeTarget({ categories: ["Freelance"] })],
+        });
+        // 1200 in, less the 100 refunded out of it.
+        expect(towardTargets).toBe(1100);
+        expect(summary.towardTargets.byPeriod).toEqual({ "2026-01": 400, "2026-02": 300, "2026-03": 400 });
     });
 
     it("keeps savings out of the caps comparison entirely", () => {

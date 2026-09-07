@@ -6,6 +6,7 @@
 // menu (which renders it) can never disagree about what an option string means.
 
 import type { XenBudgetBook, XenBudgetMember } from "../../../../hooks/xenbudget/types";
+import { FLAG_UNCATEGORISED } from "../../../../constants/xenbudget";
 
 // Synthetic options — not real flags or fields on the item.
 export const TYPE_EXPENSE = "__type_expense__";
@@ -17,9 +18,10 @@ export const WANT_FILTER = "__want__";
 export const CATEGORY_PREFIX = "__category__";
 // People are prefixed so a member's name can never collide with a category/flag name.
 export const PERSON_PREFIX = "__person__";
-// The built-in flag the importer uses to say "nothing matched" — special-cased by the
-// page so selecting it also catches items with no category that were never imported.
-export const FLAG_UNCATEGORISED = "Uncategorised";
+// Re-exported so the page and the menu keep importing their vocabulary from one module;
+// the name itself lives with the other flag constants. Special-cased by the page: it is
+// derived from "has no category", so selecting it filters on that state.
+export { FLAG_UNCATEGORISED };
 export const FLAG_NEEDS_REVIEW = "Needs review";
 
 export type FilterGroup = "Type" | "Need / Want" | "Categories" | "People" | "Flags";
@@ -38,11 +40,21 @@ export function filterGroupOf(option: string): FilterGroup {
     return "Flags";
 }
 
-/** Every option a book offers, in group order. */
+/**
+ * Every option a book offers, in group order.
+ *
+ * Categories are sorted by name rather than left in registry (i.e. creation) order: a book
+ * fed by CSV imports accumulates dozens, and a list nobody can predict the position of has
+ * to be read end to end every time. Flags stay in registry order - the built-ins are a
+ * short fixed list you learn the shape of, not something you scan alphabetically.
+ */
 export function buildFilterOptions(book: XenBudgetBook): string[] {
+    const categories = book.categories
+        .map((c) => c.name)
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
     return [
         TYPE_EXPENSE, TYPE_INCOME, NEED_FILTER, WANT_FILTER,
-        ...book.categories.map((c) => CATEGORY_PREFIX + c.name),
+        ...categories.map((name) => CATEGORY_PREFIX + name),
         ...book.members.map((m) => PERSON_PREFIX + m.user_id),
         ...book.flags.map((f) => f.name),
     ];
