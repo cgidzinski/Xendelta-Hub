@@ -157,11 +157,13 @@ export default function BookItems() {
         items, totals, isLoading, isError, error, hasMore, loadMore, isLoadingMore,
     } = useXenBudgetItems(book._id, filters);
 
-    // Day-section headers only make sense in date order — any other sort renders as a flat
-    // list instead, since groupByDay expects an already date-desc sorted list.
+    // Day-section headers make sense reading either newest-first or oldest-first — only the
+    // amount/name sorts break the "same-day items stay contiguous" assumption groupByDay
+    // relies on, so only those fall back to a flat list.
+    const isDateSort = sortMode === "date_desc" || sortMode === "date_asc";
     const dayGroups = useMemo(
-        () => (sortMode === "date_desc" ? groupByDay(items, (i) => i.date, "UTC") : null),
-        [items, sortMode],
+        () => (isDateSort ? groupByDay(items, (i) => i.date, "UTC") : null),
+        [items, isDateSort],
     );
 
     const reviewCount = book.review_count ?? 0;
@@ -264,6 +266,7 @@ export default function BookItems() {
                             }}
                         >
                             <MenuItem value="date_desc">Newest first</MenuItem>
+                            <MenuItem value="date_asc">Oldest first</MenuItem>
                             <MenuItem value="amount_desc">Amount: High to Low</MenuItem>
                             <MenuItem value="amount_asc">Amount: Low to High</MenuItem>
                             <MenuItem value="description_asc">Name: A to Z</MenuItem>

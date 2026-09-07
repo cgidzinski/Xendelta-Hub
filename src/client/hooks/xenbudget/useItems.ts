@@ -4,11 +4,12 @@ import { invalidateItemDerived } from "./invalidate";
 import type { XenBudgetItem, ItemsPage, CreateItemInput, UpdateItemInput } from "./types";
 
 /**
- * date_desc is the default (and today's only) order, so it's never sent on the wire — same
- * convention as `excluded: "hidden"` below. Day-section headers in the client only make
- * sense in date order, so anything else renders as a flat list.
+ * date_desc is the default, so it's never sent on the wire — same convention as
+ * `excluded: "hidden"` below. Day-section headers in the client make sense for either date
+ * order, so only the amount/name modes fall back to a flat list.
  */
-export type ItemSortMode = "date_desc" | "amount_asc" | "amount_desc" | "description_asc" | "description_desc";
+export type ItemSortMode =
+    | "date_desc" | "date_asc" | "amount_asc" | "amount_desc" | "description_asc" | "description_desc";
 
 export interface ItemFilters {
     from?: string;

@@ -3532,6 +3532,7 @@ function escapeRegex(input: string): string {
 // field name directly. `date_desc` is the default and the only mode the client omits.
 const ITEM_SORT_MODES: Record<string, { field: "date" | "amount" | "description"; dir: 1 | -1 }> = {
   date_desc: { field: "date", dir: -1 },
+  date_asc: { field: "date", dir: 1 },
   amount_asc: { field: "amount", dir: 1 },
   amount_desc: { field: "amount", dir: -1 },
   description_asc: { field: "description", dir: 1 },
