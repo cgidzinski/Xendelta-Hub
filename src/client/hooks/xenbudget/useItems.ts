@@ -3,6 +3,13 @@ import { apiClient } from "../../config/api";
 import { invalidateItemDerived } from "./invalidate";
 import type { XenBudgetItem, ItemsPage, CreateItemInput, UpdateItemInput } from "./types";
 
+/**
+ * date_desc is the default (and today's only) order, so it's never sent on the wire — same
+ * convention as `excluded: "hidden"` below. Day-section headers in the client only make
+ * sense in date order, so anything else renders as a flat list.
+ */
+export type ItemSortMode = "date_desc" | "amount_asc" | "amount_desc" | "description_asc" | "description_desc";
+
 export interface ItemFilters {
     from?: string;
     to?: string;
@@ -29,6 +36,7 @@ export interface ItemFilters {
      * the punctuation and reference numbers normalisation dropped.
      */
     merchant?: string;
+    sort?: ItemSortMode;
 }
 
 /**
@@ -73,6 +81,7 @@ function toParams(filters: ItemFilters): Record<string, string> {
     if (filters.source) params.source = filters.source;
     if (filters.card) params.card = filters.card;
     if (filters.q) params.q = filters.q;
+    if (filters.sort && filters.sort !== "date_desc") params.sort = filters.sort;
     if (filters.merchant) params.merchant = filters.merchant;
     return params;
 }

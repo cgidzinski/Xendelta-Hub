@@ -63,16 +63,27 @@ export function budgetLabel(budget: BudgetStatus): string {
     return budget.categories.length ? budget.categories.join(", ") : "Everything";
 }
 
+export type BudgetSortOrder = "priority" | "name_asc" | "name_desc";
+
 /**
- * Trouble first, then alphabetical.
+ * Trouble first, then alphabetical - or, when asked, purely alphabetical either way.
  *
- * Sorting purely by percentage would reshuffle the list every time a purchase lands, so
- * budgets are bucketed - in trouble, close to it, fine - and ordered by name inside each
- * bucket. What needs attention rises to the top; everything else stays where the reader
+ * Sorting purely by percentage would reshuffle the list every time a purchase lands, so by
+ * default budgets are bucketed - in trouble, close to it, fine - and ordered by name inside
+ * each bucket. What needs attention rises to the top; everything else stays where the reader
  * last saw it. An income target joins the same bands read the right way up: badly behind is
  * trouble, nearly there is fine, and met is the best state rather than the worst.
+ *
+ * `orderBy` defaults to that "priority" behavior so existing callers are unaffected; passing
+ * `name_asc`/`name_desc` drops the trouble banding entirely for a plain A-Z/Z-A browse.
  */
-export function sortBudgets(budgets: BudgetStatus[]): BudgetStatus[] {
+export function sortBudgets(budgets: BudgetStatus[], orderBy: BudgetSortOrder = "priority"): BudgetStatus[] {
+    if (orderBy !== "priority") {
+        return [...budgets].sort((a, b) => {
+            const cmp = budgetLabel(a).localeCompare(budgetLabel(b), undefined, { sensitivity: "base" });
+            return orderBy === "name_asc" ? cmp : -cmp;
+        });
+    }
     const band = (b: BudgetStatus) => {
         if (isOverCap(b)) return 0;
         return troublePercent(b) >= NEAR_LIMIT_PERCENT ? 1 : 2;

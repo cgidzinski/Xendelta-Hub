@@ -1260,6 +1260,31 @@ module.exports = function (app: any) {
   registerLabelRoutes(app, "categories");
   registerLabelRoutes(app, "flags");
 
+  // GET /api/xenbudget/books/:bookId/categories/counts
+  //   How many items currently carry each category, keyed by name — all-time, every item
+  //   type. Deliberately not the summary endpoint's by_category count, which is
+  //   expense-only and scoped to whatever date window the caller passes; deleting a
+  //   category needs the true total regardless of when the items landed.
+  app.get("/api/xenbudget/books/:bookId/categories/counts",
+    validateParams(xenBudgetBookIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        const rows = await XenBudgetItem.aggregate([
+          { $match: { book_id: book._id } },
+          { $unwind: "$categories" },
+          { $group: { _id: "$categories.name", count: { $sum: 1 } } },
+        ]);
+        const counts: Record<string, number> = {};
+        rows.forEach((row: any) => { counts[row._id] = row.count; });
+        res.json({ status: true, message: "Category item counts retrieved", data: counts });
+      } catch (error) {
+        console.error("Error fetching category item counts:", error);
+        res.status(500).json({ status: false, message: "Failed to fetch category item counts" });
+      }
+    });
+
   // POST /api/xenbudget/books/:bookId/reseed-labels
   // Re-adds any starter categories and built-in flags the book is missing - e.g. a book
   // created before a later release added more. Additive only: existing names and colours
@@ -3048,7 +3073,7 @@ module.exports = function (app: any) {
   // --- Items ---------------------------------------------------------------
 
   // GET /api/xenbudget/books/:bookId/items
-  //   ?from&to&categories=a,b&flags=a,b&people=id,id&type&uncategorised&excluded&q&limit&cursor
+  //   ?from&to&categories=a,b&flags=a,b&people=id,id&type&uncategorised&excluded&q&limit&cursor&sort
   app.get("/api/xenbudget/books/:bookId/items", validateParams(xenBudgetBookIdParamSchema), async (req: Request, res: Response) => {
     try {
       const book = await loadBookForMember(req, res);
@@ -3125,6 +3150,11 @@ module.exports = function (app: any) {
         // Streamed from a cursor rather than loaded whole, the same way the book export
         // does it: a filtered view can still be tens of thousands of rows, and buffering
         // them all would spike memory per request.
+        //
+        // Always date order regardless of the on-screen `sort` - a spreadsheet reviewed
+        // chronologically is the more useful default, and it isn't worth wiring the sort
+        // param through this separate streaming path for a control most people leave at
+        // "Newest first".
         const cursor = XenBudgetItem.find(filter).sort({ date: -1, _id: -1 }).lean().cursor();
         for await (const item of cursor as any) {
           res.write(csvLine([
@@ -3161,21 +3191,29 @@ module.exports = function (app: any) {
       const totalsFilter = { ...filter };
       const wantsTotals = !q.cursor;
 
-      // Keyset pagination on the (date, _id) sort, so a page boundary can't drop or
-      // repeat an item the way a skip/limit offset does when rows are inserted.
-      if (q.cursor) {
-        const [cursorDate, cursorId] = q.cursor.split("_");
-        if (cursorDate && cursorId && mongoose.Types.ObjectId.isValid(cursorId)) {
-          filter.$or = [
-            { date: { $lt: new Date(cursorDate) } },
-            { date: new Date(cursorDate), _id: { $lt: new mongoose.Types.ObjectId(cursorId) } },
-          ];
-        }
+      const { field: sortField, dir: sortDir } = ITEM_SORT_MODES[q.sort] ?? ITEM_SORT_MODES.date_desc;
+      const collation = sortField === "description" ? NAME_COLLATION : undefined;
+
+      // Keyset pagination on the (sortField, _id) sort, so a page boundary can't drop or
+      // repeat an item the way a skip/limit offset does when rows are inserted. The cursor
+      // is ignored (falls back to page one) if it names a different field than the current
+      // sort — a defensive guard against a stale cursor, since `sort` is part of the
+      // client's query key and the two should never actually diverge in normal use.
+      const cursor = q.cursor ? decodeItemCursor(q.cursor) : null;
+      if (cursor && cursor.field === sortField && mongoose.Types.ObjectId.isValid(cursor.id)) {
+        const cmp = sortDir === -1 ? "$lt" : "$gt";
+        const value = sortField === "date" ? new Date(cursor.value as string) : cursor.value;
+        filter.$or = [
+          { [sortField]: { [cmp]: value } },
+          { [sortField]: value, _id: { [cmp]: new mongoose.Types.ObjectId(cursor.id) } },
+        ];
       }
 
       const limit = Math.min(parseInt(q.limit || "100", 10) || 100, MAX_ITEMS_PAGE);
+      let itemsQuery = XenBudgetItem.find(filter).sort({ [sortField]: sortDir, _id: sortDir });
+      if (collation) itemsQuery = itemsQuery.collation(collation);
       const [items, totalsRows] = await Promise.all([
-        XenBudgetItem.find(filter).sort({ date: -1, _id: -1 }).limit(limit + 1).lean(),
+        itemsQuery.limit(limit + 1).lean(),
         // Amounts in different currencies can't be added together (the same rule the
         // summary route follows), so the total is per currency and the client shows one
         // line each - which for almost every book is exactly one line.
@@ -3208,7 +3246,8 @@ module.exports = function (app: any) {
       const hasMore = items.length > limit;
       const page = hasMore ? items.slice(0, limit) : items;
       const last = page[page.length - 1];
-      const nextCursor = hasMore && last ? `${new Date(last.date).toISOString()}_${last._id}` : null;
+      const lastSortValue = last ? (sortField === "date" ? new Date(last.date).toISOString() : (last as any)[sortField]) : null;
+      const nextCursor = hasMore && last ? encodeItemCursor(sortField, lastSortValue, String(last._id)) : null;
 
       // Resolve each item's import batch to a card label ("Chase Visa") so the client
       // can show provenance without an extra lookup per item. The label comes from the
@@ -3487,4 +3526,39 @@ module.exports = function (app: any) {
 // stray "(" is a 500 and ".*" is a full scan.
 function escapeRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Allow-listed: `sort` is user-controlled and must never be interpolated into a Mongo
+// field name directly. `date_desc` is the default and the only mode the client omits.
+const ITEM_SORT_MODES: Record<string, { field: "date" | "amount" | "description"; dir: 1 | -1 }> = {
+  date_desc: { field: "date", dir: -1 },
+  amount_asc: { field: "amount", dir: 1 },
+  amount_desc: { field: "amount", dir: -1 },
+  description_asc: { field: "description", dir: 1 },
+  description_desc: { field: "description", dir: -1 },
+};
+
+// A case-insensitive collation for a human-expected A-Z order ("Banana" after "apple"),
+// matching the collation the description index is built with - a query and its supporting
+// index must agree on collation or Mongo silently falls back to an in-memory sort.
+const NAME_COLLATION = { locale: "en", strength: 2 };
+
+/**
+ * Opaque keyset-pagination cursor, generalized across the three sortable fields. Earlier
+ * this was a naive `${date}_${id}` string split on "_", which breaks the moment a
+ * `description` value contains an underscore - base64url-encoded JSON has no such
+ * delimiter collision.
+ */
+function encodeItemCursor(field: string, value: unknown, id: string): string {
+  return Buffer.from(JSON.stringify({ field, value, id })).toString("base64url");
+}
+
+function decodeItemCursor(raw: string): { field: string; value: unknown; id: string } | null {
+  try {
+    const obj = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    if (!obj || typeof obj.id !== "string" || !mongoose.Types.ObjectId.isValid(obj.id)) return null;
+    return obj;
+  } catch {
+    return null;
+  }
 }

@@ -97,6 +97,13 @@ describe("sortBudgets", () => {
         sortBudgets(list);
         expect(list.map((b) => b._id)).toEqual(["b", "a"]);
     });
+
+    it("ignores the trouble band entirely when asked for a plain name order", () => {
+        const ok = budget({ _id: "ok", categories: ["Apples"], percent: 10 });
+        const over = budget({ _id: "over", categories: ["Zucchini"], percent: 130, over: true });
+        expect(sortBudgets([over, ok], "name_asc").map((b) => b._id)).toEqual(["ok", "over"]);
+        expect(sortBudgets([over, ok], "name_desc").map((b) => b._id)).toEqual(["over", "ok"]);
+    });
 });
 
 describe("savings budgets", () => {
