@@ -28,7 +28,8 @@ import ErrorDisplay from "../../../components/ErrorDisplay";
 import { formatCurrency } from "./currency";
 import { STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
 import { INCOME_COLOR } from "../../../components/ui/chartColors";
-import { cardSx, sectionLabelSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
+import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
+import EmptyState from "../../../components/ui/EmptyState";
 
 // Past a dozen the pip row is no longer countable at a glance, and the figure beside
 // it already says the same thing.
@@ -387,13 +388,11 @@ export default function BookOverview() {
                 )}
 
                 {nothingYet ? (
-                    <Box sx={emptyStateSx}>
-                        <Box sx={emptyStateIconCircleSx}><InsightsIcon color="disabled" /></Box>
-                        <Typography variant="subtitle1">Nothing in {label} yet</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Add an item and the tally updates for everyone in the book.
-                        </Typography>
-                    </Box>
+                    <EmptyState
+                        icon={<InsightsIcon />}
+                        title={`Nothing in ${label} yet`}
+                        description="Add an item and the tally updates for everyone in the book."
+                    />
                 ) : (
                     <Stack spacing={2}>
                         {categoryRows.length > 0 && (

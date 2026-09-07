@@ -13,7 +13,8 @@ import { useXenBudgetBooks } from "../../../hooks/xenbudget/useBooks";
 import { useXenBudgetBooksSocket } from "../../../hooks/xenbudget/useXenBudgetSocket";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
-import { cardSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
+import { cardSx } from "../../../components/ui/surfaceStyles";
+import EmptyState from "../../../components/ui/EmptyState";
 
 export default function BooksList() {
     useTitle("XenBudget");
@@ -49,15 +50,11 @@ export default function BooksList() {
             </Stack>
 
             {books.length === 0 ? (
-                <Box sx={emptyStateSx}>
-                    <Box sx={emptyStateIconCircleSx}>
-                        <AccountBalanceWalletIcon color="disabled" />
-                    </Box>
-                    <Typography variant="subtitle1">No books yet</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        A book holds your spending, your people and your budgets.
-                    </Typography>
-                </Box>
+                <EmptyState
+                    icon={<AccountBalanceWalletIcon />}
+                    title="No books yet"
+                    description="A book holds your spending, your people and your budgets."
+                />
             ) : (
                 <Stack spacing={1.25}>
                     {books.map((book) => (

@@ -17,7 +17,8 @@ import ContributionForm from "./components/piggyBank/ContributionForm";
 import { bankTotals, sortPiggyBanks } from "./components/piggyBank/piggyBankProgress";
 import { useBalancedColumns } from "./components/budget/useBalancedColumns";
 import { formatCurrency } from "./currency";
-import { cardSx, emptyStateSx, emptyStateIconCircleSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
+import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
+import EmptyState from "../../../components/ui/EmptyState";
 
 /** Which bank a contribution dialog is open for, and which way the money is going. */
 interface ContributionTarget {
@@ -144,15 +145,11 @@ export default function BookPiggyBanks() {
 
             <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pl: 2, pr: { xs: 2, sm: 3.5 }, pb: 2 }}>
                 {visible.length === 0 ? (
-                    <Box sx={emptyStateSx}>
-                        <Box sx={emptyStateIconCircleSx}><SavingsIcon color="disabled" /></Box>
-                        <Typography variant="subtitle1">
-                            {banks.length === 0 ? "Nothing being saved for yet" : "No banks in progress"}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Add a bank — a new car, a trip — and put money into it whenever you like.
-                        </Typography>
-                    </Box>
+                    <EmptyState
+                        icon={<SavingsIcon />}
+                        title={banks.length === 0 ? "Nothing being saved for yet" : "No banks in progress"}
+                        description="Add a bank — a new car, a trip — and put money into it whenever you like."
+                    />
                 ) : (
                     <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
                         <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>

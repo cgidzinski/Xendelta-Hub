@@ -15,7 +15,8 @@ import type { XenBudgetBook, XenBudgetItem, XenBudgetMember, UpdateItemInput, Sh
 import { useXenBudgetItemMutations, useXenBudgetItems } from "../../../../hooks/xenbudget/useItems";
 import { useXenBudgetRules } from "../../../../hooks/xenbudget/useRules";
 import { formatCurrency } from "../currency";
-import { emptyStateSx, emptyStateIconCircleSx, sectionLabelSx } from "../../../../components/ui/surfaceStyles";
+import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
+import EmptyState from "../../../../components/ui/EmptyState";
 import LoadingSpinner from "../../../../components/LoadingSpinner";
 import { CategoryChip, FlagChip } from "./LabelChip";
 import WeightedSplitEditor, { type SplitDraft } from "./WeightedSplitEditor";
@@ -348,15 +349,11 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
                 {isLoading || (!currentItem && !done) ? (
                     <LoadingSpinner message="Loading items..." />
                 ) : done ? (
-                    <Box sx={emptyStateSx}>
-                        <Box sx={emptyStateIconCircleSx}>
-                            <CheckCircleIcon color="success" />
-                        </Box>
-                        <Typography variant="subtitle1">You&rsquo;re all caught up</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Nothing left that&rsquo;s uncategorised.
-                        </Typography>
-                    </Box>
+                    <EmptyState
+                        icon={<CheckCircleIcon color="success" />}
+                        title={<>You&rsquo;re all caught up</>}
+                        description={<>Nothing left that&rsquo;s uncategorised.</>}
+                    />
                 ) : (
                     <Stack spacing={2}>
                         <Box sx={{ ...xbCardSx, p: 2 }}>

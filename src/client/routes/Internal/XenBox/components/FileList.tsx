@@ -1,10 +1,10 @@
 import { useNavigate } from "react-router-dom";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
+import EmptyState from "../../../../components/ui/EmptyState";
 import {
   Box,
   Typography,
   CircularProgress,
-  Alert,
   Chip,
   Stack,
   Card,
@@ -12,6 +12,7 @@ import {
   CardActionArea,
   IconButton,
 } from "@mui/material";
+import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import LockIcon from "@mui/icons-material/Lock";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -89,7 +90,11 @@ export default function FileList({ files, isLoading, isError, error, onRetry }: 
 
   if (!files || files.length === 0) {
     return (
-      <Alert severity="info">No files found. Upload your first file to get started.</Alert>
+      <EmptyState
+        icon={<InsertDriveFileIcon />}
+        title="No files yet"
+        description="Upload your first file to get started."
+      />
     );
   }
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
     Box, Button, IconButton, Stack, TextField, ToggleButton, ToggleButtonGroup,
-    Tooltip, Typography,
+    Tooltip,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -12,7 +12,7 @@ import type { XenBudgetBook } from "../../../../hooks/xenbudget/types";
 import { useXenBudgetLabels, type LabelKind } from "../../../../hooks/xenbudget/useLabels";
 import LabelChip, { resolveLabelColor } from "./LabelChip";
 import LabelColorPicker from "./LabelColorPicker";
-import { emptyStateSx } from "../../../../components/ui/surfaceStyles";
+import EmptyState from "../../../../components/ui/EmptyState";
 
 interface LabelManagerProps {
     book: XenBudgetBook;
@@ -91,9 +91,7 @@ export default function LabelManager({ book, kind }: LabelManagerProps) {
             </Stack>
 
             {labels.length === 0 ? (
-                <Box sx={{ ...emptyStateSx, py: 3 }}>
-                    <Typography variant="body2" color="text.secondary">{copy.empty}</Typography>
-                </Box>
+                <EmptyState description={copy.empty} sx={{ py: 3 }} />
             ) : (
                 <Stack spacing={0.75}>
                     {labels.map((label) => (

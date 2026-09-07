@@ -39,7 +39,8 @@ import { toCsv, downloadCsv } from "../../../utils/csvMapping";
 import {
     EXPENSE_RED, INCOME_COLOR, MAGNITUDE_COLOR,
 } from "../../../components/ui/chartColors";
-import { cardSx, sectionLabelSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
+import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
+import EmptyState from "../../../components/ui/EmptyState";
 
 // Past this many categories a bar chart stops being readable, so the tail is folded into
 // a single "Other" bar rather than adding more rows nobody can compare.
@@ -449,13 +450,11 @@ export default function BookReport() {
                     )}
 
                     {summary.totals.count === 0 ? (
-                        <Box sx={emptyStateSx}>
-                            <Box sx={emptyStateIconCircleSx}><InsightsIcon color="disabled" /></Box>
-                            <Typography variant="subtitle1">Nothing in this period</Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                Try a wider range, or a different currency.
-                            </Typography>
-                        </Box>
+                        <EmptyState
+                            icon={<InsightsIcon />}
+                            title="Nothing in this period"
+                            description="Try a wider range, or a different currency."
+                        />
                     ) : (
                         /* The headline numbers are a compact strip, not a chart — three bars
                         would be a worse way to read three numbers. */
