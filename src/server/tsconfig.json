@@ -6,6 +6,6 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext"
   },
-  "include": [".", "../../scripts"],
+  "include": [".", "../../scripts", "../../migrations", "../../migrate.ts"],
   "exclude": ["node_modules"]
 }
