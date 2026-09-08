@@ -113,34 +113,38 @@ export default function ItemPreviewModal({ open, onClose, book, item, onEdit, on
                             </Typography>
                         </Box>
 
-                        {(item.categories.length > 0 || item.flags.length > 0) && (
-                            <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>
-                                {item.categories.map((c) => (
-                                    <CategoryChip key={c.name} name={c.name} registry={book.categories} />
-                                ))}
-                                {/* "Uncategorised" is derived from the categories, so it
-                                gets no delete affordance - removing it would only make the
-                                server put it straight back. It goes away by categorising
-                                the item, which is what the Edit button is for. */}
-                                {item.flags.map((t) => (
-                                    <FlagChip
-                                        key={t} name={t} registry={book.flags}
-                                        onDelete={t === FLAG_UNCATEGORISED
-                                            ? undefined
-                                            : () => handleRemoveFlag(t)}
-                                        disabled={removingFlag !== null}
-                                    />
-                                ))}
-                            </Stack>
+                        {item.categories.length > 0 && (
+                            <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "action.hover", px: 1.5, py: 1.25 }}>
+                                <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5 }}>
+                                    {item.categories.map((c) => (
+                                        <CategoryChip
+                                            key={c.name} name={c.name} registry={book.categories}
+                                            sx={{ height: 24, fontSize: 12 }}
+                                        />
+                                    ))}
+                                </Stack>
+                            </Box>
                         )}
 
-                        {autoTagged && (
-                            <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
-                                <LocalOfferIcon sx={{ fontSize: 14, color: "text.secondary", flexShrink: 0 }} />
-                                <Typography variant="caption" color="text.secondary">
-                                    Auto-tagged{autoTagNames.length > 0 ? ` by ${autoTagNames.join(", ")}` : ""}
-                                </Typography>
-                            </Stack>
+                        {item.flags.length > 0 && (
+                            <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "action.hover", px: 1.5, py: 1.25 }}>
+                                <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5 }}>
+                                    {/* "Uncategorised" is derived from the categories, so it
+                                    gets no delete affordance - removing it would only make the
+                                    server put it straight back. It goes away by categorising
+                                    the item, which is what the Edit button is for. */}
+                                    {item.flags.map((t) => (
+                                        <FlagChip
+                                            key={t} name={t} registry={book.flags}
+                                            onDelete={t === FLAG_UNCATEGORISED
+                                                ? undefined
+                                                : () => handleRemoveFlag(t)}
+                                            disabled={removingFlag !== null}
+                                            sx={{ height: 24, fontSize: 12 }}
+                                        />
+                                    ))}
+                                </Stack>
+                            </Box>
                         )}
 
                         {item.notes && (
@@ -203,6 +207,18 @@ export default function ItemPreviewModal({ open, onClose, book, item, onEdit, on
                                     </Box>
                                 </Box>
                             </Box>
+                        )}
+
+                        {autoTagged && (
+                            <Stack
+                                direction="row" spacing={0.5}
+                                sx={{ alignItems: "center", justifyContent: "flex-end" }}
+                            >
+                                <LocalOfferIcon sx={{ fontSize: 14, color: "text.secondary", flexShrink: 0 }} />
+                                <Typography variant="caption" color="text.secondary">
+                                    Auto-tagged{autoTagNames.length > 0 ? ` by ${autoTagNames.join(", ")}` : ""}
+                                </Typography>
+                            </Stack>
                         )}
                     </Stack>
                 </DialogContent>

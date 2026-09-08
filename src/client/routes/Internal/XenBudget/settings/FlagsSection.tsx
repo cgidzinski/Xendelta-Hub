@@ -36,8 +36,8 @@ export default function FlagsSection() {
             >
                 <Stack spacing={1}>
                     {BUILT_IN_FLAG_MEANINGS.map(({ name, meaning }) => (
-                        <Stack key={name} direction="row" alignItems="center" spacing={1}>
-                            <Box sx={{ flexShrink: 0 }}>
+                        <Stack key={name} direction="row" alignItems="flex-start" spacing={1}>
+                            <Box sx={{ flexShrink: 0, mt: 0.25 }}>
                                 <FlagChip name={name} registry={book.flags} />
                             </Box>
                             <Typography variant="body2" color="text.secondary">{meaning}</Typography>

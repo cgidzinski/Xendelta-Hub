@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import {
-    Autocomplete, Button, Dialog, DialogActions, DialogContent, DialogTitle,
+    Button, Dialog, DialogActions, DialogContent, DialogTitle,
     InputAdornment, Stack, TextField, useMediaQuery,
 } from "@mui/material";
 import { useSnackbar } from "notistack";
 import type { XenBudgetBook, PiggyBankInput, XenBudgetPiggyBank } from "../../../../../hooks/xenbudget/types";
 import { getCurrencySymbol } from "../../currency";
 import { sanitizeAmount } from "../../../../../utils/currencyUtils";
+import LabelPicker from "../LabelPicker";
 
 
 
@@ -104,17 +105,14 @@ export default function PiggyBankForm({
                             },
                         }}
                     />
-                    <Autocomplete
-                        options={book.categories.map((c) => c.name)}
+                    <LabelPicker
+                        kind="category"
+                        registry={book.categories}
                         value={category}
-                        onChange={(_, v) => setCategory(v)}
-                        renderInput={(params) => (
-                            <TextField
-                                {...params} label="Category"
-                                required
-                                helperText="Contributions book as an expense here — the budget line this money comes from."
-                            />
-                        )}
+                        onChange={setCategory}
+                        label="Category"
+                        required
+                        helperText="Contributions book as an expense here — the budget line this money comes from."
                     />
                 </Stack>
             </DialogContent>

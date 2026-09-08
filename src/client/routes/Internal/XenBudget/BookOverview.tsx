@@ -143,6 +143,13 @@ export default function BookOverview() {
         return rows.sort((a, b) => b.total - a.total);
     }, [summary]);
 
+    // Denominator for each row's share: total net category spend, so the percentages agree
+    // with the netted figures shown on the rows and still add up to ~100 across the card.
+    const categoryNetTotal = useMemo(
+        () => categoryRows.reduce((sum, r) => sum + r.total, 0),
+        [categoryRows],
+    );
+
     // Every member appears in the per-person card, defaulting to zero rather than being
     // dropped when they have no share — the breakdown stays complete.
     const personRows = useMemo(() => {
@@ -430,13 +437,13 @@ export default function BookOverview() {
                                     alignItems: "start",
                                 }}>
                                     {categoryRows.map((row) => {
-                                        // Share of the book's gross outgoings, so the
-                                        // percentages still add up to 100 across the card
-                                        // even on a netted row - it answers "how much of
-                                        // what went out was this", which stays true
-                                        // whatever came back in.
-                                        const percent = totals.expense > 0
-                                            ? Math.round((row.out / totals.expense) * 100)
+                                        // Share of total NET category spend, so the figure
+                                        // matches the netted amount shown beside it - a
+                                        // category that was spent then fully repaid drops
+                                        // toward 0% instead of still reading large off its
+                                        // gross outgoings.
+                                        const percent = categoryNetTotal > 0
+                                            ? Math.round((row.total / categoryNetTotal) * 100)
                                             : 0;
                                         return (
                                             // Bordered rather than left to the grid gap alone: rows vary in height
