@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-    Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,
+    Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,
     IconButton, InputAdornment, MenuItem, Stack, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
@@ -13,6 +13,7 @@ import type {
 import { formatCurrency, getCurrencySymbol } from "../currency";
 import { sanitizeAmount, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
+import LabelPicker from "./LabelPicker";
 import { budgetPeriodWindow } from "./budget/budgetForRange";
 import { directionOf } from "./budget/budgetKind";
 import { monthlyEquivalent, windowLabel } from "./budget/periodDisplay";
@@ -80,13 +81,6 @@ export default function BudgetForm({
     const [subs, setSubs] = useState<SubDraft[]>([]);
     const [startDate, setStartDate] = useState<Date | null>(new Date());
 
-    // The registry, plus anything this budget already names that the registry no longer
-    // has - a category can be deleted out from under an existing budget, and the picker
-    // must still show what is on it rather than dropping it on the next save.
-    const categoryOptions = useMemo(() => {
-        const registry = book.categories.map((c) => c.name);
-        return [...registry, ...categories.filter((c) => !registry.includes(c))];
-    }, [book.categories, categories]);
     const [endDate, setEndDate] = useState<Date | null>(null);
 
     useEffect(() => {
@@ -196,18 +190,15 @@ export default function BudgetForm({
                     {/* Closed, not freeSolo: a budget on a category nothing is filed under
                     silently measures nothing, which is the worst way for this to fail.
                     Categories are registered in Settings and picked here. */}
-                    <Autocomplete
+                    <LabelPicker
                         multiple
-                        options={categoryOptions}
+                        kind="category"
+                        registry={book.categories}
                         value={categories}
-                        onChange={(_, v) => setCategories(v)}
+                        onChange={setCategories}
+                        label="Categories"
                         noOptionsText="No categories left to add"
-                        renderInput={(params) => (
-                            <TextField
-                                {...params} label="Categories"
-                                helperText={categories.length === 0 ? "Leave empty to cover every category." : undefined}
-                            />
-                        )}
+                        helperText={categories.length === 0 ? "Leave empty to cover every category." : undefined}
                     />
 
                     <TextField

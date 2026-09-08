@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
-    Autocomplete, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
+    Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
     Divider, FormControlLabel, IconButton, InputAdornment, Stack, Step, StepLabel, Stepper, TextField,
     ToggleButton, ToggleButtonGroup, Typography,
 } from "@mui/material";
@@ -18,6 +18,7 @@ import type {
     XenBudgetBook, XenBudgetItem, ShareType, ItemType, CreateItemInput,
 } from "../../../../hooks/xenbudget/types";
 import WeightedSplitEditor, { type SplitDraft } from "./WeightedSplitEditor";
+import LabelPicker from "./LabelPicker";
 import { getCurrencySymbol } from "../currency";
 import { dateOnlyToLocal } from "../../../../utils/dateGrouping";
 import { sanitizeAmount } from "../../../../utils/currencyUtils";
@@ -25,7 +26,7 @@ import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { FLAG_UNCATEGORISED } from "../../../../constants/xenbudget";
 import { EXPENSE_COLOR, INCOME_COLOR } from "../../../../components/ui/chartColors";
 
-const STEPS = ["Details", "Images", "More"] as const;
+const STEPS = ["Details", "More"] as const;
 
 const MAX_IMAGES = 10;
 
@@ -148,7 +149,7 @@ export default function ItemForm({
     const numericAmount = parseFloat(amount) || 0;
     const canSubmit = description.trim().length > 0 && numericAmount > 0 && shares.length > 0;
     const canProceed = STEPS[step] === "Details"
-        ? description.trim().length > 0 && numericAmount > 0 && shares.length > 0
+        ? description.trim().length > 0 && numericAmount > 0
         : true;
     const typeColor = type === "income" ? INCOME_COLOR : EXPENSE_COLOR;
 
@@ -315,6 +316,49 @@ export default function ItemForm({
 
                         <Box>
                             <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
+                                What was it?
+                            </Typography>
+                            <WeightedSplitEditor
+                                mode={{ kind: "categories", registry: book.categories }}
+                                splitType={categorySplitType}
+                                onSplitTypeChange={setCategorySplitType}
+                                selected={categories}
+                                onSelectedChange={setCategories}
+                                amount={numericAmount}
+                                currency={currency}
+                            />
+                        </Box>
+
+                        <Divider />
+
+                        {/* Closed, not freeSolo: a typed name would be stored on the item
+                        and nowhere else - invisible to the filter, to Settings and to every
+                        rule - so flags come from the book's registry and are managed there. */}
+                        <LabelPicker
+                            multiple
+                            kind="flag"
+                            registry={book.flags}
+                            options={flagOptions}
+                            value={flags}
+                            onChange={setFlags}
+                            label="Flags"
+                            placeholder={flagOptions.length > 0 ? "Anything needing attention?" : undefined}
+                            helperText={flagOptions.length > 0
+                                ? undefined
+                                : "Add flags in Settings → Flags to use them here."}
+                        />
+
+                        <TextField
+                            fullWidth multiline minRows={2} label="Notes (optional)"
+                            value={notes} onChange={(e) => setNotes(e.target.value)}
+                        />
+                    </Stack>
+                )}
+
+                {STEPS[step] === "More" && (
+                    <Stack spacing={2}>
+                        <Box>
+                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
                                 Attributed to
                             </Typography>
                             <Box sx={soloBook ? { opacity: 0.45, pointerEvents: "none" } : undefined}>
@@ -335,119 +379,6 @@ export default function ItemForm({
                             )}
                         </Box>
 
-                        <Divider />
-
-                        <Box>
-                            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-                                What was it?
-                            </Typography>
-                            <WeightedSplitEditor
-                                mode={{ kind: "categories", registry: book.categories }}
-                                splitType={categorySplitType}
-                                onSplitTypeChange={setCategorySplitType}
-                                selected={categories}
-                                onSelectedChange={setCategories}
-                                amount={numericAmount}
-                                currency={currency}
-                            />
-                        </Box>
-                    </Stack>
-                )}
-
-                {STEPS[step] === "Images" && (
-                    <Box>
-                        <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
-                            <Typography variant="subtitle2">
-                                Photos ({totalImageCount} / {MAX_IMAGES})
-                            </Typography>
-                            <Box sx={{ flex: 1 }} />
-                            <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
-                                10MB max
-                            </Typography>
-                        </Box>
-
-                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                            {existingImages.map((img) => {
-                                const urlEntry = existingImageUrls?.find((u) => u._id === img._id);
-                                return (
-                                    <Box key={img._id} sx={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}>
-                                        {urlEntry ? (
-                                            <Box
-                                                component="img" src={urlEntry.signedUrl}
-                                                sx={{ width: 80, height: 80, objectFit: "cover", borderRadius: 1, display: "block" }}
-                                            />
-                                        ) : (
-                                            <Box sx={{ width: 80, height: 80, bgcolor: "action.hover", borderRadius: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                                <CircularProgress size={20} />
-                                            </Box>
-                                        )}
-                                        <IconButton
-                                            size="small" disabled={isDeletingImage}
-                                            onClick={() => onDeleteExistingImage?.(img._id)}
-                                            sx={{
-                                                position: "absolute", top: 2, right: 2,
-                                                bgcolor: "rgba(0,0,0,0.55)", color: "white", p: 0.25,
-                                                "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
-                                            }}
-                                        >
-                                            <CloseIcon sx={{ fontSize: 14 }} />
-                                        </IconButton>
-                                    </Box>
-                                );
-                            })}
-
-                            {previewUrls.map((url, index) => (
-                                <Box key={url} sx={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}>
-                                    <Box
-                                        component="img" src={url}
-                                        sx={{ width: 80, height: 80, objectFit: "cover", borderRadius: 1, display: "block", opacity: 0.8 }}
-                                    />
-                                    <IconButton
-                                        size="small" onClick={() => handleRemoveNewImage(index)}
-                                        sx={{
-                                            position: "absolute", top: 2, right: 2,
-                                            bgcolor: "rgba(0,0,0,0.55)", color: "white", p: 0.25,
-                                            "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
-                                        }}
-                                    >
-                                        <CloseIcon sx={{ fontSize: 14 }} />
-                                    </IconButton>
-                                </Box>
-                            ))}
-
-                            {canAddMoreImages && <PWAImageCapture onChange={handleFileChange} />}
-                        </Box>
-                    </Box>
-                )}
-
-                {STEPS[step] === "More" && (
-                    <Stack spacing={2}>
-                        {/* Closed, not freeSolo: a typed name would be stored on the item
-                        and nowhere else - invisible to the filter, to Settings and to every
-                        rule - so flags come from the book's registry and are managed there. */}
-                        <Autocomplete
-                            multiple
-                            options={flagOptions}
-                            value={flags}
-                            onChange={(_, v) => setFlags(v)}
-                            noOptionsText="No flags left to add"
-                            renderTags={(value, getTagProps) =>
-                                value.map((option, index) => {
-                                    const { key, ...rest } = getTagProps({ index });
-                                    return <Chip key={key} size="small" variant="outlined" label={option} {...rest} />;
-                                })
-                            }
-                            renderInput={(params) => (
-                                <TextField
-                                    {...params} label="Flags"
-                                    placeholder={flagOptions.length > 0 ? "Anything needing attention?" : undefined}
-                                    helperText={flagOptions.length > 0
-                                        ? "For things to come back to — not what the purchase was."
-                                        : "Add flags in Settings → Flags to use them here."}
-                                />
-                            )}
-                        />
-
                         {!item && (
                             <Box>
                                 <FormControlLabel
@@ -460,29 +391,96 @@ export default function ItemForm({
                             </Box>
                         )}
 
-                        <TextField
-                            fullWidth multiline minRows={2} label="Notes (optional)"
-                            value={notes} onChange={(e) => setNotes(e.target.value)}
-                        />
+                        <Divider />
+
+                        <Box>
+                            <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+                                <Typography variant="subtitle2">
+                                    Photos ({totalImageCount} / {MAX_IMAGES})
+                                </Typography>
+                                <Box sx={{ flex: 1 }} />
+                                <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+                                    10MB max
+                                </Typography>
+                            </Box>
+
+                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                                {existingImages.map((img) => {
+                                    const urlEntry = existingImageUrls?.find((u) => u._id === img._id);
+                                    return (
+                                        <Box key={img._id} sx={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}>
+                                            {urlEntry ? (
+                                                <Box
+                                                    component="img" src={urlEntry.signedUrl}
+                                                    sx={{ width: 80, height: 80, objectFit: "cover", borderRadius: 1, display: "block" }}
+                                                />
+                                            ) : (
+                                                <Box sx={{ width: 80, height: 80, bgcolor: "action.hover", borderRadius: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                                    <CircularProgress size={20} />
+                                                </Box>
+                                            )}
+                                            <IconButton
+                                                size="small" disabled={isDeletingImage}
+                                                onClick={() => onDeleteExistingImage?.(img._id)}
+                                                sx={{
+                                                    position: "absolute", top: 2, right: 2,
+                                                    bgcolor: "rgba(0,0,0,0.55)", color: "white", p: 0.25,
+                                                    "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
+                                                }}
+                                            >
+                                                <CloseIcon sx={{ fontSize: 14 }} />
+                                            </IconButton>
+                                        </Box>
+                                    );
+                                })}
+
+                                {previewUrls.map((url, index) => (
+                                    <Box key={url} sx={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}>
+                                        <Box
+                                            component="img" src={url}
+                                            sx={{ width: 80, height: 80, objectFit: "cover", borderRadius: 1, display: "block", opacity: 0.8 }}
+                                        />
+                                        <IconButton
+                                            size="small" onClick={() => handleRemoveNewImage(index)}
+                                            sx={{
+                                                position: "absolute", top: 2, right: 2,
+                                                bgcolor: "rgba(0,0,0,0.55)", color: "white", p: 0.25,
+                                                "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
+                                            }}
+                                        >
+                                            <CloseIcon sx={{ fontSize: 14 }} />
+                                        </IconButton>
+                                    </Box>
+                                ))}
+
+                                {canAddMoreImages && <PWAImageCapture onChange={handleFileChange} />}
+                            </Box>
+                        </Box>
                     </Stack>
                 )}
             </DialogContent>
             <DialogActions>
-                <Stack direction="row" spacing={1} sx={{ mr: "auto" }}>
+                <Stack direction="row" spacing={1}>
                     {item && onDelete && (
-                        <Button color="error" disabled={isDeleting} onClick={handleDelete}>
+                        <Button variant="outlined" color="error" disabled={isDeleting} onClick={handleDelete}>
                             Delete
                         </Button>
                     )}
                     {step > 0 && <Button onClick={() => setStep((s) => s - 1)}>Back</Button>}
                 </Stack>
                 {(item || step === STEPS.length - 1) && (
-                    <Button variant="outlined" disabled={!canSubmit || isSubmitting} onClick={handleSubmit}>
+                    <Button
+                        variant="outlined" disabled={!canSubmit || isSubmitting} onClick={handleSubmit}
+                        sx={{ flexGrow: 1 }}
+                    >
                         Save
                     </Button>
                 )}
                 {step < STEPS.length - 1 && (
-                    <Button variant="contained" disabled={!canProceed} onClick={() => setStep((s) => s + 1)}>
+                    <Button
+                        variant="contained" disabled={!canProceed} onClick={() => setStep((s) => s + 1)}
+                        sx={{ ml: item ? undefined : "auto" }}
+                    >
                         Next
                     </Button>
                 )}

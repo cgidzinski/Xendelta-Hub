@@ -1,12 +1,12 @@
-import { useMemo } from "react";
 import {
-    Autocomplete, Avatar, Box, InputAdornment, Stack, TextField, ToggleButton,
+    Avatar, Box, InputAdornment, Stack, TextField, ToggleButton,
     ToggleButtonGroup, Typography,
 } from "@mui/material";
 import type { ShareType, XenBudgetMember, XenBudgetLabel } from "../../../../hooks/xenbudget/types";
 import { formatCurrency, getCurrencySymbol } from "../currency";
 import { sanitizeAmount } from "../../../../utils/currencyUtils";
-import { CategoryChip, resolveLabelColor } from "./LabelChip";
+import { resolveLabelColor } from "./LabelChip";
+import LabelPicker from "./LabelPicker";
 
 export interface SplitDraft {
     key: string;
@@ -61,15 +61,6 @@ export default function WeightedSplitEditor({
     amountless = false, noAmount = false, hidePicker = false,
 }: WeightedSplitEditorProps) {
     const keys = selected.map((s) => s.key);
-
-    // The registry, plus anything already ON the item that the registry doesn't know
-    // about - a CSV column can still introduce a name. Without them the picker would warn
-    // that its own value isn't an option, and there would be no way to take one off again.
-    const categoryOptions = useMemo(() => {
-        if (mode.kind !== "categories") return [];
-        const registry = mode.registry.map((c) => c.name);
-        return [...registry, ...keys.filter((k) => !registry.includes(k))];
-    }, [mode, keys]);
 
     const toggle = (key: string) => {
         if (keys.includes(key)) onSelectedChange(selected.filter((s) => s.key !== key));
@@ -185,32 +176,24 @@ export default function WeightedSplitEditor({
                 /* Closed, not freeSolo: a typed name would live on the item and nowhere
                 else - absent from the filter, from Settings and from every rule's
                 conditions - so categories come from the book's registry and are managed
-                there. Dropping freeSolo also restores clearOnBlur, so a half-typed name
-                can't sit in the field looking selected. */
-                <Autocomplete
+                there. */
+                <LabelPicker
                     multiple
-                    options={categoryOptions}
+                    kind="category"
+                    size="small"
+                    registry={mode.registry}
                     value={keys}
-                    onChange={(_, v) => {
+                    onChange={(v) => {
                         // Keep any weight already typed for a category that survives.
                         onSelectedChange(v.map((key) =>
                             selected.find((s) => s.key === key) || { key, value: "" }));
                     }}
+                    label="Categories"
+                    placeholder="What was this?"
                     noOptionsText="No categories left to add"
-                    renderTags={(value, getTagProps) =>
-                        value.map((option, index) => {
-                            const { key, ...rest } = getTagProps({ index });
-                            return <CategoryChip key={key} name={option} registry={mode.registry} {...rest} />;
-                        })
-                    }
-                    renderInput={(params) => (
-                        <TextField
-                            {...params} size="small" label="Categories" placeholder="What was this?"
-                            helperText={mode.registry.length === 0
-                                ? "Add categories in Settings → Categories to use them here."
-                                : undefined}
-                        />
-                    )}
+                    helperText={mode.registry.length === 0
+                        ? "Add categories in Settings → Categories to use them here."
+                        : undefined}
                 />
             )}
 
