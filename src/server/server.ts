@@ -125,6 +125,38 @@ require("./routes/casinoGames/pachinko.ts")(app);
 require("./routes/casinoPrinter.ts")(app);
 require("./routes/casinoRanch.ts")(app);
 
+// vite-express appends its static handler at listen() time - after this module has
+// finished running - so today it lands after every route registered above.
+// ViteExpress.static() returns a positional sentinel that the real static layer is moved
+// onto, which lets us keep that ordering while owning the response headers.
+//
+// setHeaders is the only hook that works for this: serve-static writes its own
+// Cache-Control while sending, so a header set by an upstream middleware is silently
+// overwritten. Note that staticOptions REPLACES vite-express's defaults rather than
+// merging, so redirect: false has to be repeated here.
+const nodePath = require("path");
+const distDir = nodePath.resolve(process.cwd(), "dist");
+app.use(
+  ViteExpress.static({
+    index: false,
+    serveStatic: {
+      redirect: false,
+      setHeaders(res: any, filePath: string) {
+        const rel = nodePath.relative(distDir, filePath).split(nodePath.sep).join("/");
+        if (rel === "sw.js" || rel.endsWith(".html")) {
+          // The service worker is the update signal for the whole PWA: if any cache can
+          // hand back a stale sw.js, a client can install an older worker than the one it
+          // is already running and end up stuck showing the update banner.
+          res.setHeader("Cache-Control", "no-cache");
+        } else if (rel.startsWith("assets/")) {
+          // Vite content-hashes these filenames, so a copy held forever is still correct.
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      },
+    },
+  })
+);
+
 if (Bugsnag.getPlugin("express")) {
   app.use(Bugsnag.getPlugin("express").errorHandler);
 }

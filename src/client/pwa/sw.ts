@@ -18,6 +18,11 @@ declare const self: ServiceWorkerGlobalScope;
 // Critically, we register no NavigationRoute at all. A SPA navigation fallback would serve
 // cached index.html for ALL navigations, hijacking full-page navigations to /api/auth/* and
 // breaking OAuth.
+//
+// One exception is worth knowing about: precacheAndRoute's own route still resolves a
+// request for "/" to the precached index.html, via Workbox's directoryIndex default. So the
+// root URL IS served from the cache even though every other route goes to the network -
+// which is why swUpdate.ts waits for the new worker to activate before reloading.
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
