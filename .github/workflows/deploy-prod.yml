@@ -28,6 +28,7 @@ jobs:
           git reset --hard origin/main
           SHA=$(git rev-parse HEAD)
           npm ci
+          npm run db:migrate
           VITE_BUGSNAG_APP_VERSION="$SHA" npm run build
           npx bugsnag-source-maps upload-browser \
             --api-key "$VITE_BUGSNAG_API_KEY" \

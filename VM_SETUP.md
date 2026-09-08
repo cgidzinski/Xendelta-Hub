@@ -190,6 +190,28 @@ npm run start
 
 ---
 
+## Database Migrations
+
+MongoDB data migrations run with [`ts-migrate-mongoose`](https://github.com/ilovepixelart/ts-migrate-mongoose).
+
+Applied migrations are tracked in the `migrations` collection of whichever database
+`MONGODB_URI` points at, so each environment migrates its own data.
+
+```bash
+npm run db:migrate:create <name>   # scaffold migrations/<timestamp>-<name>.ts
+npm run db:migrate:status          # list migrations and their up/down state
+npm run db:migrate                 # run all pending migrations
+npm run db:migrate:down <name>     # roll back down to (and including) <name>
+```
+
+The deploy workflows run `npm run db:migrate` automatically before restarting the app,
+so a normal deploy needs nothing extra. The server also runs any pending migrations
+once on boot as a safety net (logged, non-fatal).
+
+New one-off data fixes go in `migrations/` (see `migrations/README.md`) — not `scripts/`.
+
+---
+
 ## Process Management with PM2
 
 Install PM2 globally:

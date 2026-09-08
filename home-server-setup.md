@@ -384,6 +384,8 @@ Two clones on the same CT, same runner, different folder/port/PM2 process each:
 
 Each folder has its **own** `.env` — staging points at its own Mongo DB / GCS buckets / secrets so test data never touches prod (`PORT` and `PUBLIC_URL` also differ per the table above).
 
+Both deploy workflows run `npm run db:migrate` (ts-migrate-mongoose) between `npm ci` and the build, so each environment applies pending MongoDB migrations to its own database before restarting. `set -euo pipefail` aborts the deploy if a migration fails. See `migrations/README.md` for authoring migrations; the server also re-runs pending migrations once on boot as a non-fatal safety net.
+
 `evg31337.com` was the original test domain before `xendelta.com` became the real one — `staging.evg31337.com` still redirects to `staging.xendelta.com` as a backup, but `staging.xendelta.com` is the canonical hostname staging is actually served from (used for anything hostname-sensitive, e.g. the Bugsnag source map upload's `--base-url` in `deploy-staging.yml`).
 
 One-time setup per folder (the deploy workflow only ever `pm2 restart`s — it doesn't create the process):

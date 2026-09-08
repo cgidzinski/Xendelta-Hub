@@ -69,18 +69,16 @@ mongoConnection.on("connected", async () => {
   try {
     const { Scheduler } = require("./infrastructure/Scheduler");
     const { runDueTasks, TICK_INTERVAL_MS } = require("./infrastructure/TaskDispatcher");
-    const { registerXenSplitRecurringHandler, migrateEmbeddedRecurringSeries } = require("./utils/xensplitRecurringHandler");
+    const { registerXenSplitRecurringHandler } = require("./utils/xensplitRecurringHandler");
     const { cleanupOldSessions } = require("./utils/xenboxUtils");
+    const { runPendingMigrations } = require("./infrastructure/migrations");
+
+    // Safety net for a deploy that skipped `npm run db:migrate`. Runs before the
+    // scheduler so any reshape a migration performs lands before the first
+    // dispatcher tick. Never throws — a failure is logged and the server still starts.
+    await runPendingMigrations();
 
     registerXenSplitRecurringHandler();
-    // Must finish before the dispatcher's first tick so migrated tasks aren't missed.
-    // A migration failure must not stop the scheduler (or the unrelated xenbox job)
-    // from starting — unmigrated series simply don't generate until repaired.
-    try {
-      await migrateEmbeddedRecurringSeries();
-    } catch (e) {
-      console.error(">>> Recurring series migration failed (scheduler will still start):", e);
-    }
 
     const scheduler = Scheduler.getInstance();
     scheduler.register({ name: "scheduled-task-dispatcher", everyMs: TICK_INTERVAL_MS, runOnStart: true, handler: runDueTasks });
