@@ -1,14 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
-    Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
-    IconButton, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
+    Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
+    Divider, IconButton, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import LockIcon from "@mui/icons-material/Lock";
 import { useSnackbar } from "notistack";
-import type { XenBudgetBook } from "../../../../hooks/xenbudget/types";
+import type { XenBudgetBook, XenBudgetLabel } from "../../../../hooks/xenbudget/types";
 import { useXenBudgetLabels, type LabelKind } from "../../../../hooks/xenbudget/useLabels";
 import LabelChip, { resolveLabelColor } from "./LabelChip";
 import LabelColorPicker from "./LabelColorPicker";
@@ -47,7 +47,15 @@ export default function LabelManager({ book, kind, itemCounts }: LabelManagerPro
     const { enqueueSnackbar } = useSnackbar();
     const { createLabelAsync, isCreating, updateLabelAsync, deleteLabelAsync, isDeleting } =
         useXenBudgetLabels(book._id, kind);
-    const labels = book[kind] || [];
+    // Shown A→Z rather than in creation order — a long registry is otherwise a hunt for the
+    // one you want. Sorted on render; `resolveLabelColor` / `LabelChip` take this array as a
+    // name-keyed registry, so order doesn't matter to them.
+    const labels = useMemo(
+        () => [...(book[kind] || [])].sort(
+            (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+        ),
+        [book, kind],
+    );
     const copy = COPY[kind];
 
     const [draft, setDraft] = useState("");
@@ -97,6 +105,61 @@ export default function LabelManager({ book, kind, itemCounts }: LabelManagerPro
         );
     };
 
+    // The pieces categories and flags share, so neither row layout below repeats them.
+    const renderRenameField = (label: XenBudgetLabel) => (
+        <TextField
+            size="small" autoFocus value={editing?.name ?? ""}
+            onChange={(e) => setEditing(editing ? { ...editing, name: e.target.value } : null)}
+            onBlur={async () => {
+                const name = (editing?.name ?? "").trim();
+                if (name && name !== label.name) {
+                    await run(() => updateLabelAsync({ labelId: label._id, input: { name } }),
+                        "Could not rename that");
+                }
+                setEditing(null);
+            }}
+            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+            sx={{ flexGrow: 1, minWidth: 0 }}
+        />
+    );
+
+    const renderColor = (label: XenBudgetLabel) => (
+        kind === "categories" || !label.system ? (
+            <LabelColorPicker
+                color={resolveLabelColor(label.name, labels, copy.chip)}
+                onChange={(hex) => setColor(label, hex)}
+            />
+        ) : (
+            <Box sx={{ p: 0.25 }}>
+                <Box sx={{
+                    width: 16, height: 16, borderRadius: "50%",
+                    bgcolor: resolveLabelColor(label.name, labels, copy.chip),
+                }} />
+            </Box>
+        )
+    );
+
+    const renderRowControls = (label: XenBudgetLabel) => (
+        label.system ? (
+            <Tooltip title={`Built in — rules and imports refer to this by name, so it can't be renamed or deleted.${kind === "categories" ? " Its colour is yours to change." : ""}`}>
+                <LockIcon fontSize="small" sx={{ color: "text.disabled", mx: 0.5 }} />
+            </Tooltip>
+        ) : (
+            <>
+                <Tooltip title="Rename everywhere">
+                    <IconButton size="small" onClick={() => setEditing({ id: label._id, name: label.name })}>
+                        <EditIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
+                <Tooltip title="Delete and strip from every item">
+                    <IconButton size="small" onClick={() => handleDeleteClick(label)}>
+                        <DeleteIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
+            </>
+        )
+    );
+
     return (
         <Box>
             <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
@@ -110,58 +173,93 @@ export default function LabelManager({ book, kind, itemCounts }: LabelManagerPro
                 </Button>
             </Stack>
 
+            <Divider sx={{ mb: 1.5 }} />
+
             {labels.length === 0 ? (
                 <Box sx={{ ...emptyStateSx, py: 3 }}>
                     <Typography variant="body2" color="text.secondary">{copy.empty}</Typography>
                 </Box>
             ) : (
-                <Stack spacing={0.75}>
-                    {labels.map((label) => (
-                        <Stack
-                            key={label._id}
-                            direction="row"
-                            alignItems="center"
-                            spacing={1}
-                            sx={{
-                                px: 1,
-                                py: 0.5,
-                                borderRadius: 1,
-                                "&:hover": { bgcolor: "action.hover" },
-                            }}
-                        >
-                            {editing?.id === label._id ? (
-                                <TextField
-                                    size="small" autoFocus value={editing.name}
-                                    onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-                                    onBlur={async () => {
-                                        const name = editing.name.trim();
-                                        if (name && name !== label.name) {
-                                            await run(() => updateLabelAsync({ labelId: label._id, input: { name } }),
-                                                "Could not rename that");
-                                        }
-                                        setEditing(null);
-                                    }}
-                                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                                    sx={{ flexGrow: 1 }}
-                                />
-                            ) : (
-                                <Stack direction="row" alignItems="center" spacing={1} sx={{ flexGrow: 1, minWidth: 0 }}>
-                                    <LabelChip name={label.name} registry={labels} variant2={copy.chip} />
-                                    {itemCounts && (
-                                        <Typography variant="caption" color="text.secondary">
-                                            {itemCounts[label.name] ?? 0} item{(itemCounts[label.name] ?? 0) === 1 ? "" : "s"}
-                                        </Typography>
-                                    )}
-                                </Stack>
-                            )}
+                <Stack spacing={kind === "categories" ? 0 : 0.25}>
+                    {labels.map((label, i) => {
+                        const editingThis = editing?.id === label._id;
 
-                            {kind === "categories" && (
+                        // Flags: one line at every width — chip · colour · actions. A long
+                        // custom name ellipsizes rather than pushing the row to wrap.
+                        if (kind !== "categories") {
+                            return (
+                                <Box
+                                    key={label._id}
+                                    sx={{
+                                        display: "grid",
+                                        gridTemplateColumns: "minmax(0,1fr) auto auto",
+                                        alignItems: "center",
+                                        columnGap: 1,
+                                        px: 1, py: 0.5, borderRadius: 1,
+                                        "&:hover": { bgcolor: "action.hover" },
+                                    }}
+                                >
+                                    {editingThis ? renderRenameField(label) : (
+                                        <Box sx={{ minWidth: 0, display: "flex" }}>
+                                            <LabelChip
+                                                name={label.name} registry={labels} variant2={copy.chip}
+                                                sx={{ maxWidth: "100%" }}
+                                            />
+                                        </Box>
+                                    )}
+                                    {renderColor(label)}
+                                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
+                                        {renderRowControls(label)}
+                                    </Box>
+                                </Box>
+                            );
+                        }
+
+                        // Categories: a dual-row block at every width. Line A is identity +
+                        // colour + edit/delete; Line B is the full-width Want/Need/— band.
+                        return (
+                            <Box
+                                key={label._id}
+                                sx={{
+                                    display: "flex", flexDirection: "column", gap: 1,
+                                    px: 1, py: 1, borderRadius: 1,
+                                    "&:hover": { bgcolor: "action.hover" },
+                                    ...(i > 0 ? { borderTop: 1, borderColor: "divider" } : {}),
+                                }}
+                            >
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                    {editingThis ? renderRenameField(label) : (
+                                        <Box sx={{
+                                            flexGrow: 1, minWidth: 0,
+                                            display: "flex", alignItems: "center", gap: 1,
+                                        }}>
+                                            <Box sx={{ display: "flex", minWidth: 0 }}>
+                                                <LabelChip
+                                                    name={label.name} registry={labels} variant2={copy.chip}
+                                                    sx={{ maxWidth: "100%" }}
+                                                />
+                                            </Box>
+                                            {itemCounts && (
+                                                <Chip
+                                                    size="small" variant="outlined"
+                                                    label={itemCounts[label.name] ?? 0}
+                                                    sx={{ height: 20, fontSize: 11, flexShrink: 0 }}
+                                                />
+                                            )}
+                                        </Box>
+                                    )}
+                                    <Box sx={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 0.25 }}>
+                                        {renderColor(label)}
+                                        {renderRowControls(label)}
+                                    </Box>
+                                </Box>
+
                                 <ToggleButtonGroup
-                                    size="small" exclusive value={label.need_want ?? "none"}
+                                    size="small" exclusive fullWidth value={label.need_want ?? "none"}
                                     onChange={(_, v) => { if (v) setNeedWant(label, v as "need" | "want" | "none"); }}
                                     sx={{
                                         "& .MuiToggleButton-root": {
-                                            px: 0.75, py: 0.25, fontSize: 11, textTransform: "none",
+                                            flex: 1, py: 0.75, fontSize: 12, textTransform: "none",
                                         },
                                     }}
                                 >
@@ -169,45 +267,9 @@ export default function LabelManager({ book, kind, itemCounts }: LabelManagerPro
                                     <ToggleButton value="need">Need</ToggleButton>
                                     <ToggleButton value="none">—</ToggleButton>
                                 </ToggleButtonGroup>
-                            )}
-
-                            {kind === "categories" || !label.system ? (
-                                <LabelColorPicker
-                                    color={resolveLabelColor(label.name, labels, copy.chip)}
-                                    onChange={(hex) => setColor(label, hex)}
-                                />
-                            ) : (
-                                <Box sx={{ p: 0.25 }}>
-                                    <Box sx={{
-                                        width: 16, height: 16, borderRadius: "50%",
-                                        bgcolor: resolveLabelColor(label.name, labels, copy.chip),
-                                    }} />
-                                </Box>
-                            )}
-
-                            {label.system ? (
-                                <Tooltip title={`Built in — rules and imports refer to this by name, so it can't be renamed or deleted.${kind === "categories" ? " Its colour is yours to change." : ""}`}>
-                                    <LockIcon fontSize="small" sx={{ color: "text.disabled", mx: 0.5 }} />
-                                </Tooltip>
-                            ) : (
-                                <>
-                                    <Tooltip title="Rename everywhere">
-                                        <IconButton size="small" onClick={() => setEditing({ id: label._id, name: label.name })}>
-                                            <EditIcon fontSize="small" />
-                                        </IconButton>
-                                    </Tooltip>
-                                    <Tooltip title="Delete and strip from every item">
-                                        <IconButton
-                                            size="small"
-                                            onClick={() => handleDeleteClick(label)}
-                                        >
-                                            <DeleteIcon fontSize="small" />
-                                        </IconButton>
-                                    </Tooltip>
-                                </>
-                            )}
-                        </Stack>
-                    ))}
+                            </Box>
+                        );
+                    })}
                 </Stack>
             )}
 

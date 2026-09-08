@@ -17,8 +17,8 @@ interface Props {
 
 /**
  * Nudges anyone whose profile has no e-transfer destination: without one, the people
- * settling up with them have nowhere to send the money. Reappears every time they open
- * XenSplit until they either set one or tick the box.
+ * settling up with them have nowhere to send the money. Reappears each time they open a
+ * group until they either set one or tick the box.
  */
 export default function EtransferPromptDialog({ open, onClose }: Props) {
     const navigate = useNavigate();

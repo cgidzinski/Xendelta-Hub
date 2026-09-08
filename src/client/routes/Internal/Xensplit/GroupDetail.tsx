@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { formatCurrency, getGroupCurrencies } from "../../../utils/currencyUtils";
 import { useQueryClient } from "@tanstack/react-query";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -59,6 +59,8 @@ import ExpenseForm from "./components/ExpenseForm";
 import { recurringSeriesCaption, computeFinalExpenseIds, isSeriesEnded } from "./components/ExpenseListItem";
 import GroupAvatar from "./components/GroupAvatar";
 import CreateExchangeDialog from "./components/CreateExchangeDialog";
+import EtransferPromptDialog, { isEtransferPromptDismissed } from "./components/EtransferPromptDialog";
+import { useUserProfile } from "../../../hooks/user/useUserProfile";
 import { apiClient } from "../../../config/api";
 import type { XenSplit, XenSplitBalancesData, XenSplitExpense, SettleDebtInput, CreateExchangeInput, RecurringFrequency, UpdateExpenseInput } from "../../../hooks/xensplit/types";
 
@@ -103,6 +105,21 @@ export default function GroupDetail() {
   const { updateExpense, updateExpenseAsync, isUpdatingExpense, addExpense, addExpenseAsync, isAddingExpense, deleteExpense, isDeletingExpense, cancelRecurring, isCancellingRecurring, uploadExpenseImages, isUploadingImages, deleteExpenseImage, isDeletingExpenseImage } = useXenSplitExpenses(groupId!);
   const { addExchange, isAddingExchange, deleteExchange, isDeletingExchange, fetchLiveRate, isFetchingLiveRate } = useXenSplitExchanges(groupId!);
   useXenSplitSocket(groupId!);
+  const { profile } = useUserProfile();
+  const [showEtransferPrompt, setShowEtransferPrompt] = useState(false);
+  // Remembers the group we last nudged for: re-nudges once per distinct group opened
+  // (GroupDetail stays mounted when navigating group→group), and stops a dismissal from
+  // reopening the dialog when the profile query re-resolves.
+  const etransferPromptShownFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!profile || !groupId) return;
+    if (profile.etransfer?.handle || isEtransferPromptDismissed()) return;
+    if (etransferPromptShownFor.current === groupId) return;
+    etransferPromptShownFor.current = groupId;
+    setShowEtransferPrompt(true);
+  }, [profile, groupId]);
+
   const location = useLocation();
   const activeTab = location.pathname.endsWith("/overview")
     ? 0
@@ -1151,6 +1168,8 @@ export default function GroupDetail() {
         fetchLiveRate={fetchLiveRate}
         isFetchingLiveRate={isFetchingLiveRate}
       />
+
+      <EtransferPromptDialog open={showEtransferPrompt} onClose={() => setShowEtransferPrompt(false)} />
 
       {/* Lightbox */}
       <Dialog
