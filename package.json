@@ -72,7 +72,7 @@
     "socket.io-client": "^4.8.1",
     "tsx": "^4.19.3",
     "typescript": "^5.8.3",
-    "vite-express": "*",
+    "vite-express": "^0.21.1",
     "web-push": "^3.6.7",
     "zod": "^4.1.13"
   },
