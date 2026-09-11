@@ -90,7 +90,7 @@ export default function BookReport() {
     // A year of history, against the Overview's six months: this is the page you open to
     // look properly, and twelve columns is where a seasonal pattern becomes visible.
     const { status: budgetStatusResponse, budgets } = useXenBudgetStatus(
-        book._id, currency, budgetRange, 12,
+        book._id, currency, budgetRange, 12, period,
     );
     const visibleBudgets = useMemo(
         () => sortBudgets(budgets),

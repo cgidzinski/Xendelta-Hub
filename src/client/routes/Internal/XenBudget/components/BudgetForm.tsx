@@ -16,7 +16,7 @@ import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import LabelPicker from "./LabelPicker";
 import { budgetPeriodWindow } from "./budget/budgetForRange";
 import { directionOf } from "./budget/budgetKind";
-import { monthlyEquivalent, windowLabel } from "./budget/periodDisplay";
+import { normalizedAmounts, periodNoun, windowLabel } from "./budget/periodDisplay";
 
 /**
  * What a budget watches. Three values on one axis rather than a type plus a direction: a
@@ -130,10 +130,23 @@ export default function BudgetForm({
         const { from, to } = budgetPeriodWindow(period, new Date());
         previewWindow = { from: from.toISOString(), to: to.toISOString() };
     }
-    const monthlyAmount = monthlyEquivalent(period, numericAmount);
     const previewWindowLabel = previewWindow
         ? windowLabel(period, previewWindow.from, previewWindow.to)
         : undefined;
+
+    // The same figure at the other rates, so what was just typed can't be read as a number
+    // with no unit. Skips the rate it IS - "$800/mo ≈ $800/mo" helps nobody - and skips
+    // quarterly, which is rarely what anyone is comparing against.
+    const OWN_SUFFIX: Record<BudgetPeriod, string> = {
+        weekly: "wk", monthly: "mo", quarterly: "qtr", yearly: "yr", custom: "",
+    };
+    const rates = normalizedAmounts(period, numericAmount);
+    const rateHint = [
+        ["wk", rates.weekly], ["mo", rates.monthly], ["yr", rates.yearly],
+    ]
+        .filter(([suffix, value]) => suffix !== OWN_SUFFIX[period] && value !== undefined)
+        .map(([suffix, value]) => `${formatCurrency(value as number, currency)}/${suffix}`)
+        .join(" · ");
 
     // A member can hold at most one limit per budget, so the picker only offers the ones
     // not already listed.
@@ -201,6 +214,38 @@ export default function BudgetForm({
                         helperText={categories.length === 0 ? "Leave empty to cover every category." : undefined}
                     />
 
+                    {/* Above the amount, deliberately. The amount is a RATE, and the way
+                        this form kept producing budgets on the wrong period was letting
+                        someone type 800 into an unlabelled money box and only afterwards -
+                        a scroll further down - decide what it was 800 of. Reports restate a
+                        budget into whatever unit is being viewed, so what is picked here is
+                        only ever about when it starts over. */}
+                    <TextField
+                        select fullWidth label="Resets" value={period}
+                        onChange={(e) => setPeriod(e.target.value as BudgetPeriod)}
+                        helperText={[
+                            isFloor
+                                ? "How often it starts over. Per-person targets use it too."
+                                : "How often it starts over. Per-person limits use it too.",
+                            previewWindowLabel ? `Now in ${previewWindowLabel}` : undefined,
+                        ].filter(Boolean).join(" · ")}
+                        slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
+                    >
+                        {PERIODS.map((p) => <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>)}
+                    </TextField>
+
+                    {period === "custom" ? (
+                        <>
+                            <DatePicker label="Starts" value={startDate} onChange={setStartDate} />
+                            <DatePicker label="Ends" value={endDate} onChange={setEndDate} />
+                        </>
+                    ) : (
+                        <TextField
+                            fullWidth disabled label="Starts over on"
+                            value={PERIOD_START_HINT[period]}
+                        />
+                    )}
+
                     <TextField
                         fullWidth label={isFloor ? "Overall target" : "Overall amount"} value={amount}
                         onChange={(e) => {
@@ -211,9 +256,7 @@ export default function BudgetForm({
                             isFloor
                                 ? "The target for everyone together. Leave empty to set targets only for the people below."
                                 : "The limit for everyone together. Leave empty to cap only the people below.",
-                            monthlyAmount !== undefined
-                                ? `≈ ${formatCurrency(monthlyAmount, currency)}/mo`
-                                : undefined,
+                            rateHint ? `≈ ${rateHint}` : undefined,
                         ].filter(Boolean).join(" · ")}
                         slotProps={{
                             htmlInput: { inputMode: "decimal" },
@@ -221,6 +264,14 @@ export default function BudgetForm({
                                 startAdornment: (
                                     <InputAdornment position="start">
                                         {getCurrencySymbol(currency)}
+                                    </InputAdornment>
+                                ),
+                                // The field reads "$ 800 / month". An amount box with no
+                                // visible rate is what had people entering a month's figure
+                                // against a yearly period without noticing.
+                                endAdornment: period === "custom" ? undefined : (
+                                    <InputAdornment position="end">
+                                        {`/ ${periodNoun(period)}`}
                                     </InputAdornment>
                                 ),
                             },
@@ -253,13 +304,20 @@ export default function BudgetForm({
                                             const clean = sanitizeAmount(e.target.value);
                                             if (clean !== null) setSub(index, { amount: clean });
                                         }}
-                                        sx={{ width: 120, flexShrink: 0 }}
+                                        sx={{ width: 150, flexShrink: 0 }}
                                         slotProps={{
                                             htmlInput: { inputMode: "decimal" },
                                             input: {
                                                 startAdornment: (
                                                     <InputAdornment position="start">
                                                         {getCurrencySymbol(currency)}
+                                                    </InputAdornment>
+                                                ),
+                                                // Inherits the parent's period, so it is
+                                                // just as easy to misread without the rate.
+                                                endAdornment: period === "custom" ? undefined : (
+                                                    <InputAdornment position="end">
+                                                        {`/ ${periodNoun(period)}`}
                                                     </InputAdornment>
                                                 ),
                                             },
@@ -301,31 +359,6 @@ export default function BudgetForm({
                         </Stack>
                     </Box>
 
-                    <TextField
-                        select fullWidth label="Period" value={period}
-                        onChange={(e) => setPeriod(e.target.value as BudgetPeriod)}
-                        helperText={[
-                            isFloor
-                                ? "Per-person targets use this same period."
-                                : "Per-person limits use this same period.",
-                            previewWindowLabel ? `Current window: ${previewWindowLabel}` : undefined,
-                        ].filter(Boolean).join(" · ")}
-                        slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
-                    >
-                        {PERIODS.map((p) => <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>)}
-                    </TextField>
-
-                    {period === "custom" ? (
-                        <>
-                            <DatePicker label="Starts" value={startDate} onChange={setStartDate} />
-                            <DatePicker label="Ends" value={endDate} onChange={setEndDate} />
-                        </>
-                    ) : (
-                        <TextField
-                            fullWidth disabled label="Resets on"
-                            value={PERIOD_START_HINT[period]}
-                        />
-                    )}
                 </Stack>
             </DialogContent>
             <DialogActions>
