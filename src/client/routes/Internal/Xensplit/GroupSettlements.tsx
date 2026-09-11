@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useOutletContext, useNavigate, useParams } from "react-router-dom";
 import { Box, Typography, Button, Avatar, Divider, ToggleButtonGroup, ToggleButton, IconButton, Tooltip } from "@mui/material";
 import EastIcon from "@mui/icons-material/East";
@@ -11,6 +11,7 @@ import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitSettlement, XenSplitSettlementTransfer } from "../../../hooks/xensplit/types";
 import { xsCardSx } from "./components/rowStyles";
 import { formatCurrency, getGroupCurrencies } from "../../../utils/currencyUtils";
+import { groupByDay } from "../../../utils/dateGrouping";
 import SettlementDetailDialog, { PendingSettlementDialog } from "./components/SettlementDetailDialog";
 import CreateSettlementDialog from "./components/CreateSettlementDialog";
 import { calculateBalances, calculateMinimumTransfers } from "../../../../shared/xensplit/balances";
@@ -115,6 +116,15 @@ export default function GroupSettlements() {
         : filter === "mine"
             ? completedSettlements.filter(s => s.from === user.id || s.to === user.id)
             : completedSettlements.filter(s => s.from !== user.id && s.to !== user.id);
+
+    // Day headers, as on the Overview feed. No timeZone argument: settled_at is a
+    // real timestamp, not a date-only value stored at UTC midnight. Safe because
+    // filteredHistory is still in settlementsNewestFirst order — filtering never
+    // reorders, and groupByDay only merges into the last group.
+    const groupedHistory = useMemo(
+        () => groupByDay(filteredHistory, (s) => s.settled_at),
+        [filteredHistory],
+    );
 
     if (pendingSettlements.length === 0 && completedSettlements.length === 0) {
         return (
@@ -275,49 +285,62 @@ export default function GroupSettlements() {
                         </Box>
                     ) : (
                         <Box sx={listGridSx}>
-                            {filteredHistory.map((s, idx) => {
-                                const fromMember = getMember(s.from);
-                                const toMember = getMember(s.to);
-                                const isCut = rewindTo === s._id;
-                                const isHidden = hiddenByRewind.has(s._id);
-                                return (
-                                    <Box
-                                        key={s._id ?? idx}
-                                        onClick={() => setViewSettlement(s)}
-                                        sx={{ ...historyCardSx, ...(isHidden ? { opacity: 0.45 } : {}) }}
+                            {groupedHistory.map((dateGroup, groupIdx) => (
+                                <Fragment key={dateGroup.key}>
+                                    {/* Day header. Full-width so the cards stay direct children of
+                                        the grid — their subgrid columns inherit from it, and an
+                                        intermediate wrapper would let each day size its own. */}
+                                    <Typography
+                                        variant="caption"
+                                        color="text.disabled"
+                                        sx={{ gridColumn: "1 / -1", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1, ml: 0.25, mt: groupIdx === 0 ? 0 : 1.5 }}
                                     >
-                                        {/* row 1: avatars + amount */}
-                                        <Avatar src={fromMember?.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>{fromMember?.username[0]?.toUpperCase()}</Avatar>
-                                        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, alignSelf: "center" }}>
-                                            <Typography variant="subtitle2" sx={{ fontWeight: 700, whiteSpace: "nowrap", ...(isHidden ? { textDecoration: "line-through" } : {}) }}>{formatCurrency(s.amount, s.currency)}</Typography>
-                                        </Box>
-                                        <Avatar src={toMember?.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>{toMember?.username[0]?.toUpperCase()}</Avatar>
-                                        {/* row 2: names + arrow */}
-                                        <Typography variant="caption" noWrap sx={{ textTransform: "capitalize", color: "text.secondary" }}>{fromMember?.username ?? "?"}</Typography>
-                                        <EastIcon sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center", alignSelf: "center" }} />
-                                        <Typography variant="caption" noWrap sx={{ textTransform: "capitalize", color: "text.secondary" }}>{toMember?.username ?? "?"}</Typography>
-                                        {/* row 3: date + rewind toggle */}
-                                        <Box sx={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5, mt: 0.25 }}>
-                                            <Typography variant="caption" color="text.disabled">{settledOnLabel(s.settled_at)}</Typography>
-                                            <Tooltip title={isCut ? "Back to now" : "See the pending list as it was before this"}>
-                                                <IconButton
-                                                    size="small"
-                                                    color={isCut ? "warning" : "default"}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setRewindTo(isCut ? null : s._id);
-                                                    }}
-                                                    sx={{ p: 0.25 }}
-                                                >
-                                                    {isCut
-                                                        ? <VisibilityIcon sx={{ fontSize: 16 }} />
-                                                        : <VisibilityOffIcon sx={{ fontSize: 16 }} />}
-                                                </IconButton>
-                                            </Tooltip>
-                                        </Box>
-                                    </Box>
-                                );
-                            })}
+                                        {dateGroup.label}
+                                    </Typography>
+                                    {dateGroup.items.map((s, idx) => {
+                                        const fromMember = getMember(s.from);
+                                        const toMember = getMember(s.to);
+                                        const isCut = rewindTo === s._id;
+                                        const isHidden = hiddenByRewind.has(s._id);
+                                        return (
+                                            <Box
+                                                key={s._id ?? idx}
+                                                onClick={() => setViewSettlement(s)}
+                                                sx={{ ...historyCardSx, ...(isHidden ? { opacity: 0.45 } : {}) }}
+                                            >
+                                                {/* row 1: avatars + amount */}
+                                                <Avatar src={fromMember?.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>{fromMember?.username[0]?.toUpperCase()}</Avatar>
+                                                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, alignSelf: "center" }}>
+                                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, whiteSpace: "nowrap", ...(isHidden ? { textDecoration: "line-through" } : {}) }}>{formatCurrency(s.amount, s.currency)}</Typography>
+                                                </Box>
+                                                <Avatar src={toMember?.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>{toMember?.username[0]?.toUpperCase()}</Avatar>
+                                                {/* row 2: names + arrow */}
+                                                <Typography variant="caption" noWrap sx={{ textTransform: "capitalize", color: "text.secondary" }}>{fromMember?.username ?? "?"}</Typography>
+                                                <EastIcon sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center", alignSelf: "center" }} />
+                                                <Typography variant="caption" noWrap sx={{ textTransform: "capitalize", color: "text.secondary" }}>{toMember?.username ?? "?"}</Typography>
+                                                {/* row 3: rewind toggle — the date is on the day header */}
+                                                <Box sx={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "center", mt: 0.25 }}>
+                                                    <Tooltip title={isCut ? "Back to now" : "See the pending list as it was before this"}>
+                                                        <IconButton
+                                                            size="small"
+                                                            color={isCut ? "warning" : "default"}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setRewindTo(isCut ? null : s._id);
+                                                            }}
+                                                            sx={{ p: 0.25 }}
+                                                        >
+                                                            {isCut
+                                                                ? <VisibilityIcon sx={{ fontSize: 16 }} />
+                                                                : <VisibilityOffIcon sx={{ fontSize: 16 }} />}
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                </Box>
+                                            </Box>
+                                        );
+                                    })}
+                                </Fragment>
+                            ))}
                         </Box>
                     ))}
                 </>
