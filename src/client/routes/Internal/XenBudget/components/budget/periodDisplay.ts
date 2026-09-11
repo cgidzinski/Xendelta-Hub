@@ -1,4 +1,5 @@
 import type { BudgetPeriod } from "../../../../../hooks/xenbudget/types";
+import type { PeriodUnit } from "../periodMode";
 
 /**
  * How a budget's period is shown to people.
@@ -72,17 +73,68 @@ export function periodNoun(period: BudgetPeriod): string {
     }
 }
 
-// Simple per-month factors: a week is a quarter of a month, a quarter is three months, a
-// year is twelve. Deliberately approximate - the point is a comparable ballpark figure,
-// not an exact proration.
-const MONTHLY_FACTORS: Record<Exclude<BudgetPeriod, "custom">, number> = {
-    weekly: 4,        // a week is about a quarter of a month
-    monthly: 1,
-    quarterly: 1 / 3, // a quarter is three months
-    yearly: 1 / 12,   // a year is twelve months
+/**
+ * How many of each ladder unit make a year.
+ *
+ * NOMINAL, not astronomical: 52 weeks and 365 days, never 52.1775 and 365.2425. A $600/yr
+ * budget has to read exactly $50 a month and $11.54 a week in EVERY month and every week -
+ * February included, and including a week that straddles a month boundary. A cap that moved
+ * with the length of the window it happened to be shown in would be unreadable, and is what
+ * prorating by actual days gives you ($1.79 a day in February against $1.61 in January).
+ *
+ * These are also round-trip stable - $100/wk -> $5,200/yr -> $100/wk - which drifting
+ * factors are not. Week-to-month falls out as 52/12, exactly what the server's recurring
+ * detection already uses (PER_MONTH, xenBudgetRecurring.ts).
+ */
+const PER_YEAR: Record<PeriodUnit, number> = {
+    day: 365,
+    week: 52,
+    month: 12,
+    quarter: 4,
+    year: 1,
 };
 
+/** The ladder unit a stored budget period is denominated in. A one-off `custom` has none. */
+const PERIOD_UNIT: Record<Exclude<BudgetPeriod, "custom">, PeriodUnit> = {
+    weekly: "week",
+    monthly: "month",
+    quarterly: "quarter",
+    yearly: "year",
+};
+
+const round = (v: number) => Math.round(v * 100) / 100;
+
+/**
+ * A budget's amount as a yearly figure - the pivot every other rate divides out of.
+ *
+ * Undefined for a one-off custom budget, which has no repeating period to annualise, and for
+ * a budget that sets no overall amount (it caps only named people).
+ */
+export function annualEquivalent(
+    period: BudgetPeriod, amount: number | undefined,
+): number | undefined {
+    if (period === "custom" || amount === undefined || amount <= 0) return undefined;
+    return amount * PER_YEAR[PERIOD_UNIT[period]];
+}
+
+/**
+ * A budget's amount restated in `unit`, rounded to cents.
+ *
+ * This is what the display ladder shows, and the whole point of it is what it does NOT
+ * depend on: the figure is a function of the budget and the chosen unit only, so stepping
+ * the window from January to February leaves it exactly where it was. The spend it is read
+ * against is still measured over the real window, which is what makes the pair meaningful -
+ * the allowance is nominal, the spending is real, and a short month is good luck.
+ */
+export function amountForUnit(
+    period: BudgetPeriod, amount: number | undefined, unit: PeriodUnit,
+): number | undefined {
+    const annual = annualEquivalent(period, amount);
+    return annual === undefined ? undefined : round(annual / PER_YEAR[unit]);
+}
+
 export interface NormalizedAmounts {
+    daily?: number;
     weekly?: number;
     monthly?: number;
     quarterly?: number;
@@ -90,20 +142,21 @@ export interface NormalizedAmounts {
 }
 
 /**
- * The amount restated per week, per month, per quarter and per year, each rounded to
- * cents. A $3,000 quarterly budget reads $250/wk, $1,000/mo, $3,000/qtr, $12,000/yr.
- * Empty for a one-off custom period or a missing amount.
+ * The amount restated in every unit at once, each rounded to cents. A $3,000 quarterly
+ * budget reads $32.88/day, $230.77/wk, $1,000/mo, $3,000/qtr, $12,000/yr. Empty for a
+ * one-off custom period or a missing amount.
  */
 export function normalizedAmounts(
     period: BudgetPeriod, amount: number | undefined,
 ): NormalizedAmounts {
-    if (period === "custom" || amount === undefined || amount <= 0) return {};
-    const perMonth = amount * MONTHLY_FACTORS[period];
+    const annual = annualEquivalent(period, amount);
+    if (annual === undefined) return {};
     return {
-        weekly: Math.round((perMonth / 4) * 100) / 100,
-        monthly: Math.round(perMonth * 100) / 100,
-        quarterly: Math.round(perMonth * 3 * 100) / 100,
-        yearly: Math.round(perMonth * 12 * 100) / 100,
+        daily: round(annual / PER_YEAR.day),
+        weekly: round(annual / PER_YEAR.week),
+        monthly: round(annual / PER_YEAR.month),
+        quarterly: round(annual / PER_YEAR.quarter),
+        yearly: round(annual),
     };
 }
 

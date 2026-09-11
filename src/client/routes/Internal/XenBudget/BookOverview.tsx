@@ -57,7 +57,7 @@ export default function BookOverview() {
     // history widens the server's scan - a year of it belongs on Report, which is where
     // you go to look properly.
     const { status: budgetStatusResponse, budgets: budgetStatus } = useXenBudgetStatus(
-        book._id, currency, budgetRange, 6,
+        book._id, currency, budgetRange, 6, period,
     );
     const visibleBudgets = useMemo(
         () => sortBudgets(budgetStatus),
