@@ -1,37 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { calculateBalances, calculateMinimumTransfers, resolveSplits } from "./xenSplitUtils";
+import type { Expense, Settlement, Exchange, XenSplitDocument } from "./xenSplitUtils";
 
-interface TestExpense {
-  paid_by: string;
-  amount: number;
-  currency: string;
-  on_hold?: boolean;
-  splits: { user_id: string; amount_owed?: number; percentage?: number }[];
-}
-
-interface TestSettlement {
-  from: string;
-  to: string;
-  amount: number;
-  currency: string;
-}
-
-interface TestExchange {
-  party_a: string;
-  currency_a: string;
-  amount_a: number;
-  party_b: string;
-  currency_b: string;
-  amount_b: number;
-  rate: number;
-}
-
-interface TestDoc {
-  members: string[];
-  expenses: TestExpense[];
-  settlements: TestSettlement[];
-  exchanges?: TestExchange[];
-}
+// Input shapes come from the shared balance engine rather than being redeclared
+// here, so a change to them breaks these fixtures instead of silently drifting.
+type TestExpense = Expense;
+type TestSettlement = Settlement;
+type TestExchange = Exchange;
+type TestDoc = XenSplitDocument;
 
 function equalSplit(amount: number, participants: string[]) {
   return participants.map((user_id) => ({ user_id, amount_owed: amount / participants.length }));
@@ -408,5 +384,83 @@ describe("calculateMinimumTransfers (isolated)", () => {
 
   it("returns no transfers when all balances are zero", () => {
     expect(calculateMinimumTransfers({ A: { CAD: 0 }, B: { CAD: 0 } })).toEqual([]);
+  });
+});
+
+// The two suites above test each half in isolation. These run the real pipeline —
+// calculateBalances feeding calculateMinimumTransfers — which is what the API
+// actually serves and where the surprising behaviour lives.
+describe("calculateBalances -> calculateMinimumTransfers (end to end)", () => {
+  function transfersFor(doc: TestDoc) {
+    return sortTransfers(calculateMinimumTransfers(calculateBalances(doc)));
+  }
+
+  it("routes each debtor's share of a single payer's expense back to them", () => {
+    const doc = makeDoc([
+      { paid_by: "A", amount: 90, currency: "CAD", splits: equalSplit(90, ["A", "B", "C"]) },
+    ]);
+    expect(transfersFor(doc)).toEqual([
+      { from: "B", to: "A", amount: 30, currency: "CAD" },
+      { from: "C", to: "A", amount: 30, currency: "CAD" },
+    ]);
+  });
+
+  it("drops a debtor from the list once they settle their full share", () => {
+    const expenses: TestExpense[] = [
+      { paid_by: "A", amount: 90, currency: "CAD", splits: equalSplit(90, ["A", "B", "C"]) },
+    ];
+    const after = transfersFor(makeDoc(expenses, [{ from: "B", to: "A", amount: 30, currency: "CAD" }]));
+    expect(after).toEqual([{ from: "C", to: "A", amount: 30, currency: "CAD" }]);
+  });
+
+  // Regression guard for the behaviour that prompted the rewind preview. The
+  // transfer list is a routing of net balances, not a record of who owes whom, so
+  // paying the amount shown re-cuts every edge in the group — and the payer can
+  // come back owing the same person MORE than they were just shown. Bo's net and
+  // the total owed to You both move by exactly the $30 paid; only the routing
+  // changes. If this test starts failing, the simplification changed — decide
+  // deliberately, don't just update the numbers.
+  it("can re-route a settled debtor back to the same creditor for a larger amount", () => {
+    // Three creditors front costs for Bo and Dee, giving nets of
+    // You +90, Ann +110, Cy +70, Bo -140, Dee -130.
+    const expenses: TestExpense[] = [
+      { paid_by: "You", amount: 90, currency: "CAD", splits: [{ user_id: "Bo", amount_owed: 50 }, { user_id: "Dee", amount_owed: 40 }] },
+      { paid_by: "Ann", amount: 110, currency: "CAD", splits: [{ user_id: "Bo", amount_owed: 55 }, { user_id: "Dee", amount_owed: 55 }] },
+      { paid_by: "Cy", amount: 70, currency: "CAD", splits: [{ user_id: "Bo", amount_owed: 35 }, { user_id: "Dee", amount_owed: 35 }] },
+    ];
+    const members = ["You", "Ann", "Cy", "Bo", "Dee"];
+
+    const before = calculateBalances(makeDoc(expenses, [], members));
+    expect(before.You.CAD).toBeCloseTo(90, 2);
+    expect(before.Bo.CAD).toBeCloseTo(-140, 2);
+
+    const shown = transfersFor(makeDoc(expenses, [], members));
+    expect(shown).toContainEqual({ from: "Bo", to: "You", amount: 30, currency: "CAD" });
+
+    // Bo pays You exactly the $30 the pending list asked for.
+    const settled = makeDoc(expenses, [{ from: "Bo", to: "You", amount: 30, currency: "CAD" }], members);
+    const after = calculateBalances(settled);
+
+    // The nets behave correctly: Bo is $30 better off, You are owed $30 less.
+    expect(after.Bo.CAD).toBeCloseTo(before.Bo.CAD + 30, 2);
+    expect(after.You.CAD).toBeCloseTo(before.You.CAD - 30, 2);
+
+    // But Bo is re-paired to You for a larger slice of what he still owes.
+    expect(transfersFor(settled)).toContainEqual({ from: "Bo", to: "You", amount: 60, currency: "CAD" });
+  });
+
+  it("never routes more to a creditor than their net balance", () => {
+    const doc = makeDoc([
+      { paid_by: "A", amount: 60, currency: "CAD", splits: equalSplit(60, ["A", "B", "C"]) },
+      { paid_by: "B", amount: 30, currency: "CAD", splits: equalSplit(30, ["A", "B", "C"]) },
+    ]);
+    const balances = calculateBalances(doc);
+    const owedTo: Record<string, number> = {};
+    for (const t of calculateMinimumTransfers(balances)) {
+      owedTo[t.to] = (owedTo[t.to] ?? 0) + t.amount;
+    }
+    for (const [user, total] of Object.entries(owedTo)) {
+      expect(total).toBeLessThanOrEqual(balances[user].CAD + 0.01);
+    }
   });
 });
