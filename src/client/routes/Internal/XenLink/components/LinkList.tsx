@@ -5,6 +5,8 @@ import { format } from "date-fns";
 import { XenLink } from "../../../../hooks/xenlink/useXenlink";
 import ListSkeleton from "../../../../components/ui/ListSkeleton";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
+import EmptyState from "../../../../components/ui/EmptyState";
+import LinkIcon from "@mui/icons-material/Link";
 
 interface LinkListProps {
   links: XenLink[] | undefined;
@@ -37,7 +39,13 @@ export default function LinkList({ links, handleLinkClick, isLoading, isError, e
   }
 
   if (!links || links.length === 0) {
-    return <Alert severity="info">No links found. Create your first link to get started.</Alert>;
+    return (
+      <EmptyState
+        icon={<LinkIcon />}
+        title="No links yet"
+        description="Create your first link to get started."
+      />
+    );
   }
 
   return (

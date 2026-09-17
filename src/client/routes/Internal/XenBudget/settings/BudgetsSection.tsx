@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
-    Box, Button, InputAdornment, MenuItem, Stack, TextField, Typography,
+    Button, InputAdornment, MenuItem, Stack, TextField, Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import SavingsIcon from "@mui/icons-material/Savings";
@@ -15,7 +15,7 @@ import BudgetForm from "../components/BudgetForm";
 import SectionCard from "./SectionCard";
 import LoadingSpinner from "../../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
-import { emptyStateSx, emptyStateIconCircleSx } from "../../../../components/ui/surfaceStyles";
+import EmptyState from "../../../../components/ui/EmptyState";
 
 export default function BookBudgets() {
     const { book, currency } = useOutletContext<BookDetailContext>();
@@ -80,13 +80,11 @@ export default function BookBudgets() {
                 )}
 
                 {budgets.length === 0 ? (
-                    <Box sx={emptyStateSx}>
-                        <Box sx={emptyStateIconCircleSx}><SavingsIcon color="disabled" /></Box>
-                        <Typography variant="subtitle1">No budgets yet</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Add your first budget to start capping spending.
-                        </Typography>
-                    </Box>
+                    <EmptyState
+                        icon={<SavingsIcon />}
+                        title="No budgets yet"
+                        description="Add your first budget to start capping spending."
+                    />
                 ) : visible.length === 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 2 }}>
                         No budgets match "{search.trim()}".

@@ -24,6 +24,8 @@ export const sectionLabelSx = {
 } satisfies SxProps<Theme>;
 
 // Centered empty-state column (icon-in-a-circle + heading + helper text).
+// `satisfies` rather than an `: SxProps<Theme>` annotation, like cardSx above, so the
+// concrete object type survives and EmptyState.tsx can spread this into its own sx.
 export const emptyStateSx = {
   textAlign: "center",
   py: 8,

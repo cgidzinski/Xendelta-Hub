@@ -26,7 +26,8 @@ import { useTitle } from "../../../hooks/useTitle";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import { useUserNotifications, Notification } from "../../../hooks/user/useUserNotifications";
 import NotificationModal from "../../../components/notifications/NotificationModal";
-import { cardSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
+import { cardSx } from "../../../components/ui/surfaceStyles";
+import EmptyState from "../../../components/ui/EmptyState";
 
 const getNotificationIcon = (icon: string) => {
   switch (icon) {
@@ -101,17 +102,11 @@ export default function Notifications() {
         )}
 
         {!isLoading && notifications?.length === 0 && (
-          <Box sx={emptyStateSx}>
-            <Box sx={emptyStateIconCircleSx}>
-              <NotificationsIcon sx={{ fontSize: 32, color: "text.disabled" }} />
-            </Box>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              No notifications yet
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              You're all caught up
-            </Typography>
-          </Box>
+          <EmptyState
+            icon={<NotificationsIcon />}
+            title="No notifications yet"
+            description="You're all caught up"
+          />
         )}
 
         {notifications && notifications.length > 0 && (
