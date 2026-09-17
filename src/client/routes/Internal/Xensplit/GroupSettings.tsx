@@ -64,14 +64,14 @@ export default function GroupSettings() {
     };
 
     return (
-        <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            {/* Group Image — fixed, on top */}
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48, flexShrink: 0 }}>
+        <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+            {/* Group Image */}
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
                     Group Image
                 </Typography>
             </Box>
-            <Box sx={{ flexShrink: 0, mb: 3, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5, display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ mb: 3, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5, display: "flex", alignItems: "center", gap: 2 }}>
                 <GroupAvatar name={group.name} imageUrl={group.image_url} size={64} borderRadius={2} fontSize="1.6rem" />
                 <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Typography variant="body1" sx={{ fontWeight: 500 }}>Main image</Typography>
@@ -99,8 +99,8 @@ export default function GroupSettings() {
                 )}
             </Box>
 
-            {/* Currencies — fixed, on top */}
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48, flexShrink: 0 }}>
+            {/* Currencies */}
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
                     Currencies
                 </Typography>
@@ -110,7 +110,7 @@ export default function GroupSettings() {
                     </Button>
                 )}
             </Box>
-            <Box sx={{ flexShrink: 0, mb: 3, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5, display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box sx={{ mb: 3, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5, display: "flex", flexDirection: "column", gap: 2 }}>
                 <Box sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between", gap: { xs: 1, sm: 2 } }}>
                     <Box>
                         <Typography variant="body1" sx={{ fontWeight: 500 }}>Primary currency</Typography>
@@ -155,8 +155,8 @@ export default function GroupSettings() {
                 </Box>
             </Box>
 
-            {/* Members header — fixed */}
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48, flexShrink: 0 }}>
+            {/* Members */}
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
                     Members
                 </Typography>
@@ -164,8 +164,7 @@ export default function GroupSettings() {
                     Add Members
                 </Button>
             </Box>
-            {/* Scrollable: members list */}
-            <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pb: { xs: 1, md: 1 } }}>
+            <Box sx={{ pb: { xs: 1, md: 1 } }}>
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                     {group.members.map((member) => {
                         const canMenu = member.user_id === user.id || (isCreator && member.user_id !== group.created_by);
