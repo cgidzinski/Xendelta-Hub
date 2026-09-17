@@ -4,6 +4,9 @@ import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 import type { EtransferInfo } from "../../../shared/etransfer";
 
+/** "" is the default: follow whatever the OS is set to. */
+export type ThemePreference = "light" | "dark" | "";
+
 // Types
 export interface UserProfile {
   _id: string;
@@ -18,6 +21,8 @@ export interface UserProfile {
   pinnedApps: string[];
   /** Preferred IANA zone; "" means follow the browser. */
   timezone: string;
+  /** "light" | "dark"; "" means follow the OS setting. */
+  theme: ThemePreference;
   /** Whether the account receives emailed notifications (opt-out; default true). */
   emailNotifications: boolean;
   /** Where XenSplit tells others to send this user's settlements. Blank handle means unset. */
@@ -34,6 +39,8 @@ export interface UpdateProfileData {
   username?: string;
   /** "" clears the preference and falls back to the browser's zone. */
   timezone?: string;
+  /** "" clears it and falls back to the OS setting. */
+  theme?: ThemePreference;
   emailNotifications?: boolean;
   /** A blank handle clears it. */
   etransfer?: EtransferInfo;

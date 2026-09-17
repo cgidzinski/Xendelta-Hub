@@ -10,6 +10,12 @@ import { validate, updateProfileSchema } from "../utils/validation";
 import { upload } from "../config/multer";
 import { AuthenticatedRequest } from "../types";
 import { DEFAULT_CURRENCY } from "../../shared/currencies";
+
+/** "timezone", "timezone and username", "timezone, username and e-transfer details". */
+function formatList(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
 import { normalizeEtransfer } from "../../shared/etransfer";
 
 /** The profile's e-transfer destination on the wire: always present, blank handle when unset. */
@@ -61,6 +67,7 @@ module.exports = function (app: express.Application) {
           has_new_notifications: !!hasNewNotifications,
           pinnedApps: user.pinnedApps || [],
           timezone: user.timezone || "",
+          theme: user.theme || "",
           emailNotifications: user.notificationPrefs?.email !== false,
           etransfer: etransferPayload(user),
           xenbox: {
@@ -79,18 +86,30 @@ module.exports = function (app: express.Application) {
     validate(updateProfileSchema),
     async function (req: express.Request, res: express.Response) {
       const userId = (req as AuthenticatedRequest).user!._id;
-      const { username, timezone, emailNotifications, etransfer } = req.body;
+      const { username, timezone, emailNotifications, etransfer, theme } = req.body;
+      // Which fields this request actually changed. A preference toggle should not
+      // announce itself as "Profile updated" in the notification centre.
+      const changed: string[] = [];
       const user = await User.findOne({ _id: userId }).exec();
 
       if (timezone !== undefined) {
         // "" clears the preference, putting the user back on their browser's zone.
         user.timezone = timezone || undefined;
         await user.save();
+        changed.push("timezone");
+      }
+
+      if (theme !== undefined) {
+        // "" clears it, putting the user back on their system setting. Deliberately
+        // not pushed to `changed`: flipping a theme is not news.
+        user.theme = theme || undefined;
+        await user.save();
       }
 
       if (emailNotifications !== undefined) {
         user.notificationPrefs = { ...(user.notificationPrefs || {}), email: emailNotifications };
         await user.save();
+        changed.push("email notifications");
       }
 
       if (etransfer !== undefined) {
@@ -99,6 +118,7 @@ module.exports = function (app: express.Application) {
           ? { handle: normalizeEtransfer(etransfer.handle), currency: etransfer.currency || DEFAULT_CURRENCY }
           : undefined;
         await user.save();
+        changed.push("e-transfer details");
       }
 
       if (username !== undefined) {
@@ -112,22 +132,28 @@ module.exports = function (app: express.Application) {
         }
         user.username = username;
         await user.save();
+        changed.push("username");
       }
 
-      const newNotification = new Notification({
-        userId: userId,
-        title: "Profile updated",
-        message: "Your profile has been successfully updated",
-        time: new Date().toISOString(),
-        icon: "person",
-        unread: true,
-      });
+      // Only for changes worth telling the user about. This fired on EVERY profile PUT,
+      // so a preference toggle -- theme especially, which people flip repeatedly --
+      // filled the notification centre with "Profile updated".
+      if (changed.length > 0) {
+        const newNotification = new Notification({
+          userId: userId,
+          title: "Profile updated",
+          message: `Your ${formatList(changed)} ${changed.length === 1 ? "was" : "were"} updated`,
+          time: new Date().toISOString(),
+          icon: "person",
+          unread: true,
+        });
 
-      await newNotification.save();
+        await newNotification.save();
 
-      // Send socket notification
-      const socketManager = SocketManager.getInstance();
-      socketManager.sendNotification(userId.toString(), newNotification);
+        // Send socket notification
+        const socketManager = SocketManager.getInstance();
+        socketManager.sendNotification(userId.toString(), newNotification);
+      }
       return res.json({
         status: true,
         message: "",
@@ -137,6 +163,7 @@ module.exports = function (app: express.Application) {
             email: user.email,
             avatar: user.avatar || "/avatars/default-avatar.png",
             timezone: user.timezone || "",
+            theme: user.theme || "",
             emailNotifications: user.notificationPrefs?.email !== false,
             etransfer: etransferPayload(user),
             unread_messages: false,

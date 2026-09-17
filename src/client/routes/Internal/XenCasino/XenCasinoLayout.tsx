@@ -10,6 +10,8 @@ import XenCasinoNavbar from "./components/XenCasinoNavbar";
 import CasinoClosedOverlay from "./components/CasinoClosedOverlay";
 import { CASINO_GAMES_REGISTRY } from "./gamesRegistry";
 import { XenCasinoTitlebarProvider } from "./context/XenCasinoTitlebarContext";
+import { ThemeProvider } from "@mui/material/styles";
+import { createAppTheme } from "../../../theme";
 
 function CasinoGate({
     severity,
@@ -38,7 +40,7 @@ function CasinoGate({
     );
 }
 
-export default function XenCasinoLayout() {
+function XenCasinoLayoutBody() {
     useTitle("XenCasino");
     const { authProviders, loading: providersLoading } = useAuthProviders();
     const { linked, balance, isLoading: balanceLoading, isError, error, refetch } = useCasinoBalance();
@@ -137,5 +139,23 @@ export default function XenCasinoLayout() {
                 </Box>
             </Box>
         </XenCasinoTitlebarProvider>
+    );
+}
+
+/**
+ * The casino is dark whatever the rest of the app is set to. Its games are built on
+ * painted backgrounds and art assets that assume a dark ground -- a light palette behind
+ * them does not degrade gracefully, it just makes them unreadable. So this subtree pins
+ * its own theme rather than following the user's preference.
+ */
+const casinoTheme = createAppTheme("dark");
+
+export default function XenCasinoLayout() {
+    return (
+        <ThemeProvider theme={casinoTheme}>
+            <Box sx={{ bgcolor: "background.default", color: "text.primary", minHeight: "100vh" }}>
+                <XenCasinoLayoutBody />
+            </Box>
+        </ThemeProvider>
     );
 }
