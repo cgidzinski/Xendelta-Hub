@@ -1,11 +1,15 @@
 import { Box, Container, Grid, Typography } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import CheckCircle from "@mui/icons-material/CheckCircle";
+import { NEON } from "../../../../theme";
 
 interface HighlightsSectionProps {
   highlights: string[];
 }
 
 export default function HighlightsSection({ highlights }: HighlightsSectionProps) {
+  const theme = useTheme();
+  const accent = theme.palette.mode === "dark" ? NEON.dark : NEON.light;
   return (
     <Box sx={{ py: { xs: 8, md: 12 }, position: "relative" }}>
       <Container maxWidth="lg">
@@ -16,7 +20,7 @@ export default function HighlightsSection({ highlights }: HighlightsSectionProps
             sx={{
               fontWeight: 700,
               mb: 2,
-              background: "linear-gradient(135deg, #00f5ff 0%, #00d4ff 50%, #00a8ff 100%)",
+              background: `linear-gradient(135deg, ${accent.cyan} 0%, ${accent.cyanMid} 50%, ${accent.blue} 100%)`,
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
               backgroundClip: "text",

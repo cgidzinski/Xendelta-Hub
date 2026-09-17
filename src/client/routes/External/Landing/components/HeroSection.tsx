@@ -1,6 +1,8 @@
 import { Box, Container, Typography, Button, Stack, Chip } from "@mui/material";
 import { Login as LoginIcon, PersonAdd, ArrowForward } from "@mui/icons-material";
+import { useTheme } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
+import { NEON } from "../../../../theme";
 
 interface HeroSectionProps {
   mousePosition: { x: number; y: number };
@@ -8,6 +10,8 @@ interface HeroSectionProps {
 
 export default function HeroSection({ mousePosition }: HeroSectionProps) {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const accent = theme.palette.mode === "dark" ? NEON.dark : NEON.light;
 
   return (
     <>
@@ -74,7 +78,7 @@ export default function HeroSection({ mousePosition }: HeroSectionProps) {
                 mb: 3,
                 fontSize: { xs: "2.5rem", sm: "3.5rem", md: "4.5rem" },
                 lineHeight: 1.1,
-                background: "linear-gradient(135deg, #00f5ff 0%, #00d4ff 30%, #00a8ff 60%, #ff00ff 100%)",
+                background: `linear-gradient(135deg, ${accent.cyan} 0%, ${accent.cyanMid} 30%, ${accent.blue} 60%, ${accent.magenta} 100%)`,
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",

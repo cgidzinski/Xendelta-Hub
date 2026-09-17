@@ -1,9 +1,13 @@
 import { Box, Container, Typography, Button, Stack } from "@mui/material";
 import { PersonAdd, ArrowForward } from "@mui/icons-material";
+import { useTheme } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
+import { NEON } from "../../../../theme";
 
 export default function CTASection() {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const accent = theme.palette.mode === "dark" ? NEON.dark : NEON.light;
 
   return (
     <Box
@@ -39,7 +43,7 @@ export default function CTASection() {
             sx={{
               fontWeight: 700,
               mb: 2,
-              background: "linear-gradient(135deg, #00f5ff 0%, #ff00ff 100%)",
+              background: `linear-gradient(135deg, ${accent.cyan} 0%, ${accent.magenta} 100%)`,
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
               backgroundClip: "text",

@@ -13,8 +13,10 @@ import {
   Grid,
 } from "@mui/material";
 import { PersonAdd as SignupIcon, Person, Email } from "@mui/icons-material";
+import { useTheme } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../contexts/AuthContext";
+import { NEON } from "../../../theme";
 import LandingHeader from "../../../components/LandingHeader";
 import PasswordField from "../../../components/PasswordField";
 import FormErrorAlert from "../../../components/forms/FormErrorAlert";
@@ -38,6 +40,8 @@ interface SignupErrors {
 
 export default function Signup() {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const accent = theme.palette.mode === "dark" ? NEON.dark : NEON.light;
   const { signup } = useAuth();
   const [formData, setFormData] = useState<SignupFormData>({
     username: "",
@@ -204,7 +208,7 @@ export default function Signup() {
                       position: "relative",
                       zIndex: 1,
                       mb: 2,
-                      background: "linear-gradient(135deg, #00f5ff 0%, #00d4ff 50%, #00a8ff 100%)",
+                      background: `linear-gradient(135deg, ${accent.cyan} 0%, ${accent.cyanMid} 50%, ${accent.blue} 100%)`,
                       WebkitBackgroundClip: "text",
                       WebkitTextFillColor: "transparent",
                       backgroundClip: "text",

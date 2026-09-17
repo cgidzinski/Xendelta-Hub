@@ -1,14 +1,12 @@
 // Validated categorical palette for XenBudget's charts and label chips.
 //
-// The app renders dark-only (createTheme({ palette: { mode: "dark" } }) in main.tsx), so
-// only the dark steps are needed here.
-//
 // These values are NOT eyeballed. The previous palette — inherited from Xensplit's
 // GroupAnalytics and reused here — fails colourblind separation: #e879f9 and #60a5fa sit
 // ΔE 5.0 apart under protanopia, well under the ≥8 target, so a protan reader cannot tell
 // those two series apart. This set passes every check on the adjacent pairlist against
 // the dark surface: lightness band, chroma floor, CVD separation (worst adjacent ΔE 8.4),
-// normal-vision separation (19.3) and ≥3:1 contrast.
+// normal-vision separation (19.3) and ≥3:1 contrast. It also clears ≥3:1 against the light
+// theme's white paper (3.07–4.95 measured), so no separate light-mode palette is needed here.
 //
 // Xensplit's and the admin casino page's own copies are deliberately left alone; this is
 // XenBudget's palette, not a global migration.
@@ -36,15 +34,6 @@ export const MAGNITUDE_COLOR = "#3987e5";
 /** Money out / money in, as a fixed two-series pairing. */
 export const EXPENSE_COLOR = "#d95926";
 export const INCOME_COLOR = "#199e70";
-
-/**
- * A plain-hex mirror of the theme's default `error.main` (unoverridden dark-mode MUI red),
- * for the few charts that want the same true red already used everywhere else in XenBudget
- * for expense (item rows, the "over budget" state, BudgetBar's overflow segment) rather
- * than EXPENSE_COLOR's orange. EXPENSE_COLOR stays the default for charts in general - it's
- * the one validated above for chart-safe contrast - this is a deliberate exception.
- */
-export const EXPENSE_RED = "#f44336";
 
 export function chartColorAt(index: number): string {
     return CHART_COLORS[index % CHART_COLORS.length];

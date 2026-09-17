@@ -16,9 +16,11 @@ import {
   Grid,
 } from "@mui/material";
 import { Email, LockReset as ResetIcon, ArrowBack, Lock, Visibility, VisibilityOff } from "@mui/icons-material";
+import { useTheme } from "@mui/material/styles";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../contexts/AuthContext";
 import LandingHeader from "../../../components/LandingHeader";
+import { NEON } from "../../../theme";
 interface ResetFormData {
   email: string;
   newPassword: string;
@@ -36,6 +38,8 @@ export default function Reset() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
+  const theme = useTheme();
+  const accent = theme.palette.mode === "dark" ? NEON.dark : NEON.light;
 
   const [formData, setFormData] = useState<ResetFormData>({
     email: "",
@@ -223,7 +227,7 @@ export default function Reset() {
               variant="h4"
               fontWeight="bold"
               sx={{
-                background: "linear-gradient(90deg, #00f5ff 0%, #00d4ff 50%, #00a8ff 100%)",
+                background: `linear-gradient(90deg, ${accent.cyan} 0%, ${accent.cyanMid} 50%, ${accent.blue} 100%)`,
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",
@@ -555,7 +559,7 @@ export default function Reset() {
                       position: "relative",
                       zIndex: 1,
                       mb: 2,
-                      background: "linear-gradient(135deg, #00f5ff 0%, #00d4ff 50%, #00a8ff 100%)",
+                      background: `linear-gradient(135deg, ${accent.cyan} 0%, ${accent.cyanMid} 50%, ${accent.blue} 100%)`,
                       WebkitBackgroundClip: "text",
                       WebkitTextFillColor: "transparent",
                       backgroundClip: "text",

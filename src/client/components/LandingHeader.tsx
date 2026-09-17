@@ -3,11 +3,13 @@ import {
   Typography,
   Button,
 } from "@mui/material";
+import { useTheme, alpha } from "@mui/material/styles";
 import { Login as LoginIcon } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 
 export default function LandingHeader() {
   const navigate = useNavigate();
+  const theme = useTheme();
 
   return (
     <>
@@ -20,7 +22,7 @@ export default function LandingHeader() {
           borderBottom: "1px solid",
           borderColor: "divider",
           backdropFilter: "blur(10px)",
-          backgroundColor: "rgba(18, 18, 18, 0.8)",
+          backgroundColor: alpha(theme.palette.background.paper, 0.8),
         }}
       >
         <Box
@@ -42,7 +44,7 @@ export default function LandingHeader() {
             onClick={() => navigate("/")}
             sx={{
               fontWeight: 700,
-              background: "linear-gradient(90deg, #2196f3 0%, #1e88e5 50%, #1976d2 100%)",
+              background: `linear-gradient(90deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
               backgroundClip: "text",

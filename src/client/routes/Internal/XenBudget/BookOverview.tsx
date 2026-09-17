@@ -27,7 +27,7 @@ import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { formatCurrency } from "./currency";
 import { STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
-import { EXPENSE_RED, INCOME_COLOR } from "../../../components/ui/chartColors";
+import { INCOME_COLOR } from "../../../components/ui/chartColors";
 import { cardSx, sectionLabelSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
 
 // Past a dozen the pip row is no longer countable at a glance, and the figure beside
@@ -492,7 +492,7 @@ export default function BookOverview() {
                                                     already know which is which. Spread like a ledger: out at the
                                                     left edge, in flush with the total above it on the right, the
                                                     separator centered in whatever space is left between them. */}
-                                                    <Typography variant="caption" noWrap sx={{ color: EXPENSE_RED, flexShrink: 0 }}>
+                                                    <Typography variant="caption" noWrap sx={{ color: "error.main", flexShrink: 0 }}>
                                                         {formatCurrency(row.out, summary.currency)}
                                                     </Typography>
                                                     <Typography variant="caption" color="text.secondary" sx={{ flex: 1, textAlign: "center" }}>

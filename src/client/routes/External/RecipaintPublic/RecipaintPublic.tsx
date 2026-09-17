@@ -3,6 +3,7 @@ import { Box, Button, Card, Container, Stack, Typography } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import BrushIcon from "@mui/icons-material/Brush";
 import { useSnackbar } from "notistack";
+import { useTheme, alpha } from "@mui/material/styles";
 import { useTitle } from "../../../hooks/useTitle";
 import { usePublicRecipaintRecipe, useCloneRecipe } from "../../../hooks/recipaint/useRecipaint";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -20,6 +21,7 @@ export default function RecipaintPublic() {
   const { recipe, isLoading, isError, error, refetch } = usePublicRecipaintRecipe(id);
   const cloneRecipe = useCloneRecipe();
   const { completedSteps, toggleStep, resetProgress } = useRecipeProgress(id);
+  const theme = useTheme();
 
   useTitle(recipe?.title || "Recipe");
 
@@ -59,7 +61,7 @@ export default function RecipaintPublic() {
           borderBottom: "1px solid",
           borderColor: "divider",
           backdropFilter: "blur(10px)",
-          backgroundColor: "rgba(18, 18, 18, 0.8)",
+          backgroundColor: alpha(theme.palette.background.paper, 0.8),
         }}
       >
         <Stack
@@ -77,7 +79,7 @@ export default function RecipaintPublic() {
               sx={{
                 fontWeight: 700,
                 cursor: "pointer",
-                background: "linear-gradient(90deg, #2196f3 0%, #1e88e5 50%, #1976d2 100%)",
+                background: `linear-gradient(90deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",

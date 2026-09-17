@@ -4,8 +4,8 @@ import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 import type { EtransferInfo } from "../../../shared/etransfer";
 
-/** "" is the default: follow whatever the OS is set to. */
-export type ThemePreference = "light" | "dark" | "";
+/** "" is the default (never chosen) and resolves to dark; "system" explicitly follows the OS. */
+export type ThemePreference = "light" | "dark" | "system" | "";
 
 // Types
 export interface UserProfile {
@@ -21,7 +21,7 @@ export interface UserProfile {
   pinnedApps: string[];
   /** Preferred IANA zone; "" means follow the browser. */
   timezone: string;
-  /** "light" | "dark"; "" means follow the OS setting. */
+  /** "" means never chosen (defaults to dark); "system" means follow the OS setting. */
   theme: ThemePreference;
   /** Whether the account receives emailed notifications (opt-out; default true). */
   emailNotifications: boolean;
@@ -39,7 +39,7 @@ export interface UpdateProfileData {
   username?: string;
   /** "" clears the preference and falls back to the browser's zone. */
   timezone?: string;
-  /** "" clears it and falls back to the OS setting. */
+  /** "" clears the preference (defaults to dark). */
   theme?: ThemePreference;
   emailNotifications?: boolean;
   /** A blank handle clears it. */

@@ -13,6 +13,17 @@ const BRAND = {
 } as const;
 
 /**
+ * The External marketing/auth pages' "neon" gradient-text accent. Same problem as BRAND
+ * above, worse: the bright cyan/magenta stops that glow against a near-black ground clip
+ * to text at 1.3-2.6:1 contrast on white (need 4.5:1), so light mode swaps in the deeper
+ * step of each hue instead.
+ */
+export const NEON = {
+  dark: { cyan: "#00f5ff", cyanMid: "#00d4ff", blue: "#00a8ff", magenta: "#ff00ff" },
+  light: { cyan: "#0e7490", cyanMid: "#0369a1", blue: "#075985", magenta: "#a21caf" },
+} as const;
+
+/**
  * NOTE ON RADIUS: `shape.borderRadius` stays at MUI's default of 4. In `sx`,
  * `borderRadius: 2` resolves to 2 * shape.borderRadius, and the app has ~324 such
  * usages (including `cardSx`), so raising shape would silently double every one of
@@ -32,6 +43,9 @@ export function createAppTheme(mode: ThemeMode): Theme {
             // A faintly cool ground rather than pure white, so outlined cards on top of
             // it still read as raised surfaces.
             background: { default: "#f6f7f9", paper: "#ffffff" },
+            // MUI's default warning orange (#ed6c02) read as too bright/traffic-cone on
+            // white; this amber clears 5:1 contrast instead of the default's ~3.9:1.
+            warning: { main: "#b45309" },
           }),
     },
 

@@ -5,7 +5,7 @@ import type { XenBudgetLabel } from "../../../../../hooks/xenbudget/types";
 import { CategoryChip } from "../LabelChip";
 import { formatCurrency } from "../../currency";
 import { periodColumnLabels } from "./periodColumns";
-import { EXPENSE_RED, INCOME_COLOR } from "../../../../../components/ui/chartColors";
+import { INCOME_COLOR } from "../../../../../components/ui/chartColors";
 import { cardSx, sectionLabelSx } from "../../../../../components/ui/surfaceStyles";
 import type { Mover, Movers } from "./movers";
 
@@ -30,7 +30,7 @@ export default function MoversStrip({ movers, currency, categoryRegistry }: Move
 
     const row = (mover: Mover, direction: "up" | "down") => {
         const isUp = direction === "up";
-        const color = isUp ? EXPENSE_RED : INCOME_COLOR;
+        const color = isUp ? "error.main" : INCOME_COLOR;
         return (
             <Stack
                 key={mover.category}
