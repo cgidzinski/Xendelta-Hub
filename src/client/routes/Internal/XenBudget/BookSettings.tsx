@@ -2,6 +2,7 @@ import { Box, Tab, Tabs, useMediaQuery, useTheme } from "@mui/material";
 import { Outlet, useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import type { BookDetailContext } from "./BookDetail";
 import { SETTINGS_SECTIONS, activeIndex } from "./navigation";
+import { saveSection } from "./components/sectionStorage";
 
 /**
  * Settings is a layout, not a page: eight areas, each its own deep-linkable URL, rather
@@ -32,7 +33,10 @@ export default function BookSettings() {
             // swipe, and hides them on touch where there is.
             scrollButtons="auto"
             value={activeSection}
-            onChange={(_, v) => navigate(SETTINGS_SECTIONS[v].path)}
+            onChange={(_, v) => {
+                saveSection(ctx.book._id, SETTINGS_SECTIONS[v].path);
+                navigate(SETTINGS_SECTIONS[v].path);
+            }}
             sx={isWide
                 ? {
                     borderRight: 1,
