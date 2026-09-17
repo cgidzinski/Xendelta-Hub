@@ -3,6 +3,8 @@ import { useOutletContext, useNavigate } from "react-router-dom";
 import {
     Box, Button, Card, MenuItem, Stack, TextField, Typography, useMediaQuery,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+import type { Theme } from "@mui/material/styles";
 import DownloadIcon from "@mui/icons-material/Download";
 import InsightsIcon from "@mui/icons-material/Insights";
 import {
@@ -37,7 +39,7 @@ import { formatCurrency } from "./currency";
 import { STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
 import { toCsv, downloadCsv } from "../../../utils/csvMapping";
 import {
-    EXPENSE_RED, INCOME_COLOR, MAGNITUDE_COLOR,
+    INCOME_COLOR, MAGNITUDE_COLOR,
 } from "../../../components/ui/chartColors";
 import { cardSx, sectionLabelSx, emptyStateSx, emptyStateIconCircleSx } from "../../../components/ui/surfaceStyles";
 
@@ -45,8 +47,24 @@ import { cardSx, sectionLabelSx, emptyStateSx, emptyStateIconCircleSx } from "..
 // a single "Other" bar rather than adding more rows nobody can compare.
 const MAX_BARS = 8;
 
-const AXIS = { stroke: "#8b8b85", fontSize: 12 } as const;
-const GRID = "#ffffff14";
+// Recharts elements take literal colors, not theme tokens, so every chart in this file
+// resolves its chrome through this once, from whichever mode is active.
+function chartTheme(theme: Theme) {
+    return {
+        axis: { stroke: theme.palette.text.secondary, fontSize: 12 } as const,
+        grid: theme.palette.divider,
+        cursor: { fill: theme.palette.action.hover },
+        tooltipStyle: {
+            contentStyle: {
+                background: theme.palette.background.paper,
+                border: `1px solid ${theme.palette.divider}`,
+                borderRadius: 8,
+            },
+            labelStyle: { color: theme.palette.text.secondary },
+        },
+        labelFill: theme.palette.text.secondary,
+    };
+}
 // Axis ticks are for scanning, so they're abbreviated — a full "$8,000.00" needs a
 // gutter wide enough to squeeze the plot, and gets truncated if it doesn't get one.
 // Exact figures live on the direct labels, the tooltip and the table view.
@@ -71,6 +89,8 @@ export default function BookReport() {
         book, currency, onCurrencyChange, period, onPeriodChange,
     } = useOutletContext<BookDetailContext>();
     const navigate = useNavigate();
+    const theme = useTheme();
+    const { axis, grid, cursor, tooltipStyle } = chartTheme(theme);
 
     // The window is the book's, not this tab's — see BookDetail.
     const range = useMemo(() => resolvePeriod(period), [period]);
@@ -224,8 +244,8 @@ export default function BookReport() {
                 // overlapping layout.
                 front: Math.min(spent, income),
                 back: Math.abs(spent - income),
-                frontColor: spentBigger ? INCOME_COLOR : EXPENSE_RED,
-                backColor: spentBigger ? EXPENSE_RED : INCOME_COLOR,
+                frontColor: spentBigger ? INCOME_COLOR : theme.palette.error.main,
+                backColor: spentBigger ? theme.palette.error.main : INCOME_COLOR,
             };
         });
     }, [summary, book.members]);
@@ -390,11 +410,6 @@ export default function BookReport() {
         minimumFractionDigits: 0,
         maximumFractionDigits: 2,
     }).format(v);
-    const tooltipStyle = {
-        contentStyle: { background: "#1a1a19", border: "1px solid #ffffff26", borderRadius: 8 },
-        labelStyle: { color: "#c3c2b7" },
-    };
-
     return (
         <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
             <Box sx={{ pl: 2, pr: { xs: 2, sm: 3.5 }, pt: 2, flexShrink: 0 }}>
@@ -492,14 +507,14 @@ export default function BookReport() {
                                     than in a card of its own where the relationship has to
                                     be remembered instead of seen. */}
                                     <ComposedChart data={periodData} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
-                                        <CartesianGrid stroke={GRID} vertical={false} />
-                                        <XAxis dataKey="key" tick={AXIS} tickLine={false} axisLine={false} />
-                                        <YAxis tick={AXIS} tickLine={false} axisLine={false} width={AXIS_WIDTH}
+                                        <CartesianGrid stroke={grid} vertical={false} />
+                                        <XAxis dataKey="key" tick={axis} tickLine={false} axisLine={false} />
+                                        <YAxis tick={axis} tickLine={false} axisLine={false} width={AXIS_WIDTH}
                                             tickFormatter={(v) => compact(Number(v))} />
-                                        <Tooltip {...tooltipStyle} formatter={(v) => money(Number(v))} cursor={{ fill: "#ffffff0a" }} />
+                                        <Tooltip {...tooltipStyle} formatter={(v) => money(Number(v))} cursor={cursor} />
                                         <Legend />
                                         <Bar dataKey="In" fill={INCOME_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
-                                        <Bar dataKey="Out" fill={EXPENSE_RED} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                                        <Bar dataKey="Out" fill={theme.palette.error.main} radius={[4, 4, 0, 0]} maxBarSize={28} />
                                         <Line
                                             type="monotone" dataKey="Net" stroke={MAGNITUDE_COLOR}
                                             strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }}
@@ -512,9 +527,9 @@ export default function BookReport() {
                                 <ChartCard title="Spending against budget">
                                     <ResponsiveContainer width="100%" height={240}>
                                         <LineChart data={burnUpData} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
-                                            <CartesianGrid stroke={GRID} vertical={false} />
-                                            <XAxis dataKey="key" tick={AXIS} tickLine={false} axisLine={false} />
-                                            <YAxis tick={AXIS} tickLine={false} axisLine={false} width={AXIS_WIDTH}
+                                            <CartesianGrid stroke={grid} vertical={false} />
+                                            <XAxis dataKey="key" tick={axis} tickLine={false} axisLine={false} />
+                                            <YAxis tick={axis} tickLine={false} axisLine={false} width={AXIS_WIDTH}
                                                 tickFormatter={(v) => compact(Number(v))} />
                                             <Tooltip {...tooltipStyle} formatter={(v) => money(Number(v))} />
                                             <Legend />
@@ -525,7 +540,7 @@ export default function BookReport() {
                                                 strokeWidth={2} strokeDasharray="5 4" dot={false}
                                             />
                                             <Line
-                                                type="monotone" dataKey="Spent" stroke={EXPENSE_RED}
+                                                type="monotone" dataKey="Spent" stroke={theme.palette.error.main}
                                                 strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }}
                                             />
                                         </LineChart>
@@ -544,15 +559,15 @@ export default function BookReport() {
                                             data={budgetVsActualData} layout="vertical"
                                             margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
                                         >
-                                            <CartesianGrid stroke={GRID} horizontal={false} />
-                                            <XAxis type="number" tick={AXIS} tickLine={false} axisLine={false}
+                                            <CartesianGrid stroke={grid} horizontal={false} />
+                                            <XAxis type="number" tick={axis} tickLine={false} axisLine={false}
                                                 tickFormatter={(v) => compact(Number(v))} />
-                                            <YAxis type="category" dataKey="name" tick={AXIS} tickLine={false}
+                                            <YAxis type="category" dataKey="name" tick={axis} tickLine={false}
                                                 axisLine={false} width={CATEGORY_WIDTH} />
-                                            <Tooltip {...tooltipStyle} formatter={(v) => money(Number(v))} cursor={{ fill: "#ffffff0a" }} />
+                                            <Tooltip {...tooltipStyle} formatter={(v) => money(Number(v))} cursor={cursor} />
                                             <Legend />
                                             <Bar dataKey="Budgeted" fill={BUDGETED_COLOR} radius={[0, 4, 4, 0]} maxBarSize={14} />
-                                            <Bar dataKey="Spent" fill={EXPENSE_RED} radius={[0, 4, 4, 0]} maxBarSize={14} />
+                                            <Bar dataKey="Spent" fill={theme.palette.error.main} radius={[0, 4, 4, 0]} maxBarSize={14} />
                                         </BarChart>
                                     </ResponsiveContainer>
                                     <Typography variant="caption" color="text.secondary">
@@ -565,11 +580,11 @@ export default function BookReport() {
                                 <ChartCard title="Where the money went over time">
                                     <ResponsiveContainer width="100%" height={280}>
                                         <BarChart data={compositionData.rows} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
-                                            <CartesianGrid stroke={GRID} vertical={false} />
-                                            <XAxis dataKey="key" tick={AXIS} tickLine={false} axisLine={false} />
-                                            <YAxis tick={AXIS} tickLine={false} axisLine={false} width={AXIS_WIDTH}
+                                            <CartesianGrid stroke={grid} vertical={false} />
+                                            <XAxis dataKey="key" tick={axis} tickLine={false} axisLine={false} />
+                                            <YAxis tick={axis} tickLine={false} axisLine={false} width={AXIS_WIDTH}
                                                 tickFormatter={(v) => compact(Number(v))} />
-                                            <Tooltip {...tooltipStyle} formatter={(v) => money(Number(v))} cursor={{ fill: "#ffffff0a" }} />
+                                            <Tooltip {...tooltipStyle} formatter={(v) => money(Number(v))} cursor={cursor} />
                                             <Legend />
                                             {compositionData.series.map((name) => (
                                                 <Bar
@@ -681,23 +696,23 @@ function MagnitudeBars<T extends { name: string; total: number }>({
     color?: string;
     colorFor?: (d: T) => string;
 }) {
+    const { axis, grid, cursor, tooltipStyle, labelFill } = chartTheme(useTheme());
     return (
         <ResponsiveContainer width="100%" height={Math.max(140, data.length * 40)}>
             <BarChart data={data} layout="vertical" margin={{ top: 4, right: VALUE_LABEL_GUTTER, left: 8, bottom: 4 }}>
-                <CartesianGrid stroke={GRID} horizontal={false} />
-                <XAxis type="number" tick={AXIS} tickLine={false} axisLine={false}
+                <CartesianGrid stroke={grid} horizontal={false} />
+                <XAxis type="number" tick={axis} tickLine={false} axisLine={false}
                     tickFormatter={(v) => compact(Number(v))} />
-                <YAxis type="category" dataKey="name" tick={AXIS} tickLine={false} axisLine={false}
+                <YAxis type="category" dataKey="name" tick={axis} tickLine={false} axisLine={false}
                     width={CATEGORY_WIDTH} />
                 <Tooltip
                     formatter={(v) => money(Number(v))}
-                    cursor={{ fill: "#ffffff0a" }}
-                    contentStyle={{ background: "#1a1a19", border: "1px solid #ffffff26", borderRadius: 8 }}
-                    labelStyle={{ color: "#c3c2b7" }}
+                    cursor={cursor}
+                    {...tooltipStyle}
                 />
                 <Bar
                     dataKey="total" fill={color} radius={[0, 4, 4, 0]} maxBarSize={22}
-                    label={{ position: "right", fill: "#c3c2b7", fontSize: 12, formatter: (v: unknown) => money(Number(v)) }}
+                    label={{ position: "right", fill: labelFill, fontSize: 12, formatter: (v: unknown) => money(Number(v)) }}
                 >
                     {colorFor && data.map((d, i) => <Cell key={i} fill={colorFor(d)} />)}
                 </Bar>
@@ -719,28 +734,28 @@ function PersonFlowBars({ data, money, compact }: {
     money: (v: number) => string;
     compact: (v: number) => string;
 }) {
+    const theme = useTheme();
+    const { axis, grid, cursor, tooltipStyle } = chartTheme(theme);
     return (
         <ResponsiveContainer width="100%" height={Math.max(140, data.length * 40)}>
             <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
-                <CartesianGrid stroke={GRID} horizontal={false} />
-                <XAxis type="number" tick={AXIS} tickLine={false} axisLine={false}
+                <CartesianGrid stroke={grid} horizontal={false} />
+                <XAxis type="number" tick={axis} tickLine={false} axisLine={false}
                     tickFormatter={(v) => compact(Number(v))} />
-                <YAxis type="category" dataKey="name" tick={AXIS} tickLine={false} axisLine={false}
+                <YAxis type="category" dataKey="name" tick={axis} tickLine={false} axisLine={false}
                     width={CATEGORY_WIDTH} />
                 <Tooltip
-                    cursor={{ fill: "#ffffff0a" }}
-                    contentStyle={{ background: "#1a1a19", border: "1px solid #ffffff26", borderRadius: 8 }}
-                    labelStyle={{ color: "#c3c2b7" }}
+                    cursor={cursor}
                     content={({ active, payload }) => {
                         if (!active || !payload?.length) return null;
                         const row = payload[0].payload as (typeof data)[number];
                         return (
                             <Box sx={{
-                                bgcolor: "#1a1a19", border: "1px solid #ffffff26", borderRadius: 1,
+                                ...tooltipStyle.contentStyle,
                                 px: 1.25, py: 0.75,
                             }}>
-                                <Typography variant="caption" sx={{ display: "block", color: "#c3c2b7" }}>{row.name}</Typography>
-                                <Typography variant="caption" sx={{ display: "block", color: EXPENSE_RED }}>
+                                <Typography variant="caption" sx={{ display: "block", color: "text.secondary" }}>{row.name}</Typography>
+                                <Typography variant="caption" sx={{ display: "block", color: "error.main" }}>
                                     Spent {money(row.spent)}
                                 </Typography>
                                 <Typography variant="caption" sx={{ display: "block", color: INCOME_COLOR }}>
@@ -756,7 +771,7 @@ function PersonFlowBars({ data, money, compact }: {
                 <Legend content={() => (
                     <Stack direction="row" justifyContent="center" spacing={2} sx={{ pt: 1 }}>
                         <Stack direction="row" alignItems="center" spacing={0.5}>
-                            <Box sx={{ width: 10, height: 10, borderRadius: 0.5, bgcolor: EXPENSE_RED }} />
+                            <Box sx={{ width: 10, height: 10, borderRadius: 0.5, bgcolor: "error.main" }} />
                             <Typography variant="caption" color="text.secondary">Spent</Typography>
                         </Stack>
                         <Stack direction="row" alignItems="center" spacing={0.5}>
@@ -785,6 +800,7 @@ function NeedWantDonut({ data, money }: {
     data: { name: string; total: number; color: string }[];
     money: (v: number) => string;
 }) {
+    const { tooltipStyle } = chartTheme(useTheme());
     const total = data.reduce((sum, d) => sum + d.total, 0);
     const needs = data.find((d) => d.name === "Needs")?.total ?? 0;
     const needsShare = total > 0 ? Math.round((needs / total) * 100) : 0;
@@ -804,8 +820,7 @@ function NeedWantDonut({ data, money }: {
                         </Pie>
                         <Tooltip
                             formatter={(v) => money(Number(v))}
-                            contentStyle={{ background: "#1a1a19", border: "1px solid #ffffff26", borderRadius: 8 }}
-                            labelStyle={{ color: "#c3c2b7" }}
+                            {...tooltipStyle}
                         />
                     </PieChart>
                 </ResponsiveContainer>

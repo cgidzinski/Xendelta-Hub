@@ -56,9 +56,10 @@ var userSchema = new mongoose.Schema({
   // a thing only the client can resolve, so the effective zone is sent with each request
   // that buckets by time rather than inferred here.
   timezone: { type: String },
-  // "light" | "dark". Absent means "follow my system", which is the default and is a
-  // thing only the browser can resolve, so it is stored as absence rather than a value.
-  theme: { type: String, enum: ["light", "dark"] },
+  // "light" | "dark" | "system". Absent means "never chosen" and defaults to dark on the
+  // client; "system" is an explicit choice to follow the OS, which only the browser can
+  // resolve, so it is not itself a color.
+  theme: { type: String, enum: ["light", "dark", "system"] },
   // Interac e-transfer destination, shown to fellow XenSplit group members when they
   // settle up with this user. `currency` is what the handle accepts money in.
   etransfer: {

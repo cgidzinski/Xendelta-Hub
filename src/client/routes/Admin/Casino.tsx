@@ -28,6 +28,7 @@ import {
     Tab,
     TableSortLabel,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import { useSnackbar } from "notistack";
 import {
     ComposedChart,
@@ -64,11 +65,20 @@ const RANGE_OPTIONS: { value: StatsRange; label: string }[] = [
     { value: "all", label: "All Time" },
 ];
 
-const CHART_COLORS = {
+// Tailwind-400 hues, tuned for a dark canvas — cyan, violet and emerald fall below 3:1
+// against the light theme's white paper, so light mode uses the darker 600-step of the
+// same hues instead. Rose already clears 3:1 either way and stays shared.
+const CHART_COLORS_DARK = {
     amountIn: "#22d3ee",
     amountOut: "#f43f5e",
     net: "#a78bfa",
     balance: "#10b981",
+};
+const CHART_COLORS_LIGHT = {
+    amountIn: "#0891b2",
+    amountOut: "#f43f5e",
+    net: "#7c3aed",
+    balance: "#059669",
 };
 
 function formatChartCheddar(value: number): string {
@@ -82,14 +92,15 @@ function CustomTooltip({ active, payload, label }: any) {
     return (
         <Box
             sx={{
-                backgroundColor: "rgba(30,30,30,0.95)",
-                border: "1px solid rgba(255,255,255,0.12)",
+                backgroundColor: "background.paper",
+                border: "1px solid",
+                borderColor: "divider",
                 borderRadius: 1,
                 p: 1.5,
                 minWidth: 140,
             }}
         >
-            <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.6)", fontWeight: 600, mb: 0.5, display: "block" }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600, mb: 0.5, display: "block" }}>
                 {label}
             </Typography>
             {payload.map((entry: any) => (
@@ -97,7 +108,7 @@ function CustomTooltip({ active, payload, label }: any) {
                     <Typography variant="caption" sx={{ color: entry.color }}>
                         {entry.name}
                     </Typography>
-                    <Typography variant="caption" sx={{ color: "#fff", fontWeight: 600 }}>
+                    <Typography variant="caption" sx={{ color: "text.primary", fontWeight: 600 }}>
                         {formatCheddar(entry.value)}
                     </Typography>
                 </Box>
@@ -108,6 +119,8 @@ function CustomTooltip({ active, payload, label }: any) {
 
 export default function Casino() {
     useTitle("Casino");
+    const theme = useTheme();
+    const CHART_COLORS = theme.palette.mode === "dark" ? CHART_COLORS_DARK : CHART_COLORS_LIGHT;
     const { enqueueSnackbar } = useSnackbar();
     const [range, setRange] = useState<StatsRange>("all");
     const [activeTab, setActiveTab] = useState<"games" | "players">("games");

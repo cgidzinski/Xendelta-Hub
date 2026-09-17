@@ -1,8 +1,12 @@
 import { Box, Container, Typography, Grid, Card, CardContent, CardHeader } from "@mui/material";
 import { Security, Chat, Notifications, Speed, Group, CloudDone, Receipt } from "@mui/icons-material";
+import { useTheme } from "@mui/material/styles";
 import LandingHeader from "../../../components/LandingHeader";
+import { NEON } from "../../../theme";
 
 export default function Features() {
+  const theme = useTheme();
+  const accent = theme.palette.mode === "dark" ? NEON.dark : NEON.light;
   const features = [
     {
       icon: <Chat sx={{ fontSize: 40 }} />,
@@ -49,7 +53,7 @@ export default function Features() {
               fontWeight: 700,
               mb: 2,
               color: "text.primary",
-              background: "linear-gradient(90deg, #00f5ff 0%, #00d4ff 50%, #00a8ff 100%)",
+              background: `linear-gradient(90deg, ${accent.cyan} 0%, ${accent.cyanMid} 50%, ${accent.blue} 100%)`,
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
               backgroundClip: "text",

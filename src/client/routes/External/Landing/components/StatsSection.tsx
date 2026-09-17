@@ -1,5 +1,7 @@
 import { Box, Container, Grid, Card, Typography } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import { ReactNode } from "react";
+import { NEON } from "../../../../theme";
 
 interface Stat {
   value: string;
@@ -12,6 +14,8 @@ interface StatsSectionProps {
 }
 
 export default function StatsSection({ stats }: StatsSectionProps) {
+  const theme = useTheme();
+  const accent = theme.palette.mode === "dark" ? NEON.dark : NEON.light;
   return (
     <Box
       sx={{
@@ -60,7 +64,7 @@ export default function StatsSection({ stats }: StatsSectionProps) {
                   sx={{
                     fontWeight: 700,
                     mb: 1,
-                    background: "linear-gradient(135deg, #00f5ff 0%, #00a8ff 100%)",
+                    background: `linear-gradient(135deg, ${accent.cyan} 0%, ${accent.blue} 100%)`,
                     WebkitBackgroundClip: "text",
                     WebkitTextFillColor: "transparent",
                     backgroundClip: "text",

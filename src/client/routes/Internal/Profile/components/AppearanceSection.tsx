@@ -7,11 +7,11 @@ import { useUserProfile } from "../../../../hooks/user/useUserProfile";
 import type { ThemePreference } from "../../../../hooks/user/useUserProfile";
 
 /**
- * Light or dark, or follow the device.
+ * Light or dark, or follow the device — defaulting to dark until you pick something.
  *
- * "System" is stored as the empty string rather than a third value, matching how the
- * timezone preference treats "follow my browser" — only the device can answer it, so
- * there is nothing meaningful to persist.
+ * "System" is a real, explicit value ("system") distinct from "" (never chosen), because
+ * those two need different resolutions: unset defaults to dark, while an explicit System
+ * choice should actually track the OS.
  *
  * XenCasino is deliberately exempt and stays dark either way; its games are built on art
  * that assumes a dark ground.
@@ -22,7 +22,7 @@ export default function AppearanceSection() {
     const prefersDark = useMediaQuery("(prefers-color-scheme: dark)");
 
     const stored: ThemePreference = profile?.theme ?? "";
-    const effective = stored || (prefersDark ? "dark" : "light");
+    const effective = stored === "" ? "dark" : stored === "system" ? (prefersDark ? "dark" : "light") : stored;
 
     const save = async (value: ThemePreference) => {
         try {
@@ -36,8 +36,10 @@ export default function AppearanceSection() {
         <Stack spacing={1.5}>
             <Typography variant="body2" color="text.secondary">
                 {stored === ""
-                    ? `Following your device, which is currently ${effective}.`
-                    : `Set by you to ${stored}.`}{" "}
+                    ? "Defaulting to dark until you choose otherwise."
+                    : stored === "system"
+                        ? `Following your device, which is currently ${effective}.`
+                        : `Set by you to ${stored}.`}{" "}
                 XenCasino stays dark whichever you pick.
             </Typography>
             <ToggleButtonGroup
@@ -50,7 +52,7 @@ export default function AppearanceSection() {
                 onChange={(_, value: ThemePreference | null) => value !== null && save(value)}
                 aria-label="Theme"
             >
-                <ToggleButton value="" aria-label="Follow my device">
+                <ToggleButton value="system" aria-label="Follow my device">
                     <SettingsBrightnessIcon fontSize="small" sx={{ mr: 0.75 }} />
                     System
                 </ToggleButton>

@@ -13,8 +13,10 @@ import {
   Grid,
 } from "@mui/material";
 import { Login as LoginIcon, Email } from "@mui/icons-material";
+import { useTheme } from "@mui/material/styles";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../../contexts/AuthContext";
+import { NEON } from "../../../theme";
 import LandingHeader from "../../../components/LandingHeader";
 import PasswordField from "../../../components/PasswordField";
 import FormErrorAlert from "../../../components/forms/FormErrorAlert";
@@ -36,6 +38,8 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
+  const theme = useTheme();
+  const accent = theme.palette.mode === "dark" ? NEON.dark : NEON.light;
   const [formData, setFormData] = useState<LoginFormData>({
     email: "",
     password: "",
@@ -187,7 +191,7 @@ export default function Login() {
                       position: "relative",
                       zIndex: 1,
                       mb: 2,
-                      background: "linear-gradient(135deg, #00f5ff 0%, #00d4ff 50%, #00a8ff 100%)",
+                      background: `linear-gradient(135deg, ${accent.cyan} 0%, ${accent.cyanMid} 50%, ${accent.blue} 100%)`,
                       WebkitBackgroundClip: "text",
                       WebkitTextFillColor: "transparent",
                       backgroundClip: "text",

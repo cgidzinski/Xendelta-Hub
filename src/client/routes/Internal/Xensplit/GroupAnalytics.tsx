@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Box, Typography, Button, IconButton } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
@@ -11,10 +12,17 @@ import { formatCurrency } from "../../../utils/currencyUtils";
 import { useLiveRateQuery } from "../../../hooks/xensplit/useExchanges";
 import { xsCardSx } from "./components/rowStyles";
 
-const CHART_COLORS = ["#6366f1", "#22d3ee", "#f59e0b", "#10b981", "#f43f5e", "#a78bfa", "#fb923c", "#34d399"];
+// Tailwind-400 hues, tuned for a dark canvas — several of these (cyan, amber, emerald,
+// violet, orange, teal) fall below 3:1 against the light theme's white paper, so light
+// mode uses the darker 600-step of the same hues instead. Indigo and rose already clear
+// 3:1 either way and stay shared.
+const CHART_COLORS_DARK = ["#6366f1", "#22d3ee", "#f59e0b", "#10b981", "#f43f5e", "#a78bfa", "#fb923c", "#34d399"];
+const CHART_COLORS_LIGHT = ["#6366f1", "#0891b2", "#d97706", "#059669", "#f43f5e", "#7c3aed", "#ea580c", "#0d9488"];
 
 export default function GroupAnalytics() {
     const { group, user, balancesData } = useOutletContext<GroupDetailContext>();
+    const theme = useTheme();
+    const CHART_COLORS = theme.palette.mode === "dark" ? CHART_COLORS_DARK : CHART_COLORS_LIGHT;
 
     const defaultCurrency = group.default_currency || "CAD";
 

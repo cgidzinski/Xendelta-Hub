@@ -38,9 +38,13 @@ export default function AppThemeProvider({ children }: { children: ReactNode }) 
     }
   }, [profile?.theme]);
 
-  const mode: ThemeMode = preference === "light" || preference === "dark"
-    ? preference
-    : prefersDark ? "dark" : "light";
+  // Explicit light wins, explicit system follows the OS query, and everything else
+  // (never chosen, or explicit dark) defaults to dark.
+  const mode: ThemeMode = preference === "light"
+    ? "light"
+    : preference === "system"
+      ? (prefersDark ? "dark" : "light")
+      : "dark";
 
   const theme = useMemo(() => createAppTheme(mode), [mode]);
 
