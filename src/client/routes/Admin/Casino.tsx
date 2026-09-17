@@ -127,8 +127,8 @@ export default function Casino() {
     const [clearJackpotsOpen, setClearJackpotsOpen] = useState(false);
     const [clearStatsOpen, setClearStatsOpen] = useState(false);
     const [closeCasinoOpen, setCloseCasinoOpen] = useState(false);
-    const { games, isLoading, isError, error, clearJackpots, isClearingJackpots, clearStats, isClearingStats } = useAdminCasino(range);
-    const { players, totals: playerTotals, truncated: playersTruncated, isLoading: playersLoading, isError: playersIsError, error: playersError } = useAdminCasinoPlayerStats(range);
+    const { games, isLoading, isError, error, refetch, clearJackpots, isClearingJackpots, clearStats, isClearingStats } = useAdminCasino(range);
+    const { players, totals: playerTotals, truncated: playersTruncated, isLoading: playersLoading, isError: playersIsError, error: playersError, refetch: refetchPlayers } = useAdminCasinoPlayerStats(range);
     const [playerSort, setPlayerSort] = useState<{ key: "net" | "roundsPlayed" | "lossAmount" | "winAmount"; dir: "asc" | "desc" }>({ key: "net", dir: "desc" });
     const { dailyStats, isLoading: chartLoading } = useAdminCasinoDailyStats(5);
     const {
@@ -537,7 +537,7 @@ export default function Casino() {
                 <>
                     {isLoading && <LoadingSpinner />}
 
-                    {isError && !isLoading && <ErrorDisplay error={error} />}
+                    {isError && !isLoading && <ErrorDisplay error={error} onRetry={() => refetch()} />}
 
                     {!isLoading && !isError && (
                         <Paper variant="outlined">
@@ -619,7 +619,7 @@ export default function Casino() {
                 <>
                     {playersLoading && <LoadingSpinner />}
 
-                    {playersIsError && !playersLoading && <ErrorDisplay error={playersError} />}
+                    {playersIsError && !playersLoading && <ErrorDisplay error={playersError} onRetry={() => refetchPlayers()} />}
 
                     {!playersLoading && !playersIsError && (
                         <Paper variant="outlined">

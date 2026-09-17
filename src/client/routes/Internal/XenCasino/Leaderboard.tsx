@@ -136,14 +136,14 @@ function BiggestWinRow({ entry }: { entry: LeaderboardBiggestWinEntry }) {
 
 export default function Leaderboard() {
     const [range, setRange] = useState<LeaderboardRange>("all");
-    const { netWinners, netLosers, mostRounds, biggestWins, isLoading, isError, error } = useCasinoLeaderboard(range);
+    const { netWinners, netLosers, mostRounds, biggestWins, isLoading, isError, error, refetch } = useCasinoLeaderboard(range);
 
     if (isLoading) {
         return <LoadingSpinner />;
     }
 
     if (isError) {
-        return <ErrorDisplay error={error} />;
+        return <ErrorDisplay error={error} onRetry={() => refetch()} />;
     }
 
     return (

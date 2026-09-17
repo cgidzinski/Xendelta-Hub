@@ -26,7 +26,7 @@ export interface BudgetStatusRange {
 export function useXenBudgetStatus(
     bookId: string, currency?: string, range?: BudgetStatusRange, history?: number,
 ) {
-    const { data, isLoading, isError, error } = useQuery({
+    const { data, isLoading, isError, error, refetch } = useQuery({
         queryKey: ["xenbudget", "budget-status", bookId, currency, range?.from, range?.to, history],
         queryFn: async () => {
             const res = await apiClient.get(`/api/xenbudget/books/${bookId}/budget-status`, {
@@ -65,7 +65,7 @@ export function useXenBudgetStatus(
         return decorated.map((b) => scaleBudgetToRange(b, from, to));
     }, [data, range?.from, range?.to]);
 
-    return { status: data, budgets, isLoading, isError, error };
+    return { status: data, budgets, isLoading, isError, error, refetch };
 }
 
 export function useXenBudgetBudgets(bookId: string) {

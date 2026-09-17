@@ -35,7 +35,7 @@ import SecondaryCurrenciesSelect from "./components/SecondaryCurrenciesSelect";
 export default function GroupsList() {
   useTitle("Xensplit");
   useXenSplitGroupsSocket();
-  const { groups, isLoading, isError, error, createGroup, isCreating } = useXenSplits();
+  const { groups, isLoading, isError, error, refetch, createGroup, isCreating } = useXenSplits();
   const { user } = useAuth();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -73,7 +73,7 @@ export default function GroupsList() {
       </Container>
     );
   }
-  if (isError) return <ErrorDisplay error={error} />;
+  if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
 
   return (
     <Box>
