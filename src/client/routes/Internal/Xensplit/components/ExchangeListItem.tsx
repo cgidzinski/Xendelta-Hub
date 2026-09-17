@@ -9,6 +9,7 @@ import {
     IconButton,
     Divider,
 } from "@mui/material";
+import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import SwapVertIcon from "@mui/icons-material/SwapVert";
 import CloseIcon from "@mui/icons-material/Close";
@@ -39,6 +40,7 @@ export default function ExchangeListItem({
     groupId,
     defaultCurrency,
 }: ExchangeListItemProps) {
+    const confirm = useConfirm();
     const [open, setOpen] = useState(false);
 
     const partyA = members.find((m) => m.user_id === exchange.party_a);
@@ -208,8 +210,12 @@ export default function ExchangeListItem({
                             startIcon={<DeleteIcon />}
                             disabled={isDeletingExchange}
                             loading={isDeletingExchange}
-                            onClick={() => {
-                                if (window.confirm("Delete this exchange? This cannot be undone.")) {
+                            onClick={async () => {
+                                const ok = await confirm({
+                                    title: "Delete this exchange?",
+                                    message: "This cannot be undone.",
+                                });
+                                if (ok) {
                                     onDelete(exchange._id);
                                     setOpen(false);
                                 }
