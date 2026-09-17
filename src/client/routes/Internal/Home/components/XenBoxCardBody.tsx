@@ -11,7 +11,7 @@ function formatBytes(bytes: number): string {
 export default function XenBoxCardBody() {
     const { data: files, isLoading } = useXenboxFiles();
 
-    if (isLoading) return <Skeleton variant="rectangular" height={72} sx={{ borderRadius: 1 }} />;
+    if (isLoading) return <Skeleton variant="rectangular" height={72} sx={{ borderRadius: 2 }} />;
 
     const fileList = files || [];
     const totalSize = fileList.reduce((sum, f) => sum + (f.size || 0), 0);
