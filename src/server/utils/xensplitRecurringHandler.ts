@@ -2,7 +2,6 @@ const XenSplit = require("../models/xenSplit");
 import { SocketManager } from "../infrastructure/SocketManager";
 import { notify } from "./notificationUtils";
 import { registerTaskHandler, TaskRunResult } from "../infrastructure/TaskDispatcher";
-import { recordPlan, seedPlan } from "./xenSplitUtils";
 
 export const XENSPLIT_RECURRING_TASK_TYPE = "xensplit:recurring-expense";
 
@@ -47,11 +46,6 @@ export async function handleRecurringExpenseTask(task: any, dueDates: Date[]): P
 async function generate(task: any, dueDates: Date[]): Promise<TaskRunResult> {
   const group = await XenSplit.findById(task.payload.group_id);
   if (!group) return { processed: 0, disable: true }; // group deleted — orphaned task self-heals
-
-  // Occurrences land here rather than through a route, so the settlement plan has
-  // to be anchored from this side too, or generating one would re-cut the group's
-  // pending payments. Idempotent, so the VersionError retry path is safe.
-  seedPlan(group);
 
   const genesisId = task.payload.genesis_expense_id;
   let source = group.expenses.id(genesisId);
@@ -98,7 +92,6 @@ async function generate(task: any, dueDates: Date[]): Promise<TaskRunResult> {
   }
 
   if (pushedCount > 0) {
-    recordPlan(group);
     await group.save();
 
     if (task.payload.pending_expense) {

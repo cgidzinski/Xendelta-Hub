@@ -25,7 +25,7 @@ import {
   createExchangeSchema,
   xenSplitExchangeParamSchema,
 } from "../utils/validation";
-import { calculateAnchoredTransfers, calculateBalances, recordPlan, resolveSplits, seedPlan } from "../utils/xenSplitUtils";
+import { calculateBalances, computeDirectDebts, resolveSplits } from "../utils/xenSplitUtils";
 import { notify } from "../utils/notificationUtils";
 import { advanceDate, applyAdvance } from "../utils/scheduleUtils";
 import { dispatchTask } from "../infrastructure/TaskDispatcher";
@@ -357,9 +357,7 @@ module.exports = function (app: any) {
         }
       }
 
-      seedPlan(group);
       group.members = group.members.filter((m: any) => m.toString() !== targetUserId);
-      recordPlan(group);
       await group.save();
       await group.populate("members", MEMBER_FIELDS);
 
@@ -460,10 +458,8 @@ module.exports = function (app: any) {
         return res.json({ status: true, message: "Recurring expense scheduled", data: { group: await serializeXenSplitGroup(group), newExpenseId: null } });
       }
 
-      seedPlan(group);
       group.expenses.push(expense as any);
       const newExpense = group.expenses[group.expenses.length - 1];
-      recordPlan(group);
       await group.save();
 
       // Backfill occurrences immediately when the series started in the past
@@ -554,7 +550,6 @@ module.exports = function (app: any) {
         return res.status(400).json({ status: false, message: "Hold isn't available for recurring expenses — pause the schedule instead" });
       }
 
-      seedPlan(group);
       if (updates.paid_by !== undefined) expense.paid_by = updates.paid_by;
       if (updates.amount !== undefined) expense.amount = updates.amount;
       if (updates.currency !== undefined) expense.currency = updates.currency;
@@ -607,7 +602,6 @@ module.exports = function (app: any) {
         }
       }
 
-      recordPlan(group);
       await group.save();
 
       // Resuming backfills the paused gap
@@ -679,9 +673,7 @@ module.exports = function (app: any) {
         "payload.genesis_expense_id": expenseId,
       });
 
-      seedPlan(group);
       group.expenses.splice(expenseIndex, 1);
-      recordPlan(group);
       await group.save();
       await group.populate("members", MEMBER_FIELDS);
 
@@ -920,7 +912,7 @@ module.exports = function (app: any) {
       const groupObj = group.toObject();
       const groupForCalc = { ...groupObj, members: populatedMembers.map((m: any) => m._id.toString()) };
       const balances = calculateBalances(groupForCalc);
-      const settlements = calculateAnchoredTransfers(balances, group.settlement_plan ?? []);
+      const settlements = computeDirectDebts(groupForCalc);
 
       // Enrich with user details. The payer needs somewhere to send the money, so each
       // side carries its e-transfer destination — picked out of the populated member
@@ -986,7 +978,6 @@ module.exports = function (app: any) {
         return res.status(403).json({ status: false, message: "Can only settle your own debts" });
       }
 
-      seedPlan(group);
       group.settlements.push({
         from,
         to,
@@ -996,7 +987,6 @@ module.exports = function (app: any) {
         ...(note ? { note } : {}),
       });
 
-      recordPlan(group);
       await group.save();
       await group.populate("members", MEMBER_FIELDS);
 
@@ -1040,9 +1030,7 @@ module.exports = function (app: any) {
         return res.status(403).json({ status: false, message: "Not authorised to undo this settlement" });
       }
 
-      seedPlan(group);
       group.settlements.splice(settlementIndex, 1);
-      recordPlan(group);
       await group.save();
       await group.populate("members", MEMBER_FIELDS);
 
@@ -1082,7 +1070,6 @@ module.exports = function (app: any) {
 
       const amount_b = Number((amount_a * rate).toFixed(2));
 
-      seedPlan(group);
       group.exchanges = group.exchanges || [];
       group.exchanges.push({
         party_a,
@@ -1099,7 +1086,6 @@ module.exports = function (app: any) {
         ...(note ? { note } : {}),
       } as any);
 
-      recordPlan(group);
       await group.save();
       await group.populate("members", MEMBER_FIELDS);
 
@@ -1146,9 +1132,7 @@ module.exports = function (app: any) {
         return res.status(403).json({ status: false, message: "Not authorised to delete this exchange" });
       }
 
-      seedPlan(group);
       group.exchanges.splice(exchangeIndex, 1);
-      recordPlan(group);
       await group.save();
       await group.populate("members", MEMBER_FIELDS);
 

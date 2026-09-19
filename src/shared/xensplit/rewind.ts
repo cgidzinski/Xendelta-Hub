@@ -8,11 +8,7 @@
 //   - expense edits are not versioned, so an expense that existed then but has
 //     been edited since appears with its current amount and splits;
 //   - `on_hold` is current state, with no history of when it was toggled;
-//   - members added or removed since are not reconstructed;
-//   - the settlement plan that calculateAnchoredTransfers routes against is a
-//     single current value, not versioned per settlement, so a caller rewinding
-//     the pending list gets the plain greedy routing for that moment rather than
-//     the anchored one that was actually on screen.
+//   - members added or removed since are not reconstructed.
 
 import type { Expense, Settlement, Exchange, XenSplitDocument } from "./balances";
 

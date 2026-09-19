@@ -1,13 +1,15 @@
-import type { XenSplit, XenSplitExpense, DirectDebt, BreakdownLine } from "../hooks/xensplit/types";
+import type { XenSplit, DirectDebt, BreakdownLine } from "../hooks/xensplit/types";
+import type { XenSplitDocument } from "../../shared/xensplit/balances";
+import { computeDirectDebts as computeSharedDirectDebts, shareFor } from "../../shared/xensplit/debts";
 
-// Share of an expense owed by a single participant. Mirrors the server math in
-// src/server/utils/xenSplitUtils.ts (equal = amount / splits.length, otherwise
-// the explicit amount_owed / percentage on the split).
-function shareFor(expense: XenSplitExpense, split: XenSplitExpense["splits"][number]): number {
-  if (split.amount_owed !== undefined) return split.amount_owed;
-  if (split.percentage !== undefined) return (expense.amount * split.percentage) / 100;
-  if (expense.splits.length > 0) return expense.amount / expense.splits.length;
-  return 0;
+/** The group in the shape the shared engines take — members as bare ids. */
+export function toCalcDoc(group: XenSplit): XenSplitDocument {
+  return {
+    members: group.members.map((m) => m.user_id),
+    expenses: group.expenses,
+    settlements: group.settlements,
+    exchanges: group.exchanges ?? [],
+  } as XenSplitDocument;
 }
 
 // Distinct currencies present across (non-held) expenses, settlements, and exchanges,
@@ -22,51 +24,10 @@ export function currenciesInGroup(group: XenSplit): string[] {
   return [...seen].sort((a, b) => (a === defaultCurrency ? -1 : b === defaultCurrency ? 1 : a.localeCompare(b)));
 }
 
-// Raw pairwise debts for one currency, before the greedy simplification that
-// produces the suggested transfers. For every expense, each participant owes the
-// payer their share; settlements reduce what the payer-of-record owed. Each
-// unordered pair is then netted into a single directed debt.
+// Raw pairwise debts for one currency — the same engine the server serves the
+// pending list from, so the Explain page and the Settlements page cannot disagree.
 export function computeDirectDebts(group: XenSplit, currency: string): DirectDebt[] {
-  // owe[a][b] = how much a owes b directly.
-  const owe: { [a: string]: { [b: string]: number } } = {};
-  const add = (a: string, b: string, amount: number) => {
-    if (a === b) return;
-    if (!owe[a]) owe[a] = {};
-    owe[a][b] = (owe[a][b] ?? 0) + amount;
-  };
-
-  for (const expense of group.expenses) {
-    if (expense.on_hold || expense.currency !== currency) continue;
-    for (const split of expense.splits) {
-      add(split.user_id, expense.paid_by, shareFor(expense, split));
-    }
-  }
-
-  // A settlement from->to pays down what `from` owed `to`.
-  for (const s of group.settlements) {
-    if (s.currency !== currency) continue;
-    add(s.from, s.to, -s.amount);
-  }
-
-  // Exchanges: party_a owes party_b in currency_a, party_b owes party_a in currency_b.
-  for (const ex of group.exchanges ?? []) {
-    if (ex.currency_a === currency) add(ex.party_a, ex.party_b, ex.amount_a);
-    if (ex.currency_b === currency) add(ex.party_b, ex.party_a, ex.amount_b);
-  }
-
-  // Net each unordered pair into a single positive directed debt.
-  const debts: DirectDebt[] = [];
-  const ids = group.members.map((m) => m.user_id);
-  for (let i = 0; i < ids.length; i++) {
-    for (let j = i + 1; j < ids.length; j++) {
-      const a = ids[i];
-      const b = ids[j];
-      const net = (owe[a]?.[b] ?? 0) - (owe[b]?.[a] ?? 0);
-      if (net > 0.01) debts.push({ from: a, to: b, amount: Number(net.toFixed(2)), currency });
-      else if (net < -0.01) debts.push({ from: b, to: a, amount: Number((-net).toFixed(2)), currency });
-    }
-  }
-  return debts;
+  return computeSharedDirectDebts(toCalcDoc(group), currency);
 }
 
 // Signed line items explaining a member's net balance in one currency. The sum

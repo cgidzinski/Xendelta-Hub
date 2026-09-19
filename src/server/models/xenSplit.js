@@ -85,18 +85,6 @@ var exchangeSchema = new Schema({
   created_at: { type: Date, default: Date.now },
 }, { _id: true });
 
-// The transfer list as it was last shown. calculateAnchoredTransfers routes
-// against it so that settling a payment can only shrink a row, never re-cut the
-// group and pull somebody into a payment they were never party to. It is a hint
-// rebuilt from the group on every mutation, never a source of truth: an absent
-// or stale plan still yields a correct list, just one pinned to an older routing.
-var plannedTransferSchema = new Schema({
-  from: { type: String, required: true },
-  to: { type: String, required: true },
-  amount: { type: Number, required: true },
-  currency: { type: String, required: true },
-}, { _id: false });
-
 var xenSplitSchema = new Schema({
   name: { type: String, required: true, maxlength: 100 },
   default_currency: { type: String, default: "CAD" },
@@ -109,7 +97,6 @@ var xenSplitSchema = new Schema({
   settlements: [settlementSchema],
   exchanges: [exchangeSchema],
   recurring_expenses: [recurringExpenseSchema], // DEPRECATED — see note above
-  settlement_plan: { type: [plannedTransferSchema], default: [] },
 });
 
 module.exports = mongoose.model("XenSplit", xenSplitSchema);

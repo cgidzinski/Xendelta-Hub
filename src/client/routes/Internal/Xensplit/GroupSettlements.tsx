@@ -14,7 +14,7 @@ import { formatCurrency, getGroupCurrencies } from "../../../utils/currencyUtils
 import { groupByDay } from "../../../utils/dateGrouping";
 import SettlementDetailDialog, { PendingSettlementDialog } from "./components/SettlementDetailDialog";
 import CreateSettlementDialog from "./components/CreateSettlementDialog";
-import { calculateBalances, calculateMinimumTransfers } from "../../../../shared/xensplit/balances";
+import { computeDirectDebts } from "../../../../shared/xensplit/debts";
 import { rewindBefore, excludedSettlementIds, settlementsNewestFirst } from "../../../../shared/xensplit/rewind";
 
 const listGridSx = {
@@ -63,7 +63,7 @@ export default function GroupSettlements() {
     const getMember = (userId: string) => group.members.find((m) => m.user_id === userId);
 
     // The group in the shape the balance engine takes — same mapping the balances
-    // route does server-side before calling calculateBalances.
+    // route does server-side before computing the pending list.
     const calcDoc = useMemo(() => ({
         members: group.members.map((m) => m.user_id),
         expenses: group.expenses,
@@ -71,9 +71,11 @@ export default function GroupSettlements() {
         exchanges: group.exchanges ?? [],
     }), [group]);
 
-    // Rewinding runs the server's own balance engine over a copy of the group with
-    // the chosen settlement (and everything after it) removed, so the preview and
-    // the live list can't disagree. Mirrors the enrichment the balances route does.
+    // Rewinding runs the server's own engine over a copy of the group with the
+    // chosen settlement (and everything after it) removed, so the preview and the
+    // live list can't disagree. Mirrors the enrichment the balances route does.
+    // Pairwise debts are a pure function of the documents, so unlike the old
+    // simplified routing this reproduces the past list exactly.
     const rewoundPending = useMemo<XenSplitSettlementTransfer[]>(() => {
         if (!rewindTo) return [];
         const asUser = (userId: string) => {
@@ -82,8 +84,7 @@ export default function GroupSettlements() {
                 ? { _id: m.user_id, username: m.username, avatar: m.avatar, etransfer: m.etransfer }
                 : { _id: userId, username: "Unknown", avatar: null, etransfer: null };
         };
-        const balances = calculateBalances(rewindBefore(calcDoc, rewindTo));
-        return calculateMinimumTransfers(balances).map((t) => ({
+        return computeDirectDebts(rewindBefore(calcDoc, rewindTo)).map((t) => ({
             ...t,
             fromUser: asUser(t.from),
             toUser: asUser(t.to),

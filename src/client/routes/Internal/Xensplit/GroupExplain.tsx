@@ -7,7 +7,8 @@ import EastIcon from "@mui/icons-material/East";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { DirectDebt } from "../../../hooks/xensplit/types";
 import { formatCurrency } from "../../../utils/currencyUtils";
-import { computeDirectDebts, computeBalanceBreakdown, currenciesInGroup } from "../../../utils/xensplitExplain";
+import { computeDirectDebts, computeBalanceBreakdown, currenciesInGroup, toCalcDoc } from "../../../utils/xensplitExplain";
+import { calculateBalances, calculateMinimumTransfers } from "../../../../shared/xensplit/balances";
 import DebtWebChart, { type DebtEdge } from "./components/DebtWebChart";
 
 type Mode = "simplified" | "direct";
@@ -27,16 +28,16 @@ export default function GroupExplain() {
 
     const directDebts = useMemo<DirectDebt[]>(() => computeDirectDebts(group, currency), [group, currency]);
 
-    // The pending list as served, which is anchored to the plan the group last
-    // recorded (see src/shared/xensplit/anchor.ts) rather than being re-minimized
-    // on every read. Drawing anything else here would put a graph on screen that
-    // disagrees with the payments members are actually asked to make.
+    // Computed here rather than read from balancesData.settlements: the served
+    // pending list is the direct debts now, so reading it would make "Simplified"
+    // a copy of "Direct". This keeps the toggle meaning what it says — the
+    // theoretical fewest transfers, shown for interest, not settled from.
     const simplifiedEdges = useMemo<DebtEdge[]>(
         () =>
-            (balancesData?.settlements ?? [])
-                .filter((s) => s.currency === currency)
-                .map((s) => ({ from: s.from, to: s.to, amount: s.amount })),
-        [balancesData, currency],
+            calculateMinimumTransfers(calculateBalances(toCalcDoc(group)))
+                .filter((t) => t.currency === currency)
+                .map((t) => ({ from: t.from, to: t.to, amount: t.amount })),
+        [group, currency],
     );
 
     const edges: DebtEdge[] = mode === "simplified" ? simplifiedEdges : directDebts.map((d) => ({ from: d.from, to: d.to, amount: d.amount }));
@@ -119,7 +120,7 @@ export default function GroupExplain() {
 
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", mb: 1, flexShrink: 0 }}>
                         {mode === "simplified"
-                            ? `${directDebts.length} direct debt${directDebts.length === 1 ? "" : "s"} meshed into ${simplifiedEdges.length} payment${simplifiedEdges.length === 1 ? "" : "s"}.`
+                            ? `The ${directDebts.length} direct debt${directDebts.length === 1 ? "" : "s"} could mesh into ${simplifiedEdges.length} payment${simplifiedEdges.length === 1 ? "" : "s"} — shown for interest; settling uses the direct debts.`
                             : "Raw debts from shared expenses, before simplification."}
                     </Typography>
                 </>
