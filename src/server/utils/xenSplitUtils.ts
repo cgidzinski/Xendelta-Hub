@@ -8,6 +8,7 @@ export {
   calculateBalances,
   calculateMinimumTransfers,
 } from "../../shared/xensplit/balances";
+export { computeDirectDebts, participantsOf, shareFor } from "../../shared/xensplit/debts";
 export type {
   Transfer,
   BalanceMap,
@@ -16,6 +17,7 @@ export type {
   Exchange,
   XenSplitDocument,
 } from "../../shared/xensplit/balances";
+export type { DirectDebt } from "../../shared/xensplit/debts";
 
 // Resolves the splits to store for an expense given its split_type. Mirrors the
 // pre-existing inline logic from the create/update expense route handlers:

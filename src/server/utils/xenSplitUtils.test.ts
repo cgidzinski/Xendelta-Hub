@@ -420,6 +420,12 @@ describe("calculateBalances -> calculateMinimumTransfers (end to end)", () => {
   // the total owed to You both move by exactly the $30 paid; only the routing
   // changes. If this test starts failing, the simplification changed — decide
   // deliberately, don't just update the numbers.
+  //
+  // That decision has been made once already: calculateMinimumTransfers was left
+  // exactly as it is, and calculateAnchoredTransfers (src/shared/xensplit/anchor.ts)
+  // now wraps it for the pending list so this re-cut cannot reach a member. The
+  // numbers below are what the bare solver still does, and what anchor.test.ts
+  // asserts it no longer shows — keep both.
   it("can re-route a settled debtor back to the same creditor for a larger amount", () => {
     // Three creditors front costs for Bo and Dee, giving nets of
     // You +90, Ann +110, Cy +70, Bo -140, Dee -130.

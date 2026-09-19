@@ -104,6 +104,7 @@ const TABS: { label: string; sections: HelpSection[] }[] = [
                 heading: "Settling up",
                 items: [
                     "Record a settlement to mark a debt as paid between two members.",
+                    "Payments listed are the real debts between two people, so settling one only clears that one — nobody else's payments move, and you are never asked to pay someone you never shared an expense with.",
                     "Filter settlements to see all of them, just yours, or just other members'.",
                 ],
             },
@@ -135,7 +136,8 @@ const TABS: { label: string; sections: HelpSection[] }[] = [
                 heading: "Visualizing who owes whom",
                 items: [
                     "The Explain view draws a web of who owes what to whom.",
-                    "Toggle between \"simplified\" debts (fewest transactions to settle everyone up) and \"direct\" debts (the exact expense-by-expense trail).",
+                    "\"Direct\" debts are the exact expense-by-expense trail, and what you are actually asked to pay.",
+                    "\"Simplified\" shows the fewest transactions that would settle everyone up — a what-if view, not what gets settled.",
                     "Switch currencies to see the graph for each one separately.",
                 ],
             },

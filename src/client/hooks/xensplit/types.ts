@@ -144,14 +144,10 @@ export interface XenSplitBalancesData {
   settlements: XenSplitSettlementTransfer[];
 }
 
-// A raw, un-simplified debt between two members for a single currency,
-// derived directly from shared expenses (before the greedy meshing).
-export interface DirectDebt {
-  from: string;
-  to: string;
-  amount: number;
-  currency: string;
-}
+// A raw, un-simplified debt between two members for a single currency, derived
+// directly from shared expenses. This is what the pending list is built from —
+// see src/shared/xensplit/debts.ts, which owns the definition.
+export type { DirectDebt } from "../../../shared/xensplit/debts";
 
 // One signed line item explaining a member's net balance in a currency.
 // The sum of `amount` across all lines equals the member's net balance.

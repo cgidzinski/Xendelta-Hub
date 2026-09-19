@@ -25,7 +25,7 @@ import {
   createExchangeSchema,
   xenSplitExchangeParamSchema,
 } from "../utils/validation";
-import { calculateBalances, calculateMinimumTransfers, resolveSplits } from "../utils/xenSplitUtils";
+import { calculateBalances, computeDirectDebts, resolveSplits } from "../utils/xenSplitUtils";
 import { notify } from "../utils/notificationUtils";
 import { advanceDate, applyAdvance } from "../utils/scheduleUtils";
 import { dispatchTask } from "../infrastructure/TaskDispatcher";
@@ -912,7 +912,7 @@ module.exports = function (app: any) {
       const groupObj = group.toObject();
       const groupForCalc = { ...groupObj, members: populatedMembers.map((m: any) => m._id.toString()) };
       const balances = calculateBalances(groupForCalc);
-      const settlements = calculateMinimumTransfers(balances);
+      const settlements = computeDirectDebts(groupForCalc);
 
       // Enrich with user details. The payer needs somewhere to send the money, so each
       // side carries its e-transfer destination — picked out of the populated member

@@ -169,6 +169,13 @@ export function calculateBalances(doc: XenSplitDocument): BalanceMap {
 // from scratch on every call with no memory of what it emitted last time. A
 // settlement therefore re-cuts every edge, not just the one that was paid; see
 // the regression test in src/server/utils/xenSplitUtils.test.ts.
+//
+// That churn is why this is NO LONGER what the pending list runs through. It
+// meshes everyone's position together, so one member paying off-plan re-cuts rows
+// belonging to members who had nothing to do with it. computeDirectDebts in
+// ./debts serves the pending list instead. This function still backs the Explain
+// page's "Simplified" view, which is honest as a display of the theoretical
+// minimum — nothing should settle from its output directly.
 export function calculateMinimumTransfers(balances: BalanceMap): Transfer[] {
   const transfers: Transfer[] = [];
   const currencies = new Set<string>();
