@@ -88,6 +88,13 @@ export interface GroupDetailContext {
   isUploadingImage: boolean;
   deleteSettlement: (settlementId: string) => void;
   isDeletingSettlement: boolean;
+  // Restore is group-owner only server-side; callers gate the button on isCreator.
+  restoreExpense: (expenseId: string) => void;
+  isRestoringExpense: boolean;
+  restoreSettlement: (settlementId: string) => void;
+  isRestoringSettlement: boolean;
+  restoreExchange: (exchangeId: string) => void;
+  isRestoringExchange: boolean;
   cancelRecurring: (recurringId: string) => void;
   isCancellingRecurring: boolean;
 }
@@ -103,9 +110,9 @@ export default function GroupDetail() {
   const { group, isLoading, isError, error, refetch, addMembers, isAddingMembers, removeMember, isRemovingMember, updateGroup, isUpdating, uploadGroupImage, isUploadingImage } = useXenSplit(groupId!);
   useTitle("Xensplit");
   const { deleteGroup } = useXenSplits();
-  const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useXenSplitBalances(groupId!);
-  const { updateExpense, updateExpenseAsync, isUpdatingExpense, addExpense, addExpenseAsync, isAddingExpense, deleteExpense, isDeletingExpense, cancelRecurring, isCancellingRecurring, uploadExpenseImages, isUploadingImages, deleteExpenseImage, isDeletingExpenseImage } = useXenSplitExpenses(groupId!);
-  const { addExchange, isAddingExchange, deleteExchange, isDeletingExchange, fetchLiveRate, isFetchingLiveRate } = useXenSplitExchanges(groupId!);
+  const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement, restoreSettlement, isRestoringSettlement } = useXenSplitBalances(groupId!);
+  const { updateExpense, updateExpenseAsync, isUpdatingExpense, addExpense, addExpenseAsync, isAddingExpense, deleteExpense, isDeletingExpense, restoreExpense, isRestoringExpense, cancelRecurring, isCancellingRecurring, uploadExpenseImages, isUploadingImages, deleteExpenseImage, isDeletingExpenseImage } = useXenSplitExpenses(groupId!);
+  const { addExchange, isAddingExchange, deleteExchange, isDeletingExchange, restoreExchange, isRestoringExchange, fetchLiveRate, isFetchingLiveRate } = useXenSplitExchanges(groupId!);
   useXenSplitSocket(groupId!);
   const { profile } = useUserProfile();
   const [showEtransferPrompt, setShowEtransferPrompt] = useState(false);
@@ -552,6 +559,12 @@ export default function GroupDetail() {
     uploadGroupImage,
     isUploadingImage,
     deleteSettlement,
+    restoreExpense,
+    isRestoringExpense,
+    restoreSettlement,
+    isRestoringSettlement,
+    restoreExchange,
+    isRestoringExchange,
     isDeletingSettlement,
     cancelRecurring,
     isCancellingRecurring,
@@ -854,8 +867,8 @@ export default function GroupDetail() {
                 const ok = await confirm({
                   title: "Delete this expense?",
                   message: selectedExpenseSeries
-                    ? "This also stops its recurring schedule. Already-created expenses are kept."
-                    : "This cannot be undone.",
+                    ? "This also stops its recurring schedule, which restoring does NOT bring back. Already-created expenses are kept, and the group owner can restore the expense itself from the Deleted filter."
+                    : "The group owner can restore it later from the Deleted filter on the Expenses tab.",
                 });
                 if (ok) {
                   await new Promise<void>((resolve) => {
@@ -1093,7 +1106,15 @@ export default function GroupDetail() {
               </DialogContent>
 
               <DialogActions sx={{ px: 3, pb: 2.5 }}>
-                {e.recurring_id ? (
+                {/* A deleted expense cannot be edited - the server rejects it - so offer
+                    nothing but the route back. */}
+                {e.deleted_at != null ? (
+                  <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", width: "100%" }}>
+                    {isCreator
+                      ? "This expense is deleted. Restore it from the Deleted filter on the Expenses tab."
+                      : "This expense is deleted. Ask the group owner to restore it."}
+                  </Typography>
+                ) : e.recurring_id ? (
                   (() => {
                     const genesisExpense = group.expenses.find((x) => x._id === e.recurring_id);
                     const canDelete = isCreator || !e.created_by || e.created_by === user.id;

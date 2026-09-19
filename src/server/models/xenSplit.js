@@ -31,6 +31,10 @@ var expenseSchema = new Schema({
   // Set on generated occurrences; points at the genesis expense _id of the series
   recurring_id: { type: Schema.Types.ObjectId },
   created_at: { type: Date, default: Date.now },
+  // Soft deletion: records are never removed from the group, only stamped. Absent or
+  // null means live. The balance engine skips stamped rows (see shared/xensplit/softDelete.ts).
+  deleted_at: { type: Date, default: null },
+  deleted_by: { type: String },
 }, { _id: true });
 
 // DEPRECATED — recurring series migrated to the ScheduledTask collection
@@ -68,6 +72,10 @@ var settlementSchema = new Schema({
   currency: { type: String, default: "CAD" },
   settled_at: { type: Date, default: Date.now },
   note: { type: String, maxlength: 500 },
+  // Soft deletion: records are never removed from the group, only stamped. Absent or
+  // null means live. The balance engine skips stamped rows (see shared/xensplit/softDelete.ts).
+  deleted_at: { type: Date, default: null },
+  deleted_by: { type: String },
 }, { _id: true });
 
 var exchangeSchema = new Schema({
@@ -83,6 +91,10 @@ var exchangeSchema = new Schema({
   note: { type: String, maxlength: 500 },
   date: { type: Date, default: Date.now },
   created_at: { type: Date, default: Date.now },
+  // Soft deletion: records are never removed from the group, only stamped. Absent or
+  // null means live. The balance engine skips stamped rows (see shared/xensplit/softDelete.ts).
+  deleted_at: { type: Date, default: null },
+  deleted_by: { type: String },
 }, { _id: true });
 
 var xenSplitSchema = new Schema({

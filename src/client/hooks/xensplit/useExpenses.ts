@@ -53,6 +53,19 @@ export function useXenSplitExpenses(groupId: string) {
     },
   });
 
+  // Restore a soft-deleted expense. The server allows this for the group owner only;
+  // the UI hides the button for everyone else, and a stray call gets a 403.
+  const restoreExpenseMutation = useMutation({
+    mutationFn: async (expenseId: string) => {
+      const res = await apiClient.post(`/api/xensplit/groups/${groupId}/expenses/${expenseId}/restore`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["xensplit", "balances", groupId] });
+    },
+  });
+
   const cancelRecurringMutation = useMutation({
     mutationFn: async (recurringId: string) => {
       const res = await apiClient.delete(`/api/xensplit/groups/${groupId}/recurring/${recurringId}`);
@@ -100,6 +113,8 @@ export function useXenSplitExpenses(groupId: string) {
     deleteExpense: deleteExpenseMutation.mutate,
     isDeletingExpense: deleteExpenseMutation.isPending,
     deleteExpenseError: deleteExpenseMutation.error,
+    restoreExpense: restoreExpenseMutation.mutate,
+    isRestoringExpense: restoreExpenseMutation.isPending,
     cancelRecurring: cancelRecurringMutation.mutate,
     isCancellingRecurring: cancelRecurringMutation.isPending,
     uploadExpenseImages: uploadExpenseImagesMutation.mutateAsync,

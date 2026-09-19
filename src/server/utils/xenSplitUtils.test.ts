@@ -464,3 +464,91 @@ describe("calculateBalances -> calculateMinimumTransfers (end to end)", () => {
     }
   });
 });
+
+// Soft deletion. The contract these pin: a deleted record must land on the balances
+// exactly as if it had never been entered, and restoring it must return the original
+// figures. Anything less silently rewrites what members owe each other.
+describe("calculateBalances with soft-deleted records", () => {
+  const DELETED = "2025-06-01T00:00:00.000Z";
+
+  it("ignores a deleted expense entirely", () => {
+    const kept: TestExpense = { paid_by: "A", amount: 60, currency: "CAD", splits: equalSplit(60, ["A", "B", "C"]) };
+    const doomed: TestExpense = { paid_by: "B", amount: 90, currency: "CAD", splits: equalSplit(90, ["A", "B", "C"]) };
+
+    const withDeleted = calculateBalances(makeDoc([kept, { ...doomed, deleted_at: DELETED }], [], ["A", "B", "C"]));
+    const neverEntered = calculateBalances(makeDoc([kept], [], ["A", "B", "C"]));
+    expect(withDeleted).toEqual(neverEntered);
+  });
+
+  it("returns the original figures when the record is restored", () => {
+    const expenses: TestExpense[] = [
+      { paid_by: "A", amount: 60, currency: "CAD", splits: equalSplit(60, ["A", "B"]) },
+      { paid_by: "B", amount: 40, currency: "CAD", splits: equalSplit(40, ["A", "B"]) },
+    ];
+    const before = calculateBalances(makeDoc(expenses, [], ["A", "B"]));
+    const deleted = expenses.map((e, i) => (i === 1 ? { ...e, deleted_at: DELETED } : e));
+    expect(calculateBalances(makeDoc(deleted, [], ["A", "B"]))).not.toEqual(before);
+    // Restoring clears the stamp - the schema default is null, so cover both spellings.
+    const restoredNull = expenses.map((e, i) => (i === 1 ? { ...e, deleted_at: null } : e));
+    expect(calculateBalances(makeDoc(restoredNull, [], ["A", "B"]))).toEqual(before);
+  });
+
+  it("ignores a deleted settlement, leaving the debt outstanding", () => {
+    const expense: TestExpense = { paid_by: "A", amount: 100, currency: "CAD", splits: equalSplit(100, ["A", "B"]) };
+    const settlement: TestSettlement = { from: "B", to: "A", amount: 50, currency: "CAD" };
+
+    const settled = calculateBalances(makeDoc([expense], [settlement], ["A", "B"]));
+    expect(settled.A.CAD).toBeCloseTo(0, 5);
+
+    const undone = calculateBalances(makeDoc([expense], [{ ...settlement, deleted_at: DELETED }], ["A", "B"]));
+    expect(undone).toEqual(calculateBalances(makeDoc([expense], [], ["A", "B"])));
+    expect(undone.A.CAD).toBeCloseTo(50, 5);
+    expect(undone.B.CAD).toBeCloseTo(-50, 5);
+  });
+
+  it("ignores a deleted exchange on both legs", () => {
+    const exchange: TestExchange = {
+      party_a: "A", currency_a: "CAD", amount_a: 100,
+      party_b: "B", currency_b: "USD", amount_b: 75, rate: 0.75,
+    };
+    const withDeleted = calculateBalances(makeDoc([], [], ["A", "B"], [{ ...exchange, deleted_at: DELETED }]));
+    for (const member of ["A", "B"]) {
+      for (const amount of Object.values(withDeleted[member])) expect(amount).toBeCloseTo(0, 5);
+    }
+  });
+
+  it("drops a currency that only deleted records used", () => {
+    // The currency-collection pass runs before the accumulation pass; if it ignored
+    // deletion, every member would carry a stray zero entry for a dead currency.
+    const doc = makeDoc(
+      [
+        { paid_by: "A", amount: 50, currency: "CAD", splits: equalSplit(50, ["A", "B"]) },
+        { paid_by: "A", amount: 80, currency: "EUR", splits: equalSplit(80, ["A", "B"]), deleted_at: DELETED },
+      ],
+      [],
+      ["A", "B"]
+    );
+    const balances = calculateBalances(doc);
+    expect(Object.keys(balances.A)).toEqual(["CAD"]);
+    expect(Object.keys(balances.B)).toEqual(["CAD"]);
+  });
+
+  it("emits no transfer for a debt whose only expense was deleted", () => {
+    const doc = makeDoc(
+      [{ paid_by: "A", amount: 100, currency: "CAD", splits: equalSplit(100, ["A", "B"]), deleted_at: DELETED }],
+      [],
+      ["A", "B"]
+    );
+    expect(calculateMinimumTransfers(calculateBalances(doc))).toEqual([]);
+  });
+
+  it("treats a deletion stamped at the epoch as deleted", () => {
+    // Guards against a truthiness check: new Date(0) is falsy-adjacent but a real time.
+    const doc = makeDoc(
+      [{ paid_by: "A", amount: 100, currency: "CAD", splits: equalSplit(100, ["A", "B"]), deleted_at: new Date(0) }],
+      [],
+      ["A", "B"]
+    );
+    expect(calculateMinimumTransfers(calculateBalances(doc))).toEqual([]);
+  });
+});

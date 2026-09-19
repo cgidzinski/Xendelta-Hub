@@ -7,6 +7,7 @@ import AddIcon from "@mui/icons-material/Add";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import RestoreIcon from "@mui/icons-material/Restore";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitSettlement, XenSplitSettlementTransfer } from "../../../hooks/xensplit/types";
 import { xsCardSx } from "./components/rowStyles";
@@ -45,7 +46,7 @@ const settledOnLabel = (settledAt: string) =>
     new Date(settledAt).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
 export default function GroupSettlements() {
-    const { balancesData, group, user, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement, onAddExchange } = useOutletContext<GroupDetailContext>();
+    const { balancesData, group, user, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement, onAddExchange, isCreator, restoreSettlement, isRestoringSettlement } = useOutletContext<GroupDetailContext>();
     const navigate = useNavigate();
     const { groupId } = useParams<{ groupId: string }>();
     const lsKey = `xensplit_settlementsFilter_${groupId}`;
@@ -54,6 +55,8 @@ export default function GroupSettlements() {
         return saved === "mine" || saved === "others" ? saved : "all";
     });
     const [showHistory, setShowHistory] = useState(false);
+    const deletedKey = `xensplit_showDeletedSettlements_${groupId}`;
+    const [showDeleted, setShowDeleted] = useState(() => localStorage.getItem(deletedKey) === "true");
     const [viewPending, setViewPending] = useState<XenSplitSettlementTransfer | null>(null);
     const [viewSettlement, setViewSettlement] = useState<XenSplitSettlement | null>(null);
     const [createOpen, setCreateOpen] = useState(false);
@@ -110,7 +113,14 @@ export default function GroupSettlements() {
 
     // Same ordering the rewind cut uses, so "this one and everything after it" is
     // exactly the run of rows above the toggled one.
-    const completedSettlements = settlementsNewestFirst(group.settlements ?? []);
+    // Deleted settlements are split out of group.settlements by the query `select`, so they
+    // enter the history only when revealed - and never the rewind, which reads the live
+    // array above and must keep reconstructing balances from real settlements only.
+    const completedSettlements = settlementsNewestFirst(
+        showDeleted
+            ? [...(group.settlements ?? []), ...(group.deleted?.settlements ?? [])]
+            : (group.settlements ?? [])
+    );
     const filteredHistory = filter === "all"
         ? completedSettlements
         : filter === "mine"
@@ -126,7 +136,11 @@ export default function GroupSettlements() {
         [filteredHistory],
     );
 
-    if (pendingSettlements.length === 0 && completedSettlements.length === 0) {
+    // Fall through to the full page when deleted settlements exist but are hidden -
+    // otherwise the empty state would strand the user with no way to reach the toggle
+    // that reveals them.
+    const hasDeletedSettlements = (group.deleted?.settlements?.length ?? 0) > 0;
+    if (pendingSettlements.length === 0 && completedSettlements.length === 0 && !hasDeletedSettlements) {
         return (
             <Box>
                 <Button
@@ -161,11 +175,28 @@ export default function GroupSettlements() {
         <Box>
             <Box sx={{ mb: 2, minHeight: 48, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <Typography variant="h6" sx={{ fontWeight: 600, my: 0 }}>Settlements</Typography>
-                <ToggleButtonGroup size="small" value={filter} exclusive onChange={(_, v) => { if (v) { setFilter(v); localStorage.setItem(lsKey, v); } }} sx={{ height: 24 }}>
-                    <ToggleButton value="all" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>All</ToggleButton>
-                    <ToggleButton value="mine" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>Mine</ToggleButton>
-                    <ToggleButton value="others" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>Others</ToggleButton>
-                </ToggleButtonGroup>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                    <ToggleButtonGroup size="small" value={filter} exclusive onChange={(_, v) => { if (v) { setFilter(v); localStorage.setItem(lsKey, v); } }} sx={{ height: 24 }}>
+                        <ToggleButton value="all" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>All</ToggleButton>
+                        <ToggleButton value="mine" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>Mine</ToggleButton>
+                        <ToggleButton value="others" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>Others</ToggleButton>
+                    </ToggleButtonGroup>
+                    <ToggleButtonGroup
+                        size="small"
+                        value={showDeleted ? "deleted" : null}
+                        exclusive
+                        onChange={(_, v) => {
+                            const next = v === "deleted";
+                            setShowDeleted(next);
+                            localStorage.setItem(deletedKey, String(next));
+                        }}
+                        sx={{ height: 24 }}
+                    >
+                        <ToggleButton value="deleted" title="Show deleted settlements" sx={{ px: 1.5, fontSize: "0.7rem", textTransform: "none" }}>
+                            Deleted
+                        </ToggleButton>
+                    </ToggleButtonGroup>
+                </Box>
             </Box>
 
             <Box sx={{ display: "flex", gap: 1.5, mb: 2.5 }}>
@@ -301,12 +332,13 @@ export default function GroupSettlements() {
                                         const fromMember = getMember(s.from);
                                         const toMember = getMember(s.to);
                                         const isCut = rewindTo === s._id;
-                                        const isHidden = hiddenByRewind.has(s._id);
+                                        const isDeletedRow = s.deleted_at != null;
+                                        const isHidden = hiddenByRewind.has(s._id) || isDeletedRow;
                                         return (
                                             <Box
                                                 key={s._id ?? idx}
                                                 onClick={() => setViewSettlement(s)}
-                                                sx={{ ...historyCardSx, ...(isHidden ? { opacity: 0.45 } : {}) }}
+                                                sx={{ ...historyCardSx, ...(isHidden ? { opacity: 0.45 } : {}), ...(isDeletedRow ? { borderStyle: "dashed" } : {}) }}
                                             >
                                                 {/* row 1: avatars + amount */}
                                                 <Avatar src={fromMember?.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>{fromMember?.username[0]?.toUpperCase()}</Avatar>
@@ -319,7 +351,26 @@ export default function GroupSettlements() {
                                                 <EastIcon sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center", alignSelf: "center" }} />
                                                 <Typography variant="caption" noWrap sx={{ textTransform: "capitalize", color: "text.secondary" }}>{toMember?.username ?? "?"}</Typography>
                                                 {/* row 3: rewind toggle — the date is on the day header */}
-                                                <Box sx={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "center", mt: 0.25 }}>
+                                                <Box sx={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5, mt: 0.25 }}>
+                                                    {isDeletedRow && (
+                                                        <Typography variant="caption" sx={{ color: "error.main", fontWeight: 600, fontSize: "0.6rem", textTransform: "uppercase" }}>
+                                                            Deleted
+                                                        </Typography>
+                                                    )}
+                                                    {isDeletedRow && isCreator && (
+                                                        <Button
+                                                            size="small"
+                                                            variant="text"
+                                                            startIcon={<RestoreIcon sx={{ fontSize: "14px !important" }} />}
+                                                            disabled={isRestoringSettlement}
+                                                            onClick={(e) => { e.stopPropagation(); restoreSettlement(s._id); }}
+                                                            sx={{ py: 0, px: 0.5, minWidth: 0, fontSize: "0.65rem", textTransform: "none" }}
+                                                        >
+                                                            Restore
+                                                        </Button>
+                                                    )}
+                                                    {/* A deleted settlement is not part of the ledger, so it cannot anchor a rewind. */}
+                                                    {!isDeletedRow && (
                                                     <Tooltip title={isCut ? "Back to now" : "See the pending list as it was before this"}>
                                                         <IconButton
                                                             size="small"
@@ -335,6 +386,7 @@ export default function GroupSettlements() {
                                                                 : <VisibilityOffIcon sx={{ fontSize: 16 }} />}
                                                         </IconButton>
                                                     </Tooltip>
+                                                    )}
                                                 </Box>
                                             </Box>
                                         );

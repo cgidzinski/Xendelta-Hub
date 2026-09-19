@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import type { XenSplit } from "./types";
+import { splitDeleted } from "./splitDeleted";
 
 export function useXenSplit(groupId: string) {
   const queryClient = useQueryClient();
@@ -11,6 +12,9 @@ export function useXenSplit(groupId: string) {
       const res = await apiClient.get(`/api/xensplit/groups/${groupId}`);
       return res.data.data as XenSplit;
     },
+    // Keeps soft-deleted records out of group.expenses/settlements/exchanges for every
+    // consumer, moving them to group.deleted for the views that reveal them.
+    select: splitDeleted,
     enabled: !!groupId,
     staleTime: 0, // Always refetch in background
     // Only reuse cached data as a placeholder for this same group — otherwise

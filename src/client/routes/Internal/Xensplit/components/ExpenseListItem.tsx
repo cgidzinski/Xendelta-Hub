@@ -1,6 +1,8 @@
-import { Box, Typography, Avatar, alpha, Chip } from "@mui/material";
+import { Box, Typography, Avatar, alpha, Chip, Button } from "@mui/material";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import RepeatIcon from "@mui/icons-material/Repeat";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import RestoreIcon from "@mui/icons-material/Restore";
 import type { XenSplitExpense, XenSplitRecurringSeries } from "../../../../hooks/xensplit/types";
 import { formatCurrency } from "../../../../utils/currencyUtils";
 import { getCategoryIcon, getCategoryColor } from "../../../../constants/xensplitCategoryIcons";
@@ -65,12 +67,17 @@ interface ExpenseListItemProps {
     recurringSeries?: XenSplitRecurringSeries;
     /** Last expense of an ended series (see computeFinalExpenseIds). */
     isFinal?: boolean;
+    /** Soft-deleted: dimmed, struck through and badged. */
+    deleted?: boolean;
+    /** Restore handler. Passed only for the group owner, who alone may undo a deletion. */
+    onRestore?: () => void;
+    isRestoring?: boolean;
 }
 
-export default function ExpenseListItem({ expense, onClick, userId, hideDate, recurringSeries, isFinal }: ExpenseListItemProps) {
+export default function ExpenseListItem({ expense, onClick, userId, hideDate, recurringSeries, isFinal, deleted, onRestore, isRestoring }: ExpenseListItemProps) {
     const mySplit = userId ? expense.splits.find((sp) => sp.user_id === userId) : undefined;
     const isPayer = userId ? expense.paid_by === userId : false;
-    const owe = mySplit && !isPayer && !expense.on_hold
+    const owe = mySplit && !isPayer && !expense.on_hold && !deleted
         ? (mySplit.amount_owed ?? (expense.splits.length ? expense.amount / expense.splits.length : 0))
         : 0;
     const dateStr = new Date(expense.date).toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -87,6 +94,7 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate, re
                 alignItems: "flex-start",
                 columnGap: 1.25,
                 cursor: "pointer",
+                ...(deleted && { opacity: 0.6, borderStyle: "dashed" }),
                 "&:hover": { bgcolor: "action.hover" },
             }}
         >
@@ -100,13 +108,29 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate, re
                 <CategoryIcon sx={{ fontSize: 22, color: categoryColor }} />
             </Avatar>
             <Box sx={{ minWidth: 0 }}>
-                <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{expense.title}</Typography>
+                <Typography
+                    variant="body2"
+                    sx={{ fontWeight: 600, ...(deleted && { textDecoration: "line-through" }) }}
+                    noWrap
+                >
+                    {expense.title}
+                </Typography>
                 <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
                     <Box component="span" sx={{ textTransform: "capitalize" }}>{expense.payer?.username ?? "?"}</Box>
                     {" paid · "}
                     <Box component="span" sx={{ textTransform: "capitalize" }}>{expense.split_type}</Box>
                     {!hideDate ? ` · ${dateStr}` : ""}
                 </Typography>
+                {deleted && (
+                    <Chip
+                        icon={<DeleteOutlineIcon sx={{ fontSize: "14px !important" }} />}
+                        label="Deleted"
+                        size="small"
+                        color="error"
+                        variant="outlined"
+                        sx={{ height: 18, fontSize: "0.6rem", mt: 0.25, "& .MuiChip-label": { px: 0.75 } }}
+                    />
+                )}
                 {expense.on_hold && (
                     <Chip
                         icon={<PauseCircleOutlineIcon sx={{ fontSize: "14px !important" }} />}
@@ -146,6 +170,19 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate, re
                     <Typography variant="caption" sx={{ color: "error.main", fontWeight: 600, display: "block", lineHeight: 1.2 }}>
                         {formatCurrency(owe, expense.currency)}
                     </Typography>
+                )}
+                {onRestore && (
+                    <Button
+                        size="small"
+                        variant="text"
+                        startIcon={<RestoreIcon sx={{ fontSize: "14px !important" }} />}
+                        disabled={isRestoring}
+                        // The row itself opens the expense; restoring must not also do that.
+                        onClick={(e) => { e.stopPropagation(); onRestore(); }}
+                        sx={{ mt: 0.25, py: 0, px: 0.5, minWidth: 0, fontSize: "0.65rem", textTransform: "none" }}
+                    >
+                        Restore
+                    </Button>
                 )}
             </Box>
         </Box>

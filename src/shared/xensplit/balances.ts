@@ -8,6 +8,9 @@
 // Imported by both sides, so it stays resolution-agnostic: ESM syntax only, no
 // Node or DOM APIs, no mongoose.
 
+import { isDeleted } from "./softDelete";
+import type { SoftDeletable } from "./softDelete";
+
 export interface Transfer {
   from: string;
   to: string;
@@ -19,7 +22,7 @@ export interface BalanceMap {
   [userId: string]: { [currency: string]: number };
 }
 
-export interface Expense {
+export interface Expense extends SoftDeletable {
   paid_by: string;
   amount: number;
   currency: string;
@@ -27,7 +30,7 @@ export interface Expense {
   splits: { user_id: string; amount_owed?: number; percentage?: number }[];
 }
 
-export interface Settlement {
+export interface Settlement extends SoftDeletable {
   from: string;
   to: string;
   amount: number;
@@ -36,7 +39,7 @@ export interface Settlement {
   settled_at?: Date | string;
 }
 
-export interface Exchange {
+export interface Exchange extends SoftDeletable {
   party_a: string;
   currency_a: string;
   amount_a: number;
@@ -64,16 +67,17 @@ export function calculateBalances(doc: XenSplitDocument): BalanceMap {
   const currencies = new Set<string>();
   if (Array.isArray(doc.expenses)) {
     for (const exp of doc.expenses) {
-      if (exp && exp.currency && !exp.on_hold) currencies.add(exp.currency);
+      if (exp && exp.currency && !exp.on_hold && !isDeleted(exp)) currencies.add(exp.currency);
     }
   }
   if (Array.isArray(doc.settlements)) {
     for (const s of doc.settlements) {
-      if (s && s.currency) currencies.add(s.currency);
+      if (s && s.currency && !isDeleted(s)) currencies.add(s.currency);
     }
   }
   if (Array.isArray(doc.exchanges)) {
     for (const ex of doc.exchanges) {
+      if (ex && isDeleted(ex)) continue;
       if (ex && ex.currency_a) currencies.add(ex.currency_a);
       if (ex && ex.currency_b) currencies.add(ex.currency_b);
     }
@@ -87,9 +91,10 @@ export function calculateBalances(doc: XenSplitDocument): BalanceMap {
     }
   }
 
-  // Process each expense
+  // Process each expense. A soft-deleted record must land on the balances exactly as if
+  // it had never been entered - see softDelete.ts.
   for (const expense of doc.expenses) {
-    if (expense.on_hold) continue;
+    if (expense.on_hold || isDeleted(expense)) continue;
     const { paid_by, amount, currency, splits } = expense;
 
     // Initialize currency for payer if needed
@@ -129,6 +134,7 @@ export function calculateBalances(doc: XenSplitDocument): BalanceMap {
 
   // Subtract settled amounts
   for (const settlement of doc.settlements) {
+    if (isDeleted(settlement)) continue;
     const { from, to, amount, currency } = settlement;
     // Use explicit undefined check; a zero balance is a valid starting point
     if (balances[from]) {
@@ -149,6 +155,7 @@ export function calculateBalances(doc: XenSplitDocument): BalanceMap {
 
   // Apply exchange legs: party_a owes party_b in currency_a, party_b owes party_a in currency_b
   for (const ex of doc.exchanges ?? []) {
+    if (isDeleted(ex)) continue;
     if (balances[ex.party_a]) {
       balances[ex.party_a][ex.currency_a] = (balances[ex.party_a][ex.currency_a] ?? 0) - ex.amount_a;
       balances[ex.party_a][ex.currency_b] = (balances[ex.party_a][ex.currency_b] ?? 0) + ex.amount_b;

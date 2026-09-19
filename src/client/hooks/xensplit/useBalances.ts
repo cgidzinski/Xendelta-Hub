@@ -40,6 +40,18 @@ export function useXenSplitBalances(groupId: string) {
     },
   });
 
+  // Restore a soft-deleted settlement. Group owner only, server-side.
+  const restoreSettlementMutation = useMutation({
+    mutationFn: async (settlementId: string) => {
+      const res = await apiClient.post(`/api/xensplit/groups/${groupId}/settlements/${settlementId}/restore`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["xensplit", "balances", groupId] });
+    },
+  });
+
   return {
     balancesData: data,
     isLoading,
@@ -48,6 +60,8 @@ export function useXenSplitBalances(groupId: string) {
     settleDebt: settleDebtMutation.mutate,
     isSettlingDebt: settleDebtMutation.isPending,
     settleDebtError: settleDebtMutation.error,
+    restoreSettlement: restoreSettlementMutation.mutate,
+    isRestoringSettlement: restoreSettlementMutation.isPending,
     deleteSettlement: deleteSettlementMutation.mutate,
     isDeletingSettlement: deleteSettlementMutation.isPending,
   };
