@@ -36,7 +36,13 @@ export interface XenSplitExpense {
   images?: XenSplitExpenseImage[];
   on_hold?: boolean;
   recurring_id?: string;
-  created_at: string;
+  // Absent on expenses written before this field joined the schema: a Mongoose default
+  // applies at creation, not retroactively to existing subdocuments. Callers ordering by
+  // "when it was added" fall back to `date`.
+  /** Set when soft-deleted; null or absent means live. See shared/xensplit/softDelete.ts. */
+  deleted_at?: string | null;
+  deleted_by?: string;
+  created_at?: string;
   payer?: {
     user_id: string;
     username: string;
@@ -70,6 +76,9 @@ export interface XenSplitSettlement {
   currency: string;
   settled_at: string;
   note?: string;
+  /** Set when soft-deleted; null or absent means live. See shared/xensplit/softDelete.ts. */
+  deleted_at?: string | null;
+  deleted_by?: string;
 }
 
 export interface XenSplitExchange {
@@ -86,6 +95,9 @@ export interface XenSplitExchange {
   note?: string;
   date: string;
   created_at: string;
+  /** Set when soft-deleted; null or absent means live. See shared/xensplit/softDelete.ts. */
+  deleted_at?: string | null;
+  deleted_by?: string;
 }
 
 export interface XenSplit {
@@ -101,6 +113,16 @@ export interface XenSplit {
   settlements: XenSplitSettlement[];
   exchanges: XenSplitExchange[];
   recurring_expenses?: XenSplitRecurringSeries[];
+  /**
+   * Soft-deleted records, split out of the arrays above by the query `select` so every
+   * consumer of `expenses`/`settlements`/`exchanges` sees live records only. Present
+   * only on a group that came through useXenSplit/useXenSplitGroups.
+   */
+  deleted?: {
+    expenses: XenSplitExpense[];
+    settlements: XenSplitSettlement[];
+    exchanges: XenSplitExchange[];
+  };
 }
 
 export interface XenSplitBalance {

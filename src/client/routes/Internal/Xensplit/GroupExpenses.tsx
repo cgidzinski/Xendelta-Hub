@@ -1,15 +1,22 @@
 import { useState, useMemo } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useParams } from "react-router-dom";
 import { Box, Typography, TextField, InputAdornment, ToggleButtonGroup, ToggleButton, Avatar, IconButton, alpha } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import RepeatIcon from "@mui/icons-material/Repeat";
 import CloseIcon from "@mui/icons-material/Close";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import { startOfWeek, startOfMonth, startOfYear, subWeeks } from "date-fns";
 import type { GroupDetailContext } from "./GroupDetail";
+import type { XenSplitExpense } from "../../../hooks/xensplit/types";
 import ExpenseListItem, { FREQUENCY_LABELS, computeFinalExpenseIds } from "./components/ExpenseListItem";
 import { formatCurrency } from "../../../utils/currencyUtils";
 import { groupByDay } from "../../../utils/dateGrouping";
 import { xsCardSx, xsBadgeSx } from "./components/rowStyles";
+import {
+    sortByMode, sortDateOf, nextSortMode, loadSortMode, saveSortMode,
+    type SortField,
+} from "./components/activitySort";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
 
 type DateFilter = "all" | "thisWeek" | "lastWeek" | "thisMonth" | "thisYear";
@@ -22,19 +29,43 @@ const DATE_FILTERS: { label: string; value: DateFilter }[] = [
     { label: "This Year", value: "thisYear" },
 ];
 
-type FilterKey = "recurring" | "held";
+type FilterKey = "recurring" | "held" | "deleted";
 
 const PROPERTY_FILTERS: { label: string; value: FilterKey }[] = [
     { label: "Recurring", value: "recurring" },
     { label: "Held", value: "held" },
+    { label: "Deleted", value: "deleted" },
+];
+
+const SORT_FIELDS: { label: string; value: SortField }[] = [
+    { label: "Date", value: "date" },
+    { label: "Added", value: "added" },
 ];
 
 export default function GroupExpenses() {
-    const { group, onViewExpense, user, cancelRecurring, isCancellingRecurring } = useOutletContext<GroupDetailContext>();
+    const { group, onViewExpense, user, cancelRecurring, isCancellingRecurring, isCreator, restoreExpense, isRestoringExpense } = useOutletContext<GroupDetailContext>();
     const confirm = useConfirm();
+    const { groupId } = useParams<{ groupId: string }>();
+    const sortKey = `xensplit_expenseSort_${groupId}`;
     const [search, setSearch] = useState("");
     const [dateFilter, setDateFilter] = useState<DateFilter>("all");
     const [activeFilter, setActiveFilter] = useState<FilterKey | null>(null);
+    const [sort, setSort] = useState(() => loadSortMode(sortKey));
+
+    const handleSortPress = (pressed: SortField | null) => {
+        const next = nextSortMode(sort, pressed);
+        setSort(next);
+        saveSortMode(sortKey, next);
+    };
+
+    // Both timestamps travel with the row so the comparator and the day-header key read
+    // the same values. `created_at` is absent on pre-schema expenses, hence the fallback.
+    const asRow = (e: XenSplitExpense) => ({
+        type: "expense" as const,
+        date: e.date,
+        added: e.created_at ?? e.date,
+        item: e,
+    });
 
     // Genesis expense id -> its recurring series, for chips on genesis rows
     const seriesByGenesisId = useMemo(() => {
@@ -52,6 +83,11 @@ export default function GroupExpenses() {
         activeFilter === "recurring" ? isRecurringExpense(e) :
             activeFilter === "held" ? !!e.on_hold :
                 true;
+
+    const showingDeleted = activeFilter === "deleted";
+    // Soft-deleted expenses are split out of group.expenses by the query `select`, so the
+    // "Deleted" filter swaps the source array instead of filtering the live one.
+    const sourceExpenses = showingDeleted ? (group.deleted?.expenses ?? []) : group.expenses;
 
     const finalExpenseIds = useMemo(
         () => computeFinalExpenseIds(group.expenses, group.recurring_expenses),
@@ -79,13 +115,15 @@ export default function GroupExpenses() {
     const heldVisible = useMemo(() => {
         if (hasActiveFilters) return [];
         const q = search.trim().toLowerCase();
-        return [...group.expenses]
+        const held = group.expenses
             .filter((e) => e.on_hold)
             .filter((e) => !q || e.title.toLowerCase().includes(q))
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [group.expenses, search, hasActiveFilters]);
+            .map(asRow);
+        return sortByMode(held, sort).map((row) => row.item);
+    }, [group.expenses, search, hasActiveFilters, sort]);
 
-    // Active expenses + exchanges merged and date-filtered
+    // Active expenses, date-filtered. The range filter reads whichever timestamp the list
+    // is sorted on, so the whole tab works off one timeline rather than two.
     const sortedItems = useMemo(() => {
         const now = new Date();
         const dateStart: Date | null =
@@ -97,22 +135,27 @@ export default function GroupExpenses() {
         const dateEnd: Date | null =
             dateFilter === "lastWeek" ? startOfWeek(now) : null;
 
-        const expenses = group.expenses
-            .filter((e) => hasActiveFilters ? matchesActiveFilters(e) : !e.on_hold)
-            .filter((e) => {
-                if (search.trim() && !e.title.toLowerCase().includes(search.toLowerCase())) return false;
-                const d = new Date(e.date);
+        const expenses = sourceExpenses
+            .filter((e) => showingDeleted ? true : hasActiveFilters ? matchesActiveFilters(e) : !e.on_hold)
+            .map(asRow)
+            .filter((row) => {
+                if (search.trim() && !row.item.title.toLowerCase().includes(search.toLowerCase())) return false;
+                const d = new Date(sortDateOf(row, sort.field));
                 if (dateStart && d < dateStart) return false;
                 if (dateEnd && d >= dateEnd) return false;
                 return true;
-            })
-            .map((e) => ({ type: "expense" as const, date: e.date, item: e }));
+            });
 
-        return expenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [group.expenses, group.exchanges, search, dateFilter, activeFilter]);
+        return sortByMode(expenses, sort);
+    }, [sourceExpenses, showingDeleted, search, dateFilter, activeFilter, seriesByGenesisId, sort]);
 
-    // Group the (already date-desc sorted) list into ordered day-groups, like the Overview feed
-    const groupedItems = useMemo(() => groupByDay(sortedItems, (row) => row.date), [sortedItems]);
+    // Group the sorted list into ordered day-groups, like the Overview feed. The key must be
+    // the field it was sorted on - groupByDay only merges into its last group, so grouping on
+    // the other timestamp would silently emit a header per row.
+    const groupedItems = useMemo(
+        () => groupByDay(sortedItems, (row) => sortDateOf(row, sort.field)),
+        [sortedItems, sort.field]
+    );
 
     return (
         <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
@@ -140,20 +183,46 @@ export default function GroupExpenses() {
                         </ToggleButton>
                     ))}
                 </ToggleButtonGroup>
-                <ToggleButtonGroup
-                    size="small"
-                    value={activeFilter}
-                    exclusive
-                    onChange={(_, v: FilterKey | null) => setActiveFilter(v)}
-                    fullWidth
-                    sx={{ mb: 2, height: 30 }}
-                >
-                    {PROPERTY_FILTERS.map((f) => (
-                        <ToggleButton key={f.value} value={f.value} sx={{ px: 1, fontSize: "0.7rem", textTransform: "none", whiteSpace: "nowrap" }}>
-                            {f.label}
-                        </ToggleButton>
-                    ))}
-                </ToggleButtonGroup>
+                <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
+                    <ToggleButtonGroup
+                        size="small"
+                        value={activeFilter}
+                        exclusive
+                        onChange={(_, v: FilterKey | null) => setActiveFilter(v)}
+                        fullWidth
+                        sx={{ flex: 1, minWidth: 0, height: 30 }}
+                    >
+                        {PROPERTY_FILTERS.map((f) => (
+                            <ToggleButton key={f.value} value={f.value} sx={{ px: 1, fontSize: "0.7rem", textTransform: "none", whiteSpace: "nowrap" }}>
+                                {f.label}
+                            </ToggleButton>
+                        ))}
+                    </ToggleButtonGroup>
+                    {/* Pressing the active button reverses the order - MUI reports that as null. */}
+                    <ToggleButtonGroup
+                        size="small"
+                        value={sort.field}
+                        exclusive
+                        onChange={(_, v: SortField | null) => handleSortPress(v)}
+                        sx={{ flexShrink: 0, height: 30 }}
+                    >
+                        {SORT_FIELDS.map((f) => (
+                            <ToggleButton
+                                key={f.value}
+                                value={f.value}
+                                title={`Sort by ${f.value === "added" ? "date added" : "transaction date"}`}
+                                sx={{ px: 1, gap: 0.25, fontSize: "0.7rem", textTransform: "none", whiteSpace: "nowrap" }}
+                            >
+                                {f.label}
+                                {sort.field === f.value && (
+                                    sort.dir === "desc"
+                                        ? <ArrowDownwardIcon sx={{ fontSize: 12 }} />
+                                        : <ArrowUpwardIcon sx={{ fontSize: 12 }} />
+                                )}
+                            </ToggleButton>
+                        ))}
+                    </ToggleButtonGroup>
+                </Box>
             </Box>
             <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pb: { xs: 11, md: 1 } }}>
                 {pendingSeries.length > 0 && (
@@ -244,7 +313,11 @@ export default function GroupExpenses() {
                 {sortedItems.length === 0 ? (
                     <Box sx={{ textAlign: "center", py: heldVisible.length > 0 ? 3 : 6 }}>
                         <Typography variant="body1" color="text.secondary">
-                            {search.trim() || dateFilter !== "all" || hasActiveFilters ? "No expenses match your filters" : "No expenses yet"}
+                            {showingDeleted
+                                ? "No deleted expenses"
+                                : search.trim() || dateFilter !== "all" || hasActiveFilters
+                                    ? "No expenses match your filters"
+                                    : "No expenses yet"}
                         </Typography>
                     </Box>
                 ) : (
@@ -264,9 +337,16 @@ export default function GroupExpenses() {
                                         expense={row.item}
                                         onClick={() => onViewExpense(row.item)}
                                         userId={user.id}
-                                        hideDate
+                                        // The day header is the added day when sorting that way, so the
+                                        // row keeps showing its own transaction date.
+                                        hideDate={sort.field === "date"}
                                         recurringSeries={seriesByGenesisId.get(row.item._id)}
                                         isFinal={finalExpenseIds.has(row.item._id)}
+                                        deleted={showingDeleted}
+                                        // Only the group owner may undo a deletion; without a
+                                        // handler the row shows no Restore button.
+                                        onRestore={showingDeleted && isCreator ? () => restoreExpense(row.item._id) : undefined}
+                                        isRestoring={isRestoringExpense}
                                     />
                                 ))}
                             </Box>

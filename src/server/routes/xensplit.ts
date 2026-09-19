@@ -26,6 +26,7 @@ import {
   xenSplitExchangeParamSchema,
 } from "../utils/validation";
 import { calculateBalances, calculateMinimumTransfers, resolveSplits } from "../utils/xenSplitUtils";
+import { isDeleted } from "../../shared/xensplit/softDelete";
 import { notify } from "../utils/notificationUtils";
 import { advanceDate, applyAdvance } from "../utils/scheduleUtils";
 import { dispatchTask } from "../infrastructure/TaskDispatcher";
@@ -532,6 +533,10 @@ module.exports = function (app: any) {
         return res.status(403).json({ status: false, message: "Not authorised to edit this expense" });
       }
 
+      if (isDeleted(expense)) {
+        return res.status(404).json({ status: false, message: "Expense has been deleted" });
+      }
+
       // Occurrences are clones of their genesis — only the genesis is editable
       if (expense.recurring_id) {
         return res.status(400).json({ status: false, message: "This expense is part of a recurring series — edit the original recurring expense instead" });
@@ -651,29 +656,31 @@ module.exports = function (app: any) {
         return res.status(404).json({ status: false, message: "Expense not found" });
       }
 
-      // Delete any GCS images associated with the expense
       const expense = group.expenses[expenseIndex];
-      if (expense.images && expense.images.length > 0) {
-        await Promise.all(
-          expense.images.map((img: any) =>
-            deleteFromGCS(img.gcs_path, true).catch(() => { })
-          )
-        );
-      }
 
-      // Only the expense creator or group owner may delete
+      // Only the expense creator or group owner may delete. Checked before anything is
+      // touched - an unauthorised caller must leave no trace.
       if (expense.created_by && expense.created_by !== userId && group.created_by !== userId) {
         return res.status(403).json({ status: false, message: "Not authorised to delete this expense" });
       }
 
-      // Deleting a genesis expense cancels its recurring series (occurrences stay)
+      if (isDeleted(expense)) {
+        return res.status(409).json({ status: false, message: "Expense is already deleted" });
+      }
+
+      // Deleting a genesis expense cancels its recurring series (occurrences stay).
+      // This is NOT reversible by the restore route: the schedule is gone for good and
+      // restoring the expense brings back only the expense. The UI says so.
       await ScheduledTask.deleteOne({
         task_type: XENSPLIT_RECURRING_TASK_TYPE,
         "payload.group_id": groupId,
         "payload.genesis_expense_id": expenseId,
       });
 
-      group.expenses.splice(expenseIndex, 1);
+      // Soft delete: the row stays, stamped. Receipt images stay in GCS too - destroying
+      // them would make the restore return a hollow expense.
+      expense.deleted_at = new Date();
+      expense.deleted_by = userId;
       await group.save();
       await group.populate("members", MEMBER_FIELDS);
 
@@ -751,6 +758,10 @@ module.exports = function (app: any) {
         return res.status(404).json({ status: false, message: "Expense not found" });
       }
 
+      if (isDeleted(expense)) {
+        return res.status(404).json({ status: false, message: "Expense has been deleted" });
+      }
+
       if (!expense.images) {
         expense.images = [];
       }
@@ -797,6 +808,10 @@ module.exports = function (app: any) {
       const expense = group.expenses.id(expenseId);
       if (!expense) {
         return res.status(404).json({ status: false, message: "Expense not found" });
+      }
+
+      if (isDeleted(expense)) {
+        return res.status(404).json({ status: false, message: "Expense has been deleted" });
       }
 
       const imageIndex = expense.images.findIndex((img: any) => img._id.toString() === imageId);
@@ -1030,7 +1045,12 @@ module.exports = function (app: any) {
         return res.status(403).json({ status: false, message: "Not authorised to undo this settlement" });
       }
 
-      group.settlements.splice(settlementIndex, 1);
+      if (isDeleted(settlement)) {
+        return res.status(409).json({ status: false, message: "Settlement is already deleted" });
+      }
+
+      settlement.deleted_at = new Date();
+      settlement.deleted_by = userId;
       await group.save();
       await group.populate("members", MEMBER_FIELDS);
 
@@ -1132,7 +1152,12 @@ module.exports = function (app: any) {
         return res.status(403).json({ status: false, message: "Not authorised to delete this exchange" });
       }
 
-      group.exchanges.splice(exchangeIndex, 1);
+      if (isDeleted(exchange)) {
+        return res.status(409).json({ status: false, message: "Exchange is already deleted" });
+      }
+
+      exchange.deleted_at = new Date();
+      exchange.deleted_by = userId;
       await group.save();
       await group.populate("members", MEMBER_FIELDS);
 
@@ -1143,6 +1168,82 @@ module.exports = function (app: any) {
     } catch (error) {
       console.error("Error deleting exchange:", error);
       res.status(500).json({ status: false, message: "Failed to delete exchange" });
+    }
+  });
+
+  // Restore a soft-deleted record. Group owner only: a deletion is a deliberate act by
+  // someone with rights over the record, so putting it back - and with it everyone's
+  // balances - is the owner's call. Deleting is broader (creator/party/owner); undoing
+  // is not.
+  const restoreRecord = async (
+    req: Request,
+    res: Response,
+    kind: "expense" | "settlement" | "exchange",
+  ) => {
+    const userId = (req.user as any)._id.toString();
+    const { groupId } = req.params;
+    const recordId = req.params.expenseId ?? req.params.settlementId ?? req.params.exchangeId;
+
+    const group = await XenSplit.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ status: false, message: "Group not found" });
+    }
+
+    if (group.created_by !== userId) {
+      return res.status(403).json({ status: false, message: `Only the group owner can restore a deleted ${kind}` });
+    }
+
+    const collection: any[] =
+      kind === "expense" ? group.expenses :
+        kind === "settlement" ? group.settlements :
+          (group.exchanges || []);
+    const record = collection.find((r: any) => r._id.toString() === recordId);
+    if (!record) {
+      return res.status(404).json({ status: false, message: `${kind[0].toUpperCase()}${kind.slice(1)} not found` });
+    }
+
+    if (!isDeleted(record)) {
+      return res.status(409).json({ status: false, message: `That ${kind} is not deleted` });
+    }
+
+    record.deleted_at = null;
+    record.deleted_by = undefined;
+    await group.save();
+    await group.populate("members", MEMBER_FIELDS);
+
+    const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
+    SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
+
+    return res.json({ status: true, message: `${kind[0].toUpperCase()}${kind.slice(1)} restored`, data: await serializeXenSplitGroup(group) });
+  };
+
+  // POST /api/xensplit/groups/:groupId/expenses/:expenseId/restore
+  app.post("/api/xensplit/groups/:groupId/expenses/:expenseId/restore", validateParams(xenSplitExpenseParamSchema), async (req: Request, res: Response) => {
+    try {
+      return await restoreRecord(req, res, "expense");
+    } catch (error) {
+      console.error("Error restoring expense:", error);
+      res.status(500).json({ status: false, message: "Failed to restore expense" });
+    }
+  });
+
+  // POST /api/xensplit/groups/:groupId/settlements/:settlementId/restore
+  app.post("/api/xensplit/groups/:groupId/settlements/:settlementId/restore", validateParams(xenSplitSettlementParamSchema), async (req: Request, res: Response) => {
+    try {
+      return await restoreRecord(req, res, "settlement");
+    } catch (error) {
+      console.error("Error restoring settlement:", error);
+      res.status(500).json({ status: false, message: "Failed to restore settlement" });
+    }
+  });
+
+  // POST /api/xensplit/groups/:groupId/exchanges/:exchangeId/restore
+  app.post("/api/xensplit/groups/:groupId/exchanges/:exchangeId/restore", validateParams(xenSplitExchangeParamSchema), async (req: Request, res: Response) => {
+    try {
+      return await restoreRecord(req, res, "exchange");
+    } catch (error) {
+      console.error("Error restoring exchange:", error);
+      res.status(500).json({ status: false, message: "Failed to restore exchange" });
     }
   });
 };

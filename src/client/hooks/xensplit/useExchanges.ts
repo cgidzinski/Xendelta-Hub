@@ -34,9 +34,23 @@ export function useXenSplitExchanges(groupId: string) {
     },
   });
 
+  // Restore a soft-deleted exchange. Group owner only, server-side.
+  const restoreExchangeMutation = useMutation({
+    mutationFn: async (exchangeId: string) => {
+      const res = await apiClient.post(`/api/xensplit/groups/${groupId}/exchanges/${exchangeId}/restore`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["xensplit", "balances", groupId] });
+    },
+  });
+
   return {
     addExchange: addExchangeMutation.mutate,
     isAddingExchange: addExchangeMutation.isPending,
+    restoreExchange: restoreExchangeMutation.mutate,
+    isRestoringExchange: restoreExchangeMutation.isPending,
     deleteExchange: deleteExchangeMutation.mutate,
     isDeletingExchange: deleteExchangeMutation.isPending,
     fetchLiveRate: liveRateMutation.mutateAsync,
