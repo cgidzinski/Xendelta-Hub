@@ -36,7 +36,10 @@ export interface XenSplitExpense {
   images?: XenSplitExpenseImage[];
   on_hold?: boolean;
   recurring_id?: string;
-  created_at: string;
+  // Absent on expenses written before this field joined the schema: a Mongoose default
+  // applies at creation, not retroactively to existing subdocuments. Callers ordering by
+  // "when it was added" fall back to `date`.
+  created_at?: string;
   payer?: {
     user_id: string;
     username: string;

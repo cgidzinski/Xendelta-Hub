@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { useOutletContext, useNavigate, useParams } from "react-router-dom";
-import { Box, Typography, Button, Switch, Avatar } from "@mui/material";
+import { Box, Typography, Button, Switch, Avatar, ToggleButtonGroup, ToggleButton } from "@mui/material";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitExpense, XenSplitSettlement, XenSplitExchange } from "../../../hooks/xensplit/types";
 import ExpenseListItem, { computeFinalExpenseIds } from "./components/ExpenseListItem";
@@ -10,18 +12,31 @@ import SettlementDetailDialog from "./components/SettlementDetailDialog";
 import { xsCardSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
 import { groupByDay } from "../../../utils/dateGrouping";
+import {
+    sortByMode, sortDateOf, nextSortMode, loadSortMode, saveSortMode,
+    type SortField,
+} from "./components/activitySort";
 
+// `date` is the transaction date, `added` is when the row was entered. Both travel with
+// the item so the comparator and the day-header key never re-derive them per type.
 type ActivityItem =
-    | { type: "expense"; date: string; expense: XenSplitExpense }
-    | { type: "settlement"; date: string; settlement: XenSplitSettlement }
-    | { type: "exchange"; date: string; exchange: XenSplitExchange };
+    | { type: "expense"; date: string; added: string; expense: XenSplitExpense }
+    | { type: "settlement"; date: string; added: string; settlement: XenSplitSettlement }
+    | { type: "exchange"; date: string; added: string; exchange: XenSplitExchange };
+
+const SORT_FIELDS: { label: string; value: SortField }[] = [
+    { label: "Date", value: "date" },
+    { label: "Added", value: "added" },
+];
 
 export default function GroupOverview() {
     const { group, balancesData, user, onViewExpense, deleteSettlement, isDeletingSettlement, deleteExchange, isDeletingExchange, isCreator } = useOutletContext<GroupDetailContext>();
     const navigate = useNavigate();
     const { groupId } = useParams<{ groupId: string }>();
     const lsKey = `xensplit_myActivityOnly_${groupId}`;
+    const sortKey = `xensplit_overviewSort_${groupId}`;
     const [myActivityOnly, setMyActivityOnly] = useState(() => localStorage.getItem(lsKey) === "true");
+    const [sort, setSort] = useState(() => loadSortMode(sortKey));
     const [viewSettlement, setViewSettlement] = useState<XenSplitSettlement | null>(null);
 
     const getMember = (userId: string) => group.members.find((m) => m.user_id === userId);
@@ -45,6 +60,12 @@ export default function GroupOverview() {
         localStorage.setItem(lsKey, String(checked));
     };
 
+    const handleSortPress = (pressed: SortField | null) => {
+        const next = nextSortMode(sort, pressed);
+        setSort(next);
+        saveSortMode(sortKey, next);
+    };
+
     // Pending settlements involving this user
     const allPendingSettlements = balancesData?.settlements ?? [];
     const userSettlements = allPendingSettlements.filter(
@@ -52,36 +73,55 @@ export default function GroupOverview() {
     );
 
     // Activity feed — includes held expenses, visible to all group members
-    const feed: ActivityItem[] = [
-        ...group.expenses
-            .map((e) => ({ type: "expense" as const, date: e.date, expense: e })),
-        ...group.settlements.map((s) => ({
-            type: "settlement" as const,
-            date: s.settled_at,
-            settlement: s,
-        })),
-        ...(group.exchanges ?? []).map((ex) => ({
-            type: "exchange" as const,
-            date: ex.date,
-            exchange: ex,
-        })),
-    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const feed: ActivityItem[] = useMemo(() => {
+        const items: ActivityItem[] = [
+            ...group.expenses.map((e) => ({
+                type: "expense" as const,
+                date: e.date,
+                // Absent on expenses predating the field; fall back to the transaction date.
+                added: e.created_at ?? e.date,
+                expense: e,
+            })),
+            // Settlements carry no created_at: settled_at is stamped server-side when the
+            // settlement is recorded and is never backdated, so both timestamps are the same.
+            ...group.settlements.map((s) => ({
+                type: "settlement" as const,
+                date: s.settled_at,
+                added: s.settled_at,
+                settlement: s,
+            })),
+            ...(group.exchanges ?? []).map((ex) => ({
+                type: "exchange" as const,
+                date: ex.date,
+                added: ex.created_at ?? ex.date,
+                exchange: ex,
+            })),
+        ];
+        return sortByMode(items, sort);
+    }, [group.expenses, group.settlements, group.exchanges, sort]);
 
-    const filteredFeed = myActivityOnly
-        ? feed.filter((item) => {
-            if (item.type === "expense") {
-                const e = item.expense;
-                return e.paid_by === user.id || e.splits.some((sp) => sp.user_id === user.id);
-            }
-            if (item.type === "exchange") {
-                return item.exchange.party_a === user.id || item.exchange.party_b === user.id;
-            }
-            return item.settlement.from === user.id || item.settlement.to === user.id;
-        })
-        : feed;
+    const filteredFeed = useMemo(() => (
+        myActivityOnly
+            ? feed.filter((item) => {
+                if (item.type === "expense") {
+                    const e = item.expense;
+                    return e.paid_by === user.id || e.splits.some((sp) => sp.user_id === user.id);
+                }
+                if (item.type === "exchange") {
+                    return item.exchange.party_a === user.id || item.exchange.party_b === user.id;
+                }
+                return item.settlement.from === user.id || item.settlement.to === user.id;
+            })
+            : feed
+    ), [feed, myActivityOnly, user.id]);
 
-    // Group the (already date-desc sorted) feed into ordered day-groups
-    const groupedFeed = useMemo(() => groupByDay(filteredFeed, (item) => item.date), [filteredFeed]);
+    // Group the sorted feed into ordered day-groups, keyed on the field it was sorted on —
+    // groupByDay only merges into its last group, so the other timestamp would emit a
+    // header per row.
+    const groupedFeed = useMemo(
+        () => groupByDay(filteredFeed, (item) => sortDateOf(item, sort.field)),
+        [filteredFeed, sort.field]
+    );
 
     const settleNames = (s: XenSplitSettlement) => ({
         from: s.from === user.id ? "You" : getMember(s.from)?.username ?? "?",
@@ -97,7 +137,7 @@ export default function GroupOverview() {
                     expense={e}
                     onClick={() => onViewExpense(e)}
                     userId={user.id}
-                    hideDate
+                    hideDate={sort.field === "date"}
                     recurringSeries={seriesByGenesisId.get(e._id)}
                     isFinal={finalExpenseIds.has(e._id)}
                 />
@@ -220,15 +260,41 @@ export default function GroupOverview() {
             </Button>
 
             {/* Filter row */}
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", mb: 1, flexShrink: 0 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
-                    My activity only
-                </Typography>
-                <Switch
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 1, flexShrink: 0 }}>
+                {/* Pressing the active button reverses the order - MUI reports that as null. */}
+                <ToggleButtonGroup
                     size="small"
-                    checked={myActivityOnly}
-                    onChange={(e) => handleActivityToggle(e.target.checked)}
-                />
+                    value={sort.field}
+                    exclusive
+                    onChange={(_, v: SortField | null) => handleSortPress(v)}
+                    sx={{ flexShrink: 0, height: 28 }}
+                >
+                    {SORT_FIELDS.map((f) => (
+                        <ToggleButton
+                            key={f.value}
+                            value={f.value}
+                            title={`Sort by ${f.value === "added" ? "date added" : "transaction date"}`}
+                            sx={{ px: 1, gap: 0.25, fontSize: "0.7rem", textTransform: "none", whiteSpace: "nowrap" }}
+                        >
+                            {f.label}
+                            {sort.field === f.value && (
+                                sort.dir === "desc"
+                                    ? <ArrowDownwardIcon sx={{ fontSize: 12 }} />
+                                    : <ArrowUpwardIcon sx={{ fontSize: 12 }} />
+                            )}
+                        </ToggleButton>
+                    ))}
+                </ToggleButtonGroup>
+                <Box sx={{ display: "flex", alignItems: "center", minWidth: 0 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }} noWrap>
+                        My activity only
+                    </Typography>
+                    <Switch
+                        size="small"
+                        checked={myActivityOnly}
+                        onChange={(e) => handleActivityToggle(e.target.checked)}
+                    />
+                </Box>
             </Box>
 
             {/* Activity feed (scrollable) */}
