@@ -104,6 +104,7 @@ const TABS: { label: string; sections: HelpSection[] }[] = [
                 heading: "Settling up",
                 items: [
                     "Record a settlement to mark a debt as paid between two members.",
+                    "Paying a suggested payment only clears that one — it won't reshuffle the rest of the group or pull anyone into a payment they didn't already have.",
                     "Filter settlements to see all of them, just yours, or just other members'.",
                 ],
             },

@@ -27,6 +27,10 @@ export default function GroupExplain() {
 
     const directDebts = useMemo<DirectDebt[]>(() => computeDirectDebts(group, currency), [group, currency]);
 
+    // The pending list as served, which is anchored to the plan the group last
+    // recorded (see src/shared/xensplit/anchor.ts) rather than being re-minimized
+    // on every read. Drawing anything else here would put a graph on screen that
+    // disagrees with the payments members are actually asked to make.
     const simplifiedEdges = useMemo<DebtEdge[]>(
         () =>
             (balancesData?.settlements ?? [])
@@ -115,7 +119,7 @@ export default function GroupExplain() {
 
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", mb: 1, flexShrink: 0 }}>
                         {mode === "simplified"
-                            ? `${directDebts.length} direct debt${directDebts.length === 1 ? "" : "s"} meshed into ${simplifiedEdges.length} payment${simplifiedEdges.length === 1 ? "" : "s"} to minimize transfers.`
+                            ? `${directDebts.length} direct debt${directDebts.length === 1 ? "" : "s"} meshed into ${simplifiedEdges.length} payment${simplifiedEdges.length === 1 ? "" : "s"}.`
                             : "Raw debts from shared expenses, before simplification."}
                     </Typography>
                 </>

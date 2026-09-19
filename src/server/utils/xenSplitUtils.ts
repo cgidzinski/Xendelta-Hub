@@ -4,10 +4,14 @@
 // src/shared/xensplit/balances.ts so the client can run the identical math for
 // the Settlements page's rewind preview. Re-exported here so existing server
 // imports keep working.
+import { calculateBalances, type Transfer } from "../../shared/xensplit/balances";
+import { calculateAnchoredTransfers } from "../../shared/xensplit/anchor";
+
 export {
   calculateBalances,
   calculateMinimumTransfers,
 } from "../../shared/xensplit/balances";
+export { calculateAnchoredTransfers } from "../../shared/xensplit/anchor";
 export type {
   Transfer,
   BalanceMap,
@@ -16,6 +20,51 @@ export type {
   Exchange,
   XenSplitDocument,
 } from "../../shared/xensplit/balances";
+
+/**
+ * The pending transfer list for a group, anchored to the plan it last recorded.
+ *
+ * Takes the group document (populated members or raw ObjectIds both work) and
+ * returns the same shape the balances route serves.
+ */
+export function currentPlan(group: any): Transfer[] {
+  const doc = {
+    members: (group.members ?? []).map((m: any) => (m?._id ? m._id.toString() : String(m))),
+    expenses: group.expenses ?? [],
+    settlements: group.settlements ?? [],
+    exchanges: group.exchanges ?? [],
+  };
+  return calculateAnchoredTransfers(calculateBalances(doc), group.settlement_plan ?? []);
+}
+
+/**
+ * Re-records the group's settlement plan. Call immediately before `group.save()`
+ * in any route that moves a balance, so the next recalculation is anchored to the
+ * list members were actually looking at.
+ *
+ * Order matters: call it AFTER applying the mutation. The plan it stores is the
+ * post-mutation routing, anchored to the pre-mutation one — that chaining is what
+ * keeps a row from growing or a new counterparty from appearing.
+ *
+ * Missing a call site degrades gracefully; it only means the next recalculation
+ * anchors to an older plan.
+ */
+export function recordPlan(group: any): void {
+  group.settlement_plan = currentPlan(group);
+}
+
+/**
+ * Seeds the plan from the group's current state if it has none yet.
+ *
+ * Call BEFORE applying a mutation. Without it the first settlement in every group
+ * that predates anchoring still churns, because the list the member was looking at
+ * when they hit "settle" was never written down.
+ */
+export function seedPlan(group: any): void {
+  if (!group.settlement_plan || group.settlement_plan.length === 0) {
+    group.settlement_plan = currentPlan(group);
+  }
+}
 
 // Resolves the splits to store for an expense given its split_type. Mirrors the
 // pre-existing inline logic from the create/update expense route handlers:
