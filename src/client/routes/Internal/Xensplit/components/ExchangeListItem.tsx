@@ -14,7 +14,6 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import SwapVertIcon from "@mui/icons-material/SwapVert";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
-import RestoreIcon from "@mui/icons-material/Restore";
 import { useState } from "react";
 import { formatCurrency, formatRate, getPreferredRateCurrency, resolveRateBase, setPreferredRateCurrency } from "../../../../utils/currencyUtils";
 import type { XenSplitExchange, XenSplitMember } from "../../../../hooks/xensplit/types";
@@ -29,11 +28,8 @@ interface ExchangeListItemProps {
     isDeletingExchange: boolean;
     groupId: string;
     defaultCurrency: string;
-    /** Soft-deleted: dimmed, struck through and badged. */
+    /** Soft-deleted: dimmed, struck through and badged. Deletion is permanent. */
     deleted?: boolean;
-    /** Restore handler. Passed only for the group owner, who alone may undo a deletion. */
-    onRestore?: () => void;
-    isRestoring?: boolean;
 }
 
 export default function ExchangeListItem({
@@ -44,8 +40,6 @@ export default function ExchangeListItem({
     onDelete,
     isDeletingExchange,
     deleted,
-    onRestore,
-    isRestoring,
     groupId,
     defaultCurrency,
 }: ExchangeListItemProps) {
@@ -125,19 +119,7 @@ export default function ExchangeListItem({
                     <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
                         {deleted ? "Deleted · " : ""}Exchange · {exchange.currency_a}/{exchange.currency_b}
                     </Typography>
-                    {onRestore && (
-                        <Button
-                            size="small"
-                            variant="text"
-                            startIcon={<RestoreIcon sx={{ fontSize: "14px !important" }} />}
-                            disabled={isRestoring}
-                            // The row opens the exchange dialog; restoring must not also do that.
-                            onClick={(e) => { e.stopPropagation(); onRestore(); }}
-                            sx={{ mt: 0.25, py: 0, px: 0.5, minWidth: 0, fontSize: "0.65rem", textTransform: "none" }}
-                        >
-                            Restore
-                        </Button>
-                    )}
+
                 </Box>
 
                 <Box sx={{ textAlign: "right", flexShrink: 0 }}>
@@ -240,7 +222,7 @@ export default function ExchangeListItem({
                             onClick={async () => {
                                 const ok = await confirm({
                                     title: "Delete this exchange?",
-                                    message: "The group owner can restore it later by showing deleted activity on the Overview tab.",
+                                    message: "This cannot be undone. The exchange stays in the group's history and can be shown from Settings.",
                                 });
                                 if (ok) {
                                     onDelete(exchange._id);

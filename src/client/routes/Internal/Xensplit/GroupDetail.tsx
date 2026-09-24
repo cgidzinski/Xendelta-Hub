@@ -88,13 +88,14 @@ export interface GroupDetailContext {
   isUploadingImage: boolean;
   deleteSettlement: (settlementId: string) => void;
   isDeletingSettlement: boolean;
-  // Restore is group-owner only server-side; callers gate the button on isCreator.
-  restoreExpense: (expenseId: string) => void;
-  isRestoringExpense: boolean;
-  restoreSettlement: (settlementId: string) => void;
-  isRestoringSettlement: boolean;
-  restoreExchange: (exchangeId: string) => void;
-  isRestoringExchange: boolean;
+  /**
+   * Whether soft-deleted records are revealed in the Expenses list, Settlements history
+   * and Overview feed. Set on the Settings tab; a personal display preference, persisted
+   * per group, so each member controls their own view. Presentation only - balances never
+   * count deleted records either way.
+   */
+  showDeleted: boolean;
+  setShowDeleted: (next: boolean) => void;
   cancelRecurring: (recurringId: string) => void;
   isCancellingRecurring: boolean;
 }
@@ -110,9 +111,9 @@ export default function GroupDetail() {
   const { group, isLoading, isError, error, refetch, addMembers, isAddingMembers, removeMember, isRemovingMember, updateGroup, isUpdating, uploadGroupImage, isUploadingImage } = useXenSplit(groupId!);
   useTitle("Xensplit");
   const { deleteGroup } = useXenSplits();
-  const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement, restoreSettlement, isRestoringSettlement } = useXenSplitBalances(groupId!);
-  const { updateExpense, updateExpenseAsync, isUpdatingExpense, addExpense, addExpenseAsync, isAddingExpense, deleteExpense, isDeletingExpense, restoreExpense, isRestoringExpense, cancelRecurring, isCancellingRecurring, uploadExpenseImages, isUploadingImages, deleteExpenseImage, isDeletingExpenseImage } = useXenSplitExpenses(groupId!);
-  const { addExchange, isAddingExchange, deleteExchange, isDeletingExchange, restoreExchange, isRestoringExchange, fetchLiveRate, isFetchingLiveRate } = useXenSplitExchanges(groupId!);
+  const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useXenSplitBalances(groupId!);
+  const { updateExpense, updateExpenseAsync, isUpdatingExpense, addExpense, addExpenseAsync, isAddingExpense, deleteExpense, isDeletingExpense, cancelRecurring, isCancellingRecurring, uploadExpenseImages, isUploadingImages, deleteExpenseImage, isDeletingExpenseImage } = useXenSplitExpenses(groupId!);
+  const { addExchange, isAddingExchange, deleteExchange, isDeletingExchange, fetchLiveRate, isFetchingLiveRate } = useXenSplitExchanges(groupId!);
   useXenSplitSocket(groupId!);
   const { profile } = useUserProfile();
   const [showEtransferPrompt, setShowEtransferPrompt] = useState(false);
@@ -145,6 +146,16 @@ export default function GroupDetail() {
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [menuMemberId, setMenuMemberId] = useState<string | null>(null);
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
+  // Reveals soft-deleted records across the Expenses, Settlements and Overview tabs.
+  // Owned here rather than in each tab so toggling it on the Settings tab takes effect
+  // immediately, instead of waiting for a sibling route to remount.
+  const showDeletedKey = `xensplit_showDeleted_${groupId}`;
+  const [showDeleted, setShowDeleted] = useState(() => localStorage.getItem(showDeletedKey) === "true");
+  const handleShowDeletedChange = (next: boolean) => {
+    setShowDeleted(next);
+    localStorage.setItem(showDeletedKey, String(next));
+  };
+
   const [showEditExpenseModal, setShowEditExpenseModal] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<XenSplitExpense | null>(null);
   const [addTitle, setAddTitle] = useState("");
@@ -559,12 +570,8 @@ export default function GroupDetail() {
     uploadGroupImage,
     isUploadingImage,
     deleteSettlement,
-    restoreExpense,
-    isRestoringExpense,
-    restoreSettlement,
-    isRestoringSettlement,
-    restoreExchange,
-    isRestoringExchange,
+    showDeleted,
+    setShowDeleted: handleShowDeletedChange,
     isDeletingSettlement,
     cancelRecurring,
     isCancellingRecurring,
@@ -867,8 +874,8 @@ export default function GroupDetail() {
                 const ok = await confirm({
                   title: "Delete this expense?",
                   message: selectedExpenseSeries
-                    ? "This also stops its recurring schedule, which restoring does NOT bring back. Already-created expenses are kept, and the group owner can restore the expense itself from the Deleted filter."
-                    : "The group owner can restore it later from the Deleted filter on the Expenses tab.",
+                    ? "This cannot be undone. It also stops its recurring schedule; already-created expenses are kept. The expense stays in the group's history and can be shown from Settings."
+                    : "This cannot be undone. The expense stays in the group's history and can be shown from Settings, but it can never be brought back.",
                 });
                 if (ok) {
                   await new Promise<void>((resolve) => {
@@ -1110,9 +1117,7 @@ export default function GroupDetail() {
                     nothing but the route back. */}
                 {e.deleted_at != null ? (
                   <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", width: "100%" }}>
-                    {isCreator
-                      ? "This expense is deleted. Restore it from the Deleted filter on the Expenses tab."
-                      : "This expense is deleted. Ask the group owner to restore it."}
+                    This expense was deleted. It is kept as group history and cannot be restored.
                   </Typography>
                 ) : e.recurring_id ? (
                   (() => {

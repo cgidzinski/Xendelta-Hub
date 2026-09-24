@@ -1,8 +1,7 @@
-import { Box, Typography, Avatar, alpha, Chip, Button } from "@mui/material";
+import { Box, Typography, Avatar, alpha, Chip } from "@mui/material";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import RepeatIcon from "@mui/icons-material/Repeat";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import RestoreIcon from "@mui/icons-material/Restore";
 import type { XenSplitExpense, XenSplitRecurringSeries } from "../../../../hooks/xensplit/types";
 import { formatCurrency } from "../../../../utils/currencyUtils";
 import { getCategoryIcon, getCategoryColor } from "../../../../constants/xensplitCategoryIcons";
@@ -67,14 +66,11 @@ interface ExpenseListItemProps {
     recurringSeries?: XenSplitRecurringSeries;
     /** Last expense of an ended series (see computeFinalExpenseIds). */
     isFinal?: boolean;
-    /** Soft-deleted: dimmed, struck through and badged. */
+    /** Soft-deleted: dimmed, struck through and badged. Deletion is permanent. */
     deleted?: boolean;
-    /** Restore handler. Passed only for the group owner, who alone may undo a deletion. */
-    onRestore?: () => void;
-    isRestoring?: boolean;
 }
 
-export default function ExpenseListItem({ expense, onClick, userId, hideDate, recurringSeries, isFinal, deleted, onRestore, isRestoring }: ExpenseListItemProps) {
+export default function ExpenseListItem({ expense, onClick, userId, hideDate, recurringSeries, isFinal, deleted }: ExpenseListItemProps) {
     const mySplit = userId ? expense.splits.find((sp) => sp.user_id === userId) : undefined;
     const isPayer = userId ? expense.paid_by === userId : false;
     const owe = mySplit && !isPayer && !expense.on_hold && !deleted
@@ -171,19 +167,7 @@ export default function ExpenseListItem({ expense, onClick, userId, hideDate, re
                         {formatCurrency(owe, expense.currency)}
                     </Typography>
                 )}
-                {onRestore && (
-                    <Button
-                        size="small"
-                        variant="text"
-                        startIcon={<RestoreIcon sx={{ fontSize: "14px !important" }} />}
-                        disabled={isRestoring}
-                        // The row itself opens the expense; restoring must not also do that.
-                        onClick={(e) => { e.stopPropagation(); onRestore(); }}
-                        sx={{ mt: 0.25, py: 0, px: 0.5, minWidth: 0, fontSize: "0.65rem", textTransform: "none" }}
-                    >
-                        Restore
-                    </Button>
-                )}
+
             </Box>
         </Box>
     );
