@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { apiClient } from "../../config/api";
+import { apiClient, reportApiError } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 
 interface AdminRouteProps {
@@ -15,7 +15,10 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
   useEffect(() => {
     if (!isAuthenticated || authLoading) return;
 
-    apiClient.get<ApiResponse<{ roles: string[] }>>("/api/auth/roles/verify").catch(console.error);
+    apiClient.get<ApiResponse<{ roles: string[] }>>("/api/auth/roles/verify").catch((e) => {
+      reportApiError(e);
+      console.error(e);
+    });
   }, [isAuthenticated, authLoading, location.pathname]);
 
   if (authLoading || !isAuthenticated) {

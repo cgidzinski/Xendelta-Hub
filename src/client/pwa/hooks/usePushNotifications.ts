@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { apiClient } from "../../config/api";
+import { apiClient, reportApiError } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 
 // Web Push subscribe/unsubscribe for the current device.
@@ -141,6 +141,7 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       setSubscribed(true);
       return true;
     } catch (e: any) {
+      reportApiError(e);
       setError(e?.response?.data?.message || e?.message || "Could not enable push notifications.");
       return false;
     } finally {
@@ -168,6 +169,7 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       setSubscribed(false);
       return true;
     } catch (e: any) {
+      reportApiError(e);
       setError(e?.response?.data?.message || e?.message || "Could not disable push notifications.");
       return false;
     } finally {
