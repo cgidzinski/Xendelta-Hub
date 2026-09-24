@@ -4,6 +4,7 @@ import type {
   XenSplit,
   CreateXenSplitInput,
 } from "./types";
+import { splitDeleted } from "./splitDeleted";
 
 export function useXenSplits() {
   const queryClient = useQueryClient();
@@ -14,6 +15,9 @@ export function useXenSplits() {
       const res = await apiClient.get("/api/xensplit/groups");
       return res.data.data as XenSplit[];
     },
+    // The group cards total group.expenses directly, so deleted records have to be out
+    // of that array before it reaches them.
+    select: (groups: XenSplit[]) => groups.map(splitDeleted),
   });
 
   const createMutation = useMutation({

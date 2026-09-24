@@ -2,6 +2,7 @@ const XenSplit = require("../models/xenSplit");
 import { SocketManager } from "../infrastructure/SocketManager";
 import { notify } from "./notificationUtils";
 import { registerTaskHandler, TaskRunResult } from "../infrastructure/TaskDispatcher";
+import { isDeleted } from "../../shared/xensplit/softDelete";
 
 export const XENSPLIT_RECURRING_TASK_TYPE = "xensplit:recurring-expense";
 
@@ -66,8 +67,11 @@ async function generate(task: any, dueDates: Date[]): Promise<TaskRunResult> {
     processed++;
     pushedCount++;
     remaining = dueDates.slice(1);
-  } else if (!source) {
-    return { processed: 0, disable: true }; // genesis vanished outside the cancel path
+  } else if (!source || isDeleted(source)) {
+    // Genesis vanished outside the cancel path, or was soft-deleted. Deleting a genesis
+    // already cancels its task, so a surviving one is a stray - disable it rather than
+    // let it spawn occurrences from a tombstone.
+    return { processed: 0, disable: true };
   } else if (task.payload.pending_expense) {
     // Birth already happened but a crash prevented the task advance — clean up the snapshot
     task.payload = { ...task.payload, pending_expense: undefined };

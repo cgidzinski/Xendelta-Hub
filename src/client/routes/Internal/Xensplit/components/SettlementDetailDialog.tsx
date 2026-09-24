@@ -253,7 +253,8 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
                 <Box sx={{ p: 3, pb: 1 }}>
                     <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>Undo Settlement?</Typography>
                     <Typography variant="body2" color="text.secondary">
-                        This will remove the settlement record and restore the balance. Are you sure?
+                        This restores the balance between you. The settlement record is kept and the
+                        group owner can put it back from the Deleted toggle on the Settlements tab.
                     </Typography>
                 </Box>
                 <DialogActions sx={{ px: 3, pb: 2 }}>

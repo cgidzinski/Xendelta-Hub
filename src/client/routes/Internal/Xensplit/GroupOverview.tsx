@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react";
 import { useOutletContext, useNavigate, useParams } from "react-router-dom";
-import { Box, Typography, Button, Switch, Avatar } from "@mui/material";
+import { Box, Typography, Button, Switch, Avatar, ToggleButtonGroup, ToggleButton } from "@mui/material";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
+import RestoreIcon from "@mui/icons-material/Restore";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitExpense, XenSplitSettlement, XenSplitExchange } from "../../../hooks/xensplit/types";
 import ExpenseListItem, { computeFinalExpenseIds } from "./components/ExpenseListItem";
@@ -10,18 +13,43 @@ import SettlementDetailDialog from "./components/SettlementDetailDialog";
 import { xsCardSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
 import { groupByDay } from "../../../utils/dateGrouping";
+import {
+    sortByMode, sortDateOf, nextSortMode, loadSortMode, saveSortMode,
+    type SortField,
+} from "./components/activitySort";
 
+// `date` is the transaction date, `added` is when the row was entered. Both travel with
+// the item so the comparator and the day-header key never re-derive them per type.
 type ActivityItem =
-    | { type: "expense"; date: string; expense: XenSplitExpense }
-    | { type: "settlement"; date: string; settlement: XenSplitSettlement }
-    | { type: "exchange"; date: string; exchange: XenSplitExchange };
+    | { type: "expense"; date: string; added: string; deleted: boolean; expense: XenSplitExpense }
+    | { type: "settlement"; date: string; added: string; deleted: boolean; settlement: XenSplitSettlement }
+    | { type: "exchange"; date: string; added: string; deleted: boolean; exchange: XenSplitExchange };
+
+const SORT_FIELDS: { label: string; value: SortField }[] = [
+    { label: "Date", value: "date" },
+    { label: "Added", value: "added" },
+];
 
 export default function GroupOverview() {
-    const { group, balancesData, user, onViewExpense, deleteSettlement, isDeletingSettlement, deleteExchange, isDeletingExchange, isCreator } = useOutletContext<GroupDetailContext>();
+    const {
+        group, balancesData, user, onViewExpense, deleteSettlement, isDeletingSettlement,
+        deleteExchange, isDeletingExchange, isCreator,
+        restoreExpense, isRestoringExpense, restoreSettlement, isRestoringSettlement,
+        restoreExchange, isRestoringExchange,
+    } = useOutletContext<GroupDetailContext>();
     const navigate = useNavigate();
     const { groupId } = useParams<{ groupId: string }>();
     const lsKey = `xensplit_myActivityOnly_${groupId}`;
+    const sortKey = `xensplit_overviewSort_${groupId}`;
+    const deletedKey = `xensplit_showDeleted_${groupId}`;
     const [myActivityOnly, setMyActivityOnly] = useState(() => localStorage.getItem(lsKey) === "true");
+    const [sort, setSort] = useState(() => loadSortMode(sortKey));
+    const [showDeleted, setShowDeleted] = useState(() => localStorage.getItem(deletedKey) === "true");
+
+    const handleShowDeletedToggle = (checked: boolean) => {
+        setShowDeleted(checked);
+        localStorage.setItem(deletedKey, String(checked));
+    };
     const [viewSettlement, setViewSettlement] = useState<XenSplitSettlement | null>(null);
 
     const getMember = (userId: string) => group.members.find((m) => m.user_id === userId);
@@ -45,6 +73,12 @@ export default function GroupOverview() {
         localStorage.setItem(lsKey, String(checked));
     };
 
+    const handleSortPress = (pressed: SortField | null) => {
+        const next = nextSortMode(sort, pressed);
+        setSort(next);
+        saveSortMode(sortKey, next);
+    };
+
     // Pending settlements involving this user
     const allPendingSettlements = balancesData?.settlements ?? [];
     const userSettlements = allPendingSettlements.filter(
@@ -52,36 +86,67 @@ export default function GroupOverview() {
     );
 
     // Activity feed — includes held expenses, visible to all group members
-    const feed: ActivityItem[] = [
-        ...group.expenses
-            .map((e) => ({ type: "expense" as const, date: e.date, expense: e })),
-        ...group.settlements.map((s) => ({
-            type: "settlement" as const,
-            date: s.settled_at,
-            settlement: s,
-        })),
-        ...(group.exchanges ?? []).map((ex) => ({
-            type: "exchange" as const,
-            date: ex.date,
-            exchange: ex,
-        })),
-    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const feed: ActivityItem[] = useMemo(() => {
+        // Deleted records are split out of the arrays below by the query `select`, so they
+        // only enter the feed when explicitly revealed - and carry a flag so the row dims.
+        const del = group.deleted;
+        const expenses = showDeleted ? [...group.expenses, ...(del?.expenses ?? [])] : group.expenses;
+        const settlements = showDeleted ? [...group.settlements, ...(del?.settlements ?? [])] : group.settlements;
+        const exchanges = showDeleted
+            ? [...(group.exchanges ?? []), ...(del?.exchanges ?? [])]
+            : (group.exchanges ?? []);
 
-    const filteredFeed = myActivityOnly
-        ? feed.filter((item) => {
-            if (item.type === "expense") {
-                const e = item.expense;
-                return e.paid_by === user.id || e.splits.some((sp) => sp.user_id === user.id);
-            }
-            if (item.type === "exchange") {
-                return item.exchange.party_a === user.id || item.exchange.party_b === user.id;
-            }
-            return item.settlement.from === user.id || item.settlement.to === user.id;
-        })
-        : feed;
+        const items: ActivityItem[] = [
+            ...expenses.map((e) => ({
+                type: "expense" as const,
+                date: e.date,
+                // Absent on expenses predating the field; fall back to the transaction date.
+                added: e.created_at ?? e.date,
+                deleted: e.deleted_at != null,
+                expense: e,
+            })),
+            // Settlements carry no created_at: settled_at is stamped server-side when the
+            // settlement is recorded and is never backdated, so both timestamps are the same.
+            ...settlements.map((s) => ({
+                type: "settlement" as const,
+                date: s.settled_at,
+                added: s.settled_at,
+                deleted: s.deleted_at != null,
+                settlement: s,
+            })),
+            ...exchanges.map((ex) => ({
+                type: "exchange" as const,
+                date: ex.date,
+                added: ex.created_at ?? ex.date,
+                deleted: ex.deleted_at != null,
+                exchange: ex,
+            })),
+        ];
+        return sortByMode(items, sort);
+    }, [group.expenses, group.settlements, group.exchanges, group.deleted, showDeleted, sort]);
 
-    // Group the (already date-desc sorted) feed into ordered day-groups
-    const groupedFeed = useMemo(() => groupByDay(filteredFeed, (item) => item.date), [filteredFeed]);
+    const filteredFeed = useMemo(() => (
+        myActivityOnly
+            ? feed.filter((item) => {
+                if (item.type === "expense") {
+                    const e = item.expense;
+                    return e.paid_by === user.id || e.splits.some((sp) => sp.user_id === user.id);
+                }
+                if (item.type === "exchange") {
+                    return item.exchange.party_a === user.id || item.exchange.party_b === user.id;
+                }
+                return item.settlement.from === user.id || item.settlement.to === user.id;
+            })
+            : feed
+    ), [feed, myActivityOnly, user.id]);
+
+    // Group the sorted feed into ordered day-groups, keyed on the field it was sorted on —
+    // groupByDay only merges into its last group, so the other timestamp would emit a
+    // header per row.
+    const groupedFeed = useMemo(
+        () => groupByDay(filteredFeed, (item) => sortDateOf(item, sort.field)),
+        [filteredFeed, sort.field]
+    );
 
     const settleNames = (s: XenSplitSettlement) => ({
         from: s.from === user.id ? "You" : getMember(s.from)?.username ?? "?",
@@ -97,9 +162,12 @@ export default function GroupOverview() {
                     expense={e}
                     onClick={() => onViewExpense(e)}
                     userId={user.id}
-                    hideDate
+                    hideDate={sort.field === "date"}
                     recurringSeries={seriesByGenesisId.get(e._id)}
                     isFinal={finalExpenseIds.has(e._id)}
+                    deleted={item.deleted}
+                    onRestore={item.deleted && isCreator ? () => restoreExpense(e._id) : undefined}
+                    isRestoring={isRestoringExpense}
                 />
             );
         }
@@ -116,6 +184,9 @@ export default function GroupOverview() {
                     isDeletingExchange={isDeletingExchange}
                     groupId={groupId!}
                     defaultCurrency={group.default_currency}
+                    deleted={item.deleted}
+                    onRestore={item.deleted && isCreator ? () => restoreExchange(ex._id) : undefined}
+                    isRestoring={isRestoringExchange}
                 />
             );
         }
@@ -138,6 +209,7 @@ export default function GroupOverview() {
                     alignItems: "flex-start",
                     columnGap: 1.25,
                     cursor: "pointer",
+                    ...(item.deleted && { opacity: 0.6, borderStyle: "dashed" }),
                     "&:hover": { bgcolor: "action.hover" },
                 }}
             >
@@ -189,10 +261,28 @@ export default function GroupOverview() {
                     </Box>
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{from} → {to}</Typography>
-                    <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
-                        Settled
+                    <Typography
+                        variant="body2"
+                        sx={{ fontWeight: 600, ...(item.deleted && { textDecoration: "line-through" }) }}
+                        noWrap
+                    >
+                        {from} → {to}
                     </Typography>
+                    <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                        {item.deleted ? "Deleted" : "Settled"}
+                    </Typography>
+                    {item.deleted && isCreator && (
+                        <Button
+                            size="small"
+                            variant="text"
+                            startIcon={<RestoreIcon sx={{ fontSize: "14px !important" }} />}
+                            disabled={isRestoringSettlement}
+                            onClick={(e) => { e.stopPropagation(); restoreSettlement(s._id); }}
+                            sx={{ mt: 0.25, py: 0, px: 0.5, minWidth: 0, fontSize: "0.65rem", textTransform: "none" }}
+                        >
+                            Restore
+                        </Button>
+                    )}
                 </Box>
                 <Box sx={{ textAlign: "right", flexShrink: 0 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, color: s.from === user.id ? "error.main" : s.to === user.id ? "success.main" : "text.primary", lineHeight: 1.3 }}>{formatCurrency(s.amount, s.currency)}</Typography>
@@ -220,15 +310,49 @@ export default function GroupOverview() {
             </Button>
 
             {/* Filter row */}
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", mb: 1, flexShrink: 0 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
-                    My activity only
-                </Typography>
-                <Switch
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 1, flexShrink: 0 }}>
+                {/* Pressing the active button reverses the order - MUI reports that as null. */}
+                <ToggleButtonGroup
                     size="small"
-                    checked={myActivityOnly}
-                    onChange={(e) => handleActivityToggle(e.target.checked)}
-                />
+                    value={sort.field}
+                    exclusive
+                    onChange={(_, v: SortField | null) => handleSortPress(v)}
+                    sx={{ flexShrink: 0, height: 28 }}
+                >
+                    {SORT_FIELDS.map((f) => (
+                        <ToggleButton
+                            key={f.value}
+                            value={f.value}
+                            title={`Sort by ${f.value === "added" ? "date added" : "transaction date"}`}
+                            sx={{ px: 1, gap: 0.25, fontSize: "0.7rem", textTransform: "none", whiteSpace: "nowrap" }}
+                        >
+                            {f.label}
+                            {sort.field === f.value && (
+                                sort.dir === "desc"
+                                    ? <ArrowDownwardIcon sx={{ fontSize: 12 }} />
+                                    : <ArrowUpwardIcon sx={{ fontSize: 12 }} />
+                            )}
+                        </ToggleButton>
+                    ))}
+                </ToggleButtonGroup>
+                <Box sx={{ display: "flex", alignItems: "center", minWidth: 0 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ mr: 0.25 }} noWrap>
+                        Deleted
+                    </Typography>
+                    <Switch
+                        size="small"
+                        checked={showDeleted}
+                        onChange={(e) => handleShowDeletedToggle(e.target.checked)}
+                    />
+                    <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }} noWrap>
+                        Mine only
+                    </Typography>
+                    <Switch
+                        size="small"
+                        checked={myActivityOnly}
+                        onChange={(e) => handleActivityToggle(e.target.checked)}
+                    />
+                </Box>
             </Box>
 
             {/* Activity feed (scrollable) */}
