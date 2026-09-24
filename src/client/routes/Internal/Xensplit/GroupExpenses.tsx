@@ -29,12 +29,11 @@ const DATE_FILTERS: { label: string; value: DateFilter }[] = [
     { label: "This Year", value: "thisYear" },
 ];
 
-type FilterKey = "recurring" | "held" | "deleted";
+type FilterKey = "recurring" | "held";
 
 const PROPERTY_FILTERS: { label: string; value: FilterKey }[] = [
     { label: "Recurring", value: "recurring" },
     { label: "Held", value: "held" },
-    { label: "Deleted", value: "deleted" },
 ];
 
 const SORT_FIELDS: { label: string; value: SortField }[] = [
@@ -43,7 +42,7 @@ const SORT_FIELDS: { label: string; value: SortField }[] = [
 ];
 
 export default function GroupExpenses() {
-    const { group, onViewExpense, user, cancelRecurring, isCancellingRecurring, isCreator, restoreExpense, isRestoringExpense } = useOutletContext<GroupDetailContext>();
+    const { group, onViewExpense, user, cancelRecurring, isCancellingRecurring, showDeleted } = useOutletContext<GroupDetailContext>();
     const confirm = useConfirm();
     const { groupId } = useParams<{ groupId: string }>();
     const sortKey = `xensplit_expenseSort_${groupId}`;
@@ -64,6 +63,7 @@ export default function GroupExpenses() {
         type: "expense" as const,
         date: e.date,
         added: e.created_at ?? e.date,
+        deleted: e.deleted_at != null,
         item: e,
     });
 
@@ -84,10 +84,12 @@ export default function GroupExpenses() {
             activeFilter === "held" ? !!e.on_hold :
                 true;
 
-    const showingDeleted = activeFilter === "deleted";
-    // Soft-deleted expenses are split out of group.expenses by the query `select`, so the
-    // "Deleted" filter swaps the source array instead of filtering the live one.
-    const sourceExpenses = showingDeleted ? (group.deleted?.expenses ?? []) : group.expenses;
+    // Soft-deleted expenses are split out of group.expenses by the query `select`, so they
+    // are folded back in only when the Settings switch reveals them. They sit in their
+    // normal date order, dimmed, rather than in a list of their own.
+    const sourceExpenses = showDeleted
+        ? [...group.expenses, ...(group.deleted?.expenses ?? [])]
+        : group.expenses;
 
     const finalExpenseIds = useMemo(
         () => computeFinalExpenseIds(group.expenses, group.recurring_expenses),
@@ -136,7 +138,10 @@ export default function GroupExpenses() {
             dateFilter === "lastWeek" ? startOfWeek(now) : null;
 
         const expenses = sourceExpenses
-            .filter((e) => showingDeleted ? true : hasActiveFilters ? matchesActiveFilters(e) : !e.on_hold)
+            // Held expenses are normally pinned into their own section instead, but that
+            // section reads live records only - so a deleted one has to stay here or it
+            // would disappear from both lists.
+            .filter((e) => hasActiveFilters ? matchesActiveFilters(e) : (!e.on_hold || e.deleted_at != null))
             .map(asRow)
             .filter((row) => {
                 if (search.trim() && !row.item.title.toLowerCase().includes(search.toLowerCase())) return false;
@@ -147,7 +152,7 @@ export default function GroupExpenses() {
             });
 
         return sortByMode(expenses, sort);
-    }, [sourceExpenses, showingDeleted, search, dateFilter, activeFilter, seriesByGenesisId, sort]);
+    }, [sourceExpenses, search, dateFilter, activeFilter, seriesByGenesisId, sort]);
 
     // Group the sorted list into ordered day-groups, like the Overview feed. The key must be
     // the field it was sorted on - groupByDay only merges into its last group, so grouping on
@@ -313,11 +318,7 @@ export default function GroupExpenses() {
                 {sortedItems.length === 0 ? (
                     <Box sx={{ textAlign: "center", py: heldVisible.length > 0 ? 3 : 6 }}>
                         <Typography variant="body1" color="text.secondary">
-                            {showingDeleted
-                                ? "No deleted expenses"
-                                : search.trim() || dateFilter !== "all" || hasActiveFilters
-                                    ? "No expenses match your filters"
-                                    : "No expenses yet"}
+                            {search.trim() || dateFilter !== "all" || hasActiveFilters ? "No expenses match your filters" : "No expenses yet"}
                         </Typography>
                     </Box>
                 ) : (
@@ -342,11 +343,7 @@ export default function GroupExpenses() {
                                         hideDate={sort.field === "date"}
                                         recurringSeries={seriesByGenesisId.get(row.item._id)}
                                         isFinal={finalExpenseIds.has(row.item._id)}
-                                        deleted={showingDeleted}
-                                        // Only the group owner may undo a deletion; without a
-                                        // handler the row shows no Restore button.
-                                        onRestore={showingDeleted && isCreator ? () => restoreExpense(row.item._id) : undefined}
-                                        isRestoring={isRestoringExpense}
+                                        deleted={row.deleted}
                                     />
                                 ))}
                             </Box>

@@ -466,8 +466,9 @@ describe("calculateBalances -> calculateMinimumTransfers (end to end)", () => {
 });
 
 // Soft deletion. The contract these pin: a deleted record must land on the balances
-// exactly as if it had never been entered, and restoring it must return the original
-// figures. Anything less silently rewrites what members owe each other.
+// exactly as if it had never been entered, and deleted_at must be the ONLY thing about it
+// that changes the math. Anything less silently rewrites what members owe each other -
+// which matters all the more now that deleting is permanent from the UI.
 describe("calculateBalances with soft-deleted records", () => {
   const DELETED = "2025-06-01T00:00:00.000Z";
 
@@ -480,7 +481,7 @@ describe("calculateBalances with soft-deleted records", () => {
     expect(withDeleted).toEqual(neverEntered);
   });
 
-  it("returns the original figures when the record is restored", () => {
+  it("depends on deleted_at alone - clearing the stamp reproduces the original figures", () => {
     const expenses: TestExpense[] = [
       { paid_by: "A", amount: 60, currency: "CAD", splits: equalSplit(60, ["A", "B"]) },
       { paid_by: "B", amount: 40, currency: "CAD", splits: equalSplit(40, ["A", "B"]) },
@@ -488,7 +489,7 @@ describe("calculateBalances with soft-deleted records", () => {
     const before = calculateBalances(makeDoc(expenses, [], ["A", "B"]));
     const deleted = expenses.map((e, i) => (i === 1 ? { ...e, deleted_at: DELETED } : e));
     expect(calculateBalances(makeDoc(deleted, [], ["A", "B"]))).not.toEqual(before);
-    // Restoring clears the stamp - the schema default is null, so cover both spellings.
+    // The schema default is null, so an unstamped record must read as live either way.
     const restoredNull = expenses.map((e, i) => (i === 1 ? { ...e, deleted_at: null } : e));
     expect(calculateBalances(makeDoc(restoredNull, [], ["A", "B"]))).toEqual(before);
   });

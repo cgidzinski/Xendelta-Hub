@@ -4,7 +4,6 @@ import { Box, Typography, Button, Switch, Avatar, ToggleButtonGroup, ToggleButto
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
-import RestoreIcon from "@mui/icons-material/Restore";
 import type { GroupDetailContext } from "./GroupDetail";
 import type { XenSplitExpense, XenSplitSettlement, XenSplitExchange } from "../../../hooks/xensplit/types";
 import ExpenseListItem, { computeFinalExpenseIds } from "./components/ExpenseListItem";
@@ -33,23 +32,14 @@ const SORT_FIELDS: { label: string; value: SortField }[] = [
 export default function GroupOverview() {
     const {
         group, balancesData, user, onViewExpense, deleteSettlement, isDeletingSettlement,
-        deleteExchange, isDeletingExchange, isCreator,
-        restoreExpense, isRestoringExpense, restoreSettlement, isRestoringSettlement,
-        restoreExchange, isRestoringExchange,
+        deleteExchange, isDeletingExchange, isCreator, showDeleted,
     } = useOutletContext<GroupDetailContext>();
     const navigate = useNavigate();
     const { groupId } = useParams<{ groupId: string }>();
     const lsKey = `xensplit_myActivityOnly_${groupId}`;
     const sortKey = `xensplit_overviewSort_${groupId}`;
-    const deletedKey = `xensplit_showDeleted_${groupId}`;
     const [myActivityOnly, setMyActivityOnly] = useState(() => localStorage.getItem(lsKey) === "true");
     const [sort, setSort] = useState(() => loadSortMode(sortKey));
-    const [showDeleted, setShowDeleted] = useState(() => localStorage.getItem(deletedKey) === "true");
-
-    const handleShowDeletedToggle = (checked: boolean) => {
-        setShowDeleted(checked);
-        localStorage.setItem(deletedKey, String(checked));
-    };
     const [viewSettlement, setViewSettlement] = useState<XenSplitSettlement | null>(null);
 
     const getMember = (userId: string) => group.members.find((m) => m.user_id === userId);
@@ -166,8 +156,6 @@ export default function GroupOverview() {
                     recurringSeries={seriesByGenesisId.get(e._id)}
                     isFinal={finalExpenseIds.has(e._id)}
                     deleted={item.deleted}
-                    onRestore={item.deleted && isCreator ? () => restoreExpense(e._id) : undefined}
-                    isRestoring={isRestoringExpense}
                 />
             );
         }
@@ -185,8 +173,6 @@ export default function GroupOverview() {
                     groupId={groupId!}
                     defaultCurrency={group.default_currency}
                     deleted={item.deleted}
-                    onRestore={item.deleted && isCreator ? () => restoreExchange(ex._id) : undefined}
-                    isRestoring={isRestoringExchange}
                 />
             );
         }
@@ -271,18 +257,6 @@ export default function GroupOverview() {
                     <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
                         {item.deleted ? "Deleted" : "Settled"}
                     </Typography>
-                    {item.deleted && isCreator && (
-                        <Button
-                            size="small"
-                            variant="text"
-                            startIcon={<RestoreIcon sx={{ fontSize: "14px !important" }} />}
-                            disabled={isRestoringSettlement}
-                            onClick={(e) => { e.stopPropagation(); restoreSettlement(s._id); }}
-                            sx={{ mt: 0.25, py: 0, px: 0.5, minWidth: 0, fontSize: "0.65rem", textTransform: "none" }}
-                        >
-                            Restore
-                        </Button>
-                    )}
                 </Box>
                 <Box sx={{ textAlign: "right", flexShrink: 0 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, color: s.from === user.id ? "error.main" : s.to === user.id ? "success.main" : "text.primary", lineHeight: 1.3 }}>{formatCurrency(s.amount, s.currency)}</Typography>
@@ -336,16 +310,8 @@ export default function GroupOverview() {
                     ))}
                 </ToggleButtonGroup>
                 <Box sx={{ display: "flex", alignItems: "center", minWidth: 0 }}>
-                    <Typography variant="caption" color="text.secondary" sx={{ mr: 0.25 }} noWrap>
-                        Deleted
-                    </Typography>
-                    <Switch
-                        size="small"
-                        checked={showDeleted}
-                        onChange={(e) => handleShowDeletedToggle(e.target.checked)}
-                    />
                     <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }} noWrap>
-                        Mine only
+                        My activity only
                     </Typography>
                     <Switch
                         size="small"

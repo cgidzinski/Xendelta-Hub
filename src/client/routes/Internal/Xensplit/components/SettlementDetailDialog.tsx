@@ -253,8 +253,8 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
                 <Box sx={{ p: 3, pb: 1 }}>
                     <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>Undo Settlement?</Typography>
                     <Typography variant="body2" color="text.secondary">
-                        This restores the balance between you. The settlement record is kept and the
-                        group owner can put it back from the Deleted toggle on the Settlements tab.
+                        This restores the balance between you and cannot be undone. The settlement
+                        record is kept as group history and can be shown from Settings.
                     </Typography>
                 </Box>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
