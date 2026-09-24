@@ -3,12 +3,13 @@ import * as ReactDOM from "react-dom/client";
 import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route, Navigate } from "react-router-dom";
 import AppThemeProvider from "./theme/AppThemeProvider";
 import { SnackbarProvider } from "notistack";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryCache, MutationCache, QueryClientProvider } from "@tanstack/react-query";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 
 // Error monitoring
 import { ErrorBoundary } from "./config/bugsnag";
+import { reportApiError } from "./config/api";
 
 // Components
 import ErrorPage from "./components/ErrorPage";
@@ -295,6 +296,12 @@ const router = createBrowserRouter(
 
 // Create a client
 const queryClient = new QueryClient({
+  // react-query only calls cache-level onError once retries are exhausted, so a request that
+  // fails once and then succeeds on retry (a transient gateway blip, a brief network drop)
+  // never reaches reportApiError — unlike reporting from the axios interceptor directly, which
+  // would fire on every attempt including ones that self-heal.
+  queryCache: new QueryCache({ onError: reportApiError }),
+  mutationCache: new MutationCache({ onError: reportApiError }),
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000, // 5 minutes

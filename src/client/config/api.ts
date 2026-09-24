@@ -7,6 +7,40 @@ import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import { Bugsnag } from "./bugsnag";
 
 /**
+ * Marks an Error with the request context a caller needs to decide whether (and how) to
+ * report it. This interceptor itself never reports to Bugsnag — it fires on every retry
+ * attempt, so reporting from here would flag a blip that self-heals on retry #2 just as
+ * loudly as a request that never recovers. Callers report via `reportApiError` below: react-query
+ * consumers wire it into QueryCache/MutationCache's onError (fires once, only after retries are
+ * exhausted); one-off calls outside react-query (no retry to wait out) call it directly.
+ */
+export interface ApiError extends Error {
+  status?: number;
+  requestUrl?: string;
+  requestMethod?: string;
+}
+
+function makeApiError(message: string, error: any, status?: number): ApiError {
+  const err = new Error(message) as ApiError;
+  err.status = status;
+  err.requestUrl = error.config?.url;
+  err.requestMethod = error.config?.method;
+  return err;
+}
+
+export function reportApiError(error: unknown): void {
+  const apiError = error as ApiError;
+  if (apiError?.status === 401) return; // routine token expiry, not a bug
+  Bugsnag.notify(error instanceof Error ? error : new Error(String(error)), (event) => {
+    event.addMetadata("request", {
+      url: apiError?.requestUrl,
+      method: apiError?.requestMethod,
+      status: apiError?.status,
+    });
+  });
+}
+
+/**
  * Create axios instance with request interceptor for authentication
  */
 const createAxiosInstance = (): AxiosInstance => {
@@ -52,55 +86,32 @@ const createAxiosInstance = (): AxiosInstance => {
       return response;
     },
     (error) => {
-      const reportError = (err: Error, status?: number) => {
-        Bugsnag.notify(err, (event) => {
-          event.addMetadata("request", {
-            url: error.config?.url,
-            method: error.config?.method,
-            status,
-          });
-        });
-      };
-
       // Handle axios errors
       if (error.response) {
         // Server responded with error status
         const { status, data } = error.response;
 
         if (status === 401) {
-          // Unauthorized - clear token and redirect. Routine token-expiry flow, not a bug,
-          // so it's not reported to Bugsnag.
+          // Unauthorized - clear token and redirect. Routine token-expiry flow, not a bug.
           localStorage.removeItem("token");
-          throw new Error("Unauthorized - please log in again");
+          throw makeApiError("Unauthorized - please log in again", error, status);
         } else if (status === 403) {
-          const err = new Error(data?.message || "You are not authorized to perform this action");
-          reportError(err, status);
-          throw err;
+          throw makeApiError(data?.message || "You are not authorized to perform this action", error, status);
         } else if (status === 404) {
-          const err = new Error(data?.message || "Resource not found");
-          reportError(err, status);
-          throw err;
+          throw makeApiError(data?.message || "Resource not found", error, status);
         } else if (status === 400 && data?.errors && Array.isArray(data.errors)) {
           // Validation errors
           const errorMessages = data.errors.map((err: { path: string; message: string }) => err.message).join(", ");
-          const err = new Error(errorMessages || data.message || "Validation failed");
-          reportError(err, status);
-          throw err;
+          throw makeApiError(errorMessages || data.message || "Validation failed", error, status);
         } else {
-          const err = new Error(data?.message || `Request failed: ${error.response.statusText}`);
-          reportError(err, status);
-          throw err;
+          throw makeApiError(data?.message || `Request failed: ${error.response.statusText}`, error, status);
         }
       } else if (error.request) {
         // Request was made but no response received
-        const err = new Error("Network error - please check your connection");
-        reportError(err);
-        throw err;
+        throw makeApiError("Network error - please check your connection", error);
       } else {
         // Something else happened
-        const err = new Error(error.message || "An unexpected error occurred");
-        reportError(err);
-        throw err;
+        throw makeApiError(error.message || "An unexpected error occurred", error);
       }
     }
   );

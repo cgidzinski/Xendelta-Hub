@@ -153,7 +153,15 @@ providers:
 api:
   dashboard: true
   insecure: true
+
+# Without this, Traefik logs nothing per-request — `docker logs` on the traefik container
+# only ever shows startup output, so a failure between Traefik and an app backend (timeout,
+# connection refused, etc.) leaves no trace here to diagnose after the fact.
+accessLog: {}
 ```
+
+Static config changes (this file) need a container restart to take effect — `providers.file`'s
+`watch: true` above only covers `dynamic/`, Traefik doesn't hot-reload its own top-level config.
 
 `/opt/traefik/docker-compose.yml`:
 ```yaml
