@@ -10,6 +10,7 @@ import {
     Select,
     MenuItem,
     Switch,
+    Divider,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -156,29 +157,6 @@ export default function GroupSettings() {
                 </Box>
             </Box>
 
-            {/* Deleted Records — a personal display preference, so every member gets the
-                switch, unlike the creator-only settings above. */}
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Deleted Records
-                </Typography>
-            </Box>
-            <Box sx={{ mb: 3, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
-                <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>Show deleted records</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                        Deleted expenses, settlements and exchanges are kept as group history but can
-                        never be restored, and never count towards balances. Turn this on to see them
-                        struck through in the lists. Affects only your own view.
-                    </Typography>
-                </Box>
-                <Switch
-                    checked={showDeleted}
-                    onChange={(e) => setShowDeleted(e.target.checked)}
-                    inputProps={{ "aria-label": "Show deleted records" }}
-                />
-            </Box>
-
             {/* Members */}
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -241,6 +219,32 @@ export default function GroupSettings() {
                         );
                     })}
                 </Box>
+            </Box>
+
+            {/* Everything above is a group-wide, creator-only setting. This one is neither:
+                it lives in this browser's localStorage and changes nothing for anyone else,
+                so it sits apart, below the divider, under its own heading. */}
+            <Divider sx={{ mb: 3 }} />
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, minHeight: 48 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    Your Preferences
+                </Typography>
+            </Box>
+            <Box sx={{ mb: 3, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+                <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>Show deleted records</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                        Deleted expenses, settlements and exchanges are kept as group history but can
+                        never be restored, and never count towards balances. Turn this on to see them
+                        struck through in the lists. Saved on this device and visible only to you —
+                        it changes nothing for other members.
+                    </Typography>
+                </Box>
+                <Switch
+                    checked={showDeleted}
+                    onChange={(e) => setShowDeleted(e.target.checked)}
+                    inputProps={{ "aria-label": "Show deleted records" }}
+                />
             </Box>
         </Box>
     );
