@@ -138,9 +138,9 @@ export default function GroupDetail() {
       : location.pathname.endsWith("/balances")
         ? 2
         : false;
-  const hideAddExpense = location.pathname.endsWith("/analytics") || location.pathname.endsWith("/settings") || location.pathname.endsWith("/explain") || location.pathname.endsWith("/settlements");
+  const hideAddExpense = location.pathname.endsWith("/analytics") || location.pathname.endsWith("/settings") || location.pathname.endsWith("/explain") || location.pathname.endsWith("/settlements") || location.pathname.endsWith("/activity");
   // Routes whose page header stays fixed while only the list underneath scrolls.
-  const paneled = ["/overview", "/expenses", "/balances", "/settings", "/explain"].some((p) => location.pathname.endsWith(p));
+  const paneled = ["/overview", "/expenses", "/balances", "/settings", "/explain", "/activity"].some((p) => location.pathname.endsWith(p));
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<SearchedUser[]>([]);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
