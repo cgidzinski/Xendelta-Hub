@@ -32,12 +32,24 @@ import { advanceDate, applyAdvance } from "../utils/scheduleUtils";
 import { dispatchTask } from "../infrastructure/TaskDispatcher";
 import { XENSPLIT_RECURRING_TASK_TYPE } from "../utils/xensplitRecurringHandler";
 import { serializeXenSplitGroup, serializeXenSplitGroups, serializeEtransfer, MEMBER_FIELDS } from "../utils/xenSplitSerializer";
+import { logXenSplit, deleteXenSplitLogs } from "../utils/xenSplitLog";
+import { diffFields, collectLogUserIds, EXPENSE_LOG_FIELDS, GROUP_LOG_FIELDS } from "../utils/xenSplitLogUtils";
 const mongoose = require("mongoose");
 const ScheduledTask = require("../models/scheduledTask");
+const XenSplitLog = require("../models/xenSplitLog");
 
 function sanitizeSecondaryCurrencies(primary: string, secondaries: string[]): string[] {
   return Array.from(new Set(secondaries.filter((c: string) => c !== primary)));
 }
+
+function exchangeLogMeta(exchange: any) {
+  return {
+    party_a: exchange.party_a, amount_a: exchange.amount_a, currency_a: exchange.currency_a,
+    party_b: exchange.party_b, amount_b: exchange.amount_b, currency_b: exchange.currency_b,
+  };
+}
+
+const LOG_PAGE_SIZE = 50;
 
 const RATE_CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 const rateCache = new Map<string, { rate: number; fetchedAt: number }>();
@@ -93,6 +105,10 @@ module.exports = function (app: any) {
       });
 
       await group.save();
+      await logXenSplit(group._id, userId, "group_created", { targetType: "group", targetId: group._id, summary: name });
+      for (const memberId of members.filter((m) => m !== userId)) {
+        await logXenSplit(group._id, userId, "member_added", { targetType: "member", targetId: memberId, meta: { user_id: memberId } });
+      }
       await group.populate("members", MEMBER_FIELDS);
       const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
       SocketManager.getInstance().notifyXenSplitGroupsUpdated(allMemberIds);
@@ -154,12 +170,17 @@ module.exports = function (app: any) {
         return res.status(403).json({ status: false, message: "Only the creator can update the group" });
       }
 
+      const before = group.toObject();
       if (name) group.name = name;
       if (default_currency) group.default_currency = default_currency;
       if (secondary_currencies !== undefined || default_currency) {
         group.secondary_currencies = sanitizeSecondaryCurrencies(group.default_currency, secondary_currencies ?? group.secondary_currencies);
       }
       await group.save();
+      const groupChanges = diffFields(before, group.toObject(), GROUP_LOG_FIELDS);
+      if (groupChanges.length > 0) {
+        await logXenSplit(groupId, userId, "group_updated", { targetType: "group", targetId: groupId, summary: group.name, changes: groupChanges });
+      }
       await group.populate("members", MEMBER_FIELDS);
 
       const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
@@ -194,6 +215,7 @@ module.exports = function (app: any) {
       const { url } = await uploadXenSplitGroupImageFile(req.file, groupId);
       group.image_url = url;
       await group.save();
+      await logXenSplit(groupId, userId, "group_image_updated", { targetType: "group", targetId: groupId, summary: group.name });
       await group.populate("members", MEMBER_FIELDS);
 
       const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
@@ -225,6 +247,7 @@ module.exports = function (app: any) {
 
       await XenSplit.findByIdAndDelete(groupId);
       await ScheduledTask.deleteMany({ task_type: XENSPLIT_RECURRING_TASK_TYPE, "payload.group_id": groupId });
+      await deleteXenSplitLogs(groupId);
 
       SocketManager.getInstance().notifyXenSplitGroupsUpdated(memberIds);
 
@@ -259,6 +282,7 @@ module.exports = function (app: any) {
 
       group.created_by = newOwnerId;
       await group.save();
+      await logXenSplit(groupId, userId, "ownership_transferred", { targetType: "member", targetId: newOwnerId, meta: { from: userId, to: newOwnerId } });
       await group.populate("members", MEMBER_FIELDS);
 
       const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
@@ -302,6 +326,9 @@ module.exports = function (app: any) {
       }
 
       await group.save();
+      for (const memberId of newMemberIds) {
+        await logXenSplit(groupId, userId, "member_added", { targetType: "member", targetId: memberId, meta: { user_id: memberId } });
+      }
       await group.populate("members", MEMBER_FIELDS);
 
       const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
@@ -351,15 +378,23 @@ module.exports = function (app: any) {
       }
 
       // If creator is leaving, transfer ownership to next member
+      let inheritedOwnerId: string | null = null;
       if (group.created_by === targetUserId) {
         const remainingMembers = group.members.filter((m: any) => m.toString() !== targetUserId);
         if (remainingMembers.length > 0) {
-          group.created_by = remainingMembers[0].toString();
+          inheritedOwnerId = remainingMembers[0].toString();
+          group.created_by = inheritedOwnerId;
         }
       }
 
       group.members = group.members.filter((m: any) => m.toString() !== targetUserId);
       await group.save();
+      if (group.members.length > 0) {
+        await logXenSplit(groupId, userId, "member_removed", { targetType: "member", targetId: targetUserId, meta: { user_id: targetUserId, left: targetUserId === userId } });
+        if (inheritedOwnerId) {
+          await logXenSplit(groupId, userId, "ownership_transferred", { targetType: "member", targetId: inheritedOwnerId, meta: { from: targetUserId, to: inheritedOwnerId, automatic: true } });
+        }
+      }
       await group.populate("members", MEMBER_FIELDS);
 
       // Notify removed user if they were removed by someone else (not a voluntary leave)
@@ -371,6 +406,7 @@ module.exports = function (app: any) {
       if (group.members.length === 0) {
         await XenSplit.findByIdAndDelete(groupId);
         await ScheduledTask.deleteMany({ task_type: XENSPLIT_RECURRING_TASK_TYPE, "payload.group_id": groupId });
+        await deleteXenSplitLogs(groupId);
         SocketManager.getInstance().notifyXenSplitGroupsUpdated([targetUserId]);
         return res.json({ status: true, message: "Member removed and group deleted" });
       }
@@ -453,6 +489,11 @@ module.exports = function (app: any) {
             pending_expense: expense,
           },
         });
+        await logXenSplit(groupId, userId, "recurring_scheduled", {
+          targetType: "recurring",
+          summary: title,
+          meta: { amount, currency: expenseCurrency, paid_by, frequency: recurring.frequency, start_date: expense.date },
+        });
         await group.populate("members", MEMBER_FIELDS);
         const scheduledMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
         SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, scheduledMemberIds);
@@ -462,6 +503,12 @@ module.exports = function (app: any) {
       group.expenses.push(expense as any);
       const newExpense = group.expenses[group.expenses.length - 1];
       await group.save();
+      await logXenSplit(groupId, userId, "expense_created", {
+        targetType: "expense",
+        targetId: newExpense._id,
+        summary: title,
+        meta: { amount, currency: expenseCurrency, paid_by, ...(recurring ? { frequency: recurring.frequency } : {}) },
+      });
 
       // Backfill occurrences immediately when the series started in the past
       let respGroup = group;
@@ -555,6 +602,8 @@ module.exports = function (app: any) {
         return res.status(400).json({ status: false, message: "Hold isn't available for recurring expenses — pause the schedule instead" });
       }
 
+      const expenseBefore = expense.toObject();
+
       if (updates.paid_by !== undefined) expense.paid_by = updates.paid_by;
       if (updates.amount !== undefined) expense.amount = updates.amount;
       if (updates.currency !== undefined) expense.currency = updates.currency;
@@ -586,11 +635,15 @@ module.exports = function (app: any) {
 
       // Recurring schedule updates (only meaningful on a genesis expense)
       let resumed = false;
+      let recurringAction: "recurring_cancelled" | "recurring_paused" | "recurring_resumed" | "recurring_updated" | null = null;
+      let recurringChanges: ReturnType<typeof diffFields> = [];
       if (updates.recurring && series) {
         const r = updates.recurring;
         if (r.cancel === true) {
           await series.deleteOne();
+          recurringAction = "recurring_cancelled";
         } else {
+          const seriesBefore = { end_date: series.end_date, max_occurrences: series.max_runs, active: series.enabled };
           if (r.end_date !== undefined) series.end_date = r.end_date ? new Date(r.end_date) : undefined;
           if (r.max_occurrences !== undefined) series.max_runs = r.max_occurrences ?? undefined;
           if (r.active !== undefined) {
@@ -604,10 +657,26 @@ module.exports = function (app: any) {
             resumed = false;
           }
           await series.save();
+          recurringChanges = diffFields(seriesBefore, { end_date: series.end_date, max_occurrences: series.max_runs, active: series.enabled }, ["end_date", "max_occurrences", "active"]);
+          const activeChange = recurringChanges.find((c) => c.field === "active");
+          recurringAction = activeChange ? (activeChange.to ? "recurring_resumed" : "recurring_paused") : recurringChanges.length > 0 ? "recurring_updated" : null;
         }
       }
 
       await group.save();
+      const expenseChanges = diffFields(expenseBefore, expense.toObject(), EXPENSE_LOG_FIELDS);
+      if (expenseChanges.length > 0) {
+        await logXenSplit(groupId, userId, "expense_updated", {
+          targetType: "expense", targetId: expenseId, summary: expense.title,
+          meta: { amount: expense.amount, currency: expense.currency }, changes: expenseChanges,
+        });
+      }
+      if (recurringAction) {
+        await logXenSplit(groupId, userId, recurringAction, {
+          targetType: "recurring", targetId: series._id, summary: expense.title,
+          changes: recurringAction === "recurring_cancelled" ? undefined : recurringChanges,
+        });
+      }
 
       // Resuming backfills the paused gap
       let respGroup = group;
@@ -682,6 +751,10 @@ module.exports = function (app: any) {
       expense.deleted_at = new Date();
       expense.deleted_by = userId;
       await group.save();
+      await logXenSplit(groupId, userId, "expense_deleted", {
+        targetType: "expense", targetId: expenseId, summary: expense.title,
+        meta: { amount: expense.amount, currency: expense.currency, paid_by: expense.paid_by },
+      });
       await group.populate("members", MEMBER_FIELDS);
 
       const deletedMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
@@ -721,6 +794,9 @@ module.exports = function (app: any) {
       }
 
       await series.deleteOne();
+      await logXenSplit(groupId, userId, "recurring_cancelled", {
+        targetType: "recurring", targetId: recurringId, summary: series.payload?.pending_expense?.title,
+      });
       await group.populate("members", MEMBER_FIELDS);
 
       const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
@@ -778,6 +854,7 @@ module.exports = function (app: any) {
       }
 
       await group.save();
+      await logXenSplit(groupId, userId, "expense_images_added", { targetType: "expense", targetId: expenseId, summary: expense.title, meta: { count: files.length } });
       await group.populate("members", MEMBER_FIELDS);
 
       const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
@@ -823,6 +900,7 @@ module.exports = function (app: any) {
       await deleteFromGCS(image.gcs_path, true).catch(() => { });
       expense.images.splice(imageIndex, 1);
       await group.save();
+      await logXenSplit(groupId, userId, "expense_image_removed", { targetType: "expense", targetId: expenseId, summary: expense.title });
       await group.populate("members", MEMBER_FIELDS);
 
       const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
@@ -1003,6 +1081,8 @@ module.exports = function (app: any) {
       });
 
       await group.save();
+      const newSettlement = group.settlements[group.settlements.length - 1];
+      await logXenSplit(groupId, userId, "settlement_created", { targetType: "settlement", targetId: newSettlement._id, meta: { from, to, amount, currency } });
       await group.populate("members", MEMBER_FIELDS);
 
       const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
@@ -1052,6 +1132,10 @@ module.exports = function (app: any) {
       settlement.deleted_at = new Date();
       settlement.deleted_by = userId;
       await group.save();
+      await logXenSplit(groupId, userId, "settlement_deleted", {
+        targetType: "settlement", targetId: settlementId,
+        meta: { from: settlement.from, to: settlement.to, amount: settlement.amount, currency: settlement.currency },
+      });
       await group.populate("members", MEMBER_FIELDS);
 
       const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
@@ -1107,6 +1191,11 @@ module.exports = function (app: any) {
       } as any);
 
       await group.save();
+      const newExchange = group.exchanges[group.exchanges.length - 1];
+      await logXenSplit(groupId, userId, "exchange_created", {
+        targetType: "exchange", targetId: newExchange._id,
+        meta: { party_a, amount_a, currency_a, party_b, amount_b, currency_b },
+      });
       await group.populate("members", MEMBER_FIELDS);
 
       const actor = (group.members as any[]).find((m: any) => m._id.toString() === userId);
@@ -1159,6 +1248,7 @@ module.exports = function (app: any) {
       exchange.deleted_at = new Date();
       exchange.deleted_by = userId;
       await group.save();
+      await logXenSplit(groupId, userId, "exchange_deleted", { targetType: "exchange", targetId: exchangeId, meta: exchangeLogMeta(exchange) });
       await group.populate("members", MEMBER_FIELDS);
 
       const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
@@ -1168,6 +1258,66 @@ module.exports = function (app: any) {
     } catch (error) {
       console.error("Error deleting exchange:", error);
       res.status(500).json({ status: false, message: "Failed to delete exchange" });
+    }
+  });
+
+  // GET /api/xensplit/groups/:groupId/log - Activity log, newest first. Owner only.
+  // Paged by log id: pass the last id of a page as ?before= to get the next one.
+  app.get("/api/xensplit/groups/:groupId/log", validateParams(xenSplitIdParamSchema), async (req: Request, res: Response) => {
+    try {
+      const userId = (req.user as any)._id.toString();
+      const { groupId } = req.params;
+
+      const group = await XenSplit.findById(groupId).select("created_by");
+      if (!group) {
+        return res.status(404).json({ status: false, message: "Group not found" });
+      }
+
+      if (group.created_by !== userId) {
+        return res.status(403).json({ status: false, message: "Only the group owner can view the activity log" });
+      }
+
+      const before = typeof req.query.before === "string" ? req.query.before : undefined;
+      if (before !== undefined && !/^[a-f0-9]{24}$/i.test(before)) {
+        return res.status(400).json({ status: false, message: "Invalid cursor" });
+      }
+      const limit = Math.min(Math.max(Number(req.query.limit) || LOG_PAGE_SIZE, 1), 100);
+
+      const query: any = { group_id: groupId };
+      if (before) query._id = { $lt: new mongoose.Types.ObjectId(before) };
+      // One extra row tells us whether another page exists
+      const rows = await XenSplitLog.find(query).sort({ _id: -1 }).limit(limit + 1).lean();
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+
+      // Resolve every user a row mentions, including members who have since left
+      const userIds = Array.from(new Set(page.flatMap((row: any) => collectLogUserIds(row))));
+      const users = await User.find({ _id: { $in: userIds } }).select(MEMBER_FIELDS).lean();
+      const userMap: Record<string, { username: string; avatar: string | null }> = {};
+      for (const u of users as any[]) {
+        userMap[u._id.toString()] = { username: u.username, avatar: u.avatar || null };
+      }
+
+      const entries = page.map((row: any) => ({
+        _id: row._id.toString(),
+        actor_id: row.actor_id,
+        action: row.action,
+        target_type: row.target_type,
+        target_id: row.target_id,
+        summary: row.summary,
+        meta: row.meta,
+        changes: row.changes || [],
+        created_at: row.created_at,
+      }));
+
+      res.json({
+        status: true,
+        message: "Activity log retrieved",
+        data: { entries, users: userMap, nextBefore: hasMore ? entries[entries.length - 1]._id : null },
+      });
+    } catch (error) {
+      console.error("Error fetching activity log:", error);
+      res.status(500).json({ status: false, message: "Failed to fetch activity log" });
     }
   });
 
@@ -1209,6 +1359,15 @@ module.exports = function (app: any) {
     record.deleted_at = null;
     record.deleted_by = undefined;
     await group.save();
+    await logXenSplit(groupId, userId, `${kind}_restored`, {
+      targetType: kind,
+      targetId: recordId,
+      summary: kind === "expense" ? record.title : undefined,
+      meta:
+        kind === "expense" ? { amount: record.amount, currency: record.currency, paid_by: record.paid_by } :
+          kind === "settlement" ? { from: record.from, to: record.to, amount: record.amount, currency: record.currency } :
+            exchangeLogMeta(record),
+    });
     await group.populate("members", MEMBER_FIELDS);
 
     const memberIds = (group.members as any[]).map((m: any) => m._id.toString());

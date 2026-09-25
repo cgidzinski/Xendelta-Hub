@@ -1,5 +1,5 @@
 ﻿import { useRef, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import {
     Box,
     Typography,
@@ -15,6 +15,8 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
+import HistoryIcon from "@mui/icons-material/History";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { useSnackbar } from "notistack";
 import type { GroupDetailContext } from "./GroupDetail";
 import { xsCardSx } from "./components/rowStyles";
@@ -26,6 +28,7 @@ export default function GroupSettings() {
     const { group, user, isCreator, onAddMembers, onMemberMenu, updateGroup, isUpdating, uploadGroupImage, isUploadingImage, balancesData, showDeleted, setShowDeleted } =
         useOutletContext<GroupDetailContext>();
     const { enqueueSnackbar } = useSnackbar();
+    const navigate = useNavigate();
     const [selectedCurrency, setSelectedCurrency] = useState(group.default_currency || "CAD");
     const [selectedSecondaries, setSelectedSecondaries] = useState<string[]>(group.secondary_currencies || []);
     const [currenciesDirty, setCurrenciesDirty] = useState(false);
@@ -220,6 +223,36 @@ export default function GroupSettings() {
                     })}
                 </Box>
             </Box>
+
+            {isCreator && (
+                <>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, mt: 2, minHeight: 48 }}>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            Activity Log
+                        </Typography>
+                    </Box>
+                    <Box
+                        component="button"
+                        type="button"
+                        onClick={() => navigate(`/internal/xensplit/groups/${group._id}/activity`)}
+                        sx={{
+                            mb: 3, width: "100%", bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5,
+                            display: "flex", alignItems: "center", gap: 2, border: "none", cursor: "pointer",
+                            color: "inherit", font: "inherit", textAlign: "left",
+                            "&:hover": { bgcolor: "action.selected" },
+                        }}
+                    >
+                        <HistoryIcon color="action" />
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                            <Typography variant="body1" sx={{ fontWeight: 500 }}>View activity log</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Every creation, edit and deletion in this group. Only visible to you as the owner.
+                            </Typography>
+                        </Box>
+                        <ChevronRightIcon color="action" />
+                    </Box>
+                </>
+            )}
 
             {/* Everything above is a group-wide, creator-only setting. This one is neither:
                 it lives in this browser's localStorage and changes nothing for anyone else,

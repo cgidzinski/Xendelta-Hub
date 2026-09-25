@@ -3,6 +3,7 @@ import { SocketManager } from "../infrastructure/SocketManager";
 import { notify } from "./notificationUtils";
 import { registerTaskHandler, TaskRunResult } from "../infrastructure/TaskDispatcher";
 import { isDeleted } from "../../shared/xensplit/softDelete";
+import { logXenSplit } from "./xenSplitLog";
 
 export const XENSPLIT_RECURRING_TASK_TYPE = "xensplit:recurring-expense";
 
@@ -104,6 +105,12 @@ async function generate(task: any, dueDates: Date[]): Promise<TaskRunResult> {
     }
 
     const groupId = group._id.toString();
+    await logXenSplit(groupId, null, "recurring_generated", {
+      targetType: "recurring",
+      targetId: task._id,
+      summary: source.title,
+      meta: { count: pushedCount, amount: source.amount, currency: source.currency },
+    });
     const memberIds = (group.members as any[]).map((m: any) => m.toString());
     const message = pushedCount === 1
       ? `Recurring: ${source.title} (${source.amount} ${source.currency})`
