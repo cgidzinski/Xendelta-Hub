@@ -4,8 +4,10 @@
 // the Report's period — each holding a different shape. They are one key now; this module
 // owns that key and the one-time migration off the old ones.
 
-import { startOfYear } from "date-fns";
-import { defaultMonthMode, parsePeriodMode, serializePeriodMode, type PeriodMode } from "./periodMode";
+import { subWeeks } from "date-fns";
+import {
+    defaultMonthMode, parsePeriodMode, serializePeriodMode, unitMode, type PeriodMode,
+} from "./periodMode";
 
 const key = (bookId: string) => `xenbudget_period_${bookId}`;
 
@@ -23,9 +25,9 @@ function parseLegacyDateFilter(raw: string | null): PeriodMode | null {
     try {
         const obj = JSON.parse(raw);
         if (obj.preset === "all") return { kind: "all" };
-        if (obj.preset === "thisWeek") return { kind: "preset", preset: "thisWeek" };
-        if (obj.preset === "lastWeek") return { kind: "preset", preset: "lastWeek" };
-        if (obj.preset === "thisYear") return { kind: "year", anchor: startOfYear(new Date()) };
+        if (obj.preset === "thisWeek") return unitMode("week");
+        if (obj.preset === "lastWeek") return unitMode("week", subWeeks(new Date(), 1));
+        if (obj.preset === "thisYear") return unitMode("year");
         if (obj.preset === "custom" && obj.from && obj.to) {
             const from = new Date(obj.from);
             const to = new Date(obj.to);
