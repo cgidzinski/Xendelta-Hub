@@ -160,6 +160,7 @@ module.exports = function (app: any) {
           now: new Date(),
           doneAt: req.body.done_at ? new Date(req.body.done_at) : undefined,
           note: req.body.note,
+          occurrences: req.body.occurrences,
         });
         routine.set(patch);
         await routine.save();

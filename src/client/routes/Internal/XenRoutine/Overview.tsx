@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Box, Button, Card, Collapse, Stack, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import { Box, Button, Card, Collapse, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import { format, formatDistanceToNowStrict } from "date-fns";
@@ -10,10 +10,10 @@ import EmptyState from "../../../components/ui/EmptyState";
 import ListSkeleton from "../../../components/ui/ListSkeleton";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import {
-    intervalLabel, useCompleteRoutine, useInvalidateRoutines, useRoutines, type Routine,
+    intervalLabel, useCompleteRoutine, useInvalidateRoutines, useRoutines,
 } from "../../../hooks/xenroutine/useRoutines";
 import {
-    dueText, pendingRoutines, recentCompletions, routineStatusBucket, type Bucket,
+    bucketForDate, dueText, HORIZON_OPTIONS, pendingOccurrences, recentCompletions, type Bucket, type Occurrence,
 } from "../../../hooks/xenroutine/routineViews";
 import SlideToComplete from "./components/SlideToComplete";
 import RoutineMenu from "./components/RoutineMenu";
@@ -21,7 +21,7 @@ import type { XenRoutineOutletContext } from "./outletContext";
 
 type Filter = "pending" | "completed" | "all";
 
-const BUCKETS: { bucket: Bucket; title: string }[] = [
+const BUCKETS: { bucket: Exclude<Bucket, "later">; title: string }[] = [
     { bucket: "overdue", title: "Overdue" },
     { bucket: "soon", title: "Due soon" },
     { bucket: "month", title: "Later this month" },
@@ -30,51 +30,64 @@ const BUCKETS: { bucket: Bucket; title: string }[] = [
 // How long the exit animation runs before the list is refetched; must cover Collapse's timeout.
 const EXIT_MS = 350;
 
-function PendingCard({ routine }: { routine: Routine }) {
+function PendingCard({ occ, leaving, onCompleted }: {
+    occ: Occurrence;
+    leaving: boolean;
+    onCompleted: (routineId: string, upToIndex: number) => void;
+}) {
+    const { routine, index, date } = occ;
     const { enqueueSnackbar } = useSnackbar();
     const confirm = useConfirm();
     const complete = useCompleteRoutine();
-    const invalidate = useInvalidateRoutines();
-    const [leaving, setLeaving] = useState(false);
+    const projected = index > 1;
 
-    // Resolves once the server has recorded the completion. The card then collapses and only
-    // afterwards is the list refetched, so the slid handle stays put until the card is gone.
-    // Rejects on failure so the slider can spring back.
+    // Resolves once the server has recorded the completion, then hands over to the list to
+    // collapse this card (and any earlier occurrences it also completed) before refetching,
+    // so the slid handle stays put until the card is gone. Rejects on failure so the slider
+    // springs back.
     const handleComplete = async () => {
         try {
-            await complete.mutateAsync({ id: routine._id });
+            await complete.mutateAsync({ id: routine._id, occurrences: index });
         } catch (e: any) {
             enqueueSnackbar(e?.response?.data?.message ?? "Couldn't mark as done", { variant: "error" });
             throw e;
         }
-        enqueueSnackbar(`“${routine.name}” marked as done`, { variant: "success" });
-        setLeaving(true);
-        // A timer rather than onExited so the refetch still happens if the user navigates away.
-        setTimeout(() => { void invalidate(); }, EXIT_MS);
+        enqueueSnackbar(
+            index > 1 ? `“${routine.name}” marked as done (${index} occurrences)` : `“${routine.name}” marked as done`,
+            { variant: "success" },
+        );
+        onCompleted(routine._id, index);
     };
 
     return (
         <Collapse in={!leaving} timeout={EXIT_MS - 50} unmountOnExit>
-            <Card variant="outlined" sx={{ p: 2, mb: 1.5 }}>
+            <Card variant="outlined" sx={{ p: 2, mb: 1.5, ...(projected ? { bgcolor: "action.hover" } : {}) }}>
                 <Stack direction="row" alignItems="flex-start" spacing={1}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>{routine.name}</Typography>
-                        <Typography variant="body2" color={routineStatusBucket(routine) === "overdue" ? "error.main" : "text.secondary"}>
-                            {dueText(routine)}
+                        <Typography variant="body2" color={bucketForDate(date) === "overdue" ? "error.main" : "text.secondary"}>
+                            {dueText(date)}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                            {intervalLabel(routine.interval)} · {routine.last_done_at
+                            {intervalLabel(routine.interval)}
+                            {!projected && ` · ${routine.last_done_at
                                 ? `last done ${formatDistanceToNowStrict(new Date(routine.last_done_at), { addSuffix: true })}`
-                                : "never marked done"}
+                                : "never marked done"}`}
+                            {projected && ` · upcoming (#${index})`}
                         </Typography>
                     </Box>
-                    <RoutineMenu routine={routine} variant="overview" />
+                    <RoutineMenu routine={routine} variant="overview" allowPostpone={!projected} />
                 </Stack>
                 <Box sx={{ mt: 1.5 }}>
                     <SlideToComplete
+                        label={projected ? `Slide to complete ${index} occurrences` : undefined}
                         onComplete={handleComplete}
                         onKeyboardActivate={async () => {
-                            if (await confirm({ title: "Mark as done", message: `Mark “${routine.name}” as done?`, confirmLabel: "Done", destructive: false })) {
+                            if (await confirm({
+                                title: "Mark as done",
+                                message: projected ? `Mark “${routine.name}” done, including the ${index - 1} before this one?` : `Mark “${routine.name}” as done?`,
+                                confirmLabel: "Done", destructive: false,
+                            })) {
                                 handleComplete().catch(() => {});
                             }
                         }}
@@ -88,10 +101,26 @@ function PendingCard({ routine }: { routine: Routine }) {
 export default function Overview() {
     const { openCreate } = useOutletContext<XenRoutineOutletContext>();
     const { routines, isLoading, isError, error, refetch } = useRoutines();
+    const invalidate = useInvalidateRoutines();
     const [filter, setFilter] = useState<Filter>("pending");
+    const [horizonDays, setHorizonDays] = useState<number>(HORIZON_OPTIONS[0].days);
+    // routineId -> highest occurrence index just completed. Those cards collapse out; the
+    // entry is cleared once the refetch has replaced them with their new schedule.
+    const [exitUpTo, setExitUpTo] = useState<Record<string, number>>({});
 
-    const pending = useMemo(() => pendingRoutines(routines), [routines]);
+    const pending = useMemo(() => pendingOccurrences(routines, new Date(), horizonDays), [routines, horizonDays]);
     const completions = useMemo(() => recentCompletions(routines), [routines]);
+
+    const onCompleted = (routineId: string, upToIndex: number) => {
+        setExitUpTo((m) => ({ ...m, [routineId]: Math.max(m[routineId] ?? 0, upToIndex) }));
+        // A timer rather than a Collapse callback so the refetch still happens if the user navigates away.
+        setTimeout(() => {
+            void invalidate().then(() => setExitUpTo((m) => {
+                const { [routineId]: _gone, ...rest } = m;
+                return rest;
+            }));
+        }, EXIT_MS);
+    };
 
     if (isLoading) return <ListSkeleton rows={4} height={140} />;
     if (isError) return <ErrorDisplay error={error as Error} onRetry={() => refetch()} />;
@@ -108,37 +137,71 @@ export default function Overview() {
 
     const showPending = filter !== "completed";
     const showCompleted = filter !== "pending";
+    const horizonLabel = HORIZON_OPTIONS.find((h) => h.days === horizonDays)?.label ?? `${horizonDays} days`;
+
+    const renderCards = (items: Occurrence[]) => items.map((o) => (
+        // Keyed by due date and index: after a completion a routine comes back with a new
+        // due_at and must mount as fresh, unlocked cards.
+        <PendingCard
+            key={`${o.routine._id}:${o.routine.due_at}:${o.index}`}
+            occ={o}
+            leaving={(exitUpTo[o.routine._id] ?? 0) >= o.index}
+            onCompleted={onCompleted}
+        />
+    ));
+
+    // Beyond the first 30 days, group by calendar month rather than one long list.
+    const later = pending.filter((o) => bucketForDate(o.date) === "later");
+    const laterByMonth = later.reduce<Map<string, Occurrence[]>>((acc, o) => {
+        const key = format(o.date, "MMMM yyyy");
+        acc.set(key, [...(acc.get(key) ?? []), o]);
+        return acc;
+    }, new Map());
 
     return (
         <Stack spacing={2}>
-            <ToggleButtonGroup exclusive size="small" value={filter} onChange={(_, v) => { if (v) setFilter(v); }}>
-                <ToggleButton value="pending">Pending</ToggleButton>
-                <ToggleButton value="completed">Completed</ToggleButton>
-                <ToggleButton value="all">All</ToggleButton>
-            </ToggleButtonGroup>
+            <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
+                <ToggleButtonGroup exclusive size="small" value={filter} onChange={(_, v) => { if (v) setFilter(v); }}>
+                    <ToggleButton value="pending">Pending</ToggleButton>
+                    <ToggleButton value="completed">Completed</ToggleButton>
+                    <ToggleButton value="all">All</ToggleButton>
+                </ToggleButtonGroup>
+                {showPending && (
+                    <TextField select size="small" label="Look ahead" value={horizonDays}
+                        onChange={(e) => setHorizonDays(Number(e.target.value))} sx={{ minWidth: 140 }}>
+                        {HORIZON_OPTIONS.map((h) => <MenuItem key={h.days} value={h.days}>{h.label}</MenuItem>)}
+                    </TextField>
+                )}
+            </Stack>
 
             {showPending && (
                 pending.length === 0 ? (
                     <EmptyState
                         icon={<CheckCircleOutlineIcon />}
                         title="All caught up"
-                        description="Nothing is overdue or due in the next 30 days."
+                        description={`Nothing is overdue or due in the next ${horizonLabel}.`}
                     />
                 ) : (
-                    BUCKETS.map(({ bucket, title }) => {
-                        const items = pending.filter((r) => routineStatusBucket(r) === bucket);
-                        if (items.length === 0) return null;
-                        return (
-                            <Box key={bucket}>
-                                <Typography variant="overline" color={bucket === "overdue" ? "error" : "text.secondary"}>
-                                    {title} ({items.length})
-                                </Typography>
-                                {/* Keyed by due date too: a short-interval routine comes back with a new
-                                    due_at after completion and must mount as a fresh, unlocked card. */}
-                                {items.map((r) => <PendingCard key={`${r._id}:${r.due_at}`} routine={r} />)}
+                    <>
+                        {BUCKETS.map(({ bucket, title }) => {
+                            const items = pending.filter((o) => bucketForDate(o.date) === bucket);
+                            if (items.length === 0) return null;
+                            return (
+                                <Box key={bucket}>
+                                    <Typography variant="overline" color={bucket === "overdue" ? "error" : "text.secondary"}>
+                                        {title} ({items.length})
+                                    </Typography>
+                                    {renderCards(items)}
+                                </Box>
+                            );
+                        })}
+                        {[...laterByMonth.entries()].map(([month, items]) => (
+                            <Box key={month}>
+                                <Typography variant="overline" color="text.secondary">{month} ({items.length})</Typography>
+                                {renderCards(items)}
                             </Box>
-                        );
-                    })
+                        ))}
+                    </>
                 )
             )}
 
@@ -153,7 +216,7 @@ export default function Overview() {
                                 <Card key={`${c.routineId}:${c.at}:${i}`} variant="outlined" sx={{ p: 1.5, display: "flex", alignItems: "center", gap: 1.5 }}>
                                     <CheckCircleOutlineIcon color="success" fontSize="small" />
                                     <Box sx={{ minWidth: 0 }}>
-                                        <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{c.routineName}</Typography>
+                                        <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{c.routineName}{c.count > 1 ? ` × ${c.count}` : ""}</Typography>
                                         <Typography variant="caption" color="text.secondary">
                                             {format(new Date(c.at), "PP")}{c.by_username ? ` · ${c.by_username}` : ""}{c.note ? ` · ${c.note}` : ""}
                                         </Typography>

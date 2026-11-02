@@ -815,6 +815,8 @@ export const updateXenRoutineSchema = z.object({
 
 export const completeXenRoutineSchema = z.object({
   done_at: z.string().datetime({ offset: true }).optional(),
+  // Sliding the Nth upcoming occurrence completes it and every earlier one (N >= 1).
+  occurrences: z.number().int().min(1).max(400).optional(),
   note: z.string().trim().max(500).optional(),
 });
 

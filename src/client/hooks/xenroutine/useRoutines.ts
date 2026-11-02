@@ -21,6 +21,7 @@ export interface RoutineHistoryEntry {
     by_username?: string | null;
     note?: string;
     due_at?: string;
+    count?: number;
 }
 
 export interface Routine {
@@ -90,8 +91,8 @@ export const useDeleteRoutine = () =>
 // first and then calls useInvalidateRoutines, otherwise the card would vanish mid-slide.
 export const useCompleteRoutine = () =>
     useMutation({
-        mutationFn: (v: { id: string; note?: string; done_at?: string }) =>
-            apiClient.post(`${base}/${v.id}/complete`, { note: v.note, done_at: v.done_at }),
+        mutationFn: (v: { id: string; note?: string; done_at?: string; occurrences?: number }) =>
+            apiClient.post(`${base}/${v.id}/complete`, { note: v.note, done_at: v.done_at, occurrences: v.occurrences }),
     });
 
 export function useInvalidateRoutines() {

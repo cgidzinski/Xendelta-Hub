@@ -18,6 +18,7 @@ export interface HistoryEntry {
   by_user?: string;
   note?: string;
   due_at?: Date;
+  count?: number;
 }
 export interface RoutineLike {
   owner_id: string;
@@ -70,16 +71,26 @@ export function pushHistory(history: HistoryEntry[], entry: HistoryEntry): Histo
   return [...history, entry].slice(-MAX_HISTORY);
 }
 
+/**
+ * Completing the Nth upcoming occurrence (default 1) marks it and every earlier one done.
+ * The schedule is anchored to that occurrence: the next due date is one interval after
+ * whichever is later, the completion time or the occurrence's own date. So an overdue
+ * routine restarts from now (the clock restarts when you actually did it), while sliding a
+ * future occurrence leaves the following one next instead of bouncing the same one back.
+ */
 export function applyComplete(
   routine: RoutineLike,
-  opts: { by: string; now: Date; doneAt?: Date; note?: string },
+  opts: { by: string; now: Date; doneAt?: Date; note?: string; occurrences?: number },
 ): Pick<RoutineLike, "last_done_at" | "due_at" | "last_notified_at" | "history"> {
+  const n = Math.max(1, Math.floor(opts.occurrences ?? 1));
   const doneAt = opts.doneAt && opts.doneAt.getTime() <= opts.now.getTime() ? opts.doneAt : opts.now;
+  const occurrenceDate = addInterval(routine.due_at, { every: routine.interval.every * (n - 1), unit: routine.interval.unit });
+  const base = occurrenceDate.getTime() > doneAt.getTime() ? occurrenceDate : doneAt;
   return {
     last_done_at: doneAt,
-    due_at: addInterval(doneAt, routine.interval),
+    due_at: addInterval(base, routine.interval),
     last_notified_at: null,
-    history: pushHistory(routine.history, { action: "done", at: opts.now, by_user: opts.by, note: opts.note }),
+    history: pushHistory(routine.history, { action: "done", at: opts.now, by_user: opts.by, note: opts.note, count: n }),
   };
 }
 

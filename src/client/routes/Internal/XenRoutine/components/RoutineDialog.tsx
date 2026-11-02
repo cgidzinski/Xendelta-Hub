@@ -3,7 +3,8 @@ import {
     Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField, ToggleButton,
     ToggleButtonGroup, Typography,
 } from "@mui/material";
-import { addDays, addMonths, addWeeks, addYears, format } from "date-fns";
+import { format } from "date-fns";
+import { addInterval } from "../../../../hooks/xenroutine/routineViews";
 import type { IntervalUnit, Routine, RoutineInput } from "../../../../hooks/xenroutine/useRoutines";
 
 interface Props {
@@ -20,15 +21,6 @@ const toIso = (d: string) => new Date(`${d}T12:00:00`).toISOString();
 // Start of the local day: a "not done yet" routine starting today is due immediately.
 const toDayStartIso = (d: string) => new Date(`${d}T00:00:00`).toISOString();
 
-// Mirrors addInterval in src/server/utils/xenRoutine.ts; only used for the preview line.
-function addIntervalPreview(from: Date, every: number, unit: IntervalUnit): Date {
-    switch (unit) {
-        case "days": return addDays(from, every);
-        case "weeks": return addWeeks(from, every);
-        case "months": return addMonths(from, every);
-        case "years": return addYears(from, every);
-    }
-}
 
 export default function RoutineDialog({ open, routine, onClose, onSubmit }: Props) {
     const [name, setName] = useState("");
@@ -63,7 +55,7 @@ export default function RoutineDialog({ open, routine, onClose, onSubmit }: Prop
     const firstReminder = (() => {
         if (routine || !startDate || !Number.isInteger(everyNum) || everyNum < 1) return null;
         if (alreadyDone) {
-            return `First reminder: ${format(addIntervalPreview(new Date(`${startDate}T12:00:00`), everyNum, unit), "PP")}`;
+            return `First reminder: ${format(addInterval(new Date(`${startDate}T12:00:00`), { every: everyNum, unit }), "PP")}`;
         }
         return startDate <= today ? "Due now — you'll be reminded right away." : `First reminder: ${format(new Date(`${startDate}T12:00:00`), "PP")}`;
     })();

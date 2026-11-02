@@ -20,6 +20,9 @@ var historySchema = new Schema({
   at: { type: Date, default: Date.now },
   by_user: { type: String },
   note: { type: String, maxlength: 500 },
+  // For "done": how many occurrences this one completion covered (sliding a later
+  // occurrence completes the earlier ones too).
+  count: { type: Number, min: 1, default: 1 },
   // For "postponed": the due date it was pushed to.
   due_at: { type: Date },
 }, { _id: false });

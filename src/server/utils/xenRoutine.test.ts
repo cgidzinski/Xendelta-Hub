@@ -73,6 +73,22 @@ describe("applyComplete / applyPostpone", () => {
     expect(r.last_notified_at).toBeNull();
     expect(r.history[0]).toMatchObject({ action: "done", by_user: "u1", note: "new filter" });
   });
+  it("completing an early occurrence keeps the schedule", () => {
+    const early = base({ interval: { every: 1, unit: "weeks" }, due_at: new Date("2026-06-15T00:00:00Z") });
+    const r = applyComplete(early, { by: "u1", now });
+    expect(r.due_at.toISOString()).toBe("2026-06-22T00:00:00.000Z");
+  });
+  it("sliding the Nth occurrence anchors the next due to it", () => {
+    const weekly = base({ interval: { every: 1, unit: "weeks" }, due_at: new Date("2026-06-10T00:00:00Z") });
+    const r = applyComplete(weekly, { by: "u1", now, occurrences: 3 });
+    // occurrences are Jun 10, 17, 24; the next one after the 3rd is Jul 1
+    expect(r.due_at.toISOString()).toBe("2026-07-01T00:00:00.000Z");
+    expect(r.history[0]).toMatchObject({ action: "done", count: 3 });
+  });
+  it("an overdue occurrence still restarts the clock from now", () => {
+    const overdue = base({ interval: { every: 1, unit: "weeks" }, due_at: new Date("2026-05-01T00:00:00Z") });
+    expect(applyComplete(overdue, { by: "u1", now, occurrences: 1 }).due_at.toISOString()).toBe("2026-06-17T00:00:00.000Z");
+  });
   it("complete honours a past doneAt but not a future one", () => {
     const past = new Date("2026-06-01T00:00:00Z");
     expect(applyComplete(base(), { by: "u1", now, doneAt: past }).last_done_at).toEqual(past);
