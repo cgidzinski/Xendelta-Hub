@@ -45,7 +45,8 @@ export default function SlideToComplete({ label = "Slide to mark done", disabled
             position: "relative", height: THUMB + 8, borderRadius: 999, bgcolor: "action.hover", overflow: "hidden",
             opacity: disabled ? 0.5 : 1, userSelect: "none", touchAction: "none",
         }}>
-            <Box sx={{ position: "absolute", inset: 0, bgcolor: "success.main", opacity: 0.25, width: offset + THUMB + 4 }} />
+            {/* A pill the thumb's size, so the fill's leading edge is a semicircle under the thumb. */}
+            <Box sx={{ position: "absolute", top: 4, left: 4, height: THUMB, borderRadius: 999, bgcolor: "success.main", opacity: 0.25, width: offset + THUMB }} />
             <Typography variant="body2" color="text.secondary" sx={{
                 position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
                 pl: `${THUMB}px`, pointerEvents: "none", opacity: 1 - Math.min(1, offset / (maxOffset() * 0.6)),

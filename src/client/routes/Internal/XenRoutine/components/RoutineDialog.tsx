@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import {
-    Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField,
+    Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField, ToggleButton,
+    ToggleButtonGroup, Typography,
 } from "@mui/material";
-import { format } from "date-fns";
+import { addDays, addMonths, addWeeks, addYears, format } from "date-fns";
 import type { IntervalUnit, Routine, RoutineInput } from "../../../../hooks/xenroutine/useRoutines";
 
 interface Props {
@@ -16,6 +17,18 @@ const UNITS: IntervalUnit[] = ["days", "weeks", "months", "years"];
 // <input type="date"> yields yyyy-MM-dd; anchoring at local noon keeps the calendar day
 // stable in every timezone.
 const toIso = (d: string) => new Date(`${d}T12:00:00`).toISOString();
+// Start of the local day: a "not done yet" routine starting today is due immediately.
+const toDayStartIso = (d: string) => new Date(`${d}T00:00:00`).toISOString();
+
+// Mirrors addInterval in src/server/utils/xenRoutine.ts; only used for the preview line.
+function addIntervalPreview(from: Date, every: number, unit: IntervalUnit): Date {
+    switch (unit) {
+        case "days": return addDays(from, every);
+        case "weeks": return addWeeks(from, every);
+        case "months": return addMonths(from, every);
+        case "years": return addYears(from, every);
+    }
+}
 
 export default function RoutineDialog({ open, routine, onClose, onSubmit }: Props) {
     const [name, setName] = useState("");
@@ -24,6 +37,8 @@ export default function RoutineDialog({ open, routine, onClose, onSubmit }: Prop
     const [every, setEvery] = useState("3");
     const [unit, setUnit] = useState<IntervalUnit>("months");
     const [startDate, setStartDate] = useState("");
+    // Create only: was the job actually done on the start date?
+    const [alreadyDone, setAlreadyDone] = useState(true);
     const [dueAt, setDueAt] = useState("");
     const [saving, setSaving] = useState(false);
 
@@ -35,11 +50,23 @@ export default function RoutineDialog({ open, routine, onClose, onSubmit }: Prop
         setEvery(String(routine?.interval.every ?? 3));
         setUnit(routine?.interval.unit ?? "months");
         setStartDate(format(new Date(), "yyyy-MM-dd"));
+        setAlreadyDone(true);
         setDueAt(routine ? format(new Date(routine.due_at), "yyyy-MM-dd") : "");
     }, [open, routine]);
 
     const everyNum = Number(every);
-    const valid = name.trim().length > 0 && Number.isInteger(everyNum) && everyNum >= 1;
+    const today = format(new Date(), "yyyy-MM-dd");
+    // A completed job can't have been done in the future; a not-yet-done one can start later.
+    const startOk = !!routine || (!!startDate && (!alreadyDone || startDate <= today));
+    const valid = name.trim().length > 0 && Number.isInteger(everyNum) && everyNum >= 1 && startOk;
+
+    const firstReminder = (() => {
+        if (routine || !startDate || !Number.isInteger(everyNum) || everyNum < 1) return null;
+        if (alreadyDone) {
+            return `First reminder: ${format(addIntervalPreview(new Date(`${startDate}T12:00:00`), everyNum, unit), "PP")}`;
+        }
+        return startDate <= today ? "Due now — you'll be reminded right away." : `First reminder: ${format(new Date(`${startDate}T12:00:00`), "PP")}`;
+    })();
 
     const submit = async () => {
         setSaving(true);
@@ -50,9 +77,11 @@ export default function RoutineDialog({ open, routine, onClose, onSubmit }: Prop
                 interval: { every: everyNum, unit },
                 // Edit keeps whatever category it had; create has none for now.
                 ...(routine ? { category: category.trim(), ...(dueAt ? { due_at: toIso(dueAt) } : {}) } : {}),
-                // On create the start date is the last time it was done; the server
-                // sets the first due date one interval after it.
-                ...(!routine && startDate ? { last_done_at: toIso(startDate) } : {}),
+                // Create: if it was done on the start date the server sets the first due date
+                // one interval later; if not, the start date itself is the first due date.
+                ...(!routine && startDate
+                    ? alreadyDone ? { last_done_at: toIso(startDate) } : { due_at: toDayStartIso(startDate) }
+                    : {}),
             });
             onClose();
         } finally {
@@ -84,10 +113,13 @@ export default function RoutineDialog({ open, routine, onClose, onSubmit }: Prop
                     ) : (
                         <>
                             <TextField label="Start date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
-                                slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: format(new Date(), "yyyy-MM-dd") } }} fullWidth />
-                            <Alert severity="info" sx={{ py: 0 }}>
-                                Set this to the date you last did it. The next reminder is one interval after this date.
-                            </Alert>
+                                slotProps={{ inputLabel: { shrink: true }, htmlInput: alreadyDone ? { max: today } : {} }} fullWidth />
+                            <ToggleButtonGroup exclusive fullWidth size="small" color="primary" value={alreadyDone ? "done" : "not"}
+                                onChange={(_, v) => { if (v) setAlreadyDone(v === "done"); }}>
+                                <ToggleButton value="done">I did it on this date</ToggleButton>
+                                <ToggleButton value="not">Not done yet</ToggleButton>
+                            </ToggleButtonGroup>
+                            {firstReminder && <Typography variant="body2" color="text.secondary">{firstReminder}</Typography>}
                         </>
                     )}
                     <TextField label="Notes (part numbers, spares…)" value={notes} onChange={(e) => setNotes(e.target.value)}
