@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-    Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField,
+    Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField,
 } from "@mui/material";
 import { format } from "date-fns";
 import type { IntervalUnit, Routine, RoutineInput } from "../../../../hooks/xenroutine/useRoutines";
@@ -23,9 +23,8 @@ export default function RoutineDialog({ open, routine, onClose, onSubmit }: Prop
     const [notes, setNotes] = useState("");
     const [every, setEvery] = useState("3");
     const [unit, setUnit] = useState<IntervalUnit>("months");
-    const [lastDone, setLastDone] = useState("");
+    const [startDate, setStartDate] = useState("");
     const [dueAt, setDueAt] = useState("");
-    const [remindAgain, setRemindAgain] = useState("3");
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
@@ -35,9 +34,8 @@ export default function RoutineDialog({ open, routine, onClose, onSubmit }: Prop
         setNotes(routine?.notes ?? "");
         setEvery(String(routine?.interval.every ?? 3));
         setUnit(routine?.interval.unit ?? "months");
-        setLastDone("");
+        setStartDate(format(new Date(), "yyyy-MM-dd"));
         setDueAt(routine ? format(new Date(routine.due_at), "yyyy-MM-dd") : "");
-        setRemindAgain(String(routine?.remind_again_days ?? 3));
     }, [open, routine]);
 
     const everyNum = Number(every);
@@ -48,13 +46,13 @@ export default function RoutineDialog({ open, routine, onClose, onSubmit }: Prop
         try {
             await onSubmit({
                 name: name.trim(),
-                category: category.trim(),
                 notes,
                 interval: { every: everyNum, unit },
-                remind_again_days: Math.max(1, Number(remindAgain) || 3),
-                ...(dueAt ? { due_at: toIso(dueAt) } : {}),
-                // Only meaningful on create: seeds the first due date from when you last did it.
-                ...(!routine && lastDone && !dueAt ? { last_done_at: toIso(lastDone) } : {}),
+                // Edit keeps whatever category it had; create has none for now.
+                ...(routine ? { category: category.trim(), ...(dueAt ? { due_at: toIso(dueAt) } : {}) } : {}),
+                // On create the start date is the last time it was done; the server
+                // sets the first due date one interval after it.
+                ...(!routine && startDate ? { last_done_at: toIso(startDate) } : {}),
             });
             onClose();
         } finally {
@@ -69,8 +67,10 @@ export default function RoutineDialog({ open, routine, onClose, onSubmit }: Prop
                 <Stack spacing={2} sx={{ mt: 1 }}>
                     <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} autoFocus fullWidth
                         placeholder="Replace fridge water filter" slotProps={{ htmlInput: { maxLength: 100 } }} />
-                    <TextField label="Category (optional)" value={category} onChange={(e) => setCategory(e.target.value)} fullWidth
-                        placeholder="Water, HVAC, Car…" slotProps={{ htmlInput: { maxLength: 50 } }} />
+                    {routine && routine.category && (
+                        <TextField label="Category" value={category} onChange={(e) => setCategory(e.target.value)} fullWidth
+                            slotProps={{ htmlInput: { maxLength: 50 } }} />
+                    )}
                     <Stack direction="row" spacing={2}>
                         <TextField label="Every" type="number" value={every} onChange={(e) => setEvery(e.target.value)}
                             slotProps={{ htmlInput: { min: 1, max: 1000 } }} sx={{ width: 120 }} />
@@ -78,18 +78,20 @@ export default function RoutineDialog({ open, routine, onClose, onSubmit }: Prop
                             {UNITS.map((u) => <MenuItem key={u} value={u}>{u}</MenuItem>)}
                         </TextField>
                     </Stack>
-                    {!routine && (
-                        <TextField label="Last done (optional)" type="date" value={lastDone} onChange={(e) => setLastDone(e.target.value)}
-                            slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: format(new Date(), "yyyy-MM-dd") } }}
-                            helperText="Sets the next due date to one interval after this." fullWidth />
+                    {routine ? (
+                        <TextField label="Next due" type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)}
+                            slotProps={{ inputLabel: { shrink: true } }} fullWidth />
+                    ) : (
+                        <>
+                            <TextField label="Start date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
+                                slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: format(new Date(), "yyyy-MM-dd") } }} fullWidth />
+                            <Alert severity="info" sx={{ py: 0 }}>
+                                Set this to the date you last did it. The next reminder is one interval after this date.
+                            </Alert>
+                        </>
                     )}
-                    <TextField label={routine ? "Next due" : "Next due (optional)"} type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)}
-                        slotProps={{ inputLabel: { shrink: true } }}
-                        helperText={routine ? undefined : "Leave blank to start the clock now."} fullWidth />
                     <TextField label="Notes (part numbers, spares…)" value={notes} onChange={(e) => setNotes(e.target.value)}
                         multiline minRows={2} fullWidth slotProps={{ htmlInput: { maxLength: 1000 } }} />
-                    <TextField label="Remind again every (days) while overdue" type="number" value={remindAgain}
-                        onChange={(e) => setRemindAgain(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 365 } }} />
                 </Stack>
             </DialogContent>
             <DialogActions>

@@ -200,6 +200,8 @@ module.exports = function (app: any) {
         if (!me) return fail(res, 404, "Routine not found");
         if (req.body.channels) me.channels = req.body.channels;
         if (req.body.muted !== undefined) me.muted = req.body.muted;
+        // Routine-wide, not per member: one nag cadence for everyone on the routine.
+        if (req.body.remind_again_days !== undefined) routine.remind_again_days = req.body.remind_again_days;
         await routine.save();
         const [out] = await serialize([routine], callerId(req));
         return res.json({ status: true, message: "Notification options saved", data: { routine: out } });

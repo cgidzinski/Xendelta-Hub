@@ -3,8 +3,6 @@ import {
     Box, Button, Card, Chip, Container, Fab, IconButton, Menu, MenuItem, Stack, Tooltip, Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import CheckIcon from "@mui/icons-material/Check";
-import SnoozeIcon from "@mui/icons-material/Snooze";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import GroupIcon from "@mui/icons-material/Group";
@@ -26,6 +24,7 @@ import RoutineDialog from "./components/RoutineDialog";
 import NotificationOptions from "./components/NotificationOptions";
 import ShareDialog from "./components/ShareDialog";
 import HistoryDialog from "./components/HistoryDialog";
+import SlideToComplete from "./components/SlideToComplete";
 
 const POSTPONE_PRESETS = [
     { label: "1 day", days: 1 },
@@ -123,16 +122,16 @@ export default function XenRoutine() {
                 </IconButton>
             </Stack>
             {r.enabled && (
-                <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
-                    <Button size="small" variant="contained" startIcon={<CheckIcon />}
-                        onClick={() => run(completeRoutine.mutateAsync({ id: r._id }), "Marked as done").catch(() => {})}>
-                        Done
-                    </Button>
-                    <Button size="small" variant="outlined" startIcon={<SnoozeIcon />}
-                        onClick={(e) => setPostponeAnchor({ el: e.currentTarget, id: r._id })}>
-                        Postpone
-                    </Button>
-                </Stack>
+                <Box sx={{ mt: 1.5 }}>
+                    <SlideToComplete
+                        onComplete={() => run(completeRoutine.mutateAsync({ id: r._id }), "Marked as done").catch(() => {})}
+                        onKeyboardActivate={async () => {
+                            if (await confirm({ title: "Mark as done", message: `Mark “${r.name}” as done?`, confirmLabel: "Done", destructive: false })) {
+                                run(completeRoutine.mutateAsync({ id: r._id }), "Marked as done").catch(() => {});
+                            }
+                        }}
+                    />
+                </Box>
             )}
         </Card>
     );
@@ -191,6 +190,9 @@ export default function XenRoutine() {
             </Menu>
 
             <Menu open={!!moreAnchor} anchorEl={moreAnchor?.el} onClose={() => setMoreAnchor(null)}>
+                {moreRoutine?.enabled && (
+                    <MenuItem onClick={() => { setPostponeAnchor({ el: moreAnchor!.el, id: moreAnchor!.id }); setMoreAnchor(null); }}>Postpone…</MenuItem>
+                )}
                 <MenuItem onClick={() => { setHistoryFor(moreAnchor!.id); setMoreAnchor(null); }}>History &amp; notes</MenuItem>
                 <MenuItem onClick={() => { setNotifFor(moreAnchor!.id); setMoreAnchor(null); }}>Notification options</MenuItem>
                 {moreRoutine?.is_owner && <MenuItem onClick={() => { setShareFor(moreAnchor!.id); setMoreAnchor(null); }}>Share</MenuItem>}

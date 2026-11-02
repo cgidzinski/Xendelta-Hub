@@ -833,6 +833,7 @@ export const xenRoutineNotificationsSchema = z.object({
     email: z.boolean(),
   }).optional(),
   muted: z.boolean().optional(),
+  remind_again_days: z.number().int().min(1).max(365).optional(),
 });
 
 export const shareXenRoutineSchema = z.object({

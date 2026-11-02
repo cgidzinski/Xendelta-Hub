@@ -95,8 +95,8 @@ export const usePostponeRoutine = () =>
         apiClient.post(`${base}/${v.id}/postpone`, { days: v.days, until: v.until, note: v.note }));
 
 export const useSetRoutineNotifications = () =>
-    useRoutineMutation((v: { id: string; channels?: RoutineChannels; muted?: boolean }) =>
-        apiClient.put(`${base}/${v.id}/notifications`, { channels: v.channels, muted: v.muted }));
+    useRoutineMutation((v: { id: string; channels?: RoutineChannels; muted?: boolean; remind_again_days?: number }) =>
+        apiClient.put(`${base}/${v.id}/notifications`, { channels: v.channels, muted: v.muted, remind_again_days: v.remind_again_days }));
 
 export const useShareRoutine = () =>
     useRoutineMutation((v: { id: string; userIds: string[] }) =>
