@@ -86,9 +86,18 @@ export const useUpdateRoutine = () =>
 export const useDeleteRoutine = () =>
     useRoutineMutation((id: string) => apiClient.delete(`${base}/${id}`));
 
+// Deliberately does NOT refetch on success: the Overview card plays an exit animation
+// first and then calls useInvalidateRoutines, otherwise the card would vanish mid-slide.
 export const useCompleteRoutine = () =>
-    useRoutineMutation((v: { id: string; note?: string; done_at?: string }) =>
-        apiClient.post(`${base}/${v.id}/complete`, { note: v.note, done_at: v.done_at }));
+    useMutation({
+        mutationFn: (v: { id: string; note?: string; done_at?: string }) =>
+            apiClient.post(`${base}/${v.id}/complete`, { note: v.note, done_at: v.done_at }),
+    });
+
+export function useInvalidateRoutines() {
+    const qc = useQueryClient();
+    return () => qc.invalidateQueries({ queryKey: routineKeys.all });
+}
 
 export const usePostponeRoutine = () =>
     useRoutineMutation((v: { id: string; days?: number; until?: string; note?: string }) =>
