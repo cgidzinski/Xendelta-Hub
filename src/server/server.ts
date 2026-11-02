@@ -71,6 +71,7 @@ mongoConnection.on("connected", async () => {
     const { runDueTasks, TICK_INTERVAL_MS } = require("./infrastructure/TaskDispatcher");
     const { registerXenSplitRecurringHandler } = require("./utils/xensplitRecurringHandler");
     const { cleanupOldSessions } = require("./utils/xenboxUtils");
+    const { runRoutineReminders } = require("./utils/xenRoutineReminders");
     const { runPendingMigrations } = require("./infrastructure/migrations");
 
     // Safety net for a deploy that skipped `npm run db:migrate`. Runs before the
@@ -83,6 +84,7 @@ mongoConnection.on("connected", async () => {
     const scheduler = Scheduler.getInstance();
     scheduler.register({ name: "scheduled-task-dispatcher", everyMs: TICK_INTERVAL_MS, runOnStart: true, handler: runDueTasks });
     scheduler.register({ name: "xenbox-session-cleanup", everyMs: 30 * 60 * 1000, handler: cleanupOldSessions });
+    scheduler.register({ name: "xenroutine-reminders", everyMs: 60 * 60 * 1000, runOnStart: true, handler: () => runRoutineReminders() });
     scheduler.start();
   } catch (e) {
     // An error thrown from an event handler would crash the process as an
@@ -114,6 +116,7 @@ require("./routes/xenbox.ts")(app);
 require("./routes/xenlink.ts")(app);
 require("./routes/xensplit")(app);
 require("./routes/xenbudget.ts")(app);
+require("./routes/xenroutine.ts")(app);
 require("./routes/casino.ts")(app);
 require("./routes/casinoGames/slots.ts")(app);
 require("./routes/casinoGames/spinmania.ts")(app);
