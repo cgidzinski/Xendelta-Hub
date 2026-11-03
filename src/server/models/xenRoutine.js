@@ -13,6 +13,14 @@ var memberSchema = new Schema({
     email: { type: Boolean, default: true },
   },
   muted: { type: Boolean, default: false },
+  // Also remind this many days before it's due (0 = off).
+  lead_days: { type: Number, min: 0, max: 30, default: 0 },
+  // Tell this person when someone else completes or postpones the routine.
+  activity: { type: Boolean, default: true },
+  // Per-person reminder throttling: people have their own reminder hour and timezone,
+  // so one routine-wide "last notified" no longer works.
+  last_due_notified_at: { type: Date, default: null },
+  lead_notified_for: { type: Date, default: null },
 }, { _id: false });
 
 var historySchema = new Schema({

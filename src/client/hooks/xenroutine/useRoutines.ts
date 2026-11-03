@@ -39,7 +39,7 @@ export interface Routine {
     /** Positions (2 = the occurrence after due_at) already completed ahead of time; hidden from the projection. */
     done_ahead_indices?: number[];
     is_owner: boolean;
-    my_notifications: { channels: RoutineChannels; muted: boolean } | null;
+    my_notifications: { channels: RoutineChannels; muted: boolean; lead_days: number; activity: boolean } | null;
     members: RoutineMember[];
     history: RoutineHistoryEntry[];
 }
@@ -110,8 +110,11 @@ export const usePostponeRoutine = () =>
         apiClient.post(`${base}/${v.id}/postpone`, { days: v.days, until: v.until, note: v.note }));
 
 export const useSetRoutineNotifications = () =>
-    useRoutineMutation((v: { id: string; channels?: RoutineChannels; muted?: boolean; remind_again_days?: number }) =>
-        apiClient.put(`${base}/${v.id}/notifications`, { channels: v.channels, muted: v.muted, remind_again_days: v.remind_again_days }));
+    useRoutineMutation((v: {
+        id: string; channels?: RoutineChannels; muted?: boolean; remind_again_days?: number; lead_days?: number; activity?: boolean;
+    }) => apiClient.put(`${base}/${v.id}/notifications`, {
+        channels: v.channels, muted: v.muted, remind_again_days: v.remind_again_days, lead_days: v.lead_days, activity: v.activity,
+    }));
 
 export const useShareRoutine = () =>
     useRoutineMutation((v: { id: string; userIds: string[] }) =>
@@ -124,4 +127,36 @@ export const useUnshareRoutine = () =>
 export function intervalLabel(i: Routine["interval"]): string {
     const unit = i.every === 1 ? i.unit.replace(/s$/, "") : i.unit;
     return i.every === 1 ? `Every ${unit}` : `Every ${i.every} ${unit}`;
+}
+
+// ---- Reminder settings (per user) -----------------------------------------------------
+
+export interface RoutineSettings {
+    remind_hour: number;
+    digest: boolean;
+    /** What the browser last reported; only used when the Profile timezone is empty. */
+    browser_timezone: string | null;
+    profile_timezone: string | null;
+    /** The zone reminders are actually scheduled in. */
+    timezone: string;
+}
+
+export const routineSettingsKey = [...routineKeys.all, "settings"] as const;
+
+export function useRoutineSettings() {
+    const { data, isLoading } = useQuery({
+        queryKey: routineSettingsKey,
+        queryFn: async () =>
+            (await apiClient.get<ApiResponse<{ settings: RoutineSettings }>>("/api/xenroutine/settings")).data.data!.settings,
+    });
+    return { settings: data, isLoading };
+}
+
+export function useSaveRoutineSettings() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: async (patch: Partial<Pick<RoutineSettings, "remind_hour" | "digest" | "browser_timezone">>) =>
+            (await apiClient.put<ApiResponse<{ settings: RoutineSettings }>>("/api/xenroutine/settings", patch)).data.data!.settings,
+        onSuccess: (settings) => qc.setQueryData(routineSettingsKey, settings),
+    });
 }

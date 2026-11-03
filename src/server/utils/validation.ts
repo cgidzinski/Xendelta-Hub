@@ -838,6 +838,14 @@ export const xenRoutineNotificationsSchema = z.object({
   }).optional(),
   muted: z.boolean().optional(),
   remind_again_days: z.number().int().min(1).max(365).optional(),
+  lead_days: z.number().int().min(0).max(30).optional(),
+  activity: z.boolean().optional(),
+});
+
+export const xenRoutineSettingsSchema = z.object({
+  remind_hour: z.number().int().min(0).max(23).optional(),
+  digest: z.boolean().optional(),
+  browser_timezone: timezoneSchema.optional(),
 });
 
 export const shareXenRoutineSchema = z.object({
