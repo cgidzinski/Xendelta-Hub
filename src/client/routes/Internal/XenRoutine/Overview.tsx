@@ -142,25 +142,27 @@ export default function Overview() {
 
     return (
         <Stack spacing={2}>
-            <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
-                <ToggleButtonGroup exclusive size="small" value={filter} onChange={(_, v) => { if (v) setFilter(v); }}>
-                    <ToggleButton value="pending">Pending</ToggleButton>
-                    <ToggleButton value="completed">Completed</ToggleButton>
-                    <ToggleButton value="all">All</ToggleButton>
+            {/* Simplified and Look ahead only affect the pending list, so they stay put but
+                disable under the Complete filter - the toolbar doesn't jump around. */}
+            <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.5}>
+                <ToggleButtonGroup exclusive size="small" disabled={!showPending} value={simplified ? "simple" : "detailed"}
+                    onChange={(_, v) => { if (v) changeSimplified(v === "simple"); }}>
+                    <ToggleButton value="simple">Simplified</ToggleButton>
+                    <ToggleButton value="detailed">
+                        Every<Box component="span" sx={{ display: { xs: "none", sm: "inline" }, whiteSpace: "pre" }}> occurrence</Box>
+                    </ToggleButton>
                 </ToggleButtonGroup>
-                {showPending && (
-                    <ToggleButtonGroup exclusive size="small" value={simplified ? "simple" : "detailed"}
-                        onChange={(_, v) => { if (v) changeSimplified(v === "simple"); }}>
-                        <ToggleButton value="simple">Simplified</ToggleButton>
-                        <ToggleButton value="detailed">Every occurrence</ToggleButton>
-                    </ToggleButtonGroup>
-                )}
-                {showPending && (
-                    <TextField select size="small" label="Look ahead" value={horizonDays}
-                        onChange={(e) => setHorizonDays(Number(e.target.value))} sx={{ minWidth: 140 }}>
-                        {HORIZON_OPTIONS.map((h) => <MenuItem key={h.days} value={h.days}>{h.label}</MenuItem>)}
-                    </TextField>
-                )}
+                <ToggleButtonGroup exclusive size="small" value={filter} onChange={(_, v) => { if (v) setFilter(v); }}>
+                    <ToggleButton value="all">All</ToggleButton>
+                    <ToggleButton value="pending">Pending</ToggleButton>
+                    <ToggleButton value="completed">Complete</ToggleButton>
+                </ToggleButtonGroup>
+            </Stack>
+            <Stack direction="row" justifyContent="flex-end">
+                <TextField select size="small" label="Look ahead" value={horizonDays} disabled={!showPending}
+                    onChange={(e) => setHorizonDays(Number(e.target.value))} sx={{ minWidth: 140 }}>
+                    {HORIZON_OPTIONS.map((h) => <MenuItem key={h.days} value={h.days}>{h.label}</MenuItem>)}
+                </TextField>
             </Stack>
 
             {showPending && (
