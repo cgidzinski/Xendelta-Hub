@@ -249,6 +249,9 @@ export default function GroupDetail() {
   const findSeriesForGenesis = (expenseId: string) =>
     group.recurring_expenses?.find((r) => r.genesis_expense_id === expenseId);
   const selectedExpenseSeries = selectedExpense ? findSeriesForGenesis(selectedExpense._id) : undefined;
+  // Same rule the server enforces on PUT/DELETE: the expense's creator or the group owner
+  const canEditExpense = (expense: XenSplitExpense) =>
+    isCreator || !expense.created_by || expense.created_by === user?.id;
 
   const handleAddMembers = async () => {
     if (selectedMembers.length === 0) return;
@@ -478,6 +481,10 @@ export default function GroupDetail() {
   };
 
   const handleOpenEditExpense = (expense: XenSplitExpense) => {
+    if (!canEditExpense(expense)) {
+      enqueueSnackbar("Only the person who added this expense or the group owner can edit it", { variant: "info" });
+      return;
+    }
     setSelectedExpense(expense);
     setEditTitle(expense.title || "");
     setEditNotes(expense.notes || "");
@@ -1122,7 +1129,7 @@ export default function GroupDetail() {
                 ) : e.recurring_id ? (
                   (() => {
                     const genesisExpense = group.expenses.find((x) => x._id === e.recurring_id);
-                    const canDelete = isCreator || !e.created_by || e.created_by === user.id;
+                    const canDelete = canEditExpense(e);
                     return (
                       <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%" }}>
                         {genesisExpense ? (
@@ -1172,7 +1179,7 @@ export default function GroupDetail() {
                       </Box>
                     );
                   })()
-                ) : (
+                ) : canEditExpense(e) ? (
                   <Button
                     fullWidth
                     variant="outlined"
@@ -1183,6 +1190,12 @@ export default function GroupDetail() {
                   >
                     Edit Expense
                   </Button>
+                ) : (
+                  /* Mirrors the server's edit check so a non-editor learns up front,
+                     not after filling out the form and hitting Save. */
+                  <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", width: "100%" }}>
+                    Only the person who added this expense or the group owner can edit it.
+                  </Typography>
                 )}
               </DialogActions>
             </>
