@@ -3,8 +3,8 @@ const XenRoutineSettings = require("../models/xenRoutineSettings");
 const { User } = require("../models/user");
 import { notify, type NotifyChannel } from "./notificationUtils";
 import {
-  activityRecipients, channelsFor, DEFAULT_REMIND_HOUR, effectiveTimezone, groupForDigest, reminderKindFor,
-  reminderMessage, type ReminderItem, type ReminderKind, type RoutineLike, type RoutineMember,
+  activityRecipients, ALL_CHANNELS, channelsFor, DEFAULT_REMIND_HOUR, effectiveTimezone, groupForDigest, reminderKindFor,
+  type ChannelPrefs, type ReminderItem, type ReminderKind, type RoutineLike, type RoutineMember,
 } from "./xenRoutine";
 
 const DAY = 86_400_000;
@@ -16,13 +16,13 @@ interface Pending {
   dueAt: Date;
   kind: ReminderKind;
   item: ReminderItem;
-  channels: NotifyChannel[];
 }
 
 /**
  * Hourly job. Each member is reminded at most once a day, in their own reminder hour and
- * timezone (Profile timezone, else the one their browser reported), either per routine or,
- * if they chose a digest, as a single message.
+ * timezone (Profile timezone, else the one their browser reported). Everything due for a
+ * person at that hour goes out as a single message, over the channels they chose in their
+ * reminder settings.
  *
  * Per-member timestamps are stamped even if a channel failed: notify() swallows per-channel
  * errors, and re-sending every hour is worse than missing one nag.
@@ -54,11 +54,9 @@ export async function runRoutineReminders(now: Date = new Date()): Promise<void>
       };
       const kind = reminderKindFor(routine, member, settings, now);
       if (!kind) continue;
-      const channels = channelsFor(member);
-      if (channels.length === 0) continue;
       const list = pendingByUser.get(member.user_id) ?? [];
       list.push({
-        routineId: doc._id, dueAt: routine.due_at, kind, channels,
+        routineId: doc._id, dueAt: routine.due_at, kind,
         item: { name: routine.name, kind, dueAt: routine.due_at },
       });
       pendingByUser.set(member.user_id, list);
@@ -67,17 +65,13 @@ export async function runRoutineReminders(now: Date = new Date()): Promise<void>
 
   for (const [userId, pending] of pendingByUser) {
     try {
-      const digest = settingsByUser.get(userId)?.digest === true;
-      if (digest && pending.length > 1) {
-        const { title, message } = groupForDigest(pending.map((p) => p.item), now);
-        const channels = [...new Set(pending.flatMap((p) => p.channels))];
-        await notify(userId, { title, message, link: "/internal/xenroutine", icon: "event_repeat", channels });
-      } else {
-        await Promise.all(pending.map((p) => {
-          const { title, message } = reminderMessage(p.item, now);
-          return notify(userId, { title, message, link: "/internal/xenroutine", icon: "event_repeat", channels: p.channels });
-        }));
-      }
+      // Someone who has switched every channel off gets nothing, and is not stamped, so
+      // turning a channel back on later doesn't lose a reminder that was never delivered.
+      const channels = channelsFor(settingsByUser.get(userId)?.channels ?? ALL_CHANNELS);
+      if (channels.length === 0) continue;
+
+      const { title, message } = groupForDigest(pending.map((p) => p.item), now);
+      await notify(userId, { title, message, link: "/internal/xenroutine", icon: "event_repeat", channels });
 
       // Conditional on due_at so a concurrent complete/postpone (which moves it) isn't
       // stamped as already notified.
@@ -101,7 +95,10 @@ export async function sendActivityNotices(
   text: string,
 ): Promise<void> {
   try {
-    await Promise.all(activityRecipients(routine, actorId).map((r) =>
+    const ids = routine.members.map((m) => m.user_id);
+    const docs = await XenRoutineSettings.find({ user_id: { $in: ids } }).lean().exec();
+    const prefs: ChannelPrefs = new Map(docs.filter((d: any) => d.channels).map((d: any) => [d.user_id, d.channels]));
+    await Promise.all(activityRecipients(routine, actorId, prefs).map((r) =>
       notify(r.userId, {
         title: "XenRoutine",
         message: `${actorName} ${text}`,

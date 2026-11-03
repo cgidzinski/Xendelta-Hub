@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   addInterval, computeDueStatus, doneAheadIndices, shouldNotify, applyComplete, applyPostpone,
-  recipientsFor, activityRecipients, localHour, effectiveTimezone, reminderKindFor, groupForDigest, canEdit, canAct, MAX_HISTORY, type RoutineLike, type RoutineMember,
+  recipientsFor, activityRecipients, channelsFor, localHour, effectiveTimezone, reminderKindFor, groupForDigest, canEdit, canAct, MAX_HISTORY, type RoutineLike, type RoutineMember,
 } from "./xenRoutine";
 
 const member = (id: string, over: Partial<RoutineMember> = {}): RoutineMember => ({
-  user_id: id, role: "sharer", channels: { inapp: true, push: true, email: true }, muted: false, ...over,
+  user_id: id, role: "sharer", muted: false, ...over,
 });
 
 const base = (over: Partial<RoutineLike> = {}): RoutineLike => ({
@@ -127,19 +127,29 @@ describe("applyComplete / applyPostpone", () => {
 });
 
 describe("recipientsFor", () => {
-  it("skips muted members and honours per-member channels", () => {
+  const on = { inapp: true, push: true, email: true };
+  it("skips muted members and honours each person's own channel settings", () => {
     const r = base({
       members: [
         member("u1", { role: "owner" }),
         member("u2", { muted: true }),
-        member("u3", { channels: { inapp: false, push: true, email: false } }),
-        member("u4", { channels: { inapp: false, push: false, email: false } }),
+        member("u3"),
+        member("u4"),
       ],
     });
-    expect(recipientsFor(r)).toEqual([
-      { userId: "u1", channels: ["inapp", "socket", "push", "email"] },
+    const prefs = new Map([
+      ["u3", { inapp: false, push: true, email: false }],
+      ["u4", { inapp: false, push: false, email: false }],
+    ]);
+    expect(recipientsFor(r, prefs)).toEqual([
+      { userId: "u1", channels: ["inapp", "socket", "push", "email"] }, // no stored prefs = everything on
       { userId: "u3", channels: ["push"] },
     ]);
+  });
+  it("channelsFor pairs socket with inapp and can drop email", () => {
+    expect(channelsFor(on)).toEqual(["inapp", "socket", "push", "email"]);
+    expect(channelsFor(on, { email: false })).toEqual(["inapp", "socket", "push"]);
+    expect(channelsFor({ inapp: false, push: false, email: false })).toEqual([]);
   });
 });
 
@@ -240,9 +250,10 @@ describe("activityRecipients", () => {
       member("a"),
       member("muted", { muted: true }),
       member("off", { activity: false }),
-      member("pushOnly", { channels: { inapp: false, push: true, email: true } }),
+      member("pushOnly"),
     ] });
-    expect(activityRecipients(r, "actor")).toEqual([
+    const prefs = new Map([["pushOnly", { inapp: false, push: true, email: true }]]);
+    expect(activityRecipients(r, "actor", prefs)).toEqual([
       { userId: "a", channels: ["inapp", "socket", "push"] },
       { userId: "pushOnly", channels: ["push"] },
     ]);

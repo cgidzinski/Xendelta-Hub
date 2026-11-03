@@ -4,7 +4,7 @@ import {
 } from "@mui/material";
 import { Link as RouterLink } from "react-router-dom";
 import { useSnackbar } from "notistack";
-import { useRoutineSettings, useSaveRoutineSettings } from "../../../../hooks/xenroutine/useRoutines";
+import { useRoutineSettings, useSaveRoutineSettings, type RoutineChannels } from "../../../../hooks/xenroutine/useRoutines";
 
 interface Props { open: boolean; onClose: () => void }
 
@@ -14,23 +14,25 @@ const hourLabel = (h: number) => {
     return `${twelve}:00 ${suffix}`;
 };
 
-/** When reminders land, and whether to batch them. The timezone itself is the Profile setting. */
+/** When reminders land and how you are reached, for every routine. The timezone itself is the Profile setting. */
 export default function ReminderSettingsDialog({ open, onClose }: Props) {
     const { enqueueSnackbar } = useSnackbar();
     const { settings } = useRoutineSettings();
     const save = useSaveRoutineSettings();
     const [hour, setHour] = useState(8);
-    const [digest, setDigest] = useState(false);
+    const [channels, setChannels] = useState<RoutineChannels>({ inapp: true, push: true, email: true });
 
     useEffect(() => {
         if (!open || !settings) return;
         setHour(settings.remind_hour);
-        setDigest(settings.digest);
+        setChannels(settings.channels);
     }, [open, settings]);
+
+    const toggle = (k: keyof RoutineChannels) => (_: unknown, v: boolean) => setChannels((c) => ({ ...c, [k]: v }));
 
     const submit = async () => {
         try {
-            await save.mutateAsync({ remind_hour: hour, digest });
+            await save.mutateAsync({ remind_hour: hour, channels });
             enqueueSnackbar("Reminder settings saved", { variant: "success" });
             onClose();
         } catch (e: any) {
@@ -51,13 +53,15 @@ export default function ReminderSettingsDialog({ open, onClose }: Props) {
                         {settings && !settings.profile_timezone && " (following your browser)"}.{" "}
                         <Link component={RouterLink} to="/internal/profile">Change it in your Profile</Link>.
                     </Typography>
-                    <FormControlLabel
-                        control={<Switch checked={digest} onChange={(_, v) => setDigest(v)} />}
-                        label="Combine into one daily digest"
-                    />
+                    <Stack>
+                        <Typography variant="subtitle2">How should I reach you?</Typography>
+                        <FormControlLabel control={<Switch checked={channels.inapp} onChange={toggle("inapp")} />} label="In-app notification" />
+                        <FormControlLabel control={<Switch checked={channels.push} onChange={toggle("push")} />} label="Push notification" />
+                        <FormControlLabel control={<Switch checked={channels.email} onChange={toggle("email")} />} label="Email" />
+                    </Stack>
                     <Typography variant="caption" color="text.secondary">
-                        With the digest on, several routines that need attention arrive as one message instead of one each.
-                        Each routine's own options (channels, heads-up, mute) still apply.
+                        This applies to every routine. Everything due at your reminder time arrives as one message.
+                        Push needs a subscribed device, and email also needs email notifications turned on in your Profile.
                     </Typography>
                 </Stack>
             </DialogContent>

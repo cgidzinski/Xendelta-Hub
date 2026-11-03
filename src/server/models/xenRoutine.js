@@ -2,16 +2,11 @@ var mongoose = require("mongoose");
 var Schema = mongoose.Schema;
 
 // One person's relationship to a routine: the owner is always a member, sharers are
-// added by the owner. Notification preferences live here (not on the routine) so each
-// person decides for themselves how they are nagged about a shared routine.
+// added by the owner. Per-routine reminder options live here (mute, heads-up, activity) so
+// each person decides for themselves; delivery channels are per user (XenRoutineSettings).
 var memberSchema = new Schema({
   user_id: { type: String, required: true },
   role: { type: String, enum: ["owner", "sharer"], default: "sharer" },
-  channels: {
-    inapp: { type: Boolean, default: true },
-    push: { type: Boolean, default: true },
-    email: { type: Boolean, default: true },
-  },
   muted: { type: Boolean, default: false },
   // Also remind this many days before it's due (0 = off).
   lead_days: { type: Number, min: 0, max: 30, default: 0 },

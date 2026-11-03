@@ -39,7 +39,7 @@ export interface Routine {
     /** Positions (2 = the occurrence after due_at) already completed ahead of time; hidden from the projection. */
     done_ahead_indices?: number[];
     is_owner: boolean;
-    my_notifications: { channels: RoutineChannels; muted: boolean; lead_days: number; activity: boolean } | null;
+    my_notifications: { muted: boolean; lead_days: number; activity: boolean } | null;
     members: RoutineMember[];
     history: RoutineHistoryEntry[];
 }
@@ -111,9 +111,9 @@ export const usePostponeRoutine = () =>
 
 export const useSetRoutineNotifications = () =>
     useRoutineMutation((v: {
-        id: string; channels?: RoutineChannels; muted?: boolean; remind_again_days?: number; lead_days?: number; activity?: boolean;
+        id: string; muted?: boolean; remind_again_days?: number; lead_days?: number; activity?: boolean;
     }) => apiClient.put(`${base}/${v.id}/notifications`, {
-        channels: v.channels, muted: v.muted, remind_again_days: v.remind_again_days, lead_days: v.lead_days, activity: v.activity,
+        muted: v.muted, remind_again_days: v.remind_again_days, lead_days: v.lead_days, activity: v.activity,
     }));
 
 export const useShareRoutine = () =>
@@ -133,7 +133,8 @@ export function intervalLabel(i: Routine["interval"]): string {
 
 export interface RoutineSettings {
     remind_hour: number;
-    digest: boolean;
+    /** How this person is reached, for every routine. */
+    channels: RoutineChannels;
     /** What the browser last reported; only used when the Profile timezone is empty. */
     browser_timezone: string | null;
     profile_timezone: string | null;
@@ -155,7 +156,7 @@ export function useRoutineSettings() {
 export function useSaveRoutineSettings() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: async (patch: Partial<Pick<RoutineSettings, "remind_hour" | "digest" | "browser_timezone">>) =>
+        mutationFn: async (patch: Partial<Pick<RoutineSettings, "remind_hour" | "channels" | "browser_timezone">>) =>
             (await apiClient.put<ApiResponse<{ settings: RoutineSettings }>>("/api/xenroutine/settings", patch)).data.data!.settings,
         onSuccess: (settings) => qc.setQueryData(routineSettingsKey, settings),
     });

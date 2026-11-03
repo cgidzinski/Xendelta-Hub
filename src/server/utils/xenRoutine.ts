@@ -9,7 +9,6 @@ export interface MemberChannels { inapp: boolean; push: boolean; email: boolean 
 export interface RoutineMember {
   user_id: string;
   role: "owner" | "sharer";
-  channels: MemberChannels;
   muted: boolean;
   lead_days?: number;
   activity?: boolean;
@@ -156,23 +155,30 @@ export function applyPostpone(
 
 export type NotifyChannelName = "inapp" | "socket" | "push" | "email";
 
-/** The notify() channels a member has switched on. */
-export function channelsFor(m: Pick<RoutineMember, "channels">, opts: { email?: boolean } = {}): NotifyChannelName[] {
+/** A person's delivery preferences, app-wide (XenRoutineSettings.channels). */
+export const ALL_CHANNELS: MemberChannels = { inapp: true, push: true, email: true };
+
+/** The notify() channels someone has switched on. */
+export function channelsFor(prefs: MemberChannels = ALL_CHANNELS, opts: { email?: boolean } = {}): NotifyChannelName[] {
   const channels: NotifyChannelName[] = [];
   // The socket emit carries the persisted notification's _id, so it only makes sense
   // alongside inapp (see notificationUtils).
-  if (m.channels.inapp) channels.push("inapp", "socket");
-  if (m.channels.push) channels.push("push");
-  if (m.channels.email && opts.email !== false) channels.push("email");
+  if (prefs.inapp) channels.push("inapp", "socket");
+  if (prefs.push) channels.push("push");
+  if (prefs.email && opts.email !== false) channels.push("email");
   return channels;
 }
 
+export type ChannelPrefs = Map<string, MemberChannels>;
+
 /** Members to remind, each with the notify() channels they have left switched on. */
-export function recipientsFor(routine: Pick<RoutineLike, "members">): { userId: string; channels: NotifyChannelName[] }[] {
+export function recipientsFor(
+  routine: Pick<RoutineLike, "members">, prefs: ChannelPrefs = new Map(),
+): { userId: string; channels: NotifyChannelName[] }[] {
   const out: { userId: string; channels: NotifyChannelName[] }[] = [];
   for (const m of routine.members) {
     if (m.muted) continue;
-    const channels = channelsFor(m);
+    const channels = channelsFor(prefs.get(m.user_id));
     if (channels.length > 0) out.push({ userId: m.user_id, channels });
   }
   return out;
@@ -180,12 +186,12 @@ export function recipientsFor(routine: Pick<RoutineLike, "members">): { userId: 
 
 /** Who hears that `actorId` completed or postponed a routine: not them, not muted, not opted out; never by email. */
 export function activityRecipients(
-  routine: Pick<RoutineLike, "members">, actorId: string,
+  routine: Pick<RoutineLike, "members">, actorId: string, prefs: ChannelPrefs = new Map(),
 ): { userId: string; channels: NotifyChannelName[] }[] {
   const out: { userId: string; channels: NotifyChannelName[] }[] = [];
   for (const m of routine.members) {
     if (m.user_id === actorId || m.muted || m.activity === false) continue;
-    const channels = channelsFor(m, { email: false });
+    const channels = channelsFor(prefs.get(m.user_id), { email: false });
     if (channels.length > 0) out.push({ userId: m.user_id, channels });
   }
   return out;
@@ -262,7 +268,7 @@ export function reminderMessage(item: ReminderItem, now: Date): { title: string;
   };
 }
 
-/** One message for several reminders: overdue first, then coming up. */
+/** One message for everything a person is being reminded of: overdue first, then coming up. */
 export function groupForDigest(items: ReminderItem[], now: Date): { title: string; message: string } {
   if (items.length === 1) return reminderMessage(items[0], now);
   const sorted = [...items].sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());

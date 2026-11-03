@@ -831,11 +831,6 @@ export const postponeXenRoutineSchema = z.object({
 });
 
 export const xenRoutineNotificationsSchema = z.object({
-  channels: z.object({
-    inapp: z.boolean(),
-    push: z.boolean(),
-    email: z.boolean(),
-  }).optional(),
   muted: z.boolean().optional(),
   remind_again_days: z.number().int().min(1).max(365).optional(),
   lead_days: z.number().int().min(0).max(30).optional(),
@@ -844,7 +839,11 @@ export const xenRoutineNotificationsSchema = z.object({
 
 export const xenRoutineSettingsSchema = z.object({
   remind_hour: z.number().int().min(0).max(23).optional(),
-  digest: z.boolean().optional(),
+  channels: z.object({
+    inapp: z.boolean(),
+    push: z.boolean(),
+    email: z.boolean(),
+  }).optional(),
   browser_timezone: timezoneSchema.optional(),
 });
 

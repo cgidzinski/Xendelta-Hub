@@ -70,7 +70,7 @@ async function serialize(routines: any[], uid: string) {
       done_ahead_indices: doneAheadIndices(obj),
       is_owner: obj.owner_id === uid,
       my_notifications: mine
-        ? { channels: mine.channels, muted: mine.muted, lead_days: mine.lead_days ?? 0, activity: mine.activity !== false }
+        ? { muted: mine.muted, lead_days: mine.lead_days ?? 0, activity: mine.activity !== false }
         : null,
       members: obj.members.map((m: any) => ({
         user_id: m.user_id,
@@ -98,7 +98,7 @@ module.exports = function (app: any) {
     ]);
     return {
       remind_hour: settings?.remind_hour ?? DEFAULT_REMIND_HOUR,
-      digest: settings?.digest === true,
+      channels: settings?.channels ?? { inapp: true, push: true, email: true },
       browser_timezone: settings?.browser_timezone ?? null,
       profile_timezone: user?.timezone || null,
       timezone: effectiveTimezone(user?.timezone, settings?.browser_timezone),
@@ -117,10 +117,10 @@ module.exports = function (app: any) {
   app.put("/api/xenroutine/settings", validate(xenRoutineSettingsSchema), async (req: Request, res: Response) => {
     try {
       const uid = callerId(req);
-      const { remind_hour, digest, browser_timezone } = req.body;
+      const { remind_hour, channels, browser_timezone } = req.body;
       const set: Record<string, unknown> = {};
       if (remind_hour !== undefined) set.remind_hour = remind_hour;
-      if (digest !== undefined) set.digest = digest;
+      if (channels !== undefined) set.channels = channels;
       if (browser_timezone !== undefined) set.browser_timezone = browser_timezone;
       await XenRoutineSettings.updateOne({ user_id: uid }, { $set: set, $setOnInsert: { user_id: uid } }, { upsert: true });
       return res.json({ status: true, message: "Settings saved", data: { settings: await settingsPayload(uid) } });
@@ -256,7 +256,6 @@ module.exports = function (app: any) {
         if (!routine) return;
         const me = routine.members.find((m: any) => m.user_id === callerId(req));
         if (!me) return fail(res, 404, "Routine not found");
-        if (req.body.channels) me.channels = req.body.channels;
         if (req.body.muted !== undefined) me.muted = req.body.muted;
         if (req.body.lead_days !== undefined) me.lead_days = req.body.lead_days;
         if (req.body.activity !== undefined) me.activity = req.body.activity;
