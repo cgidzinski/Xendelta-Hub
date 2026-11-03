@@ -25,7 +25,8 @@ export default function ReminderSettingsDialog({ open, onClose }: Props) {
     useEffect(() => {
         if (!open || !settings) return;
         setHour(settings.remind_hour);
-        setChannels(settings.channels);
+        // ?? because a server that predates per-user channels doesn't send them
+        setChannels(settings.channels ?? { inapp: true, push: true, email: true });
     }, [open, settings]);
 
     const toggle = (k: keyof RoutineChannels) => (_: unknown, v: boolean) => setChannels((c) => ({ ...c, [k]: v }));

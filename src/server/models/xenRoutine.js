@@ -8,8 +8,8 @@ var memberSchema = new Schema({
   user_id: { type: String, required: true },
   role: { type: String, enum: ["owner", "sharer"], default: "sharer" },
   muted: { type: Boolean, default: false },
-  // Also remind this many days before it's due (0 = off).
-  lead_days: { type: Number, min: 0, max: 30, default: 0 },
+  // Also remind this many days before it's due (0 = off). On by default: one day ahead.
+  lead_days: { type: Number, min: 0, max: 30, default: 1 },
   // Tell this person when someone else completes or postpones the routine.
   activity: { type: Boolean, default: true },
   // Per-person reminder throttling: people have their own reminder hour and timezone,

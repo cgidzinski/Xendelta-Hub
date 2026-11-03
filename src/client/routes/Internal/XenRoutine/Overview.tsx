@@ -13,7 +13,7 @@ import {
     intervalLabel, useCompleteRoutine, useInvalidateRoutines, useRoutines,
 } from "../../../hooks/xenroutine/useRoutines";
 import {
-    bucketForDate, dueText, HORIZON_OPTIONS, pendingOccurrences, recentCompletions, type Bucket, type Occurrence,
+    bucketForDate, DEFAULT_HORIZON_DAYS, dueText, HORIZON_OPTIONS, pendingOccurrences, recentCompletions, type Bucket, type Occurrence,
 } from "../../../hooks/xenroutine/routineViews";
 import SlideToComplete from "./components/SlideToComplete";
 import RoutineMenu from "./components/RoutineMenu";
@@ -58,7 +58,7 @@ function PendingCard({ occ }: { occ: Occurrence }) {
 
     return (
         <Collapse in={!leaving} timeout={EXIT_MS - 50} unmountOnExit>
-            <Card variant="outlined" sx={{ p: 2, mb: 1.5, ...(projected ? { bgcolor: "action.hover" } : {}) }}>
+            <Card variant="outlined" sx={{ p: 2, mb: 1.5 }}>
                 <Stack direction="row" alignItems="flex-start" spacing={1}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>{routine.name}</Typography>
@@ -95,7 +95,7 @@ export default function Overview() {
     const { routines, isLoading, isError, error, refetch } = useRoutines();
     const invalidate = useInvalidateRoutines();
     const [filter, setFilter] = useState<Filter>("pending");
-    const [horizonDays, setHorizonDays] = useState<number>(HORIZON_OPTIONS[0].days);
+    const [horizonDays, setHorizonDays] = useState<number>(DEFAULT_HORIZON_DAYS);
     // Simplified shows one card per routine (its current due date); detailed shows every
     // occurrence in the window. Remembered per browser, never required.
     const [simplified, setSimplified] = useState<boolean>(() => {

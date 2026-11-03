@@ -70,7 +70,7 @@ async function serialize(routines: any[], uid: string) {
       done_ahead_indices: doneAheadIndices(obj),
       is_owner: obj.owner_id === uid,
       my_notifications: mine
-        ? { muted: mine.muted, lead_days: mine.lead_days ?? 0, activity: mine.activity !== false }
+        ? { muted: mine.muted, lead_days: mine.lead_days ?? 1, activity: mine.activity !== false }
         : null,
       members: obj.members.map((m: any) => ({
         user_id: m.user_id,
