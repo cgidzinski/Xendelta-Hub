@@ -86,6 +86,10 @@ import GroupSettlements from "./routes/Internal/Xensplit/GroupSettlements";
 import GroupExplain from "./routes/Internal/Xensplit/GroupExplain";
 import GroupSettings from "./routes/Internal/Xensplit/GroupSettings";
 import GroupActivityLog from "./routes/Internal/Xensplit/GroupActivityLog";
+// Routes - XenRoutine
+import XenRoutine from "./routes/Internal/XenRoutine/XenRoutine";
+import XenRoutineOverview from "./routes/Internal/XenRoutine/Overview";
+import XenRoutineRoutines from "./routes/Internal/XenRoutine/Routines";
 // Routes - XenBudget
 import XenBudgetBooksList from "./routes/Internal/XenBudget/BooksList";
 import XenBudgetBookDetail from "./routes/Internal/XenBudget/BookDetail";
@@ -242,6 +246,11 @@ const router = createBrowserRouter(
           <Route path="explain" element={<GroupExplain />} />
           <Route path="settings" element={<GroupSettings />} />
           <Route path="activity" element={<GroupActivityLog />} />
+        </Route>
+        <Route path="xenroutine" element={<XenRoutine />}>
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route path="overview" element={<XenRoutineOverview />} />
+          <Route path="routines" element={<XenRoutineRoutines />} />
         </Route>
         <Route path="xenbudget">
           <Route index element={<Navigate to="books" replace />} />

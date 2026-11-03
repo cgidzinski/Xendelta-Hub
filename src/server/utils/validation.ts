@@ -784,3 +784,65 @@ export const pushSubscribeSchema = z.object({
 export const pushUnsubscribeSchema = z.object({
   endpoint: z.string().url("Endpoint must be a valid URL").max(2000, "Endpoint too long"),
 });
+
+
+// XenRoutine schemas
+const xenRoutineIntervalSchema = z.object({
+  every: z.number().int().min(1).max(1000),
+  unit: z.enum(["days", "weeks", "months", "years"]),
+});
+
+export const createXenRoutineSchema = z.object({
+  name: z.string().trim().min(1, "A name is required").max(100),
+  category: z.string().trim().max(50).optional(),
+  notes: z.string().max(1000).optional(),
+  interval: xenRoutineIntervalSchema,
+  // When it's next due. Omitted = one interval from now (or from last_done_at if given).
+  due_at: z.string().datetime({ offset: true }).optional(),
+  last_done_at: z.string().datetime({ offset: true }).optional(),
+  remind_again_days: z.number().int().min(1).max(365).optional(),
+});
+
+export const updateXenRoutineSchema = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  category: z.string().trim().max(50).optional(),
+  notes: z.string().max(1000).optional(),
+  interval: xenRoutineIntervalSchema.optional(),
+  due_at: z.string().datetime({ offset: true }).optional(),
+  enabled: z.boolean().optional(),
+  remind_again_days: z.number().int().min(1).max(365).optional(),
+});
+
+export const completeXenRoutineSchema = z.object({
+  done_at: z.string().datetime({ offset: true }).optional(),
+  // Which upcoming occurrence is being completed (1 = the current due date). Sent with the
+  // due_at the client saw so a stale view can't complete the wrong occurrence.
+  occurrence: z.number().int().min(1).max(400).optional(),
+  expected_due_at: z.string().datetime({ offset: true }).optional(),
+  note: z.string().trim().max(500).optional(),
+});
+
+export const postponeXenRoutineSchema = z.object({
+  days: z.number().int().min(1).max(3650).optional(),
+  until: z.string().datetime({ offset: true }).optional(),
+  note: z.string().trim().max(500).optional(),
+}).refine((v) => (v.days === undefined) !== (v.until === undefined), {
+  message: "Provide exactly one of days or until",
+});
+
+export const xenRoutineNotificationsSchema = z.object({
+  channels: z.object({
+    inapp: z.boolean(),
+    push: z.boolean(),
+    email: z.boolean(),
+  }).optional(),
+  muted: z.boolean().optional(),
+  remind_again_days: z.number().int().min(1).max(365).optional(),
+});
+
+export const shareXenRoutineSchema = z.object({
+  userIds: z.array(objectIdSchema).min(1).max(20),
+});
+
+export const xenRoutineIdParamSchema = z.object({ id: objectIdSchema });
+export const xenRoutineMemberParamSchema = z.object({ id: objectIdSchema, userId: objectIdSchema });
