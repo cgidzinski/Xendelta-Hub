@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   addInterval, computeDueStatus, doneAheadIndices, shouldNotify, applyComplete, applyPostpone,
-  recipientsFor, canEdit, canAct, MAX_HISTORY, type RoutineLike, type RoutineMember,
+  recipientsFor, activityRecipients, channelsFor, localHour, effectiveTimezone, reminderKindFor, groupForDigest, canEdit, canAct, MAX_HISTORY, type RoutineLike, type RoutineMember,
 } from "./xenRoutine";
 
 const member = (id: string, over: Partial<RoutineMember> = {}): RoutineMember => ({
-  user_id: id, role: "sharer", channels: { inapp: true, push: true, email: true }, muted: false, ...over,
+  user_id: id, role: "sharer", muted: false, ...over,
 });
 
 const base = (over: Partial<RoutineLike> = {}): RoutineLike => ({
@@ -127,19 +127,29 @@ describe("applyComplete / applyPostpone", () => {
 });
 
 describe("recipientsFor", () => {
-  it("skips muted members and honours per-member channels", () => {
+  const on = { inapp: true, push: true, email: true };
+  it("skips muted members and honours each person's own channel settings", () => {
     const r = base({
       members: [
         member("u1", { role: "owner" }),
         member("u2", { muted: true }),
-        member("u3", { channels: { inapp: false, push: true, email: false } }),
-        member("u4", { channels: { inapp: false, push: false, email: false } }),
+        member("u3"),
+        member("u4"),
       ],
     });
-    expect(recipientsFor(r)).toEqual([
-      { userId: "u1", channels: ["inapp", "socket", "push", "email"] },
+    const prefs = new Map([
+      ["u3", { inapp: false, push: true, email: false }],
+      ["u4", { inapp: false, push: false, email: false }],
+    ]);
+    expect(recipientsFor(r, prefs)).toEqual([
+      { userId: "u1", channels: ["inapp", "socket", "push", "email"] }, // no stored prefs = everything on
       { userId: "u3", channels: ["push"] },
     ]);
+  });
+  it("channelsFor pairs socket with inapp and can drop email", () => {
+    expect(channelsFor(on)).toEqual(["inapp", "socket", "push", "email"]);
+    expect(channelsFor(on, { email: false })).toEqual(["inapp", "socket", "push"]);
+    expect(channelsFor({ inapp: false, push: false, email: false })).toEqual([]);
   });
 });
 
@@ -150,5 +160,102 @@ describe("permissions", () => {
     expect(canEdit(r, "u2")).toBe(false);
     expect(canAct(r, "u2")).toBe(true);
     expect(canAct(r, "u9")).toBe(false);
+  });
+});
+
+describe("effectiveTimezone", () => {
+  it("prefers Profile, then the browser-reported zone, then UTC", () => {
+    expect(effectiveTimezone("Europe/London", "America/New_York")).toBe("Europe/London");
+    expect(effectiveTimezone("", "America/New_York")).toBe("America/New_York");
+    expect(effectiveTimezone(undefined, undefined)).toBe("UTC");
+  });
+});
+
+describe("localHour", () => {
+  it("reads the hour in a zone, including across DST", () => {
+    expect(localHour(new Date("2026-01-15T08:00:00Z"), "UTC")).toBe(8);
+    expect(localHour(new Date("2026-01-15T08:00:00Z"), "Asia/Tokyo")).toBe(17);
+    // New York is UTC-5 in winter, UTC-4 in summer
+    expect(localHour(new Date("2026-01-15T13:00:00Z"), "America/New_York")).toBe(8);
+    expect(localHour(new Date("2026-07-15T12:00:00Z"), "America/New_York")).toBe(8);
+  });
+  it("treats midnight as 0, not 24", () => {
+    expect(localHour(new Date("2026-01-15T00:30:00Z"), "UTC")).toBe(0);
+  });
+  it("falls back to UTC for an unknown zone", () => {
+    expect(localHour(new Date("2026-01-15T05:00:00Z"), "Not/AZone")).toBe(5);
+  });
+});
+
+describe("reminderKindFor", () => {
+  const settings = { remindHour: 8, timezone: "UTC" };
+  const at8 = new Date("2026-06-10T08:00:00Z");
+  const routine = (over: Partial<RoutineLike> = {}) => base({ due_at: new Date("2026-06-09T00:00:00Z"), ...over });
+
+  it("only fires in the member's own reminder hour", () => {
+    expect(reminderKindFor(routine(), member("u1"), settings, new Date("2026-06-10T09:00:00Z"))).toBeNull();
+    expect(reminderKindFor(routine(), member("u1"), settings, at8)).toBe("due");
+  });
+  it("uses the member's timezone", () => {
+    const tokyo = { remindHour: 8, timezone: "Asia/Tokyo" };
+    expect(reminderKindFor(routine(), member("u1"), tokyo, new Date("2026-06-09T23:00:00Z"))).toBe("due");
+    expect(reminderKindFor(routine(), member("u1"), tokyo, at8)).toBeNull();
+  });
+  it("nags again only after remind_again_days, measured per member", () => {
+    const told = member("u1", { last_due_notified_at: new Date("2026-06-09T08:00:00Z") });
+    expect(reminderKindFor(routine(), told, settings, at8)).toBeNull(); // 1 day later
+    const toldLong = member("u1", { last_due_notified_at: new Date("2026-06-07T08:00:00Z") });
+    expect(reminderKindFor(routine(), toldLong, settings, at8)).toBe("due"); // 3 days later
+    const other = member("u2");
+    expect(reminderKindFor(routine(), other, settings, at8)).toBe("due"); // never told
+  });
+  it("a new due date restarts the cycle", () => {
+    const told = member("u1", { last_due_notified_at: new Date("2026-06-09T08:00:00Z") });
+    const moved = routine({ due_at: new Date("2026-06-10T00:00:00Z") });
+    expect(reminderKindFor(moved, told, settings, at8)).toBe("due");
+  });
+  it("gives a heads-up once per due date", () => {
+    const upcoming = routine({ due_at: new Date("2026-06-12T08:00:00Z") });
+    const m = member("u1", { lead_days: 3 });
+    expect(reminderKindFor(upcoming, m, settings, at8)).toBe("lead");
+    const told = member("u1", { lead_days: 3, lead_notified_for: upcoming.due_at });
+    expect(reminderKindFor(upcoming, told, settings, at8)).toBeNull();
+    expect(reminderKindFor(upcoming, member("u1"), settings, at8)).toBeNull(); // lead off
+    expect(reminderKindFor(routine({ due_at: new Date("2026-06-20T08:00:00Z") }), m, settings, at8)).toBeNull(); // too far out
+  });
+  it("stays quiet for muted members and disabled routines", () => {
+    expect(reminderKindFor(routine(), member("u1", { muted: true }), settings, at8)).toBeNull();
+    expect(reminderKindFor(routine({ enabled: false }), member("u1"), settings, at8)).toBeNull();
+  });
+});
+
+describe("groupForDigest", () => {
+  const now = new Date("2026-06-10T08:00:00Z");
+  it("uses the single message for one item and a combined one for several", () => {
+    const one = groupForDigest([{ name: "Filter", kind: "due", dueAt: new Date("2026-06-08T00:00:00Z") }], now);
+    expect(one.title).toBe("Due: Filter");
+    const many = groupForDigest([
+      { name: "B", kind: "lead", dueAt: new Date("2026-06-12T08:00:00Z") },
+      { name: "A", kind: "due", dueAt: new Date("2026-06-08T00:00:00Z") },
+    ], now);
+    expect(many.title).toBe("2 routines need attention");
+    expect(many.message.split("\n")[0]).toContain('"A" is 2 days overdue');
+  });
+});
+
+describe("activityRecipients", () => {
+  it("excludes the actor, muted members and opted-out members, and never uses email", () => {
+    const r = base({ members: [
+      member("actor", { role: "owner" }),
+      member("a"),
+      member("muted", { muted: true }),
+      member("off", { activity: false }),
+      member("pushOnly"),
+    ] });
+    const prefs = new Map([["pushOnly", { inapp: false, push: true, email: true }]]);
+    expect(activityRecipients(r, "actor", prefs)).toEqual([
+      { userId: "a", channels: ["inapp", "socket", "push"] },
+      { userId: "pushOnly", channels: ["push"] },
+    ]);
   });
 });

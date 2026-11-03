@@ -9,8 +9,11 @@ export interface MemberChannels { inapp: boolean; push: boolean; email: boolean 
 export interface RoutineMember {
   user_id: string;
   role: "owner" | "sharer";
-  channels: MemberChannels;
   muted: boolean;
+  lead_days?: number;
+  activity?: boolean;
+  last_due_notified_at?: Date | null;
+  lead_notified_for?: Date | null;
 }
 export interface HistoryEntry {
   action: "done" | "postponed";
@@ -152,20 +155,125 @@ export function applyPostpone(
 
 export type NotifyChannelName = "inapp" | "socket" | "push" | "email";
 
+/** A person's delivery preferences, app-wide (XenRoutineSettings.channels). */
+export const ALL_CHANNELS: MemberChannels = { inapp: true, push: true, email: true };
+
+/** The notify() channels someone has switched on. */
+export function channelsFor(prefs: MemberChannels = ALL_CHANNELS, opts: { email?: boolean } = {}): NotifyChannelName[] {
+  const channels: NotifyChannelName[] = [];
+  // The socket emit carries the persisted notification's _id, so it only makes sense
+  // alongside inapp (see notificationUtils).
+  if (prefs.inapp) channels.push("inapp", "socket");
+  if (prefs.push) channels.push("push");
+  if (prefs.email && opts.email !== false) channels.push("email");
+  return channels;
+}
+
+export type ChannelPrefs = Map<string, MemberChannels>;
+
 /** Members to remind, each with the notify() channels they have left switched on. */
-export function recipientsFor(routine: Pick<RoutineLike, "members">): { userId: string; channels: NotifyChannelName[] }[] {
+export function recipientsFor(
+  routine: Pick<RoutineLike, "members">, prefs: ChannelPrefs = new Map(),
+): { userId: string; channels: NotifyChannelName[] }[] {
   const out: { userId: string; channels: NotifyChannelName[] }[] = [];
   for (const m of routine.members) {
     if (m.muted) continue;
-    const channels: NotifyChannelName[] = [];
-    // The socket emit carries the persisted notification's _id, so it only makes sense
-    // alongside inapp (see notificationUtils).
-    if (m.channels.inapp) channels.push("inapp", "socket");
-    if (m.channels.push) channels.push("push");
-    if (m.channels.email) channels.push("email");
+    const channels = channelsFor(prefs.get(m.user_id));
     if (channels.length > 0) out.push({ userId: m.user_id, channels });
   }
   return out;
+}
+
+/** Who hears that `actorId` completed or postponed a routine: not them, not muted, not opted out; never by email. */
+export function activityRecipients(
+  routine: Pick<RoutineLike, "members">, actorId: string, prefs: ChannelPrefs = new Map(),
+): { userId: string; channels: NotifyChannelName[] }[] {
+  const out: { userId: string; channels: NotifyChannelName[] }[] = [];
+  for (const m of routine.members) {
+    if (m.user_id === actorId || m.muted || m.activity === false) continue;
+    const channels = channelsFor(prefs.get(m.user_id), { email: false });
+    if (channels.length > 0) out.push({ userId: m.user_id, channels });
+  }
+  return out;
+}
+
+// ---- Per-person reminder timing ------------------------------------------------------
+
+export interface ReminderSettings { remindHour: number; timezone: string }
+export type ReminderKind = "due" | "lead";
+
+export const DEFAULT_REMIND_HOUR = 8;
+
+/** The zone to schedule in: the Profile setting, else what the browser reported, else UTC. */
+export function effectiveTimezone(profileTz?: string | null, browserTz?: string | null): string {
+  return profileTz || browserTz || "UTC";
+}
+
+/** The hour (0-23) it is in `timezone` at `now`. */
+export function localHour(now: Date, timezone: string): number {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: timezone, hour: "numeric", hourCycle: "h23" }).formatToParts(now);
+    const h = Number(parts.find((p) => p.type === "hour")?.value);
+    return Number.isFinite(h) ? h % 24 : now.getUTCHours();
+  } catch {
+    return now.getUTCHours();
+  }
+}
+
+// The nag interval is measured between runs that both land in the member's reminder hour,
+// so the real gap is N days give or take scheduler drift and a DST hour.
+const NAG_TOLERANCE_MS = 2 * 3_600_000;
+
+/**
+ * What (if anything) to send this member right now. The hourly job calls this for every
+ * member, and it only says yes during the member's own reminder hour, so each person is
+ * reminded at most once a day, at the time they picked.
+ *
+ * - "due": the routine is due or overdue and this member has not been told for this due date,
+ *   or was last told at least remind_again_days ago.
+ * - "lead": it falls due within the member's lead_days and they have not had a heads-up for
+ *   this due date yet.
+ */
+export function reminderKindFor(
+  routine: RoutineLike, member: RoutineMember, settings: ReminderSettings, now: Date,
+): ReminderKind | null {
+  if (!routine.enabled || member.muted) return null;
+  if (localHour(now, settings.timezone) !== settings.remindHour) return null;
+
+  const due = routine.due_at.getTime();
+  const t = now.getTime();
+
+  if (due <= t) {
+    const last = member.last_due_notified_at?.getTime();
+    if (last === undefined || last < due) return "due";
+    return t - last >= routine.remind_again_days * 86_400_000 - NAG_TOLERANCE_MS ? "due" : null;
+  }
+
+  const lead = member.lead_days ?? 0;
+  if (lead > 0 && due - t <= lead * 86_400_000 && member.lead_notified_for?.getTime() !== due) return "lead";
+  return null;
+}
+
+export interface ReminderItem { name: string; kind: ReminderKind; dueAt: Date }
+
+export function reminderMessage(item: ReminderItem, now: Date): { title: string; message: string } {
+  if (item.kind === "lead") {
+    const days = Math.max(1, Math.ceil((item.dueAt.getTime() - now.getTime()) / 86_400_000));
+    return { title: `Coming up: ${item.name}`, message: `"${item.name}" is due in ${days} day${days === 1 ? "" : "s"}.` };
+  }
+  const overdueDays = Math.max(0, Math.floor((now.getTime() - item.dueAt.getTime()) / 86_400_000));
+  return {
+    title: `Due: ${item.name}`,
+    message: overdueDays === 0 ? `"${item.name}" is due today.` : `"${item.name}" is ${overdueDays} day${overdueDays === 1 ? "" : "s"} overdue.`,
+  };
+}
+
+/** One message for everything a person is being reminded of: overdue first, then coming up. */
+export function groupForDigest(items: ReminderItem[], now: Date): { title: string; message: string } {
+  if (items.length === 1) return reminderMessage(items[0], now);
+  const sorted = [...items].sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
+  const lines = sorted.map((i) => `• ${reminderMessage(i, now).message}`);
+  return { title: `${items.length} routines need attention`, message: lines.join("\n") };
 }
 
 export const isMember = (routine: Pick<RoutineLike, "members">, userId: string) =>

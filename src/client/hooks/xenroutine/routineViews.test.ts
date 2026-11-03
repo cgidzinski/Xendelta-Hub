@@ -33,6 +33,10 @@ describe("projectOccurrences", () => {
         expect(projectOccurrences(r, now)).toHaveLength(1);
         expect(projectOccurrences(r, now, 365)).toHaveLength(12);
     });
+    it("a 1 week look-ahead shows this week's occurrences only", () => {
+        const occ = projectOccurrences(routine({ ...weekly, due_at: iso(0) }), now, 7);
+        expect(occ.map((o) => o.index)).toEqual([1, 2]); // day 0 and day 7
+    });
     it("keeps an overdue routine as its first occurrence", () => {
         const occ = projectOccurrences(routine({ ...weekly, due_at: iso(-3) }), now);
         expect(occ[0].index).toBe(1);

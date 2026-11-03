@@ -13,8 +13,9 @@ import {
     intervalLabel, useCompleteRoutine, useInvalidateRoutines, useRoutines,
 } from "../../../hooks/xenroutine/useRoutines";
 import {
-    bucketForDate, dueText, HORIZON_OPTIONS, pendingOccurrences, recentCompletions, type Bucket, type Occurrence,
+    bucketForDate, DEFAULT_HORIZON_DAYS, dueText, HORIZON_OPTIONS, pendingOccurrences, recentCompletions, type Bucket, type Occurrence,
 } from "../../../hooks/xenroutine/routineViews";
+import { useLocalStorageState } from "../../../hooks/useLocalStorageState";
 import SlideToComplete from "./components/SlideToComplete";
 import RoutineMenu from "./components/RoutineMenu";
 import type { XenRoutineOutletContext } from "./outletContext";
@@ -58,7 +59,7 @@ function PendingCard({ occ }: { occ: Occurrence }) {
 
     return (
         <Collapse in={!leaving} timeout={EXIT_MS - 50} unmountOnExit>
-            <Card variant="outlined" sx={{ p: 2, mb: 1.5, ...(projected ? { bgcolor: "action.hover" } : {}) }}>
+            <Card variant="outlined" sx={{ p: 2, mb: 1.5 }}>
                 <Stack direction="row" alignItems="flex-start" spacing={1}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>{routine.name}</Typography>
@@ -94,18 +95,22 @@ export default function Overview() {
     const { openCreate } = useOutletContext<XenRoutineOutletContext>();
     const { routines, isLoading, isError, error, refetch } = useRoutines();
     const invalidate = useInvalidateRoutines();
-    const [filter, setFilter] = useState<Filter>("pending");
-    const [horizonDays, setHorizonDays] = useState<number>(HORIZON_OPTIONS[0].days);
+    // The three view settings are remembered per browser (localStorage), and a stored value
+    // is only used if it is still one of the choices on offer.
+    const [filter, setFilter] = useLocalStorageState<Filter>(
+        "xenroutine:overview:filter", "pending",
+        (v): v is Filter => v === "all" || v === "pending" || v === "completed",
+    );
+    const [horizonDays, setHorizonDays] = useLocalStorageState<number>(
+        "xenroutine:overview:horizon", DEFAULT_HORIZON_DAYS,
+        (v): v is number => HORIZON_OPTIONS.some((h) => h.days === v),
+    );
     // Simplified shows one card per routine (its current due date); detailed shows every
-    // occurrence in the window. Remembered per browser, never required.
-    const [simplified, setSimplified] = useState<boolean>(() => {
-        try { return localStorage.getItem("xenroutine:simplified") === "1"; } catch { return false; }
-    });
-    const changeSimplified = (v: boolean) => {
-        setSimplified(v);
-        try { localStorage.setItem("xenroutine:simplified", v ? "1" : "0"); } catch { /* storage unavailable */ }
-    };
-
+    // occurrence in the window.
+    const [simplified, setSimplified] = useLocalStorageState<boolean>(
+        "xenroutine:overview:simplified", false,
+        (v): v is boolean => typeof v === "boolean",
+    );
     const pending = useMemo(() => pendingOccurrences(routines, new Date(), horizonDays, simplified), [routines, horizonDays, simplified]);
     const completions = useMemo(() => recentCompletions(routines), [routines]);
 
@@ -146,7 +151,7 @@ export default function Overview() {
                 disable under the Complete filter - the toolbar doesn't jump around. */}
             <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.5}>
                 <ToggleButtonGroup exclusive size="small" disabled={!showPending} value={simplified ? "simple" : "detailed"}
-                    onChange={(_, v) => { if (v) changeSimplified(v === "simple"); }}>
+                    onChange={(_, v) => { if (v) setSimplified(v === "simple"); }}>
                     <ToggleButton value="simple">Simplified</ToggleButton>
                     <ToggleButton value="detailed">
                         Every<Box component="span" sx={{ display: { xs: "none", sm: "inline" }, whiteSpace: "pre" }}> occurrence</Box>

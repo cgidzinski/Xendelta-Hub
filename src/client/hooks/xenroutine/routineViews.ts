@@ -7,6 +7,8 @@ import type { Routine } from "./useRoutines";
 const DAY = 86_400_000;
 export const OVERVIEW_HORIZON_DAYS = 30;
 export const DUE_SOON_DAYS = 7;
+/** What Overview looks ahead by default. */
+export const DEFAULT_HORIZON_DAYS = OVERVIEW_HORIZON_DAYS;
 
 export type Bucket = "overdue" | "soon" | "month" | "later";
 
@@ -21,8 +23,9 @@ export function addInterval(from: Date, interval: Routine["interval"], times = 1
     }
 }
 
-/** How far ahead Overview can look. The default is the first entry. */
+/** How far ahead Overview can look. */
 export const HORIZON_OPTIONS = [
+    { days: 7, label: "1 week" },
     { days: 30, label: "30 days" },
     { days: 90, label: "3 months" },
     { days: 180, label: "6 months" },

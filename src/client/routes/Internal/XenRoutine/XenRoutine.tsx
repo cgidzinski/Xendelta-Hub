@@ -1,11 +1,17 @@
-import { useState } from "react";
-import { Box, Button, Container, Fab, Stack, Tab, Tabs, Typography } from "@mui/material";
+import { useEffect, useState } from "react";
+import { Box, Button, Container, Fab, IconButton, Stack, Tab, Tabs, Tooltip, Typography } from "@mui/material";
+import SettingsIcon from "@mui/icons-material/Settings";
 import AddIcon from "@mui/icons-material/Add";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import { useTitle } from "../../../hooks/useTitle";
-import { useCreateRoutine, useUpdateRoutine, type Routine } from "../../../hooks/xenroutine/useRoutines";
+import {
+    useCreateRoutine, useRoutineSettings, useSaveRoutineSettings, useUpdateRoutine, type Routine,
+} from "../../../hooks/xenroutine/useRoutines";
+import { useUserProfile } from "../../../hooks/user/useUserProfile";
+import { browserTimezone } from "../../../constants/timezones";
 import RoutineDialog from "./components/RoutineDialog";
+import ReminderSettingsDialog from "./components/ReminderSettingsDialog";
 import type { XenRoutineOutletContext } from "./outletContext";
 
 const TABS = [
@@ -21,6 +27,20 @@ export default function XenRoutine() {
     const { pathname } = useLocation();
     const createRoutine = useCreateRoutine();
     const updateRoutine = useUpdateRoutine();
+
+    const { profile } = useUserProfile();
+    const { settings } = useRoutineSettings();
+    const saveSettings = useSaveRoutineSettings();
+    const [settingsOpen, setSettingsOpen] = useState(false);
+
+    // Reminders are scheduled in the Profile timezone. People who leave it on "follow my
+    // browser" have no zone the server can see, so report the browser's once it differs.
+    const browserTz = browserTimezone();
+    useEffect(() => {
+        if (!profile || !settings || profile.timezone) return;
+        if (settings.browser_timezone !== browserTz) saveSettings.mutate({ browser_timezone: browserTz });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [profile?.timezone, settings?.browser_timezone, browserTz]);
 
     const [editing, setEditing] = useState<Routine | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -50,10 +70,15 @@ export default function XenRoutine() {
         <Container maxWidth="md" sx={{ mt: 3, mb: 10 }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
                 <Typography variant="h5" sx={{ fontWeight: 700 }}>XenRoutine</Typography>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}
-                    sx={{ display: { xs: "none", sm: "inline-flex" } }}>
-                    New routine
-                </Button>
+                <Stack direction="row" spacing={1} alignItems="center">
+                    <Tooltip title="Reminder settings">
+                        <IconButton aria-label="Reminder settings" onClick={() => setSettingsOpen(true)}><SettingsIcon /></IconButton>
+                    </Tooltip>
+                    <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}
+                        sx={{ display: { xs: "none", sm: "inline-flex" } }}>
+                        New routine
+                    </Button>
+                </Stack>
             </Stack>
 
             <Tabs value={current} onChange={(_, v) => navigate(v)} sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}>
@@ -69,6 +94,7 @@ export default function XenRoutine() {
                 <AddIcon />
             </Fab>
 
+            <ReminderSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
             <RoutineDialog open={dialogOpen} routine={editing} onClose={() => setDialogOpen(false)} onSubmit={submit} />
         </Container>
     );

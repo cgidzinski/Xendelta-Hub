@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 const XenRoutine = require("../models/xenRoutine");
+const XenRoutineSettings = require("../models/xenRoutineSettings");
 const { User } = require("../models/user");
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
@@ -11,15 +12,20 @@ import {
   completeXenRoutineSchema,
   postponeXenRoutineSchema,
   xenRoutineNotificationsSchema,
+  xenRoutineSettingsSchema,
   shareXenRoutineSchema,
   xenRoutineIdParamSchema,
   xenRoutineMemberParamSchema,
 } from "../utils/validation";
 import {
   addInterval, applyComplete, applyPostpone, canAct, canEdit, computeDueStatus, doneAheadIndices,
+  DEFAULT_REMIND_HOUR, effectiveTimezone,
 } from "../utils/xenRoutine";
+import { sendActivityNotices } from "../utils/xenRoutineReminders";
 
 const callerId = (req: Request) => (req as AuthenticatedRequest).user!._id.toString();
+
+const actorName = (req: Request) => (req as AuthenticatedRequest).user!.username;
 
 const fail = (res: Response, code: number, message: string) =>
   res.status(code).json({ status: false, message });
@@ -63,7 +69,9 @@ async function serialize(routines: any[], uid: string) {
       status: computeDueStatus(obj, now),
       done_ahead_indices: doneAheadIndices(obj),
       is_owner: obj.owner_id === uid,
-      my_notifications: mine ? { channels: mine.channels, muted: mine.muted } : null,
+      my_notifications: mine
+        ? { muted: mine.muted, lead_days: mine.lead_days ?? 1, activity: mine.activity !== false }
+        : null,
       members: obj.members.map((m: any) => ({
         user_id: m.user_id,
         role: m.role,
@@ -80,6 +88,47 @@ async function serialize(routines: any[], uid: string) {
 
 module.exports = function (app: any) {
   app.use("/api/xenroutine", authenticateToken);
+
+  // Per-user reminder timing. The timezone is the Profile setting; browser_timezone is only
+  // the client-reported fallback for people who leave Profile on "follow my browser".
+  async function settingsPayload(uid: string) {
+    const [settings, user] = await Promise.all([
+      XenRoutineSettings.findOne({ user_id: uid }).lean().exec(),
+      User.findById(uid, "timezone").lean().exec(),
+    ]);
+    return {
+      remind_hour: settings?.remind_hour ?? DEFAULT_REMIND_HOUR,
+      channels: settings?.channels ?? { inapp: true, push: true, email: true },
+      browser_timezone: settings?.browser_timezone ?? null,
+      profile_timezone: user?.timezone || null,
+      timezone: effectiveTimezone(user?.timezone, settings?.browser_timezone),
+    };
+  }
+
+  app.get("/api/xenroutine/settings", async (req: Request, res: Response) => {
+    try {
+      return res.json({ status: true, message: "", data: { settings: await settingsPayload(callerId(req)) } });
+    } catch (e) {
+      console.error("xenroutine settings load failed:", e);
+      return fail(res, 500, "Failed to load settings");
+    }
+  });
+
+  app.put("/api/xenroutine/settings", validate(xenRoutineSettingsSchema), async (req: Request, res: Response) => {
+    try {
+      const uid = callerId(req);
+      const { remind_hour, channels, browser_timezone } = req.body;
+      const set: Record<string, unknown> = {};
+      if (remind_hour !== undefined) set.remind_hour = remind_hour;
+      if (channels !== undefined) set.channels = channels;
+      if (browser_timezone !== undefined) set.browser_timezone = browser_timezone;
+      await XenRoutineSettings.updateOne({ user_id: uid }, { $set: set, $setOnInsert: { user_id: uid } }, { upsert: true });
+      return res.json({ status: true, message: "Settings saved", data: { settings: await settingsPayload(uid) } });
+    } catch (e) {
+      console.error("xenroutine settings save failed:", e);
+      return fail(res, 500, "Failed to save settings");
+    }
+  });
 
   app.get("/api/xenroutine/routines", async (req: Request, res: Response) => {
     try {
@@ -171,6 +220,7 @@ module.exports = function (app: any) {
         routine.set(patch);
         await routine.save();
         const [out] = await serialize([routine], callerId(req));
+        void sendActivityNotices(routine, callerId(req), actorName(req), `marked "${routine.name}" as done`);
         return res.json({ status: true, message: "Marked as done", data: { routine: out } });
       } catch (e) {
         console.error("xenroutine complete failed:", e);
@@ -190,6 +240,7 @@ module.exports = function (app: any) {
         routine.set(patch);
         await routine.save();
         const [out] = await serialize([routine], callerId(req));
+        void sendActivityNotices(routine, callerId(req), actorName(req), `postponed "${routine.name}" to ${routine.due_at.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`);
         return res.json({ status: true, message: "Postponed", data: { routine: out } });
       } catch (e) {
         console.error("xenroutine postpone failed:", e);
@@ -205,8 +256,9 @@ module.exports = function (app: any) {
         if (!routine) return;
         const me = routine.members.find((m: any) => m.user_id === callerId(req));
         if (!me) return fail(res, 404, "Routine not found");
-        if (req.body.channels) me.channels = req.body.channels;
         if (req.body.muted !== undefined) me.muted = req.body.muted;
+        if (req.body.lead_days !== undefined) me.lead_days = req.body.lead_days;
+        if (req.body.activity !== undefined) me.activity = req.body.activity;
         // Routine-wide, not per member: one nag cadence for everyone on the routine.
         if (req.body.remind_again_days !== undefined) routine.remind_again_days = req.body.remind_again_days;
         await routine.save();
