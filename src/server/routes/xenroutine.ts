@@ -16,7 +16,7 @@ import {
   xenRoutineMemberParamSchema,
 } from "../utils/validation";
 import {
-  addInterval, applyComplete, applyPostpone, canAct, canEdit, computeDueStatus,
+  addInterval, applyComplete, applyPostpone, canAct, canEdit, computeDueStatus, doneAheadIndices,
 } from "../utils/xenRoutine";
 
 const callerId = (req: Request) => (req as AuthenticatedRequest).user!._id.toString();
@@ -61,6 +61,7 @@ async function serialize(routines: any[], uid: string) {
       enabled: obj.enabled,
       remind_again_days: obj.remind_again_days,
       status: computeDueStatus(obj, now),
+      done_ahead_indices: doneAheadIndices(obj),
       is_owner: obj.owner_id === uid,
       my_notifications: mine ? { channels: mine.channels, muted: mine.muted } : null,
       members: obj.members.map((m: any) => ({
@@ -155,12 +156,17 @@ module.exports = function (app: any) {
       try {
         const routine = await loadRoutine(req, res, "act");
         if (!routine) return;
+        // A view that was open while the schedule moved (another device, a sharer) could
+        // otherwise complete a different occurrence than the one on screen.
+        if (req.body.expected_due_at && new Date(req.body.expected_due_at).getTime() !== routine.due_at.getTime()) {
+          return fail(res, 409, "This routine changed. Refresh and try again.");
+        }
         const patch = applyComplete(routine.toObject(), {
           by: callerId(req),
           now: new Date(),
           doneAt: req.body.done_at ? new Date(req.body.done_at) : undefined,
           note: req.body.note,
-          occurrences: req.body.occurrences,
+          occurrence: req.body.occurrence,
         });
         routine.set(patch);
         await routine.save();

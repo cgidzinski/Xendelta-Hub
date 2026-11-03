@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  addInterval, computeDueStatus, shouldNotify, applyComplete, applyPostpone,
+  addInterval, computeDueStatus, doneAheadIndices, shouldNotify, applyComplete, applyPostpone,
   recipientsFor, canEdit, canAct, MAX_HISTORY, type RoutineLike, type RoutineMember,
 } from "./xenRoutine";
 
@@ -15,6 +15,7 @@ const base = (over: Partial<RoutineLike> = {}): RoutineLike => ({
   due_at: new Date("2026-06-01T00:00:00Z"),
   enabled: true,
   last_notified_at: null,
+  done_ahead: [],
   remind_again_days: 3,
   members: [member("u1", { role: "owner" })],
   history: [],
@@ -78,16 +79,31 @@ describe("applyComplete / applyPostpone", () => {
     const r = applyComplete(early, { by: "u1", now });
     expect(r.due_at.toISOString()).toBe("2026-06-22T00:00:00.000Z");
   });
-  it("sliding the Nth occurrence anchors the next due to it", () => {
+  it("completing a later occurrence records only that one and leaves due_at alone", () => {
     const weekly = base({ interval: { every: 1, unit: "weeks" }, due_at: new Date("2026-06-10T00:00:00Z") });
-    const r = applyComplete(weekly, { by: "u1", now, occurrences: 3 });
-    // occurrences are Jun 10, 17, 24; the next one after the 3rd is Jul 1
-    expect(r.due_at.toISOString()).toBe("2026-07-01T00:00:00.000Z");
-    expect(r.history[0]).toMatchObject({ action: "done", count: 3 });
+    const r = applyComplete(weekly, { by: "u1", now, occurrence: 3 });
+    expect(r.due_at).toEqual(weekly.due_at);
+    expect(r.done_ahead.map((d) => d.toISOString())).toEqual(["2026-06-24T00:00:00.000Z"]);
+    expect(r.history[0]).toMatchObject({ action: "done" });
+    expect(r.history[0].occurrence_at?.toISOString()).toBe("2026-06-24T00:00:00.000Z");
+    expect(doneAheadIndices({ ...weekly, done_ahead: r.done_ahead })).toEqual([3]);
+  });
+  it("doing the same later occurrence twice is idempotent", () => {
+    const weekly = base({ interval: { every: 1, unit: "weeks" }, due_at: new Date("2026-06-10T00:00:00Z") });
+    const once = applyComplete(weekly, { by: "u1", now, occurrence: 2 });
+    const twice = applyComplete({ ...weekly, done_ahead: once.done_ahead }, { by: "u1", now, occurrence: 2 });
+    expect(twice.done_ahead).toHaveLength(1);
+  });
+  it("completing the current one skips occurrences already done ahead", () => {
+    const weekly = base({ interval: { every: 1, unit: "weeks" }, due_at: new Date("2026-06-10T12:00:00Z"), done_ahead: [new Date("2026-06-17T12:00:00Z")] });
+    const r = applyComplete(weekly, { by: "u1", now: new Date("2026-06-10T12:00:00Z") });
+    // next would be Jun 17 (done ahead) so it lands on Jun 24
+    expect(r.due_at.toISOString()).toBe("2026-06-24T12:00:00.000Z");
+    expect(r.done_ahead).toEqual([]);
   });
   it("an overdue occurrence still restarts the clock from now", () => {
     const overdue = base({ interval: { every: 1, unit: "weeks" }, due_at: new Date("2026-05-01T00:00:00Z") });
-    expect(applyComplete(overdue, { by: "u1", now, occurrences: 1 }).due_at.toISOString()).toBe("2026-06-17T00:00:00.000Z");
+    expect(applyComplete(overdue, { by: "u1", now, occurrence: 1 }).due_at.toISOString()).toBe("2026-06-17T00:00:00.000Z");
   });
   it("complete honours a past doneAt but not a future one", () => {
     const past = new Date("2026-06-01T00:00:00Z");

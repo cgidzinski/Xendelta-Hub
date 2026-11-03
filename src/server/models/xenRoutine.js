@@ -20,9 +20,9 @@ var historySchema = new Schema({
   at: { type: Date, default: Date.now },
   by_user: { type: String },
   note: { type: String, maxlength: 500 },
-  // For "done": how many occurrences this one completion covered (sliding a later
-  // occurrence completes the earlier ones too).
-  count: { type: Number, min: 1, default: 1 },
+  // For "done": which scheduled occurrence this completion was for, when it was done
+  // ahead of its time (a later occurrence completed while earlier ones are still pending).
+  occurrence_at: { type: Date },
   // For "postponed": the due date it was pushed to.
   due_at: { type: Date },
 }, { _id: false });
@@ -41,6 +41,9 @@ var xenRoutineSchema = new Schema({
   due_at: { type: Date, required: true },
   enabled: { type: Boolean, default: true },
   last_notified_at: { type: Date, default: null },
+  // Future occurrences already completed ahead of time. The schedule grid is
+  // due_at + k * interval; these dates are skipped when the grid reaches them.
+  done_ahead: { type: [Date], default: [] },
   remind_again_days: { type: Number, default: 3, min: 1, max: 365 },
   members: { type: [memberSchema], default: [] },
   history: { type: [historySchema], default: [] },

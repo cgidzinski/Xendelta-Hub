@@ -8,7 +8,7 @@ const iso = (days: number) => new Date(now.getTime() + days * 86_400_000).toISOS
 const routine = (over: Partial<Routine> = {}): Routine => ({
     _id: "r1", name: "Filter", category: "", notes: "", interval: { every: 3, unit: "months" },
     last_done_at: null, due_at: iso(1), enabled: true, remind_again_days: 3, status: "ok", is_owner: true,
-    my_notifications: null, members: [], history: [], ...over,
+    my_notifications: null, members: [], history: [], done_ahead_indices: [], ...over,
 });
 
 describe("routineStatusBucket", () => {
@@ -49,6 +49,10 @@ describe("projectOccurrences", () => {
         const occ = projectOccurrences(r, new Date(2026, 0, 1), 120);
         expect(occ.map((o) => o.date.getDate())).toEqual([31, 28, 31, 30]);
     });
+    it("hides occurrences already completed ahead of time", () => {
+        const occ = projectOccurrences(routine({ ...weekly, due_at: iso(0), done_ahead_indices: [3] }), now);
+        expect(occ.map((o) => o.index)).toEqual([1, 2, 4, 5]);
+    });
     it("is empty when the first due date is beyond the horizon", () => {
         expect(projectOccurrences(routine({ due_at: iso(90) }), now)).toHaveLength(0);
     });
@@ -70,6 +74,17 @@ describe("pendingOccurrences", () => {
     });
 });
 
+describe("pendingOccurrences simplified", () => {
+    it("keeps only each routine's current occurrence", () => {
+        const list = [
+            routine({ _id: "w", interval: { every: 1, unit: "weeks" }, due_at: iso(1) }),
+            routine({ _id: "m", interval: { every: 1, unit: "months" }, due_at: iso(3) }),
+        ];
+        const out = pendingOccurrences(list, now, 30, true);
+        expect(out.map((o) => `${o.routine._id}:${o.index}`)).toEqual(["w:1", "m:1"]);
+    });
+});
+
 describe("recentCompletions", () => {
     it("flattens done entries within the window, newest first", () => {
         const list = [
@@ -84,6 +99,5 @@ describe("recentCompletions", () => {
         expect(out.map((c) => c.routineName)).toEqual(["B", "A"]);
         expect(out[1].by_username).toBe("sam");
         expect(out[0].note).toBe("new one");
-        expect(out[0].count).toBe(1);
     });
 });

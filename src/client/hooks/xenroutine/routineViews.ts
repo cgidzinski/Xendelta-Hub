@@ -64,16 +64,25 @@ export function projectOccurrences(
     for (let i = 0; i < cap; i++) {
         const date = i === 0 ? first : addInterval(first, routine.interval, i);
         if (date.getTime() > limit) break;
+        // Occurrences already completed ahead of time are not pending any more.
+        if (routine.done_ahead_indices.includes(i + 1)) continue;
         out.push({ routine, index: i + 1, date });
     }
     return out;
 }
 
-/** What the Overview "Pending" list shows: every occurrence of enabled routines up to the horizon, soonest first. */
-export function pendingOccurrences(routines: Routine[], now: Date = new Date(), horizonDays = OVERVIEW_HORIZON_DAYS): Occurrence[] {
+/**
+ * What the Overview "Pending" list shows: every occurrence of enabled routines up to the
+ * horizon, soonest first. In simplified mode only each routine's current occurrence (the
+ * real due date) is kept.
+ */
+export function pendingOccurrences(
+    routines: Routine[], now: Date = new Date(), horizonDays = OVERVIEW_HORIZON_DAYS, simplified = false,
+): Occurrence[] {
     return routines
         .filter((r) => r.enabled)
         .flatMap((r) => projectOccurrences(r, now, horizonDays))
+        .filter((o) => !simplified || o.index === 1)
         .sort((a, b) => a.date.getTime() - b.date.getTime() || a.index - b.index);
 }
 
@@ -83,7 +92,8 @@ export interface Completion {
     at: string;
     by_username: string | null;
     note?: string;
-    count: number;
+    /** When the completion was for a later occurrence done ahead of time. */
+    occurrenceAt?: string;
 }
 
 /** "done" history entries from the last `days` days across all routines, newest first. */
@@ -94,7 +104,7 @@ export function recentCompletions(routines: Routine[], days = OVERVIEW_HORIZON_D
         for (const h of r.history) {
             if (h.action !== "done") continue;
             if (new Date(h.at).getTime() < cutoff) continue;
-            out.push({ routineId: r._id, routineName: r.name, at: h.at, by_username: h.by_username ?? null, note: h.note, count: h.count ?? 1 });
+            out.push({ routineId: r._id, routineName: r.name, at: h.at, by_username: h.by_username ?? null, note: h.note, occurrenceAt: h.occurrence_at });
         }
     }
     return out.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());

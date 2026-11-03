@@ -30,33 +30,30 @@ const BUCKETS: { bucket: Exclude<Bucket, "later">; title: string }[] = [
 // How long the exit animation runs before the list is refetched; must cover Collapse's timeout.
 const EXIT_MS = 350;
 
-function PendingCard({ occ, leaving, onCompleted }: {
-    occ: Occurrence;
-    leaving: boolean;
-    onCompleted: (routineId: string, upToIndex: number) => void;
-}) {
+function PendingCard({ occ }: { occ: Occurrence }) {
     const { routine, index, date } = occ;
     const { enqueueSnackbar } = useSnackbar();
     const confirm = useConfirm();
     const complete = useCompleteRoutine();
+    const invalidate = useInvalidateRoutines();
+    const [leaving, setLeaving] = useState(false);
     const projected = index > 1;
 
-    // Resolves once the server has recorded the completion, then hands over to the list to
-    // collapse this card (and any earlier occurrences it also completed) before refetching,
-    // so the slid handle stays put until the card is gone. Rejects on failure so the slider
-    // springs back.
+    // Each occurrence is its own completion. Resolves once the server has recorded it, then
+    // the card collapses and only afterwards is the list refetched, so the slid handle stays
+    // put until the card is gone. Rejects on failure so the slider springs back.
     const handleComplete = async () => {
         try {
-            await complete.mutateAsync({ id: routine._id, occurrences: index });
+            await complete.mutateAsync({ id: routine._id, occurrence: index, expected_due_at: routine.due_at });
         } catch (e: any) {
             enqueueSnackbar(e?.response?.data?.message ?? "Couldn't mark as done", { variant: "error" });
+            if (e?.response?.status === 409) void invalidate();
             throw e;
         }
-        enqueueSnackbar(
-            index > 1 ? `“${routine.name}” marked as done (${index} occurrences)` : `“${routine.name}” marked as done`,
-            { variant: "success" },
-        );
-        onCompleted(routine._id, index);
+        enqueueSnackbar(`“${routine.name}” marked as done`, { variant: "success" });
+        setLeaving(true);
+        // A timer rather than onExited so the refetch still happens if the user navigates away.
+        setTimeout(() => { void invalidate(); }, EXIT_MS);
     };
 
     return (
@@ -73,21 +70,16 @@ function PendingCard({ occ, leaving, onCompleted }: {
                             {!projected && ` · ${routine.last_done_at
                                 ? `last done ${formatDistanceToNowStrict(new Date(routine.last_done_at), { addSuffix: true })}`
                                 : "never marked done"}`}
-                            {projected && ` · upcoming (#${index})`}
+                            {projected && " · upcoming"}
                         </Typography>
                     </Box>
                     <RoutineMenu routine={routine} variant="overview" allowPostpone={!projected} />
                 </Stack>
                 <Box sx={{ mt: 1.5 }}>
                     <SlideToComplete
-                        label={projected ? `Slide to complete ${index} occurrences` : undefined}
                         onComplete={handleComplete}
                         onKeyboardActivate={async () => {
-                            if (await confirm({
-                                title: "Mark as done",
-                                message: projected ? `Mark “${routine.name}” done, including the ${index - 1} before this one?` : `Mark “${routine.name}” as done?`,
-                                confirmLabel: "Done", destructive: false,
-                            })) {
+                            if (await confirm({ title: "Mark as done", message: `Mark “${routine.name}” (${format(date, "PP")}) as done?`, confirmLabel: "Done", destructive: false })) {
                                 handleComplete().catch(() => {});
                             }
                         }}
@@ -104,23 +96,18 @@ export default function Overview() {
     const invalidate = useInvalidateRoutines();
     const [filter, setFilter] = useState<Filter>("pending");
     const [horizonDays, setHorizonDays] = useState<number>(HORIZON_OPTIONS[0].days);
-    // routineId -> highest occurrence index just completed. Those cards collapse out; the
-    // entry is cleared once the refetch has replaced them with their new schedule.
-    const [exitUpTo, setExitUpTo] = useState<Record<string, number>>({});
-
-    const pending = useMemo(() => pendingOccurrences(routines, new Date(), horizonDays), [routines, horizonDays]);
-    const completions = useMemo(() => recentCompletions(routines), [routines]);
-
-    const onCompleted = (routineId: string, upToIndex: number) => {
-        setExitUpTo((m) => ({ ...m, [routineId]: Math.max(m[routineId] ?? 0, upToIndex) }));
-        // A timer rather than a Collapse callback so the refetch still happens if the user navigates away.
-        setTimeout(() => {
-            void invalidate().then(() => setExitUpTo((m) => {
-                const { [routineId]: _gone, ...rest } = m;
-                return rest;
-            }));
-        }, EXIT_MS);
+    // Simplified shows one card per routine (its current due date); detailed shows every
+    // occurrence in the window. Remembered per browser, never required.
+    const [simplified, setSimplified] = useState<boolean>(() => {
+        try { return localStorage.getItem("xenroutine:simplified") === "1"; } catch { return false; }
+    });
+    const changeSimplified = (v: boolean) => {
+        setSimplified(v);
+        try { localStorage.setItem("xenroutine:simplified", v ? "1" : "0"); } catch { /* storage unavailable */ }
     };
+
+    const pending = useMemo(() => pendingOccurrences(routines, new Date(), horizonDays, simplified), [routines, horizonDays, simplified]);
+    const completions = useMemo(() => recentCompletions(routines), [routines]);
 
     if (isLoading) return <ListSkeleton rows={4} height={140} />;
     if (isError) return <ErrorDisplay error={error as Error} onRetry={() => refetch()} />;
@@ -142,12 +129,7 @@ export default function Overview() {
     const renderCards = (items: Occurrence[]) => items.map((o) => (
         // Keyed by due date and index: after a completion a routine comes back with a new
         // due_at and must mount as fresh, unlocked cards.
-        <PendingCard
-            key={`${o.routine._id}:${o.routine.due_at}:${o.index}`}
-            occ={o}
-            leaving={(exitUpTo[o.routine._id] ?? 0) >= o.index}
-            onCompleted={onCompleted}
-        />
+        <PendingCard key={`${o.routine._id}:${o.routine.due_at}:${o.index}`} occ={o} />
     ));
 
     // Beyond the first 30 days, group by calendar month rather than one long list.
@@ -166,6 +148,13 @@ export default function Overview() {
                     <ToggleButton value="completed">Completed</ToggleButton>
                     <ToggleButton value="all">All</ToggleButton>
                 </ToggleButtonGroup>
+                {showPending && (
+                    <ToggleButtonGroup exclusive size="small" value={simplified ? "simple" : "detailed"}
+                        onChange={(_, v) => { if (v) changeSimplified(v === "simple"); }}>
+                        <ToggleButton value="simple">Simplified</ToggleButton>
+                        <ToggleButton value="detailed">Every occurrence</ToggleButton>
+                    </ToggleButtonGroup>
+                )}
                 {showPending && (
                     <TextField select size="small" label="Look ahead" value={horizonDays}
                         onChange={(e) => setHorizonDays(Number(e.target.value))} sx={{ minWidth: 140 }}>
@@ -216,9 +205,9 @@ export default function Overview() {
                                 <Card key={`${c.routineId}:${c.at}:${i}`} variant="outlined" sx={{ p: 1.5, display: "flex", alignItems: "center", gap: 1.5 }}>
                                     <CheckCircleOutlineIcon color="success" fontSize="small" />
                                     <Box sx={{ minWidth: 0 }}>
-                                        <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{c.routineName}{c.count > 1 ? ` × ${c.count}` : ""}</Typography>
+                                        <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{c.routineName}</Typography>
                                         <Typography variant="caption" color="text.secondary">
-                                            {format(new Date(c.at), "PP")}{c.by_username ? ` · ${c.by_username}` : ""}{c.note ? ` · ${c.note}` : ""}
+                                            {format(new Date(c.at), "PP")}{c.occurrenceAt ? ` (for ${format(new Date(c.occurrenceAt), "PP")})` : ""}{c.by_username ? ` · ${c.by_username}` : ""}{c.note ? ` · ${c.note}` : ""}
                                         </Typography>
                                     </Box>
                                 </Card>

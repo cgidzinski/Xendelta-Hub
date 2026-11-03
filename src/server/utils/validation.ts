@@ -815,8 +815,10 @@ export const updateXenRoutineSchema = z.object({
 
 export const completeXenRoutineSchema = z.object({
   done_at: z.string().datetime({ offset: true }).optional(),
-  // Sliding the Nth upcoming occurrence completes it and every earlier one (N >= 1).
-  occurrences: z.number().int().min(1).max(400).optional(),
+  // Which upcoming occurrence is being completed (1 = the current due date). Sent with the
+  // due_at the client saw so a stale view can't complete the wrong occurrence.
+  occurrence: z.number().int().min(1).max(400).optional(),
+  expected_due_at: z.string().datetime({ offset: true }).optional(),
   note: z.string().trim().max(500).optional(),
 });
 

@@ -21,7 +21,8 @@ export interface RoutineHistoryEntry {
     by_username?: string | null;
     note?: string;
     due_at?: string;
-    count?: number;
+    /** Set when a later occurrence was completed ahead of its time. */
+    occurrence_at?: string;
 }
 
 export interface Routine {
@@ -35,6 +36,8 @@ export interface Routine {
     enabled: boolean;
     remind_again_days: number;
     status: DueStatus;
+    /** Positions (2 = the occurrence after due_at) already completed ahead of time; hidden from the projection. */
+    done_ahead_indices: number[];
     is_owner: boolean;
     my_notifications: { channels: RoutineChannels; muted: boolean } | null;
     members: RoutineMember[];
@@ -91,8 +94,10 @@ export const useDeleteRoutine = () =>
 // first and then calls useInvalidateRoutines, otherwise the card would vanish mid-slide.
 export const useCompleteRoutine = () =>
     useMutation({
-        mutationFn: (v: { id: string; note?: string; done_at?: string; occurrences?: number }) =>
-            apiClient.post(`${base}/${v.id}/complete`, { note: v.note, done_at: v.done_at, occurrences: v.occurrences }),
+        mutationFn: (v: { id: string; note?: string; done_at?: string; occurrence?: number; expected_due_at?: string }) =>
+            apiClient.post(`${base}/${v.id}/complete`, {
+                note: v.note, done_at: v.done_at, occurrence: v.occurrence, expected_due_at: v.expected_due_at,
+            }),
     });
 
 export function useInvalidateRoutines() {
