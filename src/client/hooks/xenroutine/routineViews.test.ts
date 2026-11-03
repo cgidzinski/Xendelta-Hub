@@ -53,6 +53,11 @@ describe("projectOccurrences", () => {
         const occ = projectOccurrences(routine({ ...weekly, due_at: iso(0), done_ahead_indices: [3] }), now);
         expect(occ.map((o) => o.index)).toEqual([1, 2, 4, 5]);
     });
+    it("tolerates a server response without done_ahead_indices", () => {
+        const r = routine({ ...weekly, due_at: iso(0) });
+        delete (r as Partial<Routine>).done_ahead_indices;
+        expect(projectOccurrences(r, now)).toHaveLength(5);
+    });
     it("is empty when the first due date is beyond the horizon", () => {
         expect(projectOccurrences(routine({ due_at: iso(90) }), now)).toHaveLength(0);
     });

@@ -37,7 +37,7 @@ export interface Routine {
     remind_again_days: number;
     status: DueStatus;
     /** Positions (2 = the occurrence after due_at) already completed ahead of time; hidden from the projection. */
-    done_ahead_indices: number[];
+    done_ahead_indices?: number[];
     is_owner: boolean;
     my_notifications: { channels: RoutineChannels; muted: boolean } | null;
     members: RoutineMember[];

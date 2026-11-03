@@ -83,7 +83,7 @@ export function occurrenceDate(routine: Pick<RoutineLike, "due_at" | "interval">
  * date arithmetic (timezones, DST) to know which projected occurrences to hide.
  */
 export function doneAheadIndices(routine: Pick<RoutineLike, "due_at" | "interval" | "done_ahead">, max = 400): number[] {
-  if (routine.done_ahead.length === 0) return [];
+  if (!routine.done_ahead || routine.done_ahead.length === 0) return [];
   const wanted = new Set(routine.done_ahead.map((d) => d.getTime()));
   const out: number[] = [];
   for (let n = 2; n <= max && out.length < wanted.size; n++) {

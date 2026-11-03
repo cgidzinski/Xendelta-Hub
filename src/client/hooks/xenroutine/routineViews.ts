@@ -65,7 +65,8 @@ export function projectOccurrences(
         const date = i === 0 ? first : addInterval(first, routine.interval, i);
         if (date.getTime() > limit) break;
         // Occurrences already completed ahead of time are not pending any more.
-        if (routine.done_ahead_indices.includes(i + 1)) continue;
+        // (?? [] because a server that predates this field simply omits it)
+        if ((routine.done_ahead_indices ?? []).includes(i + 1)) continue;
         out.push({ routine, index: i + 1, date });
     }
     return out;
