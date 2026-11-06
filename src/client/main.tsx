@@ -90,6 +90,11 @@ import GroupActivityLog from "./routes/Internal/Xensplit/GroupActivityLog";
 import XenRoutine from "./routes/Internal/XenRoutine/XenRoutine";
 import XenRoutineOverview from "./routes/Internal/XenRoutine/Overview";
 import XenRoutineRoutines from "./routes/Internal/XenRoutine/Routines";
+
+// Routes - XenKitchen
+import XenKitchen from "./routes/Internal/XenKitchen/XenKitchen";
+import XenKitchenItemDetail from "./routes/Internal/XenKitchen/ItemDetail";
+import XenKitchenPublic from "./routes/External/XenKitchenPublic/XenKitchenPublic";
 // Routes - XenBudget
 import XenBudgetBooksList from "./routes/Internal/XenBudget/BooksList";
 import XenBudgetBookDetail from "./routes/Internal/XenBudget/BookDetail";
@@ -186,6 +191,7 @@ const router = createBrowserRouter(
       <Route path="/xenbox/:shareToken" element={<XenBoxDownload />} errorElement={<ErrorPage />} />
       <Route path="/x/:slug" element={<XenLinkRedirect />} errorElement={<ErrorPage />} />
       <Route path="/recipaint/:id" element={<RecipaintPublic />} errorElement={<ErrorPage />} />
+      <Route path="/k/:token" element={<XenKitchenPublic />} errorElement={<ErrorPage />} />
       {/* Internal routes - require authentication */}
       <Route
         path="/internal"
@@ -252,6 +258,8 @@ const router = createBrowserRouter(
           <Route path="overview" element={<XenRoutineOverview />} />
           <Route path="routines" element={<XenRoutineRoutines />} />
         </Route>
+        <Route path="xenkitchen" element={<XenKitchen />} />
+        <Route path="xenkitchen/:id" element={<XenKitchenItemDetail />} />
         <Route path="xenbudget">
           <Route index element={<Navigate to="books" replace />} />
           <Route path="books" element={<XenBudgetBooksList />} />

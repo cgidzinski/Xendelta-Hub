@@ -6,7 +6,7 @@
 
 import multer from "multer";
 import { Request } from "express";
-import { MAX_FILE_SIZE, MAX_BLOG_ASSET_SIZE, MAX_RECIPAINT_ASSET_SIZE, MAX_XENSPLIT_IMAGE_SIZE, MAX_XENBUDGET_IMAGE_SIZE, ALLOWED_IMAGE_MIMES } from "../constants";
+import { MAX_FILE_SIZE, MAX_BLOG_ASSET_SIZE, MAX_RECIPAINT_ASSET_SIZE, MAX_XENSPLIT_IMAGE_SIZE, MAX_XENBUDGET_IMAGE_SIZE, MAX_XENKITCHEN_IMAGE_SIZE, ALLOWED_IMAGE_MIMES } from "../constants";
 
 // File filter function for images only
 const imageFileFilter = function (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) {
@@ -69,3 +69,14 @@ export const uploadXenBudgetImages = multer({
   fileFilter: imageFileFilter,
 });
 
+
+// Configured multer instance for xenkitchen photos (memory storage) - accepts images only.
+// Photos are resized server-side before storage, so the limit is generous for phone cameras.
+export const uploadXenKitchenImages = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_XENKITCHEN_IMAGE_SIZE,
+  },
+  fileFilter: (req, file, cb) =>
+    file.mimetype === "image/webp" ? cb(null, true) : imageFileFilter(req, file, cb),
+});

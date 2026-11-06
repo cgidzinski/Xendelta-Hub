@@ -853,3 +853,83 @@ export const shareXenRoutineSchema = z.object({
 
 export const xenRoutineIdParamSchema = z.object({ id: objectIdSchema });
 export const xenRoutineMemberParamSchema = z.object({ id: objectIdSchema, userId: objectIdSchema });
+
+// ---------- XenKitchen ----------
+
+const optObjectId = z.union([objectIdSchema, z.literal(""), z.null()]).optional();
+const optMinutes = z.number().min(0).max(10000).nullable().optional();
+const shortStr = (max: number) => z.string().max(max).optional();
+
+const xenKitchenIngredientSchema = z.object({
+  _id: objectIdSchema.optional(),
+  name: z.string().max(120).default(""),
+  quantity: shortStr(20),
+  unit: shortStr(30),
+  note: shortStr(120),
+  section: shortStr(60),
+});
+
+const xenKitchenStepSchema = z.object({
+  _id: objectIdSchema.optional(),
+  text: z.string().max(2000),
+  timer_minutes: z.number().min(0).max(1440).nullable().optional(),
+});
+
+const xenKitchenMethodSchema = z.object({
+  _id: objectIdSchema.optional(),
+  method: z.enum(["oven", "microwave", "air_fryer", "stovetop", "grill", "other"]),
+  temp: z.number().min(0).max(1000).nullable().optional(),
+  temp_unit: z.enum(["F", "C"]).optional(),
+  power: shortStr(30),
+  minutes_min: z.number().min(0).max(1440).nullable().optional(),
+  minutes_max: z.number().min(0).max(1440).nullable().optional(),
+  preheat: z.boolean().optional(),
+  steps: z.array(z.string().max(500)).max(20).optional(),
+});
+
+export const xenKitchenItemSchema = z.object({
+  title: z.string().trim().max(120).optional(),
+  description: shortStr(2000),
+  category_id: optObjectId,
+  tags: z.array(z.string().max(30)).max(20).optional(),
+  favorite: z.boolean().optional(),
+  notes: shortStr(4000),
+  servings: z.number().min(0).max(1000).nullable().optional(),
+  prep_minutes: optMinutes,
+  cook_minutes: optMinutes,
+  ingredients: z.array(xenKitchenIngredientSchema).max(100).optional(),
+  steps: z.array(xenKitchenStepSchema).max(100).optional(),
+  brand: shortStr(80),
+  methods: z.array(xenKitchenMethodSchema).max(10).optional(),
+  storage_note: shortStr(500),
+  /** Image ids in the order to show them; the first is the cover. */
+  image_order: z.array(objectIdSchema).max(10).optional(),
+});
+
+const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Colour must be #rrggbb");
+
+export const xenKitchenCategorySchema = z.object({
+  name: z.string().trim().min(1, "A name is required").max(40),
+  icon: z.string().max(30).optional(),
+  color: hexColor.optional(),
+  layout: z.enum(["recipe", "instructions"]).optional(),
+});
+
+export const xenKitchenCategoryUpdateSchema = xenKitchenCategorySchema.partial();
+
+export const xenKitchenCategoryOrderSchema = z.object({
+  ids: z.array(objectIdSchema).max(100),
+});
+
+export const xenKitchenBulkCategorySchema = z.object({
+  ids: z.array(objectIdSchema).min(1).max(500),
+  category_id: z.union([objectIdSchema, z.null()]),
+});
+
+export const xenKitchenBulkDeleteSchema = z.object({
+  ids: z.array(objectIdSchema).min(1).max(500),
+});
+
+export const xenKitchenIdParamSchema = z.object({ id: objectIdSchema });
+export const xenKitchenImageParamSchema = z.object({ id: objectIdSchema, imageId: objectIdSchema });
+export const xenKitchenTokenParamSchema = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{22}$/) });

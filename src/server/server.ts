@@ -36,10 +36,12 @@ app.use("/avatars", express.static("src/server/public/avatars"));
 // /recipaint/:id share link straight through, so OG crawlers get a real preview without
 // putting a Mongo read in front of any other page. Spread the mode rather than passing
 // `undefined`, which would clobber vite-express's own default in development.
+// XenKitchen's /k/:token share links get the same treatment.
 const { recipaintHtmlTransformer } = require("./utils/recipaintOgMeta");
+const { kitchenHtmlTransformer, composeTransformers } = require("./utils/xenKitchenOgMeta");
 ViteExpress.config({
   ...(process.env.NODE_ENV === "production" ? { mode: "production" as const } : {}),
-  transformer: recipaintHtmlTransformer,
+  transformer: composeTransformers(recipaintHtmlTransformer, kitchenHtmlTransformer),
 });
 
 const port = process.env.PORT || "3000";
@@ -117,6 +119,7 @@ require("./routes/xenlink.ts")(app);
 require("./routes/xensplit")(app);
 require("./routes/xenbudget.ts")(app);
 require("./routes/xenroutine.ts")(app);
+require("./routes/xenkitchen.ts")(app);
 require("./routes/casino.ts")(app);
 require("./routes/casinoGames/slots.ts")(app);
 require("./routes/casinoGames/spinmania.ts")(app);

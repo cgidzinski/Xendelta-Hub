@@ -5,6 +5,7 @@ import LinkIcon from "@mui/icons-material/Link";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import CasinoIcon from "@mui/icons-material/Casino";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
+import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
 
 export interface AppRegistryItem {
     key: string;
@@ -61,6 +62,13 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
         icon: EventRepeatIcon,
         path: "/internal/xenroutine",
         description: "Get reminded of recurring chores like filters and oil changes",
+    },
+    {
+        key: "xenkitchen",
+        label: "XenKitchen",
+        icon: RestaurantMenuIcon,
+        path: "/internal/xenkitchen",
+        description: "Save recipes and the cooking instructions off the box",
     },
     // XenCasino hidden from side nav
     {
