@@ -105,32 +105,9 @@ async function createStarterBook(uid: string): Promise<void> {
   }
 }
 
-/**
- * Cleans up duplicate starter books left by the race above, before it was fixed: extra
- * "My recipes" books that only this user is in and that hold nothing. The oldest is kept.
- */
-async function dedupeStarterBooks(uid: string, books: any[]): Promise<boolean> {
-  const starters = books.filter((b) =>
-    b.name === STARTER_BOOK_NAME && !b.default_for && b.members.length === 1 && roleIn(b, uid) === "owner" && !b.share?.enabled);
-  if (starters.length < 2) return false;
-  const counts = await XenKitchenItem.aggregate([
-    { $match: { book_id: { $in: starters.map((b) => b._id) } } },
-    { $group: { _id: "$book_id", n: { $sum: 1 } } },
-  ]).exec();
-  const used = new Set(counts.map((c: any) => String(c._id)));
-  const sorted = [...starters].sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at));
-  const keep = sorted.find((b) => used.has(String(b._id))) ?? sorted[0];
-  const extra = sorted.filter((b) => b !== keep && !used.has(String(b._id))).map((b) => b._id);
-  if (!extra.length) return false;
-  await XenKitchenCategory.deleteMany({ book_id: { $in: extra } }).exec();
-  await XenKitchenBook.deleteMany({ _id: { $in: extra } }).exec();
-  return true;
-}
-
 /** Everyone has at least one book: the first visit makes "My recipes". */
 async function ensureBooks(uid: string): Promise<any[]> {
-  let books = await myBooks(uid);
-  if (books.length && (await dedupeStarterBooks(uid, books))) books = await myBooks(uid);
+  const books = await myBooks(uid);
   if (books.length) return books;
   await createStarterBook(uid);
   return myBooks(uid);
