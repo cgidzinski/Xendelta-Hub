@@ -124,7 +124,9 @@ const KNOWN_UNITS = [
   "litres", "liter", "litre", "l", "pinch", "pinches", "dash", "dashes", "cloves", "clove",
   "cans", "can", "packages", "package", "pkg", "slices", "slice", "sticks", "stick", "bunch",
   "bunches", "handful", "handfuls", "sprigs", "sprig", "pieces", "piece", "quarts", "quart",
-  "qt", "pints", "pint", "pt", "fl oz",
+  "qt", "pints", "pint", "pt", "fl oz", "stalks", "stalk", "heads", "head", "jars", "jar", "bags", "bag",
+  "boxes", "box", "bottles", "bottle", "sheets", "sheet", "leaves", "leaf", "drops", "drop", "scoops", "scoop",
+  "packets", "packet", "dozen", "knobs", "knob", "fillets", "fillet", "rashers", "rasher", "strips", "strip",
 ];
 
 export interface ParsedIngredient { quantity: string; unit: string; name: string; note: string }
@@ -172,6 +174,11 @@ export function parseIngredientLine(line: string): ParsedIngredient | null {
 
   if (!s && !quantity) return null;
   return { quantity, unit, name: s, note };
+}
+
+/** The one-line form the editor shows: "1½ cups flour, sifted". parseIngredientLine reads it back. */
+export function ingredientLine(p: { quantity?: string; unit?: string; name?: string; note?: string }): string {
+  return [p.quantity, p.unit, p.name].filter(Boolean).join(" ") + (p.note ? `, ${p.note}` : "");
 }
 
 export function parseIngredientBlock(text: string): ParsedIngredient[] {

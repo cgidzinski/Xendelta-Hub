@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   EMPTY_FILTERS, activeFilterCount, filtersFromParams, filtersToParams, formatAmount, formatMinutes,
-  normalizeIngredientName, parseAmount, parseIngredientBlock, parseIngredientLine, scaleQuantity, totalMinutes,
+  ingredientLine, normalizeIngredientName, parseAmount, parseIngredientBlock, parseIngredientLine, scaleQuantity, totalMinutes,
 } from "./kitchen";
 
 describe("parseAmount", () => {
@@ -89,5 +89,23 @@ describe("filters <-> params", () => {
     expect(f.maxMinutes).toBeNull();
     expect(filtersFromParams(new URLSearchParams("type=pasta")).layout).toBe("");
     expect(filtersFromParams(new URLSearchParams("type=recipes")).layout).toBe("recipe");
+  });
+});
+
+describe("ingredientLine", () => {
+  it("joins the parts the way people write them", () => {
+    expect(ingredientLine({ quantity: "1 1/2", unit: "cups", name: "flour", note: "sifted" })).toBe("1 1/2 cups flour, sifted");
+    expect(ingredientLine({ quantity: "", unit: "", name: "Salt", note: "" })).toBe("Salt");
+  });
+  it("reads back to the same fields for typical ingredients", () => {
+    for (const p of [
+      { quantity: "2", unit: "tbsp", name: "olive oil", note: "" },
+      { quantity: "1 1/2", unit: "cups", name: "flour", note: "sifted" },
+      { quantity: "3", unit: "", name: "eggs", note: "beaten" },
+      { quantity: "200", unit: "g", name: "butter", note: "" },
+      { quantity: "", unit: "", name: "Salt and pepper", note: "to taste" },
+    ]) {
+      expect(parseIngredientLine(ingredientLine(p))).toEqual(p);
+    }
   });
 });
