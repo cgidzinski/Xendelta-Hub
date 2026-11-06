@@ -33,6 +33,8 @@ export const MAX_XENSPLIT_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB per expense ima
 export const MAX_XENSPLIT_IMAGES_PER_EXPENSE = 10;
 export const MAX_XENBUDGET_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB per item image
 export const MAX_XENBUDGET_IMAGES_PER_ITEM = 10;
+export const MAX_XENKITCHEN_IMAGE_SIZE = 15 * 1024 * 1024; // 15MB per photo (resized on upload)
+export const MAX_XENKITCHEN_IMAGES = 10;
 
 // Image processing constants
 export const AVATAR_WIDTH = 500;

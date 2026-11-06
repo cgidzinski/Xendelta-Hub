@@ -8,6 +8,7 @@ import XenLinkCardBody from "./components/XenLinkCardBody";
 import XenSplitCardBody from "./components/XenSplitCardBody";
 import XenBudgetCardBody from "./components/XenBudgetCardBody";
 import XenRoutineCardBody from "./components/XenRoutineCardBody";
+import XenKitchenCardBody from "./components/XenKitchenCardBody";
 import XenCasinoCardBody from "./components/XenCasinoCardBody";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
 import { usePinnedApps } from "../../../hooks/user/usePinnedApps";
@@ -32,6 +33,7 @@ export default function Home() {
     xensplit: <XenSplitCardBody />,
     xenbudget: <XenBudgetCardBody />,
     xenroutine: <XenRoutineCardBody />,
+    xenkitchen: <XenKitchenCardBody />,
     xencasino: <XenCasinoCardBody />,
   };
 

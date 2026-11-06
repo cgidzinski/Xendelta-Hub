@@ -91,7 +91,7 @@ export type RecipeLoader = (id: string) => Promise<OgRecipeRecord | null>;
 /** This hook sits in front of page rendering, so a slow database must not stall the HTML. */
 export const OG_LOOKUP_TIMEOUT_MS = 500;
 
-function withDeadline<T>(work: Promise<T>, ms: number): Promise<T | null> {
+export function withDeadline<T>(work: Promise<T>, ms: number): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout>;
   const deadline = new Promise<null>((resolve) => {
     timer = setTimeout(() => resolve(null), ms);
