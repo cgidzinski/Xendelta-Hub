@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Badge, Box, Button, Chip, Container, Fab, IconButton, InputAdornment, Menu, MenuItem, Paper, Skeleton, Slide, Stack,
-  TextField, Tooltip, Typography,
+  Tab, Tabs, TextField, Tooltip, Typography,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
@@ -21,7 +21,7 @@ import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import EmptyState from "../../../components/ui/EmptyState";
 import {
   COOK_METHOD_LABELS, KITCHEN_SORTS, activeFilterCount, filtersFromParams, filtersToParams,
-  type KitchenFilters, type KitchenSort,
+  type KitchenFilters, type KitchenLayout, type KitchenSort,
 } from "../../../../shared/xenkitchen/kitchen";
 import {
   useBulkDeleteKitchenItems, useBulkMoveKitchenItems, useKitchenCategories, useKitchenItems, useUpdateKitchenItem,
@@ -102,8 +102,21 @@ export default function XenKitchen() {
   };
 
   const activeCategory = categories.find((c) => c._id === filters.category);
+  // Uncategorised items use the recipe layout, so they count (and filter) as recipes.
+  const layoutCount = (l: KitchenLayout) =>
+    categories.filter((c) => c.layout === l).reduce((n, c) => n + c.count, 0) + (l === "recipe" ? uncategorised : 0);
+  const visibleCategories = filters.layout ? categories.filter((c) => c.layout === filters.layout) : categories;
+  const setLayout = (layout: KitchenLayout | "") => {
+    // A category from the other type would make the list empty, so drop it.
+    const keep = !layout || !activeCategory || activeCategory.layout === layout;
+    const keepNone = filters.category === "none" && layout !== "instructions";
+    setFilters({ ...filters, layout, category: keep && filters.category !== "none" ? filters.category : keepNone ? "none" : "" });
+  };
+  // On the Instructions tab a new item starts as instructions; otherwise only a selected chip pre-picks.
+  const newItemCategory = activeCategory?._id
+    ?? (filters.layout === "instructions" ? visibleCategories[0]?._id ?? null : null);
   const filterCount = activeFilterCount(filters);
-  const anyFilter = filterCount > 0 || !!filters.q || !!filters.category;
+  const anyFilter = filterCount > 0 || !!filters.q || !!filters.category || !!filters.layout;
 
   const chip = (key: string, label: React.ReactNode, onDelete: () => void) => (
     <Chip key={key} label={label} size="small" onDelete={onDelete} />
@@ -148,6 +161,17 @@ export default function XenKitchen() {
         </Button>
       </Stack>
 
+      {/* Recipes vs instructions */}
+      <Tabs
+        value={filters.layout}
+        onChange={(_, v) => setLayout(v)}
+        sx={{ mb: 1.5, minHeight: 40, "& .MuiTab-root": { minHeight: 40, textTransform: "none", fontWeight: 600, fontSize: 15 } }}
+      >
+        <Tab value="" label={<span>All <Box component="span" sx={{ opacity: 0.6 }}>{total}</Box></span>} />
+        <Tab value="recipe" label={<span>Recipes <Box component="span" sx={{ opacity: 0.6 }}>{layoutCount("recipe")}</Box></span>} />
+        <Tab value="instructions" label={<span>Instructions <Box component="span" sx={{ opacity: 0.6 }}>{layoutCount("instructions")}</Box></span>} />
+      </Tabs>
+
       {/* Category strip */}
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
         <Box sx={{ display: "flex", gap: 1, overflowX: "auto", flex: 1, pb: 0.5, scrollbarWidth: "thin" }}>
@@ -155,9 +179,9 @@ export default function XenKitchen() {
             ? Array.from({ length: 5 }, (_, i) => <Skeleton key={i} variant="rounded" width={100} height={36} sx={{ borderRadius: 5, flexShrink: 0 }} />)
             : (
               <>
-                {categoryChip("", "All", total)}
-                {categories.map((c) => categoryChip(c._id, c.name, c.count, c.color, c.icon))}
-                {uncategorised > 0 && categoryChip("none", "Uncategorised", uncategorised)}
+                {categoryChip("", filters.layout ? "All categories" : "All", filters.layout ? layoutCount(filters.layout) : total)}
+                {visibleCategories.map((c) => categoryChip(c._id, c.name, c.count, c.color, c.icon))}
+                {uncategorised > 0 && filters.layout !== "instructions" && categoryChip("none", "Uncategorised", uncategorised)}
               </>
             )}
         </Box>
@@ -231,7 +255,7 @@ export default function XenKitchen() {
             icon={<SearchIcon />}
             title="Nothing matches"
             description="Try another search or clear some filters."
-            action={<Button onClick={() => setFilters({ ...filters, q: "", category: "", favorite: false, maxMinutes: null, method: "", tags: [], ingredients: [] })}>Show everything</Button>}
+            action={<Button onClick={() => setFilters({ ...filters, q: "", layout: "", category: "", favorite: false, maxMinutes: null, method: "", tags: [], ingredients: [] })}>Show everything</Button>}
           />
         ) : (
           <EmptyState
@@ -274,7 +298,7 @@ export default function XenKitchen() {
       <ItemEditor
         open={editorOpen}
         onClose={() => setEditorOpen(false)}
-        defaultCategoryId={activeCategory?._id ?? null}
+        defaultCategoryId={newItemCategory}
         onSaved={(item, created) => { if (created) navigate(`/internal/xenkitchen/${item._id}`); }}
       />
     </Container>

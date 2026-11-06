@@ -76,7 +76,7 @@ describe("totalMinutes / formatMinutes", () => {
 
 describe("filters <-> params", () => {
   it("round-trips and only writes non-defaults", () => {
-    const f = { ...EMPTY_FILTERS, q: "soup", tags: ["quick", "vegan"], favorite: true, method: "oven" as const, maxMinutes: 30, sort: "title" as const };
+    const f = { ...EMPTY_FILTERS, layout: "instructions" as const, q: "soup", tags: ["quick", "vegan"], favorite: true, method: "oven" as const, maxMinutes: 30, sort: "title" as const };
     const p = filtersToParams(f);
     expect(filtersFromParams(p)).toEqual(f);
     expect(filtersToParams(EMPTY_FILTERS).toString()).toBe("");
@@ -87,5 +87,7 @@ describe("filters <-> params", () => {
     expect(f.method).toBe("");
     expect(f.sort).toBe("updated");
     expect(f.maxMinutes).toBeNull();
+    expect(filtersFromParams(new URLSearchParams("type=pasta")).layout).toBe("");
+    expect(filtersFromParams(new URLSearchParams("type=recipes")).layout).toBe("recipe");
   });
 });

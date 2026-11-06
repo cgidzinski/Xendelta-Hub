@@ -33,6 +33,7 @@ export const CATEGORY_COLORS = [
 export interface StarterCategory { name: string; icon: CategoryIcon; color: string; layout: KitchenLayout }
 
 export const STARTER_CATEGORIES: StarterCategory[] = [
+  { name: "Appetizers", icon: "party", color: "#ba68c8", layout: "recipe" },
   { name: "Breakfast", icon: "breakfast", color: "#ffb74d", layout: "recipe" },
   { name: "Lunch", icon: "lunch", color: "#81c784", layout: "recipe" },
   { name: "Dinner", icon: "dinner", color: "#e57373", layout: "recipe" },
@@ -41,7 +42,7 @@ export const STARTER_CATEGORIES: StarterCategory[] = [
   { name: "Desserts", icon: "dessert", color: "#f06292", layout: "recipe" },
   { name: "Baking", icon: "baking", color: "#a1887f", layout: "recipe" },
   { name: "Drinks", icon: "drink", color: "#4fc3f7", layout: "recipe" },
-  { name: "Frozen / Box instructions", icon: "frozen", color: "#7986cb", layout: "instructions" },
+  { name: "Instructions", icon: "frozen", color: "#7986cb", layout: "instructions" },
 ];
 
 export const MAX_KITCHEN_IMAGES = 10;
@@ -218,6 +219,8 @@ export function formatMinuteRange(a?: number | null, b?: number | null): string 
 
 export interface KitchenFilters {
   q: string;
+  /** Recipes or box instructions only; "" for both. */
+  layout: KitchenLayout | "";
   /** Category id, "none" for uncategorised, "" for all. */
   category: string;
   tags: string[];
@@ -229,7 +232,7 @@ export interface KitchenFilters {
 }
 
 export const EMPTY_FILTERS: KitchenFilters = {
-  q: "", category: "", tags: [], ingredients: [], favorite: false, method: "", maxMinutes: null, sort: "updated",
+  q: "", layout: "", category: "", tags: [], ingredients: [], favorite: false, method: "", maxMinutes: null, sort: "updated",
 };
 
 interface ParamsLike { get(name: string): string | null; getAll(name: string): string[] }
@@ -238,8 +241,10 @@ export function filtersFromParams(p: ParamsLike, defaultSort: KitchenSort = "upd
   const method = p.get("method") || "";
   const sort = p.get("sort") || "";
   const max = Number(p.get("max_minutes"));
+  const type = p.get("type");
   return {
     q: (p.get("q") || "").slice(0, 100),
+    layout: type === "recipes" ? "recipe" : type === "instructions" ? "instructions" : "",
     category: p.get("category") || "",
     tags: p.getAll("tag").filter(Boolean).slice(0, 10),
     ingredients: p.getAll("ingredient").filter(Boolean).slice(0, 10),
@@ -253,6 +258,7 @@ export function filtersFromParams(p: ParamsLike, defaultSort: KitchenSort = "upd
 /** Only non-default values are written, so a plain list has a clean URL. */
 export function filtersToParams(f: KitchenFilters, defaultSort: KitchenSort = "updated"): URLSearchParams {
   const p = new URLSearchParams();
+  if (f.layout) p.set("type", f.layout === "recipe" ? "recipes" : "instructions");
   if (f.q) p.set("q", f.q);
   if (f.category) p.set("category", f.category);
   f.tags.forEach((t) => p.append("tag", t));

@@ -263,9 +263,14 @@ export default function ItemEditor({ open, onClose, item, defaultCategoryId = nu
         <Stack spacing={3}>
           {/* Category */}
           <Box>
-            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Category</Typography>
+            {(["recipe", "instructions"] as KitchenLayout[]).map((group) => {
+              const list = categories.filter((c) => c.layout === group);
+              if (!list.length) return null;
+              return (
+            <Box key={group} sx={{ mb: 1.5 }}>
+            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>{group === "recipe" ? "Recipe category" : "Instructions"}</Typography>
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-              {categories.map((c) => {
+              {list.map((c) => {
                 const active = c._id === draft.category_id;
                 return (
                   <Chip
@@ -281,9 +286,12 @@ export default function ItemEditor({ open, onClose, item, defaultCategoryId = nu
                 );
               })}
             </Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+            </Box>
+              );
+            })}
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
               {layout === "instructions"
-                ? "Box instructions: brand, cooking directions and storage. Snap the box, add the temps, toss the box."
+                ? "Instructions: brand, cooking directions and storage. Snap the box, add the temps, toss the box."
                 : "Recipe: servings, times, ingredients and steps."}
             </Typography>
           </Box>

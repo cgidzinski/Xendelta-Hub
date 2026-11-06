@@ -103,6 +103,7 @@ export function applyKitchenFilters(items: any[], f: KitchenFilters, categories:
 
   const out = items.filter((item) => {
     const cat = item.category_id ? String(item.category_id) : "";
+    if (f.layout && layoutFor(item, categories) !== f.layout) return false;
     if (f.category === "none" ? cat && categories.has(cat) : f.category && cat !== f.category) return false;
     if (f.favorite && !item.favorite) return false;
     if (wantTags.length && !wantTags.every((t) => (item.tags || []).includes(t))) return false;

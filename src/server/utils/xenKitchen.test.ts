@@ -44,6 +44,11 @@ describe("applyKitchenFilters", () => {
     expect(ids(applyKitchenFilters(items, { ...EMPTY_FILTERS, category: "c2" }, cats))).toEqual(["i2"]);
     expect(ids(applyKitchenFilters(items, { ...EMPTY_FILTERS, category: "none" }, cats))).toEqual(["i3"]);
   });
+  it("filters recipes vs instructions by the category's layout", () => {
+    expect(ids(applyKitchenFilters(items, { ...EMPTY_FILTERS, layout: "instructions" }, cats))).toEqual(["i2"]);
+    // Uncategorised items count as recipes.
+    expect(ids(applyKitchenFilters(items, { ...EMPTY_FILTERS, layout: "recipe" }, cats))).toEqual(["i1", "i3"]);
+  });
   it("treats an item whose category was deleted as uncategorised", () => {
     const orphan = { ...items[0], _id: "i4", category_id: "gone" };
     expect(ids(applyKitchenFilters([orphan], { ...EMPTY_FILTERS, category: "none" }, cats))).toEqual(["i4"]);

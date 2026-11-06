@@ -20,7 +20,7 @@ import { CategoryIconView } from "./kitchenIcons";
 
 export const LAYOUT_LABELS: Record<KitchenLayout, { label: string; help: string }> = {
   recipe: { label: "Recipe", help: "Servings, times, ingredients and steps" },
-  instructions: { label: "Box instructions", help: "Brand, oven/microwave/air fryer directions and storage — no ingredients" },
+  instructions: { label: "Instructions", help: "Brand, oven/microwave/air fryer directions and storage — no ingredients" },
 };
 
 export function LayoutSelect({ value, onChange, size = "small" }: { value: KitchenLayout; onChange: (v: KitchenLayout) => void; size?: "small" | "medium" }) {
