@@ -67,6 +67,16 @@ function FilterBody({ filters, onChange, onClose }: { filters: KitchenFilters; o
         </TextField>
       </Box>
 
+      <Box>
+        <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Type</Typography>
+        <ToggleButtonGroup exclusive size="small" fullWidth value={filters.layout}
+          onChange={(_, v) => { if (v !== null) set({ layout: v }); }}>
+          <ToggleButton value="">All</ToggleButton>
+          <ToggleButton value="recipe">Recipes</ToggleButton>
+          <ToggleButton value="instructions">Instructions</ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+
       <FormControlLabel
         control={<Switch checked={filters.favorite} onChange={(e) => set({ favorite: e.target.checked })} />}
         label="Favorites only"

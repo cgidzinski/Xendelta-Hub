@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Badge, Box, Button, Chip, Container, Fab, IconButton, InputAdornment, Menu, MenuItem, Paper, Skeleton, Slide, Stack,
-  Tab, Tabs, TextField, Tooltip, Typography,
+  TextField, Tooltip, Typography,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
@@ -154,6 +154,7 @@ export default function XenKitchen() {
     <Chip key={key} label={label} size="small" onDelete={onDelete} />
   );
   const activeChips = [
+    filters.layout && chip("type", filters.layout === "recipe" ? "Recipes only" : "Instructions only", () => setLayout("")),
     filters.favorite && chip("fav", <Stack direction="row" alignItems="center" spacing={0.5}><StarIcon sx={{ fontSize: 14 }} /><span>Favorites</span></Stack>, () => setFilters({ ...filters, favorite: false })),
     filters.maxMinutes && chip("time", `≤ ${filters.maxMinutes} min`, () => setFilters({ ...filters, maxMinutes: null })),
     filters.method && chip("method", COOK_METHOD_LABELS[filters.method], () => setFilters({ ...filters, method: "" })),
@@ -184,7 +185,7 @@ export default function XenKitchen() {
   return (
     <Container maxWidth="lg" sx={{ mt: 3, mb: 12 }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ mb: 2 }}>
-        <Box sx={{ minWidth: 0 }}>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
           <BookSwitcher books={books} value={book} onChange={selectBook} />
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.25, minHeight: 24 }}>
             {currentBook ? (
@@ -217,17 +218,6 @@ export default function XenKitchen() {
         </Stack>
       </Stack>
 
-      {/* Recipes vs instructions */}
-      <Tabs
-        value={filters.layout}
-        onChange={(_, v) => setLayout(v)}
-        sx={{ mb: 1.5, minHeight: 40, "& .MuiTab-root": { minHeight: 40, textTransform: "none", fontWeight: 600, fontSize: 15 } }}
-      >
-        <Tab value="" label={<span>All <Box component="span" sx={{ opacity: 0.6 }}>{total}</Box></span>} />
-        <Tab value="recipe" label={<span>Recipes <Box component="span" sx={{ opacity: 0.6 }}>{layoutCount("recipe")}</Box></span>} />
-        <Tab value="instructions" label={<span>Instructions <Box component="span" sx={{ opacity: 0.6 }}>{layoutCount("instructions")}</Box></span>} />
-      </Tabs>
-
       {/* Category strip — categories belong to a book, so it shows inside one */}
       {!allView && <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
         <Box sx={{ display: "flex", gap: 1, overflowX: "auto", flex: 1, pb: 0.5, scrollbarWidth: "thin" }}>
@@ -235,7 +225,7 @@ export default function XenKitchen() {
             ? Array.from({ length: 5 }, (_, i) => <Skeleton key={i} variant="rounded" width={100} height={36} sx={{ borderRadius: 5, flexShrink: 0 }} />)
             : (
               <>
-                {categoryChip("", filters.layout ? "All categories" : "All", filters.layout ? layoutCount(filters.layout) : total)}
+                {categoryChip("", "All", filters.layout ? layoutCount(filters.layout) : total)}
                 {visibleCategories.map((c) => categoryChip(c._id, c.name, c.count, c.color, c.icon))}
                 {uncategorised > 0 && filters.layout !== "instructions" && categoryChip("none", "Uncategorised", uncategorised)}
               </>
@@ -280,7 +270,7 @@ export default function XenKitchen() {
         </Typography>
         {activeChips}
         {activeChips.length > 0 && (
-          <Button size="small" color="inherit" onClick={() => setFilters({ ...filters, favorite: false, maxMinutes: null, method: "", tags: [], ingredients: [] })}>
+          <Button size="small" color="inherit" onClick={() => setFilters({ ...filters, layout: "", favorite: false, maxMinutes: null, method: "", tags: [], ingredients: [] })}>
             Clear all
           </Button>
         )}
@@ -356,7 +346,13 @@ export default function XenKitchen() {
         <AddIcon />
       </Fab>
 
-      <FilterPanel anchor={filterAnchor} open={!!filterAnchor} onClose={() => setFilterAnchor(null)} filters={filters} onChange={setFilters} />
+      <FilterPanel anchor={filterAnchor} open={!!filterAnchor} onClose={() => setFilterAnchor(null)} filters={filters}
+        onChange={(f) => {
+          // Switching type drops a selected category of the other type, which would leave nothing.
+          const cat = categories.find((c) => c._id === f.category);
+          const clash = f.layout && ((cat && cat.layout !== f.layout) || (f.category === "none" && f.layout === "instructions"));
+          setFilters(clash ? { ...f, category: "" } : f);
+        }} />
       {currentBook && <CategoryDialog open={manageOpen} onClose={() => setManageOpen(false)} bookId={currentBook._id} bookName={currentBook.name} />}
       <BookDialog
         book={currentBook}

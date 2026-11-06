@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Box, Button, Chip, Container, InputAdornment, Stack, Tab, Tabs, TextField, Typography } from "@mui/material";
+import { Box, Button, Chip, Container, InputAdornment, Stack, TextField, Typography } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
 import SearchIcon from "@mui/icons-material/Search";
@@ -10,7 +10,6 @@ import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import EmptyState from "../../../components/ui/EmptyState";
 import { usePublicKitchenBook } from "../../../hooks/xenkitchen/useKitchen";
-import type { KitchenLayout } from "../../../../shared/xenkitchen/kitchen";
 import ItemCard from "../../Internal/XenKitchen/components/ItemCard";
 import { CategoryIconView } from "../../Internal/XenKitchen/components/kitchenIcons";
 
@@ -21,7 +20,6 @@ export default function XenKitchenPublicBook() {
   const theme = useTheme();
   const { isAuthenticated } = useAuth();
   const { data, isLoading, isError, error, refetch } = usePublicKitchenBook(token);
-  const [layout, setLayout] = useState<KitchenLayout | "">("");
   const [category, setCategory] = useState("");
   const [q, setQ] = useState("");
   useTitle(data?.book.name || "XenKitchen");
@@ -29,13 +27,11 @@ export default function XenKitchenPublicBook() {
   const items = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     return (data?.items ?? []).filter((i) =>
-      (!layout || i.layout === layout)
-      && (!category || i.category?._id === category)
+      (!category || i.category?._id === category)
       && words.every((w) => [i.title, i.brand, ...i.tags, ...i.ingredients.map((x) => x.name)].join(" ").toLowerCase().includes(w)));
-  }, [data, layout, category, q]);
+  }, [data, category, q]);
 
-  const cats = (data?.categories ?? []).filter((c) => !layout || c.layout === layout);
-  const countOf = (l: KitchenLayout) => (data?.items ?? []).filter((i) => i.layout === l).length;
+  const cats = data?.categories ?? [];
 
   return (
     <Box sx={{ minHeight: "100vh" }}>
@@ -65,11 +61,6 @@ export default function XenKitchenPublicBook() {
             </Stack>
             {data.book.description && <Typography color="text.secondary" sx={{ mb: 2 }}>{data.book.description}</Typography>}
 
-            <Tabs value={layout} onChange={(_, v) => { setLayout(v); setCategory(""); }} sx={{ mb: 1.5, "& .MuiTab-root": { textTransform: "none", fontWeight: 600 } }}>
-              <Tab value="" label={`All ${data.items.length}`} />
-              <Tab value="recipe" label={`Recipes ${countOf("recipe")}`} />
-              <Tab value="instructions" label={`Instructions ${countOf("instructions")}`} />
-            </Tabs>
             <Box sx={{ display: "flex", gap: 1, overflowX: "auto", mb: 2, pb: 0.5 }}>
               <Chip label="All categories" onClick={() => setCategory("")} variant={category ? "outlined" : "filled"} />
               {cats.map((c) => (

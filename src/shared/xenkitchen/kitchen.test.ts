@@ -80,7 +80,7 @@ describe("filters <-> params", () => {
     const p = filtersToParams(f);
     expect(filtersFromParams(p)).toEqual(f);
     expect(filtersToParams(EMPTY_FILTERS).toString()).toBe("");
-    expect(activeFilterCount(f)).toBe(5);
+    expect(activeFilterCount(f)).toBe(6);
   });
   it("ignores junk values", () => {
     const f = filtersFromParams(new URLSearchParams("method=laser&sort=random&max_minutes=-4"));

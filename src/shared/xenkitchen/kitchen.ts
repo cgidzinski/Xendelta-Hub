@@ -272,5 +272,5 @@ export function filtersToParams(f: KitchenFilters, defaultSort: KitchenSort = "u
 
 /** Number of active filters (search and sort excluded), for the Filters button badge. */
 export function activeFilterCount(f: KitchenFilters): number {
-  return f.tags.length + f.ingredients.length + (f.favorite ? 1 : 0) + (f.method ? 1 : 0) + (f.maxMinutes ? 1 : 0);
+  return (f.layout ? 1 : 0) + f.tags.length + f.ingredients.length + (f.favorite ? 1 : 0) + (f.method ? 1 : 0) + (f.maxMinutes ? 1 : 0);
 }
