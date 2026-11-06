@@ -21,6 +21,7 @@ import { useTitle } from "../../../hooks/useTitle";
 import { useLocalStorageState } from "../../../hooks/useLocalStorageState";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import EmptyState from "../../../components/ui/EmptyState";
+import ErrorDisplay from "../../../components/ErrorDisplay";
 import {
   COOK_METHOD_LABELS, KITCHEN_SORTS, activeFilterCount, filtersFromParams, filtersToParams,
   type KitchenFilters, type KitchenLayout, type KitchenSort,
@@ -94,7 +95,7 @@ export default function XenKitchen() {
   }, [search]);
 
   const { categories, total, uncategorised, isLoading: catsLoading } = useKitchenCategories(book);
-  const { items, isLoading, isFetching } = useKitchenItems(allView ? { ...filters, category: "" } : filters, book);
+  const { items, isLoading, isFetching, isError, error, refetch } = useKitchenItems(allView ? { ...filters, category: "" } : filters, book);
   const favorite = useToggleKitchenFavorite();
   const bulkMove = useBulkMoveKitchenItems();
   const bulkDelete = useBulkDeleteKitchenItems();
@@ -307,7 +308,9 @@ export default function XenKitchen() {
           ))}
       </Box>
 
-      {!isLoading && items.length === 0 && (
+      {isError && <ErrorDisplay error={error} title="Couldn't load your kitchen" onRetry={() => refetch()} />}
+
+      {!isLoading && !isError && items.length === 0 && (
         anyFilter ? (
           <EmptyState
             icon={<SearchIcon />}

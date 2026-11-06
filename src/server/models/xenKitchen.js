@@ -15,6 +15,9 @@ var bookSchema = new Schema({
   icon: { type: String, default: "restaurant", maxlength: 30 },
   color: { type: String, default: "#ff8a65", maxlength: 9 },
   members: { type: [bookMemberSchema], default: [] },
+  // Set on the starter book made automatically for this user. The unique index makes that
+  // creation safe when several first-visit requests arrive at once: only one can insert.
+  default_for: { type: String, default: undefined },
   share: {
     enabled: { type: Boolean, default: false },
     token: { type: String, default: undefined },
@@ -23,6 +26,7 @@ var bookSchema = new Schema({
 });
 
 bookSchema.index({ "members.user_id": 1 });
+bookSchema.index({ default_for: 1 }, { unique: true, sparse: true });
 bookSchema.index({ "share.token": 1 }, { unique: true, sparse: true });
 
 // A category decides which fields its items show. "recipe" is ingredients + steps;

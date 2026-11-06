@@ -115,10 +115,23 @@ export const kitchenKeys = {
 
 const base = "/api/xenkitchen";
 
+/**
+ * Unwraps `{ status, data }`. A response without `data` means something other than the
+ * XenKitchen API answered — typically the web page, while a deploy is still restarting the
+ * server — so say that instead of failing later with "data is undefined".
+ */
+function unwrap<T>(res: { data: ApiResponse<T> | string }): T {
+  const body = res.data;
+  if (!body || typeof body !== "object" || body.data === undefined) {
+    throw new Error("XenKitchen couldn't reach its server just now. Refresh in a moment.");
+  }
+  return body.data;
+}
+
 export function useKitchenBooks() {
   const { data, isLoading } = useQuery({
     queryKey: kitchenKeys.books(),
-    queryFn: async () => (await apiClient.get<ApiResponse<{ books: KitchenBook[] }>>(`${base}/books`)).data.data!.books,
+    queryFn: async () => unwrap(await apiClient.get<ApiResponse<{ books: KitchenBook[] }>>(`${base}/books`)).books,
   });
   return { books: data ?? [], isLoading };
 }
@@ -127,7 +140,7 @@ export function useKitchenCategories(book: BookScope = "all") {
   const { data, isLoading } = useQuery({
     queryKey: kitchenKeys.categories(book),
     queryFn: async () =>
-      (await apiClient.get<ApiResponse<{ categories: KitchenCategory[]; total: number; uncategorised: number }>>(`${base}/categories`, { params: { book } })).data.data!,
+      unwrap(await apiClient.get<ApiResponse<{ categories: KitchenCategory[]; total: number; uncategorised: number }>>(`${base}/categories`, { params: { book } })),
     placeholderData: keepPreviousData,
   });
   return {
@@ -145,7 +158,7 @@ export function useKitchenItems(filters: KitchenFilters, book: BookScope = "all"
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: kitchenKeys.items(params),
     queryFn: async () =>
-      (await apiClient.get<ApiResponse<{ items: KitchenItem[]; total: number }>>(`${base}/items?${params}`)).data.data!,
+      unwrap(await apiClient.get<ApiResponse<{ items: KitchenItem[]; total: number }>>(`${base}/items?${params}`)),
     placeholderData: keepPreviousData,
   });
   return { items: data?.items ?? [], total: data?.total ?? 0, isLoading, isFetching, isError, error, refetch };
@@ -154,7 +167,7 @@ export function useKitchenItems(filters: KitchenFilters, book: BookScope = "all"
 export function useKitchenItem(id: string | undefined) {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: kitchenKeys.item(id ?? ""),
-    queryFn: async () => (await apiClient.get<ApiResponse<{ item: KitchenItem }>>(`${base}/items/${id}`)).data.data!.item,
+    queryFn: async () => unwrap(await apiClient.get<ApiResponse<{ item: KitchenItem }>>(`${base}/items/${id}`)).item,
     enabled: !!id,
   });
   return { item: data, isLoading, isError, error, refetch };
@@ -164,7 +177,7 @@ export function usePublicKitchenItem(token: string | undefined) {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: kitchenKeys.public(token ?? ""),
     queryFn: async () =>
-      (await apiClient.get<ApiResponse<{ item: KitchenItem; owner: string | null }>>(`${base}/public/${token}`)).data.data!,
+      unwrap(await apiClient.get<ApiResponse<{ item: KitchenItem; owner: string | null }>>(`${base}/public/${token}`)),
     enabled: !!token,
     retry: false,
   });
@@ -181,7 +194,7 @@ export function useIngredientSuggestions(q: string, enabled = true) {
   const { data, isFetching } = useQuery({
     queryKey: kitchenKeys.suggest(debounced.toLowerCase()),
     queryFn: async () =>
-      (await apiClient.get<ApiResponse<{ suggestions: IngredientSuggestion[] }>>(`${base}/ingredients/suggest`, { params: { q: debounced } })).data.data!.suggestions,
+      unwrap(await apiClient.get<ApiResponse<{ suggestions: IngredientSuggestion[] }>>(`${base}/ingredients/suggest`, { params: { q: debounced } })).suggestions,
     enabled,
     staleTime: 60_000,
     placeholderData: keepPreviousData,
@@ -193,7 +206,7 @@ export function useKitchenTags() {
   const { data } = useQuery({
     queryKey: kitchenKeys.tags(),
     queryFn: async () =>
-      (await apiClient.get<ApiResponse<{ tags: Array<{ tag: string; count: number }> }>>(`${base}/tags`)).data.data!.tags,
+      unwrap(await apiClient.get<ApiResponse<{ tags: Array<{ tag: string; count: number }> }>>(`${base}/tags`)).tags,
     staleTime: 60_000,
   });
   return { tags: data ?? [] };
@@ -214,7 +227,7 @@ function useKitchenMutation<TVars, TResult>(fn: (v: TVars) => Promise<TResult>) 
 }
 
 type ItemResult = { item: KitchenItem };
-const itemData = (r: { data: ApiResponse<ItemResult> }) => r.data.data!;
+const itemData = (r: { data: ApiResponse<ItemResult> }) => unwrap(r);
 
 export const useCreateKitchenItem = () =>
   useKitchenMutation(async (input: KitchenItemInput) => itemData(await apiClient.post(`${base}/items`, input)));
@@ -268,7 +281,7 @@ export interface PublicBook {
 export function usePublicKitchenBook(token: string | undefined) {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: kitchenKeys.publicBook(token ?? ""),
-    queryFn: async () => (await apiClient.get<ApiResponse<PublicBook>>(`${base}/public/book/${token}`)).data.data!,
+    queryFn: async () => unwrap(await apiClient.get<ApiResponse<PublicBook>>(`${base}/public/book/${token}`)),
     enabled: !!token,
     retry: false,
   });
@@ -279,7 +292,7 @@ export function usePublicKitchenBookItem(token: string | undefined, itemId: stri
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: kitchenKeys.publicBookItem(token ?? "", itemId ?? ""),
     queryFn: async () =>
-      (await apiClient.get<ApiResponse<{ item: KitchenItem; book: { name: string } }>>(`${base}/public/book/${token}/items/${itemId}`)).data.data!,
+      unwrap(await apiClient.get<ApiResponse<{ item: KitchenItem; book: { name: string } }>>(`${base}/public/book/${token}/items/${itemId}`)),
     enabled: !!token && !!itemId,
     retry: false,
   });
@@ -299,7 +312,7 @@ export const useCopyKitchenItem = () =>
     itemData(await apiClient.post(`${base}/items/${v.id}/copy`, { book_id: v.book_id })));
 
 type BookResult = { book: KitchenBook };
-const bookData = (r: { data: ApiResponse<BookResult> }) => r.data.data!;
+const bookData = (r: { data: ApiResponse<BookResult> }) => unwrap(r);
 
 export const useCreateKitchenBook = () =>
   useKitchenMutation(async (v: { name: string; icon?: string; color?: string; description?: string }) =>
