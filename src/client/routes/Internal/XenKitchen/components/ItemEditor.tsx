@@ -24,8 +24,8 @@ import {
   type CookMethod, type KitchenLayout,
 } from "../../../../../shared/xenkitchen/kitchen";
 import {
-  useCreateKitchenItem, useDeleteKitchenImage, useIngredientSuggestions, useKitchenCategories, useKitchenTags,
-  useUpdateKitchenItem, useUploadKitchenImages,
+  canEditBook, useCreateKitchenItem, useDeleteKitchenImage, useIngredientSuggestions, useKitchenBooks, useKitchenCategories,
+  useKitchenTags, useUpdateKitchenItem, useUploadKitchenImages,
   type KitchenItem, type KitchenItemInput, type KitchenMethod,
 } from "../../../../hooks/xenkitchen/useKitchen";
 import { CategoryIconView, MethodIconView } from "./kitchenIcons";
@@ -157,15 +157,25 @@ interface ItemEditorProps {
   /** Edit this item; omit to create a new one. */
   item?: KitchenItem | null;
   defaultCategoryId?: string | null;
+  /** Book a new item goes into; null asks (the picker starts on the first book you can edit). */
+  defaultBookId?: string | null;
   onSaved?: (item: KitchenItem, created: boolean) => void;
 }
 
-export default function ItemEditor({ open, onClose, item, defaultCategoryId = null, onSaved }: ItemEditorProps) {
+export default function ItemEditor({ open, onClose, item, defaultCategoryId = null, defaultBookId = null, onSaved }: ItemEditorProps) {
   const theme = useTheme();
   const phone = useMediaQuery(theme.breakpoints.down("sm"));
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
-  const { categories } = useKitchenCategories();
+  const { books } = useKitchenBooks();
+  const editableBooks = books.filter((b) => canEditBook(b.my_role));
+  const [bookId, setBookId] = useState<string>("");
+  useEffect(() => {
+    if (!open) return;
+    setBookId(item?.book_id ?? defaultBookId ?? editableBooks[0]?._id ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, item?._id, defaultBookId, books.length]);
+  const { categories } = useKitchenCategories(bookId || "all");
   const create = useCreateKitchenItem();
   const update = useUpdateKitchenItem();
   const upload = useUploadKitchenImages();
@@ -224,7 +234,7 @@ export default function ItemEditor({ open, onClose, item, defaultCategoryId = nu
         for (const img of removed) await deleteImage.mutateAsync({ id: item._id, imageId: img._id });
         saved = (await update.mutateAsync({ id: item._id, patch: { ...input, image_order: photos.map((p) => p._id) } })).item;
       } else {
-        saved = (await create.mutateAsync(input)).item;
+        saved = (await create.mutateAsync({ ...input, book_id: bookId })).item;
       }
       if (newFiles.length) {
         try {
@@ -243,7 +253,7 @@ export default function ItemEditor({ open, onClose, item, defaultCategoryId = nu
     }
   };
 
-  const canSave = !saving && (draft.title.trim() !== "" || totalPhotos > 0);
+  const canSave = !saving && !!bookId && (draft.title.trim() !== "" || totalPhotos > 0);
 
   return (
     <Dialog open={open} onClose={requestClose} fullScreen={phone} fullWidth maxWidth="md"
@@ -261,6 +271,19 @@ export default function ItemEditor({ open, onClose, item, defaultCategoryId = nu
 
       <DialogContent sx={{ px: { xs: 2, sm: 3 }, py: 3 }}>
         <Stack spacing={3}>
+          {/* Book (new items only; existing ones move from the item menu) */}
+          {!item && editableBooks.length > 1 && (
+            <TextField select label="Recipe book" value={bookId} size="small"
+              onChange={(e) => { setBookId(e.target.value); set({ category_id: null }); }} sx={{ maxWidth: 320 }}>
+              {editableBooks.map((b) => (
+                <MenuItem key={b._id} value={b._id}>
+                  <CategoryIconView icon={b.icon} sx={{ fontSize: 18, color: b.color, mr: 1, verticalAlign: "middle" }} />
+                  {b.name}{b.members.length > 1 ? ` · shared with ${b.members.length - 1}` : ""}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+
           {/* Category */}
           <Box>
             {(["recipe", "instructions"] as KitchenLayout[]).map((group) => {

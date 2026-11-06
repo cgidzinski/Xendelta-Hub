@@ -11,6 +11,8 @@ import {
 // needs its Open Graph tags in the HTML the server sends.
 
 export const XENKITCHEN_SHARE_PATH = /^\/k\/([A-Za-z0-9_-]{22})$/;
+/** A shared book, or one item opened from it. */
+export const XENKITCHEN_BOOK_PATH = /^\/k\/b\/([A-Za-z0-9_-]{22})(?:\/([a-f0-9]{24}))?$/i;
 
 export interface OgKitchenItem {
   title?: string | null;
@@ -47,14 +49,18 @@ export function buildKitchenMetaTags(item: OgKitchenItem, pageUrl: string): stri
 
 /** Resolves only shared items; anything else is null. */
 export type KitchenLoader = (token: string) => Promise<OgKitchenItem | null>;
+/** Resolves a shared book (or an item in it) to preview data; null if not shared. */
+export type KitchenBookLoader = (token: string, itemId?: string) => Promise<OgKitchenItem | null>;
 
-export function createKitchenHtmlTransformer(load: KitchenLoader) {
+export function createKitchenHtmlTransformer(load: KitchenLoader, loadBook: KitchenBookLoader = async () => null) {
   return async function kitchenHtmlTransformer(html: string, req: express.Request): Promise<string> {
     const match = XENKITCHEN_SHARE_PATH.exec(req.path);
-    if (!match) return html;
+    const bookMatch = match ? null : XENKITCHEN_BOOK_PATH.exec(req.path);
+    if (!match && !bookMatch) return html;
     let item: OgKitchenItem | null;
     try {
-      item = await withDeadline(load(match[1]), OG_LOOKUP_TIMEOUT_MS);
+      const work = match ? load(match[1]) : loadBook(bookMatch![1], bookMatch![2]);
+      item = await withDeadline(work, OG_LOOKUP_TIMEOUT_MS);
     } catch {
       return html;
     }
@@ -73,7 +79,21 @@ const loadSharedItem: KitchenLoader = (token) => {
     .exec();
 };
 
-export const kitchenHtmlTransformer = createKitchenHtmlTransformer(loadSharedItem);
+const loadSharedBook: KitchenBookLoader = async (token, itemId) => {
+  const { XenKitchenBook, XenKitchenItem } = require("../models/xenKitchen");
+  const book = await XenKitchenBook.findOne({ "share.token": token, "share.enabled": true })
+    .select("name description").maxTimeMS(OG_LOOKUP_TIMEOUT_MS).lean().exec();
+  if (!book) return null;
+  if (itemId) {
+    return XenKitchenItem.findOne({ _id: itemId, book_id: book._id })
+      .select("title description brand images").maxTimeMS(OG_LOOKUP_TIMEOUT_MS).lean().exec();
+  }
+  const cover = await XenKitchenItem.findOne({ book_id: book._id, "images.0": { $exists: true } })
+    .sort({ updated_at: -1 }).select("images").maxTimeMS(OG_LOOKUP_TIMEOUT_MS).lean().exec();
+  return { title: book.name, description: book.description || "A recipe book on XenKitchen.", images: cover?.images ?? [] };
+};
+
+export const kitchenHtmlTransformer = createKitchenHtmlTransformer(loadSharedItem, loadSharedBook);
 
 type Transformer = (html: string, req: express.Request) => string | Promise<string>;
 

@@ -13,6 +13,8 @@ import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
 import DriveFileMoveIcon from "@mui/icons-material/DriveFileMove";
 import DeleteIcon from "@mui/icons-material/Delete";
 import StarIcon from "@mui/icons-material/Star";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import { useTitle } from "../../../hooks/useTitle";
@@ -24,16 +26,27 @@ import {
   type KitchenFilters, type KitchenLayout, type KitchenSort,
 } from "../../../../shared/xenkitchen/kitchen";
 import {
-  useBulkDeleteKitchenItems, useBulkMoveKitchenItems, useKitchenCategories, useKitchenItems, useUpdateKitchenItem,
-  type KitchenItem,
+  canEditBook, useBulkDeleteKitchenItems, useBulkMoveKitchenItems, useKitchenBooks, useKitchenCategories, useKitchenItems,
+  useToggleKitchenFavorite, type KitchenBook, type KitchenItem,
 } from "../../../hooks/xenkitchen/useKitchen";
 import ItemCard from "./components/ItemCard";
 import FilterPanel, { SORT_LABELS } from "./components/FilterPanel";
 import CategoryDialog from "./components/CategoryDialog";
 import ItemEditor from "./components/ItemEditor";
 import { CategoryIconView } from "./components/kitchenIcons";
+import BookSwitcher, { MemberAvatars } from "./components/BookSwitcher";
+import BookDialog from "./components/BookDialog";
 
 const isSort = (v: unknown): v is KitchenSort => KITCHEN_SORTS.includes(v as KitchenSort);
+const isString = (v: unknown): v is string => typeof v === "string";
+
+/** "Only you" · "Shared with 2 others" · "Ann's book · you can edit" · "Ann's book · view only". */
+function bookSubtitle(b: KitchenBook): string {
+  const others = b.members.length - 1;
+  if (b.my_role === "owner") return others ? `Shared with ${others} other${others === 1 ? "" : "s"}` : "Only you";
+  const owner = b.members.find((m) => m.role === "owner")?.username ?? "Someone";
+  return `${owner}'s book · ${b.my_role === "viewer" ? "view only" : "you can edit"}`;
+}
 
 export default function XenKitchen() {
   useTitle("XenKitchen");
@@ -47,9 +60,27 @@ export default function XenKitchen() {
   const [params, setParams] = useSearchParams();
   const [savedSort, setSavedSort] = useLocalStorageState<KitchenSort>("xenkitchen.sort", "updated", isSort);
   const filters = useMemo(() => filtersFromParams(params, savedSort), [params, savedSort]);
-  const setFilters = (f: KitchenFilters) => {
+
+  // The book you're in: ?book= wins (links from notifications), else the last one you used.
+  const { books, isLoading: booksLoading } = useKitchenBooks();
+  const [savedBook, setSavedBook] = useLocalStorageState<string>("xenkitchen.book", "all", isString);
+  const wantedBook = params.get("book") ?? savedBook;
+  const currentBook = books.find((b) => b._id === wantedBook) ?? null;
+  // Until books load, trust the wanted id; after, an unknown id (left the book) falls back to All.
+  const book = booksLoading ? wantedBook : currentBook?._id ?? "all";
+  const allView = book === "all";
+  const canAdd = currentBook ? canEditBook(currentBook.my_role) : books.some((b) => canEditBook(b.my_role));
+
+  const setFilters = (f: KitchenFilters, nextBook: string = book) => {
     if (f.sort !== savedSort) setSavedSort(f.sort);
-    setParams(filtersToParams(f, f.sort), { replace: true });
+    const p = filtersToParams(f, f.sort);
+    if (nextBook !== "all") p.set("book", nextBook);
+    setParams(p, { replace: true });
+  };
+  const selectBook = (id: string) => {
+    setSavedBook(id);
+    setSelected(new Set());
+    setFilters({ ...filters, category: "" }, id);
   };
 
   // The search box is local so typing stays snappy; it reaches the URL after a pause.
@@ -62,15 +93,16 @@ export default function XenKitchen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  const { categories, total, uncategorised, isLoading: catsLoading } = useKitchenCategories();
-  const { items, isLoading, isFetching } = useKitchenItems(filters);
-  const update = useUpdateKitchenItem();
+  const { categories, total, uncategorised, isLoading: catsLoading } = useKitchenCategories(book);
+  const { items, isLoading, isFetching } = useKitchenItems(allView ? { ...filters, category: "" } : filters, book);
+  const favorite = useToggleKitchenFavorite();
   const bulkMove = useBulkMoveKitchenItems();
   const bulkDelete = useBulkDeleteKitchenItems();
 
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null);
   const filterBtn = useRef<HTMLButtonElement>(null);
   const [manageOpen, setManageOpen] = useState(false);
+  const [bookDialog, setBookDialog] = useState<null | "general" | "people">(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [moveAnchor, setMoveAnchor] = useState<HTMLElement | null>(null);
@@ -79,8 +111,7 @@ export default function XenKitchen() {
   const toggleSelect = (id: string) =>
     setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
-  const toggleFavorite = (item: KitchenItem) =>
-    update.mutate({ id: item._id, patch: { favorite: !item.favorite } });
+  const toggleFavorite = (item: KitchenItem) => favorite.mutate({ id: item._id, on: !item.favorite });
 
   const moveSelected = async (categoryId: string | null) => {
     setMoveAnchor(null);
@@ -151,14 +182,38 @@ export default function XenKitchen() {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 3, mb: 12 }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 800 }}>XenKitchen</Typography>
-          <Typography variant="body2" color="text.secondary">Recipes, and the instructions off the box.</Typography>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ mb: 2 }}>
+        <Box sx={{ minWidth: 0 }}>
+          <BookSwitcher books={books} value={book} onChange={selectBook} />
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.25, minHeight: 24 }}>
+            {currentBook ? (
+              <>
+                <MemberAvatars book={currentBook} />
+                <Typography variant="body2" color="text.secondary" noWrap>{bookSubtitle(currentBook)}</Typography>
+              </>
+            ) : (
+              <Typography variant="body2" color="text.secondary">Recipes, and the instructions off the box.</Typography>
+            )}
+          </Stack>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEditorOpen(true)} sx={{ display: { xs: "none", sm: "inline-flex" } }}>
-          New
-        </Button>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+          {currentBook && (
+            <>
+              <Button variant="outlined" startIcon={<PersonAddIcon />} onClick={() => setBookDialog("people")}
+                sx={{ display: { xs: "none", sm: "inline-flex" } }}>
+                Share
+              </Button>
+              <Tooltip title="Book settings">
+                <IconButton onClick={() => setBookDialog("general")} aria-label="Book settings"><MoreHorizIcon /></IconButton>
+              </Tooltip>
+            </>
+          )}
+          {canAdd && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEditorOpen(true)} sx={{ display: { xs: "none", sm: "inline-flex" } }}>
+              New
+            </Button>
+          )}
+        </Stack>
       </Stack>
 
       {/* Recipes vs instructions */}
@@ -172,8 +227,8 @@ export default function XenKitchen() {
         <Tab value="instructions" label={<span>Instructions <Box component="span" sx={{ opacity: 0.6 }}>{layoutCount("instructions")}</Box></span>} />
       </Tabs>
 
-      {/* Category strip */}
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+      {/* Category strip — categories belong to a book, so it shows inside one */}
+      {!allView && <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
         <Box sx={{ display: "flex", gap: 1, overflowX: "auto", flex: 1, pb: 0.5, scrollbarWidth: "thin" }}>
           {catsLoading
             ? Array.from({ length: 5 }, (_, i) => <Skeleton key={i} variant="rounded" width={100} height={36} sx={{ borderRadius: 5, flexShrink: 0 }} />)
@@ -185,10 +240,12 @@ export default function XenKitchen() {
               </>
             )}
         </Box>
-        <Tooltip title="Manage categories">
-          <IconButton onClick={() => setManageOpen(true)} aria-label="Manage categories"><SettingsIcon /></IconButton>
-        </Tooltip>
-      </Stack>
+        {currentBook && canEditBook(currentBook.my_role) && (
+          <Tooltip title="Manage categories">
+            <IconButton onClick={() => setManageOpen(true)} aria-label="Manage categories"><SettingsIcon /></IconButton>
+          </Tooltip>
+        )}
+      </Stack>}
 
       {/* Search + filters */}
       <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
@@ -244,7 +301,8 @@ export default function XenKitchen() {
               onToggleFavorite={() => toggleFavorite(item)}
               selecting={selecting}
               selected={selected.has(item._id)}
-              onToggleSelect={() => toggleSelect(item._id)}
+              onToggleSelect={canEditBook(item.my_role) ? () => toggleSelect(item._id) : undefined}
+              bookLabel={allView && books.length > 1 ? item.book?.name : undefined}
             />
           ))}
       </Box>
@@ -260,9 +318,11 @@ export default function XenKitchen() {
         ) : (
           <EmptyState
             icon={<RestaurantMenuIcon />}
-            title="Your kitchen is empty"
-            description="Save a recipe, or snap the back of a frozen-food box so you can throw the box out."
-            action={<Button variant="contained" startIcon={<AddIcon />} onClick={() => setEditorOpen(true)}>Add your first</Button>}
+            title={currentBook ? `${currentBook.name} is empty` : "Your kitchen is empty"}
+            description={canAdd
+              ? "Save a recipe, or snap the back of a frozen-food box so you can throw the box out."
+              : "Nothing here yet. You can view this book; ask its owner if you'd like to add recipes."}
+            action={canAdd ? <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEditorOpen(true)}>Add your first</Button> : undefined}
           />
         )
       )}
@@ -274,7 +334,7 @@ export default function XenKitchen() {
           px: 2, py: 1, borderRadius: 5, display: "flex", alignItems: "center", gap: 1,
         }}>
           <Typography variant="body2" sx={{ fontWeight: 600, mr: 1 }}>{selected.size} selected</Typography>
-          <Button size="small" startIcon={<DriveFileMoveIcon />} onClick={(e) => setMoveAnchor(e.currentTarget)}>Move</Button>
+          {!allView && <Button size="small" startIcon={<DriveFileMoveIcon />} onClick={(e) => setMoveAnchor(e.currentTarget)}>Category</Button>}
           <Button size="small" color="error" startIcon={<DeleteIcon />} onClick={deleteSelected}>Delete</Button>
           <IconButton size="small" aria-label="Cancel selection" onClick={() => setSelected(new Set())}><CloseIcon fontSize="small" /></IconButton>
         </Paper>
@@ -289,16 +349,24 @@ export default function XenKitchen() {
       </Menu>
 
       <Fab color="primary" aria-label="New" onClick={() => setEditorOpen(true)}
-        sx={{ position: "fixed", right: 20, bottom: 24, display: { xs: selecting ? "none" : "flex", sm: "none" } }}>
+        sx={{ position: "fixed", right: 20, bottom: 24, display: { xs: selecting || !canAdd ? "none" : "flex", sm: "none" } }}>
         <AddIcon />
       </Fab>
 
       <FilterPanel anchor={filterAnchor} open={!!filterAnchor} onClose={() => setFilterAnchor(null)} filters={filters} onChange={setFilters} />
-      <CategoryDialog open={manageOpen} onClose={() => setManageOpen(false)} />
+      {currentBook && <CategoryDialog open={manageOpen} onClose={() => setManageOpen(false)} bookId={currentBook._id} bookName={currentBook.name} />}
+      <BookDialog
+        book={currentBook}
+        open={!!bookDialog}
+        initialTab={bookDialog ?? "general"}
+        onClose={() => setBookDialog(null)}
+        onGone={() => selectBook("all")}
+      />
       <ItemEditor
         open={editorOpen}
         onClose={() => setEditorOpen(false)}
         defaultCategoryId={newItemCategory}
+        defaultBookId={currentBook && canEditBook(currentBook.my_role) ? currentBook._id : null}
         onSaved={(item, created) => { if (created) navigate(`/internal/xenkitchen/${item._id}`); }}
       />
     </Container>

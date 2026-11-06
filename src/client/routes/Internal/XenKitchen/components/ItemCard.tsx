@@ -11,13 +11,19 @@ import { CategoryIconView } from "./kitchenIcons";
 interface ItemCardProps {
   item: KitchenItem;
   onOpen: () => void;
-  onToggleFavorite: () => void;
-  selecting: boolean;
-  selected: boolean;
-  onToggleSelect: () => void;
+  /** Omit on read-only pages (public book). */
+  onToggleFavorite?: () => void;
+  selecting?: boolean;
+  selected?: boolean;
+  /** Omit when the viewer can't edit this item, so it can't be selected for bulk actions. */
+  onToggleSelect?: () => void;
+  /** Shown under the title in the All-books view. */
+  bookLabel?: string;
 }
 
-export default function ItemCard({ item, onOpen, onToggleFavorite, selecting, selected, onToggleSelect }: ItemCardProps) {
+export default function ItemCard({
+  item, onOpen, onToggleFavorite, selecting = false, selected = false, onToggleSelect, bookLabel,
+}: ItemCardProps) {
   const theme = useTheme();
   const accent = item.category?.color ?? theme.palette.primary.main;
   const cover = item.images[0]?.url;
@@ -25,7 +31,7 @@ export default function ItemCard({ item, onOpen, onToggleFavorite, selecting, se
 
   // Long-press starts selecting on touch screens, where there's no hover checkbox.
   let pressTimer: ReturnType<typeof setTimeout> | undefined;
-  const startPress = () => { pressTimer = setTimeout(onToggleSelect, 500); };
+  const startPress = () => { if (onToggleSelect) pressTimer = setTimeout(onToggleSelect, 500); };
   const endPress = () => clearTimeout(pressTimer);
 
   return (
@@ -44,11 +50,11 @@ export default function ItemCard({ item, onOpen, onToggleFavorite, selecting, se
       }}
     >
       <CardActionArea
-        onClick={selecting ? onToggleSelect : onOpen}
+        onClick={selecting && onToggleSelect ? onToggleSelect : onOpen}
         onTouchStart={startPress}
         onTouchEnd={endPress}
         onTouchMove={endPress}
-        onContextMenu={(e) => { if (!selecting) { e.preventDefault(); onToggleSelect(); } }}
+        onContextMenu={(e) => { if (!selecting && onToggleSelect) { e.preventDefault(); onToggleSelect(); } }}
       >
         <Box sx={{ position: "relative", aspectRatio: "4 / 3", bgcolor: alpha(accent, 0.12) }}>
           {cover ? (
@@ -83,19 +89,20 @@ export default function ItemCard({ item, onOpen, onToggleFavorite, selecting, se
         <Box sx={{ p: 1.5, pr: 5 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25 }} noWrap>{item.title || "Untitled"}</Typography>
           <Typography variant="body2" color="text.secondary" noWrap sx={{ minHeight: 20 }}>{summary || " "}</Typography>
+          {bookLabel && <Typography variant="caption" color="text.disabled" noWrap sx={{ display: "block" }}>{bookLabel}</Typography>}
         </Box>
       </CardActionArea>
 
-      <IconButton
+      {onToggleFavorite && <IconButton
         aria-label={item.favorite ? "Unfavorite" : "Favorite"}
         onClick={onToggleFavorite}
         size="small"
         sx={{ position: "absolute", right: 6, bottom: 12, color: item.favorite ? "#f9a825" : "text.disabled" }}
       >
         {item.favorite ? <StarIcon /> : <StarBorderIcon />}
-      </IconButton>
+      </IconButton>}
 
-      <Checkbox
+      {onToggleSelect && <Checkbox
         className="kitchen-select"
         checked={selected}
         onChange={onToggleSelect}
@@ -107,7 +114,7 @@ export default function ItemCard({ item, onOpen, onToggleFavorite, selecting, se
           "@media (hover: none)": { display: selecting ? "inline-flex" : "none" },
           "&:hover": { bgcolor: theme.palette.background.paper },
         }}
-      />
+      />}
     </Card>
   );
 }

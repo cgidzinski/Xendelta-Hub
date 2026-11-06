@@ -39,7 +39,7 @@ export function LayoutSelect({ value, onChange, size = "small" }: { value: Kitch
 }
 
 /** Icon + colour in one button; opens a picker grid. */
-function AppearancePicker({ icon, color, onChange }: { icon: string; color: string; onChange: (v: { icon?: string; color?: string }) => void }) {
+export function AppearancePicker({ icon, color, onChange }: { icon: string; color: string; onChange: (v: { icon?: string; color?: string }) => void }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   return (
     <>
@@ -120,11 +120,11 @@ function CategoryRow({ cat, first, last, onMove }: { cat: KitchenCategory; first
   );
 }
 
-export default function CategoryDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function CategoryDialog({ open, onClose, bookId, bookName }: { open: boolean; onClose: () => void; bookId: string; bookName?: string }) {
   const theme = useTheme();
   const phone = useMediaQuery(theme.breakpoints.down("sm"));
   const { enqueueSnackbar } = useSnackbar();
-  const { categories } = useKitchenCategories();
+  const { categories } = useKitchenCategories(bookId);
   const reorder = useReorderKitchenCategories();
   const create = useCreateKitchenCategory();
   const [order, setOrder] = useState<KitchenCategory[]>(categories);
@@ -138,14 +138,14 @@ export default function CategoryDialog({ open, onClose }: { open: boolean; onClo
     const next = [...order];
     [next[i], next[i + d]] = [next[i + d], next[i]];
     setOrder(next);
-    reorder.mutate(next.map((c) => c._id));
+    reorder.mutate({ book_id: bookId, ids: next.map((c) => c._id) });
   };
 
   const add = async () => {
     const name = newName.trim();
     if (!name) return;
     try {
-      await create.mutateAsync({ name, layout: newLayout, ...newLook });
+      await create.mutateAsync({ book_id: bookId, name, layout: newLayout, ...newLook });
       setNewName("");
     } catch (e: any) {
       enqueueSnackbar(e?.response?.data?.message ?? "Couldn't add category", { variant: "error" });
@@ -154,10 +154,10 @@ export default function CategoryDialog({ open, onClose }: { open: boolean; onClo
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" fullScreen={phone}>
-      <DialogTitle sx={{ fontWeight: 700 }}>Categories</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 700 }}>Categories{bookName ? ` · ${bookName}` : ""}</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          A category's <b>Shows</b> setting picks which fields its items have: full recipes, or just the cooking directions off a box.
+          Categories belong to this book and are shared with everyone in it. A category's <b>Shows</b> setting picks which fields its items have: full recipes, or just the cooking directions off a box.
         </Typography>
         <Stack spacing={1}>
           {order.map((c, i) => (

@@ -8,27 +8,31 @@ import { useTitle } from "../../../hooks/useTitle";
 import { useAuth } from "../../../contexts/AuthContext";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
-import { useClonePublicKitchenItem, usePublicKitchenItem } from "../../../hooks/xenkitchen/useKitchen";
+import { useClonePublicKitchenItem, usePublicKitchenBookItem, usePublicKitchenItem } from "../../../hooks/xenkitchen/useKitchen";
 import ItemView from "../../Internal/XenKitchen/components/ItemView";
 
-/** Read-only page behind a /k/:token share link. Works signed out. */
+/** Read-only page behind /k/:token (one shared item) or /k/b/:token/:itemId (an item in a shared book). Works signed out. */
 export default function XenKitchenPublic() {
-  const { token } = useParams<{ token: string }>();
+  const { token, itemId } = useParams<{ token: string; itemId?: string }>();
   const navigate = useNavigate();
   const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const { isAuthenticated } = useAuth();
-  const { item, owner, isLoading, isError, error, refetch } = usePublicKitchenItem(token);
+  const single = usePublicKitchenItem(itemId ? undefined : token);
+  const inBook = usePublicKitchenBookItem(itemId ? token : undefined, itemId);
+  const { item, isLoading, isError, error, refetch } = itemId ? inBook : single;
+  const owner = itemId ? null : single.owner;
+  const here = itemId ? `/k/b/${token}/${itemId}` : `/k/${token}`;
   const clone = useClonePublicKitchenItem();
   useTitle(item?.title || "XenKitchen");
 
   const save = () => {
     if (!token) return;
     if (!isAuthenticated) {
-      navigate("/login", { state: { from: { pathname: `/k/${token}` } } });
+      navigate("/login", { state: { from: { pathname: here } } });
       return;
     }
-    clone.mutate(token, {
+    clone.mutate({ token, itemId }, {
       onSuccess: ({ item: copy }) => {
         enqueueSnackbar("Saved to your kitchen", { variant: "success" });
         navigate(`/internal/xenkitchen/${copy._id}`);
@@ -61,6 +65,11 @@ export default function XenKitchenPublic() {
         )}
         {item && (
           <>
+            {itemId && (
+              <Button size="small" color="inherit" onClick={() => navigate(`/k/b/${token}`)} sx={{ mb: 1 }}>
+                ← {inBook.bookName ?? "Back to the book"}
+              </Button>
+            )}
             {owner && <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>Shared by {owner}</Typography>}
             <ItemView
               item={item}

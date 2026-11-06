@@ -14,6 +14,73 @@ export function generateShareToken(): string {
 
 export const SHARE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 
+// ---------- book membership ----------
+
+export type BookRole = "owner" | "editor" | "viewer";
+export interface BookLike { _id: any; name?: string; members: Array<{ user_id: string; role: BookRole }> }
+
+export function roleIn(book: BookLike | null | undefined, uid: string): BookRole | null {
+  return book?.members.find((m) => m.user_id === uid)?.role ?? null;
+}
+/** Any member can read the book. */
+export const canView = (book: BookLike | null | undefined, uid: string) => roleIn(book, uid) !== null;
+/** Owners and editors change items and categories. */
+export const canEdit = (book: BookLike | null | undefined, uid: string) => {
+  const r = roleIn(book, uid);
+  return r === "owner" || r === "editor";
+};
+/** Only the owner manages people, the book link, and renames or deletes the book. */
+export const canManage = (book: BookLike | null | undefined, uid: string) => roleIn(book, uid) === "owner";
+
+export type MemberChange =
+  | { ok: true; members: Array<{ user_id: string; role: BookRole; added_at?: Date }> }
+  | { ok: false; code: 403 | 404 | 400; message: string };
+
+/**
+ * Applies a role change. Making someone else the owner hands the book over: the old owner
+ * becomes an editor, so there is always exactly one owner.
+ */
+export function changeRole(book: BookLike, actor: string, target: string, role: BookRole): MemberChange {
+  if (!canManage(book, actor)) return { ok: false, code: 403, message: "Only the owner can change roles" };
+  const member = book.members.find((m) => m.user_id === target);
+  if (!member) return { ok: false, code: 404, message: "Not a member" };
+  if (target === actor && role !== "owner") {
+    return { ok: false, code: 400, message: "Hand the book to someone else first" };
+  }
+  const members = book.members.map((m) => {
+    if (m.user_id === target) return { ...m, role };
+    if (role === "owner" && m.role === "owner") return { ...m, role: "editor" as BookRole };
+    return { ...m };
+  });
+  return { ok: true, members };
+}
+
+/** The owner removes anyone else; anyone else may remove only themselves. The owner can't leave. */
+export function removeMember(book: BookLike, actor: string, target: string): MemberChange {
+  const role = roleIn(book, target);
+  if (!role || !canView(book, actor)) return { ok: false, code: 404, message: "Not a member" };
+  if (role === "owner") return { ok: false, code: 400, message: "The owner can't leave — hand the book to someone else first" };
+  if (actor !== target && !canManage(book, actor)) return { ok: false, code: 403, message: "Only the owner can remove people" };
+  return { ok: true, members: book.members.filter((m) => m.user_id !== target) };
+}
+
+/**
+ * Where an item lands when moved to another book: an explicit category of that book, else the
+ * one with the same name, else the first with the same layout, else uncategorised.
+ */
+export function pickTargetCategory(
+  targetCategories: CategoryLike[],
+  fromCategory: CategoryLike | undefined,
+  requested?: string | null,
+): string | null {
+  if (requested) return targetCategories.some((c) => String(c._id) === requested) ? requested : null;
+  if (!fromCategory) return null;
+  const sameName = targetCategories.find((c) => (c.name || "").toLowerCase() === (fromCategory.name || "").toLowerCase() && c.layout === fromCategory.layout);
+  if (sameName) return String(sameName._id);
+  const sameLayout = targetCategories.find((c) => c.layout === fromCategory.layout);
+  return sameLayout ? String(sameLayout._id) : null;
+}
+
 export interface CategoryLike { _id: any; layout: KitchenLayout; name?: string; color?: string; icon?: string }
 
 export function layoutFor(item: { category_id?: any }, categories: Map<string, CategoryLike>): KitchenLayout {
@@ -36,7 +103,6 @@ export function itemFieldsFromBody(body: any): Record<string, unknown> {
   ["title", "description", "notes", "brand", "storage_note"].forEach(copyStr);
 
   if ("category_id" in body) out.category_id = body.category_id || null;
-  if (typeof body.favorite === "boolean") out.favorite = body.favorite;
   if (Array.isArray(body.tags)) {
     out.tags = [...new Set<string>(body.tags.map(normalizeTag).filter(Boolean))].slice(0, 20);
   }
@@ -96,7 +162,7 @@ function searchableText(item: any): string {
  * so this runs in memory rather than as a Mongo query; that keeps "time" (which depends on
  * the category's layout) and free-text search over ingredients simple and exact.
  */
-export function applyKitchenFilters(items: any[], f: KitchenFilters, categories: Map<string, CategoryLike>): any[] {
+export function applyKitchenFilters(items: any[], f: KitchenFilters, categories: Map<string, CategoryLike>, uid = ""): any[] {
   const words = f.q.toLowerCase().split(/\s+/).filter(Boolean);
   const wantTags = f.tags.map(normalizeTag);
   const wantIngredients = f.ingredients.map(normalizeIngredientName);
@@ -105,7 +171,7 @@ export function applyKitchenFilters(items: any[], f: KitchenFilters, categories:
     const cat = item.category_id ? String(item.category_id) : "";
     if (f.layout && layoutFor(item, categories) !== f.layout) return false;
     if (f.category === "none" ? cat && categories.has(cat) : f.category && cat !== f.category) return false;
-    if (f.favorite && !item.favorite) return false;
+    if (f.favorite && !(item.favorited_by || []).includes(uid)) return false;
     if (wantTags.length && !wantTags.every((t) => (item.tags || []).includes(t))) return false;
     if (wantIngredients.length) {
       const keys = (item.ingredients || []).map((i: any) => i.name_key || normalizeIngredientName(i.name));
@@ -184,8 +250,16 @@ const pick = (sub: any[] | undefined) => (sub || []).map((s: any) => {
   return o;
 });
 
-/** The item as the client sees it. `isPublic` strips anything that identifies the owner. */
-export function serializeItem(raw: any, categories: Map<string, CategoryLike>, opts: { isPublic?: boolean } = {}) {
+export interface SerializeOpts {
+  isPublic?: boolean;
+  /** The viewer: decides `favorite` and `my_role`. */
+  uid?: string;
+  books?: Map<string, BookLike>;
+  usernames?: Map<string, string>;
+}
+
+/** The item as the client sees it. `isPublic` strips anything that identifies people. */
+export function serializeItem(raw: any, categories: Map<string, CategoryLike>, opts: SerializeOpts = {}) {
   const item = raw.toObject ? raw.toObject() : raw;
   const catId = item.category_id ? String(item.category_id) : null;
   const cat = catId ? categories.get(catId) : undefined;
@@ -210,10 +284,17 @@ export function serializeItem(raw: any, categories: Map<string, CategoryLike>, o
     updated_at: item.updated_at,
   };
   if (opts.isPublic) return base;
+  const book = opts.books?.get(String(item.book_id));
+  const name = (id: string | null | undefined) => (id ? opts.usernames?.get(id) ?? null : null);
   return {
     ...base,
+    book_id: String(item.book_id),
+    book: book ? { _id: String(book._id), name: book.name ?? "" } : null,
+    my_role: book && opts.uid ? roleIn(book, opts.uid) : null,
+    created_by: name(item.created_by),
+    updated_by: name(item.updated_by),
     category_id: catId && cat ? catId : null,
-    favorite: !!item.favorite,
+    favorite: !!opts.uid && (item.favorited_by || []).includes(opts.uid),
     share: { enabled: !!item.share?.enabled, token: item.share?.enabled ? item.share.token ?? null : null },
   };
 }

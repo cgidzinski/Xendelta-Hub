@@ -933,3 +933,19 @@ export const xenKitchenBulkDeleteSchema = z.object({
 export const xenKitchenIdParamSchema = z.object({ id: objectIdSchema });
 export const xenKitchenImageParamSchema = z.object({ id: objectIdSchema, imageId: objectIdSchema });
 export const xenKitchenTokenParamSchema = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{22}$/) });
+
+export const xenKitchenBookSchema = z.object({
+  name: z.string().trim().min(1, "A name is required").max(60),
+  description: z.string().max(500).optional(),
+  icon: z.string().max(30).optional(),
+  color: hexColor.optional(),
+});
+export const xenKitchenBookUpdateSchema = xenKitchenBookSchema.partial();
+export const xenKitchenAddMembersSchema = z.object({
+  userIds: z.array(objectIdSchema).min(1).max(20),
+  role: z.enum(["editor", "viewer"]).default("editor"),
+});
+export const xenKitchenMemberRoleSchema = z.object({ role: z.enum(["owner", "editor", "viewer"]) });
+export const xenKitchenMemberParamSchema = z.object({ id: objectIdSchema, userId: objectIdSchema });
+export const xenKitchenMoveSchema = z.object({ book_id: objectIdSchema, category_id: objectIdSchema.nullable().optional() });
+export const xenKitchenBookItemParamSchema = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{22}$/), itemId: objectIdSchema });

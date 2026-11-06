@@ -1,10 +1,34 @@
 var mongoose = require("mongoose");
 var Schema = mongoose.Schema;
 
+// A recipe book is the unit of sharing: items and categories belong to a book, and people
+// are members of it. Everything in a shared book is shared with everyone in it.
+var bookMemberSchema = new Schema({
+  user_id: { type: String, required: true },
+  role: { type: String, enum: ["owner", "editor", "viewer"], default: "editor" },
+  added_at: { type: Date, default: Date.now },
+}, { _id: false });
+
+var bookSchema = new Schema({
+  name: { type: String, required: true, maxlength: 60 },
+  description: { type: String, default: "", maxlength: 500 },
+  icon: { type: String, default: "restaurant", maxlength: 30 },
+  color: { type: String, default: "#ff8a65", maxlength: 9 },
+  members: { type: [bookMemberSchema], default: [] },
+  share: {
+    enabled: { type: Boolean, default: false },
+    token: { type: String, default: undefined },
+  },
+  created_at: { type: Date, default: Date.now },
+});
+
+bookSchema.index({ "members.user_id": 1 });
+bookSchema.index({ "share.token": 1 }, { unique: true, sparse: true });
+
 // A category decides which fields its items show. "recipe" is ingredients + steps;
 // "instructions" is the heating directions off a box (oven/microwave/air fryer...).
 var categorySchema = new Schema({
-  owner_id: { type: String, required: true },
+  book_id: { type: Schema.Types.ObjectId, ref: "XenKitchenBook", required: true },
   name: { type: String, required: true, maxlength: 40 },
   icon: { type: String, default: "restaurant", maxlength: 30 },
   color: { type: String, default: "#8d6e63", maxlength: 9 },
@@ -13,7 +37,7 @@ var categorySchema = new Schema({
   created_at: { type: Date, default: Date.now },
 });
 
-categorySchema.index({ owner_id: 1, order: 1 });
+categorySchema.index({ book_id: 1, order: 1 });
 
 var imageSchema = new Schema({
   gcs_path: { type: String, required: true },
@@ -54,12 +78,16 @@ var methodSchema = new Schema({
 // One item schema for everything. Fields that the category's layout doesn't show are
 // kept, so moving an item to another category and back loses nothing.
 var itemSchema = new Schema({
-  owner_id: { type: String, required: true },
+  book_id: { type: Schema.Types.ObjectId, ref: "XenKitchenBook", required: true },
+  // Who added / last changed it, shown as "added by". The item belongs to the book, not to them.
+  created_by: { type: String, default: null },
+  updated_by: { type: String, default: null },
   title: { type: String, default: "", maxlength: 120 },
   description: { type: String, default: "", maxlength: 2000 },
   category_id: { type: Schema.Types.ObjectId, ref: "XenKitchenCategory", default: null },
   tags: { type: [String], default: [] },
-  favorite: { type: Boolean, default: false },
+  // Favorites are per person: each member stars things for themselves.
+  favorited_by: { type: [String], default: [] },
   notes: { type: String, default: "", maxlength: 4000 },
   images: { type: [imageSchema], default: [] },
 
@@ -82,9 +110,8 @@ var itemSchema = new Schema({
   updated_at: { type: Date, default: Date.now },
 });
 
-itemSchema.index({ owner_id: 1, updated_at: -1 });
-itemSchema.index({ owner_id: 1, category_id: 1 });
-itemSchema.index({ owner_id: 1, "ingredients.name_key": 1 });
+itemSchema.index({ book_id: 1, updated_at: -1 });
+itemSchema.index({ book_id: 1, category_id: 1 });
 itemSchema.index({ "share.token": 1 }, { unique: true, sparse: true });
 
 itemSchema.pre("save", function (next) {
@@ -92,7 +119,8 @@ itemSchema.pre("save", function (next) {
   next();
 });
 
+const XenKitchenBook = mongoose.model("XenKitchenBook", bookSchema);
 const XenKitchenCategory = mongoose.model("XenKitchenCategory", categorySchema);
 const XenKitchenItem = mongoose.model("XenKitchenItem", itemSchema);
 
-module.exports = { XenKitchenCategory, XenKitchenItem };
+module.exports = { XenKitchenBook, XenKitchenCategory, XenKitchenItem };
