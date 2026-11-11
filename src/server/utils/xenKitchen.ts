@@ -1,5 +1,16 @@
 import { randomToken } from "./tokens";
 import {
+  roleOf,
+  canView,
+  canEdit,
+  canManage,
+  changeRole,
+  removeMember,
+  type MemberRole,
+  type HasMembers,
+  type MemberChange,
+} from "./membership";
+import {
   KitchenFilters,
   KitchenLayout,
   normalizeIngredientName,
@@ -15,60 +26,17 @@ export function generateShareToken(): string {
 export const SHARE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 
 // ---------- book membership ----------
+// The role logic is shared with every other sub-app (utils/membership.ts); these are the
+// names the kitchen code and tests already use.
 
-export type BookRole = "owner" | "editor" | "viewer";
-export interface BookLike {
+export type BookRole = MemberRole;
+export interface BookLike extends HasMembers {
   _id: any;
   name?: string;
-  members: Array<{ user_id: string; role: BookRole }>;
 }
-
-export function roleIn(book: BookLike | null | undefined, uid: string): BookRole | null {
-  return book?.members.find((m) => m.user_id === uid)?.role ?? null;
-}
-/** Any member can read the book. */
-export const canView = (book: BookLike | null | undefined, uid: string) => roleIn(book, uid) !== null;
-/** Owners and editors change items and categories. */
-export const canEdit = (book: BookLike | null | undefined, uid: string) => {
-  const r = roleIn(book, uid);
-  return r === "owner" || r === "editor";
-};
-/** Only the owner manages people, the book link, and renames or deletes the book. */
-export const canManage = (book: BookLike | null | undefined, uid: string) => roleIn(book, uid) === "owner";
-
-export type MemberChange =
-  | { ok: true; members: Array<{ user_id: string; role: BookRole; added_at?: Date }> }
-  | { ok: false; code: 403 | 404 | 400; message: string };
-
-/**
- * Applies a role change. Making someone else the owner hands the book over: the old owner
- * becomes an editor, so there is always exactly one owner.
- */
-export function changeRole(book: BookLike, actor: string, target: string, role: BookRole): MemberChange {
-  if (!canManage(book, actor)) return { ok: false, code: 403, message: "Only the owner can change roles" };
-  const member = book.members.find((m) => m.user_id === target);
-  if (!member) return { ok: false, code: 404, message: "Not a member" };
-  if (target === actor && role !== "owner") {
-    return { ok: false, code: 400, message: "Hand the book to someone else first" };
-  }
-  const members = book.members.map((m) => {
-    if (m.user_id === target) return { ...m, role };
-    if (role === "owner" && m.role === "owner") return { ...m, role: "editor" as BookRole };
-    return { ...m };
-  });
-  return { ok: true, members };
-}
-
-/** The owner removes anyone else; anyone else may remove only themselves. The owner can't leave. */
-export function removeMember(book: BookLike, actor: string, target: string): MemberChange {
-  const role = roleIn(book, target);
-  if (!role || !canView(book, actor)) return { ok: false, code: 404, message: "Not a member" };
-  if (role === "owner")
-    return { ok: false, code: 400, message: "The owner can't leave — hand the book to someone else first" };
-  if (actor !== target && !canManage(book, actor))
-    return { ok: false, code: 403, message: "Only the owner can remove people" };
-  return { ok: true, members: book.members.filter((m) => m.user_id !== target) };
-}
+export type { MemberChange };
+export const roleIn = roleOf;
+export { canView, canEdit, canManage, changeRole, removeMember };
 
 /**
  * Where an item lands when moved to another book: an explicit category of that book, else the

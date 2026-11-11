@@ -22,7 +22,7 @@ import {
 
 const member = (id: string, over: Partial<RoutineMember> = {}): RoutineMember => ({
   user_id: id,
-  role: "sharer",
+  role: "editor",
   muted: false,
   ...over,
 });

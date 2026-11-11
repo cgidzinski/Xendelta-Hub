@@ -6,7 +6,7 @@ import mongoose, { Schema, type InferSchemaType } from "mongoose";
 const memberSchema = new Schema(
   {
     user_id: { type: String, required: true },
-    role: { type: String, enum: ["owner", "sharer"], default: "sharer" },
+    role: { type: String, enum: ["owner", "editor"], default: "editor" },
     muted: { type: Boolean, default: false },
     // Also remind this many days before it's due (0 = off). On by default: one day ahead.
     lead_days: { type: Number, min: 0, max: 30, default: 1 },
