@@ -48,12 +48,6 @@ export default function NotificationModal({ notification, open, onClose }: Notif
       onClose={onClose}
       maxWidth="sm"
       fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: 2,
-          backgroundColor: "background.paper",
-        },
-      }}
     >
       <DialogTitle
         sx={{

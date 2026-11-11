@@ -161,7 +161,7 @@ export default function Admin() {
         </Box>
 
         {/* Demo Notifications Card */}
-        <Card elevation={3} sx={{ p: 3 }}>
+        <Card sx={{ p: 3 }}>
           <Typography variant="h5" gutterBottom>
             Demo Notifications
           </Typography>
@@ -201,7 +201,7 @@ export default function Admin() {
         </Card>
 
         {/* Delete All Messages Card */}
-        <Card elevation={3} sx={{ p: 3, mt: 3 }}>
+        <Card sx={{ p: 3, mt: 3 }}>
           <Typography variant="h5" gutterBottom color="error">
             Danger Zone
           </Typography>
@@ -221,7 +221,7 @@ export default function Admin() {
         </Card>
 
         {/* Error Monitoring Card */}
-        <Card elevation={3} sx={{ p: 3, mt: 3 }}>
+        <Card sx={{ p: 3, mt: 3 }}>
           <Typography variant="h5" gutterBottom>
             Error Monitoring
           </Typography>

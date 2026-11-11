@@ -29,10 +29,10 @@ export default function ErrorPage() {
         }}
       >
         <ErrorOutlineIcon sx={{ fontSize: 64, color: "error.main" }} />
-        <Typography variant="h3" component="h1" gutterBottom>
+        <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
           Oops!
         </Typography>
-        <Typography variant="h6" color="text.secondary" gutterBottom>
+        <Typography variant="subtitle1" color="text.secondary">
           Sorry, an unexpected error has occurred.
         </Typography>
         {errorStatus && (
