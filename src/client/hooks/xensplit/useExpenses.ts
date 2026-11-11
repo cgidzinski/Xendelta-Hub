@@ -1,3 +1,4 @@
+import type { AxiosProgressEvent } from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import type { CreateExpenseInput, UpdateExpenseInput } from "./types";
@@ -75,10 +76,20 @@ export function useXenSplitExpenses(groupId: string) {
   });
 
   const uploadExpenseImagesMutation = useMutation({
-    mutationFn: async ({ expenseId, files }: { expenseId: string; files: File[] }) => {
+    mutationFn: async ({
+      expenseId,
+      files,
+      onUploadProgress,
+    }: {
+      expenseId: string;
+      files: File[];
+      onUploadProgress?: (event: AxiosProgressEvent) => void;
+    }) => {
       const formData = new FormData();
       files.forEach((f) => formData.append("images", f));
-      const res = await apiClient.post(`/api/xensplit/groups/${groupId}/expenses/${expenseId}/images`, formData);
+      const res = await apiClient.post(`/api/xensplit/groups/${groupId}/expenses/${expenseId}/images`, formData, {
+        onUploadProgress,
+      });
       return res.data;
     },
     onSuccess: (_data, { expenseId }) => {

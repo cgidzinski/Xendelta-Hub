@@ -1,3 +1,4 @@
+import UploadProgress from "../../../../components/ui/UploadProgress";
 import React, { useEffect, useRef } from "react";
 import PWAImageCapture from "../../../../pwa/components/PWAImageCapture";
 import {
@@ -60,6 +61,8 @@ interface ExpenseFormProps {
   submitDisabled?: boolean;
   submitLabel?: string;
   loading?: boolean;
+  /** 0-100 while photos are uploading, null otherwise. */
+  uploadPercent?: number | null;
   paidByUser?: SearchedUser | null;
   onPaidByUserChange?: (user: SearchedUser | null) => void;
   // Image props
@@ -130,6 +133,7 @@ export default function ExpenseForm({
   submitDisabled,
   submitLabel = "Confirm",
   loading,
+  uploadPercent = null,
   onPaidByUserChange,
   images,
   onImagesChange,
@@ -878,6 +882,8 @@ export default function ExpenseForm({
           )}
         </Box>
       )}
+
+      <UploadProgress percent={uploadPercent} label="photos" />
 
       {/* Navigation */}
       <Box sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>

@@ -1,3 +1,4 @@
+import { useUploadProgress } from "../../../hooks/useUploadProgress";
 import DetailHeader from "../../../components/ui/DetailHeader";
 import SectionLabel from "../../../components/ui/SectionLabel";
 import { useState, useRef, useMemo, useEffect } from "react";
@@ -246,6 +247,7 @@ export default function GroupDetail() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [confirmDialogText, setConfirmDialogText] = useState("");
   const [confirmAction, setConfirmAction] = useState<() => void>(() => {});
+  const { percent: uploadPercent, onUploadProgress, reset: resetUploadProgress } = useUploadProgress();
   const [addImages, setAddImages] = useState<File[]>([]);
   const [editImages, setEditImages] = useState<File[]>([]);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -430,9 +432,17 @@ export default function GroupDetail() {
             const newExpenseId = result?.data?.newExpenseId;
             if (addImages.length > 0 && newExpenseId) {
               try {
-                await uploadExpenseImages({ expenseId: newExpenseId, files: addImages });
-              } catch {
-                enqueueSnackbar("Expense added but some images failed to upload", { variant: "warning" });
+                await uploadExpenseImages({ expenseId: newExpenseId, files: addImages, onUploadProgress });
+              } catch (error) {
+                // Say why, and keep it in the console: a bare "failed to upload" hid the cause of
+                // this for a long time. The expense itself was saved; only the photos are missing.
+                console.error("Photo upload after adding an expense failed:", error);
+                enqueueSnackbar(
+                  `Expense added, but the photos didn't upload (${(error as Error)?.message || "unknown error"}). Open the expense to add them again.`,
+                  { variant: "warning" },
+                );
+              } finally {
+                resetUploadProgress();
               }
             }
             enqueueSnackbar(addIsRecurring && !newExpenseId ? "Recurring expense scheduled" : "Expense added", {
@@ -522,9 +532,15 @@ export default function GroupDetail() {
           onSuccess: async () => {
             if (editImages.length > 0) {
               try {
-                await uploadExpenseImages({ expenseId: selectedExpense._id, files: editImages });
-              } catch {
-                enqueueSnackbar("Expense updated but some images failed to upload", { variant: "warning" });
+                await uploadExpenseImages({ expenseId: selectedExpense._id, files: editImages, onUploadProgress });
+              } catch (error) {
+                console.error("Photo upload after editing an expense failed:", error);
+                enqueueSnackbar(
+                  `Expense updated, but the photos didn't upload (${(error as Error)?.message || "unknown error"}).`,
+                  { variant: "warning" },
+                );
+              } finally {
+                resetUploadProgress();
               }
             }
             enqueueSnackbar("Expense updated", { variant: "success" });
@@ -952,6 +968,7 @@ export default function GroupDetail() {
             onSubmit={handleAddExpense}
             submitDisabled={!addTitle.trim() || !addAmount || !addPaidBy || !isExactValid || !isPercentValid}
             loading={isAddingExpense || isUploadingImages}
+            uploadPercent={uploadPercent}
             images={addImages}
             onImagesChange={setAddImages}
             date={addDate}
@@ -1052,6 +1069,7 @@ export default function GroupDetail() {
             submitDisabled={!editTitle.trim() || !editAmount || !editPaidBy || !isEditExactValid || !isEditPercentValid}
             submitLabel="Save Changes"
             loading={isUpdatingExpense || isUploadingImages}
+            uploadPercent={uploadPercent}
             images={editImages}
             onImagesChange={setEditImages}
             existingImages={selectedExpense?.images}
