@@ -1,0 +1,82 @@
+// One way to ask "who is in this, and what may they do?" for every sub-app.
+//
+// A shared thing (a recipe book, a routine, a budget book, a split group) holds
+// `members: [{ user_id, role }]`. There is exactly one owner; owners and editors change things;
+// viewers only read. New sub-apps should store membership this way (use `memberFields` in the
+// schema) and call these helpers instead of writing their own checks.
+
+import { Schema } from "mongoose";
+
+export type MemberRole = "owner" | "editor" | "viewer";
+export const MEMBER_ROLES: readonly MemberRole[] = ["owner", "editor", "viewer"];
+
+export interface MemberLike {
+  user_id: string;
+  role: MemberRole;
+}
+export interface HasMembers<M extends MemberLike = MemberLike> {
+  members: M[];
+}
+
+/** Schema fields for a member entry; spread into the app's own member schema to add extras. */
+export const memberFields = {
+  user_id: { type: String, required: true },
+  role: { type: String, enum: MEMBER_ROLES, default: "editor" },
+  added_at: { type: Date, default: Date.now },
+} as const;
+
+/** A plain member schema (no app-specific extras). */
+export const memberSchema = new Schema(memberFields, { _id: false });
+
+type Maybe<T> = T | null | undefined;
+
+export function roleOf(doc: Maybe<HasMembers>, userId: string): MemberRole | null {
+  return doc?.members.find((m) => m.user_id === userId)?.role ?? null;
+}
+/** Any member can read. */
+export const canView = (doc: Maybe<HasMembers>, userId: string) => roleOf(doc, userId) !== null;
+/** Owners and editors change what is inside. */
+export const canEdit = (doc: Maybe<HasMembers>, userId: string) => {
+  const r = roleOf(doc, userId);
+  return r === "owner" || r === "editor";
+};
+/** Only the owner manages people and sharing, and renames or deletes. */
+export const canManage = (doc: Maybe<HasMembers>, userId: string) => roleOf(doc, userId) === "owner";
+
+export type MemberChange<M extends MemberLike = MemberLike> =
+  { ok: true; members: M[] } | { ok: false; code: 403 | 404 | 400; message: string };
+
+/**
+ * Applies a role change. Making someone else the owner hands the thing over: the old owner
+ * becomes an editor, so there is always exactly one owner.
+ */
+export function changeRole<M extends MemberLike>(
+  doc: HasMembers<M>,
+  actor: string,
+  target: string,
+  role: MemberRole,
+): MemberChange<M> {
+  if (!canManage(doc, actor)) return { ok: false, code: 403, message: "Only the owner can change roles" };
+  const member = doc.members.find((m) => m.user_id === target);
+  if (!member) return { ok: false, code: 404, message: "Not a member" };
+  if (target === actor && role !== "owner") {
+    return { ok: false, code: 400, message: "Hand it to someone else first" };
+  }
+  const members = doc.members.map((m) => {
+    if (m.user_id === target) return { ...m, role };
+    if (role === "owner" && m.role === "owner") return { ...m, role: "editor" as MemberRole };
+    return { ...m };
+  });
+  return { ok: true, members };
+}
+
+/** The owner removes anyone else; anyone else may remove only themselves. The owner can't leave. */
+export function removeMember<M extends MemberLike>(doc: HasMembers<M>, actor: string, target: string): MemberChange<M> {
+  const role = roleOf(doc, target);
+  if (!role || !canView(doc, actor)) return { ok: false, code: 404, message: "Not a member" };
+  if (role === "owner")
+    return { ok: false, code: 400, message: "The owner can't leave — hand it to someone else first" };
+  if (actor !== target && !canManage(doc, actor))
+    return { ok: false, code: 403, message: "Only the owner can remove people" };
+  return { ok: true, members: doc.members.filter((m) => m.user_id !== target) };
+}

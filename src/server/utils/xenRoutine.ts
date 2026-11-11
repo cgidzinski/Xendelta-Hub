@@ -15,7 +15,7 @@ export interface MemberChannels {
 }
 export interface RoutineMember {
   user_id: string;
-  role: "owner" | "sharer";
+  role: "owner" | "editor";
   muted: boolean;
   lead_days?: number;
   activity?: boolean;
@@ -329,6 +329,6 @@ export const isMember = (routine: Pick<RoutineLike, "members">, userId: string) 
 /** Owner-only: edit settings, change sharing, delete. */
 export const canEdit = (routine: Pick<RoutineLike, "owner_id">, userId: string) => routine.owner_id === userId;
 
-/** Owner or sharer: complete, postpone, see history. */
+/** Owner or editor (shared with): complete, postpone, see history. */
 export const canAct = (routine: Pick<RoutineLike, "owner_id" | "members">, userId: string) =>
   canEdit(routine, userId) || isMember(routine, userId);

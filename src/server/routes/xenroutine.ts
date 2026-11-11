@@ -328,7 +328,7 @@ module.exports = function (app: any) {
           .exec();
         for (const u of users) {
           const id = u._id.toString();
-          if (!existing.has(id)) routine.members.push({ user_id: id, role: "sharer" });
+          if (!existing.has(id)) routine.members.push({ user_id: id, role: "editor" });
         }
         await routine.save();
         const [out] = await serialize([routine], callerId(req));

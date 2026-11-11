@@ -13,7 +13,7 @@ export interface RoutineChannels {
 
 export interface RoutineMember {
   user_id: string;
-  role: "owner" | "sharer";
+  role: "owner" | "editor";
   username: string;
   avatar: string | null;
 }
