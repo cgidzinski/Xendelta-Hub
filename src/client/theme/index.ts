@@ -3,6 +3,24 @@ import type { Theme } from "@mui/material/styles";
 
 export type ThemeMode = "light" | "dark";
 
+/*
+ * Design language reference: src/client/components/ui/DESIGN.md
+ * Tokens live here and in components/ui/surfaceStyles.ts; shared building blocks live in
+ * components/ui/. Use theme tokens rather than hex/rgba literals in pages.
+ */
+
+/**
+ * Radius scale in `sx` units (multiples of shape.borderRadius = 4px): 4 / 6 / 8 / 10px
+ * plus a pill. Pages should pick from this rather than inventing values.
+ */
+export const RADIUS = { sm: 1, md: 1.5, lg: 2, xl: 2.5, pill: 999 } as const;
+
+/** Page widths. `lg` is the default; `md` suits single-column forms, settings and detail pages. */
+export const PAGE_MAX_WIDTH = { default: "lg", narrow: "md", wide: "xl" } as const;
+
+/** Gold used for the points currency icon. */
+export const POINTS_GOLD = "#FFD700";
+
 /**
  * The one blue the app is built around. Dark surfaces want the brighter shade and light
  * surfaces the deeper one, or the same hue fails contrast on one of the two grounds.
@@ -23,6 +41,11 @@ export const NEON = {
   light: { cyan: "#0e7490", cyanMid: "#0369a1", blue: "#075985", magenta: "#a21caf" },
 } as const;
 
+/** The brand blue gradient (wordmarks, hero accents), following the active palette. */
+export function brandGradient(theme: Theme): string {
+  return `linear-gradient(135deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.dark} 100%)`;
+}
+
 /**
  * NOTE ON RADIUS: `shape.borderRadius` stays at MUI's default of 4. In `sx`,
  * `borderRadius: 2` resolves to 2 * shape.borderRadius, and the app has ~324 such
@@ -37,6 +60,11 @@ export function createAppTheme(mode: ThemeMode): Theme {
     palette: {
       mode,
       primary: isDark ? BRAND.dark : BRAND.light,
+      // Magenta family from NEON, used by the public pages' accent. Defined so
+      // `secondary.main` stops falling back to MUI's default purple.
+      secondary: isDark
+        ? { main: NEON.dark.magenta, light: "#ff66ff", dark: "#cc00cc" }
+        : { main: NEON.light.magenta, light: "#c026d3", dark: "#86198f" },
       ...(isDark
         ? {}
         : {
@@ -78,6 +106,14 @@ export function createAppTheme(mode: ThemeMode): Theme {
         // surfaces are distinguished by border, not elevation, so it only muddies them.
         styleOverrides: { root: { backgroundImage: "none" } },
       },
+      // Dialogs: 10px corners, square when full screen on mobile. Width stays per dialog.
+      MuiDialog: {
+        styleOverrides: {
+          paper: ({ ownerState }) => ({
+            borderRadius: ownerState.fullScreen ? 0 : 10,
+          }),
+        },
+      },
       MuiButton: {
         defaultProps: { disableElevation: true },
         styleOverrides: { root: { borderRadius: 6 } },
@@ -86,9 +122,6 @@ export function createAppTheme(mode: ThemeMode): Theme {
       // size="small" and the other half do not, so defaulting it would resize 60 inputs
       // that were left at the default on purpose. Picking one size is a design decision
       // per form, not a defaults cleanup.
-      MuiDialog: {
-        styleOverrides: { paper: { borderRadius: 10 } },
-      },
       MuiTooltip: {
         defaultProps: { arrow: true },
       },

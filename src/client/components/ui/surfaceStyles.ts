@@ -46,3 +46,24 @@ export const emptyStateIconCircleSx = {
   justifyContent: "center",
   mb: 0.5,
 } satisfies SxProps<Theme>;
+
+// Icon button that sits on top of an image (remove/edit/zoom). `dark` for light imagery,
+// `light` for dark imagery. Replaces ~10 hand-written copies.
+export const overlayButtonSx = {
+  dark: {
+    bgcolor: "rgba(0,0,0,0.55)",
+    color: "common.white",
+    "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
+  },
+  light: {
+    bgcolor: "rgba(255,255,255,0.8)",
+    color: "common.black",
+    "&:hover": { bgcolor: "rgba(255,255,255,0.95)" },
+  },
+} satisfies Record<string, SxProps<Theme>>;
+
+// Page title role: h5 with h1 semantics. Use via <PageHeader>.
+export const pageTitleSx = {
+  fontWeight: 700,
+  letterSpacing: "-0.02em",
+} satisfies SxProps<Theme>;

@@ -11,7 +11,7 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { useSnackbar } from "notistack";
 import { format } from "date-fns";
 import type { BookDetailContext } from "../BookDetail";
-import SectionCard from "./SectionCard";
+import SectionCard from "../../../../components/ui/SectionCard";
 import BookBackupSection from "../components/BookBackupSection";
 import { UserSelect } from "../../../../components/UserSelect";
 import type { SearchedUser } from "../../../../hooks/useUserSearch";

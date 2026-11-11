@@ -12,7 +12,7 @@ import { useXenBudgetStatus, useXenBudgetBudgets } from "../../../../hooks/xenbu
 import BudgetRow from "../components/budget/BudgetRow";
 import { sortBudgets, budgetLabel, type BudgetSortOrder } from "../components/budget/sortBudgets";
 import BudgetForm from "../components/BudgetForm";
-import SectionCard from "./SectionCard";
+import SectionCard from "../../../../components/ui/SectionCard";
 import LoadingSpinner from "../../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
 import EmptyState from "../../../../components/ui/EmptyState";

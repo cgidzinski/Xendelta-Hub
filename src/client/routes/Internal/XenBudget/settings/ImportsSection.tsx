@@ -1,7 +1,7 @@
 import { Stack } from "@mui/material";
 import { useOutletContext } from "react-router-dom";
 import type { BookDetailContext } from "../BookDetail";
-import SectionCard from "./SectionCard";
+import SectionCard from "../../../../components/ui/SectionCard";
 import ImportHistory from "../components/ImportHistory";
 
 export default function ImportsSection() {

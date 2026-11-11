@@ -2,7 +2,7 @@ import { useOutletContext } from "react-router-dom";
 import { Stack } from "@mui/material";
 import type { BookDetailContext } from "../BookDetail";
 import { useXenBudgetCategoryItemCounts } from "../../../../hooks/xenbudget/useLabels";
-import SectionCard from "./SectionCard";
+import SectionCard from "../../../../components/ui/SectionCard";
 import LabelManager from "../components/LabelManager";
 
 export default function CategoriesSection() {
