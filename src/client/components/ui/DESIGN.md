@@ -14,7 +14,7 @@ Flat, outlined surfaces on one brand blue. Surfaces are separated by a 1px borde
 | `CHART_COLORS` etc. | `ui/chartColors.ts` | every chart and label chip |
 
 ## Components (`components/ui/`)
-`PageContainer` > `PageHeader` > content. `SectionCard` / `SectionLabel` for grouped content,
+`PageContainer` > `PageHeader` > content (`DetailHeader` instead of `PageHeader` for pages inside a book or group: back arrow, name, actions, tabs). `SectionCard` / `SectionLabel` for grouped content,
 `EmptyState` / `ListSkeleton` for empty and loading,
 `ResponsiveDialog` for dialogs (full screen on phones), `Banner` for fixed status strips.
 

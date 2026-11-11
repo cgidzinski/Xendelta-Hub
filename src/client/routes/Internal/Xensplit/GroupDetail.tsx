@@ -1,3 +1,4 @@
+import DetailHeader from "../../../components/ui/DetailHeader";
 import SectionLabel from "../../../components/ui/SectionLabel";
 import { useState, useRef, useMemo, useEffect } from "react";
 import { formatCurrency, getGroupCurrencies } from "../../../utils/currencyUtils";
@@ -615,14 +616,11 @@ export default function GroupDetail() {
         }
       >
         {/* Header */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.5, sm: 1 }, mb: { xs: 2, sm: 3 }, flexShrink: 0 }}>
-          <IconButton
-            onClick={() => navigate(activeTab === false ? `/internal/xensplit/groups/${groupId}/overview` : "/internal/xensplit/groups")}
-            size="small"
-          >
-            <ArrowBackIcon />
-          </IconButton>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexGrow: 1, minWidth: 0 }}>
+        <DetailHeader
+          title={group.name}
+          backLabel={activeTab === false ? "Back to group" : "All groups"}
+          onBack={() => navigate(activeTab === false ? `/internal/xensplit/groups/${groupId}/overview` : "/internal/xensplit/groups")}
+          leading={
             <GroupAvatar
               name={group.name}
               imageUrl={group.image_url}
@@ -630,48 +628,51 @@ export default function GroupDetail() {
               borderRadius={1.5}
               fontSize={{ xs: "0.9rem", sm: "1.1rem" }}
             />
-            <Box sx={{ minWidth: 0 }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }} noWrap>
-                {group.name}
-              </Typography>
-              <Box sx={{ display: "flex", alignItems: "center", mt: 0.25 }}>
-                <AvatarGroup
-                  max={4}
-                  sx={{ "& .MuiAvatar-root": { width: 20, height: 20, fontSize: 9, border: "1.5px solid", borderColor: "background.paper" } }}
-                >
-                  {group.members.map((m) => (
-                    <Avatar key={m.user_id} src={m.avatar || undefined}>
-                      {m.username[0]?.toUpperCase()}
-                    </Avatar>
-                  ))}
-                </AvatarGroup>
-              </Box>
+          }
+          subtitle={
+            <Box sx={{ display: "flex", alignItems: "center", mt: 0.25 }}>
+              <AvatarGroup
+                max={4}
+                sx={{ "& .MuiAvatar-root": { width: 20, height: 20, fontSize: 9, border: "1.5px solid", borderColor: "background.paper" } }}
+              >
+                {group.members.map((m) => (
+                  <Avatar key={m.user_id} src={m.avatar || undefined}>
+                    {m.username[0]?.toUpperCase()}
+                  </Avatar>
+                ))}
+              </AvatarGroup>
             </Box>
-          </Box>
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<AddIcon />}
-            onClick={openAddExpenseModal}
-            sx={{ display: activeTab === false ? "none" : { xs: "none", md: "inline-flex" }, flexShrink: 0 }}
-          >
-            New Expense
-          </Button>
-          <IconButton
-            onClick={() => navigate(`/internal/xensplit/groups/${groupId}/analytics`)}
-            size="small"
-            sx={{ flexShrink: 0, display: activeTab === false ? "none" : "inline-flex" }}
-          >
-            <AnalyticsIcon />
-          </IconButton>
-          <IconButton
-            onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settings`)}
-            size="small"
-            sx={{ flexShrink: 0, display: activeTab === false ? "none" : "inline-flex" }}
-          >
-            <SettingsIcon />
-          </IconButton>
-        </Box>
+          }
+          actions={
+            <>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<AddIcon />}
+                onClick={openAddExpenseModal}
+                sx={{ display: activeTab === false ? "none" : { xs: "none", md: "inline-flex" }, flexShrink: 0 }}
+              >
+                New Expense
+              </Button>
+              <IconButton
+                onClick={() => navigate(`/internal/xensplit/groups/${groupId}/analytics`)}
+                size="small"
+                aria-label="Analytics"
+                sx={{ flexShrink: 0, display: activeTab === false ? "none" : "inline-flex" }}
+              >
+                <AnalyticsIcon />
+              </IconButton>
+              <IconButton
+                onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settings`)}
+                size="small"
+                aria-label="Settings"
+                sx={{ flexShrink: 0, display: activeTab === false ? "none" : "inline-flex" }}
+              >
+                <SettingsIcon />
+              </IconButton>
+            </>
+          }
+        />
 
         {/* Tabs */}
         {activeTab !== false && (
