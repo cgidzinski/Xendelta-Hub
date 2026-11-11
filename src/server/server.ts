@@ -8,8 +8,6 @@ const passport = require("passport");
 const cors = require("cors");
 const helmet = require("helmet");
 const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
-const cookieParser = require("cookie-parser");
-const logger = require("morgan");
 const { initializeDefaultUsers } = require("./utils/defaultUsers");
 const ViteExpress = require("vite-express");
 const { SocketManager } = require("./infrastructure/SocketManager.js");
@@ -42,8 +40,6 @@ app.use("/api/xenbudget", BIG_JSON);
 app.use("/api/admin", BIG_JSON);
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
-// app.use(logger("dev"));
-app.use(cookieParser());
 app.use(passport.initialize());
 app.use("/avatars", express.static("src/server/public/avatars"));
 
