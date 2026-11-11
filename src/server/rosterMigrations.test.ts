@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import mongoose from "mongoose";
 import { startTestApp, type TestApp } from "./testing/testApp";
 import * as budgetRoster from "../../migrations/1794428701239-budget-book-roster";
+import * as splitRoster from "../../migrations/1794428927038-split-group-roster";
 
 let t: TestApp;
 beforeAll(async () => {
@@ -34,5 +35,32 @@ describe("budget book roster migration", () => {
 
     await budgetRoster.down(conn);
     expect((await books.findOne({ _id: insertedId }))!.roster).toBeUndefined();
+  });
+});
+
+describe("split group roster migration", () => {
+  it("backfills owner + editors, leaves the original fields alone, is repeatable, and reverses", async () => {
+    const conn = mongoose.connection;
+    const groups = conn.collection("xensplits");
+    const [a, b] = [oid(), oid()];
+    const { insertedId } = await groups.insertOne({
+      name: "g",
+      created_by: b.toString(),
+      members: [a, b],
+      expenses: [],
+    });
+
+    await splitRoster.up(conn);
+    await splitRoster.up(conn);
+    const g = await groups.findOne({ _id: insertedId });
+    expect(g!.roster.map((r: any) => [r.user_id, r.role])).toEqual([
+      [a.toString(), "editor"],
+      [b.toString(), "owner"],
+    ]);
+    expect(g!.members).toEqual([a, b]);
+    expect(g!.created_by).toBe(b.toString());
+
+    await splitRoster.down(conn);
+    expect((await groups.findOne({ _id: insertedId }))!.roster).toBeUndefined();
   });
 });
