@@ -2801,7 +2801,7 @@ module.exports = function (app: any) {
         const uncategorisedRow = facets?.uncategorised?.[0];
 
         // Resolve usernames in JS with one batched query rather than a $lookup, matching
-        // the casino leaderboard's approach.
+        // the same approach as elsewhere.
         const personIds = byPersonRaw.map((r: any) => r._id).filter(Boolean);
         const userMap = new Map<string, any>();
         if (personIds.length > 0) {

@@ -1,10 +1,6 @@
 require("dotenv").config({ quiet: true });
 const Bugsnag = require("./config/bugsnag").default;
 
-if (process.env.MOCK_WEEABETS === "true" && process.env.NODE_ENV !== "production") {
-  require("./mocks/node").startWeeabetsMock();
-}
-
 const express = require("express");
 const passport = require("passport");
 const cors = require("cors");
@@ -109,7 +105,6 @@ require("./routes/blog.ts")(app);
 require("./routes/admin/blog.ts")(app);
 require("./routes/admin/users.ts")(app);
 require("./routes/admin/messages.ts")(app);
-require("./routes/admin/casino.ts")(app);
 require("./routes/admin/debug.ts")(app);
 require("./routes/recipaint.ts")(app);
 require("./routes/paints.ts")(app);
@@ -120,16 +115,6 @@ require("./routes/xensplit")(app);
 require("./routes/xenbudget.ts")(app);
 require("./routes/xenroutine.ts")(app);
 require("./routes/xenkitchen.ts")(app);
-require("./routes/casino.ts")(app);
-require("./routes/casinoGames/slots.ts")(app);
-require("./routes/casinoGames/spinmania.ts")(app);
-require("./routes/casinoGames/kittyScratch.ts")(app);
-require("./routes/casinoGames/crossword.ts")(app);
-require("./routes/casinoGames/memory.ts")(app);
-require("./routes/casinoGames/plinko.ts")(app);
-require("./routes/casinoGames/pachinko.ts")(app);
-require("./routes/casinoPrinter.ts")(app);
-require("./routes/casinoRanch.ts")(app);
 
 // vite-express appends its static handler at listen() time - after this module has
 // finished running - so today it lands after every route registered above.

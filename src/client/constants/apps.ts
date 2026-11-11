@@ -3,7 +3,6 @@ import BrushIcon from "@mui/icons-material/Brush";
 import FolderIcon from "@mui/icons-material/Folder";
 import LinkIcon from "@mui/icons-material/Link";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-import CasinoIcon from "@mui/icons-material/Casino";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
 
@@ -69,13 +68,5 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
         icon: RestaurantMenuIcon,
         path: "/internal/xenkitchen",
         description: "Save recipes and the cooking instructions off the box",
-    },
-    // XenCasino hidden from side nav
-    {
-        key: "xencasino",
-        label: "XenCasino",
-        icon: CasinoIcon,
-        path: "/internal/xencasino",
-        description: "Play casino games with your Weeabets cheddar",
     },
 ];

@@ -8,7 +8,7 @@
 // normal-vision separation (19.3) and ≥3:1 contrast. It also clears ≥3:1 against the light
 // theme's white paper (3.07–4.95 measured), so no separate light-mode palette is needed here.
 //
-// Xensplit's and the admin casino page's own copies are deliberately left alone; this is
+// Xensplit's copies are deliberately left alone; this is
 // XenBudget's palette, not a global migration.
 export const CHART_COLORS = [
     "#3987e5", // blue

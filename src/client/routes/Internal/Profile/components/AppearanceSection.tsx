@@ -12,9 +12,6 @@ import type { ThemePreference } from "../../../../hooks/user/useUserProfile";
  * "System" is a real, explicit value ("system") distinct from "" (never chosen), because
  * those two need different resolutions: unset defaults to dark, while an explicit System
  * choice should actually track the OS.
- *
- * XenCasino is deliberately exempt and stays dark either way; its games are built on art
- * that assumes a dark ground.
  */
 export default function AppearanceSection() {
     const { profile, updateProfile, isUpdating } = useUserProfile();
@@ -40,7 +37,6 @@ export default function AppearanceSection() {
                     : stored === "system"
                         ? `Following your device, which is currently ${effective}.`
                         : `Set by you to ${stored}.`}{" "}
-                XenCasino stays dark whichever you pick.
             </Typography>
             <ToggleButtonGroup
                 exclusive
