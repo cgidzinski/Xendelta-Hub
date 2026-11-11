@@ -4,12 +4,9 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as GitHubStrategy } from 'passport-github2';
 import { Strategy as DiscordStrategy } from 'passport-discord';
 const { User } = require('../models/user');
+import { getJwtSecret } from './env';
 
 // Check for required environment variables
-if (!process.env.JWT_SECRET) {
-  console.warn('⚠️  WARNING: JWT_SECRET not found in environment variables. Using fallback secret.');
-}
-
 if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
   console.warn('⚠️  WARNING: Google OAuth credentials not found. Google login will not work.');
 }
@@ -21,7 +18,7 @@ if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) {
 // JWT Strategy Configuration
 const jwtOptions = {
   jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-  secretOrKey: process.env.JWT_SECRET || 'fallback-secret-key-for-development',
+  secretOrKey: getJwtSecret(),
 };
 
 // JWT Strategy

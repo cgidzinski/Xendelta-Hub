@@ -1,5 +1,6 @@
 var mongoose = require("mongoose");
 var Schema = mongoose.Schema;
+var { randomToken } = require("../utils/tokens");
 var { deleteFromGCS } = require("../utils/gcsUtils");
 
 // MEDIA SCHEMA
@@ -18,10 +19,8 @@ var xenboxMediaSchema = new mongoose.Schema({
 // Pre-save hook: Generate share token if not exists
 xenboxMediaSchema.pre("save", function(next) {
   if (!this.shareToken) {
-    // Generate a unique token using timestamp and random string
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substring(2, 15);
-    this.shareToken = `${timestamp}-${random}`;
+    // 128 bits from the OS CSPRNG. Links already issued keep working; only new ones change.
+    this.shareToken = randomToken(16);
   }
   next();
 });

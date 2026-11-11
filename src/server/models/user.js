@@ -1,5 +1,5 @@
 var mongoose = require("mongoose");
-var bcrypt = require("bcrypt-nodejs");
+var bcrypt = require("bcryptjs");
 var Schema = mongoose.Schema;
 
 // User-specific conversation metadata (references Conversation collection)
@@ -75,7 +75,8 @@ var userSchema = new mongoose.Schema({
   },
 });
 userSchema.methods.generateHash = function (password) {
-  return bcrypt.hashSync(password, bcrypt.genSaltSync(8), null);
+  // Cost 12 for new hashes; existing cost-8 hashes from the old library still verify.
+  return bcrypt.hashSync(password, 12);
 };
 userSchema.methods.validPassword = function (password) {
   return bcrypt.compareSync(password, this.password);

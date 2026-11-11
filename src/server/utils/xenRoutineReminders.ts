@@ -15,6 +15,7 @@ interface Pending {
   routineId: any;
   dueAt: Date;
   kind: ReminderKind;
+  prev: Date | null;
   item: ReminderItem;
 }
 
@@ -57,6 +58,8 @@ export async function runRoutineReminders(now: Date = new Date()): Promise<void>
       const list = pendingByUser.get(member.user_id) ?? [];
       list.push({
         routineId: doc._id, dueAt: routine.due_at, kind,
+        // What the stamp held when we read it: the claim below only succeeds if it still does.
+        prev: (kind === "due" ? member.last_due_notified_at : member.lead_notified_for) ?? null,
         item: { name: routine.name, kind, dueAt: routine.due_at },
       });
       pendingByUser.set(member.user_id, list);
@@ -70,21 +73,44 @@ export async function runRoutineReminders(now: Date = new Date()): Promise<void>
       const channels = channelsFor(settingsByUser.get(userId)?.channels ?? ALL_CHANNELS);
       if (channels.length === 0) continue;
 
-      const { title, message } = groupForDigest(pending.map((p) => p.item), now);
-      await notify(userId, { title, message, link: "/internal/xenroutine", icon: "event_repeat", channels });
+      // Claim each reminder BEFORE sending. The stamp is set with a compare-and-set on its
+      // previous value, so of two runs racing (a second instance, an overlapping tick) only
+      // one wins each reminder and the other skips it. Stamping after sending left a window
+      // where both sent. due_at is in the filter so a concurrent complete/postpone (which
+      // moves it) isn't stamped as already notified.
+      const claimed: Pending[] = [];
+      for (const p of pending) {
+        const field = p.kind === "due" ? "last_due_notified_at" : "lead_notified_for";
+        const res = await XenRoutine.updateOne(
+          { _id: p.routineId, due_at: p.dueAt, members: { $elemMatch: { user_id: userId, [field]: p.prev } } },
+          { $set: { [`members.$.${field}`]: stampValue(p, now) } },
+        );
+        if (res.modifiedCount === 1) claimed.push(p);
+      }
+      if (claimed.length === 0) continue;
 
-      // Conditional on due_at so a concurrent complete/postpone (which moves it) isn't
-      // stamped as already notified.
-      await Promise.all(pending.map((p) => XenRoutine.updateOne(
-        { _id: p.routineId, due_at: p.dueAt, "members.user_id": userId },
-        { $set: p.kind === "due"
-          ? { "members.$.last_due_notified_at": now }
-          : { "members.$.lead_notified_for": p.dueAt } },
-      )));
+      try {
+        const { title, message } = groupForDigest(claimed.map((p) => p.item), now);
+        await notify(userId, { title, message, link: "/internal/xenroutine", icon: "event_repeat", channels });
+      } catch (e) {
+        // Nothing was delivered: put the stamps back so the next run retries.
+        await Promise.all(claimed.map((p) => {
+          const field = p.kind === "due" ? "last_due_notified_at" : "lead_notified_for";
+          return XenRoutine.updateOne(
+            { _id: p.routineId, members: { $elemMatch: { user_id: userId, [field]: stampValue(p, now) } } },
+            { $set: { [`members.$.${field}`]: p.prev } },
+          );
+        }));
+        throw e;
+      }
     } catch (e) {
       console.error(`XenRoutine reminders failed for user ${userId}:`, e);
     }
   }
+}
+
+function stampValue(p: Pending, now: Date): Date {
+  return p.kind === "due" ? now : p.dueAt;
 }
 
 /** Tell the other members that someone completed or postponed a routine. Never throws. */

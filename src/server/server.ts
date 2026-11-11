@@ -1,9 +1,13 @@
 require("dotenv").config({ quiet: true });
+// Refuse to boot without the secrets the server cannot run safely without.
+require("./config/env").validateEnv();
 const Bugsnag = require("./config/bugsnag").default;
 
 const express = require("express");
 const passport = require("passport");
 const cors = require("cors");
+const helmet = require("helmet");
+const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
 const cookieParser = require("cookie-parser");
 const logger = require("morgan");
 const { initializeDefaultUsers } = require("./utils/defaultUsers");
@@ -19,10 +23,25 @@ const app = express();
 if (Bugsnag.getPlugin("express")) {
   app.use(Bugsnag.getPlugin("express").requestHandler);
 }
-app.use(cors());
-// Increase body size limits for file uploads (100MB to accommodate blog/recipaint assets and xenbox chunks (xenbox uses 10MB chunks, ~13-14MB base64 encoded))
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ extended: false, limit: '100mb' }));
+// Security headers. CSP stays off (the SPA ships inline styles and loads GCS images from
+// another origin); the cross-origin policies would block those images.
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false, crossOriginResourcePolicy: false }));
+
+// The app is served from the same origin as its API, so CORS only matters for other
+// origins. In production allow just PUBLIC_URL; in development stay open.
+const allowedOrigin = process.env.PUBLIC_URL ? process.env.PUBLIC_URL.replace(/\/$/, "") : undefined;
+app.use(cors({ origin: allowedOrigin ?? (process.env.NODE_ENV === "production" ? false : true) }));
+
+// Body limits: 1MB for everything, with the big limit scoped to the routes that really
+// post large JSON (xenbox base64 chunks are ~13-14MB; XenBudget imports/backups and
+// admin tools can be large). The scoped parsers run first and mark the body as parsed, so
+// the global 1MB parser skips those requests. File uploads go through multer, not here.
+const BIG_JSON = express.json({ limit: "100mb" });
+app.use("/api/xenbox/chunk", BIG_JSON);
+app.use("/api/xenbudget", BIG_JSON);
+app.use("/api/admin", BIG_JSON);
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 // app.use(logger("dev"));
 app.use(cookieParser());
 app.use(passport.initialize());
@@ -95,6 +114,24 @@ console.log(">>> Initializing Socket...");
 const socketManager = SocketManager.getInstance();
 socketManager.initialize(io);
 
+// Traffic arrives via Cloudflare, so the socket address is the proxy: key on the
+// client IP Cloudflare reports instead, or everyone shares one bucket.
+const clientKey = (req: any) => ipKeyGenerator(String(req.headers["cf-connecting-ip"] || req.ip));
+const tooMany = { status: false, message: "Too many attempts. Please wait a few minutes and try again." };
+// Only the unauthenticated, abuse-prone routes: /verify and /roles/verify run on ordinary page
+// loads and must not be throttled.
+app.use(
+  ["/api/auth/login", "/api/auth/signup", "/api/auth/verify-reset-token", "/api/auth/reset-password"],
+  rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, keyGenerator: clientKey, standardHeaders: true, legacyHeaders: false, message: tooMany }),
+);
+app.use("/api/auth/forgot-password", rateLimit({ windowMs: 60 * 60 * 1000, limit: 5, keyGenerator: clientKey, standardHeaders: true, legacyHeaders: false, message: tooMany }));
+
+// Liveness/readiness for the process manager and uptime checks.
+app.get("/api/health", (req: any, res: any) => {
+  const connected = Mongo.getConnection().readyState === 1;
+  res.status(connected ? 200 : 503).json({ status: connected, uptime: Math.round(process.uptime()) });
+});
+
 require("./routes/auth.ts")(app);
 require("./routes/users.ts")(app);
 require("./routes/points.ts")(app);
@@ -157,4 +194,37 @@ app.use((err: any, req: any, res: any, next: any) => {
   res.status(status).json({
     message: process.env.NODE_ENV === "production" ? "Internal server error" : err.message,
   });
+});
+
+// Graceful shutdown: stop taking work, let in-flight requests finish, close sockets and
+// the database, then exit. pm2 sends SIGINT on restart and SIGTERM on stop.
+let shuttingDown = false;
+function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`>>> ${signal} received, shutting down...`);
+  const force = setTimeout(() => process.exit(1), 10_000);
+  force.unref();
+  try {
+    require("./infrastructure/Scheduler").Scheduler.getInstance().stop();
+  } catch {
+    // The scheduler may not have started yet.
+  }
+  io.close();
+  server.close(async () => {
+    try {
+      await mongoConnection.close();
+    } finally {
+      process.exit(0);
+    }
+  });
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
+
+// A rejected promise nobody awaited would otherwise be a silent log line (or, in newer
+// Node, a crash). Report it and keep serving.
+process.on("unhandledRejection", (reason) => {
+  console.error(">>> Unhandled rejection:", reason);
+  Bugsnag.notify(reason instanceof Error ? reason : new Error(String(reason)));
 });

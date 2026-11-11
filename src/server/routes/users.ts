@@ -462,9 +462,10 @@ module.exports = function (app: express.Application) {
     }
   });
 
-  // Get all users (for admin and message participant selection)
+  // Directory for the message participant picker. Deliberately just the public profile
+  // (id, username, avatar): emails and roles are admin-only (see /api/admin/users).
   app.get("/api/users", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const users = await User.find({}, "username email _id roles avatar").exec();
+    const users = await User.find({}, "username _id avatar").exec();
 
     return res.json({
       status: true,
@@ -473,9 +474,7 @@ module.exports = function (app: express.Application) {
         users: users.map((user: any) => ({
           _id: user._id,
           username: user.username,
-          email: user.email,
           avatar: user.avatar || "/avatars/default-avatar.png",
-          roles: (user.roles || []).map((role: string) => role.toLowerCase()),
         })),
       },
     });

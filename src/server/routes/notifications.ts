@@ -6,14 +6,11 @@ import { requireAdmin } from "../middleware/admin";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { validate, createNotificationSchema, adminNotifyUserSchema } from "../utils/validation";
 import { notify } from "../utils/notificationUtils";
-import { TIMEOUTS } from "../constants";
 import { AuthenticatedRequest } from "../types";
 
 module.exports = function (app: express.Application) {
   app.get("/api/user/notifications", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = (req as AuthenticatedRequest).user!._id;
-    await new Promise((resolve) => setTimeout(resolve, TIMEOUTS.NOTIFICATION_DELAY));
-
     await User.findByIdAndUpdate(userId, { notificationsLastCheckedAt: new Date() });
 
     const notifications = await Notification.find({ userId })
