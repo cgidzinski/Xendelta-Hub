@@ -42,6 +42,23 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+// Password reset. Every field is forced to a plain string so a JSON body like
+// {"token": {"$ne": null}} is rejected here instead of reaching a Mongo query.
+export const forgotPasswordSchema = z.object({
+  email: z.string().email("Invalid email format").max(VALIDATION_LIMITS.EMAIL_MAX, "Email too long"),
+});
+
+export const verifyResetTokenSchema = z.object({
+  token: z.string().min(1, "Reset token is required").max(256),
+  email: z.string().email("Invalid email format").max(VALIDATION_LIMITS.EMAIL_MAX, "Email too long"),
+});
+
+export const resetPasswordSchema = verifyResetTokenSchema.extend({
+  newPassword: z.string()
+    .min(6, "Password must be at least 6 characters long.")
+    .max(VALIDATION_LIMITS.PASSWORD_MAX, "Password too long"),
+});
+
 export const updateProfileSchema = z.object({
   avatar: z.string().url("Invalid avatar URL").optional(),
   // "" clears the preference and falls back to the browser's zone.

@@ -1,14 +1,19 @@
 import express = require("express");
 const { User } = require("../models/user");
 const Notification = require("../models/notification");
-const crypto = require("crypto");
 import { authenticateToken } from "../middleware/auth";
 import { generateToken } from "../utils/tokenUtils";
 import { sendPasswordResetEmail } from "../utils/emailUtils";
 import passport from "../config/passport";
 import { SocketManager } from "../infrastructure/SocketManager";
-import { validate, signupSchema, loginSchema } from "../utils/validation";
+import {
+  validate, signupSchema, loginSchema, forgotPasswordSchema, verifyResetTokenSchema, resetPasswordSchema,
+} from "../utils/validation";
+import { randomToken, hashToken } from "../utils/tokens";
 import { AuthenticatedRequest } from "../types";
+
+// A recovery link is good for one hour. Keep in step with the wording in utils/emailUtils.ts.
+export const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 module.exports = function (app: express.Application) {
   // Role verification endpoint - returns user's roles from database
@@ -64,7 +69,7 @@ module.exports = function (app: express.Application) {
   app.post("/api/auth/login", validate(loginSchema), async function (req: express.Request, res: express.Response) {
     const email = req.body.email.toLowerCase();
     const password = req.body.password;
-    const user = await User.findOne({ email: email }).exec();
+    const user = await User.findOne({ email: email.toLowerCase() }).exec();
 
     if (user && user.validPassword(password)) {
       const token = generateToken({
@@ -95,7 +100,7 @@ module.exports = function (app: express.Application) {
     const username = req.body.username;
     const password = req.body.password;
 
-    const user = await User.findOne({ email: email }).exec();
+    const user = await User.findOne({ email: email.toLowerCase() }).exec();
 
     if (!user) {
       const newUser = new User();
@@ -152,17 +157,18 @@ module.exports = function (app: express.Application) {
     }
   });
 
-  app.post("/api/auth/forgot-password", async function (req: express.Request, res: express.Response) {
+  app.post("/api/auth/forgot-password", validate(forgotPasswordSchema), async function (req: express.Request, res: express.Response) {
     const email = req.body.email;
-    const user = await User.findOne({ email: email }).exec();
+    const user = await User.findOne({ email: email.toLowerCase() }).exec();
 
     if (user) {
       // Generate a secure random token
-      const resetToken = crypto.randomBytes(32).toString("hex");
-      const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
+      const resetToken = randomToken(32);
+      const resetTokenExpiry = new Date(Date.now() + RESET_TOKEN_TTL_MS);
 
       // Save the token and expiry to the user
-      user.resetPassword.token = resetToken;
+      // Only the hash is stored; the raw token exists only in the emailed link.
+      user.resetPassword.token = hashToken(resetToken);
       user.resetPassword.expires = resetTokenExpiry;
       await user.save();
 
@@ -195,7 +201,7 @@ module.exports = function (app: express.Application) {
     }
   });
 
-  app.post("/api/auth/verify-reset-token", async function (req: express.Request, res: express.Response) {
+  app.post("/api/auth/verify-reset-token", validate(verifyResetTokenSchema), async function (req: express.Request, res: express.Response) {
     const { token, email } = req.body;
 
     if (!token) {
@@ -213,7 +219,7 @@ module.exports = function (app: express.Application) {
     }
 
     const user = await User.findOne({
-      "resetPassword.token": token,
+      "resetPassword.token": hashToken(token),
       "resetPassword.expires": { $gt: Date.now() },
       email: email.toLowerCase(),
     }).exec();
@@ -235,7 +241,7 @@ module.exports = function (app: express.Application) {
     });
   });
 
-  app.post("/api/auth/reset-password", async function (req: express.Request, res: express.Response) {
+  app.post("/api/auth/reset-password", validate(resetPasswordSchema), async function (req: express.Request, res: express.Response) {
     const { token, newPassword, email } = req.body;
 
     if (!token || !newPassword) {
@@ -260,7 +266,7 @@ module.exports = function (app: express.Application) {
     }
 
     const user = await User.findOne({
-      "resetPassword.token": token,
+      "resetPassword.token": hashToken(token),
       "resetPassword.expires": { $gt: Date.now() },
       email: email.toLowerCase(),
     }).exec();
@@ -276,6 +282,8 @@ module.exports = function (app: express.Application) {
     user.password = user.generateHash(newPassword);
     user.resetPassword.token = undefined;
     user.resetPassword.expires = undefined;
+    // Without this the new password and the cleared token were only ever set in memory.
+    await user.save();
 
     // Add notification to separate collection
     const newNotification = new Notification({
@@ -306,34 +314,6 @@ module.exports = function (app: express.Application) {
     provider: 'google' | 'github' | 'discord'
   ) => {
     const user = req.user as any; // Passport sets full User document, not AuthenticatedRequest structure
-    const state = req.query.state;
-    const userId = req.query.userId;
-
-    // Check if this is an account linking request
-    if (state === 'link' && userId) {
-      // Link OAuth account to existing local account
-      const existingUser = await User.findById(userId).exec();
-      if (existingUser) {
-        const providerId = provider === 'google'
-          ? user.googleId
-          : provider === 'github'
-            ? user.authProviders.find((p: any) => p.provider === 'github')?.providerId
-            : user.authProviders.find((p: any) => p.provider === 'discord')?.providerId;
-
-        await existingUser.addAuthProvider(provider, providerId, user.email);
-
-        // Generate token for the linked account
-        const token = generateToken({
-          _id: existingUser._id,
-          username: existingUser.username,
-          email: existingUser.email,
-        });
-
-        res.redirect(`/auth/callback?token=${token}&linked=true`);
-        return;
-      }
-    }
-
     // Regular OAuth flow
     const token = generateToken({
       _id: user._id,

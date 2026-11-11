@@ -1,6 +1,7 @@
 import { Server as SocketIOServer, Socket } from "socket.io";
 import jwt from "jsonwebtoken";
 const { User } = require("../models/user");
+import { getJwtSecret } from "../config/env";
 import { Message } from "../types/Message";
 
 interface AuthenticatedSocket extends Socket {
@@ -67,7 +68,7 @@ export class SocketManager {
       }
 
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-key-for-development') as JWTPayload;
+        const decoded = jwt.verify(token, getJwtSecret()) as JWTPayload;
         const user = await User.findOne({ _id: decoded._id }).exec();
         
         if (!user) {

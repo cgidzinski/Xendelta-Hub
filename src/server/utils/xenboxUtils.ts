@@ -7,6 +7,7 @@
 import https from "https";
 import { privateBucket } from "../config/gcs";
 import { formatFileSize } from "./fileUtils";
+import { randomToken } from "./tokens";
 const { XenBoxMedia } = require("../models/xenboxMedia");
 const { User } = require("../models/user");
 
@@ -64,7 +65,7 @@ function detectContentType(filename: string): string {
  * @returns Upload session ID
  */
 export async function initiateChunkedUpload(userId: string, filename: string, totalChunks: number): Promise<string> {
-  const uploadId = `xenbox-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+  const uploadId = `xenbox-${Date.now()}-${randomToken(9)}`;
   const finalFilename = generateXenboxFilename(filename);
   const gcsPath = `xenbox/${userId}/${finalFilename}`;
 

@@ -98,9 +98,7 @@ module.exports = function (app: express.Application) {
 
   app.get("/api/xenlink/redirect/:slug", async function (req: express.Request, res: express.Response) {
     const slug = req.params.slug;
-    console.log(slug);
     const link = await XenLink.findOne({ slug }).exec();
-    console.log(link);
     if (!link) {
       return res.status(404).json({
         status: false,

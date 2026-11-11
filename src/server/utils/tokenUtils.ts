@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import { getJwtSecret } from "../config/env";
 
 export const TOKEN_EXPIRATION = "30d";
 
@@ -15,5 +16,5 @@ export const generateToken = (userData: TokenData): string => {
     email: userData.email,
   };
   
-  return jwt.sign(tokenData, process.env.JWT_SECRET || 'fallback-secret-key-for-development', { expiresIn: TOKEN_EXPIRATION });
+  return jwt.sign(tokenData, getJwtSecret(), { expiresIn: TOKEN_EXPIRATION });
 };

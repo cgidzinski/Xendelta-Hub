@@ -2,6 +2,7 @@ import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types";
 import { ShopItem } from "../types/shopItem";
+const mongoose = require("mongoose");
 const { User } = require("../models/user");
 const { SHOP_ITEMS } = require("../constants/shopItems");
 const { ITEMS } = require("../constants/items");
@@ -23,7 +24,7 @@ module.exports = function (app: express.Application) {
     //Buy items
     app.post("/api/points/redeemItem", authenticateToken, async function (req: express.Request, res: express.Response) {
         const userId = (req as AuthenticatedRequest).user!._id;
-        const { itemId } = req.body;
+        const itemId = typeof req.body?.itemId === "string" ? req.body.itemId : undefined;
 
         const shopItem: ShopItem | undefined = SHOP_ITEMS.find((item: ShopItem) => item.id === itemId);
         if (!shopItem) {
@@ -33,43 +34,54 @@ module.exports = function (app: express.Application) {
             });
         }
 
-        const user = await User.findById(userId).exec();
-
-        if (!user) {
-            return res.status(404).json({
-                status: false,
-                message: "User not found",
-            });
+        // One atomic update: the balance check, the deduction and the inventory grant happen
+        // together in Mongo, so two simultaneous purchases can't both pass the check and
+        // spend the same points (the old read-modify-save allowed that).
+        const inventoryId = new mongoose.Types.ObjectId();
+        const grant = shopItem.addToInventory !== false;
+        const item = ITEMS[shopItem.itemKey];
+        const update: any = { $inc: { points: -shopItem.price } };
+        if (grant) {
+            update.$push = {
+                inventory: {
+                    _id: inventoryId,
+                    itemKey: shopItem.itemKey,
+                    name: item.name,
+                    description: item.description,
+                    image: item.image,
+                    redeemable: item.redeemable,
+                    purchasedAt: new Date(),
+                    used: false,
+                },
+            };
         }
 
-        if (user.points < shopItem.price) {
-            return res.json({
-                status: false,
-                message: "Insufficient points",
-            });
+        const updated = await User.findOneAndUpdate(
+            { _id: userId, points: { $gte: shopItem.price } },
+            update,
+            { new: true },
+        ).exec();
+
+        if (!updated) {
+            const exists = await User.exists({ _id: userId });
+            return exists
+                ? res.json({ status: false, message: "Insufficient points" })
+                : res.status(404).json({ status: false, message: "User not found" });
         }
 
-        // Run onPurchase if it exists
         if (shopItem.onPurchase) {
-            await shopItem.onPurchase(user);
+            try {
+                await shopItem.onPurchase(updated);
+            } catch (e) {
+                // Roll the purchase back rather than keep the points for nothing.
+                console.error("Shop onPurchase failed, refunding:", e);
+                await User.updateOne(
+                    { _id: userId },
+                    { $inc: { points: shopItem.price }, ...(grant ? { $pull: { inventory: { _id: inventoryId } } } : {}) },
+                ).exec();
+                return res.status(500).json({ status: false, message: "Purchase failed" });
+            }
         }
-
-        // Add to inventory if addToInventory is true (default)
-        if (shopItem.addToInventory !== false) {
-            const item = ITEMS[shopItem.itemKey];
-            user.inventory.push({
-                itemKey: shopItem.itemKey,
-                name: item.name,
-                description: item.description,
-                image: item.image,
-                redeemable: item.redeemable,
-                purchasedAt: new Date(),
-                used: false,
-            });
-        }
-
-        user.points -= shopItem.price;
-        await user.save();
 
         return res.json({
             status: true,

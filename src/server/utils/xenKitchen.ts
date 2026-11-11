@@ -1,4 +1,4 @@
-import crypto from "crypto";
+import { randomToken } from "./tokens";
 import {
   KitchenFilters,
   KitchenLayout,
@@ -9,7 +9,7 @@ import {
 
 /** 128 random bits, URL safe: 22 characters. Unguessable, so a link is the only way in. */
 export function generateShareToken(): string {
-  return crypto.randomBytes(16).toString("base64url");
+  return randomToken(16);
 }
 
 export const SHARE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/;
