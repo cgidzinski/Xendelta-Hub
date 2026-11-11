@@ -112,14 +112,10 @@ export default function LandingHeader() {
               py: 1,
               fontWeight: 600,
               fontSize: { xs: "0.875rem", md: "1rem" },
-              backgroundColor: "primary.main",
-              boxShadow: "0 0 20px rgba(33, 150, 243, 0.3)",
+              backgroundColor: "primary.main",
               flexShrink: 0,
               order: { xs: 2, md: 3 },
-              "&:hover": {
-                backgroundColor: "primary.dark",
-                boxShadow: "0 0 30px rgba(33, 150, 243, 0.5)",
-              },
+              "&:hover": { backgroundColor: "primary.dark" },
             }}
           >
             Sign In

@@ -36,7 +36,7 @@ export default function GroupAvatar({ name, imageUrl, size = 48, borderRadius = 
         flexShrink: 0,
       }}
     >
-      <Typography sx={{ color: "#fff", fontWeight: 800, fontSize, lineHeight: 1 }}>
+      <Typography sx={{ color: "common.white", fontWeight: 800, fontSize, lineHeight: 1 }}>
         {name[0]?.toUpperCase() ?? "?"}
       </Typography>
       {showImage && (
