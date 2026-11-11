@@ -110,19 +110,19 @@ export default function ConversationBody({
           const showTimestamp = shouldShowTimestamp(message, nextMessage);
 
           return (
-              <MessageBlock
-                key={message._id || `message-${index}`}
-                message={message}
-                previousMessage={previousMessage}
-                nextMessage={nextMessage}
-                isMyMessage={myMessage}
-                showAvatar={showAvatar}
-                showTimestamp={showTimestamp}
-                getMessageSenderName={getMessageSenderName}
-                getMessageSenderAvatar={getMessageSenderAvatar}
-                onMessageOptions={onMessageOptions}
-                profileId={profileId}
-              />
+            <MessageBlock
+              key={message._id || `message-${index}`}
+              message={message}
+              previousMessage={previousMessage}
+              nextMessage={nextMessage}
+              isMyMessage={myMessage}
+              showAvatar={showAvatar}
+              showTimestamp={showTimestamp}
+              getMessageSenderName={getMessageSenderName}
+              getMessageSenderAvatar={getMessageSenderAvatar}
+              onMessageOptions={onMessageOptions}
+              profileId={profileId}
+            />
           );
         })
       )}
@@ -130,4 +130,3 @@ export default function ConversationBody({
     </Box>
   );
 }
-

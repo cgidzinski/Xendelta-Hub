@@ -115,7 +115,13 @@ export default function FileDetail() {
   const handleAddTime = (amount: number, unit: "minute" | "hour" | "day" | "week" | "month") => {
     const baseDate = expiryDate && expiryDate > new Date() ? expiryDate : new Date();
     const newDate = new Date(baseDate);
-    const multipliers = { minute: 60 * 1000, hour: 3600 * 1000, day: 86400 * 1000, week: 604800 * 1000, month: 2592000000 };
+    const multipliers = {
+      minute: 60 * 1000,
+      hour: 3600 * 1000,
+      day: 86400 * 1000,
+      week: 604800 * 1000,
+      month: 2592000000,
+    };
     newDate.setTime(newDate.getTime() + amount * (unit === "month" ? 0 : multipliers[unit]));
     if (unit === "month") newDate.setMonth(newDate.getMonth() + amount);
     setExpiryDate(newDate);
@@ -143,7 +149,7 @@ export default function FileDetail() {
             { label: "Uploaded", value: format(new Date(file.createdAt), "PPpp") },
           ]
         : [],
-    [file]
+    [file],
   );
 
   if (!file) {
@@ -273,20 +279,11 @@ export default function FileDetail() {
               )}
             </Box>
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
-              <Button
-                variant={expiryDate === null ? "contained" : "outlined"}
-                size="small"
-                onClick={handleClearExpiry}
-              >
+              <Button variant={expiryDate === null ? "contained" : "outlined"} size="small" onClick={handleClearExpiry}>
                 None
               </Button>
               {EXPIRY_OPTIONS.map(({ label, amount, unit }) => (
-                <Button
-                  key={label}
-                  variant="outlined"
-                  size="small"
-                  onClick={() => handleAddTime(amount, unit)}
-                >
+                <Button key={label} variant="outlined" size="small" onClick={() => handleAddTime(amount, unit)}>
                   {label}
                 </Button>
               ))}

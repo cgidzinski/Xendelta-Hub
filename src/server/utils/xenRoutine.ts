@@ -4,8 +4,15 @@ import { addDays, addMonths, addWeeks, addYears } from "date-fns";
 // the route file and the reminder job are thin wrappers around these.
 
 export type IntervalUnit = "days" | "weeks" | "months" | "years";
-export interface RoutineInterval { every: number; unit: IntervalUnit }
-export interface MemberChannels { inapp: boolean; push: boolean; email: boolean }
+export interface RoutineInterval {
+  every: number;
+  unit: IntervalUnit;
+}
+export interface MemberChannels {
+  inapp: boolean;
+  push: boolean;
+  email: boolean;
+}
 export interface RoutineMember {
   user_id: string;
   role: "owner" | "sharer";
@@ -45,10 +52,14 @@ export type DueStatus = "ok" | "due_soon" | "overdue";
 export function addInterval(from: Date, interval: RoutineInterval): Date {
   // date-fns clamps month-ends (Jan 31 + 1 month = Feb 28/29).
   switch (interval.unit) {
-    case "days": return addDays(from, interval.every);
-    case "weeks": return addWeeks(from, interval.every);
-    case "months": return addMonths(from, interval.every);
-    case "years": return addYears(from, interval.every);
+    case "days":
+      return addDays(from, interval.every);
+    case "weeks":
+      return addWeeks(from, interval.every);
+    case "months":
+      return addMonths(from, interval.every);
+    case "years":
+      return addYears(from, interval.every);
   }
 }
 
@@ -85,7 +96,10 @@ export function occurrenceDate(routine: Pick<RoutineLike, "due_at" | "interval">
  * ahead of time. Computed server-side so the client never has to reproduce the server's
  * date arithmetic (timezones, DST) to know which projected occurrences to hide.
  */
-export function doneAheadIndices(routine: Pick<RoutineLike, "due_at" | "interval" | "done_ahead">, max = 400): number[] {
+export function doneAheadIndices(
+  routine: Pick<RoutineLike, "due_at" | "interval" | "done_ahead">,
+  max = 400,
+): number[] {
   if (!routine.done_ahead || routine.done_ahead.length === 0) return [];
   const wanted = new Set(routine.done_ahead.map((d) => d.getTime()));
   const out: number[] = [];
@@ -121,7 +135,13 @@ export function applyComplete(
       due_at: routine.due_at,
       last_notified_at: routine.last_notified_at,
       done_ahead: already ? routine.done_ahead : [...routine.done_ahead, date],
-      history: pushHistory(routine.history, { action: "done", at: opts.now, by_user: opts.by, note: opts.note, occurrence_at: date }),
+      history: pushHistory(routine.history, {
+        action: "done",
+        at: opts.now,
+        by_user: opts.by,
+        note: opts.note,
+        occurrence_at: date,
+      }),
     };
   }
 
@@ -148,7 +168,11 @@ export function applyPostpone(
     due_at: dueAt,
     last_notified_at: null,
     history: pushHistory(routine.history, {
-      action: "postponed", at: opts.now, by_user: opts.by, note: opts.note, due_at: dueAt,
+      action: "postponed",
+      at: opts.now,
+      by_user: opts.by,
+      note: opts.note,
+      due_at: dueAt,
     }),
   };
 }
@@ -173,7 +197,8 @@ export type ChannelPrefs = Map<string, MemberChannels>;
 
 /** Members to remind, each with the notify() channels they have left switched on. */
 export function recipientsFor(
-  routine: Pick<RoutineLike, "members">, prefs: ChannelPrefs = new Map(),
+  routine: Pick<RoutineLike, "members">,
+  prefs: ChannelPrefs = new Map(),
 ): { userId: string; channels: NotifyChannelName[] }[] {
   const out: { userId: string; channels: NotifyChannelName[] }[] = [];
   for (const m of routine.members) {
@@ -186,7 +211,9 @@ export function recipientsFor(
 
 /** Who hears that `actorId` completed or postponed a routine: not them, not muted, not opted out; never by email. */
 export function activityRecipients(
-  routine: Pick<RoutineLike, "members">, actorId: string, prefs: ChannelPrefs = new Map(),
+  routine: Pick<RoutineLike, "members">,
+  actorId: string,
+  prefs: ChannelPrefs = new Map(),
 ): { userId: string; channels: NotifyChannelName[] }[] {
   const out: { userId: string; channels: NotifyChannelName[] }[] = [];
   for (const m of routine.members) {
@@ -199,7 +226,10 @@ export function activityRecipients(
 
 // ---- Per-person reminder timing ------------------------------------------------------
 
-export interface ReminderSettings { remindHour: number; timezone: string }
+export interface ReminderSettings {
+  remindHour: number;
+  timezone: string;
+}
 export type ReminderKind = "due" | "lead";
 
 export const DEFAULT_REMIND_HOUR = 8;
@@ -212,7 +242,11 @@ export function effectiveTimezone(profileTz?: string | null, browserTz?: string 
 /** The hour (0-23) it is in `timezone` at `now`. */
 export function localHour(now: Date, timezone: string): number {
   try {
-    const parts = new Intl.DateTimeFormat("en-US", { timeZone: timezone, hour: "numeric", hourCycle: "h23" }).formatToParts(now);
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      hour: "numeric",
+      hourCycle: "h23",
+    }).formatToParts(now);
     const h = Number(parts.find((p) => p.type === "hour")?.value);
     return Number.isFinite(h) ? h % 24 : now.getUTCHours();
   } catch {
@@ -235,7 +269,10 @@ const NAG_TOLERANCE_MS = 2 * 3_600_000;
  *   this due date yet.
  */
 export function reminderKindFor(
-  routine: RoutineLike, member: RoutineMember, settings: ReminderSettings, now: Date,
+  routine: RoutineLike,
+  member: RoutineMember,
+  settings: ReminderSettings,
+  now: Date,
 ): ReminderKind | null {
   if (!routine.enabled || member.muted) return null;
   if (localHour(now, settings.timezone) !== settings.remindHour) return null;
@@ -254,17 +291,27 @@ export function reminderKindFor(
   return null;
 }
 
-export interface ReminderItem { name: string; kind: ReminderKind; dueAt: Date }
+export interface ReminderItem {
+  name: string;
+  kind: ReminderKind;
+  dueAt: Date;
+}
 
 export function reminderMessage(item: ReminderItem, now: Date): { title: string; message: string } {
   if (item.kind === "lead") {
     const days = Math.max(1, Math.ceil((item.dueAt.getTime() - now.getTime()) / 86_400_000));
-    return { title: `Coming up: ${item.name}`, message: `"${item.name}" is due in ${days} day${days === 1 ? "" : "s"}.` };
+    return {
+      title: `Coming up: ${item.name}`,
+      message: `"${item.name}" is due in ${days} day${days === 1 ? "" : "s"}.`,
+    };
   }
   const overdueDays = Math.max(0, Math.floor((now.getTime() - item.dueAt.getTime()) / 86_400_000));
   return {
     title: `Due: ${item.name}`,
-    message: overdueDays === 0 ? `"${item.name}" is due today.` : `"${item.name}" is ${overdueDays} day${overdueDays === 1 ? "" : "s"} overdue.`,
+    message:
+      overdueDays === 0
+        ? `"${item.name}" is due today.`
+        : `"${item.name}" is ${overdueDays} day${overdueDays === 1 ? "" : "s"} overdue.`,
   };
 }
 

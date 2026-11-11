@@ -19,4 +19,3 @@ export interface BlogPost {
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
 }
-

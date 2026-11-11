@@ -71,9 +71,7 @@ export async function dispatchTask(task: any): Promise<number> {
     }
 
     // "latest" deliberately skips older due dates, so a successful run advances past all of them
-    const advanceBy = task.catch_up === "latest"
-      ? (result.processed > 0 ? dueDates.length : 0)
-      : result.processed;
+    const advanceBy = task.catch_up === "latest" ? (result.processed > 0 ? dueDates.length : 0) : result.processed;
 
     const next = applyAdvance(task, advanceBy);
     if (result.disable) next.enabled = false;
@@ -92,7 +90,7 @@ export async function dispatchTask(task: any): Promise<number> {
           last_error: null,
           payload: task.payload, // handlers may mutate payload (e.g. clearing a pending snapshot)
         },
-      }
+      },
     );
     if (update.matchedCount === 0) {
       // A concurrent writer advanced/edited the task; the next tick reconciles.

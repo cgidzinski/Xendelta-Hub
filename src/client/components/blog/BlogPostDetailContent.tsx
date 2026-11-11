@@ -1,14 +1,4 @@
-import {
-  Container,
-  Typography,
-  Stack,
-  Chip,
-  Box,
-  IconButton,
-  Tooltip,
-  Divider,
-  Paper,
-} from "@mui/material";
+import { Container, Typography, Stack, Chip, Box, IconButton, Tooltip, Divider, Paper } from "@mui/material";
 import { CalendarToday, Person, ArrowBack, Star } from "@mui/icons-material";
 import { format } from "date-fns";
 import ReactMarkdown from "react-markdown";
@@ -95,12 +85,7 @@ interface BlogPostDetailContentProps {
   onBackClick: () => void;
 }
 
-export default function BlogPostDetailContent({
-  post,
-  isLoading,
-  error,
-  onBackClick,
-}: BlogPostDetailContentProps) {
+export default function BlogPostDetailContent({ post, isLoading, error, onBackClick }: BlogPostDetailContentProps) {
   if (isLoading) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -155,31 +140,13 @@ export default function BlogPostDetailContent({
 
       <Stack direction="row" spacing={1} sx={{ mb: 3 }} flexWrap="wrap">
         {post.featured && (
-          <Chip
-            icon={<Star />}
-            label="Featured"
-            size="small"
-            color="warning"
-            sx={{ fontWeight: 600 }}
-          />
+          <Chip icon={<Star />} label="Featured" size="small" color="warning" sx={{ fontWeight: 600 }} />
         )}
         {post.categories.map((category: string, index: number) => (
-          <Chip
-            key={index}
-            label={category}
-            size="small"
-            color="primary"
-            sx={{ fontWeight: 600 }}
-          />
+          <Chip key={index} label={category} size="small" color="primary" sx={{ fontWeight: 600 }} />
         ))}
         {post.tags.map((tag: string, index: number) => (
-          <Chip
-            key={index}
-            label={tag}
-            size="small"
-            variant="outlined"
-            sx={{ fontWeight: 500 }}
-          />
+          <Chip key={index} label={tag} size="small" variant="outlined" sx={{ fontWeight: 500 }} />
         ))}
       </Stack>
 
@@ -192,9 +159,7 @@ export default function BlogPostDetailContent({
         )}
         <Stack direction="row" spacing={1} alignItems="center" color="text.secondary">
           <CalendarToday fontSize="small" />
-          <Typography variant="body2">
-            {format(new Date(post.publishDate), "MMMM d, yyyy")}
-          </Typography>
+          <Typography variant="body2">{format(new Date(post.publishDate), "MMMM d, yyyy")}</Typography>
         </Stack>
       </Stack>
 
@@ -208,4 +173,3 @@ export default function BlogPostDetailContent({
     </Container>
   );
 }
-

@@ -1,7 +1,20 @@
 import { useState } from "react";
 import {
-  Avatar, AvatarGroup, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, ListItemIcon,
-  ListItemText, Menu, MenuItem, TextField, Typography,
+  Avatar,
+  AvatarGroup,
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
+  TextField,
+  Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -15,7 +28,11 @@ export function MemberAvatars({ book, size = 22 }: { book: KitchenBook; size?: n
   if (book.members.length < 2) return null;
   return (
     <AvatarGroup max={4} sx={{ "& .MuiAvatar-root": { width: size, height: size, fontSize: size * 0.5 } }}>
-      {book.members.map((m) => <Avatar key={m.user_id} src={m.avatar || undefined} alt={m.username}>{m.username[0]?.toUpperCase()}</Avatar>)}
+      {book.members.map((m) => (
+        <Avatar key={m.user_id} src={m.avatar || undefined} alt={m.username}>
+          {m.username[0]?.toUpperCase()}
+        </Avatar>
+      ))}
     </AvatarGroup>
   );
 }
@@ -37,7 +54,10 @@ export default function BookSwitcher({ books, value, onChange }: Props) {
   const current = books.find((b) => b._id === value);
   const total = books.reduce((n, b) => n + b.item_count, 0);
 
-  const pick = (id: string) => { setAnchor(null); onChange(id); };
+  const pick = (id: string) => {
+    setAnchor(null);
+    onChange(id);
+  };
 
   const createBook = async () => {
     const n = name.trim();
@@ -67,19 +87,41 @@ export default function BookSwitcher({ books, value, onChange }: Props) {
         ) : (
           <LibraryBooksIcon sx={{ mr: 1, fontSize: 28, opacity: 0.8 }} />
         )}
-        <Typography variant="h5" component="span" sx={{ fontWeight: 800 }} noWrap>{current?.name ?? "All books"}</Typography>
+        <Typography variant="h5" component="span" sx={{ fontWeight: 800 }} noWrap>
+          {current?.name ?? "All books"}
+        </Typography>
       </Button>
 
-      <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} slotProps={{ paper: { sx: { minWidth: 280, borderRadius: 2 } } }}>
+      <Menu
+        anchorEl={anchor}
+        open={!!anchor}
+        onClose={() => setAnchor(null)}
+        slotProps={{ paper: { sx: { minWidth: 280, borderRadius: 2 } } }}
+      >
         <MenuItem selected={value === "all"} onClick={() => pick("all")}>
-          <ListItemIcon><LibraryBooksIcon fontSize="small" /></ListItemIcon>
-          <ListItemText primary="All books" secondary={`${total} items across ${books.length} book${books.length === 1 ? "" : "s"}`} />
+          <ListItemIcon>
+            <LibraryBooksIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="All books"
+            secondary={`${total} items across ${books.length} book${books.length === 1 ? "" : "s"}`}
+          />
         </MenuItem>
         <Divider />
         {books.map((b) => (
           <MenuItem key={b._id} selected={value === b._id} onClick={() => pick(b._id)} sx={{ gap: 1 }}>
             <ListItemIcon>
-              <Box sx={{ width: 28, height: 28, borderRadius: 1.5, bgcolor: alpha(b.color, 0.2), display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Box
+                sx={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 1.5,
+                  bgcolor: alpha(b.color, 0.2),
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 <CategoryIconView icon={b.icon} sx={{ fontSize: 18, color: b.color }} />
               </Box>
             </ListItemIcon>
@@ -91,8 +133,15 @@ export default function BookSwitcher({ books, value, onChange }: Props) {
           </MenuItem>
         ))}
         <Divider />
-        <MenuItem onClick={() => { setAnchor(null); setNewOpen(true); }}>
-          <ListItemIcon><AddIcon fontSize="small" /></ListItemIcon>
+        <MenuItem
+          onClick={() => {
+            setAnchor(null);
+            setNewOpen(true);
+          }}
+        >
+          <ListItemIcon>
+            <AddIcon fontSize="small" />
+          </ListItemIcon>
           <ListItemText primary="New book…" secondary="e.g. a shared household book" />
         </MenuItem>
       </Menu>
@@ -101,14 +150,27 @@ export default function BookSwitcher({ books, value, onChange }: Props) {
         <DialogTitle sx={{ fontWeight: 700 }}>New recipe book</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Books are how you share: add people to a book and everything in it — including recipes added later — is shared with them.
+            Books are how you share: add people to a book and everything in it — including recipes added later — is
+            shared with them.
           </Typography>
-          <TextField autoFocus fullWidth label="Name" placeholder="e.g. Home" value={name} onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") createBook(); }} slotProps={{ htmlInput: { maxLength: 60 } }} />
+          <TextField
+            autoFocus
+            fullWidth
+            label="Name"
+            placeholder="e.g. Home"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") createBook();
+            }}
+            slotProps={{ htmlInput: { maxLength: 60 } }}
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setNewOpen(false)}>Cancel</Button>
-          <Button variant="contained" disabled={!name.trim() || create.isPending} onClick={createBook}>Create</Button>
+          <Button variant="contained" disabled={!name.trim() || create.isPending} onClick={createBook}>
+            Create
+          </Button>
         </DialogActions>
       </Dialog>
     </>

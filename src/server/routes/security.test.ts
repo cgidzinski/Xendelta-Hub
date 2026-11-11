@@ -19,11 +19,7 @@ vi.mock("../utils/emailUtils.js", async (importOriginal) => ({
 let t: TestApp;
 
 beforeAll(async () => {
-  t = await startTestApp([
-    () => import("./auth.js"),
-    () => import("./users.js"),
-    () => import("./points.js"),
-  ]);
+  t = await startTestApp([() => import("./auth.js"), () => import("./users.js"), () => import("./points.js")]);
 }, 180_000);
 
 afterAll(async () => {
@@ -52,7 +48,9 @@ describe("password reset", () => {
       .send({ token: { $ne: null }, email: "someone@example.com" });
     expect(verify.status).toBe(400);
 
-    const forgot = await request(t.app).post("/api/auth/forgot-password").send({ email: { $ne: null } });
+    const forgot = await request(t.app)
+      .post("/api/auth/forgot-password")
+      .send({ email: { $ne: null } });
     expect(forgot.status).toBe(400);
   });
 
@@ -117,7 +115,10 @@ describe("points shop", () => {
 
   it("refuses a purchase the balance cannot cover", async () => {
     const { user, token } = await createUser({ points: 100 });
-    const res = await request(t.app).post("/api/points/redeemItem").set("Authorization", `Bearer ${token}`).send({ itemId: "3" });
+    const res = await request(t.app)
+      .post("/api/points/redeemItem")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ itemId: "3" });
     expect(res.body.status).toBe(false);
     expect(((await mongoose.model("User").findById(user._id)) as any).points).toBe(100);
   });
@@ -146,11 +147,15 @@ describe("password recovery link lifetime", () => {
     const token = rawTokenFrom(sentEmails[0].resetUrl);
 
     // Same token, but pretend it was issued 61 minutes ago.
-    await mongoose.model("User").updateOne({ _id: user._id }, { "resetPassword.expires": new Date(Date.now() - 60_000) });
+    await mongoose
+      .model("User")
+      .updateOne({ _id: user._id }, { "resetPassword.expires": new Date(Date.now() - 60_000) });
 
     const verify = await request(t.app).post("/api/auth/verify-reset-token").send({ token, email: user.email });
     expect(verify.body.status).toBe(false);
-    const reset = await request(t.app).post("/api/auth/reset-password").send({ token, email: user.email, newPassword: "new-password-1" });
+    const reset = await request(t.app)
+      .post("/api/auth/reset-password")
+      .send({ token, email: user.email, newPassword: "new-password-1" });
     expect(reset.body.status).toBe(false);
   });
 
@@ -160,9 +165,13 @@ describe("password recovery link lifetime", () => {
     await request(t.app).post("/api/auth/forgot-password").send({ email: user.email });
     const token = rawTokenFrom(sentEmails[0].resetUrl);
 
-    const first = await request(t.app).post("/api/auth/reset-password").send({ token, email: user.email, newPassword: "new-password-1" });
+    const first = await request(t.app)
+      .post("/api/auth/reset-password")
+      .send({ token, email: user.email, newPassword: "new-password-1" });
     expect(first.body.status).toBe(true);
-    const second = await request(t.app).post("/api/auth/reset-password").send({ token, email: user.email, newPassword: "another-pass-2" });
+    const second = await request(t.app)
+      .post("/api/auth/reset-password")
+      .send({ token, email: user.email, newPassword: "another-pass-2" });
     expect(second.body.status).toBe(false);
   });
 
@@ -173,9 +182,13 @@ describe("password recovery link lifetime", () => {
     await request(t.app).post("/api/auth/forgot-password").send({ email: user.email });
     const [older, newer] = sentEmails.map((e) => rawTokenFrom(e.resetUrl));
 
-    const stale = await request(t.app).post("/api/auth/reset-password").send({ token: older, email: user.email, newPassword: "new-password-1" });
+    const stale = await request(t.app)
+      .post("/api/auth/reset-password")
+      .send({ token: older, email: user.email, newPassword: "new-password-1" });
     expect(stale.body.status).toBe(false);
-    const current = await request(t.app).post("/api/auth/reset-password").send({ token: newer, email: user.email, newPassword: "new-password-1" });
+    const current = await request(t.app)
+      .post("/api/auth/reset-password")
+      .send({ token: newer, email: user.email, newPassword: "new-password-1" });
     expect(current.body.status).toBe(true);
   });
 });

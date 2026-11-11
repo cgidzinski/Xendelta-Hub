@@ -14,7 +14,7 @@ import type { QueryClient } from "@tanstack/react-query";
  * pre-import figures.
  */
 export function invalidateItemDerived(queryClient: QueryClient, bookId: string): void {
-    for (const key of ["items", "summary", "budget-status", "book", "recurring", "merchants"]) {
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", key, bookId] });
-    }
+  for (const key of ["items", "summary", "budget-status", "book", "recurring", "merchants"]) {
+    queryClient.invalidateQueries({ queryKey: ["xenbudget", key, bookId] });
+  }
 }

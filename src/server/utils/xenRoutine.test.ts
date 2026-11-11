@@ -1,11 +1,30 @@
 import { describe, it, expect } from "vitest";
 import {
-  addInterval, computeDueStatus, doneAheadIndices, shouldNotify, applyComplete, applyPostpone,
-  recipientsFor, activityRecipients, channelsFor, localHour, effectiveTimezone, reminderKindFor, groupForDigest, canEdit, canAct, MAX_HISTORY, type RoutineLike, type RoutineMember,
+  addInterval,
+  computeDueStatus,
+  doneAheadIndices,
+  shouldNotify,
+  applyComplete,
+  applyPostpone,
+  recipientsFor,
+  activityRecipients,
+  channelsFor,
+  localHour,
+  effectiveTimezone,
+  reminderKindFor,
+  groupForDigest,
+  canEdit,
+  canAct,
+  MAX_HISTORY,
+  type RoutineLike,
+  type RoutineMember,
 } from "./xenRoutine";
 
 const member = (id: string, over: Partial<RoutineMember> = {}): RoutineMember => ({
-  user_id: id, role: "sharer", muted: false, ...over,
+  user_id: id,
+  role: "sharer",
+  muted: false,
+  ...over,
 });
 
 const base = (over: Partial<RoutineLike> = {}): RoutineLike => ({
@@ -99,7 +118,11 @@ describe("applyComplete / applyPostpone", () => {
     expect(twice.done_ahead).toHaveLength(1);
   });
   it("completing the current one skips occurrences already done ahead", () => {
-    const weekly = base({ interval: { every: 1, unit: "weeks" }, due_at: new Date("2026-06-10T12:00:00Z"), done_ahead: [new Date("2026-06-17T12:00:00Z")] });
+    const weekly = base({
+      interval: { every: 1, unit: "weeks" },
+      due_at: new Date("2026-06-10T12:00:00Z"),
+      done_ahead: [new Date("2026-06-17T12:00:00Z")],
+    });
     const r = applyComplete(weekly, { by: "u1", now: new Date("2026-06-10T12:00:00Z") });
     // next would be Jun 17 (done ahead) so it lands on Jun 24
     expect(r.due_at.toISOString()).toBe("2026-06-24T12:00:00.000Z");
@@ -107,12 +130,16 @@ describe("applyComplete / applyPostpone", () => {
   });
   it("an overdue occurrence still restarts the clock from now", () => {
     const overdue = base({ interval: { every: 1, unit: "weeks" }, due_at: new Date("2026-05-01T00:00:00Z") });
-    expect(applyComplete(overdue, { by: "u1", now, occurrence: 1 }).due_at.toISOString()).toBe("2026-06-17T00:00:00.000Z");
+    expect(applyComplete(overdue, { by: "u1", now, occurrence: 1 }).due_at.toISOString()).toBe(
+      "2026-06-17T00:00:00.000Z",
+    );
   });
   it("complete honours a past doneAt but not a future one", () => {
     const past = new Date("2026-06-01T00:00:00Z");
     expect(applyComplete(base(), { by: "u1", now, doneAt: past }).last_done_at).toEqual(past);
-    expect(applyComplete(base(), { by: "u1", now, doneAt: new Date("2027-01-01T00:00:00Z") }).last_done_at).toEqual(now);
+    expect(applyComplete(base(), { by: "u1", now, doneAt: new Date("2027-01-01T00:00:00Z") }).last_done_at).toEqual(
+      now,
+    );
   });
   it("postpone leaves last_done_at alone", () => {
     const r = applyPostpone(base({ last_done_at: new Date("2026-03-01T00:00:00Z") }), { by: "u2", now, days: 7 });
@@ -134,12 +161,7 @@ describe("recipientsFor", () => {
   const on = { inapp: true, push: true, email: true };
   it("skips muted members and honours each person's own channel settings", () => {
     const r = base({
-      members: [
-        member("u1", { role: "owner" }),
-        member("u2", { muted: true }),
-        member("u3"),
-        member("u4"),
-      ],
+      members: [member("u1", { role: "owner" }), member("u2", { muted: true }), member("u3"), member("u4")],
     });
     const prefs = new Map([
       ["u3", { inapp: false, push: true, email: false }],
@@ -238,10 +260,13 @@ describe("groupForDigest", () => {
   it("uses the single message for one item and a combined one for several", () => {
     const one = groupForDigest([{ name: "Filter", kind: "due", dueAt: new Date("2026-06-08T00:00:00Z") }], now);
     expect(one.title).toBe("Due: Filter");
-    const many = groupForDigest([
-      { name: "B", kind: "lead", dueAt: new Date("2026-06-12T08:00:00Z") },
-      { name: "A", kind: "due", dueAt: new Date("2026-06-08T00:00:00Z") },
-    ], now);
+    const many = groupForDigest(
+      [
+        { name: "B", kind: "lead", dueAt: new Date("2026-06-12T08:00:00Z") },
+        { name: "A", kind: "due", dueAt: new Date("2026-06-08T00:00:00Z") },
+      ],
+      now,
+    );
     expect(many.title).toBe("2 routines need attention");
     expect(many.message.split("\n")[0]).toContain('"A" is 2 days overdue');
   });
@@ -249,13 +274,15 @@ describe("groupForDigest", () => {
 
 describe("activityRecipients", () => {
   it("excludes the actor, muted members and opted-out members, and never uses email", () => {
-    const r = base({ members: [
-      member("actor", { role: "owner" }),
-      member("a"),
-      member("muted", { muted: true }),
-      member("off", { activity: false }),
-      member("pushOnly"),
-    ] });
+    const r = base({
+      members: [
+        member("actor", { role: "owner" }),
+        member("a"),
+        member("muted", { muted: true }),
+        member("off", { activity: false }),
+        member("pushOnly"),
+      ],
+    });
     const prefs = new Map([["pushOnly", { inapp: false, push: true, email: true }]]);
     expect(activityRecipients(r, "actor", prefs)).toEqual([
       { userId: "a", channels: ["inapp", "socket", "push"] },

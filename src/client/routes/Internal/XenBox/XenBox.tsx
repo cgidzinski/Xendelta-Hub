@@ -26,8 +26,6 @@ import { useXenboxUpload, useXenboxFiles } from "../../../hooks/xenbox/useXenbox
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
 import { formatFileSize } from "../../../utils/fileUtils";
 
-
-
 export default function XenBox() {
   useTitle("XenBox");
   const navigate = useNavigate();
@@ -38,7 +36,7 @@ export default function XenBox() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const { data: files, isLoading, isError, error, refetch } = useXenboxFiles(search || undefined);
   const { uploadFile, isUploading } = useXenboxUpload();
 
@@ -75,14 +73,12 @@ export default function XenBox() {
       return;
     }
 
-    await uploadFile(
-      {
-        file: selectedFile,
-        onProgress: (progress) => {
-          setUploadProgress(progress);
-        },
-      }
-    )
+    await uploadFile({
+      file: selectedFile,
+      onProgress: (progress) => {
+        setUploadProgress(progress);
+      },
+    })
       .then((newFile) => {
         handleCloseUploadDialog();
         enqueueSnackbar("File uploaded successfully", { variant: "success" });
@@ -94,12 +90,11 @@ export default function XenBox() {
       });
   };
 
-  const quotaPercentage = profile?.xenbox
-    ? (profile.xenbox.spaceUsed / profile.xenbox.spaceAllowed) * 100
-    : 0;
-  const canUpload = selectedFile && profile?.xenbox
-    ? profile.xenbox.spaceUsed + selectedFile.size <= profile.xenbox.spaceAllowed
-    : true;
+  const quotaPercentage = profile?.xenbox ? (profile.xenbox.spaceUsed / profile.xenbox.spaceAllowed) * 100 : 0;
+  const canUpload =
+    selectedFile && profile?.xenbox
+      ? profile.xenbox.spaceUsed + selectedFile.size <= profile.xenbox.spaceAllowed
+      : true;
 
   return (
     <PageContainer>
@@ -185,11 +180,7 @@ export default function XenBox() {
           <Button onClick={handleCloseUploadDialog} disabled={isUploading}>
             Cancel
           </Button>
-          <Button
-            variant="contained"
-            onClick={handleUpload}
-            disabled={!selectedFile || isUploading || !canUpload}
-          >
+          <Button variant="contained" onClick={handleUpload} disabled={!selectedFile || isUploading || !canUpload}>
             {isUploading ? "Uploading..." : "Upload"}
           </Button>
         </DialogActions>

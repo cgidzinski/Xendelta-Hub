@@ -4,13 +4,7 @@ import AddIcon from "@mui/icons-material/Add";
 import CheckIcon from "@mui/icons-material/Check";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
-import {
-  RecipePaint,
-  catalogueKey,
-  describePaintDetail,
-  formatPaint,
-  paintKey,
-} from "@shared/recipaint/paints";
+import { RecipePaint, catalogueKey, describePaintDetail, formatPaint, paintKey } from "@shared/recipaint/paints";
 import { CollectionPaint, usePaints } from "../../../../hooks/recipaint/usePaints";
 import { usePaintCatalogueSearch } from "../../../../hooks/recipaint/usePaintCatalogue";
 import PaintFormDialog from "./PaintFormDialog";
@@ -192,7 +186,9 @@ export default function PaintListEditor({ paints, onChange }: PaintListEditorPro
                 value={value}
                 // Filtering happens above, over the owned list and the server's results.
                 filterOptions={(all) => all}
-                groupBy={(option) => (option.kind === "owned" ? OWNED_GROUP : option.kind === "catalogue" ? CATALOGUE_GROUP : "")}
+                groupBy={(option) =>
+                  option.kind === "owned" ? OWNED_GROUP : option.kind === "catalogue" ? CATALOGUE_GROUP : ""
+                }
                 isOptionEqualToValue={(option, selected) => option.id === selected.id}
                 getOptionLabel={labelFor}
                 onInputChange={(_, text, reason) => {
@@ -211,13 +207,16 @@ export default function PaintListEditor({ paints, onChange }: PaintListEditorPro
                   return (
                     // Keyed on our own id: two paints can share a brand and name across ranges,
                     // and MUI's default key comes from the label.
-                    <Box component="li" key={option.id} {...optionProps} sx={{ display: "flex", gap: 1, alignItems: "flex-start", minWidth: 0 }}>
+                    <Box
+                      component="li"
+                      key={option.id}
+                      {...optionProps}
+                      sx={{ display: "flex", gap: 1, alignItems: "flex-start", minWidth: 0 }}
+                    >
                       {option.kind === "create" ? (
                         <>
                           <AddIcon fontSize="small" color="primary" />
-                          <Typography variant="body2">
-                            Add &quot;{option.name}&quot; as a new paint
-                          </Typography>
+                          <Typography variant="body2">Add &quot;{option.name}&quot; as a new paint</Typography>
                         </>
                       ) : (
                         <>

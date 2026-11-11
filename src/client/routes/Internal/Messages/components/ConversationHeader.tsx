@@ -39,10 +39,12 @@ export default function ConversationHeader({
         </IconButton>
         <Box sx={{ flexGrow: 1 }}>
           <Typography variant="h6" component="div">
-            {conversation.name || conversation.participants
-              .filter((p) => p !== profileId && p !== "system")
-              .map((p) => getParticipantDisplay(p))
-              .join(", ") || "Chat"}
+            {conversation.name ||
+              conversation.participants
+                .filter((p) => p !== profileId && p !== "system")
+                .map((p) => getParticipantDisplay(p))
+                .join(", ") ||
+              "Chat"}
           </Typography>
         </Box>
         <IconButton onClick={onUsersClick}>
@@ -55,4 +57,3 @@ export default function ConversationHeader({
     </Box>
   );
 }
-

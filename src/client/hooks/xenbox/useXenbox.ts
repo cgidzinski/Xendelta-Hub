@@ -23,7 +23,6 @@ interface ChunkUploadResponse {
   chunkIndex: number;
 }
 
-
 // Calculate total chunks based on file size
 function calculateTotalChunks(fileSize: number): number {
   return Math.ceil(fileSize / CHUNK_SIZE);
@@ -75,7 +74,11 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 // API functions
-const initiateUpload = async (filename: string, totalChunks: number, fileSize: number): Promise<UploadSessionResponse> => {
+const initiateUpload = async (
+  filename: string,
+  totalChunks: number,
+  fileSize: number,
+): Promise<UploadSessionResponse> => {
   const response = await apiClient.post<ApiResponse<UploadSessionResponse>>("/api/xenbox/initiate", {
     filename,
     totalChunks,
@@ -88,7 +91,7 @@ const uploadChunkApi = async (
   uploadId: string,
   chunkIndex: number,
   totalChunks: number,
-  chunkData: string
+  chunkData: string,
 ): Promise<ChunkUploadResponse> => {
   const response = await apiClient.post<ApiResponse<ChunkUploadResponse>>("/api/xenbox/chunk", {
     uploadId,
@@ -110,7 +113,6 @@ const cancelUpload = async (uploadId: string): Promise<void> => {
   await apiClient.delete(`/api/xenbox/${uploadId}`);
 };
 
-
 const deleteXenboxFile = async (fileId: string): Promise<void> => {
   await apiClient.delete(`/api/xenbox/files/${fileId}`);
 };
@@ -121,10 +123,13 @@ const fetchXenboxFiles = async (search?: string): Promise<XenBoxFile[]> => {
   return response.data.data!.files;
 };
 
-const updateFileSettings = async (fileId: string, settings: { password?: string | null; expiry?: string | null }): Promise<{ shareUrl: string; hasPassword: boolean; expiry: string | null }> => {
+const updateFileSettings = async (
+  fileId: string,
+  settings: { password?: string | null; expiry?: string | null },
+): Promise<{ shareUrl: string; hasPassword: boolean; expiry: string | null }> => {
   const response = await apiClient.put<ApiResponse<{ shareUrl: string; hasPassword: boolean; expiry: string | null }>>(
     `/api/xenbox/files/${fileId}/settings`,
-    settings
+    settings,
   );
   return response.data.data!;
 };
@@ -137,36 +142,36 @@ interface UploadFileParams {
 
 export const useXenboxUpload = () => {
   const queryClient = useQueryClient();
-  
+
   const { mutateAsync: uploadFile, isPending: isUploading } = useMutation({
     mutationFn: async ({ file, onProgress }: UploadFileParams): Promise<XenboxUploadResponse> => {
       const totalChunks = calculateTotalChunks(file.size);
-      
+
       // Initiate upload session (includes quota check)
       const { uploadId } = await initiateUpload(file.name, totalChunks, file.size);
-      
+
       // Split file into chunks
       const chunks = await splitFileIntoChunks(file, CHUNK_SIZE);
-      
+
       // Upload chunks sequentially
       for (let i = 0; i < chunks.length; i++) {
         const chunkBase64 = await blobToBase64(chunks[i]);
         await uploadChunkApi(uploadId, i, totalChunks, chunkBase64);
-        
+
         // Report progress
         if (onProgress) {
           const progress = ((i + 1) / totalChunks) * 100;
           onProgress(progress);
         }
       }
-      
+
       // Finalize upload
       const result = await finalizeUpload(uploadId);
-      
+
       // Invalidate queries to refresh file list and user profile
       queryClient.invalidateQueries({ queryKey: ["xenboxFiles"] });
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
-      
+
       return result;
     },
   });
@@ -191,10 +196,15 @@ export const useXenboxFiles = (search?: string) => {
 // Hook for updating file settings
 export const useXenboxFileSettings = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: ({ fileId, settings }: { fileId: string; settings: { password?: string | null; expiry?: string | null } }) =>
-      updateFileSettings(fileId, settings),
+    mutationFn: ({
+      fileId,
+      settings,
+    }: {
+      fileId: string;
+      settings: { password?: string | null; expiry?: string | null };
+    }) => updateFileSettings(fileId, settings),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["xenboxFiles"] });
     },
@@ -204,7 +214,7 @@ export const useXenboxFileSettings = () => {
 // Hook for xenbox operations
 export const useXenbox = () => {
   const queryClient = useQueryClient();
-  
+
   // Mutation for deleting xenbox file
   const deleteMutation = useMutation({
     mutationFn: deleteXenboxFile,

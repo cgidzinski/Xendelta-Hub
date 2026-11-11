@@ -57,7 +57,7 @@ export function usePushNotifications(): UsePushNotificationsReturn {
   const needsInstall = detectNeedsInstall();
 
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">(
-    supported ? Notification.permission : "unsupported"
+    supported ? Notification.permission : "unsupported",
   );
   const [subscribed, setSubscribed] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
@@ -106,7 +106,7 @@ export function usePushNotifications(): UsePushNotificationsReturn {
         setError(
           result === "denied"
             ? "Notifications are blocked. Enable them for this site in your browser settings."
-            : "Notification permission was dismissed."
+            : "Notification permission was dismissed.",
         );
         return false;
       }

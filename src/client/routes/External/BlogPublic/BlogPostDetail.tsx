@@ -27,7 +27,7 @@ export default function BlogPostDetail() {
         blogBasePath="/blog"
         post={post}
         isLoading={isLoading}
-        error={isError ? (error?.message || "Failed to load blog post") : null}
+        error={isError ? error?.message || "Failed to load blog post" : null}
         onBackClick={handleBackClick}
       />
     </Box>

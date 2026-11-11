@@ -9,4 +9,3 @@ export interface Message {
   parentMessageId?: string;
   toObject?: () => Message;
 }
-

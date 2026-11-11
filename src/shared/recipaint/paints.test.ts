@@ -218,7 +218,9 @@ describe("catalogueKey", () => {
 
   it("is a different identity from paintKey", () => {
     // A recipe step keys on brand+name and carries no range; the two must not be conflated.
-    expect(catalogueKey(warpaints)).not.toBe(paintKey({ brand: "Army Painter", name: "Warlock Purple", hex: "", type: "" }));
+    expect(catalogueKey(warpaints)).not.toBe(
+      paintKey({ brand: "Army Painter", name: "Warlock Purple", hex: "", type: "" }),
+    );
   });
 
   it("tolerates a missing range", () => {

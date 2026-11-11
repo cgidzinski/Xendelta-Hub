@@ -4,17 +4,17 @@
 import { cardSx } from "../../../../components/ui/surfaceStyles";
 
 export const xsCardSx = {
-    ...cardSx,
-    px: 1.25,
-    py: 1,
+  ...cardSx,
+  px: 1.25,
+  py: 1,
 };
 
 export const xsBadgeSx = {
-    width: 40,
-    height: 40,
-    borderRadius: 1,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
+  width: 40,
+  height: 40,
+  borderRadius: 1,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
 };

@@ -39,13 +39,7 @@ export default function LinkList({ links, handleLinkClick, isLoading, isError, e
   }
 
   if (!links || links.length === 0) {
-    return (
-      <EmptyState
-        icon={<LinkIcon />}
-        title="No links yet"
-        description="Create your first link to get started."
-      />
-    );
+    return <EmptyState icon={<LinkIcon />} title="No links yet" description="Create your first link to get started." />;
   }
 
   return (

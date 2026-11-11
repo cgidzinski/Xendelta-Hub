@@ -1,12 +1,21 @@
 import { describe, it, expect } from "vitest";
 import {
-  normalizeMerchant, classifyFrequency, priceLevels, detectRecurring, monthlyCommitted,
-  merchantMatchPattern, type RecurringInputItem,
+  normalizeMerchant,
+  classifyFrequency,
+  priceLevels,
+  detectRecurring,
+  monthlyCommitted,
+  merchantMatchPattern,
+  type RecurringInputItem,
 } from "./xenBudgetRecurring";
 
 /** A run of `count` charges starting at `start`, `everyDays` apart. */
 function series(
-  description: string, amount: number, start: string, everyDays: number, count: number,
+  description: string,
+  amount: number,
+  start: string,
+  everyDays: number,
+  count: number,
   amountAt?: (index: number) => number,
 ): RecurringInputItem[] {
   const from = new Date(start).getTime();
@@ -19,7 +28,10 @@ function series(
 
 /** Monthly charges that land on the same day-of-month, the way a real subscription does. */
 function monthly(
-  description: string, amount: number, startIso: string, count: number,
+  description: string,
+  amount: number,
+  startIso: string,
+  count: number,
   amountAt?: (index: number) => number,
 ): RecurringInputItem[] {
   const start = new Date(startIso);
@@ -132,9 +144,7 @@ describe("detectRecurring", () => {
     expect(found).toHaveLength(1);
     // The CURRENT price, not an average across the rise.
     expect(found[0].amount).toBe(13.99);
-    expect(found[0].price_changes).toEqual([
-      { date: "2026-04-10T00:00:00.000Z", from: 11.99, to: 13.99 },
-    ]);
+    expect(found[0].price_changes).toEqual([{ date: "2026-04-10T00:00:00.000Z", from: 11.99, to: 13.99 }]);
   });
 
   it("does not classify an irregular merchant", () => {
@@ -160,22 +170,22 @@ describe("detectRecurring", () => {
 
   it("clamps the next expected date to the end of a short month", () => {
     // Jan 31 -> Feb 28 -> Mar 31: advanceDate clamps per-occurrence, never cumulatively.
-    const found = detectRecurring([
-      { date: new Date(Date.UTC(2026, 0, 31)), amount: 20, description: "RENT" },
-      { date: new Date(Date.UTC(2026, 1, 28)), amount: 20, description: "RENT" },
-      { date: new Date(Date.UTC(2026, 2, 31)), amount: 20, description: "RENT" },
-      { date: new Date(Date.UTC(2026, 3, 30)), amount: 20, description: "RENT" },
-    ], new Date("2026-05-02T00:00:00.000Z"));
+    const found = detectRecurring(
+      [
+        { date: new Date(Date.UTC(2026, 0, 31)), amount: 20, description: "RENT" },
+        { date: new Date(Date.UTC(2026, 1, 28)), amount: 20, description: "RENT" },
+        { date: new Date(Date.UTC(2026, 2, 31)), amount: 20, description: "RENT" },
+        { date: new Date(Date.UTC(2026, 3, 30)), amount: 20, description: "RENT" },
+      ],
+      new Date("2026-05-02T00:00:00.000Z"),
+    );
     expect(found).toHaveLength(1);
     expect(found[0].next_expected).toBe("2026-05-30T00:00:00.000Z");
   });
 
   it("marks a series whose charge has not landed as missing", () => {
     // Last charge Jan 15, so February's is six weeks overdue but not yet abandoned.
-    const found = detectRecurring(
-      monthly("DISNEY PLUS", 11.99, "2025-10-15", 4),
-      new Date("2026-02-28T00:00:00.000Z"),
-    );
+    const found = detectRecurring(monthly("DISNEY PLUS", 11.99, "2025-10-15", 4), new Date("2026-02-28T00:00:00.000Z"));
     expect(found[0].status).toBe("missing");
   });
 
@@ -185,18 +195,20 @@ describe("detectRecurring", () => {
   });
 
   it("groups the same merchant across differing reference numbers", () => {
-    const items = monthly("NETFLIX.COM", 16.99, "2026-01-15", 6)
-      .map((item, i) => ({ ...item, description: `NETFLIX.COM ${1000000 + i * 7717}` }));
+    const items = monthly("NETFLIX.COM", 16.99, "2026-01-15", 6).map((item, i) => ({
+      ...item,
+      description: `NETFLIX.COM ${1000000 + i * 7717}`,
+    }));
     const found = detectRecurring(items, now);
     expect(found).toHaveLength(1);
     expect(found[0].occurrences).toBe(6);
   });
 
   it("sorts by monthly cost, so a yearly renewal does not outrank the monthly bills", () => {
-    const found = detectRecurring([
-      ...monthly("INTERNET", 90, "2026-01-08", 8),
-      ...series("DOMAIN RENEWAL", 240, "2023-03-01", 365, 4),
-    ], now);
+    const found = detectRecurring(
+      [...monthly("INTERNET", 90, "2026-01-08", 8), ...series("DOMAIN RENEWAL", 240, "2023-03-01", 365, 4)],
+      now,
+    );
     expect(found.map((s) => s.merchant)).toEqual(["INTERNET", "DOMAIN RENEWAL"]);
     expect(found[1].monthly_equivalent).toBe(20);
   });
@@ -218,18 +230,21 @@ describe("monthlyCommitted", () => {
   const now = new Date("2026-08-26T00:00:00.000Z");
 
   it("adds up what the live series cost per month", () => {
-    const found = detectRecurring([
-      ...monthly("NETFLIX", 16.99, "2026-01-15", 8),
-      ...monthly("INTERNET", 90, "2026-01-08", 8),
-    ], now);
+    const found = detectRecurring(
+      [...monthly("NETFLIX", 16.99, "2026-01-15", 8), ...monthly("INTERNET", 90, "2026-01-08", 8)],
+      now,
+    );
     expect(monthlyCommitted(found)).toBe(106.99);
   });
 
   it("leaves out a series that has stopped, but still counts one that is merely late", () => {
-    const found = detectRecurring([
-      ...monthly("NETFLIX", 16.99, "2026-01-15", 8),   // active
-      ...monthly("OLD GYM", 45, "2025-01-05", 5),      // ended
-    ], now);
+    const found = detectRecurring(
+      [
+        ...monthly("NETFLIX", 16.99, "2026-01-15", 8), // active
+        ...monthly("OLD GYM", 45, "2025-01-05", 5), // ended
+      ],
+      now,
+    );
     expect(found.map((s) => s.status).sort()).toEqual(["active", "ended"]);
     expect(monthlyCommitted(found)).toBe(16.99);
   });

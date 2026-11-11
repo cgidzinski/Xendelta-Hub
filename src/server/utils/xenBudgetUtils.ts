@@ -24,7 +24,7 @@ export interface BudgetLike {
 
 export interface PeriodRange {
   from: Date;
-  to: Date;  // exclusive
+  to: Date; // exclusive
 }
 
 // --- Weighted splitting -----------------------------------------------------
@@ -156,10 +156,7 @@ const MONTHS_PER_PERIOD: Record<string, number> = { monthly: 1, quarterly: 3, ye
 // still runs calendar-month to calendar-month. All the arithmetic is done on wall-clock
 // dates in `timeZone` and only converted to UTC at the edges - doing it on UTC instants
 // shifts the boundary by the offset and misfiles anything spent near midnight.
-export function budgetPeriodRange(
-  budget: BudgetLike,
-  asOf: Date,
-): PeriodRange {
+export function budgetPeriodRange(budget: BudgetLike, asOf: Date): PeriodRange {
   if (budget.period === "custom") {
     const from = budget.start_date ? new Date(budget.start_date) : new Date(0);
     const to = budget.end_date ? new Date(budget.end_date) : new Date(8640000000000000);
@@ -204,11 +201,7 @@ export function budgetPeriodRange(
  * empty rather than inventing one. `count` at or below zero returns empty too, which is
  * what makes `?history=0` the free default on the wire.
  */
-export function previousPeriodRanges(
-  budget: BudgetLike,
-  asOf: Date,
-  count: number,
-): PeriodRange[] {
+export function previousPeriodRanges(budget: BudgetLike, asOf: Date, count: number): PeriodRange[] {
   if (budget.period === "custom" || count <= 0) return [];
 
   const current = budgetPeriodRange(budget, asOf);
@@ -248,8 +241,8 @@ export type GroupBy = "day" | "week" | "month";
 // 2027-01-01 is a Friday and belongs to week 2026-W53.
 export function isoWeekKey(year: number, month: number, day: number): string {
   const date = new Date(Date.UTC(year, month - 1, day));
-  const dayNum = (date.getUTCDay() + 6) % 7;  // Monday = 0
-  date.setUTCDate(date.getUTCDate() - dayNum + 3);  // the Thursday of this week
+  const dayNum = (date.getUTCDay() + 6) % 7; // Monday = 0
+  date.setUTCDate(date.getUTCDate() - dayNum + 3); // the Thursday of this week
   const isoYear = date.getUTCFullYear();
   const firstThursday = new Date(Date.UTC(isoYear, 0, 4));
   firstThursday.setUTCDate(firstThursday.getUTCDate() - ((firstThursday.getUTCDay() + 6) % 7) + 3);
@@ -279,11 +272,8 @@ export function seedPeriods(from: Date, to: Date, groupBy: GroupBy): string[] {
     const y = cursor.getUTCFullYear();
     const m = cursor.getUTCMonth() + 1;
     const d = cursor.getUTCDate();
-    const key = groupBy === "day"
-      ? `${y}-${pad(m)}-${pad(d)}`
-      : groupBy === "week"
-        ? isoWeekKey(y, m, d)
-        : `${y}-${pad(m)}`;
+    const key =
+      groupBy === "day" ? `${y}-${pad(m)}-${pad(d)}` : groupBy === "week" ? isoWeekKey(y, m, d) : `${y}-${pad(m)}`;
     if (keys[keys.length - 1] !== key) keys.push(key);
     cursor = new Date(cursor.getTime() + 86400000);
   }
@@ -301,11 +291,7 @@ export function normalizeDescription(description: string): string {
 // Identifies a transaction for duplicate detection. Deliberately NOT unique in the
 // database: two identical $4 coffees on the same day are both real, so a match is
 // surfaced to the user as "probably a duplicate" rather than enforced as a constraint.
-export function computeImportHash(
-  date: Date | string,
-  amount: number,
-  description: string,
-): string {
+export function computeImportHash(date: Date | string, amount: number, description: string): string {
   const day = new Date(date).toISOString().slice(0, 10);
   const payload = `${day}|${amount.toFixed(2)}|${normalizeDescription(description)}`;
   return crypto.createHash("sha1").update(payload).digest("hex");

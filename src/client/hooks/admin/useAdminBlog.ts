@@ -109,9 +109,12 @@ export const useAdminBlog = () => {
   });
 
   // Mutation for updating blog post
-  const { mutateAsync: updatePostAsync, mutate: updatePostMutate, isPending: isUpdating } = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: UpdateBlogPostPayload }) =>
-      updateBlogPost(id, payload),
+  const {
+    mutateAsync: updatePostAsync,
+    mutate: updatePostMutate,
+    isPending: isUpdating,
+  } = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateBlogPostPayload }) => updateBlogPost(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminBlogKeys.posts() });
       queryClient.invalidateQueries({ queryKey: blogKeys.lists() });
@@ -136,8 +139,7 @@ export const useAdminBlog = () => {
 
   // Mutation for uploading blog asset
   const { mutateAsync: uploadAsset, isPending: isUploadingAsset } = useMutation({
-    mutationFn: ({ file, postId }: { file: File; postId?: string }) =>
-      uploadBlogAsset(file, postId),
+    mutationFn: ({ file, postId }: { file: File; postId?: string }) => uploadBlogAsset(file, postId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminBlogKeys.posts() });
     },
@@ -148,8 +150,7 @@ export const useAdminBlog = () => {
 
   // Mutation for deleting blog asset
   const { mutate: deleteAsset, isPending: isDeletingAsset } = useMutation({
-    mutationFn: ({ postId, assetUrl }: { postId: string; assetUrl: string }) =>
-      deleteBlogAsset(postId, assetUrl),
+    mutationFn: ({ postId, assetUrl }: { postId: string; assetUrl: string }) => deleteBlogAsset(postId, assetUrl),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminBlogKeys.posts() });
     },
@@ -166,7 +167,11 @@ export const useAdminBlog = () => {
     refetch,
     createPost: createPostMutation,
     isCreating,
-    updatePost: (id: string, payload: UpdateBlogPostPayload, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => {
+    updatePost: (
+      id: string,
+      payload: UpdateBlogPostPayload,
+      options?: { onSuccess?: () => void; onError?: (error: Error) => void },
+    ) => {
       if (options) {
         updatePostAsync({ id, payload }, options);
       } else {

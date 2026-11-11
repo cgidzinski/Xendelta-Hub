@@ -44,13 +44,7 @@ const fetchBlogPosts = async (page: number = 1, limit: number = 10): Promise<Blo
 export const useBlog = (options: UseBlogOptions = {}) => {
   const { page = 1, limit = 10, enabled = true } = options;
 
-  const {
-    data,
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: blogKeys.list(page, limit),
     queryFn: () => fetchBlogPosts(page, limit),
     enabled,

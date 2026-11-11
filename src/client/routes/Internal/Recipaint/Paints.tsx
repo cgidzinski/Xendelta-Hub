@@ -291,8 +291,8 @@ export default function Paints() {
         <DialogTitle>Remove paint</DialogTitle>
         <DialogContent>
           <Typography>
-            Remove {pendingDelete ? formatPaint(pendingDelete) : "this paint"} from your collection? Recipes that use
-            it keep their own copy, so none of them change.
+            Remove {pendingDelete ? formatPaint(pendingDelete) : "this paint"} from your collection? Recipes that use it
+            keep their own copy, so none of them change.
           </Typography>
         </DialogContent>
         <DialogActions>

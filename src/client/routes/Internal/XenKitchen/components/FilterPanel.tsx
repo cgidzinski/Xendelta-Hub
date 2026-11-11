@@ -1,12 +1,30 @@
 import { useState } from "react";
 import {
-  Autocomplete, Box, Button, Chip, Drawer, FormControlLabel, MenuItem, Popover, Stack, Switch, TextField,
-  ToggleButton, ToggleButtonGroup, Typography, useMediaQuery,
+  Autocomplete,
+  Box,
+  Button,
+  Chip,
+  Drawer,
+  FormControlLabel,
+  MenuItem,
+  Popover,
+  Stack,
+  Switch,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+  useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import {
-  COOK_METHODS, COOK_METHOD_LABELS, EMPTY_FILTERS, type CookMethod, type KitchenFilters, type KitchenSort,
+  COOK_METHODS,
+  COOK_METHOD_LABELS,
+  EMPTY_FILTERS,
+  type CookMethod,
+  type KitchenFilters,
+  type KitchenSort,
 } from "@shared/xenkitchen/kitchen";
 import { useIngredientSuggestions, useKitchenTags } from "../../../../hooks/xenkitchen/useKitchen";
 import { MethodIconView } from "./kitchenIcons";
@@ -36,23 +54,40 @@ export default function FilterPanel({ anchor, open, onClose, filters, onChange }
 
   if (phone) {
     return (
-      <Drawer anchor="bottom" open={open} onClose={onClose}
-        slotProps={{ paper: { sx: { borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: "85vh" } } }}>
+      <Drawer
+        anchor="bottom"
+        open={open}
+        onClose={onClose}
+        slotProps={{ paper: { sx: { borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: "85vh" } } }}
+      >
         <Box sx={{ width: 40, height: 4, borderRadius: 2, bgcolor: "divider", mx: "auto", mt: 1 }} />
         {body}
       </Drawer>
     );
   }
   return (
-    <Popover open={open} anchorEl={anchor} onClose={onClose}
-      anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }}
-      slotProps={{ paper: { sx: { width: 380, mt: 1, borderRadius: 2 } } }}>
+    <Popover
+      open={open}
+      anchorEl={anchor}
+      onClose={onClose}
+      anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      transformOrigin={{ vertical: "top", horizontal: "right" }}
+      slotProps={{ paper: { sx: { width: 380, mt: 1, borderRadius: 2 } } }}
+    >
       {body}
     </Popover>
   );
 }
 
-function FilterBody({ filters, onChange, onClose }: { filters: KitchenFilters; onChange: (f: KitchenFilters) => void; onClose: () => void }) {
+function FilterBody({
+  filters,
+  onChange,
+  onClose,
+}: {
+  filters: KitchenFilters;
+  onChange: (f: KitchenFilters) => void;
+  onClose: () => void;
+}) {
   const set = (patch: Partial<KitchenFilters>) => onChange({ ...filters, ...patch });
   const { tags } = useKitchenTags();
   const [ingQuery, setIngQuery] = useState("");
@@ -61,16 +96,37 @@ function FilterBody({ filters, onChange, onClose }: { filters: KitchenFilters; o
   return (
     <Stack spacing={2.5} sx={{ p: 2.5 }}>
       <Box>
-        <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Sort</Typography>
-        <TextField select size="small" fullWidth value={filters.sort} onChange={(e) => set({ sort: e.target.value as KitchenSort })}>
-          {(Object.keys(SORT_LABELS) as KitchenSort[]).map((s) => <MenuItem key={s} value={s}>{SORT_LABELS[s]}</MenuItem>)}
+        <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
+          Sort
+        </Typography>
+        <TextField
+          select
+          size="small"
+          fullWidth
+          value={filters.sort}
+          onChange={(e) => set({ sort: e.target.value as KitchenSort })}
+        >
+          {(Object.keys(SORT_LABELS) as KitchenSort[]).map((s) => (
+            <MenuItem key={s} value={s}>
+              {SORT_LABELS[s]}
+            </MenuItem>
+          ))}
         </TextField>
       </Box>
 
       <Box>
-        <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Type</Typography>
-        <ToggleButtonGroup exclusive size="small" fullWidth value={filters.layout}
-          onChange={(_, v) => { if (v !== null) set({ layout: v }); }}>
+        <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
+          Type
+        </Typography>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          fullWidth
+          value={filters.layout}
+          onChange={(_, v) => {
+            if (v !== null) set({ layout: v });
+          }}
+        >
           <ToggleButton value="">All</ToggleButton>
           <ToggleButton value="recipe">Recipes</ToggleButton>
           <ToggleButton value="instructions">Instructions</ToggleButton>
@@ -83,11 +139,22 @@ function FilterBody({ filters, onChange, onClose }: { filters: KitchenFilters; o
       />
 
       <Box>
-        <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Ready in</Typography>
-        <ToggleButtonGroup exclusive size="small" fullWidth value={filters.maxMinutes ?? 0}
-          onChange={(_, v) => set({ maxMinutes: v ? Number(v) : null })}>
+        <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
+          Ready in
+        </Typography>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          fullWidth
+          value={filters.maxMinutes ?? 0}
+          onChange={(_, v) => set({ maxMinutes: v ? Number(v) : null })}
+        >
           <ToggleButton value={0}>Any</ToggleButton>
-          {TIME_OPTIONS.map((t) => <ToggleButton key={t} value={t}>≤ {t} min</ToggleButton>)}
+          {TIME_OPTIONS.map((t) => (
+            <ToggleButton key={t} value={t}>
+              ≤ {t} min
+            </ToggleButton>
+          ))}
         </ToggleButtonGroup>
       </Box>
 
@@ -111,11 +178,19 @@ function FilterBody({ filters, onChange, onClose }: { filters: KitchenFilters; o
         inputValue={ingQuery}
         onInputChange={(_, v) => setIngQuery(v)}
         onChange={(_, v) => set({ ingredients: v as string[] })}
-        renderInput={(p) => <TextField {...p} label="Contains ingredient" placeholder={filters.ingredients.length ? "" : "e.g. chicken"} />}
+        renderInput={(p) => (
+          <TextField
+            {...p}
+            label="Contains ingredient"
+            placeholder={filters.ingredients.length ? "" : "e.g. chicken"}
+          />
+        )}
       />
 
       <Box>
-        <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>Cooking method</Typography>
+        <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
+          Cooking method
+        </Typography>
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
           {COOK_METHODS.map((m: CookMethod) => (
             <Chip
@@ -131,10 +206,15 @@ function FilterBody({ filters, onChange, onClose }: { filters: KitchenFilters; o
       </Box>
 
       <Stack direction="row" justifyContent="space-between">
-        <Button color="inherit" onClick={() => onChange({ ...EMPTY_FILTERS, q: filters.q, category: filters.category, sort: filters.sort })}>
+        <Button
+          color="inherit"
+          onClick={() => onChange({ ...EMPTY_FILTERS, q: filters.q, category: filters.category, sort: filters.sort })}
+        >
           Clear filters
         </Button>
-        <Button variant="contained" onClick={onClose}>Done</Button>
+        <Button variant="contained" onClick={onClose}>
+          Done
+        </Button>
       </Stack>
     </Stack>
   );

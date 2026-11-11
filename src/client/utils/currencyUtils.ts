@@ -65,9 +65,8 @@ export function formatCurrency(amount: number, currency: string): string {
 
 export function getCurrencySymbol(currency: string): string {
   return (
-    new Intl.NumberFormat("en-US", { style: "currency", currency })
-      .formatToParts(0)
-      .find((p) => p.type === "currency")?.value ?? currency
+    new Intl.NumberFormat("en-US", { style: "currency", currency }).formatToParts(0).find((p) => p.type === "currency")
+      ?.value ?? currency
   );
 }
 

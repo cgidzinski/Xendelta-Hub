@@ -32,7 +32,7 @@ export type LimitDirection = "ceiling" | "floor";
  * treat a savings budget as a cap and report being behind on it as comfortable.
  */
 export function directionOf(measures: BudgetMeasures): LimitDirection {
-    return measures === "expense" ? "ceiling" : "floor";
+  return measures === "expense" ? "ceiling" : "floor";
 }
 
 /**
@@ -43,21 +43,21 @@ export function directionOf(measures: BudgetMeasures): LimitDirection {
  * so anything summing "what has gone toward this" needs this as well as the direction.
  */
 export function countsItemType(measures: BudgetMeasures): "expense" | "income" {
-    return measures === "income" ? "income" : "expense";
+  return measures === "income" ? "income" : "expense";
 }
 
 /** Everything at or past this share of a CEILING is worth looking at before the rest. */
 export const NEAR_LIMIT_PERCENT = 80;
 
 export type LimitState =
-    /** Comfortably inside a ceiling, or a floor still on track. */
-    | "ok"
-    /** Nearing a ceiling, or a floor that has fallen behind the pace it needs. */
-    | "warn"
-    /** Past a ceiling. The failure state. */
-    | "over"
-    /** Reached a floor. The success state. */
-    | "met";
+  /** Comfortably inside a ceiling, or a floor still on track. */
+  | "ok"
+  /** Nearing a ceiling, or a floor that has fallen behind the pace it needs. */
+  | "warn"
+  /** Past a ceiling. The failure state. */
+  | "over"
+  /** Reached a floor. The success state. */
+  | "met";
 
 /**
  * `pace` is the elapsed fraction of the period, 0-1.
@@ -68,26 +68,28 @@ export type LimitState =
  * signal measured the only way that means anything for a floor. With no pace to compare
  * against, a floor short of its amount is simply in progress.
  */
-export function limitState(
-    direction: LimitDirection, percent: number, pace?: number,
-): LimitState {
-    if (direction === "floor") {
-        if (percent >= 100) return "met";
-        if (pace !== undefined && percent < pace * 100) return "warn";
-        return "ok";
-    }
-    if (percent > 100) return "over";
-    return percent >= NEAR_LIMIT_PERCENT ? "warn" : "ok";
+export function limitState(direction: LimitDirection, percent: number, pace?: number): LimitState {
+  if (direction === "floor") {
+    if (percent >= 100) return "met";
+    if (pace !== undefined && percent < pace * 100) return "warn";
+    return "ok";
+  }
+  if (percent > 100) return "over";
+  return percent >= NEAR_LIMIT_PERCENT ? "warn" : "ok";
 }
 
 /** The colour for a state, or undefined to leave the surrounding text alone. */
 export function limitColor(state: LimitState): string | undefined {
-    switch (state) {
-        case "over": return "error.main";
-        case "warn": return "warning.main";
-        case "met": return INCOME_COLOR;
-        default: return undefined;
-    }
+  switch (state) {
+    case "over":
+      return "error.main";
+    case "warn":
+      return "warning.main";
+    case "met":
+      return INCOME_COLOR;
+    default:
+      return undefined;
+  }
 }
 
 /**
@@ -97,31 +99,33 @@ export function limitColor(state: LimitState): string | undefined {
  * and what is still owed to a floor - the wording is what separates them.
  */
 export function limitCaption(
-    direction: LimitDirection, remaining: number, percent: number, money: (v: number) => string,
+  direction: LimitDirection,
+  remaining: number,
+  percent: number,
+  money: (v: number) => string,
 ): string {
-    if (direction === "floor") {
-        return remaining > 0
-            ? `${money(remaining)} to go · ${percent}%`
-            : `${money(-remaining)} past target · ${percent}%`;
-    }
-    return remaining < 0
-        ? `${money(-remaining)} over · ${percent}%`
-        : `${money(remaining)} left · ${percent}%`;
+  if (direction === "floor") {
+    return remaining > 0 ? `${money(remaining)} to go · ${percent}%` : `${money(-remaining)} past target · ${percent}%`;
+  }
+  return remaining < 0 ? `${money(-remaining)} over · ${percent}%` : `${money(remaining)} left · ${percent}%`;
 }
 
 /** "of the limit" / "of the target", for screen-reader descriptions. */
 export function limitNoun(direction: LimitDirection): string {
-    return direction === "floor" ? "target" : "limit";
+  return direction === "floor" ? "target" : "limit";
 }
 
 const PERIOD_LABELS: Record<string, string> = {
-    weekly: "weekly", monthly: "monthly", quarterly: "quarterly",
-    yearly: "yearly", custom: "one-off",
+  weekly: "weekly",
+  monthly: "monthly",
+  quarterly: "quarterly",
+  yearly: "yearly",
+  custom: "one-off",
 };
 
 /** A budget's period as a word, e.g. "monthly" or "one-off" for a custom range. */
 export function periodLabel(period: string): string {
-    return PERIOD_LABELS[period] || period;
+  return PERIOD_LABELS[period] || period;
 }
 
 /**
@@ -131,7 +135,7 @@ export function periodLabel(period: string): string {
  * early.
  */
 export function aheadIsGood(direction: LimitDirection): boolean {
-    return direction === "floor";
+  return direction === "floor";
 }
 
 /**
@@ -151,21 +155,21 @@ export function aheadIsGood(direction: LimitDirection): boolean {
  */
 
 export type VerdictKey =
-    /** The window is still running. `limitState` is the one to ask. */
-    | "open"
-    /** Inside a ceiling, or a floor that was reached. */
-    | "pass"
-    /** Past a ceiling, or a floor that fell short. */
-    | "miss"
-    /** Nothing was counted, so there is nothing to judge. */
-    | "quiet";
+  /** The window is still running. `limitState` is the one to ask. */
+  | "open"
+  /** Inside a ceiling, or a floor that was reached. */
+  | "pass"
+  /** Past a ceiling, or a floor that fell short. */
+  | "miss"
+  /** Nothing was counted, so there is nothing to judge. */
+  | "quiet";
 
 export interface BudgetVerdict {
-    key: VerdictKey;
-    /** "Passed", "Missed", "Target met", "No activity", "In progress". */
-    word: string;
-    /** Undefined for `open` and `quiet`, so surrounding text is left alone. */
-    color?: string;
+  key: VerdictKey;
+  /** "Passed", "Missed", "Target met", "No activity", "In progress". */
+  word: string;
+  /** Undefined for `open` and `quiet`, so surrounding text is left alone. */
+  color?: string;
 }
 
 /**
@@ -176,7 +180,7 @@ export interface BudgetVerdict {
  * its own last day.
  */
 export function isSettled(periodTo: string, asOf: string): boolean {
-    return new Date(asOf).getTime() >= new Date(periodTo).getTime();
+  return new Date(asOf).getTime() >= new Date(periodTo).getTime();
 }
 
 /**
@@ -186,23 +190,26 @@ export function isSettled(periodTo: string, asOf: string): boolean {
  * report six passes.
  */
 export function budgetVerdict(
-    direction: LimitDirection, percent: number, itemCount: number,
-    periodTo: string, asOf: string,
+  direction: LimitDirection,
+  percent: number,
+  itemCount: number,
+  periodTo: string,
+  asOf: string,
 ): BudgetVerdict {
-    if (!isSettled(periodTo, asOf)) {
-        return { key: "open", word: "In progress" };
-    }
-    if (itemCount === 0) {
-        return { key: "quiet", word: "No activity" };
-    }
-    if (direction === "floor") {
-        return percent >= 100
-            ? { key: "pass", word: "Target met", color: INCOME_COLOR }
-            : { key: "miss", word: "Missed", color: "error.main" };
-    }
-    return percent > 100
-        ? { key: "miss", word: "Missed", color: "error.main" }
-        : { key: "pass", word: "Passed", color: INCOME_COLOR };
+  if (!isSettled(periodTo, asOf)) {
+    return { key: "open", word: "In progress" };
+  }
+  if (itemCount === 0) {
+    return { key: "quiet", word: "No activity" };
+  }
+  if (direction === "floor") {
+    return percent >= 100
+      ? { key: "pass", word: "Target met", color: INCOME_COLOR }
+      : { key: "miss", word: "Missed", color: "error.main" };
+  }
+  return percent > 100
+    ? { key: "miss", word: "Missed", color: "error.main" }
+    : { key: "pass", word: "Passed", color: INCOME_COLOR };
 }
 
 /**
@@ -221,14 +228,17 @@ export const NO_ACTIVITY_CAPTION = "No activity · nothing to judge";
  * budget indistinguishable from a live one at a glance.
  */
 export function settledCaption(
-    direction: LimitDirection, remaining: number, percent: number, money: (v: number) => string,
+  direction: LimitDirection,
+  remaining: number,
+  percent: number,
+  money: (v: number) => string,
 ): string {
-    if (direction === "floor") {
-        return remaining <= 0
-            ? `Closed ${money(-remaining)} past target · ${percent}%`
-            : `Closed ${money(remaining)} short · ${percent}%`;
-    }
-    return remaining < 0
-        ? `Closed ${money(-remaining)} over · ${percent}%`
-        : `Closed ${money(remaining)} under · ${percent}%`;
+  if (direction === "floor") {
+    return remaining <= 0
+      ? `Closed ${money(-remaining)} past target · ${percent}%`
+      : `Closed ${money(remaining)} short · ${percent}%`;
+  }
+  return remaining < 0
+    ? `Closed ${money(-remaining)} over · ${percent}%`
+    : `Closed ${money(remaining)} under · ${percent}%`;
 }

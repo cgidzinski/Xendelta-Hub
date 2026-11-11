@@ -10,8 +10,12 @@ design language: theme tokens, the shared components in `src/client/components/u
 - Reuse the shared components before hand-writing headers, labels, empty states or dialogs.
 
 ## Checks
-`npm run lint`, `npm run type-check`, `npm test`, `npm run build`. CI runs all of them plus
-`npm audit --omit=dev --audit-level=high`.
+`npm run format:check`, `npm run lint`, `npm run type-check`, `npm test`, `npm run build`. CI runs all of them
+plus `npm audit --omit=dev --audit-level=high`.
+
+- Code is formatted with Prettier (`.prettierrc.json`: 120 columns, 2 spaces, double quotes, trailing commas).
+  Run `npm run format` before committing; CI fails on unformatted code. Markdown and the workflow YAML are
+  not auto-formatted.
 
 - `tsc` fails on unused locals, imports and parameters. Prefix an intentionally unused parameter with `_`.
   **Never drop the 4th parameter of an Express error handler** (`(err, req, res, next)`): Express detects error

@@ -5,15 +5,12 @@ import SectionCard from "../../../../components/ui/SectionCard";
 import ImportHistory from "../components/ImportHistory";
 
 export default function ImportsSection() {
-    const { book } = useOutletContext<BookDetailContext>();
-    return (
-        <Stack spacing={2}>
-            <SectionCard
-                title="Imports"
-                description="Every CSV you've brought in. Delete one to remove everything it added."
-            >
-                <ImportHistory bookId={book._id} />
-            </SectionCard>
-        </Stack>
-    );
+  const { book } = useOutletContext<BookDetailContext>();
+  return (
+    <Stack spacing={2}>
+      <SectionCard title="Imports" description="Every CSV you've brought in. Delete one to remove everything it added.">
+        <ImportHistory bookId={book._id} />
+      </SectionCard>
+    </Stack>
+  );
 }

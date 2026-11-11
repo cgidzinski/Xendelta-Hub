@@ -98,12 +98,12 @@ describe("injectMetaTags", () => {
     const out = injectMetaTags(SHELL, '<meta property="og:title" content="X" />', "Necron Warrior");
     expect(out).toContain("<title>Necron Warrior</title>");
     expect(out).not.toContain("<title>Xendelta Hub</title>");
-    expect(out.indexOf('og:title')).toBeLessThan(out.indexOf("</head>"));
+    expect(out.indexOf("og:title")).toBeLessThan(out.indexOf("</head>"));
     expect(out).toContain('<div id="root">');
   });
 
   it("escapes the injected title", () => {
-    const out = injectMetaTags(SHELL, "", '</title><script>alert(1)</script>');
+    const out = injectMetaTags(SHELL, "", "</title><script>alert(1)</script>");
     expect(out).not.toContain("<script>alert(1)</script>");
     expect(out).toContain("&lt;/title&gt;");
   });

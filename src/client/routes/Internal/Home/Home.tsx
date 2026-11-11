@@ -40,10 +40,7 @@ export default function Home() {
     <Box>
       <PageContainer width="wide">
         <CompactHomeHeader />
-        <PinnedAppsSection
-          pinnedApps={resolvePinnedApps(profile.pinnedApps)}
-          appDetails={appDetails}
-        />
+        <PinnedAppsSection pinnedApps={resolvePinnedApps(profile.pinnedApps)} appDetails={appDetails} />
       </PageContainer>
     </Box>
   );

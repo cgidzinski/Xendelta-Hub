@@ -7,4 +7,3 @@ export interface ParticipantInfo {
   email?: string;
   avatar?: string;
 }
-

@@ -19,7 +19,6 @@ interface ProfileListItemProps {
 }
 
 export default function ProfileListItem({ profile, onNavigate, isSelected }: ProfileListItemProps) {
-
   // Use direct avatar URL from profile
   const avatarUrl = useMemo(() => {
     return profile?.avatar;
@@ -27,12 +26,7 @@ export default function ProfileListItem({ profile, onNavigate, isSelected }: Pro
 
   return (
     <ListItem disablePadding>
-      <ListItemButton
-        sx={{ pl: 1 }}
-        disableGutters
-        onClick={onNavigate}
-        selected={isSelected}
-      >
+      <ListItemButton sx={{ pl: 1 }} disableGutters onClick={onNavigate} selected={isSelected}>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
           <Box sx={{ display: "flex", flexDirection: "row", gap: 1 }}>
             <ListItemAvatar>

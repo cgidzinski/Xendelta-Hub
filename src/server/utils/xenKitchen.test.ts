@@ -1,29 +1,70 @@
 import { describe, it, expect } from "vitest";
 import {
-  applyKitchenFilters, collectTags, type CategoryLike, type BookLike, canEdit, canManage, canView, changeRole,
-  pickTargetCategory, removeMember, roleIn, generateShareToken, itemFieldsFromBody, SHARE_TOKEN_PATTERN,
-  serializeItem, suggestIngredients,
+  applyKitchenFilters,
+  collectTags,
+  type CategoryLike,
+  type BookLike,
+  canEdit,
+  canManage,
+  canView,
+  changeRole,
+  pickTargetCategory,
+  removeMember,
+  roleIn,
+  generateShareToken,
+  itemFieldsFromBody,
+  SHARE_TOKEN_PATTERN,
+  serializeItem,
+  suggestIngredients,
 } from "./xenKitchen";
 import { EMPTY_FILTERS } from "@shared/xenkitchen/kitchen";
 
 const dinner = { _id: "c1", layout: "recipe" as const, name: "Dinner", color: "#e57373", icon: "dinner" };
 const frozen = { _id: "c2", layout: "instructions" as const, name: "Frozen", color: "#7986cb", icon: "frozen" };
-const cats = new Map<string, CategoryLike>([["c1", dinner], ["c2", frozen]]);
+const cats = new Map<string, CategoryLike>([
+  ["c1", dinner],
+  ["c2", frozen],
+]);
 
 const items = [
   {
-    _id: "i1", title: "Chicken curry", category_id: "c1", tags: ["spicy"], favorited_by: ["me"],
-    prep_minutes: 15, cook_minutes: 30, updated_at: "2026-01-03", created_at: "2026-01-01",
-    ingredients: [{ name: "Chicken thighs", name_key: "chicken thighs", unit: "lb" }, { name: "Garlic", name_key: "garlic", unit: "cloves" }],
+    _id: "i1",
+    title: "Chicken curry",
+    category_id: "c1",
+    tags: ["spicy"],
+    favorited_by: ["me"],
+    prep_minutes: 15,
+    cook_minutes: 30,
+    updated_at: "2026-01-03",
+    created_at: "2026-01-01",
+    ingredients: [
+      { name: "Chicken thighs", name_key: "chicken thighs", unit: "lb" },
+      { name: "Garlic", name_key: "garlic", unit: "cloves" },
+    ],
   },
   {
-    _id: "i2", title: "Frozen pizza", category_id: "c2", brand: "Acme", tags: [], updated_at: "2026-01-05", created_at: "2026-01-04",
+    _id: "i2",
+    title: "Frozen pizza",
+    category_id: "c2",
+    brand: "Acme",
+    tags: [],
+    updated_at: "2026-01-05",
+    created_at: "2026-01-04",
     methods: [{ method: "oven", minutes_min: 12, minutes_max: 15 }],
   },
   {
-    _id: "i3", title: "Garlic bread", category_id: null, tags: ["spicy", "quick"], updated_at: "2026-01-01", created_at: "2026-01-02",
-    prep_minutes: 5, cook_minutes: 5,
-    ingredients: [{ name: "garlic", name_key: "garlic", unit: "clove" }, { name: "Bread", unit: "" }],
+    _id: "i3",
+    title: "Garlic bread",
+    category_id: null,
+    tags: ["spicy", "quick"],
+    updated_at: "2026-01-01",
+    created_at: "2026-01-02",
+    prep_minutes: 5,
+    cook_minutes: 5,
+    ingredients: [
+      { name: "garlic", name_key: "garlic", unit: "clove" },
+      { name: "Bread", unit: "" },
+    ],
   },
 ];
 
@@ -57,7 +98,9 @@ describe("applyKitchenFilters", () => {
   it("requires every tag and ingredient", () => {
     expect(ids(applyKitchenFilters(items, { ...EMPTY_FILTERS, tags: ["spicy", "quick"] }, cats))).toEqual(["i3"]);
     expect(ids(applyKitchenFilters(items, { ...EMPTY_FILTERS, ingredients: ["Garlic"] }, cats))).toEqual(["i1", "i3"]);
-    expect(ids(applyKitchenFilters(items, { ...EMPTY_FILTERS, ingredients: ["garlic", "bread"] }, cats))).toEqual(["i3"]);
+    expect(ids(applyKitchenFilters(items, { ...EMPTY_FILTERS, ingredients: ["garlic", "bread"] }, cats))).toEqual([
+      "i3",
+    ]);
   });
   it("searches title, brand, tags and ingredient names", () => {
     expect(ids(applyKitchenFilters(items, { ...EMPTY_FILTERS, q: "acme" }, cats))).toEqual(["i2"]);
@@ -82,7 +125,15 @@ describe("suggestIngredients", () => {
     expect(s.map((x) => x.name.toLowerCase())).toEqual(["garlic", "bread", "chicken thighs"]);
   });
   it("matches the query and ranks prefix matches first", () => {
-    const more = [...items, { ingredients: [{ name: "Thai basil", unit: "" }, { name: "Basil", unit: "" }] }];
+    const more = [
+      ...items,
+      {
+        ingredients: [
+          { name: "Thai basil", unit: "" },
+          { name: "Basil", unit: "" },
+        ],
+      },
+    ];
     expect(suggestIngredients(more, "bas").map((x) => x.name)).toEqual(["Basil", "Thai basil"]);
     expect(suggestIngredients(items, "zzz")).toEqual([]);
   });
@@ -90,7 +141,10 @@ describe("suggestIngredients", () => {
 
 describe("collectTags", () => {
   it("counts tags", () => {
-    expect(collectTags(items)).toEqual([{ tag: "spicy", count: 2 }, { tag: "quick", count: 1 }]);
+    expect(collectTags(items)).toEqual([
+      { tag: "spicy", count: 2 },
+      { tag: "quick", count: 1 },
+    ]);
   });
 });
 
@@ -101,14 +155,25 @@ describe("itemFieldsFromBody", () => {
   it("normalises tags, drops empty rows and adds ingredient keys", () => {
     const out: any = itemFieldsFromBody({
       tags: ["Quick ", "quick", ""],
-      ingredients: [{ name: " Olive Oil ", quantity: "2", unit: "tbsp" }, { name: "", quantity: "" }],
+      ingredients: [
+        { name: " Olive Oil ", quantity: "2", unit: "tbsp" },
+        { name: "", quantity: "" },
+      ],
       steps: [{ text: "Stir" }, { text: "  " }],
       methods: [{ method: "oven", temp: 425, minutes_min: 18, minutes_max: 20, steps: ["", "Remove film"] }],
     });
     expect(out.tags).toEqual(["quick"]);
-    expect(out.ingredients).toEqual([{ name: "Olive Oil", name_key: "olive oil", quantity: "2", unit: "tbsp", note: "", section: "" }]);
+    expect(out.ingredients).toEqual([
+      { name: "Olive Oil", name_key: "olive oil", quantity: "2", unit: "tbsp", note: "", section: "" },
+    ]);
     expect(out.steps).toEqual([{ text: "Stir", timer_minutes: null }]);
-    expect(out.methods[0]).toMatchObject({ method: "oven", temp: 425, temp_unit: "F", preheat: false, steps: ["Remove film"] });
+    expect(out.methods[0]).toMatchObject({
+      method: "oven",
+      temp: 425,
+      temp_unit: "F",
+      preheat: false,
+      steps: ["Remove film"],
+    });
   });
   it("clears the category with an empty string", () => {
     expect(itemFieldsFromBody({ category_id: "" })).toEqual({ category_id: null });
@@ -116,9 +181,29 @@ describe("itemFieldsFromBody", () => {
 });
 
 describe("serializeItem", () => {
-  const raw = { ...items[1], _id: "i2", book_id: "b1", created_by: "u1", favorited_by: ["u1"], share: { enabled: true, token: "t".repeat(22) }, images: [{ _id: "m1", url: "u", gcs_path: "p" }] };
+  const raw = {
+    ...items[1],
+    _id: "i2",
+    book_id: "b1",
+    created_by: "u1",
+    favorited_by: ["u1"],
+    share: { enabled: true, token: "t".repeat(22) },
+    images: [{ _id: "m1", url: "u", gcs_path: "p" }],
+  };
   it("carries the category layout and hides storage paths", () => {
-    const books = new Map<string, BookLike>([["b1", { _id: "b1", name: "Home", members: [{ user_id: "u1", role: "owner" }, { user_id: "u2", role: "viewer" }] }]]);
+    const books = new Map<string, BookLike>([
+      [
+        "b1",
+        {
+          _id: "b1",
+          name: "Home",
+          members: [
+            { user_id: "u1", role: "owner" },
+            { user_id: "u2", role: "viewer" },
+          ],
+        },
+      ],
+    ]);
     const s: any = serializeItem(raw, cats, { uid: "u1", books, usernames: new Map([["u1", "ann"]]) });
     expect(s.layout).toBe("instructions");
     expect(s.favorite).toBe(true);
@@ -158,7 +243,10 @@ describe("XenKitchen link previews", () => {
   });
 
   it("escapes titles and includes the cover image", () => {
-    const tags = buildKitchenMetaTags({ title: 'Mom"s <pie>', images: [{ url: "https://img/x.webp" }] }, "https://hub.test/k/x");
+    const tags = buildKitchenMetaTags(
+      { title: 'Mom"s <pie>', images: [{ url: "https://img/x.webp" }] },
+      "https://hub.test/k/x",
+    );
     expect(tags).toContain("Mom&quot;s &lt;pie&gt;");
     expect(tags).toContain('og:image" content="https://img/x.webp"');
   });
@@ -172,7 +260,14 @@ describe("XenKitchen link previews", () => {
 });
 
 describe("book roles", () => {
-  const book: BookLike = { _id: "b", members: [{ user_id: "own", role: "owner" }, { user_id: "ed", role: "editor" }, { user_id: "vw", role: "viewer" }] };
+  const book: BookLike = {
+    _id: "b",
+    members: [
+      { user_id: "own", role: "owner" },
+      { user_id: "ed", role: "editor" },
+      { user_id: "vw", role: "viewer" },
+    ],
+  };
   it("grants view/edit/manage by role", () => {
     expect([canView(book, "vw"), canEdit(book, "vw"), canManage(book, "vw")]).toEqual([true, false, false]);
     expect([canView(book, "ed"), canEdit(book, "ed"), canManage(book, "ed")]).toEqual([true, true, false]);

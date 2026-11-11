@@ -53,7 +53,7 @@ const createAxiosInstance = (): AxiosInstance => {
   instance.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
       const token = localStorage.getItem("token");
-      
+
       // Add Authorization header if token exists
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
@@ -77,7 +77,7 @@ const createAxiosInstance = (): AxiosInstance => {
     },
     (error) => {
       return Promise.reject(error);
-    }
+    },
   );
 
   // Response interceptor for error handling
@@ -113,7 +113,7 @@ const createAxiosInstance = (): AxiosInstance => {
         // Something else happened
         throw makeApiError(error.message || "An unexpected error occurred", error);
       }
-    }
+    },
   );
 
   return instance;

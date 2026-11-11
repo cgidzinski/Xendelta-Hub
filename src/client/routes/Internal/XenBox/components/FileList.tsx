@@ -2,16 +2,7 @@ import { useNavigate } from "react-router-dom";
 import ListSkeleton from "../../../../components/ui/ListSkeleton";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
 import EmptyState from "../../../../components/ui/EmptyState";
-import {
-  Box,
-  Typography,
-  Chip,
-  Stack,
-  Card,
-  CardContent,
-  CardActionArea,
-  IconButton,
-} from "@mui/material";
+import { Box, Typography, Chip, Stack, Card, CardContent, CardActionArea, IconButton } from "@mui/material";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import LockIcon from "@mui/icons-material/Lock";
 import ScheduleIcon from "@mui/icons-material/Schedule";
@@ -79,9 +70,7 @@ export default function FileList({ files, isLoading, isError, error, onRetry }: 
   }
 
   if (isError) {
-    return (
-      <ErrorDisplay error={error ?? null} title="Couldn't load your files" onRetry={onRetry} />
-    );
+    return <ErrorDisplay error={error ?? null} title="Couldn't load your files" onRetry={onRetry} />;
   }
 
   if (!files || files.length === 0) {
@@ -102,7 +91,7 @@ export default function FileList({ files, isLoading, isError, error, onRetry }: 
             <IconButton
               size="small"
               onClick={(e) => handleCopyUrl(e, file)}
-              sx={{ 
+              sx={{
                 position: "absolute",
                 top: 8,
                 right: 8,
@@ -117,13 +106,32 @@ export default function FileList({ files, isLoading, isError, error, onRetry }: 
           <CardActionArea onClick={() => handleFileClick(file._id)}>
             <CardContent>
               <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 1 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 500, flexGrow: 1, wordBreak: "break-word", pr: file.shareToken ? 4 : 0 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    flexWrap: "wrap",
+                    gap: 1,
+                  }}
+                >
+                  <Typography
+                    variant="h6"
+                    sx={{ fontWeight: 500, flexGrow: 1, wordBreak: "break-word", pr: file.shareToken ? 4 : 0 }}
+                  >
                     {file.filename}
                   </Typography>
                 </Box>
-                
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 1 }}>
+
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-end",
+                    flexWrap: "wrap",
+                    gap: 1,
+                  }}
+                >
                   <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center" }}>
                     <Typography variant="body2" color="text.secondary">
                       Type: {getMimeTypeLabel(file.mimeType)}
@@ -135,7 +143,7 @@ export default function FileList({ files, isLoading, isError, error, onRetry }: 
                       Uploaded: {format(new Date(file.createdAt), "MMM d, yyyy")}
                     </Typography>
                   </Box>
-                  
+
                   <Stack direction="row" spacing={0.5} flexWrap="wrap" gap={0.5}>
                     <Chip
                       icon={<LockIcon sx={{ fontSize: 14 }} />}
@@ -143,9 +151,9 @@ export default function FileList({ files, isLoading, isError, error, onRetry }: 
                       size="small"
                       color={file.hasPassword ? "success" : "default"}
                       variant="outlined"
-                      sx={{ 
+                      sx={{
                         opacity: file.hasPassword ? 1 : 0.5,
-                        borderColor: file.hasPassword ? undefined : "grey.400"
+                        borderColor: file.hasPassword ? undefined : "grey.400",
                       }}
                     />
                     <Chip
@@ -154,9 +162,9 @@ export default function FileList({ files, isLoading, isError, error, onRetry }: 
                       size="small"
                       color={getExpiryColor(file)}
                       variant="outlined"
-                      sx={{ 
+                      sx={{
                         opacity: !file.expiry ? 0.5 : 1,
-                        borderColor: !file.expiry ? "grey.400" : undefined
+                        borderColor: !file.expiry ? "grey.400" : undefined,
                       }}
                     />
                   </Stack>

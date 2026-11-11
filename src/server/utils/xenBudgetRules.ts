@@ -11,12 +11,21 @@
 
 import { FLAG_OFF_BUDGET, FLAG_UNCATEGORISED } from "../constants/xenbudget";
 
-export type RuleField =
-  | "description" | "amount" | "flags" | "category" | "type" | "date" | "source";
+export type RuleField = "description" | "amount" | "flags" | "category" | "type" | "date" | "source";
 
 export type RuleOp =
-  | "contains" | "not_contains" | "equals" | "starts_with" | "ends_with" | "regex"
-  | "gt" | "gte" | "lt" | "lte" | "between" | "is_empty";
+  | "contains"
+  | "not_contains"
+  | "equals"
+  | "starts_with"
+  | "ends_with"
+  | "regex"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "between"
+  | "is_empty";
 
 /** One weighted category a rule can assign. `amount`/`percentage` are mutually exclusive. */
 export interface CategoryWeightInput {
@@ -143,12 +152,18 @@ function matchString(op: RuleOp, subject: string, cond: RuleCondition): boolean 
   const s = norm(subject, cond.case_sensitive);
   const v = norm(value, cond.case_sensitive);
   switch (op) {
-    case "contains": return s.includes(v);
-    case "not_contains": return !s.includes(v);
-    case "equals": return s === v;
-    case "starts_with": return s.startsWith(v);
-    case "ends_with": return s.endsWith(v);
-    default: return false;
+    case "contains":
+      return s.includes(v);
+    case "not_contains":
+      return !s.includes(v);
+    case "equals":
+      return s === v;
+    case "starts_with":
+      return s.startsWith(v);
+    case "ends_with":
+      return s.endsWith(v);
+    default:
+      return false;
   }
 }
 
@@ -156,13 +171,20 @@ function matchNumber(op: RuleOp, subject: number, cond: RuleCondition): boolean 
   const a = asNumber(cond.value);
   const b = asNumber(cond.value2);
   switch (op) {
-    case "gt": return a !== null && subject > a;
-    case "gte": return a !== null && subject >= a;
-    case "lt": return a !== null && subject < a;
-    case "lte": return a !== null && subject <= a;
-    case "between": return a !== null && b !== null && subject >= Math.min(a, b) && subject <= Math.max(a, b);
-    case "equals": return a !== null && subject === a;
-    default: return false;
+    case "gt":
+      return a !== null && subject > a;
+    case "gte":
+      return a !== null && subject >= a;
+    case "lt":
+      return a !== null && subject < a;
+    case "lte":
+      return a !== null && subject <= a;
+    case "between":
+      return a !== null && b !== null && subject >= Math.min(a, b) && subject <= Math.max(a, b);
+    case "equals":
+      return a !== null && subject === a;
+    default:
+      return false;
   }
 }
 
@@ -202,11 +224,16 @@ function matchCondition(cond: RuleCondition, item: DraftItem): boolean {
       const a = asTime(cond.value);
       const b = asTime(cond.value2);
       switch (cond.op) {
-        case "gt": case "gte": return a !== null && subject >= a;
-        case "lt": case "lte": return a !== null && subject <= a;
-        case "between": return a !== null && b !== null
-          && subject >= Math.min(a, b) && subject <= Math.max(a, b);
-        default: return false;
+        case "gt":
+        case "gte":
+          return a !== null && subject >= a;
+        case "lt":
+        case "lte":
+          return a !== null && subject <= a;
+        case "between":
+          return a !== null && b !== null && subject >= Math.min(a, b) && subject <= Math.max(a, b);
+        default:
+          return false;
       }
     }
 
@@ -350,7 +377,9 @@ export function applyRules(draft: DraftItem, rules: Rule[], options: ApplyOption
       });
       item.category_split_type = actions.category_split_type === "percent" ? "percent" : "equal";
       item.category_weights = (actions.set_category_weights || []).map((w) => ({
-        name: w.name, amount: w.amount, percentage: w.percentage,
+        name: w.name,
+        amount: w.amount,
+        percentage: w.percentage,
       }));
     }
 

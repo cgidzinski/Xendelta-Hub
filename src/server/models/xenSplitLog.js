@@ -4,11 +4,14 @@ var Schema = mongoose.Schema;
 // Append-only activity log for a XenSplit group, readable only by the group owner.
 // Kept out of the group document so it can't bloat every group fetch (or reach
 // members through the group serializer). Rows are deleted with their group.
-var changeSchema = new Schema({
-  field: { type: String, required: true },
-  from: { type: Schema.Types.Mixed },
-  to: { type: Schema.Types.Mixed },
-}, { _id: false });
+var changeSchema = new Schema(
+  {
+    field: { type: String, required: true },
+    from: { type: Schema.Types.Mixed },
+    to: { type: Schema.Types.Mixed },
+  },
+  { _id: false },
+);
 
 var xenSplitLogSchema = new Schema({
   group_id: { type: Schema.Types.ObjectId, required: true },
@@ -18,14 +21,30 @@ var xenSplitLogSchema = new Schema({
     type: String,
     required: true,
     enum: [
-      "group_created", "group_updated", "group_image_updated", "ownership_transferred",
-      "member_added", "member_removed",
-      "expense_created", "expense_updated", "expense_deleted", "expense_restored",
-      "expense_images_added", "expense_image_removed",
-      "recurring_scheduled", "recurring_generated", "recurring_cancelled", "recurring_paused",
-      "recurring_resumed", "recurring_updated",
-      "settlement_created", "settlement_deleted", "settlement_restored",
-      "exchange_created", "exchange_deleted", "exchange_restored",
+      "group_created",
+      "group_updated",
+      "group_image_updated",
+      "ownership_transferred",
+      "member_added",
+      "member_removed",
+      "expense_created",
+      "expense_updated",
+      "expense_deleted",
+      "expense_restored",
+      "expense_images_added",
+      "expense_image_removed",
+      "recurring_scheduled",
+      "recurring_generated",
+      "recurring_cancelled",
+      "recurring_paused",
+      "recurring_resumed",
+      "recurring_updated",
+      "settlement_created",
+      "settlement_deleted",
+      "settlement_restored",
+      "exchange_created",
+      "exchange_deleted",
+      "exchange_restored",
     ],
   },
   target_type: { type: String, enum: ["group", "member", "expense", "settlement", "exchange", "recurring"] },

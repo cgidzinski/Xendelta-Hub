@@ -36,7 +36,9 @@ function timeOf(value: Date | string | undefined): number | undefined {
 function order(settlements: RewindDocument["settlements"]) {
   return settlements
     .map((settlement, index) => ({ settlement, index }))
-    .sort((a, b) => (timeOf(b.settlement.settled_at) ?? 0) - (timeOf(a.settlement.settled_at) ?? 0) || b.index - a.index);
+    .sort(
+      (a, b) => (timeOf(b.settlement.settled_at) ?? 0) - (timeOf(a.settlement.settled_at) ?? 0) || b.index - a.index,
+    );
 }
 
 /** The History list's order: newest first, ties broken deterministically. */

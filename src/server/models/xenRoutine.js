@@ -4,31 +4,37 @@ var Schema = mongoose.Schema;
 // One person's relationship to a routine: the owner is always a member, sharers are
 // added by the owner. Per-routine reminder options live here (mute, heads-up, activity) so
 // each person decides for themselves; delivery channels are per user (XenRoutineSettings).
-var memberSchema = new Schema({
-  user_id: { type: String, required: true },
-  role: { type: String, enum: ["owner", "sharer"], default: "sharer" },
-  muted: { type: Boolean, default: false },
-  // Also remind this many days before it's due (0 = off). On by default: one day ahead.
-  lead_days: { type: Number, min: 0, max: 30, default: 1 },
-  // Tell this person when someone else completes or postpones the routine.
-  activity: { type: Boolean, default: true },
-  // Per-person reminder throttling: people have their own reminder hour and timezone,
-  // so one routine-wide "last notified" no longer works.
-  last_due_notified_at: { type: Date, default: null },
-  lead_notified_for: { type: Date, default: null },
-}, { _id: false });
+var memberSchema = new Schema(
+  {
+    user_id: { type: String, required: true },
+    role: { type: String, enum: ["owner", "sharer"], default: "sharer" },
+    muted: { type: Boolean, default: false },
+    // Also remind this many days before it's due (0 = off). On by default: one day ahead.
+    lead_days: { type: Number, min: 0, max: 30, default: 1 },
+    // Tell this person when someone else completes or postpones the routine.
+    activity: { type: Boolean, default: true },
+    // Per-person reminder throttling: people have their own reminder hour and timezone,
+    // so one routine-wide "last notified" no longer works.
+    last_due_notified_at: { type: Date, default: null },
+    lead_notified_for: { type: Date, default: null },
+  },
+  { _id: false },
+);
 
-var historySchema = new Schema({
-  action: { type: String, enum: ["done", "postponed"], required: true },
-  at: { type: Date, default: Date.now },
-  by_user: { type: String },
-  note: { type: String, maxlength: 500 },
-  // For "done": which scheduled occurrence this completion was for, when it was done
-  // ahead of its time (a later occurrence completed while earlier ones are still pending).
-  occurrence_at: { type: Date },
-  // For "postponed": the due date it was pushed to.
-  due_at: { type: Date },
-}, { _id: false });
+var historySchema = new Schema(
+  {
+    action: { type: String, enum: ["done", "postponed"], required: true },
+    at: { type: Date, default: Date.now },
+    by_user: { type: String },
+    note: { type: String, maxlength: 500 },
+    // For "done": which scheduled occurrence this completion was for, when it was done
+    // ahead of its time (a later occurrence completed while earlier ones are still pending).
+    occurrence_at: { type: Date },
+    // For "postponed": the due date it was pushed to.
+    due_at: { type: Date },
+  },
+  { _id: false },
+);
 
 var xenRoutineSchema = new Schema({
   owner_id: { type: String, required: true },

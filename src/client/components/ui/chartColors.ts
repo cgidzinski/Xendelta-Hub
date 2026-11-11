@@ -11,14 +11,14 @@
 // Xensplit's copies are deliberately left alone; this is
 // XenBudget's palette, not a global migration.
 export const CHART_COLORS = [
-    "#3987e5", // blue
-    "#d95926", // orange
-    "#199e70", // aqua
-    "#c98500", // yellow
-    "#d55181", // magenta
-    "#008300", // green
-    "#9085e9", // violet
-    "#e66767", // red
+  "#3987e5", // blue
+  "#d95926", // orange
+  "#199e70", // aqua
+  "#c98500", // yellow
+  "#d55181", // magenta
+  "#008300", // green
+  "#9085e9", // violet
+  "#e66767", // red
 ] as const;
 
 /**
@@ -36,7 +36,7 @@ export const EXPENSE_COLOR = "#d95926";
 export const INCOME_COLOR = "#199e70";
 
 export function chartColorAt(index: number): string {
-    return CHART_COLORS[index % CHART_COLORS.length];
+  return CHART_COLORS[index % CHART_COLORS.length];
 }
 
 /**
@@ -49,11 +49,11 @@ export function chartColorAt(index: number): string {
  * would reuse hues, and two different ones sharing a hue would be unreadable.
  */
 export function colorForLabel(label: string): string {
-    let hash = 0;
-    for (let i = 0; i < label.length; i++) {
-        hash = (hash * 31 + label.charCodeAt(i)) | 0;
-    }
-    return CHART_COLORS[Math.abs(hash) % CHART_COLORS.length];
+  let hash = 0;
+  for (let i = 0; i < label.length; i++) {
+    hash = (hash * 31 + label.charCodeAt(i)) | 0;
+  }
+  return CHART_COLORS[Math.abs(hash) % CHART_COLORS.length];
 }
 
 /** Quiet neutral for backdrops (e.g. a budget cap behind the spend bar). */

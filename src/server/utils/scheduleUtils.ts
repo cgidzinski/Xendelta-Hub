@@ -3,7 +3,14 @@
 
 export type ScheduleFrequency = "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
 
-export const SCHEDULE_FREQUENCIES: ScheduleFrequency[] = ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"];
+export const SCHEDULE_FREQUENCIES: ScheduleFrequency[] = [
+  "daily",
+  "weekly",
+  "biweekly",
+  "monthly",
+  "quarterly",
+  "yearly",
+];
 
 const DAY_MS = 86_400_000;
 const MONTHS_PER_PERIOD: Partial<Record<ScheduleFrequency, number>> = {
@@ -34,10 +41,17 @@ export function advanceDate(anchor: Date, frequency: ScheduleFrequency, n: numbe
   const targetYear = anchor.getUTCFullYear() + Math.floor(months / 12);
   const targetMonth = ((months % 12) + 12) % 12;
   const day = Math.min(anchor.getUTCDate(), daysInUTCMonth(targetYear, targetMonth));
-  return new Date(Date.UTC(
-    targetYear, targetMonth, day,
-    anchor.getUTCHours(), anchor.getUTCMinutes(), anchor.getUTCSeconds(), anchor.getUTCMilliseconds()
-  ));
+  return new Date(
+    Date.UTC(
+      targetYear,
+      targetMonth,
+      day,
+      anchor.getUTCHours(),
+      anchor.getUTCMinutes(),
+      anchor.getUTCSeconds(),
+      anchor.getUTCMilliseconds(),
+    ),
+  );
 }
 
 // ---- Scheduled-task state machine (pure; persisted/dispatched by TaskDispatcher) ----
@@ -72,7 +86,10 @@ export function computeDueDates(task: TaskScheduleState, now: Date, cap = MAX_RU
 }
 
 /** Pure next-state after `processed` due dates were handled. */
-export function applyAdvance(task: TaskScheduleState, processed: number): { run_count: number; run_at: Date; enabled: boolean } {
+export function applyAdvance(
+  task: TaskScheduleState,
+  processed: number,
+): { run_count: number; run_at: Date; enabled: boolean } {
   const run_count = task.run_count + processed;
   let run_at = task.run_at;
   let enabled = true;

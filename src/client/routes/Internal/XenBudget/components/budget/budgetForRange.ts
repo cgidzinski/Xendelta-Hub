@@ -22,66 +22,69 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Monday of the UTC day `d` falls in, matching the server's ISO-week convention. */
 function utcStartOfWeek(d: Date): Date {
-    const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-    date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
-    return date;
+  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+  return date;
 }
 
 function utcStartOfMonth(d: Date): Date {
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
 }
 
 function utcStartOfQuarter(d: Date): Date {
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - (d.getUTCMonth() % 3), 1));
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - (d.getUTCMonth() % 3), 1));
 }
 
 function utcStartOfYear(d: Date): Date {
-    return new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
 }
 
 function utcAddWeeks(d: Date, n: number): Date {
-    return new Date(d.getTime() + n * 7 * DAY_MS);
+  return new Date(d.getTime() + n * 7 * DAY_MS);
 }
 
 function utcAddMonths(d: Date, n: number): Date {
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
 }
 
 function utcAddYears(d: Date, n: number): Date {
-    return new Date(Date.UTC(d.getUTCFullYear() + n, 0, 1));
+  return new Date(Date.UTC(d.getUTCFullYear() + n, 0, 1));
 }
 
-const STEPS: Record<Exclude<BudgetPeriod, "custom">, {
+const STEPS: Record<
+  Exclude<BudgetPeriod, "custom">,
+  {
     start: (d: Date) => Date;
     next: (d: Date) => Date;
-}> = {
-    // Monday-to-Monday, matching the server's ISO-week convention.
-    weekly: { start: utcStartOfWeek, next: (d) => utcAddWeeks(d, 1) },
-    monthly: { start: utcStartOfMonth, next: (d) => utcAddMonths(d, 1) },
-    quarterly: { start: utcStartOfQuarter, next: (d) => utcAddMonths(d, 3) },
-    yearly: { start: utcStartOfYear, next: (d) => utcAddYears(d, 1) },
+  }
+> = {
+  // Monday-to-Monday, matching the server's ISO-week convention.
+  weekly: { start: utcStartOfWeek, next: (d) => utcAddWeeks(d, 1) },
+  monthly: { start: utcStartOfMonth, next: (d) => utcAddMonths(d, 1) },
+  quarterly: { start: utcStartOfQuarter, next: (d) => utcAddMonths(d, 3) },
+  yearly: { start: utcStartOfYear, next: (d) => utcAddYears(d, 1) },
 };
 
 /** Months in one period, for the month-aligned periods. */
 const MONTHS_PER_PERIOD: Record<"monthly" | "quarterly" | "yearly", number> = {
-    monthly: 1,
-    quarterly: 3,
-    yearly: 12,
+  monthly: 1,
+  quarterly: 3,
+  yearly: 12,
 };
 
 function overlapMs(aFrom: Date, aTo: Date, bFrom: Date, bTo: Date): number {
-    const from = Math.max(aFrom.getTime(), bFrom.getTime());
-    const to = Math.min(aTo.getTime(), bTo.getTime());
-    return Math.max(0, to - from);
+  const from = Math.max(aFrom.getTime(), bFrom.getTime());
+  const to = Math.min(aTo.getTime(), bTo.getTime());
+  return Math.max(0, to - from);
 }
 
 export interface RangeBudget {
-    period: BudgetPeriod;
-    /** Absent when the budget sets no overall cap - then there is nothing to scale. */
-    amount?: number;
-    /** For a custom budget these are its fixed window; otherwise unused. */
-    period_from: string;
-    period_to: string;
+  period: BudgetPeriod;
+  /** Absent when the budget sets no overall cap - then there is nothing to scale. */
+  amount?: number;
+  /** For a custom budget these are its fixed window; otherwise unused. */
+  period_from: string;
+  period_to: string;
 }
 
 /**
@@ -93,59 +96,57 @@ export interface RangeBudget {
  * and scaling a sub-budget's amount uses the same factor.
  */
 export function periodsInRange(
-    budget: Pick<RangeBudget, "period" | "period_from" | "period_to">,
-    rangeFrom: Date,
-    rangeTo: Date,
+  budget: Pick<RangeBudget, "period" | "period_from" | "period_to">,
+  rangeFrom: Date,
+  rangeTo: Date,
 ): number {
-    if (rangeTo.getTime() <= rangeFrom.getTime()) return 0;
+  if (rangeTo.getTime() <= rangeFrom.getTime()) return 0;
 
-    // A one-off budget is a single fixed window, not a repeating one, so it contributes
-    // only the fraction of itself the range happens to cover.
-    if (budget.period === "custom") {
-        const from = new Date(budget.period_from);
-        const to = new Date(budget.period_to);
-        const span = to.getTime() - from.getTime();
-        if (span <= 0) return 0;
-        return overlapMs(from, to, rangeFrom, rangeTo) / span;
-    }
+  // A one-off budget is a single fixed window, not a repeating one, so it contributes
+  // only the fraction of itself the range happens to cover.
+  if (budget.period === "custom") {
+    const from = new Date(budget.period_from);
+    const to = new Date(budget.period_to);
+    const span = to.getTime() - from.getTime();
+    if (span <= 0) return 0;
+    return overlapMs(from, to, rangeFrom, rangeTo) / span;
+  }
 
-    // Weekly is the only period that isn't month-aligned, so it keeps the day-based walk.
-    if (budget.period === "weekly") {
-        let total = 0;
-        let periodStart = STEPS.weekly.start(rangeFrom);
-        for (let i = 0; periodStart.getTime() < rangeTo.getTime() && i < MAX_PERIODS; i++) {
-            const periodEnd = STEPS.weekly.next(periodStart);
-            const span = periodEnd.getTime() - periodStart.getTime();
-            if (span <= 0) break;
-            total += overlapMs(periodStart, periodEnd, rangeFrom, rangeTo) / span;
-            periodStart = periodEnd;
-        }
-        return total;
+  // Weekly is the only period that isn't month-aligned, so it keeps the day-based walk.
+  if (budget.period === "weekly") {
+    let total = 0;
+    let periodStart = STEPS.weekly.start(rangeFrom);
+    for (let i = 0; periodStart.getTime() < rangeTo.getTime() && i < MAX_PERIODS; i++) {
+      const periodEnd = STEPS.weekly.next(periodStart);
+      const span = periodEnd.getTime() - periodStart.getTime();
+      if (span <= 0) break;
+      total += overlapMs(periodStart, periodEnd, rangeFrom, rangeTo) / span;
+      periodStart = periodEnd;
     }
+    return total;
+  }
 
-    // Monthly/quarterly/yearly are month-aligned, so count calendar MONTHS and divide by
-    // how many months one period spans. Whole-month ranges then give exact fractions -
-    // three months of a year is exactly 3/12 - instead of day-counts that drift with
-    // month lengths (a $600 yearly cap over three months reads $150, not $139.73).
-    const monthsPerPeriod = MONTHS_PER_PERIOD[budget.period] ?? 1;
-    let months = 0;
-    let monthStart = new Date(Date.UTC(rangeFrom.getUTCFullYear(), rangeFrom.getUTCMonth(), 1));
-    while (monthStart.getTime() < rangeTo.getTime()) {
-        const monthEnd = new Date(Date.UTC(
-            monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1,
-        ));
-        const span = monthEnd.getTime() - monthStart.getTime();
-        if (span <= 0) break;
-        months += overlapMs(monthStart, monthEnd, rangeFrom, rangeTo) / span;
-        monthStart = monthEnd;
-    }
-    return months / monthsPerPeriod;
+  // Monthly/quarterly/yearly are month-aligned, so count calendar MONTHS and divide by
+  // how many months one period spans. Whole-month ranges then give exact fractions -
+  // three months of a year is exactly 3/12 - instead of day-counts that drift with
+  // month lengths (a $600 yearly cap over three months reads $150, not $139.73).
+  const monthsPerPeriod = MONTHS_PER_PERIOD[budget.period] ?? 1;
+  let months = 0;
+  let monthStart = new Date(Date.UTC(rangeFrom.getUTCFullYear(), rangeFrom.getUTCMonth(), 1));
+  while (monthStart.getTime() < rangeTo.getTime()) {
+    const monthEnd = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1));
+    const span = monthEnd.getTime() - monthStart.getTime();
+    if (span <= 0) break;
+    months += overlapMs(monthStart, monthEnd, rangeFrom, rangeTo) / span;
+    monthStart = monthEnd;
+  }
+  return months / monthsPerPeriod;
 }
 
 export function budgetedForRange(budget: RangeBudget, rangeFrom: Date, rangeTo: Date): number {
-    const { amount } = budget;
-    if (amount === undefined || amount <= 0) return 0;
-    return amount * periodsInRange(budget, rangeFrom, rangeTo);
+  const { amount } = budget;
+  if (amount === undefined || amount <= 0) return 0;
+  return amount * periodsInRange(budget, rangeFrom, rangeTo);
 }
 
 /**
@@ -154,10 +155,8 @@ export function budgetedForRange(budget: RangeBudget, rangeFrom: Date, rangeTo: 
  * live previews before a budget exists (the form), since saved budgets already get their
  * window back as `period_from`/`period_to`.
  */
-export function budgetPeriodWindow(
-    period: Exclude<BudgetPeriod, "custom">, asOf: Date,
-): { from: Date; to: Date } {
-    const step = STEPS[period];
-    const from = step.start(asOf);
-    return { from, to: step.next(from) };
+export function budgetPeriodWindow(period: Exclude<BudgetPeriod, "custom">, asOf: Date): { from: Date; to: Date } {
+  const step = STEPS[period];
+  const from = step.start(asOf);
+  return { from, to: step.next(from) };
 }

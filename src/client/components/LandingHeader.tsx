@@ -1,8 +1,4 @@
-import {
-  Box,
-  Typography,
-  Button,
-} from "@mui/material";
+import { Box, Typography, Button } from "@mui/material";
 import { useTheme, alpha } from "@mui/material/styles";
 import { Login as LoginIcon } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
@@ -125,4 +121,3 @@ export default function LandingHeader() {
     </>
   );
 }
-

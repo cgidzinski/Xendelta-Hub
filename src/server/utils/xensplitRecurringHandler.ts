@@ -85,7 +85,7 @@ async function generate(task: any, dueDates: Date[]): Promise<TaskRunResult> {
   const existing = new Set<number>(
     group.expenses
       .filter((e: any) => e.recurring_id?.toString() === genesisId.toString())
-      .map((e: any) => new Date(e.date).getTime())
+      .map((e: any) => new Date(e.date).getTime()),
   );
   existing.add(new Date(source.date).getTime());
 
@@ -112,15 +112,20 @@ async function generate(task: any, dueDates: Date[]): Promise<TaskRunResult> {
       meta: { count: pushedCount, amount: source.amount, currency: source.currency },
     });
     const memberIds = (group.members as any[]).map((m: any) => m.toString());
-    const message = pushedCount === 1
-      ? `Recurring: ${source.title} (${source.amount} ${source.currency})`
-      : `Recurring: ${source.title} — ${pushedCount} occurrences added`;
+    const message =
+      pushedCount === 1
+        ? `Recurring: ${source.title} (${source.amount} ${source.currency})`
+        : `Recurring: ${source.title} — ${pushedCount} occurrences added`;
     const involved = new Set<string>(
-      [source.paid_by?.toString(), ...(source.splits || []).map((s: any) => s.user_id?.toString())].filter(Boolean)
+      [source.paid_by?.toString(), ...(source.splits || []).map((s: any) => s.user_id?.toString())].filter(Boolean),
     );
     for (const mid of memberIds) {
       if (mid !== source.created_by && involved.has(mid)) {
-        await notify(mid, { title: "Recurring Expense", message, link: `/internal/xensplit/groups/${groupId}/expenses` });
+        await notify(mid, {
+          title: "Recurring Expense",
+          message,
+          link: `/internal/xensplit/groups/${groupId}/expenses`,
+        });
       }
     }
     SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);

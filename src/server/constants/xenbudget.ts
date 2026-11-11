@@ -10,11 +10,11 @@
 // The four colours are chosen to read as clearly distinct from each other at a glance
 // (red / blue / amber / grey); they may coincide with category colours, which is fine.
 export const SYSTEM_FLAGS: { name: string; color: string }[] = [
-  { name: "Needs review", color: "#e66767" },        // a human should look at this
-  { name: "Uncategorised", color: "#3987e5" },       // imported, but nothing categorised it
-  { name: "Possible duplicate", color: "#c98500" },  // matched an existing row, imported anyway
-  { name: "Ignored", color: "#8b8b85" },             // deliberately set aside
-  { name: "Off budget", color: "#64748b" },          // stored, but never counted in a total
+  { name: "Needs review", color: "#e66767" }, // a human should look at this
+  { name: "Uncategorised", color: "#3987e5" }, // imported, but nothing categorised it
+  { name: "Possible duplicate", color: "#c98500" }, // matched an existing row, imported anyway
+  { name: "Ignored", color: "#8b8b85" }, // deliberately set aside
+  { name: "Off budget", color: "#64748b" }, // stored, but never counted in a total
 ];
 
 /** The system flag the importer puts on a row no rule managed to categorise. */

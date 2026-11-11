@@ -1,8 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  AppBar, Autocomplete, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
-  DialogTitle, IconButton, InputAdornment, ListSubheader, Menu, MenuItem, Stack, TextField,
-  Toolbar, Tooltip, Typography, useMediaQuery,
+  AppBar,
+  Autocomplete,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  InputAdornment,
+  ListSubheader,
+  Menu,
+  MenuItem,
+  Stack,
+  TextField,
+  Toolbar,
+  Tooltip,
+  Typography,
+  useMediaQuery,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
@@ -21,13 +39,29 @@ import { useSnackbar } from "notistack";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import {
-  COOK_METHODS, COOK_METHOD_LABELS, MAX_KITCHEN_IMAGES, ingredientLine, normalizeTag, parseIngredientBlock, parseIngredientLine,
-  type CookMethod, type KitchenLayout,
+  COOK_METHODS,
+  COOK_METHOD_LABELS,
+  MAX_KITCHEN_IMAGES,
+  ingredientLine,
+  normalizeTag,
+  parseIngredientBlock,
+  parseIngredientLine,
+  type CookMethod,
+  type KitchenLayout,
 } from "@shared/xenkitchen/kitchen";
 import {
-  canEditBook, useCreateKitchenItem, useDeleteKitchenImage, useIngredientSuggestions, useKitchenBooks, useKitchenCategories,
-  useKitchenTags, useUpdateKitchenItem, useUploadKitchenImages,
-  type KitchenItem, type KitchenItemInput, type KitchenMethod,
+  canEditBook,
+  useCreateKitchenItem,
+  useDeleteKitchenImage,
+  useIngredientSuggestions,
+  useKitchenBooks,
+  useKitchenCategories,
+  useKitchenTags,
+  useUpdateKitchenItem,
+  useUploadKitchenImages,
+  type KitchenItem,
+  type KitchenItemInput,
+  type KitchenMethod,
 } from "../../../../hooks/xenkitchen/useKitchen";
 import { CategoryIconView, MethodIconView } from "./kitchenIcons";
 
@@ -42,11 +76,25 @@ type IngredientRow =
   | { key: string; kind: "section"; name: string }
   | { key: string; kind: "ingredient"; _id?: string; text: string; original?: string; parsed?: Parsed };
 
-interface Parsed { quantity: string; unit: string; name: string; note: string }
+interface Parsed {
+  quantity: string;
+  unit: string;
+  name: string;
+  note: string;
+}
 
-interface StepRow { key: string; _id?: string; text: string; timer: string }
+interface StepRow {
+  key: string;
+  _id?: string;
+  text: string;
+  timer: string;
+}
 interface MethodRow extends Omit<KitchenMethod, "temp" | "minutes_min" | "minutes_max" | "steps"> {
-  key: string; temp: string; minutes_min: string; minutes_max: string; stepsText: string;
+  key: string;
+  temp: string;
+  minutes_min: string;
+  minutes_max: string;
+  stepsText: string;
 }
 
 interface Draft {
@@ -73,7 +121,6 @@ const strNum = (s: string): number | null => {
   return s.trim() !== "" && Number.isFinite(n) && n >= 0 ? n : null;
 };
 
-
 function parseRow(row: Extract<IngredientRow, { kind: "ingredient" }>): Parsed | null {
   if (row.parsed && row.text === row.original) return row.parsed;
   const p = parseIngredientLine(row.text);
@@ -83,14 +130,33 @@ function parseRow(row: Extract<IngredientRow, { kind: "ingredient" }>): Parsed |
 const blankIngredient = (): IngredientRow => ({ key: newKey(), kind: "ingredient", text: "" });
 const blankStep = (): StepRow => ({ key: newKey(), text: "", timer: "" });
 const blankMethod = (method: CookMethod = "oven"): MethodRow => ({
-  key: newKey(), method, temp: "", temp_unit: "F", power: "", minutes_min: "", minutes_max: "", preheat: method === "oven", stepsText: "",
+  key: newKey(),
+  method,
+  temp: "",
+  temp_unit: "F",
+  power: "",
+  minutes_min: "",
+  minutes_max: "",
+  preheat: method === "oven",
+  stepsText: "",
 });
 
 function draftFrom(item: KitchenItem | null | undefined, categoryId: string | null): Draft {
   if (!item) {
     return {
-      title: "", description: "", category_id: categoryId, tags: [], notes: "", servings: "", prep_minutes: "", cook_minutes: "",
-      ingredients: [blankIngredient()], steps: [blankStep()], brand: "", methods: [blankMethod()], storage_note: "",
+      title: "",
+      description: "",
+      category_id: categoryId,
+      tags: [],
+      notes: "",
+      servings: "",
+      prep_minutes: "",
+      cook_minutes: "",
+      ingredients: [blankIngredient()],
+      steps: [blankStep()],
+      brand: "",
+      methods: [blankMethod()],
+      storage_note: "",
     };
   }
   const ingredients: IngredientRow[] = [];
@@ -114,12 +180,19 @@ function draftFrom(item: KitchenItem | null | undefined, categoryId: string | nu
     prep_minutes: numStr(item.prep_minutes),
     cook_minutes: numStr(item.cook_minutes),
     ingredients: ingredients.length ? ingredients : [blankIngredient()],
-    steps: item.steps.length ? item.steps.map((s) => ({ key: newKey(), _id: s._id, text: s.text, timer: numStr(s.timer_minutes) })) : [blankStep()],
+    steps: item.steps.length
+      ? item.steps.map((s) => ({ key: newKey(), _id: s._id, text: s.text, timer: numStr(s.timer_minutes) }))
+      : [blankStep()],
     brand: item.brand,
     methods: item.methods.length
       ? item.methods.map((m) => ({
-        ...m, key: newKey(), temp: numStr(m.temp), minutes_min: numStr(m.minutes_min), minutes_max: numStr(m.minutes_max), stepsText: m.steps.join("\n"),
-      }))
+          ...m,
+          key: newKey(),
+          temp: numStr(m.temp),
+          minutes_min: numStr(m.minutes_min),
+          minutes_max: numStr(m.minutes_max),
+          stepsText: m.steps.join("\n"),
+        }))
       : [blankMethod()],
     storage_note: item.storage_note,
   };
@@ -129,7 +202,10 @@ function inputFrom(d: Draft): KitchenItemInput {
   let section = "";
   const ingredients: KitchenItemInput["ingredients"] = [];
   for (const row of d.ingredients) {
-    if (row.kind === "section") { section = row.name.trim(); continue; }
+    if (row.kind === "section") {
+      section = row.name.trim();
+      continue;
+    }
     const p = parseRow(row);
     if (!p) continue;
     ingredients.push({ ...(row._id ? { _id: row._id } : {}), ...p, section });
@@ -144,7 +220,9 @@ function inputFrom(d: Draft): KitchenItemInput {
     prep_minutes: strNum(d.prep_minutes),
     cook_minutes: strNum(d.cook_minutes),
     ingredients,
-    steps: d.steps.filter((s) => s.text.trim()).map((s) => ({ ...(s._id ? { _id: s._id } : {}), text: s.text, timer_minutes: strNum(s.timer) })),
+    steps: d.steps
+      .filter((s) => s.text.trim())
+      .map((s) => ({ ...(s._id ? { _id: s._id } : {}), text: s.text, timer_minutes: strNum(s.timer) })),
     brand: d.brand,
     methods: d.methods
       .filter((m) => m.temp || m.minutes_min || m.minutes_max || m.power || m.stepsText.trim())
@@ -153,7 +231,10 @@ function inputFrom(d: Draft): KitchenItemInput {
         temp: strNum(m.temp),
         minutes_min: strNum(m.minutes_min),
         minutes_max: strNum(m.minutes_max),
-        steps: stepsText.split(/\r?\n/).map((s) => s.trim()).filter(Boolean),
+        steps: stepsText
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter(Boolean),
       })),
     storage_note: d.storage_note,
   };
@@ -170,7 +251,12 @@ function moveIn<T>(list: T[], i: number, d: number): T[] {
 // Optional fields, hidden behind "+ …" chips until used.
 type Extra = "description" | "tags" | "times" | "brand" | "storage" | "notes";
 const EXTRA_LABELS: Record<Extra, string> = {
-  description: "Description", tags: "Tags", times: "Servings & time", brand: "Brand", storage: "Storage", notes: "Notes",
+  description: "Description",
+  tags: "Tags",
+  times: "Servings & time",
+  brand: "Brand",
+  storage: "Storage",
+  notes: "Notes",
 };
 const EXTRAS_FOR: Record<KitchenLayout, Extra[]> = {
   recipe: ["description", "times", "tags", "notes"],
@@ -206,7 +292,14 @@ interface ItemEditorProps {
   onSaved?: (item: KitchenItem, created: boolean) => void;
 }
 
-export default function ItemEditor({ open, onClose, item, defaultCategoryId = null, defaultBookId = null, onSaved }: ItemEditorProps) {
+export default function ItemEditor({
+  open,
+  onClose,
+  item,
+  defaultCategoryId = null,
+  defaultBookId = null,
+  onSaved,
+}: ItemEditorProps) {
   const theme = useTheme();
   const phone = useMediaQuery(theme.breakpoints.down("sm"));
   const { enqueueSnackbar } = useSnackbar();
@@ -251,13 +344,23 @@ export default function ItemEditor({ open, onClose, item, defaultCategoryId = nu
   const layout: KitchenLayout = category?.layout ?? "recipe";
   const accent = category?.color ?? theme.palette.primary.main;
 
-  const dirty = JSON.stringify(inputFrom(draft)) !== initial.current
-    || newFiles.length > 0
-    || photos.map((p) => p._id).join() !== (item?.images ?? []).map((p) => p._id).join();
+  const dirty =
+    JSON.stringify(inputFrom(draft)) !== initial.current ||
+    newFiles.length > 0 ||
+    photos.map((p) => p._id).join() !== (item?.images ?? []).map((p) => p._id).join();
 
   const requestClose = async () => {
     if (saving) return;
-    if (dirty && !(await confirm({ title: "Discard changes?", message: "Your edits haven't been saved.", confirmLabel: "Discard", destructive: false }))) return;
+    if (
+      dirty &&
+      !(await confirm({
+        title: "Discard changes?",
+        message: "Your edits haven't been saved.",
+        confirmLabel: "Discard",
+        destructive: false,
+      }))
+    )
+      return;
     onClose();
   };
 
@@ -265,9 +368,14 @@ export default function ItemEditor({ open, onClose, item, defaultCategoryId = nu
   const addFiles = (files: FileList | null) => {
     if (!files) return;
     const room = MAX_KITCHEN_IMAGES - totalPhotos;
-    const picked = [...files].filter((f) => f.type.startsWith("image/") || /\.(heic|heif)$/i.test(f.name)).slice(0, room);
+    const picked = [...files]
+      .filter((f) => f.type.startsWith("image/") || /\.(heic|heif)$/i.test(f.name))
+      .slice(0, room);
     if (files.length > room) enqueueSnackbar(`Up to ${MAX_KITCHEN_IMAGES} photos per item`, { variant: "info" });
-    setNewFiles((prev) => [...prev, ...picked.map((file) => ({ key: newKey(), file, url: URL.createObjectURL(file) }))]);
+    setNewFiles((prev) => [
+      ...prev,
+      ...picked.map((file) => ({ key: newKey(), file, url: URL.createObjectURL(file) })),
+    ]);
   };
 
   const save = async () => {
@@ -278,7 +386,8 @@ export default function ItemEditor({ open, onClose, item, defaultCategoryId = nu
       if (item) {
         const removed = item.images.filter((img) => !photos.some((p) => p._id === img._id));
         for (const img of removed) await deleteImage.mutateAsync({ id: item._id, imageId: img._id });
-        saved = (await update.mutateAsync({ id: item._id, patch: { ...input, image_order: photos.map((p) => p._id) } })).item;
+        saved = (await update.mutateAsync({ id: item._id, patch: { ...input, image_order: photos.map((p) => p._id) } }))
+          .item;
       } else {
         saved = (await create.mutateAsync({ ...input, book_id: bookId })).item;
       }
@@ -307,12 +416,25 @@ export default function ItemEditor({ open, onClose, item, defaultCategoryId = nu
 
   return (
     <Dialog open={open} onClose={requestClose} fullScreen={phone} fullWidth maxWidth="sm">
-      <AppBar position="sticky" color="inherit" elevation={0} sx={{ borderBottom: "1px solid", borderColor: "divider" }}>
+      <AppBar
+        position="sticky"
+        color="inherit"
+        elevation={0}
+        sx={{ borderBottom: "1px solid", borderColor: "divider" }}
+      >
         <Toolbar sx={{ gap: 1 }} variant="dense">
-          <IconButton edge="start" onClick={requestClose} aria-label="Close"><CloseIcon /></IconButton>
-          <Typography variant="subtitle1" sx={{ flex: 1, fontWeight: 700 }} noWrap>{item ? "Edit" : "New"}</Typography>
-          <Button variant="contained" onClick={save} disabled={!canSave}
-            startIcon={saving ? <CircularProgress size={16} color="inherit" /> : undefined}>
+          <IconButton edge="start" onClick={requestClose} aria-label="Close">
+            <CloseIcon />
+          </IconButton>
+          <Typography variant="subtitle1" sx={{ flex: 1, fontWeight: 700 }} noWrap>
+            {item ? "Edit" : "New"}
+          </Typography>
+          <Button
+            variant="contained"
+            onClick={save}
+            disabled={!canSave}
+            startIcon={saving ? <CircularProgress size={16} color="inherit" /> : undefined}
+          >
             {saving ? "Saving" : "Save"}
           </Button>
         </Toolbar>
@@ -372,7 +494,8 @@ export default function ItemEditor({ open, onClose, item, defaultCategoryId = nu
                 <ListSubheader key={`h-${group}`}>{group === "recipe" ? "Recipes" : "Instructions"}</ListSubheader>,
                 ...list.map((c) => (
                   <MenuItem key={c._id} value={c._id}>
-                    <CategoryIconView icon={c.icon} sx={{ fontSize: 18, color: c.color, mr: 1.5 }} />{c.name}
+                    <CategoryIconView icon={c.icon} sx={{ fontSize: 18, color: c.color, mr: 1.5 }} />
+                    {c.name}
                   </MenuItem>
                 )),
               ];
@@ -381,12 +504,23 @@ export default function ItemEditor({ open, onClose, item, defaultCategoryId = nu
           </TextField>
 
           {!item && editableBooks.length > 1 && (
-            <TextField select size="small" value={bookId} sx={{ minWidth: 160 }}
-              onChange={(e) => { setBookId(e.target.value); set({ category_id: null }); }}
-              slotProps={{ htmlInput: { "aria-label": "Recipe book" } }}>
+            <TextField
+              select
+              size="small"
+              value={bookId}
+              sx={{ minWidth: 160 }}
+              onChange={(e) => {
+                setBookId(e.target.value);
+                set({ category_id: null });
+              }}
+              slotProps={{ htmlInput: { "aria-label": "Recipe book" } }}
+            >
               {editableBooks.map((b) => (
                 <MenuItem key={b._id} value={b._id}>
-                  <CategoryIconView icon={b.icon} sx={{ fontSize: 18, color: b.color, mr: 1, verticalAlign: "middle" }} />
+                  <CategoryIconView
+                    icon={b.icon}
+                    sx={{ fontSize: 18, color: b.color, mr: 1, verticalAlign: "middle" }}
+                  />
                   {b.name}
                 </MenuItem>
               ))}
@@ -406,30 +540,97 @@ export default function ItemEditor({ open, onClose, item, defaultCategoryId = nu
             {shown.map((e) => {
               switch (e) {
                 case "description":
-                  return <TextField key={e} label="Description" value={draft.description} onChange={(ev) => set({ description: ev.target.value })}
-                    fullWidth multiline minRows={2} slotProps={{ htmlInput: { maxLength: 2000 } }} />;
+                  return (
+                    <TextField
+                      key={e}
+                      label="Description"
+                      value={draft.description}
+                      onChange={(ev) => set({ description: ev.target.value })}
+                      fullWidth
+                      multiline
+                      minRows={2}
+                      slotProps={{ htmlInput: { maxLength: 2000 } }}
+                    />
+                  );
                 case "tags":
                   return <TagField key={e} value={draft.tags} onChange={(tags) => set({ tags })} />;
                 case "times":
                   return (
                     <Stack key={e} direction="row" spacing={1.5}>
-                      <TextField label="Serves" type="number" size="small" value={draft.servings} onChange={(ev) => set({ servings: ev.target.value })} fullWidth
-                        slotProps={{ htmlInput: { min: 0, inputMode: "numeric" } }} />
-                      <TextField label="Prep" type="number" size="small" value={draft.prep_minutes} onChange={(ev) => set({ prep_minutes: ev.target.value })} fullWidth
-                        slotProps={{ htmlInput: { min: 0, inputMode: "numeric" }, input: { endAdornment: <InputAdornment position="end">min</InputAdornment> } }} />
-                      <TextField label="Cook" type="number" size="small" value={draft.cook_minutes} onChange={(ev) => set({ cook_minutes: ev.target.value })} fullWidth
-                        slotProps={{ htmlInput: { min: 0, inputMode: "numeric" }, input: { endAdornment: <InputAdornment position="end">min</InputAdornment> } }} />
+                      <TextField
+                        label="Serves"
+                        type="number"
+                        size="small"
+                        value={draft.servings}
+                        onChange={(ev) => set({ servings: ev.target.value })}
+                        fullWidth
+                        slotProps={{ htmlInput: { min: 0, inputMode: "numeric" } }}
+                      />
+                      <TextField
+                        label="Prep"
+                        type="number"
+                        size="small"
+                        value={draft.prep_minutes}
+                        onChange={(ev) => set({ prep_minutes: ev.target.value })}
+                        fullWidth
+                        slotProps={{
+                          htmlInput: { min: 0, inputMode: "numeric" },
+                          input: { endAdornment: <InputAdornment position="end">min</InputAdornment> },
+                        }}
+                      />
+                      <TextField
+                        label="Cook"
+                        type="number"
+                        size="small"
+                        value={draft.cook_minutes}
+                        onChange={(ev) => set({ cook_minutes: ev.target.value })}
+                        fullWidth
+                        slotProps={{
+                          htmlInput: { min: 0, inputMode: "numeric" },
+                          input: { endAdornment: <InputAdornment position="end">min</InputAdornment> },
+                        }}
+                      />
                     </Stack>
                   );
                 case "brand":
-                  return <TextField key={e} label="Brand" size="small" value={draft.brand} onChange={(ev) => set({ brand: ev.target.value })}
-                    fullWidth slotProps={{ htmlInput: { maxLength: 80 } }} />;
+                  return (
+                    <TextField
+                      key={e}
+                      label="Brand"
+                      size="small"
+                      value={draft.brand}
+                      onChange={(ev) => set({ brand: ev.target.value })}
+                      fullWidth
+                      slotProps={{ htmlInput: { maxLength: 80 } }}
+                    />
+                  );
                 case "storage":
-                  return <TextField key={e} label="Storage" size="small" value={draft.storage_note} onChange={(ev) => set({ storage_note: ev.target.value })}
-                    fullWidth multiline placeholder="Keep frozen. Do not refreeze." slotProps={{ htmlInput: { maxLength: 500 } }} />;
+                  return (
+                    <TextField
+                      key={e}
+                      label="Storage"
+                      size="small"
+                      value={draft.storage_note}
+                      onChange={(ev) => set({ storage_note: ev.target.value })}
+                      fullWidth
+                      multiline
+                      placeholder="Keep frozen. Do not refreeze."
+                      slotProps={{ htmlInput: { maxLength: 500 } }}
+                    />
+                  );
                 case "notes":
-                  return <TextField key={e} label="Notes" value={draft.notes} onChange={(ev) => set({ notes: ev.target.value })}
-                    fullWidth multiline minRows={2} slotProps={{ htmlInput: { maxLength: 4000 } }} />;
+                  return (
+                    <TextField
+                      key={e}
+                      label="Notes"
+                      value={draft.notes}
+                      onChange={(ev) => set({ notes: ev.target.value })}
+                      fullWidth
+                      multiline
+                      minRows={2}
+                      slotProps={{ htmlInput: { maxLength: 4000 } }}
+                    />
+                  );
               }
             })}
           </Stack>
@@ -437,7 +638,13 @@ export default function ItemEditor({ open, onClose, item, defaultCategoryId = nu
         {hidden.length > 0 && (
           <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 3 }}>
             {hidden.map((e) => (
-              <Chip key={e} icon={<AddIcon />} label={EXTRA_LABELS[e]} variant="outlined" onClick={() => openExtra(e)} />
+              <Chip
+                key={e}
+                icon={<AddIcon />}
+                label={EXTRA_LABELS[e]}
+                variant="outlined"
+                onClick={() => openExtra(e)}
+              />
             ))}
           </Stack>
         )}
@@ -448,7 +655,17 @@ export default function ItemEditor({ open, onClose, item, defaultCategoryId = nu
 
 // ---------- photos ----------
 
-function PhotoStrip({ photos, newFiles, accent, canAdd, onAdd, onRemovePhoto, onCoverPhoto, onRemoveNew, hint }: {
+function PhotoStrip({
+  photos,
+  newFiles,
+  accent,
+  canAdd,
+  onAdd,
+  onRemovePhoto,
+  onCoverPhoto,
+  onRemoveNew,
+  hint,
+}: {
   photos: KitchenItem["images"];
   newFiles: Array<{ key: string; url: string }>;
   accent: string;
@@ -471,9 +688,16 @@ function PhotoStrip({ photos, newFiles, accent, canAdd, onAdd, onRemovePhoto, on
 
   return (
     <Box
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
       onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => { e.preventDefault(); setDragOver(false); onAdd(e.dataTransfer.files); }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        onAdd(e.dataTransfer.files);
+      }}
       sx={{ borderRadius: 3, outline: dragOver ? `2px dashed ${accent}` : "none", outlineOffset: 4 }}
     >
       <Box sx={{ display: "flex", gap: 1, overflowX: "auto", pb: 1 }}>
@@ -481,23 +705,51 @@ function PhotoStrip({ photos, newFiles, accent, canAdd, onAdd, onRemovePhoto, on
           <Box key={p.key} sx={{ ...tile, position: "relative" }}>
             <Box component="img" src={p.url} alt="" sx={{ ...tile, objectFit: "cover", display: "block" }} />
             {i === 0 && (
-              <Chip size="small" icon={<StarIcon sx={{ fontSize: 14 }} />} label="Cover"
-                sx={{ position: "absolute", left: 4, bottom: 4, height: 22, bgcolor: "rgba(0,0,0,0.6)", color: "common.white", "& .MuiChip-icon": { color: "warning.light" } }} />
+              <Chip
+                size="small"
+                icon={<StarIcon sx={{ fontSize: 14 }} />}
+                label="Cover"
+                sx={{
+                  position: "absolute",
+                  left: 4,
+                  bottom: 4,
+                  height: 22,
+                  bgcolor: "rgba(0,0,0,0.6)",
+                  color: "common.white",
+                  "& .MuiChip-icon": { color: "warning.light" },
+                }}
+              />
             )}
             {!p.existing && (
-              <Chip size="small" label="New" sx={{ position: "absolute", left: 4, top: 4, height: 20, bgcolor: accent, color: "common.white" }} />
+              <Chip
+                size="small"
+                label="New"
+                sx={{ position: "absolute", left: 4, top: 4, height: 20, bgcolor: accent, color: "common.white" }}
+              />
             )}
             <Stack direction="row" sx={{ position: "absolute", right: 2, top: 2 }}>
               {p.existing && i !== 0 && (
                 <Tooltip title="Make cover">
-                  <IconButton size="small" onClick={() => onCoverPhoto(p.key)} sx={{ bgcolor: "rgba(0,0,0,0.5)", color: "common.white", "&:hover": { bgcolor: "rgba(0,0,0,0.7)" }, mr: 0.5 }}>
+                  <IconButton
+                    size="small"
+                    onClick={() => onCoverPhoto(p.key)}
+                    sx={{
+                      bgcolor: "rgba(0,0,0,0.5)",
+                      color: "common.white",
+                      "&:hover": { bgcolor: "rgba(0,0,0,0.7)" },
+                      mr: 0.5,
+                    }}
+                  >
                     <StarIcon sx={{ fontSize: 16 }} />
                   </IconButton>
                 </Tooltip>
               )}
               <Tooltip title="Remove">
-                <IconButton size="small" onClick={() => (p.existing ? onRemovePhoto(p.key) : onRemoveNew(p.key))}
-                  sx={{ bgcolor: "rgba(0,0,0,0.5)", color: "common.white", "&:hover": { bgcolor: "rgba(0,0,0,0.7)" } }}>
+                <IconButton
+                  size="small"
+                  onClick={() => (p.existing ? onRemovePhoto(p.key) : onRemoveNew(p.key))}
+                  sx={{ bgcolor: "rgba(0,0,0,0.5)", color: "common.white", "&:hover": { bgcolor: "rgba(0,0,0,0.7)" } }}
+                >
                   <CloseIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </Tooltip>
@@ -506,63 +758,140 @@ function PhotoStrip({ photos, newFiles, accent, canAdd, onAdd, onRemovePhoto, on
         ))}
         {canAdd && (
           <>
-            <Box role="button" onClick={() => fileInput.current?.click()} sx={{
-              ...tile, border: "2px dashed", borderColor: "divider", cursor: "pointer", display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "center", gap: 0.5, color: "text.secondary", textAlign: "center", px: 1,
-              "&:hover": { borderColor: accent, color: accent },
-            }}>
+            <Box
+              role="button"
+              onClick={() => fileInput.current?.click()}
+              sx={{
+                ...tile,
+                border: "2px dashed",
+                borderColor: "divider",
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 0.5,
+                color: "text.secondary",
+                textAlign: "center",
+                px: 1,
+                "&:hover": { borderColor: accent, color: accent },
+              }}
+            >
               <AddPhotoAlternateIcon />
               <Typography variant="caption">{all.length ? "Add more" : hint}</Typography>
             </Box>
-            <Box role="button" onClick={() => cameraInput.current?.click()} sx={{
-              ...tile, border: "2px dashed", borderColor: "divider", cursor: "pointer", display: { xs: "flex", md: "none" },
-              flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 0.5, color: "text.secondary",
-              "&:hover": { borderColor: accent, color: accent },
-            }}>
+            <Box
+              role="button"
+              onClick={() => cameraInput.current?.click()}
+              sx={{
+                ...tile,
+                border: "2px dashed",
+                borderColor: "divider",
+                cursor: "pointer",
+                display: { xs: "flex", md: "none" },
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 0.5,
+                color: "text.secondary",
+                "&:hover": { borderColor: accent, color: accent },
+              }}
+            >
               <PhotoCameraIcon />
               <Typography variant="caption">Camera</Typography>
             </Box>
           </>
         )}
       </Box>
-      <input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={(e) => { onAdd(e.target.files); e.target.value = ""; }} />
-      <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { onAdd(e.target.files); e.target.value = ""; }} />
+      <input
+        ref={fileInput}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={(e) => {
+          onAdd(e.target.files);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={cameraInput}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={(e) => {
+          onAdd(e.target.files);
+          e.target.value = "";
+        }}
+      />
     </Box>
   );
 }
 
-function PasteDialog({ open, onClose, onAdd }: { open: boolean; onClose: () => void; onAdd: (rows: ReturnType<typeof parseIngredientBlock>) => void }) {
+function PasteDialog({
+  open,
+  onClose,
+  onAdd,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onAdd: (rows: ReturnType<typeof parseIngredientBlock>) => void;
+}) {
   const [text, setText] = useState("");
   const parsed = parseIngredientBlock(text);
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>Paste ingredients</DialogTitle>
       <DialogContent>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>One per line. Quantities and units are split out for you.</Typography>
-        <TextField multiline minRows={6} fullWidth autoFocus value={text} onChange={(e) => setText(e.target.value)}
-          placeholder={"2 cups flour\n1 tsp salt\n3 eggs, beaten"} />
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          One per line. Quantities and units are split out for you.
+        </Typography>
+        <TextField
+          multiline
+          minRows={6}
+          fullWidth
+          autoFocus
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={"2 cups flour\n1 tsp salt\n3 eggs, beaten"}
+        />
         {parsed.length > 0 && (
           <Box sx={{ mt: 2 }}>
-            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.5 }}>Preview</Typography>
+            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.5 }}>
+              Preview
+            </Typography>
             {parsed.slice(0, 8).map((p, i) => (
               <Typography key={i} variant="body2">
-                <b>{[p.quantity, p.unit].filter(Boolean).join(" ")}</b> {p.name}{p.note && <span style={{ opacity: 0.6 }}>, {p.note}</span>}
+                <b>{[p.quantity, p.unit].filter(Boolean).join(" ")}</b> {p.name}
+                {p.note && <span style={{ opacity: 0.6 }}>, {p.note}</span>}
               </Typography>
             ))}
-            {parsed.length > 8 && <Typography variant="caption" color="text.secondary">…and {parsed.length - 8} more</Typography>}
+            {parsed.length > 8 && (
+              <Typography variant="caption" color="text.secondary">
+                …and {parsed.length - 8} more
+              </Typography>
+            )}
           </Box>
         )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" disabled={!parsed.length} onClick={() => { onAdd(parsed); setText(""); onClose(); }}>
+        <Button
+          variant="contained"
+          disabled={!parsed.length}
+          onClick={() => {
+            onAdd(parsed);
+            setText("");
+            onClose();
+          }}
+        >
           Add {parsed.length || ""}
         </Button>
       </DialogActions>
     </Dialog>
   );
 }
-
 
 // ---------- tags ----------
 
@@ -596,7 +925,9 @@ function TagField({ value, onChange }: { value: string[]; onChange: (v: string[]
 function SectionTitle({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 3, mb: 0.5 }}>
-      <Typography variant="caption" sx={{ ...sectionLabelSx, color: "text.secondary" }}>{children}</Typography>
+      <Typography variant="caption" sx={{ ...sectionLabelSx, color: "text.secondary" }}>
+        {children}
+      </Typography>
       {action}
     </Stack>
   );
@@ -620,60 +951,135 @@ function RecipeFields({ draft, set, accent }: { draft: Draft; set: (p: Partial<D
 
   return (
     <>
-      <SectionTitle action={
-        <Button size="small" color="inherit" startIcon={<ContentPasteIcon fontSize="small" />} onClick={() => setPasteOpen(true)} sx={{ opacity: 0.7 }}>
-          Paste list
-        </Button>
-      }>
+      <SectionTitle
+        action={
+          <Button
+            size="small"
+            color="inherit"
+            startIcon={<ContentPasteIcon fontSize="small" />}
+            onClick={() => setPasteOpen(true)}
+            sx={{ opacity: 0.7 }}
+          >
+            Paste list
+          </Button>
+        }
+      >
         Ingredients
       </SectionTitle>
       <Stack spacing={0.25}>
-        {rows.map((row, i) => row.kind === "section" ? (
-          <Stack key={row.key} direction="row" alignItems="center" sx={{ pt: i ? 1 : 0 }}>
-            <TextField variant="standard" placeholder="Section, e.g. Sauce" value={row.name} fullWidth
-              onChange={(e) => patchRow(i, { name: e.target.value })} sx={quietInput}
-              slotProps={{ htmlInput: { maxLength: 60, style: { fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, fontSize: 13 } } }} />
-            <IconButton size="small" onClick={() => removeAt(i)} aria-label="Remove section"><CloseIcon fontSize="small" /></IconButton>
-          </Stack>
-        ) : (
-          <Stack key={row.key} direction="row" alignItems="center" spacing={1}
-            sx={{ "& .row-more": { opacity: { sm: 0 } }, "&:hover .row-more, &:focus-within .row-more": { opacity: 1 } }}>
-            <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: accent, flexShrink: 0, opacity: 0.7 }} />
-            <IngredientLineField
-              value={row.text}
-              autoFocus={focusKey === row.key}
-              onChange={(text) => patchRow(i, { text })}
-              onEnter={() => insertAfter(i)}
-              onBackspaceEmpty={() => { if (rows.length > 1) removeAt(i); }}
-            />
-            <IconButton className="row-more" size="small" onClick={(e) => setMenu({ el: e.currentTarget, i })} aria-label="Ingredient options">
-              <MoreVertIcon fontSize="small" />
-            </IconButton>
-          </Stack>
-        ))}
+        {rows.map((row, i) =>
+          row.kind === "section" ? (
+            <Stack key={row.key} direction="row" alignItems="center" sx={{ pt: i ? 1 : 0 }}>
+              <TextField
+                variant="standard"
+                placeholder="Section, e.g. Sauce"
+                value={row.name}
+                fullWidth
+                onChange={(e) => patchRow(i, { name: e.target.value })}
+                sx={quietInput}
+                slotProps={{
+                  htmlInput: {
+                    maxLength: 60,
+                    style: { fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, fontSize: 13 },
+                  },
+                }}
+              />
+              <IconButton size="small" onClick={() => removeAt(i)} aria-label="Remove section">
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Stack>
+          ) : (
+            <Stack
+              key={row.key}
+              direction="row"
+              alignItems="center"
+              spacing={1}
+              sx={{
+                "& .row-more": { opacity: { sm: 0 } },
+                "&:hover .row-more, &:focus-within .row-more": { opacity: 1 },
+              }}
+            >
+              <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: accent, flexShrink: 0, opacity: 0.7 }} />
+              <IngredientLineField
+                value={row.text}
+                autoFocus={focusKey === row.key}
+                onChange={(text) => patchRow(i, { text })}
+                onEnter={() => insertAfter(i)}
+                onBackspaceEmpty={() => {
+                  if (rows.length > 1) removeAt(i);
+                }}
+              />
+              <IconButton
+                className="row-more"
+                size="small"
+                onClick={(e) => setMenu({ el: e.currentTarget, i })}
+                aria-label="Ingredient options"
+              >
+                <MoreVertIcon fontSize="small" />
+              </IconButton>
+            </Stack>
+          ),
+        )}
       </Stack>
       <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-        <Button size="small" startIcon={<AddIcon />} onClick={() => insertAfter(rows.length - 1)}>Ingredient</Button>
-        <Button size="small" color="inherit" startIcon={<TitleIcon />} sx={{ opacity: 0.7 }}
-          onClick={() => { const row = blankIngredient(); setRows([...rows, { key: newKey(), kind: "section", name: "" }, row]); }}>
+        <Button size="small" startIcon={<AddIcon />} onClick={() => insertAfter(rows.length - 1)}>
+          Ingredient
+        </Button>
+        <Button
+          size="small"
+          color="inherit"
+          startIcon={<TitleIcon />}
+          sx={{ opacity: 0.7 }}
+          onClick={() => {
+            const row = blankIngredient();
+            setRows([...rows, { key: newKey(), kind: "section", name: "" }, row]);
+          }}
+        >
           Section
         </Button>
       </Stack>
       <Menu anchorEl={menu?.el} open={!!menu} onClose={() => setMenu(null)}>
-        <MenuItem disabled={!menu || menu.i === 0} onClick={() => { if (menu) setRows(moveIn(rows, menu.i, -1)); setMenu(null); }}>
-          <ArrowUpwardIcon fontSize="small" sx={{ mr: 1 }} />Move up
+        <MenuItem
+          disabled={!menu || menu.i === 0}
+          onClick={() => {
+            if (menu) setRows(moveIn(rows, menu.i, -1));
+            setMenu(null);
+          }}
+        >
+          <ArrowUpwardIcon fontSize="small" sx={{ mr: 1 }} />
+          Move up
         </MenuItem>
-        <MenuItem disabled={!menu || menu.i === rows.length - 1} onClick={() => { if (menu) setRows(moveIn(rows, menu.i, 1)); setMenu(null); }}>
-          <ArrowDownwardIcon fontSize="small" sx={{ mr: 1 }} />Move down
+        <MenuItem
+          disabled={!menu || menu.i === rows.length - 1}
+          onClick={() => {
+            if (menu) setRows(moveIn(rows, menu.i, 1));
+            setMenu(null);
+          }}
+        >
+          <ArrowDownwardIcon fontSize="small" sx={{ mr: 1 }} />
+          Move down
         </MenuItem>
-        <MenuItem onClick={() => { if (menu) removeAt(menu.i); setMenu(null); }}>
-          <DeleteOutlineIcon fontSize="small" sx={{ mr: 1 }} />Remove
+        <MenuItem
+          onClick={() => {
+            if (menu) removeAt(menu.i);
+            setMenu(null);
+          }}
+        >
+          <DeleteOutlineIcon fontSize="small" sx={{ mr: 1 }} />
+          Remove
         </MenuItem>
       </Menu>
-      <PasteDialog open={pasteOpen} onClose={() => setPasteOpen(false)} onAdd={(parsed) => {
-        const kept = rows.filter((r) => r.kind === "section" || r.text.trim());
-        setRows([...kept, ...parsed.map((p) => ({ key: newKey(), kind: "ingredient" as const, text: ingredientLine(p) }))]);
-      }} />
+      <PasteDialog
+        open={pasteOpen}
+        onClose={() => setPasteOpen(false)}
+        onAdd={(parsed) => {
+          const kept = rows.filter((r) => r.kind === "section" || r.text.trim());
+          setRows([
+            ...kept,
+            ...parsed.map((p) => ({ key: newKey(), kind: "ingredient" as const, text: ingredientLine(p) })),
+          ]);
+        }}
+      />
 
       <StepsEditor steps={draft.steps} onChange={(steps) => set({ steps })} accent={accent} />
     </>
@@ -684,7 +1090,13 @@ function RecipeFields({ draft, set, accent }: { draft: Draft; set: (p: Partial<D
  * One line per ingredient. Suggestions come from the name part of what's typed
  * ("2 cups gar" → garlic), and picking one keeps the amount and fills the usual unit.
  */
-function IngredientLineField({ value, onChange, onEnter, onBackspaceEmpty, autoFocus }: {
+function IngredientLineField({
+  value,
+  onChange,
+  onEnter,
+  onBackspaceEmpty,
+  autoFocus,
+}: {
   value: string;
   onChange: (v: string) => void;
   onEnter: () => void;
@@ -702,11 +1114,21 @@ function IngredientLineField({ value, onChange, onEnter, onBackspaceEmpty, autoF
   const options = useMemo(() => {
     const pick = (list: typeof suggestions, q: string) => {
       const lq = q.toLowerCase();
-      return lq ? list.filter((s) => { const n = s.name.toLowerCase(); return n.includes(lq) && n !== lq; }) : [];
+      return lq
+        ? list.filter((s) => {
+            const n = s.name.toLowerCase();
+            return n.includes(lq) && n !== lq;
+          })
+        : [];
     };
     const seen = new Set<string>();
     return [...pick(suggestions, nameQuery), ...pick(tailSuggestions, tailQuery)]
-      .filter((s) => { const k = s.name.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
+      .filter((s) => {
+        const k = s.name.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      })
       .slice(0, 8);
   }, [suggestions, tailSuggestions, nameQuery, tailQuery]);
 
@@ -719,13 +1141,22 @@ function IngredientLineField({ value, onChange, onEnter, onBackspaceEmpty, autoF
       filterOptions={(x) => x}
       getOptionLabel={(o) => (typeof o === "string" ? o : o.name)}
       inputValue={value}
-      onInputChange={(_, v, reason) => { if (reason === "input" || reason === "clear") onChange(v); }}
+      onInputChange={(_, v, reason) => {
+        if (reason === "input" || reason === "clear") onChange(v);
+      }}
       onChange={(_, v) => {
         if (v && typeof v !== "string") {
           // Matched on the tail ("handfuls spin" → spinach): the first word was really a unit.
           const viaTail = tailQuery && !v.name.toLowerCase().includes(nameQuery.toLowerCase());
           const lead = viaTail ? nameQuery.slice(0, nameQuery.indexOf(" ")) : "";
-          onChange(ingredientLine({ quantity: parsed.quantity, unit: parsed.unit || lead || v.unit, name: v.name, note: parsed.note }));
+          onChange(
+            ingredientLine({
+              quantity: parsed.quantity,
+              unit: parsed.unit || lead || v.unit,
+              name: v.name,
+              note: parsed.note,
+            }),
+          );
         }
       }}
       onFocus={() => setFocused(true)}
@@ -736,24 +1167,46 @@ function IngredientLineField({ value, onChange, onEnter, onBackspaceEmpty, autoF
           <li key={key} {...rest}>
             <Stack direction="row" justifyContent="space-between" sx={{ width: "100%" }}>
               <span>{o.name}</span>
-              <Typography variant="caption" color="text.secondary">{o.unit}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {o.unit}
+              </Typography>
             </Stack>
           </li>
         );
       }}
       renderInput={(p) => (
-        <TextField {...p} variant="standard" autoFocus={autoFocus} placeholder="e.g. 2 cups flour, sifted" sx={quietInput}
+        <TextField
+          {...p}
+          variant="standard"
+          autoFocus={autoFocus}
+          placeholder="e.g. 2 cups flour, sifted"
+          sx={quietInput}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.defaultPrevented && !(p.inputProps as any)["aria-activedescendant"]) { e.preventDefault(); onEnter(); }
-            if (e.key === "Backspace" && !value) { e.preventDefault(); onBackspaceEmpty(); }
+            if (e.key === "Enter" && !e.defaultPrevented && !(p.inputProps as any)["aria-activedescendant"]) {
+              e.preventDefault();
+              onEnter();
+            }
+            if (e.key === "Backspace" && !value) {
+              e.preventDefault();
+              onBackspaceEmpty();
+            }
           }}
-          slotProps={{ htmlInput: { ...p.inputProps, maxLength: 200, "aria-label": "Ingredient" } }} />
+          slotProps={{ htmlInput: { ...p.inputProps, maxLength: 200, "aria-label": "Ingredient" } }}
+        />
       )}
     />
   );
 }
 
-function StepsEditor({ steps, onChange, accent }: { steps: StepRow[]; onChange: (s: StepRow[]) => void; accent: string }) {
+function StepsEditor({
+  steps,
+  onChange,
+  accent,
+}: {
+  steps: StepRow[];
+  onChange: (s: StepRow[]) => void;
+  accent: string;
+}) {
   const patch = (i: number, p: Partial<StepRow>) => onChange(steps.map((s, j) => (j === i ? { ...s, ...p } : s)));
   const [timerFor, setTimerFor] = useState<Set<string>>(new Set());
   const [focusKey, setFocusKey] = useState<string | null>(null);
@@ -768,47 +1221,102 @@ function StepsEditor({ steps, onChange, accent }: { steps: StepRow[]; onChange: 
       <SectionTitle>Steps</SectionTitle>
       <Stack spacing={1}>
         {steps.map((s, i) => (
-          <Stack key={s.key} direction="row" spacing={1.5} alignItems="flex-start"
-            sx={{ "& .row-more": { opacity: { sm: 0 } }, "&:hover .row-more, &:focus-within .row-more": { opacity: 1 } }}>
-            <Box sx={{
-              width: 24, height: 24, mt: 0.5, borderRadius: "50%", bgcolor: alpha(accent, 0.18), fontSize: 13, fontWeight: 700,
-              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            }}>
+          <Stack
+            key={s.key}
+            direction="row"
+            spacing={1.5}
+            alignItems="flex-start"
+            sx={{
+              "& .row-more": { opacity: { sm: 0 } },
+              "&:hover .row-more, &:focus-within .row-more": { opacity: 1 },
+            }}
+          >
+            <Box
+              sx={{
+                width: 24,
+                height: 24,
+                mt: 0.5,
+                borderRadius: "50%",
+                bgcolor: alpha(accent, 0.18),
+                fontSize: 13,
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
               {i + 1}
             </Box>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <TextField multiline fullWidth variant="standard" placeholder={i === 0 ? "First, …" : "Then…"} value={s.text}
+              <TextField
+                multiline
+                fullWidth
+                variant="standard"
+                placeholder={i === 0 ? "First, …" : "Then…"}
+                value={s.text}
                 autoFocus={focusKey === s.key}
-                onChange={(e) => patch(i, { text: e.target.value })} sx={quietInput}
+                onChange={(e) => patch(i, { text: e.target.value })}
+                sx={quietInput}
                 onKeyDown={(e) => {
                   // Enter starts the next step; Shift+Enter is a line break inside this one.
-                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); insertAfter(i); }
-                  if (e.key === "Backspace" && !s.text && steps.length > 1) { e.preventDefault(); onChange(steps.filter((_, j) => j !== i)); }
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    insertAfter(i);
+                  }
+                  if (e.key === "Backspace" && !s.text && steps.length > 1) {
+                    e.preventDefault();
+                    onChange(steps.filter((_, j) => j !== i));
+                  }
                 }}
-                slotProps={{ htmlInput: { maxLength: 2000, "aria-label": `Step ${i + 1}` } }} />
+                slotProps={{ htmlInput: { maxLength: 2000, "aria-label": `Step ${i + 1}` } }}
+              />
               {(s.timer || timerFor.has(s.key)) && (
-                <TextField size="small" type="number" placeholder="Timer" value={s.timer} onChange={(e) => patch(i, { timer: e.target.value })}
-                  sx={{ mt: 0.5, width: 130 }} autoFocus={!s.timer}
-                  slotProps={{ htmlInput: { min: 0, "aria-label": "Timer minutes" }, input: {
-                    startAdornment: <InputAdornment position="start"><TimerOutlinedIcon fontSize="small" /></InputAdornment>,
-                    endAdornment: <InputAdornment position="end">min</InputAdornment>,
-                  } }} />
+                <TextField
+                  size="small"
+                  type="number"
+                  placeholder="Timer"
+                  value={s.timer}
+                  onChange={(e) => patch(i, { timer: e.target.value })}
+                  sx={{ mt: 0.5, width: 130 }}
+                  autoFocus={!s.timer}
+                  slotProps={{
+                    htmlInput: { min: 0, "aria-label": "Timer minutes" },
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <TimerOutlinedIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                      endAdornment: <InputAdornment position="end">min</InputAdornment>,
+                    },
+                  }}
+                />
               )}
             </Box>
             <Stack direction="row" className="row-more">
               {!s.timer && !timerFor.has(s.key) && (
                 <Tooltip title="Add a timer">
-                  <IconButton size="small" onClick={() => setTimerFor((t) => new Set(t).add(s.key))}><TimerOutlinedIcon fontSize="small" /></IconButton>
+                  <IconButton size="small" onClick={() => setTimerFor((t) => new Set(t).add(s.key))}>
+                    <TimerOutlinedIcon fontSize="small" />
+                  </IconButton>
                 </Tooltip>
               )}
               <Tooltip title="Remove step">
-                <IconButton size="small" onClick={() => onChange(steps.length > 1 ? steps.filter((_, j) => j !== i) : [blankStep()])}><CloseIcon fontSize="small" /></IconButton>
+                <IconButton
+                  size="small"
+                  onClick={() => onChange(steps.length > 1 ? steps.filter((_, j) => j !== i) : [blankStep()])}
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
               </Tooltip>
             </Stack>
           </Stack>
         ))}
       </Stack>
-      <Button size="small" startIcon={<AddIcon />} sx={{ mt: 0.5 }} onClick={() => insertAfter(steps.length - 1)}>Step</Button>
+      <Button size="small" startIcon={<AddIcon />} sx={{ mt: 0.5 }} onClick={() => insertAfter(steps.length - 1)}>
+        Step
+      </Button>
     </>
   );
 }
@@ -817,7 +1325,8 @@ function StepsEditor({ steps, onChange, accent }: { steps: StepRow[]; onChange: 
 
 function InstructionFields({ draft, set, accent }: { draft: Draft; set: (p: Partial<Draft>) => void; accent: string }) {
   const methods = draft.methods;
-  const patch = (i: number, p: Partial<MethodRow>) => set({ methods: methods.map((m, j) => (j === i ? { ...m, ...p } : m)) });
+  const patch = (i: number, p: Partial<MethodRow>) =>
+    set({ methods: methods.map((m, j) => (j === i ? { ...m, ...p } : m)) });
   const used = new Set(methods.map((m) => m.method));
   const nextMethod = COOK_METHODS.find((m) => !used.has(m)) ?? "other";
   const [stepsOpen, setStepsOpen] = useState<Set<string>>(new Set());
@@ -829,71 +1338,174 @@ function InstructionFields({ draft, set, accent }: { draft: Draft; set: (p: Part
         {methods.map((m, i) => {
           const showSteps = !!m.stepsText.trim() || stepsOpen.has(m.key);
           return (
-            <Box key={m.key} sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.07), border: "1px solid", borderColor: alpha(accent, 0.25) }}>
+            <Box
+              key={m.key}
+              sx={{
+                p: 1.5,
+                borderRadius: 2,
+                bgcolor: alpha(accent, 0.07),
+                border: "1px solid",
+                borderColor: alpha(accent, 0.25),
+              }}
+            >
               <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                <TextField select size="small" value={m.method} onChange={(e) => patch(i, { method: e.target.value as CookMethod, preheat: e.target.value === "oven" ? m.preheat : false })}
-                  sx={{ minWidth: 150 }} slotProps={{ htmlInput: { "aria-label": "Method" }, select: { renderValue: (v) => (
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <MethodIconView method={v as CookMethod} sx={{ fontSize: 18, color: accent }} />
-                      <span>{COOK_METHOD_LABELS[v as CookMethod]}</span>
-                    </Stack>
-                  ) } }}>
+                <TextField
+                  select
+                  size="small"
+                  value={m.method}
+                  onChange={(e) =>
+                    patch(i, {
+                      method: e.target.value as CookMethod,
+                      preheat: e.target.value === "oven" ? m.preheat : false,
+                    })
+                  }
+                  sx={{ minWidth: 150 }}
+                  slotProps={{
+                    htmlInput: { "aria-label": "Method" },
+                    select: {
+                      renderValue: (v) => (
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <MethodIconView method={v as CookMethod} sx={{ fontSize: 18, color: accent }} />
+                          <span>{COOK_METHOD_LABELS[v as CookMethod]}</span>
+                        </Stack>
+                      ),
+                    },
+                  }}
+                >
                   {COOK_METHODS.map((opt) => (
-                    <MenuItem key={opt} value={opt}><MethodIconView method={opt} sx={{ fontSize: 18, mr: 1.5 }} />{COOK_METHOD_LABELS[opt]}</MenuItem>
+                    <MenuItem key={opt} value={opt}>
+                      <MethodIconView method={opt} sx={{ fontSize: 18, mr: 1.5 }} />
+                      {COOK_METHOD_LABELS[opt]}
+                    </MenuItem>
                   ))}
                 </TextField>
 
                 {m.method === "microwave" ? (
-                  <TextField size="small" placeholder="Power" value={m.power} onChange={(e) => patch(i, { power: e.target.value })}
-                    sx={{ width: 110 }} slotProps={{ htmlInput: { maxLength: 30, "aria-label": "Power" } }} />
+                  <TextField
+                    size="small"
+                    placeholder="Power"
+                    value={m.power}
+                    onChange={(e) => patch(i, { power: e.target.value })}
+                    sx={{ width: 110 }}
+                    slotProps={{ htmlInput: { maxLength: 30, "aria-label": "Power" } }}
+                  />
                 ) : (
-                  <TextField size="small" placeholder="Temp" type="number" value={m.temp} onChange={(e) => patch(i, { temp: e.target.value })}
+                  <TextField
+                    size="small"
+                    placeholder="Temp"
+                    type="number"
+                    value={m.temp}
+                    onChange={(e) => patch(i, { temp: e.target.value })}
                     sx={{ width: 120 }}
-                    slotProps={{ htmlInput: { min: 0, inputMode: "numeric", "aria-label": "Temperature" }, input: { endAdornment: (
-                      <InputAdornment position="end">
-                        <Tooltip title="Switch °F / °C">
-                          <Box component="button" type="button" onClick={() => patch(i, { temp_unit: m.temp_unit === "F" ? "C" : "F" })}
-                            sx={{ border: 0, bgcolor: "transparent", color: "text.secondary", cursor: "pointer", font: "inherit", p: 0 }}>
-                            °{m.temp_unit}
-                          </Box>
-                        </Tooltip>
-                      </InputAdornment>
-                    ) } }} />
+                    slotProps={{
+                      htmlInput: { min: 0, inputMode: "numeric", "aria-label": "Temperature" },
+                      input: {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <Tooltip title="Switch °F / °C">
+                              <Box
+                                component="button"
+                                type="button"
+                                onClick={() => patch(i, { temp_unit: m.temp_unit === "F" ? "C" : "F" })}
+                                sx={{
+                                  border: 0,
+                                  bgcolor: "transparent",
+                                  color: "text.secondary",
+                                  cursor: "pointer",
+                                  font: "inherit",
+                                  p: 0,
+                                }}
+                              >
+                                °{m.temp_unit}
+                              </Box>
+                            </Tooltip>
+                          </InputAdornment>
+                        ),
+                      },
+                    }}
+                  />
                 )}
 
                 <Stack direction="row" spacing={0.5} alignItems="center">
-                  <TextField size="small" placeholder="Min" type="number" value={m.minutes_min} onChange={(e) => patch(i, { minutes_min: e.target.value })}
-                    sx={{ width: 72 }} slotProps={{ htmlInput: { min: 0, inputMode: "numeric", "aria-label": "Minutes from" } }} />
+                  <TextField
+                    size="small"
+                    placeholder="Min"
+                    type="number"
+                    value={m.minutes_min}
+                    onChange={(e) => patch(i, { minutes_min: e.target.value })}
+                    sx={{ width: 72 }}
+                    slotProps={{ htmlInput: { min: 0, inputMode: "numeric", "aria-label": "Minutes from" } }}
+                  />
                   <Typography color="text.secondary">–</Typography>
-                  <TextField size="small" placeholder="Max" type="number" value={m.minutes_max} onChange={(e) => patch(i, { minutes_max: e.target.value })}
-                    sx={{ width: 72 }} slotProps={{ htmlInput: { min: 0, inputMode: "numeric", "aria-label": "Minutes to" } }} />
-                  <Typography variant="body2" color="text.secondary">min</Typography>
+                  <TextField
+                    size="small"
+                    placeholder="Max"
+                    type="number"
+                    value={m.minutes_max}
+                    onChange={(e) => patch(i, { minutes_max: e.target.value })}
+                    sx={{ width: 72 }}
+                    slotProps={{ htmlInput: { min: 0, inputMode: "numeric", "aria-label": "Minutes to" } }}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    min
+                  </Typography>
                 </Stack>
 
                 {m.method !== "microwave" && (
-                  <Chip size="small" label="Preheat" variant={m.preheat ? "filled" : "outlined"} color={m.preheat ? "warning" : "default"}
-                    onClick={() => patch(i, { preheat: !m.preheat })} />
+                  <Chip
+                    size="small"
+                    label="Preheat"
+                    variant={m.preheat ? "filled" : "outlined"}
+                    color={m.preheat ? "warning" : "default"}
+                    onClick={() => patch(i, { preheat: !m.preheat })}
+                  />
                 )}
                 <Box sx={{ flex: 1 }} />
                 {!showSteps && (
-                  <Button size="small" color="inherit" sx={{ opacity: 0.7 }} onClick={() => setStepsOpen((s) => new Set(s).add(m.key))}>+ Steps</Button>
+                  <Button
+                    size="small"
+                    color="inherit"
+                    sx={{ opacity: 0.7 }}
+                    onClick={() => setStepsOpen((s) => new Set(s).add(m.key))}
+                  >
+                    + Steps
+                  </Button>
                 )}
-                <IconButton size="small" aria-label="Remove method"
-                  onClick={() => set({ methods: methods.length > 1 ? methods.filter((_, j) => j !== i) : [blankMethod()] })}>
+                <IconButton
+                  size="small"
+                  aria-label="Remove method"
+                  onClick={() =>
+                    set({ methods: methods.length > 1 ? methods.filter((_, j) => j !== i) : [blankMethod()] })
+                  }
+                >
                   <CloseIcon fontSize="small" />
                 </IconButton>
               </Stack>
               {showSteps && (
-                <TextField sx={{ mt: 1.5 }} fullWidth multiline minRows={2} size="small" placeholder={"One per line, e.g.\nRemove film\nLet stand 2 minutes"}
-                  value={m.stepsText} onChange={(e) => patch(i, { stepsText: e.target.value })} autoFocus={!m.stepsText}
-                  slotProps={{ htmlInput: { "aria-label": "Steps" } }} />
+                <TextField
+                  sx={{ mt: 1.5 }}
+                  fullWidth
+                  multiline
+                  minRows={2}
+                  size="small"
+                  placeholder={"One per line, e.g.\nRemove film\nLet stand 2 minutes"}
+                  value={m.stepsText}
+                  onChange={(e) => patch(i, { stepsText: e.target.value })}
+                  autoFocus={!m.stepsText}
+                  slotProps={{ htmlInput: { "aria-label": "Steps" } }}
+                />
               )}
             </Box>
           );
         })}
       </Stack>
       {methods.length < 6 && (
-        <Button size="small" startIcon={<AddIcon />} sx={{ mt: 0.5 }} onClick={() => set({ methods: [...methods, blankMethod(nextMethod)] })}>
+        <Button
+          size="small"
+          startIcon={<AddIcon />}
+          sx={{ mt: 0.5 }}
+          onClick={() => set({ methods: [...methods, blankMethod(nextMethod)] })}
+        >
           Another way to cook it
         </Button>
       )}

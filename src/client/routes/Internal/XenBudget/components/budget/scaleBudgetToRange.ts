@@ -19,35 +19,36 @@ const round = (v: number) => Math.round(v * 100) / 100;
  * each already measured against its own amount. Scaling them to the range would be wrong
  * twice over - the spend is not the range's, and the amount is not the range's either.
  */
-export function scaleBudgetToRange(
-    budget: BudgetStatus, rangeFrom: Date, rangeTo: Date,
-): BudgetStatus {
-    const factor = periodsInRange(budget, rangeFrom, rangeTo);
+export function scaleBudgetToRange(budget: BudgetStatus, rangeFrom: Date, rangeTo: Date): BudgetStatus {
+  const factor = periodsInRange(budget, rangeFrom, rangeTo);
 
-    const overall = budget.amount === undefined ? {} : (() => {
-        const amount = round(budget.amount * factor);
-        return {
+  const overall =
+    budget.amount === undefined
+      ? {}
+      : (() => {
+          const amount = round(budget.amount * factor);
+          return {
             amount,
             remaining: round(amount - budget.spent),
             // Uncapped rather than clamped, matching the server, so a bar can still show
             // how far past the amount it went.
             percent: amount > 0 ? Math.round((budget.spent / amount) * 100) : 0,
             over: budget.spent > amount,
-        };
-    })();
+          };
+        })();
 
-    return {
-        ...budget,
-        ...overall,
-        sub_budgets: budget.sub_budgets.map((sub) => {
-            const amount = round(sub.amount * factor);
-            return {
-                ...sub,
-                amount,
-                remaining: round(amount - sub.spent),
-                percent: amount > 0 ? Math.round((sub.spent / amount) * 100) : 0,
-                over: sub.spent > amount,
-            };
-        }),
-    };
+  return {
+    ...budget,
+    ...overall,
+    sub_budgets: budget.sub_budgets.map((sub) => {
+      const amount = round(sub.amount * factor);
+      return {
+        ...sub,
+        amount,
+        remaining: round(amount - sub.spent),
+        percent: amount > 0 ? Math.round((sub.spent / amount) * 100) : 0,
+        over: sub.spent > amount,
+      };
+    }),
+  };
 }

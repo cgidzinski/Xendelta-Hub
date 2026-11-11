@@ -1,15 +1,6 @@
 import PageContainer from "../../components/ui/PageContainer";
 import { useState, useEffect } from "react";
-import {
-  Box,
-  Card,
-  Typography,
-  Button,
-  Tabs,
-  Tab,
-  IconButton,
-  CircularProgress,
-} from "@mui/material";
+import { Box, Card, Typography, Button, Tabs, Tab, IconButton, CircularProgress } from "@mui/material";
 import {
   Save as SaveIcon,
   Preview as PreviewIcon,
@@ -205,7 +196,7 @@ export default function BlogPostForm() {
       assets.map((asset) => ({
         ...asset,
         isFeatured: asset.id === assetId ? !asset.isFeatured : false,
-      }))
+      })),
     );
   };
 
@@ -373,13 +364,7 @@ export default function BlogPostForm() {
               <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: "error.main" }}>
                 Danger Zone
               </Typography>
-              <Button
-                variant="outlined"
-                color="error"
-                startIcon={<DeleteIcon />}
-                onClick={handleDelete}
-                sx={{ mt: 1 }}
-              >
+              <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={handleDelete} sx={{ mt: 1 }}>
                 Delete Post
               </Button>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>

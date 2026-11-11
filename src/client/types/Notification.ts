@@ -10,4 +10,3 @@ export interface Notification {
   unread: boolean;
   link?: string;
 }
-

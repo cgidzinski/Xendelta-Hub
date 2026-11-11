@@ -17,7 +17,10 @@ export function currenciesInGroup(group: XenSplit): string[] {
   const seen = new Set<string>();
   group.expenses.filter((e) => !e.on_hold).forEach((e) => seen.add(e.currency));
   group.settlements.forEach((s) => seen.add(s.currency));
-  (group.exchanges ?? []).forEach((ex) => { seen.add(ex.currency_a); seen.add(ex.currency_b); });
+  (group.exchanges ?? []).forEach((ex) => {
+    seen.add(ex.currency_a);
+    seen.add(ex.currency_b);
+  });
   if (seen.size === 0) seen.add(defaultCurrency);
   return [...seen].sort((a, b) => (a === defaultCurrency ? -1 : b === defaultCurrency ? 1 : a.localeCompare(b)));
 }

@@ -44,7 +44,8 @@ const emptyStep = (index: number): RecipeStep => ({
 });
 
 // `index` is persisted on each step, so anything that shifts positions has to renumber.
-const reindex = (steps: RecipeStep[]): RecipeStep[] => steps.map((step, i) => (step.index === i ? step : { ...step, index: i }));
+const reindex = (steps: RecipeStep[]): RecipeStep[] =>
+  steps.map((step, i) => (step.index === i ? step : { ...step, index: i }));
 
 function stepsReducer(steps: RecipeStep[], action: StepAction): RecipeStep[] {
   switch (action.type) {
@@ -158,7 +159,12 @@ export default function RecipeForm({
               {isDeleting ? "Deleting..." : "Delete"}
             </Button>
           )}
-          <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={isSaving || !title.trim()}>
+          <Button
+            variant="contained"
+            startIcon={<SaveIcon />}
+            onClick={handleSave}
+            disabled={isSaving || !title.trim()}
+          >
             {isSaving ? "Saving..." : "Save"}
           </Button>
         </Box>

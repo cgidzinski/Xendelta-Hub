@@ -6,17 +6,17 @@ import SectionCard from "../../../../components/ui/SectionCard";
 import LabelManager from "../components/LabelManager";
 
 export default function CategoriesSection() {
-    const { book } = useOutletContext<BookDetailContext>();
-    const { counts } = useXenBudgetCategoryItemCounts(book._id);
+  const { book } = useOutletContext<BookDetailContext>();
+  const { counts } = useXenBudgetCategoryItemCounts(book._id);
 
-    return (
-        <Stack spacing={2}>
-            <SectionCard
-                title="Categories"
-                description="What a purchase was. Budgets and reports run on these, and one purchase can split across several."
-            >
-                <LabelManager book={book} kind="categories" itemCounts={counts} />
-            </SectionCard>
-        </Stack>
-    );
+  return (
+    <Stack spacing={2}>
+      <SectionCard
+        title="Categories"
+        description="What a purchase was. Budgets and reports run on these, and one purchase can split across several."
+      >
+        <LabelManager book={book} kind="categories" itemCounts={counts} />
+      </SectionCard>
+    </Stack>
+  );
 }

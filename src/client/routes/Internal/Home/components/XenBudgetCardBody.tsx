@@ -18,11 +18,11 @@ import type { XenBudgetBook, BudgetStatus } from "../../../../hooks/xenbudget/ty
  * has room for something people can act on, not a portfolio summary.
  */
 function mostRecentlyActive(books: XenBudgetBook[]): XenBudgetBook | undefined {
-    return [...books].sort((a, b) => {
-        const aAt = new Date(a.last_item_at ?? a.created_at).getTime();
-        const bAt = new Date(b.last_item_at ?? b.created_at).getTime();
-        return bAt - aAt;
-    })[0];
+  return [...books].sort((a, b) => {
+    const aAt = new Date(a.last_item_at ?? a.created_at).getTime();
+    const bAt = new Date(b.last_item_at ?? b.created_at).getTime();
+    return bAt - aAt;
+  })[0];
 }
 
 /**
@@ -35,141 +35,138 @@ function mostRecentlyActive(books: XenBudgetBook[]): XenBudgetBook | undefined {
  * is tightest, never both, so the same dollars aren't counted twice within one budget.
  */
 function budgetAhead(budget: BudgetStatus): { ahead: number; amount: number } | null {
-    if (directionOf(budget.measures) === "floor") return null;
-    const tightestSub = [...budget.sub_budgets].sort((a, b) => b.percent - a.percent)[0];
-    const useSub = budget.amount === undefined
-        || (tightestSub && tightestSub.percent > (budget.percent ?? 0));
-    const spent = useSub ? tightestSub.spent : budget.spent;
-    const amount = useSub ? tightestSub.amount : (budget.amount ?? 0);
-    if (amount <= 0) return null;
-    const pace = budgetPace(budget.period_from, budget.period_to, new Date().toISOString(), spent, amount);
-    if (pace.finished) return null;
-    return { ahead: pace.ahead, amount };
+  if (directionOf(budget.measures) === "floor") return null;
+  const tightestSub = [...budget.sub_budgets].sort((a, b) => b.percent - a.percent)[0];
+  const useSub = budget.amount === undefined || (tightestSub && tightestSub.percent > (budget.percent ?? 0));
+  const spent = useSub ? tightestSub.spent : budget.spent;
+  const amount = useSub ? tightestSub.amount : (budget.amount ?? 0);
+  if (amount <= 0) return null;
+  const pace = budgetPace(budget.period_from, budget.period_to, new Date().toISOString(), spent, amount);
+  if (pace.finished) return null;
+  return { ahead: pace.ahead, amount };
 }
 
 export default function XenBudgetCardBody() {
-    const navigate = useNavigate();
-    const { books, isLoading } = useXenBudgetBooks();
-    const book = mostRecentlyActive(books);
-    const { book: bookDetail } = useXenBudgetBook(book?._id || "");
-    const { summary } = useXenBudgetSummary(book?._id || "");
-    const { budgets } = useXenBudgetStatus(book?._id || "");
+  const navigate = useNavigate();
+  const { books, isLoading } = useXenBudgetBooks();
+  const book = mostRecentlyActive(books);
+  const { book: bookDetail } = useXenBudgetBook(book?._id || "");
+  const { summary } = useXenBudgetSummary(book?._id || "");
+  const { budgets } = useXenBudgetStatus(book?._id || "");
 
-    if (isLoading) {
-        return <Skeleton variant="rectangular" height={96} sx={{ borderRadius: 2 }} />;
-    }
-    if (!book) {
-        return <EmptyState description="No books yet." sx={{ py: 1 }} />;
-    }
+  if (isLoading) {
+    return <Skeleton variant="rectangular" height={96} sx={{ borderRadius: 2 }} />;
+  }
+  if (!book) {
+    return <EmptyState description="No books yet." sx={{ py: 1 }} />;
+  }
 
-    const currency = summary?.currency || book.default_currency;
-    const otherBookCount = books.length - 1;
-    const needsReviewCount = bookDetail?.needs_review_count ?? 0;
-    const missingCategoryCount = bookDetail?.review_count ?? 0;
+  const currency = summary?.currency || book.default_currency;
+  const otherBookCount = books.length - 1;
+  const needsReviewCount = bookDetail?.needs_review_count ?? 0;
+  const missingCategoryCount = bookDetail?.review_count ?? 0;
 
-    const paceEntries = budgets.map(budgetAhead).filter((e): e is { ahead: number; amount: number } => e !== null);
-    const combinedAhead = paceEntries.reduce((sum, e) => sum + e.ahead, 0);
-    const combinedAmount = paceEntries.reduce((sum, e) => sum + e.amount, 0);
-    const paceThreshold = Math.max(combinedAmount * 0.02, 1);
-    const hasPace = paceEntries.length > 0;
+  const paceEntries = budgets.map(budgetAhead).filter((e): e is { ahead: number; amount: number } => e !== null);
+  const combinedAhead = paceEntries.reduce((sum, e) => sum + e.ahead, 0);
+  const combinedAmount = paceEntries.reduce((sum, e) => sum + e.amount, 0);
+  const paceThreshold = Math.max(combinedAmount * 0.02, 1);
+  const hasPace = paceEntries.length > 0;
 
-    // The card itself already navigates to the books list (AppCard's own CardActionArea,
-    // via app.path) - this box is the one part of it that should jump straight to the
-    // book being previewed, so its click has to stop there rather than bubble up.
-    const goToBook = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        navigate(`/internal/xenbudget/books/${book._id}/overview`);
-    };
+  // The card itself already navigates to the books list (AppCard's own CardActionArea,
+  // via app.path) - this box is the one part of it that should jump straight to the
+  // book being previewed, so its click has to stop there rather than bubble up.
+  const goToBook = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigate(`/internal/xenbudget/books/${book._id}/overview`);
+  };
 
-    return (
-        <Box
-            onClick={goToBook}
-            sx={{ ...cardSx, p: 1, cursor: "pointer" }}
+  return (
+    <Box onClick={goToBook} sx={{ ...cardSx, p: 1, cursor: "pointer" }}>
+      <Stack direction="row" alignItems="center" spacing={1}>
+        <Typography variant="caption" sx={{ ...sectionLabelSx, flexGrow: 1, minWidth: 0 }} noWrap>
+          {book.name}
+          {otherBookCount > 0 && (
+            <Typography component="span" variant="caption" color="text.secondary">
+              {" "}
+              · +{otherBookCount} more
+            </Typography>
+          )}
+        </Typography>
+        {(needsReviewCount > 0 || missingCategoryCount > 0) && (
+          <Stack direction="row" spacing={0.75} sx={{ flexShrink: 0 }}>
+            {needsReviewCount > 0 && (
+              <Chip
+                size="small"
+                color="error"
+                variant="outlined"
+                label={`${needsReviewCount} Flagged`}
+                sx={{ height: 20, "& .MuiChip-label": { px: 0.75, fontSize: 11 } }}
+              />
+            )}
+            {missingCategoryCount > 0 && (
+              <Chip
+                size="small"
+                color="warning"
+                variant="outlined"
+                label={`${missingCategoryCount} Needs Category`}
+                sx={{ height: 20, "& .MuiChip-label": { px: 0.75, fontSize: 11 } }}
+              />
+            )}
+          </Stack>
+        )}
+      </Stack>
+
+      <Divider sx={{ my: 1 }} />
+
+      <TotalsSummary
+        bare
+        income={summary?.totals.income ?? 0}
+        expense={summary?.totals.expense ?? 0}
+        net={summary?.totals.net ?? 0}
+        currency={currency}
+      />
+
+      {summary && summary.by_person.length > 1 && (
+        <AvatarGroup
+          max={4}
+          sx={{ justifyContent: "flex-end", mt: 1, "& .MuiAvatar-root": { width: 24, height: 24, fontSize: 11 } }}
         >
-            <Stack direction="row" alignItems="center" spacing={1}>
-                <Typography variant="caption" sx={{ ...sectionLabelSx, flexGrow: 1, minWidth: 0 }} noWrap>
-                    {book.name}
-                    {otherBookCount > 0 && (
-                        <Typography component="span" variant="caption" color="text.secondary">
-                            {" "}· +{otherBookCount} more
-                        </Typography>
-                    )}
-                </Typography>
-                {(needsReviewCount > 0 || missingCategoryCount > 0) && (
-                    <Stack direction="row" spacing={0.75} sx={{ flexShrink: 0 }}>
-                        {needsReviewCount > 0 && (
-                            <Chip
-                                size="small"
-                                color="error"
-                                variant="outlined"
-                                label={`${needsReviewCount} Flagged`}
-                                sx={{ height: 20, "& .MuiChip-label": { px: 0.75, fontSize: 11 } }}
-                            />
-                        )}
-                        {missingCategoryCount > 0 && (
-                            <Chip
-                                size="small"
-                                color="warning"
-                                variant="outlined"
-                                label={`${missingCategoryCount} Needs Category`}
-                                sx={{ height: 20, "& .MuiChip-label": { px: 0.75, fontSize: 11 } }}
-                            />
-                        )}
-                    </Stack>
-                )}
-            </Stack>
+          {summary.by_person.map((person) => (
+            <Tooltip key={person.user_id} title={`${person.username}: ${formatCurrency(person.total, currency)}`}>
+              <Avatar src={person.avatar || undefined} alt={person.username}>
+                {person.username.charAt(0).toUpperCase()}
+              </Avatar>
+            </Tooltip>
+          ))}
+        </AvatarGroup>
+      )}
 
-            <Divider sx={{ my: 1 }} />
-
-            <TotalsSummary
-                bare
-                income={summary?.totals.income ?? 0}
-                expense={summary?.totals.expense ?? 0}
-                net={summary?.totals.net ?? 0}
-                currency={currency}
-            />
-
-            {summary && summary.by_person.length > 1 && (
-                <AvatarGroup
-                    max={4}
-                    sx={{ justifyContent: "flex-end", mt: 1, "& .MuiAvatar-root": { width: 24, height: 24, fontSize: 11 } }}
-                >
-                    {summary.by_person.map((person) => (
-                        <Tooltip
-                            key={person.user_id}
-                            title={`${person.username}: ${formatCurrency(person.total, currency)}`}
-                        >
-                            <Avatar src={person.avatar || undefined} alt={person.username}>
-                                {person.username.charAt(0).toUpperCase()}
-                            </Avatar>
-                        </Tooltip>
-                    ))}
-                </AvatarGroup>
-            )}
-
-            {hasPace && (
-                <>
-                    <Divider sx={{ my: 1 }} />
-                    <Typography variant="caption" color="text.secondary">
-                        Pace · {paceEntries.length} budget{paceEntries.length === 1 ? "" : "s"}
-                    </Typography>
-                    <Typography
-                        variant="subtitle2"
-                        noWrap
-                        sx={{
-                            color: combinedAhead > paceThreshold
-                                ? "error.main"
-                                : combinedAhead < -paceThreshold ? "success.main" : "text.primary",
-                        }}
-                    >
-                        {Math.abs(combinedAhead) < paceThreshold
-                            ? "On pace"
-                            : combinedAhead > 0
-                                ? `${formatCurrency(combinedAhead, currency)} ahead of pace`
-                                : `${formatCurrency(-combinedAhead, currency)} behind pace`}
-                    </Typography>
-                </>
-            )}
-        </Box>
-    );
+      {hasPace && (
+        <>
+          <Divider sx={{ my: 1 }} />
+          <Typography variant="caption" color="text.secondary">
+            Pace · {paceEntries.length} budget{paceEntries.length === 1 ? "" : "s"}
+          </Typography>
+          <Typography
+            variant="subtitle2"
+            noWrap
+            sx={{
+              color:
+                combinedAhead > paceThreshold
+                  ? "error.main"
+                  : combinedAhead < -paceThreshold
+                    ? "success.main"
+                    : "text.primary",
+            }}
+          >
+            {Math.abs(combinedAhead) < paceThreshold
+              ? "On pace"
+              : combinedAhead > 0
+                ? `${formatCurrency(combinedAhead, currency)} ahead of pace`
+                : `${formatCurrency(-combinedAhead, currency)} behind pace`}
+          </Typography>
+        </>
+      )}
+    </Box>
+  );
 }

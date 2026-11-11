@@ -3,18 +3,11 @@
  */
 
 // Re-export sub-app constants
-export {
-  MAX_XENBOX_SIZE,
-  XENBOX_CHUNK_SIZE,
-} from "./xenbox";
+export { MAX_XENBOX_SIZE, XENBOX_CHUNK_SIZE } from "./xenbox";
 
-export {
-  MAX_RECIPAINT_ASSET_SIZE,
-} from "./recipaint";
+export { MAX_RECIPAINT_ASSET_SIZE } from "./recipaint";
 
-export {
-  MAX_BLOG_ASSET_SIZE,
-} from "./blog";
+export { MAX_BLOG_ASSET_SIZE } from "./blog";
 
 export {
   SYSTEM_FLAGS,
@@ -43,13 +36,7 @@ export const AVATAR_QUALITY = 90;
 export const AVATAR_COMPRESSION_LEVEL = 9;
 
 // Allowed MIME types for images
-export const ALLOWED_IMAGE_MIMES = [
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/heic",
-  "image/heif"
-] as const;
+export const ALLOWED_IMAGE_MIMES = ["image/jpeg", "image/png", "image/gif", "image/heic", "image/heif"] as const;
 
 // Validation limits
 export const VALIDATION_LIMITS = {

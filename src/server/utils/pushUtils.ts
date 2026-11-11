@@ -85,7 +85,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
       try {
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } },
-          body
+          body,
         );
         return { ok: true as const };
       } catch (err: any) {
@@ -104,11 +104,11 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
           "Push send failed:",
           sub.endpoint,
           err?.statusCode !== undefined ? `HTTP ${err.statusCode}` : "(no HTTP response)",
-          err?.body || err?.message || err
+          err?.body || err?.message || err,
         );
         return { ok: false as const, pruned: false };
       }
-    })
+    }),
   );
 
   for (const result of results) {

@@ -27,17 +27,15 @@ export const FLAG_NEEDS_REVIEW = "Needs review";
 export type FilterGroup = "Type" | "Need / Want" | "Categories" | "People" | "Flags";
 
 /** The order the groups are listed in, in the menu and in the option list. */
-export const FILTER_GROUPS: FilterGroup[] = [
-    "Type", "Need / Want", "Categories", "People", "Flags",
-];
+export const FILTER_GROUPS: FilterGroup[] = ["Type", "Need / Want", "Categories", "People", "Flags"];
 
 /** Which section of the menu an option belongs to. Prefixes decide, never the name. */
 export function filterGroupOf(option: string): FilterGroup {
-    if (option === TYPE_EXPENSE || option === TYPE_INCOME) return "Type";
-    if (option === NEED_FILTER || option === WANT_FILTER) return "Need / Want";
-    if (option.startsWith(CATEGORY_PREFIX)) return "Categories";
-    if (option.startsWith(PERSON_PREFIX)) return "People";
-    return "Flags";
+  if (option === TYPE_EXPENSE || option === TYPE_INCOME) return "Type";
+  if (option === NEED_FILTER || option === WANT_FILTER) return "Need / Want";
+  if (option.startsWith(CATEGORY_PREFIX)) return "Categories";
+  if (option.startsWith(PERSON_PREFIX)) return "People";
+  return "Flags";
 }
 
 /**
@@ -49,15 +47,18 @@ export function filterGroupOf(option: string): FilterGroup {
  * short fixed list you learn the shape of, not something you scan alphabetically.
  */
 export function buildFilterOptions(book: XenBudgetBook): string[] {
-    const categories = book.categories
-        .map((c) => c.name)
-        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-    return [
-        TYPE_EXPENSE, TYPE_INCOME, NEED_FILTER, WANT_FILTER,
-        ...categories.map((name) => CATEGORY_PREFIX + name),
-        ...book.members.map((m) => PERSON_PREFIX + m.user_id),
-        ...book.flags.map((f) => f.name),
-    ];
+  const categories = book.categories
+    .map((c) => c.name)
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  return [
+    TYPE_EXPENSE,
+    TYPE_INCOME,
+    NEED_FILTER,
+    WANT_FILTER,
+    ...categories.map((name) => CATEGORY_PREFIX + name),
+    ...book.members.map((m) => PERSON_PREFIX + m.user_id),
+    ...book.flags.map((f) => f.name),
+  ];
 }
 
 /**
@@ -65,16 +66,16 @@ export function buildFilterOptions(book: XenBudgetBook): string[] {
  * prefix; everything else is a fixed label or the raw flag name.
  */
 export function optionLabel(option: string, members: XenBudgetMember[]): string {
-    if (option === TYPE_EXPENSE) return "Expenses";
-    if (option === TYPE_INCOME) return "Income";
-    if (option === NEED_FILTER) return "Need";
-    if (option === WANT_FILTER) return "Want";
-    if (option.startsWith(CATEGORY_PREFIX)) return option.slice(CATEGORY_PREFIX.length);
-    if (option.startsWith(PERSON_PREFIX)) {
-        const id = option.slice(PERSON_PREFIX.length);
-        return members.find((m) => m.user_id === id)?.username ?? id;
-    }
-    return option;
+  if (option === TYPE_EXPENSE) return "Expenses";
+  if (option === TYPE_INCOME) return "Income";
+  if (option === NEED_FILTER) return "Need";
+  if (option === WANT_FILTER) return "Want";
+  if (option.startsWith(CATEGORY_PREFIX)) return option.slice(CATEGORY_PREFIX.length);
+  if (option.startsWith(PERSON_PREFIX)) {
+    const id = option.slice(PERSON_PREFIX.length);
+    return members.find((m) => m.user_id === id)?.username ?? id;
+  }
+  return option;
 }
 
 /**
@@ -85,11 +86,9 @@ export function optionLabel(option: string, members: XenBudgetMember[]): string 
  * every selection size. On a phone that is the count alone; from sm up there is room to
  * name the first filter, which is the common case of having picked exactly one.
  */
-export function summariseFilters(
-    selected: string[], labelOf: (option: string) => string, compact: boolean,
-): string {
-    if (selected.length === 0) return "All";
-    if (compact) return String(selected.length);
-    const first = labelOf(selected[0]);
-    return selected.length === 1 ? first : `${first} +${selected.length - 1}`;
+export function summariseFilters(selected: string[], labelOf: (option: string) => string, compact: boolean): string {
+  if (selected.length === 0) return "All";
+  if (compact) return String(selected.length);
+  const first = labelOf(selected[0]);
+  return selected.length === 1 ? first : `${first} +${selected.length - 1}`;
 }

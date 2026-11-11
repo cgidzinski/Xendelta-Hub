@@ -6,4 +6,3 @@ export interface UserConversationMetadata {
   unread: boolean;
   lastReadAt?: Date;
 }
-

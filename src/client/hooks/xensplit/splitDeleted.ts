@@ -19,16 +19,16 @@ import type { XenSplit } from "./types";
  * regardless of what any component passes in.
  */
 export function splitDeleted(group: XenSplit): XenSplit {
-    const exchanges = group.exchanges ?? [];
-    return {
-        ...group,
-        expenses: liveOnly(group.expenses),
-        settlements: liveOnly(group.settlements),
-        exchanges: liveOnly(exchanges),
-        deleted: {
-            expenses: deletedOnly(group.expenses),
-            settlements: deletedOnly(group.settlements),
-            exchanges: deletedOnly(exchanges),
-        },
-    };
+  const exchanges = group.exchanges ?? [];
+  return {
+    ...group,
+    expenses: liveOnly(group.expenses),
+    settlements: liveOnly(group.settlements),
+    exchanges: liveOnly(exchanges),
+    deleted: {
+      expenses: deletedOnly(group.expenses),
+      settlements: deletedOnly(group.settlements),
+      exchanges: deletedOnly(exchanges),
+    },
+  };
 }

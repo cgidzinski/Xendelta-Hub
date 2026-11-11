@@ -89,7 +89,10 @@ registerSW({
       lastCheck = Date.now();
       // Rejects when offline; swallow it rather than letting it surface as an unhandled
       // rejection in Bugsnag.
-      registration.update().then(reconcile).catch(() => {});
+      registration
+        .update()
+        .then(reconcile)
+        .catch(() => {});
     };
     document.addEventListener("visibilitychange", checkForUpdate);
     window.addEventListener("focus", checkForUpdate);

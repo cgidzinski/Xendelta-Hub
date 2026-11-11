@@ -67,12 +67,7 @@ export default function ConfirmProvider({ children }: { children: ReactNode }) {
           <Button onClick={() => settle(false)} color="inherit">
             {options?.cancelLabel ?? "Cancel"}
           </Button>
-          <Button
-            onClick={() => settle(true)}
-            color={destructive ? "error" : "primary"}
-            variant="contained"
-            autoFocus
-          >
+          <Button onClick={() => settle(true)} color={destructive ? "error" : "primary"} variant="contained" autoFocus>
             {options?.confirmLabel ?? (destructive ? "Delete" : "Confirm")}
           </Button>
         </DialogActions>

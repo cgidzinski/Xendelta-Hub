@@ -9,38 +9,38 @@ import { invalidateItemDerived } from "./invalidate";
  * Overview re-fetches its summary.
  */
 export function useXenBudgetSocket(bookId: string) {
-    const { socket } = useSocket();
-    const queryClient = useQueryClient();
+  const { socket } = useSocket();
+  const queryClient = useQueryClient();
 
-    useEffect(() => {
-        if (!socket) return;
+  useEffect(() => {
+    if (!socket) return;
 
-        const handleBookUpdate = (data: { bookId: string }) => {
-            if (data.bookId !== bookId) return;
-            invalidateItemDerived(queryClient, bookId);
-        };
+    const handleBookUpdate = (data: { bookId: string }) => {
+      if (data.bookId !== bookId) return;
+      invalidateItemDerived(queryClient, bookId);
+    };
 
-        socket.on("xenbudget:book_update", handleBookUpdate);
-        return () => {
-            socket.off("xenbudget:book_update", handleBookUpdate);
-        };
-    }, [socket, bookId, queryClient]);
+    socket.on("xenbudget:book_update", handleBookUpdate);
+    return () => {
+      socket.off("xenbudget:book_update", handleBookUpdate);
+    };
+  }, [socket, bookId, queryClient]);
 }
 
 export function useXenBudgetBooksSocket() {
-    const { socket } = useSocket();
-    const queryClient = useQueryClient();
+  const { socket } = useSocket();
+  const queryClient = useQueryClient();
 
-    useEffect(() => {
-        if (!socket) return;
+  useEffect(() => {
+    if (!socket) return;
 
-        const handleBooksUpdated = () => {
-            queryClient.invalidateQueries({ queryKey: ["xenbudget", "books"] });
-        };
+    const handleBooksUpdated = () => {
+      queryClient.invalidateQueries({ queryKey: ["xenbudget", "books"] });
+    };
 
-        socket.on("xenbudget:books_updated", handleBooksUpdated);
-        return () => {
-            socket.off("xenbudget:books_updated", handleBooksUpdated);
-        };
-    }, [socket, queryClient]);
+    socket.on("xenbudget:books_updated", handleBooksUpdated);
+    return () => {
+      socket.off("xenbudget:books_updated", handleBooksUpdated);
+    };
+  }, [socket, queryClient]);
 }

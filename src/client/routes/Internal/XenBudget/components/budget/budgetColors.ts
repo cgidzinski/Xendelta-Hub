@@ -10,7 +10,7 @@ import { resolveLabelColor } from "../LabelChip";
  * those fall back to the magnitude hue rather than picking one category's arbitrarily.
  */
 export function scopeColor(categories: string[], registry: XenBudgetLabel[]): string {
-    return categories.length === 1 ? resolveLabelColor(categories[0], registry) : MAGNITUDE_COLOR;
+  return categories.length === 1 ? resolveLabelColor(categories[0], registry) : MAGNITUDE_COLOR;
 }
 
 /**
@@ -22,6 +22,6 @@ export function scopeColor(categories: string[], registry: XenBudgetLabel[]): st
  * so they get the magnitude hue instead of colouring by accident.
  */
 export function memberColor(userId: string, members: XenBudgetMember[]): string {
-    const index = members.findIndex((m) => m.user_id === userId);
-    return index === -1 ? MAGNITUDE_COLOR : chartColorAt(index);
+  const index = members.findIndex((m) => m.user_id === userId);
+  return index === -1 ? MAGNITUDE_COLOR : chartColorAt(index);
 }

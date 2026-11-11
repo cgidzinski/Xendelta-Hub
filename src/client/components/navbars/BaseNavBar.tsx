@@ -140,7 +140,9 @@ export default function BaseNavBar({
     if (item.type === "header") {
       return (
         <ListItem key={item.key} disablePadding>
-          <Box sx={{ px: 2, py: 1, width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Box
+            sx={{ px: 2, py: 1, width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+          >
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               {item.icon}
               <Typography variant="overline" sx={{ fontWeight: 600, color: "text.secondary" }}>
@@ -153,11 +155,7 @@ export default function BaseNavBar({
       );
     }
     return (
-      <ListItem
-        key={item.key}
-        disablePadding
-        secondaryAction={item.endAction}
-      >
+      <ListItem key={item.key} disablePadding secondaryAction={item.endAction}>
         <ListItemButton
           onClick={() => handleNavItemClick(item.path)}
           selected={item.isSelected(pathname)}
@@ -299,15 +297,9 @@ export default function BaseNavBar({
           )}
 
           <Box sx={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
-            <List>
-              {navItems.map(renderNavItem)}
-            </List>
+            <List>{navItems.map(renderNavItem)}</List>
 
-            {scrollableNavItems.length > 0 && (
-              <List sx={{ py: 0 }}>
-                {scrollableNavItems.map(renderNavItem)}
-              </List>
-            )}
+            {scrollableNavItems.length > 0 && <List sx={{ py: 0 }}>{scrollableNavItems.map(renderNavItem)}</List>}
           </Box>
 
           {footerNavItems.length > 0 && (
@@ -316,10 +308,7 @@ export default function BaseNavBar({
               <List>
                 {footerNavItems.map((item) => (
                   <ListItem key={item.key} disablePadding>
-                    <ListItemButton
-                      onClick={() => handleNavItemClick(item.path)}
-                      selected={item.isSelected(pathname)}
-                    >
+                    <ListItemButton onClick={() => handleNavItemClick(item.path)} selected={item.isSelected(pathname)}>
                       <ListItemIcon>{item.icon}</ListItemIcon>
                       <ListItemText primary={item.label} />
                     </ListItemButton>
@@ -347,13 +336,7 @@ export default function BaseNavBar({
         }}
       >
         <Toolbar>
-          <IconButton
-            color="inherit"
-            aria-label="toggle drawer"
-            onClick={onToggleNavBar}
-            edge="start"
-            sx={{ mr: 2 }}
-          >
+          <IconButton color="inherit" aria-label="toggle drawer" onClick={onToggleNavBar} edge="start" sx={{ mr: 2 }}>
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
@@ -362,14 +345,24 @@ export default function BaseNavBar({
           {(showMessages || showNotifications) && (
             <Box sx={{ display: "flex", alignItems: "center" }}>
               {showMessages && (
-                <IconButton color="inherit" aria-label="Messages" sx={{ width: 50, height: 50 }} onClick={() => navigate(messagesPath)}>
+                <IconButton
+                  color="inherit"
+                  aria-label="Messages"
+                  sx={{ width: 50, height: 50 }}
+                  onClick={() => navigate(messagesPath)}
+                >
                   <Badge badgeContent={profile?.unread_messages ? 1 : 0} color="error" variant="dot">
                     <MailIcon />
                   </Badge>
                 </IconButton>
               )}
               {showNotifications && (
-                <IconButton color="inherit" aria-label="Notifications" sx={{ width: 50, height: 50, p: 0 }} onClick={handleNotificationClick}>
+                <IconButton
+                  color="inherit"
+                  aria-label="Notifications"
+                  sx={{ width: 50, height: 50, p: 0 }}
+                  onClick={handleNotificationClick}
+                >
                   <Badge badgeContent={profile?.has_new_notifications ? 1 : 0} color="error" variant="dot">
                     <NotificationsIcon />
                   </Badge>
@@ -395,7 +388,9 @@ export default function BaseNavBar({
         >
           <Box sx={{ pt: 1 }}>
             <Box sx={{ px: 2, pb: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <Typography variant="overline" sx={{ fontWeight: "bold", lineHeight: 1 }}>Notifications</Typography>
+              <Typography variant="overline" sx={{ fontWeight: "bold", lineHeight: 1 }}>
+                Notifications
+              </Typography>
               <Box sx={{ display: "flex", gap: 0.5 }}>
                 <Tooltip title="Mark all as read">
                   <span>
@@ -455,14 +450,37 @@ export default function BaseNavBar({
                 >
                   <Box sx={{ display: "flex", alignItems: "center", width: "100%", mb: 0.5 }}>
                     <Box sx={{ mr: 1, color: "primary.main" }}>{getNotificationIcon(notification.icon)}</Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: notification.unread ? "bold" : "normal", flexGrow: 1 }}>
+                    <Typography
+                      variant="subtitle2"
+                      sx={{ fontWeight: notification.unread ? "bold" : "normal", flexGrow: 1 }}
+                    >
                       {notification.title}
                     </Typography>
                     {notification.unread && (
-                      <Box sx={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "primary.main", flexShrink: 0, ml: 1 }} />
+                      <Box
+                        sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          backgroundColor: "primary.main",
+                          flexShrink: 0,
+                          ml: 1,
+                        }}
+                      />
                     )}
                   </Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mb: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 300 }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      ml: 4,
+                      mb: 0.5,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      maxWidth: 300,
+                    }}
+                  >
                     {notification.message}
                   </Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ ml: 4 }}>
@@ -479,7 +497,10 @@ export default function BaseNavBar({
                 variant="body2"
                 color="primary"
                 sx={{ cursor: "pointer", "&:hover": { textDecoration: "underline" } }}
-                onClick={() => { navigate("/internal/notifications"); handleNotificationClose(); }}
+                onClick={() => {
+                  navigate("/internal/notifications");
+                  handleNotificationClose();
+                }}
               >
                 View all notifications
               </Typography>

@@ -1,112 +1,125 @@
 import { describe, it, expect } from "vitest";
 import {
-    CATEGORY_PREFIX, PERSON_PREFIX, TYPE_EXPENSE, TYPE_INCOME, NEED_FILTER, WANT_FILTER,
-    FLAG_UNCATEGORISED, buildFilterOptions, filterGroupOf, optionLabel, summariseFilters,
+  CATEGORY_PREFIX,
+  PERSON_PREFIX,
+  TYPE_EXPENSE,
+  TYPE_INCOME,
+  NEED_FILTER,
+  WANT_FILTER,
+  FLAG_UNCATEGORISED,
+  buildFilterOptions,
+  filterGroupOf,
+  optionLabel,
+  summariseFilters,
 } from "./itemFilterOptions";
 import type { XenBudgetBook, XenBudgetMember } from "../../../../hooks/xenbudget/types";
 
 const members: XenBudgetMember[] = [
-    { user_id: "u1", username: "ada", avatar: null },
-    { user_id: "u2", username: "grace", avatar: null },
+  { user_id: "u1", username: "ada", avatar: null },
+  { user_id: "u2", username: "grace", avatar: null },
 ];
 
 describe("filterGroupOf", () => {
-    it("places each synthetic option in its own group", () => {
-        expect(filterGroupOf(TYPE_EXPENSE)).toBe("Type");
-        expect(filterGroupOf(TYPE_INCOME)).toBe("Type");
-        expect(filterGroupOf(NEED_FILTER)).toBe("Need / Want");
-        expect(filterGroupOf(WANT_FILTER)).toBe("Need / Want");
-    });
+  it("places each synthetic option in its own group", () => {
+    expect(filterGroupOf(TYPE_EXPENSE)).toBe("Type");
+    expect(filterGroupOf(TYPE_INCOME)).toBe("Type");
+    expect(filterGroupOf(NEED_FILTER)).toBe("Need / Want");
+    expect(filterGroupOf(WANT_FILTER)).toBe("Need / Want");
+  });
 
-    it("groups by prefix, so a flag name is only ever a flag", () => {
-        expect(filterGroupOf(CATEGORY_PREFIX + "Groceries")).toBe("Categories");
-        expect(filterGroupOf(PERSON_PREFIX + "u1")).toBe("People");
-        expect(filterGroupOf(FLAG_UNCATEGORISED)).toBe("Flags");
-    });
+  it("groups by prefix, so a flag name is only ever a flag", () => {
+    expect(filterGroupOf(CATEGORY_PREFIX + "Groceries")).toBe("Categories");
+    expect(filterGroupOf(PERSON_PREFIX + "u1")).toBe("People");
+    expect(filterGroupOf(FLAG_UNCATEGORISED)).toBe("Flags");
+  });
 
-    it("keeps a category named after a flag on the categories side", () => {
-        // The prefix decides, not the name — both registries allow the same string.
-        expect(filterGroupOf(CATEGORY_PREFIX + FLAG_UNCATEGORISED)).toBe("Categories");
-    });
+  it("keeps a category named after a flag on the categories side", () => {
+    // The prefix decides, not the name — both registries allow the same string.
+    expect(filterGroupOf(CATEGORY_PREFIX + FLAG_UNCATEGORISED)).toBe("Categories");
+  });
 });
 
 describe("buildFilterOptions", () => {
-    const book = (categories: string[], flags: string[] = []) => ({
-        categories: categories.map((name, i) => ({ _id: `c${i}`, name })),
-        flags: flags.map((name, i) => ({ _id: `f${i}`, name })),
-        members,
-    } as XenBudgetBook);
+  const book = (categories: string[], flags: string[] = []) =>
+    ({
+      categories: categories.map((name, i) => ({ _id: `c${i}`, name })),
+      flags: flags.map((name, i) => ({ _id: `f${i}`, name })),
+      members,
+    }) as XenBudgetBook;
 
-    const categoriesIn = (options: string[]) => options
-        .filter((o) => o.startsWith(CATEGORY_PREFIX))
-        .map((o) => o.slice(CATEGORY_PREFIX.length));
+  const categoriesIn = (options: string[]) =>
+    options.filter((o) => o.startsWith(CATEGORY_PREFIX)).map((o) => o.slice(CATEGORY_PREFIX.length));
 
-    it("sorts categories by name, not by when they were added", () => {
-        const options = buildFilterOptions(book(["Travel", "dining", "Groceries"]));
-        expect(categoriesIn(options)).toEqual(["dining", "Groceries", "Travel"]);
-    });
+  it("sorts categories by name, not by when they were added", () => {
+    const options = buildFilterOptions(book(["Travel", "dining", "Groceries"]));
+    expect(categoriesIn(options)).toEqual(["dining", "Groceries", "Travel"]);
+  });
 
-    it("leaves flags in registry order — the built-ins are a fixed, learnable list", () => {
-        const flags = ["Needs review", "Uncategorised", "Off budget"];
-        const options = buildFilterOptions(book(["Groceries"], flags));
-        expect(options.slice(-flags.length)).toEqual(flags);
-    });
+  it("leaves flags in registry order — the built-ins are a fixed, learnable list", () => {
+    const flags = ["Needs review", "Uncategorised", "Off budget"];
+    const options = buildFilterOptions(book(["Groceries"], flags));
+    expect(options.slice(-flags.length)).toEqual(flags);
+  });
 
-    it("keeps the groups in order, with the synthetic options first", () => {
-        const options = buildFilterOptions(book(["Groceries"], ["Ignored"]));
-        expect(options).toEqual([
-            TYPE_EXPENSE, TYPE_INCOME, NEED_FILTER, WANT_FILTER,
-            CATEGORY_PREFIX + "Groceries",
-            PERSON_PREFIX + "u1", PERSON_PREFIX + "u2",
-            "Ignored",
-        ]);
-    });
+  it("keeps the groups in order, with the synthetic options first", () => {
+    const options = buildFilterOptions(book(["Groceries"], ["Ignored"]));
+    expect(options).toEqual([
+      TYPE_EXPENSE,
+      TYPE_INCOME,
+      NEED_FILTER,
+      WANT_FILTER,
+      CATEGORY_PREFIX + "Groceries",
+      PERSON_PREFIX + "u1",
+      PERSON_PREFIX + "u2",
+      "Ignored",
+    ]);
+  });
 });
 
 describe("optionLabel", () => {
-    it("names the synthetic options", () => {
-        expect(optionLabel(TYPE_EXPENSE, members)).toBe("Expenses");
-        expect(optionLabel(TYPE_INCOME, members)).toBe("Income");
-        expect(optionLabel(NEED_FILTER, members)).toBe("Need");
-        expect(optionLabel(WANT_FILTER, members)).toBe("Want");
-    });
+  it("names the synthetic options", () => {
+    expect(optionLabel(TYPE_EXPENSE, members)).toBe("Expenses");
+    expect(optionLabel(TYPE_INCOME, members)).toBe("Income");
+    expect(optionLabel(NEED_FILTER, members)).toBe("Need");
+    expect(optionLabel(WANT_FILTER, members)).toBe("Want");
+  });
 
-    it("strips the category prefix and resolves a person to their username", () => {
-        expect(optionLabel(CATEGORY_PREFIX + "Groceries", members)).toBe("Groceries");
-        expect(optionLabel(PERSON_PREFIX + "u2", members)).toBe("grace");
-    });
+  it("strips the category prefix and resolves a person to their username", () => {
+    expect(optionLabel(CATEGORY_PREFIX + "Groceries", members)).toBe("Groceries");
+    expect(optionLabel(PERSON_PREFIX + "u2", members)).toBe("grace");
+  });
 
-    it("falls back to the id for a member who has since left the book", () => {
-        expect(optionLabel(PERSON_PREFIX + "gone", members)).toBe("gone");
-    });
+  it("falls back to the id for a member who has since left the book", () => {
+    expect(optionLabel(PERSON_PREFIX + "gone", members)).toBe("gone");
+  });
 
-    it("passes a flag through as-is", () => {
-        expect(optionLabel(FLAG_UNCATEGORISED, members)).toBe("Uncategorised");
-    });
+  it("passes a flag through as-is", () => {
+    expect(optionLabel(FLAG_UNCATEGORISED, members)).toBe("Uncategorised");
+  });
 });
 
 describe("summariseFilters", () => {
-    const label = (o: string) => optionLabel(o, members);
+  const label = (o: string) => optionLabel(o, members);
 
-    it("reads 'All' with nothing selected, at either width", () => {
-        expect(summariseFilters([], label, true)).toBe("All");
-        expect(summariseFilters([], label, false)).toBe("All");
-    });
+  it("reads 'All' with nothing selected, at either width", () => {
+    expect(summariseFilters([], label, true)).toBe("All");
+    expect(summariseFilters([], label, false)).toBe("All");
+  });
 
-    it("is the count alone on a phone", () => {
-        expect(summariseFilters([TYPE_EXPENSE], label, true)).toBe("1");
-        expect(summariseFilters(
-            [TYPE_EXPENSE, CATEGORY_PREFIX + "Groceries", PERSON_PREFIX + "u1"], label, true,
-        )).toBe("3");
-    });
+  it("is the count alone on a phone", () => {
+    expect(summariseFilters([TYPE_EXPENSE], label, true)).toBe("1");
+    expect(summariseFilters([TYPE_EXPENSE, CATEGORY_PREFIX + "Groceries", PERSON_PREFIX + "u1"], label, true)).toBe(
+      "3",
+    );
+  });
 
-    it("names the one filter from sm up", () => {
-        expect(summariseFilters([CATEGORY_PREFIX + "Groceries"], label, false)).toBe("Groceries");
-    });
+  it("names the one filter from sm up", () => {
+    expect(summariseFilters([CATEGORY_PREFIX + "Groceries"], label, false)).toBe("Groceries");
+  });
 
-    it("names the first and counts the rest from sm up", () => {
-        expect(summariseFilters(
-            [CATEGORY_PREFIX + "Groceries", TYPE_EXPENSE, FLAG_UNCATEGORISED], label, false,
-        )).toBe("Groceries +2");
-    });
+  it("names the first and counts the rest from sm up", () => {
+    expect(summariseFilters([CATEGORY_PREFIX + "Groceries", TYPE_EXPENSE, FLAG_UNCATEGORISED], label, false)).toBe(
+      "Groceries +2",
+    );
+  });
 });

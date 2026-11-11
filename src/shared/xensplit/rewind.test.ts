@@ -11,7 +11,9 @@ function expense(overrides: Partial<RewindDocument["expenses"][number]> & { paid
   };
 }
 
-function settlement(overrides: Partial<RewindDocument["settlements"][number]> & { _id: string; from: string; to: string; amount: number }) {
+function settlement(
+  overrides: Partial<RewindDocument["settlements"][number]> & { _id: string; from: string; to: string; amount: number },
+) {
   return { currency: "CAD", settled_at: "2025-06-02T00:00:00.000Z", ...overrides };
 }
 
@@ -62,8 +64,18 @@ describe("rewindBefore", () => {
     const d = doc({
       members: ["A", "B"],
       expenses: [
-        expense({ paid_by: "A", amount: 10, created_at: "2025-06-01T00:00:00.000Z", date: "2025-06-01T00:00:00.000Z" } as never),
-        expense({ paid_by: "A", amount: 99, created_at: "2025-06-20T00:00:00.000Z", date: "2025-01-01T00:00:00.000Z" } as never),
+        expense({
+          paid_by: "A",
+          amount: 10,
+          created_at: "2025-06-01T00:00:00.000Z",
+          date: "2025-06-01T00:00:00.000Z",
+        } as never),
+        expense({
+          paid_by: "A",
+          amount: 99,
+          created_at: "2025-06-20T00:00:00.000Z",
+          date: "2025-01-01T00:00:00.000Z",
+        } as never),
       ],
       settlements: [settlement({ _id: "cut", from: "B", to: "A", amount: 5, settled_at: "2025-06-10T00:00:00.000Z" })],
     });
@@ -100,8 +112,26 @@ describe("rewindBefore", () => {
     const d = doc({
       members: ["A", "B"],
       exchanges: [
-        { party_a: "A", currency_a: "CAD", amount_a: 10, party_b: "B", currency_b: "USD", amount_b: 7, rate: 0.7, created_at: "2025-06-01T00:00:00.000Z" },
-        { party_a: "A", currency_a: "CAD", amount_a: 50, party_b: "B", currency_b: "USD", amount_b: 35, rate: 0.7, created_at: "2025-06-20T00:00:00.000Z" },
+        {
+          party_a: "A",
+          currency_a: "CAD",
+          amount_a: 10,
+          party_b: "B",
+          currency_b: "USD",
+          amount_b: 7,
+          rate: 0.7,
+          created_at: "2025-06-01T00:00:00.000Z",
+        },
+        {
+          party_a: "A",
+          currency_a: "CAD",
+          amount_a: 50,
+          party_b: "B",
+          currency_b: "USD",
+          amount_b: 35,
+          rate: 0.7,
+          created_at: "2025-06-20T00:00:00.000Z",
+        },
       ],
       settlements: [settlement({ _id: "cut", from: "B", to: "A", amount: 5, settled_at: "2025-06-10T00:00:00.000Z" })],
     });
@@ -112,9 +142,30 @@ describe("rewindBefore", () => {
     // The scenario from the regression test: Bo is shown owing You $30, pays it,
     // and comes back owing $60. Rewinding past that payment must restore the $30.
     const expenses = [
-      expense({ paid_by: "You", amount: 90, splits: [{ user_id: "Bo", amount_owed: 50 }, { user_id: "Dee", amount_owed: 40 }] }),
-      expense({ paid_by: "Ann", amount: 110, splits: [{ user_id: "Bo", amount_owed: 55 }, { user_id: "Dee", amount_owed: 55 }] }),
-      expense({ paid_by: "Cy", amount: 70, splits: [{ user_id: "Bo", amount_owed: 35 }, { user_id: "Dee", amount_owed: 35 }] }),
+      expense({
+        paid_by: "You",
+        amount: 90,
+        splits: [
+          { user_id: "Bo", amount_owed: 50 },
+          { user_id: "Dee", amount_owed: 40 },
+        ],
+      }),
+      expense({
+        paid_by: "Ann",
+        amount: 110,
+        splits: [
+          { user_id: "Bo", amount_owed: 55 },
+          { user_id: "Dee", amount_owed: 55 },
+        ],
+      }),
+      expense({
+        paid_by: "Cy",
+        amount: 70,
+        splits: [
+          { user_id: "Bo", amount_owed: 35 },
+          { user_id: "Dee", amount_owed: 35 },
+        ],
+      }),
     ];
     const members = ["You", "Ann", "Cy", "Bo", "Dee"];
     const pendingFor = (d: RewindDocument) =>
@@ -126,7 +177,9 @@ describe("rewindBefore", () => {
     const afterPayment = doc({
       members,
       expenses,
-      settlements: [settlement({ _id: "bo-paid", from: "Bo", to: "You", amount: 30, settled_at: "2025-06-10T00:00:00.000Z" })],
+      settlements: [
+        settlement({ _id: "bo-paid", from: "Bo", to: "You", amount: 30, settled_at: "2025-06-10T00:00:00.000Z" }),
+      ],
     });
     expect(pendingFor(afterPayment)?.amount).toBe(60);
 

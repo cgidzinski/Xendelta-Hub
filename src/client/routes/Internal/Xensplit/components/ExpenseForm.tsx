@@ -186,7 +186,7 @@ export default function ExpenseForm({
     const edited = editedSplitIdsRef.current;
     const editedSum = selectedParticipants.reduce(
       (s, p) => (edited.has(p._id) ? s + (parseFloat(next[p._id]) || 0) : s),
-      0
+      0,
     );
     const uneditedIds = selectedParticipants.filter((p) => !edited.has(p._id)).map((p) => p._id);
     if (uneditedIds.length > 0) {
@@ -332,7 +332,9 @@ export default function ExpenseForm({
                 MenuProps={STABLE_CURRENCY_MENU_PROPS}
               >
                 {currencyOptions.map((c) => (
-                  <MenuItem key={c} value={c}>{c} ({getCurrencySymbol(c)})</MenuItem>
+                  <MenuItem key={c} value={c}>
+                    {c} ({getCurrencySymbol(c)})
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
@@ -360,7 +362,10 @@ export default function ExpenseForm({
             slotProps={{
               textField: {
                 fullWidth: true,
-                helperText: recurringMode === "editSeries" ? "Locked while recurring — cancel recurrence to change it" : undefined,
+                helperText:
+                  recurringMode === "editSeries"
+                    ? "Locked while recurring — cancel recurrence to change it"
+                    : undefined,
               },
             }}
           />
@@ -375,7 +380,11 @@ export default function ExpenseForm({
                   key={member.user_id}
                   onClick={() => {
                     onPaidByChange(paidBy === member.user_id ? "" : member.user_id);
-                    onPaidByUserChange?.({ _id: member.user_id, username: member.username, avatar: member.avatar ?? null });
+                    onPaidByUserChange?.({
+                      _id: member.user_id,
+                      username: member.username,
+                      avatar: member.avatar ?? null,
+                    });
                   }}
                   sx={{
                     display: "flex",
@@ -429,8 +438,8 @@ export default function ExpenseForm({
                   selectedParticipants.length === members.length
                     ? onParticipantsChange([])
                     : onParticipantsChange(
-                      members.map((m) => ({ _id: m.user_id, username: m.username, avatar: m.avatar ?? null }))
-                    )
+                        members.map((m) => ({ _id: m.user_id, username: m.username, avatar: m.avatar ?? null })),
+                      )
                 }
               >
                 {selectedParticipants.length === members.length ? "Clear" : "Everyone"}
@@ -483,16 +492,14 @@ export default function ExpenseForm({
                 numAmount > 0 && (
                   <Typography variant="caption" color="text.secondary">
                     {new Intl.NumberFormat(undefined, { style: "currency", currency }).format(
-                      numAmount / selectedParticipants.length
+                      numAmount / selectedParticipants.length,
                     )}{" "}
                     each
                   </Typography>
                 )
               ) : (
                 <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                  <Typography variant="subtitle2">
-                    {splitType === "exact" ? "Exact amounts" : "Percentages"}
-                  </Typography>
+                  <Typography variant="subtitle2">{splitType === "exact" ? "Exact amounts" : "Percentages"}</Typography>
                   {splitType === "exact" && (
                     <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
                       <Typography
@@ -511,10 +518,7 @@ export default function ExpenseForm({
                   )}
                   {splitType === "percent" && (
                     <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                      <Typography
-                        variant="caption"
-                        color={Math.abs(totalPercent - 100) < 0.01 ? "success" : "error"}
-                      >
+                      <Typography variant="caption" color={Math.abs(totalPercent - 100) < 0.01 ? "success" : "error"}>
                         Total: {totalPercent === 0 ? "0" : totalPercent.toFixed(2)}% / 100%
                       </Typography>
                       <Typography
@@ -529,7 +533,16 @@ export default function ExpenseForm({
               )}
               {splitType !== "equal" &&
                 selectedParticipants.map((p) => (
-                  <Box key={p._id} sx={{ display: "grid", gridTemplateColumns: "28px auto 1fr", alignItems: "center", columnGap: 2, mb: 1 }}>
+                  <Box
+                    key={p._id}
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: "28px auto 1fr",
+                      alignItems: "center",
+                      columnGap: 2,
+                      mb: 1,
+                    }}
+                  >
                     <Avatar src={p.avatar || undefined} sx={{ width: 28, height: 28 }}>
                       {p.username[0]?.toUpperCase()}
                     </Avatar>
@@ -585,15 +598,13 @@ export default function ExpenseForm({
                 borderRadius: 2,
                 border: "1px solid",
                 borderColor: onHold ? "warning.main" : "divider",
-                bgcolor: (t) => onHold ? alpha(t.palette.warning.main, 0.08) : "transparent",
+                bgcolor: (t) => (onHold ? alpha(t.palette.warning.main, 0.08) : "transparent"),
                 opacity: recurringOn ? 0.5 : 1,
                 transition: "all 0.2s",
               }}
             >
               <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-                <PauseCircleOutlineIcon
-                  sx={{ fontSize: 22, color: onHold ? "warning.main" : "text.secondary" }}
-                />
+                <PauseCircleOutlineIcon sx={{ fontSize: 22, color: onHold ? "warning.main" : "text.secondary" }} />
                 <Box>
                   <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
                     On Hold
@@ -624,15 +635,13 @@ export default function ExpenseForm({
                 borderRadius: 2,
                 border: "1px solid",
                 borderColor: recurringOn ? "secondary.main" : "divider",
-                bgcolor: (t) => recurringOn ? alpha(t.palette.secondary.main, 0.08) : "transparent",
+                bgcolor: (t) => (recurringOn ? alpha(t.palette.secondary.main, 0.08) : "transparent"),
                 transition: "all 0.2s",
               }}
             >
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-                  <RepeatIcon
-                    sx={{ fontSize: 22, color: recurringOn ? "secondary.main" : "text.secondary" }}
-                  />
+                  <RepeatIcon sx={{ fontSize: 22, color: recurringOn ? "secondary.main" : "text.secondary" }} />
                   <Box>
                     <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
                       Recurring
@@ -665,7 +674,9 @@ export default function ExpenseForm({
                       disabled={recurringMode === "editSeries"}
                     >
                       {FREQUENCY_OPTIONS.map((f) => (
-                        <MenuItem key={f.value} value={f.value}>{f.label}</MenuItem>
+                        <MenuItem key={f.value} value={f.value}>
+                          {f.label}
+                        </MenuItem>
                       ))}
                     </Select>
                   </FormControl>
@@ -698,11 +709,18 @@ export default function ExpenseForm({
                           {seriesActive ? "Active" : seriesEnded ? "Ended" : "Paused"}
                         </Typography>
                         {seriesActive && seriesWasInactive ? (
-                          <Typography variant="caption" sx={{ lineHeight: 1.3, display: "block", color: "warning.main" }}>
+                          <Typography
+                            variant="caption"
+                            sx={{ lineHeight: 1.3, display: "block", color: "warning.main" }}
+                          >
                             Saving restarts the schedule — occurrences missed since it stopped will be added
                           </Typography>
                         ) : (
-                          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3, display: "block" }}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ lineHeight: 1.3, display: "block" }}
+                          >
                             {seriesActive
                               ? "Occurrences are being created on schedule"
                               : seriesEnded
@@ -729,14 +747,14 @@ export default function ExpenseForm({
             </Avatar>
             <FormControl fullWidth>
               <InputLabel>Category (optional)</InputLabel>
-              <Select
-                value={category}
-                label="Category (optional)"
-                onChange={(e) => onCategoryChange(e.target.value)}
-              >
-                <MenuItem value=""><em>None</em></MenuItem>
+              <Select value={category} label="Category (optional)" onChange={(e) => onCategoryChange(e.target.value)}>
+                <MenuItem value="">
+                  <em>None</em>
+                </MenuItem>
                 {EXPENSE_CATEGORIES.map((c) => (
-                  <MenuItem key={c} value={c}>{c}</MenuItem>
+                  <MenuItem key={c} value={c}>
+                    {c}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
@@ -757,57 +775,88 @@ export default function ExpenseForm({
               Photos can be added once the first expense is created on the start date.
             </Typography>
           ) : (
-          <Box>
-            <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
-              <Typography variant="subtitle2">
-                Photos ({totalImageCount} / {MAX_IMAGES})
-              </Typography>
-              <Box sx={{ flex: 1 }} />
-              <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
-                10MB max
-              </Typography>
-            </Box>
+            <Box>
+              <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+                <Typography variant="subtitle2">
+                  Photos ({totalImageCount} / {MAX_IMAGES})
+                </Typography>
+                <Box sx={{ flex: 1 }} />
+                <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+                  10MB max
+                </Typography>
+              </Box>
 
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-              {/* Existing images (from DB) */}
-              {existingImages.map((img) => {
-                const urlEntry = existingImageUrls.find((u) => u._id === img._id);
-                return (
-                  <Box
-                    key={img._id}
-                    sx={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}
-                  >
-                    {urlEntry ? (
-                      <Box
-                        component="img"
-                        src={urlEntry.signedUrl}
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                {/* Existing images (from DB) */}
+                {existingImages.map((img) => {
+                  const urlEntry = existingImageUrls.find((u) => u._id === img._id);
+                  return (
+                    <Box key={img._id} sx={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}>
+                      {urlEntry ? (
+                        <Box
+                          component="img"
+                          src={urlEntry.signedUrl}
+                          sx={{
+                            width: 80,
+                            height: 80,
+                            objectFit: "cover",
+                            borderRadius: 1,
+                            display: "block",
+                          }}
+                        />
+                      ) : (
+                        <Box
+                          sx={{
+                            width: 80,
+                            height: 80,
+                            bgcolor: "action.hover",
+                            borderRadius: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <CircularProgress size={20} />
+                        </Box>
+                      )}
+                      <IconButton
+                        size="small"
+                        disabled={isDeletingImage}
+                        onClick={() => onDeleteExistingImage?.(img._id)}
                         sx={{
-                          width: 80,
-                          height: 80,
-                          objectFit: "cover",
-                          borderRadius: 1,
-                          display: "block",
-                        }}
-                      />
-                    ) : (
-                      <Box
-                        sx={{
-                          width: 80,
-                          height: 80,
-                          bgcolor: "action.hover",
-                          borderRadius: 1,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
+                          position: "absolute",
+                          top: 2,
+                          right: 2,
+                          bgcolor: "rgba(0,0,0,0.55)",
+                          color: "white",
+                          p: 0.25,
+                          "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
                         }}
                       >
-                        <CircularProgress size={20} />
-                      </Box>
-                    )}
+                        <CloseIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    </Box>
+                  );
+                })}
+
+                {/* New images (pending upload) */}
+                {previewUrls.map((url, index) => (
+                  <Box key={url} sx={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}>
+                    <Box
+                      component="img"
+                      src={url}
+                      sx={{
+                        width: 80,
+                        height: 80,
+                        objectFit: "cover",
+                        borderRadius: 1,
+                        display: "block",
+                        opacity: 0.8,
+                      }}
+                    />
                     <IconButton
                       size="small"
-                      disabled={isDeletingImage}
-                      onClick={() => onDeleteExistingImage?.(img._id)}
+                      onClick={() => handleRemoveNewImage(index)}
                       sx={{
                         position: "absolute",
                         top: 2,
@@ -821,48 +870,11 @@ export default function ExpenseForm({
                       <CloseIcon sx={{ fontSize: 14 }} />
                     </IconButton>
                   </Box>
-                );
-              })}
+                ))}
 
-              {/* New images (pending upload) */}
-              {previewUrls.map((url, index) => (
-                <Box
-                  key={url}
-                  sx={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}
-                >
-                  <Box
-                    component="img"
-                    src={url}
-                    sx={{
-                      width: 80,
-                      height: 80,
-                      objectFit: "cover",
-                      borderRadius: 1,
-                      display: "block",
-                      opacity: 0.8,
-                    }}
-                  />
-                  <IconButton
-                    size="small"
-                    onClick={() => handleRemoveNewImage(index)}
-                    sx={{
-                      position: "absolute",
-                      top: 2,
-                      right: 2,
-                      bgcolor: "rgba(0,0,0,0.55)",
-                      color: "white",
-                      p: 0.25,
-                      "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
-                    }}
-                  >
-                    <CloseIcon sx={{ fontSize: 14 }} />
-                  </IconButton>
-                </Box>
-              ))}
-
-              {canAddMoreImages && <PWAImageCapture onChange={handleFileChange} />}
+                {canAddMoreImages && <PWAImageCapture onChange={handleFileChange} />}
+              </Box>
             </Box>
-          </Box>
           )}
         </Box>
       )}
@@ -887,12 +899,7 @@ export default function ExpenseForm({
           </Button>
         ) : (
           <>
-            <Button
-              variant="contained"
-              onClick={onSubmit}
-              disabled={submitDisabled || loading}
-              loading={loading}
-            >
+            <Button variant="contained" onClick={onSubmit} disabled={submitDisabled || loading} loading={loading}>
               {submitLabel}
             </Button>
             {/* Delete Expense button removed; now only in dialog header */}
@@ -902,4 +909,3 @@ export default function ExpenseForm({
     </Box>
   );
 }
-

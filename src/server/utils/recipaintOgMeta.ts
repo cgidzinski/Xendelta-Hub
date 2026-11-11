@@ -126,10 +126,6 @@ export function createRecipaintHtmlTransformer(loadRecipe: RecipeLoader) {
 }
 
 const loadPublicRecipe: RecipeLoader = (id) =>
-  Recipe.findById(id)
-    .select("title description showcase isPublic")
-    .maxTimeMS(OG_LOOKUP_TIMEOUT_MS)
-    .lean()
-    .exec();
+  Recipe.findById(id).select("title description showcase isPublic").maxTimeMS(OG_LOOKUP_TIMEOUT_MS).lean().exec();
 
 export const recipaintHtmlTransformer = createRecipaintHtmlTransformer(loadPublicRecipe);

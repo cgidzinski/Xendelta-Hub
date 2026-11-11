@@ -74,11 +74,11 @@ export interface SendUserNotificationResult {
 
 const sendUserNotification = async (
   userId: string,
-  data: { title: string; message: string; link?: string; channels: NotifyChannel[] }
+  data: { title: string; message: string; link?: string; channels: NotifyChannel[] },
 ): Promise<SendUserNotificationResult> => {
   const response = await apiClient.post<ApiResponse<{ result: SendUserNotificationResult }>>(
     `/api/admin/notifications/user/${userId}`,
-    data
+    data,
   );
   return response.data.data!.result;
 };
@@ -181,7 +181,8 @@ export const useAdminUsers = () => {
     isError,
     error: error as Error | null,
     refetch,
-    updateUser: (userId: string, updates: { roles?: string[]; xenboxQuota?: number }) => updateUserMutation({ userId, updates }),
+    updateUser: (userId: string, updates: { roles?: string[]; xenboxQuota?: number }) =>
+      updateUserMutation({ userId, updates }),
     isUpdatingUser,
     deleteUser: (userId: string) => deleteUserMutation(userId),
     isDeletingUser,
@@ -193,7 +194,7 @@ export const useAdminUsers = () => {
     isRemovingItem,
     sendUserNotification: (
       userId: string,
-      data: { title: string; message: string; link?: string; channels: NotifyChannel[] }
+      data: { title: string; message: string; link?: string; channels: NotifyChannel[] },
     ) => sendUserNotificationMutation({ userId, data }),
     isSendingNotification,
   };

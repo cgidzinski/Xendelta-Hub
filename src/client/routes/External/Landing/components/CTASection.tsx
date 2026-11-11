@@ -23,11 +23,7 @@ export default function CTASection() {
     >
       <Container maxWidth="md">
         <Box sx={{ textAlign: "center" }}>
-          <Typography
-            variant="h3"
-            component="h2"
-            sx={{ fontWeight: 700, mb: 2, ...gradientTextSx(theme, "short") }}
-          >
+          <Typography variant="h3" component="h2" sx={{ fontWeight: 700, mb: 2, ...gradientTextSx(theme, "short") }}>
             Ready to Transform Your Workflow?
           </Typography>
           <Typography variant="h6" sx={{ color: "text.secondary", mb: 4, fontWeight: 400 }}>

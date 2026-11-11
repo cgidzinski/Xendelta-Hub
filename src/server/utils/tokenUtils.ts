@@ -15,6 +15,6 @@ export const generateToken = (userData: TokenData): string => {
     username: userData.username,
     email: userData.email,
   };
-  
+
   return jwt.sign(tokenData, getJwtSecret(), { expiresIn: TOKEN_EXPIRATION });
 };

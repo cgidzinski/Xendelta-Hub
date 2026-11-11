@@ -13,7 +13,12 @@ function equalSplit(amount: number, participants: string[]) {
   return participants.map((user_id) => ({ user_id, amount_owed: amount / participants.length }));
 }
 
-function makeDoc(expenses: TestExpense[], settlements: TestSettlement[] = [], members?: string[], exchanges: TestExchange[] = []): TestDoc {
+function makeDoc(
+  expenses: TestExpense[],
+  settlements: TestSettlement[] = [],
+  members?: string[],
+  exchanges: TestExchange[] = [],
+): TestDoc {
   const inferredMembers = new Set<string>();
   for (const e of expenses) {
     inferredMembers.add(e.paid_by);
@@ -29,9 +34,11 @@ function makeDoc(expenses: TestExpense[], settlements: TestSettlement[] = [], me
 // Sort transfers for order-independent comparison.
 function sortTransfers<T extends { from: string; to: string; currency: string }>(transfers: T[]): T[] {
   return [...transfers].sort((a, b) =>
-    a.currency !== b.currency ? a.currency.localeCompare(b.currency)
-      : a.from !== b.from ? a.from.localeCompare(b.from)
-        : a.to.localeCompare(b.to)
+    a.currency !== b.currency
+      ? a.currency.localeCompare(b.currency)
+      : a.from !== b.from
+        ? a.from.localeCompare(b.from)
+        : a.to.localeCompare(b.to),
   );
 }
 
@@ -57,7 +64,12 @@ describe("resolveSplits", () => {
     it("does not auto-correct an unequal remainder (unlike percent/exact)", () => {
       // $10 split 3 ways: no rounding correction is applied to equal splits,
       // so each share is the raw division result.
-      const result = resolveSplits("equal", 10, [{ user_id: "A" }, { user_id: "B" }, { user_id: "C" }], ["A", "B", "C"]);
+      const result = resolveSplits(
+        "equal",
+        10,
+        [{ user_id: "A" }, { user_id: "B" }, { user_id: "C" }],
+        ["A", "B", "C"],
+      );
       for (const split of result) {
         expect(split.amount_owed).toBeCloseTo(10 / 3, 10);
       }
@@ -71,7 +83,10 @@ describe("resolveSplits", () => {
       const result = resolveSplits(
         "percent",
         100,
-        [{ user_id: "A", percentage: 60 }, { user_id: "B", percentage: 40 }],
+        [
+          { user_id: "A", percentage: 60 },
+          { user_id: "B", percentage: 40 },
+        ],
         ["A", "B"],
       );
       expect(result).toEqual([
@@ -103,7 +118,10 @@ describe("resolveSplits", () => {
       const result = resolveSplits(
         "percent",
         100,
-        [{ user_id: "A", percentage: 50 }, { user_id: "B", percentage: 50.5 }],
+        [
+          { user_id: "A", percentage: 50 },
+          { user_id: "B", percentage: 50.5 },
+        ],
         ["A", "B"],
       );
       expect(result[0]).toEqual({ user_id: "A", amount_owed: 50, percentage: 50 });
@@ -120,7 +138,10 @@ describe("resolveSplits", () => {
       const result = resolveSplits(
         "percent",
         100,
-        [{ user_id: "A", percentage: 100 }, { user_id: "B", percentage: 0 }],
+        [
+          { user_id: "A", percentage: 100 },
+          { user_id: "B", percentage: 0 },
+        ],
         ["A", "B"],
       );
       expect(result).toEqual([
@@ -139,7 +160,10 @@ describe("resolveSplits", () => {
       const result = resolveSplits(
         "exact",
         90,
-        [{ user_id: "A", amount_owed: 30 }, { user_id: "B", amount_owed: 60 }],
+        [
+          { user_id: "A", amount_owed: 30 },
+          { user_id: "B", amount_owed: 60 },
+        ],
         ["A", "B"],
       );
       expect(result).toEqual([
@@ -200,7 +224,9 @@ describe("calculateBalances (isolated)", () => {
   });
 
   it("nets an equal-split expense across 4 members to zero", () => {
-    const doc = makeDoc([{ paid_by: "A", amount: 100, currency: "CAD", splits: equalSplit(100, ["A", "B", "C", "D"]) }]);
+    const doc = makeDoc([
+      { paid_by: "A", amount: 100, currency: "CAD", splits: equalSplit(100, ["A", "B", "C", "D"]) },
+    ]);
     const balances = calculateBalances(doc);
     expect(balances.A.CAD).toBe(75);
     expect(balances.B.CAD).toBe(-25);
@@ -215,7 +241,10 @@ describe("calculateBalances (isolated)", () => {
         paid_by: "A",
         amount: 200,
         currency: "CAD",
-        splits: [{ user_id: "A", percentage: 50 }, { user_id: "B", percentage: 50 }],
+        splits: [
+          { user_id: "A", percentage: 50 },
+          { user_id: "B", percentage: 50 },
+        ],
       },
     ]);
     const balances = calculateBalances(doc);
@@ -229,7 +258,10 @@ describe("calculateBalances (isolated)", () => {
         paid_by: "A",
         amount: 150,
         currency: "CAD",
-        splits: [{ user_id: "A", amount_owed: 50 }, { user_id: "B", amount_owed: 100 }],
+        splits: [
+          { user_id: "A", amount_owed: 50 },
+          { user_id: "B", amount_owed: 100 },
+        ],
       },
     ]);
     const balances = calculateBalances(doc);
@@ -288,7 +320,9 @@ describe("calculateBalances (isolated)", () => {
       members: ["A", "B"],
       expenses: [] as any[],
       settlements: [] as any[],
-      exchanges: [{ party_a: "A", currency_a: "CAD", amount_a: 100, party_b: "B", currency_b: "USD", amount_b: 75, rate: 0.75 }],
+      exchanges: [
+        { party_a: "A", currency_a: "CAD", amount_a: 100, party_b: "B", currency_b: "USD", amount_b: 75, rate: 0.75 },
+      ],
     };
     const balances = calculateBalances(doc);
     expect(balances.A).toEqual({ CAD: -100, USD: 75 });
@@ -324,7 +358,9 @@ describe("calculateBalances (isolated)", () => {
         },
       ],
       settlements: [{ from: "A", to: "C", amount: 15, currency: "CAD" }],
-      exchanges: [{ party_a: "A", currency_a: "CAD", amount_a: 25, party_b: "B", currency_b: "USD", amount_b: 18, rate: 0.72 }],
+      exchanges: [
+        { party_a: "A", currency_a: "CAD", amount_a: 25, party_b: "B", currency_b: "USD", amount_b: 18, rate: 0.72 },
+      ],
     };
     const balances = calculateBalances(doc);
     expect(sumBalances(balances, "CAD")).toBeCloseTo(0, 8);
@@ -348,12 +384,14 @@ describe("calculateMinimumTransfers (isolated)", () => {
     expect(totalTransferred).toBeCloseTo(150, 8);
     expect(transfers.length).toBeLessThanOrEqual(4);
 
-    expect(sortTransfers(transfers)).toEqual(sortTransfers([
-      { from: "D", to: "A", amount: 60, currency: "CAD" },
-      { from: "E", to: "A", amount: 40, currency: "CAD" },
-      { from: "E", to: "B", amount: 20, currency: "CAD" },
-      { from: "C", to: "B", amount: 30, currency: "CAD" },
-    ]));
+    expect(sortTransfers(transfers)).toEqual(
+      sortTransfers([
+        { from: "D", to: "A", amount: 60, currency: "CAD" },
+        { from: "E", to: "A", amount: 40, currency: "CAD" },
+        { from: "E", to: "B", amount: 20, currency: "CAD" },
+        { from: "C", to: "B", amount: 30, currency: "CAD" },
+      ]),
+    );
   });
 
   it("handles tied debtor amounts against a single creditor", () => {
@@ -362,10 +400,12 @@ describe("calculateMinimumTransfers (isolated)", () => {
     const total = transfers.reduce((acc, t) => acc + t.amount, 0);
     expect(total).toBeCloseTo(100, 8);
     expect(transfers.length).toBeLessThanOrEqual(2);
-    expect(sortTransfers(transfers)).toEqual(sortTransfers([
-      { from: "B", to: "A", amount: 50, currency: "CAD" },
-      { from: "C", to: "A", amount: 50, currency: "CAD" },
-    ]));
+    expect(sortTransfers(transfers)).toEqual(
+      sortTransfers([
+        { from: "B", to: "A", amount: 50, currency: "CAD" },
+        { from: "C", to: "A", amount: 50, currency: "CAD" },
+      ]),
+    );
   });
 
   it("treats balances within the 0.01 epsilon as already settled", () => {
@@ -396,9 +436,7 @@ describe("calculateBalances -> calculateMinimumTransfers (end to end)", () => {
   }
 
   it("routes each debtor's share of a single payer's expense back to them", () => {
-    const doc = makeDoc([
-      { paid_by: "A", amount: 90, currency: "CAD", splits: equalSplit(90, ["A", "B", "C"]) },
-    ]);
+    const doc = makeDoc([{ paid_by: "A", amount: 90, currency: "CAD", splits: equalSplit(90, ["A", "B", "C"]) }]);
     expect(transfersFor(doc)).toEqual([
       { from: "B", to: "A", amount: 30, currency: "CAD" },
       { from: "C", to: "A", amount: 30, currency: "CAD" },
@@ -424,9 +462,33 @@ describe("calculateBalances -> calculateMinimumTransfers (end to end)", () => {
     // Three creditors front costs for Bo and Dee, giving nets of
     // You +90, Ann +110, Cy +70, Bo -140, Dee -130.
     const expenses: TestExpense[] = [
-      { paid_by: "You", amount: 90, currency: "CAD", splits: [{ user_id: "Bo", amount_owed: 50 }, { user_id: "Dee", amount_owed: 40 }] },
-      { paid_by: "Ann", amount: 110, currency: "CAD", splits: [{ user_id: "Bo", amount_owed: 55 }, { user_id: "Dee", amount_owed: 55 }] },
-      { paid_by: "Cy", amount: 70, currency: "CAD", splits: [{ user_id: "Bo", amount_owed: 35 }, { user_id: "Dee", amount_owed: 35 }] },
+      {
+        paid_by: "You",
+        amount: 90,
+        currency: "CAD",
+        splits: [
+          { user_id: "Bo", amount_owed: 50 },
+          { user_id: "Dee", amount_owed: 40 },
+        ],
+      },
+      {
+        paid_by: "Ann",
+        amount: 110,
+        currency: "CAD",
+        splits: [
+          { user_id: "Bo", amount_owed: 55 },
+          { user_id: "Dee", amount_owed: 55 },
+        ],
+      },
+      {
+        paid_by: "Cy",
+        amount: 70,
+        currency: "CAD",
+        splits: [
+          { user_id: "Bo", amount_owed: 35 },
+          { user_id: "Dee", amount_owed: 35 },
+        ],
+      },
     ];
     const members = ["You", "Ann", "Cy", "Bo", "Dee"];
 
@@ -509,8 +571,13 @@ describe("calculateBalances with soft-deleted records", () => {
 
   it("ignores a deleted exchange on both legs", () => {
     const exchange: TestExchange = {
-      party_a: "A", currency_a: "CAD", amount_a: 100,
-      party_b: "B", currency_b: "USD", amount_b: 75, rate: 0.75,
+      party_a: "A",
+      currency_a: "CAD",
+      amount_a: 100,
+      party_b: "B",
+      currency_b: "USD",
+      amount_b: 75,
+      rate: 0.75,
     };
     const withDeleted = calculateBalances(makeDoc([], [], ["A", "B"], [{ ...exchange, deleted_at: DELETED }]));
     for (const member of ["A", "B"]) {
@@ -527,7 +594,7 @@ describe("calculateBalances with soft-deleted records", () => {
         { paid_by: "A", amount: 80, currency: "EUR", splits: equalSplit(80, ["A", "B"]), deleted_at: DELETED },
       ],
       [],
-      ["A", "B"]
+      ["A", "B"],
     );
     const balances = calculateBalances(doc);
     expect(Object.keys(balances.A)).toEqual(["CAD"]);
@@ -538,7 +605,7 @@ describe("calculateBalances with soft-deleted records", () => {
     const doc = makeDoc(
       [{ paid_by: "A", amount: 100, currency: "CAD", splits: equalSplit(100, ["A", "B"]), deleted_at: DELETED }],
       [],
-      ["A", "B"]
+      ["A", "B"],
     );
     expect(calculateMinimumTransfers(calculateBalances(doc))).toEqual([]);
   });
@@ -548,7 +615,7 @@ describe("calculateBalances with soft-deleted records", () => {
     const doc = makeDoc(
       [{ paid_by: "A", amount: 100, currency: "CAD", splits: equalSplit(100, ["A", "B"]), deleted_at: new Date(0) }],
       [],
-      ["A", "B"]
+      ["A", "B"],
     );
     expect(calculateMinimumTransfers(calculateBalances(doc))).toEqual([]);
   });

@@ -23,8 +23,16 @@ import AuthButton, { PROVIDER_CONFIG } from "./AuthButton";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 
 export default function AuthProviderManager() {
-  const { authProviders, loading, error, linkGoogleAccount, linkGitHubAccount, linkDiscordAccount, unlinkProvider, addPassword } =
-    useAuthProviders();
+  const {
+    authProviders,
+    loading,
+    error,
+    linkGoogleAccount,
+    linkGitHubAccount,
+    linkDiscordAccount,
+    unlinkProvider,
+    addPassword,
+  } = useAuthProviders();
 
   const [unlinkDialog, setUnlinkDialog] = useState<{
     open: boolean;
@@ -115,40 +123,40 @@ export default function AuthProviderManager() {
         </Typography>
 
         <List>
-            {providers.map((provider) => (
-              <React.Fragment key={provider.provider}>
-                <ListItem>
-                  <Box sx={{ display: "flex", alignItems: "center", mr: 2 }}>{getProviderIcon(provider.provider)}</Box>
+          {providers.map((provider) => (
+            <React.Fragment key={provider.provider}>
+              <ListItem>
+                <Box sx={{ display: "flex", alignItems: "center", mr: 2 }}>{getProviderIcon(provider.provider)}</Box>
 
-                  <ListItemText
-                    primary={<Typography variant="body1">{getProviderName(provider.provider)}</Typography>}
-                    secondary={
-                      <Typography variant="body2" color="text.secondary">
-                        {provider.email} • Linked {new Date(provider.linkedAt).toLocaleDateString()}
-                      </Typography>
-                    }
-                  />
+                <ListItemText
+                  primary={<Typography variant="body1">{getProviderName(provider.provider)}</Typography>}
+                  secondary={
+                    <Typography variant="body2" color="text.secondary">
+                      {provider.email} • Linked {new Date(provider.linkedAt).toLocaleDateString()}
+                    </Typography>
+                  }
+                />
 
-                  <ListItemSecondaryAction>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      {providers.length > 1 && (
-                        <IconButton
-                          onClick={() => setUnlinkDialog({ open: true, provider: provider.provider })}
-                          disabled={actionLoading}
-                          color="error"
-                          title="Unlink account"
-                        >
-                          <UnlinkIcon />
-                        </IconButton>
-                      )}
-                    </Box>
-                  </ListItemSecondaryAction>
-                </ListItem>
+                <ListItemSecondaryAction>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    {providers.length > 1 && (
+                      <IconButton
+                        onClick={() => setUnlinkDialog({ open: true, provider: provider.provider })}
+                        disabled={actionLoading}
+                        color="error"
+                        title="Unlink account"
+                      >
+                        <UnlinkIcon />
+                      </IconButton>
+                    )}
+                  </Box>
+                </ListItemSecondaryAction>
+              </ListItem>
 
-                {provider.provider !== providers[providers.length - 1].provider && <Divider />}
-              </React.Fragment>
-            ))}
-          </List>
+              {provider.provider !== providers[providers.length - 1].provider && <Divider />}
+            </React.Fragment>
+          ))}
+        </List>
       </Box>
 
       <Box sx={{ mt: 3 }}>
@@ -181,8 +189,8 @@ export default function AuthProviderManager() {
 
         {!hasProvider("discord") && (
           <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
-            On iPhone with Xendelta installed as an app: if the Discord page freezes when Face ID/AutoFill pops up,
-            type your password manually instead. If it's already frozen, force-quit Safari and reopen it to clear it.
+            On iPhone with Xendelta installed as an app: if the Discord page freezes when Face ID/AutoFill pops up, type
+            your password manually instead. If it's already frozen, force-quit Safari and reopen it to clear it.
           </Typography>
         )}
       </Box>

@@ -28,8 +28,7 @@ describe("csvCell", () => {
 
 describe("csvLine", () => {
   it("joins the fields and terminates with CRLF", () => {
-    expect(csvLine(["2026-08-15", "NETFLIX", 16.99]))
-      .toBe('"2026-08-15","NETFLIX","16.99"\r\n');
+    expect(csvLine(["2026-08-15", "NETFLIX", 16.99])).toBe('"2026-08-15","NETFLIX","16.99"\r\n');
   });
 
   it("writes an empty record for no fields", () => {

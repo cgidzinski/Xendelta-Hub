@@ -1,7 +1,18 @@
 import { describe, it, expect } from "vitest";
 import {
-  EMPTY_FILTERS, activeFilterCount, filtersFromParams, filtersToParams, formatAmount, formatMinutes,
-  ingredientLine, normalizeIngredientName, parseAmount, parseIngredientBlock, parseIngredientLine, scaleQuantity, totalMinutes,
+  EMPTY_FILTERS,
+  activeFilterCount,
+  filtersFromParams,
+  filtersToParams,
+  formatAmount,
+  formatMinutes,
+  ingredientLine,
+  normalizeIngredientName,
+  parseAmount,
+  parseIngredientBlock,
+  parseIngredientLine,
+  scaleQuantity,
+  totalMinutes,
 } from "./kitchen";
 
 describe("parseAmount", () => {
@@ -39,9 +50,24 @@ describe("formatAmount / scaleQuantity", () => {
 
 describe("parseIngredientLine", () => {
   it("splits quantity, unit, name and note", () => {
-    expect(parseIngredientLine("1 1/2 cups flour, sifted")).toEqual({ quantity: "1 1/2", unit: "cups", name: "flour", note: "sifted" });
-    expect(parseIngredientLine("- 2 tbsp olive oil")).toEqual({ quantity: "2", unit: "tbsp", name: "olive oil", note: "" });
-    expect(parseIngredientLine("200g butter (softened)")).toEqual({ quantity: "200", unit: "g", name: "butter", note: "softened" });
+    expect(parseIngredientLine("1 1/2 cups flour, sifted")).toEqual({
+      quantity: "1 1/2",
+      unit: "cups",
+      name: "flour",
+      note: "sifted",
+    });
+    expect(parseIngredientLine("- 2 tbsp olive oil")).toEqual({
+      quantity: "2",
+      unit: "tbsp",
+      name: "olive oil",
+      note: "",
+    });
+    expect(parseIngredientLine("200g butter (softened)")).toEqual({
+      quantity: "200",
+      unit: "g",
+      name: "butter",
+      note: "softened",
+    });
     expect(parseIngredientLine("3 eggs")).toEqual({ quantity: "3", unit: "", name: "eggs", note: "" });
     expect(parseIngredientLine("Salt")).toEqual({ quantity: "", unit: "", name: "Salt", note: "" });
   });
@@ -66,7 +92,9 @@ describe("totalMinutes / formatMinutes", () => {
     expect(totalMinutes({}, "recipe")).toBeNull();
   });
   it("uses the quickest method for instructions", () => {
-    expect(totalMinutes({ methods: [{ minutes_min: 18, minutes_max: 20 }, { minutes_min: 5 }] }, "instructions")).toBe(5);
+    expect(totalMinutes({ methods: [{ minutes_min: 18, minutes_max: 20 }, { minutes_min: 5 }] }, "instructions")).toBe(
+      5,
+    );
   });
   it("formats hours", () => {
     expect(formatMinutes(90)).toBe("1 h 30 min");
@@ -76,7 +104,16 @@ describe("totalMinutes / formatMinutes", () => {
 
 describe("filters <-> params", () => {
   it("round-trips and only writes non-defaults", () => {
-    const f = { ...EMPTY_FILTERS, layout: "instructions" as const, q: "soup", tags: ["quick", "vegan"], favorite: true, method: "oven" as const, maxMinutes: 30, sort: "title" as const };
+    const f = {
+      ...EMPTY_FILTERS,
+      layout: "instructions" as const,
+      q: "soup",
+      tags: ["quick", "vegan"],
+      favorite: true,
+      method: "oven" as const,
+      maxMinutes: 30,
+      sort: "title" as const,
+    };
     const p = filtersToParams(f);
     expect(filtersFromParams(p)).toEqual(f);
     expect(filtersToParams(EMPTY_FILTERS).toString()).toBe("");
@@ -94,7 +131,9 @@ describe("filters <-> params", () => {
 
 describe("ingredientLine", () => {
   it("joins the parts the way people write them", () => {
-    expect(ingredientLine({ quantity: "1 1/2", unit: "cups", name: "flour", note: "sifted" })).toBe("1 1/2 cups flour, sifted");
+    expect(ingredientLine({ quantity: "1 1/2", unit: "cups", name: "flour", note: "sifted" })).toBe(
+      "1 1/2 cups flour, sifted",
+    );
     expect(ingredientLine({ quantity: "", unit: "", name: "Salt", note: "" })).toBe("Salt");
   });
   it("reads back to the same fields for typical ingredients", () => {

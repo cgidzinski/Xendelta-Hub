@@ -1,7 +1,19 @@
 import { useState } from "react";
 import {
-  Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, InputAdornment,
-  Stack, Switch, TextField, Tooltip, Typography,
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  IconButton,
+  InputAdornment,
+  Stack,
+  Switch,
+  TextField,
+  Tooltip,
+  Typography,
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import IosShareIcon from "@mui/icons-material/IosShare";
@@ -10,7 +22,15 @@ import { useSnackbar } from "notistack";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { shareUrlFor, useShareKitchenItem, type KitchenItem } from "../../../../hooks/xenkitchen/useKitchen";
 
-export default function ShareDialog({ item, open, onClose }: { item: KitchenItem; open: boolean; onClose: () => void }) {
+export default function ShareDialog({
+  item,
+  open,
+  onClose,
+}: {
+  item: KitchenItem;
+  open: boolean;
+  onClose: () => void;
+}) {
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
   const share = useShareKitchenItem();
@@ -42,7 +62,13 @@ export default function ShareDialog({ item, open, onClose }: { item: KitchenItem
   const nativeShare = () => navigator.share?.({ title: item.title, url }).catch(() => {});
 
   const rotate = async () => {
-    if (await confirm({ title: "Reset the link?", message: "Anyone with the current link will lose access. You'll get a new link to share.", confirmLabel: "Reset link" })) {
+    if (
+      await confirm({
+        title: "Reset the link?",
+        message: "Anyone with the current link will lose access. You'll get a new link to share.",
+        confirmLabel: "Reset link",
+      })
+    ) {
       run("rotate");
     }
   };
@@ -52,7 +78,9 @@ export default function ShareDialog({ item, open, onClose }: { item: KitchenItem
       <DialogTitle sx={{ fontWeight: 700 }}>Share "{item.title || "Untitled"}"</DialogTitle>
       <DialogContent>
         <FormControlLabel
-          control={<Switch checked={enabled} disabled={busy} onChange={(e) => run(e.target.checked ? "enable" : "disable")} />}
+          control={
+            <Switch checked={enabled} disabled={busy} onChange={(e) => run(e.target.checked ? "enable" : "disable")} />
+          }
           label="Anyone with the link can view"
         />
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
@@ -70,7 +98,11 @@ export default function ShareDialog({ item, open, onClose }: { item: KitchenItem
                   readOnly: true,
                   endAdornment: (
                     <InputAdornment position="end">
-                      <Tooltip title="Copy"><IconButton edge="end" onClick={copy} aria-label="Copy link"><ContentCopyIcon fontSize="small" /></IconButton></Tooltip>
+                      <Tooltip title="Copy">
+                        <IconButton edge="end" onClick={copy} aria-label="Copy link">
+                          <ContentCopyIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                     </InputAdornment>
                   ),
                 },
@@ -78,15 +110,27 @@ export default function ShareDialog({ item, open, onClose }: { item: KitchenItem
             />
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
               {typeof navigator.share === "function" && (
-                <Button variant="contained" startIcon={<IosShareIcon />} onClick={nativeShare}>Share…</Button>
+                <Button variant="contained" startIcon={<IosShareIcon />} onClick={nativeShare}>
+                  Share…
+                </Button>
               )}
-              <Button variant={typeof navigator.share === "function" ? "outlined" : "contained"} startIcon={<ContentCopyIcon />} onClick={copy}>Copy link</Button>
-              <Button color="inherit" startIcon={<RefreshIcon />} onClick={rotate} disabled={busy}>Reset link</Button>
+              <Button
+                variant={typeof navigator.share === "function" ? "outlined" : "contained"}
+                startIcon={<ContentCopyIcon />}
+                onClick={copy}
+              >
+                Copy link
+              </Button>
+              <Button color="inherit" startIcon={<RefreshIcon />} onClick={rotate} disabled={busy}>
+                Reset link
+              </Button>
             </Box>
           </Stack>
         )}
       </DialogContent>
-      <DialogActions><Button onClick={onClose}>Done</Button></DialogActions>
+      <DialogActions>
+        <Button onClick={onClose}>Done</Button>
+      </DialogActions>
     </Dialog>
   );
 }

@@ -10,7 +10,7 @@ export const ITEMS: Record<string, Item> = {
     apply: async (user: any) => {
       user.points += 1000;
       await user.save();
-    }
+    },
   },
   "1gb-xenbox-voucher": {
     key: "1gb-xenbox-voucher",
@@ -21,7 +21,7 @@ export const ITEMS: Record<string, Item> = {
     apply: async (user: any) => {
       user.xenbox.spaceAllowed += 1024 * 1024 * 1024;
       await user.save();
-    }
+    },
   },
   "golden-badge": {
     key: "golden-badge",

@@ -38,7 +38,9 @@ const fetchConversations = async (): Promise<Conversation[]> => {
 };
 
 const markNotificationAsRead = async (notificationId: string): Promise<Notification> => {
-  const response = await apiClient.put<ApiResponse<{ notification: Notification }>>(`/api/user/notifications/${notificationId}/mark-read`);
+  const response = await apiClient.put<ApiResponse<{ notification: Notification }>>(
+    `/api/user/notifications/${notificationId}/mark-read`,
+  );
   return response.data.data!.notification;
 };
 
@@ -61,7 +63,7 @@ const notificationToInboxItem = (notification: Notification): NotificationInboxI
 const conversationToInboxItem = (conversation: Conversation): ConversationInboxItem => ({
   id: conversation._id,
   type: "conversation",
-  title: conversation.name || conversation.participantInfo?.map(p => p.username).join(", ") || "Conversation",
+  title: conversation.name || conversation.participantInfo?.map((p) => p.username).join(", ") || "Conversation",
   preview: conversation.lastMessage,
   time: conversation.lastMessageTime,
   unread: conversation.unread,
@@ -147,24 +149,21 @@ export const useInbox = (): UseInboxReturn => {
     const notificationItems = (notifications.notifications || []).map(notificationToInboxItem);
     const conversationItems = (notifications.conversations || []).map(conversationToInboxItem);
 
-    return [...notificationItems, ...conversationItems].sort((a, b) =>
-      new Date(b.time).getTime() - new Date(a.time).getTime()
+    return [...notificationItems, ...conversationItems].sort(
+      (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime(),
     );
   }, [notifications]);
 
-  const totalUnread = useMemo(() =>
-    inboxItems.reduce((sum, item) => sum + (item.unread ? 1 : 0), 0),
-    [inboxItems]
+  const totalUnread = useMemo(() => inboxItems.reduce((sum, item) => sum + (item.unread ? 1 : 0), 0), [inboxItems]);
+
+  const notificationsUnread = useMemo(
+    () => inboxItems.filter((item) => item.type === "notification" && item.unread).length,
+    [inboxItems],
   );
 
-  const notificationsUnread = useMemo(() =>
-    inboxItems.filter(item => item.type === "notification" && item.unread).length,
-    [inboxItems]
-  );
-
-  const conversationsUnread = useMemo(() =>
-    inboxItems.filter(item => item.type === "conversation" && item.unread).length,
-    [inboxItems]
+  const conversationsUnread = useMemo(
+    () => inboxItems.filter((item) => item.type === "conversation" && item.unread).length,
+    [inboxItems],
   );
 
   const { mutate: markAsReadMutation, isPending: isMarkingAsRead } = useMutation({
@@ -182,10 +181,10 @@ export const useInbox = (): UseInboxReturn => {
         return {
           ...oldData,
           notifications: oldData.notifications.map((n: Notification) =>
-            item.type === "notification" && n._id === item.id ? { ...n, unread: false } : n
+            item.type === "notification" && n._id === item.id ? { ...n, unread: false } : n,
           ),
           conversations: oldData.conversations.map((c: Conversation) =>
-            item.type === "conversation" && c._id === item.id ? { ...c, unread: false } : c
+            item.type === "conversation" && c._id === item.id ? { ...c, unread: false } : c,
           ),
         };
       });

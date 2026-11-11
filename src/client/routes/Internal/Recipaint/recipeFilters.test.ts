@@ -36,8 +36,18 @@ describe("matchesFilter", () => {
 });
 
 describe("sortRecipes", () => {
-  const older = recipe({ _id: "older", dateUpdated: "2026-01-01T00:00:00.000Z", dateCreated: "2026-06-01T00:00:00.000Z", title: "Zealot" });
-  const newer = recipe({ _id: "newer", dateUpdated: "2026-08-01T00:00:00.000Z", dateCreated: "2026-02-01T00:00:00.000Z", title: "Aspirant" });
+  const older = recipe({
+    _id: "older",
+    dateUpdated: "2026-01-01T00:00:00.000Z",
+    dateCreated: "2026-06-01T00:00:00.000Z",
+    title: "Zealot",
+  });
+  const newer = recipe({
+    _id: "newer",
+    dateUpdated: "2026-08-01T00:00:00.000Z",
+    dateCreated: "2026-02-01T00:00:00.000Z",
+    title: "Aspirant",
+  });
 
   it("puts the most recently updated first", () => {
     expect(sortRecipes([older, newer], "updated").map((r) => r._id)).toEqual(["newer", "older"]);

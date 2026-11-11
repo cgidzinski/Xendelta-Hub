@@ -8,7 +8,11 @@ import { useTitle } from "../../../hooks/useTitle";
 import { useAuth } from "../../../contexts/AuthContext";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
-import { useClonePublicKitchenItem, usePublicKitchenBookItem, usePublicKitchenItem } from "../../../hooks/xenkitchen/useKitchen";
+import {
+  useClonePublicKitchenItem,
+  usePublicKitchenBookItem,
+  usePublicKitchenItem,
+} from "../../../hooks/xenkitchen/useKitchen";
 import ItemView from "../../Internal/XenKitchen/components/ItemView";
 
 /** Read-only page behind /k/:token (one shared item) or /k/b/:token/:itemId (an item in a shared book). Works signed out. */
@@ -32,25 +36,49 @@ export default function XenKitchenPublic() {
       navigate("/login", { state: { from: { pathname: here } } });
       return;
     }
-    clone.mutate({ token, itemId }, {
-      onSuccess: ({ item: copy }) => {
-        enqueueSnackbar("Saved to your kitchen", { variant: "success" });
-        navigate(`/internal/xenkitchen/${copy._id}`);
+    clone.mutate(
+      { token, itemId },
+      {
+        onSuccess: ({ item: copy }) => {
+          enqueueSnackbar("Saved to your kitchen", { variant: "success" });
+          navigate(`/internal/xenkitchen/${copy._id}`);
+        },
+        onError: () => enqueueSnackbar("Couldn't save it", { variant: "error" }),
       },
-      onError: () => enqueueSnackbar("Couldn't save it", { variant: "error" }),
-    });
+    );
   };
 
   return (
     <Box sx={{ minHeight: "100vh" }}>
-      <Box component="header" sx={{
-        position: "sticky", top: 0, zIndex: 1000, borderBottom: "1px solid", borderColor: "divider",
-        backdropFilter: "blur(10px)", backgroundColor: alpha(theme.palette.background.paper, 0.8),
-      }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ maxWidth: 900, mx: "auto", px: { xs: 2, sm: 3 }, py: 1.5 }}>
-          <Stack direction="row" alignItems="center" spacing={1} onClick={() => navigate("/")} sx={{ cursor: "pointer" }}>
+      <Box
+        component="header"
+        sx={{
+          position: "sticky",
+          top: 0,
+          zIndex: 1000,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          backdropFilter: "blur(10px)",
+          backgroundColor: alpha(theme.palette.background.paper, 0.8),
+        }}
+      >
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{ maxWidth: 900, mx: "auto", px: { xs: 2, sm: 3 }, py: 1.5 }}
+        >
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1}
+            onClick={() => navigate("/")}
+            sx={{ cursor: "pointer" }}
+          >
             <RestaurantMenuIcon color="primary" />
-            <Typography variant="h6" sx={{ fontWeight: 800 }}>XenKitchen</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 800 }}>
+              XenKitchen
+            </Typography>
           </Stack>
           <Button size="small" onClick={() => navigate(isAuthenticated ? "/internal/xenkitchen" : "/")}>
             {isAuthenticated ? "My kitchen" : "Xendelta Hub"}
@@ -70,7 +98,11 @@ export default function XenKitchenPublic() {
                 ← {inBook.bookName ?? "Back to the book"}
               </Button>
             )}
-            {owner && <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>Shared by {owner}</Typography>}
+            {owner && (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Shared by {owner}
+              </Typography>
+            )}
             <ItemView
               item={item}
               actions={

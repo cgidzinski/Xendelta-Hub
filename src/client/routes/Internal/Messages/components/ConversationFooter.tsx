@@ -44,15 +44,10 @@ export default function ConversationFooter({
           variant="outlined"
           size="small"
         />
-        <IconButton
-          color="primary"
-          onClick={onSendMessage}
-          disabled={!messageText.trim() || isSending}
-        >
+        <IconButton color="primary" onClick={onSendMessage} disabled={!messageText.trim() || isSending}>
           <SendIcon />
         </IconButton>
       </Box>
     </Box>
   );
 }
-

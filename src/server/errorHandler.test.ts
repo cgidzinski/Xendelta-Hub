@@ -12,7 +12,10 @@ describe("server.ts error handler", () => {
   it("keeps four parameters so Express treats it as an error handler", () => {
     const match = source.match(/app\.use\(\(\s*err\b[^)]*\)\s*=>/);
     expect(match, "expected a final app.use((err, req, res, next) => ...) handler").not.toBeNull();
-    const params = match![0].replace(/^app\.use\(\(/, "").replace(/\)\s*=>$/, "").split(",");
+    const params = match![0]
+      .replace(/^app\.use\(\(/, "")
+      .replace(/\)\s*=>$/, "")
+      .split(",");
     expect(params).toHaveLength(4);
   });
 });

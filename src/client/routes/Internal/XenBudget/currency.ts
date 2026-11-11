@@ -6,17 +6,17 @@
 // `getCurrencySymbol` from utils/currencyUtils unchanged, so this module is
 // deliberately scoped to XenBudget only.
 export function formatCurrency(amount: number, currency: string): string {
-    return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency,
-        currencyDisplay: "narrowSymbol",
-    }).format(amount);
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    currencyDisplay: "narrowSymbol",
+  }).format(amount);
 }
 
 export function getCurrencySymbol(currency: string): string {
-    return (
-        new Intl.NumberFormat("en-US", { style: "currency", currency, currencyDisplay: "narrowSymbol" })
-            .formatToParts(0)
-            .find((p) => p.type === "currency")?.value ?? currency
-    );
+  return (
+    new Intl.NumberFormat("en-US", { style: "currency", currency, currencyDisplay: "narrowSymbol" })
+      .formatToParts(0)
+      .find((p) => p.type === "currency")?.value ?? currency
+  );
 }

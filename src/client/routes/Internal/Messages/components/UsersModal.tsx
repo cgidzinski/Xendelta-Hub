@@ -77,15 +77,12 @@ export default function UsersModal({
           {conversation.participants.map((participantId) => {
             if (participantId === "system") return null;
             const isCurrentUser = participantId === profileId;
-            const participant = conversation.participantInfo?.find(p => p._id === participantId);
+            const participant = conversation.participantInfo?.find((p) => p._id === participantId);
             return (
               <React.Fragment key={participantId}>
                 <ListItem>
                   <ListItemAvatar>
-                    <Avatar 
-                      src={participant?.avatar || undefined}
-                      sx={{ borderRadius: 1.5 }}
-                    >
+                    <Avatar src={participant?.avatar || undefined} sx={{ borderRadius: 1.5 }}>
                       {getParticipantDisplay(participantId).charAt(0).toUpperCase()}
                     </Avatar>
                   </ListItemAvatar>
@@ -139,12 +136,7 @@ export default function UsersModal({
 
         {!showAddUser && (
           <Box sx={{ mt: 2 }}>
-            <Button
-              variant="outlined"
-              startIcon={<PersonAddIcon />}
-              onClick={() => setShowAddUser(true)}
-              fullWidth
-            >
+            <Button variant="outlined" startIcon={<PersonAddIcon />} onClick={() => setShowAddUser(true)} fullWidth>
               Add User
             </Button>
           </Box>
@@ -159,14 +151,9 @@ export default function UsersModal({
           startIcon={<ExitToAppIcon />}
           disabled={isLeaving}
         >
-          {isLeaving
-            ? "Leaving..."
-            : isLastUser
-            ? "Delete Conversation"
-            : "Leave Conversation"}
+          {isLeaving ? "Leaving..." : isLastUser ? "Delete Conversation" : "Leave Conversation"}
         </Button>
       </DialogActions>
     </Dialog>
   );
 }
-

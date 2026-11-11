@@ -52,10 +52,7 @@ export default function StatsSection({ stats }: StatsSectionProps) {
                 >
                   {stat.icon}
                 </Box>
-                <Typography
-                  variant="h3"
-                  sx={{ fontWeight: 700, mb: 1, ...gradientTextSx(theme, "short") }}
-                >
+                <Typography variant="h3" sx={{ fontWeight: 700, mb: 1, ...gradientTextSx(theme, "short") }}>
                   {stat.value}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
@@ -69,4 +66,3 @@ export default function StatsSection({ stats }: StatsSectionProps) {
     </Box>
   );
 }
-

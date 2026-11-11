@@ -10,9 +10,9 @@ import { cardSx, sectionLabelSx } from "../../../../../components/ui/surfaceStyl
 import type { Mover, Movers } from "./movers";
 
 interface MoversStripProps {
-    movers: Movers;
-    currency: string;
-    categoryRegistry: XenBudgetLabel[];
+  movers: Movers;
+  currency: string;
+  categoryRegistry: XenBudgetLabel[];
 }
 
 /**
@@ -23,67 +23,74 @@ interface MoversStripProps {
  * round for a budget: spending more is the bad news.
  */
 export default function MoversStrip({ movers, currency, categoryRegistry }: MoversStripProps) {
-    if (movers.up.length === 0 && movers.down.length === 0) return null;
+  if (movers.up.length === 0 && movers.down.length === 0) return null;
 
-    // The same headings the table's columns carry, so "vs Jul" names a column on screen.
-    const [previousLabel, currentLabel] = periodColumnLabels([movers.previousKey, movers.currentKey]);
+  // The same headings the table's columns carry, so "vs Jul" names a column on screen.
+  const [previousLabel, currentLabel] = periodColumnLabels([movers.previousKey, movers.currentKey]);
 
-    const row = (mover: Mover, direction: "up" | "down") => {
-        const isUp = direction === "up";
-        const color = isUp ? "error.main" : INCOME_COLOR;
-        return (
-            <Stack
-                key={mover.category}
-                direction="row" alignItems="center" spacing={1}
-                sx={{ minWidth: 0 }}
-            >
-                {isUp
-                    ? <ArrowUpwardIcon sx={{ fontSize: 14, color, flexShrink: 0 }} />
-                    : <ArrowDownwardIcon sx={{ fontSize: 14, color, flexShrink: 0 }} />}
-                <CategoryChip name={mover.category} registry={categoryRegistry} />
-                <Box sx={{ flexGrow: 1 }} />
-                <Typography variant="body2" noWrap sx={{ color, fontWeight: 600, flexShrink: 0 }}>
-                    {isUp ? "+" : "−"}{formatCurrency(Math.abs(mover.delta), currency)}
-                </Typography>
-                <Typography
-                    variant="caption" color="text.secondary" noWrap
-                    sx={{ flexShrink: 0, width: 52, textAlign: "right" }}
-                >
-                    {/* Nothing to divide by when the category started from zero — "new"
-                    says what happened, where "+100%" would be arithmetic fiction. */}
-                    {mover.percent === null ? "new" : `${Math.round(mover.percent * 100)}%`}
-                </Typography>
-            </Stack>
-        );
-    };
-
+  const row = (mover: Mover, direction: "up" | "down") => {
+    const isUp = direction === "up";
+    const color = isUp ? "error.main" : INCOME_COLOR;
     return (
-        <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
-            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.25 }}>
-                What changed
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
-                {currentLabel} vs {previousLabel}
-            </Typography>
-            <Box sx={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))",
-                gap: { xs: 1.5, sm: 3 },
-                alignItems: "start",
-            }}>
-                {movers.up.length > 0 && (
-                    <Stack spacing={1}>
-                        <Typography variant="caption" color="text.secondary">Spent more on</Typography>
-                        {movers.up.map((m) => row(m, "up"))}
-                    </Stack>
-                )}
-                {movers.down.length > 0 && (
-                    <Stack spacing={1}>
-                        <Typography variant="caption" color="text.secondary">Spent less on</Typography>
-                        {movers.down.map((m) => row(m, "down"))}
-                    </Stack>
-                )}
-            </Box>
-        </Card>
+      <Stack key={mover.category} direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
+        {isUp ? (
+          <ArrowUpwardIcon sx={{ fontSize: 14, color, flexShrink: 0 }} />
+        ) : (
+          <ArrowDownwardIcon sx={{ fontSize: 14, color, flexShrink: 0 }} />
+        )}
+        <CategoryChip name={mover.category} registry={categoryRegistry} />
+        <Box sx={{ flexGrow: 1 }} />
+        <Typography variant="body2" noWrap sx={{ color, fontWeight: 600, flexShrink: 0 }}>
+          {isUp ? "+" : "−"}
+          {formatCurrency(Math.abs(mover.delta), currency)}
+        </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          noWrap
+          sx={{ flexShrink: 0, width: 52, textAlign: "right" }}
+        >
+          {/* Nothing to divide by when the category started from zero — "new"
+                    says what happened, where "+100%" would be arithmetic fiction. */}
+          {mover.percent === null ? "new" : `${Math.round(mover.percent * 100)}%`}
+        </Typography>
+      </Stack>
     );
+  };
+
+  return (
+    <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
+      <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.25 }}>
+        What changed
+      </Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+        {currentLabel} vs {previousLabel}
+      </Typography>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))",
+          gap: { xs: 1.5, sm: 3 },
+          alignItems: "start",
+        }}
+      >
+        {movers.up.length > 0 && (
+          <Stack spacing={1}>
+            <Typography variant="caption" color="text.secondary">
+              Spent more on
+            </Typography>
+            {movers.up.map((m) => row(m, "up"))}
+          </Stack>
+        )}
+        {movers.down.length > 0 && (
+          <Stack spacing={1}>
+            <Typography variant="caption" color="text.secondary">
+              Spent less on
+            </Typography>
+            {movers.down.map((m) => row(m, "down"))}
+          </Stack>
+        )}
+      </Box>
+    </Card>
+  );
 }

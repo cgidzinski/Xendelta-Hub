@@ -8,6 +8,6 @@ import { loadSection } from "../components/sectionStorage";
  * from a section bounces through /settings straight back into the same section.
  */
 export default function SettingsIndexRedirect() {
-    const { bookId = "" } = useParams();
-    return <Navigate to={loadSection(bookId)} replace />;
+  const { bookId = "" } = useParams();
+  return <Navigate to={loadSection(bookId)} replace />;
 }

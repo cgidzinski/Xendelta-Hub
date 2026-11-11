@@ -7,10 +7,7 @@ export { NEAR_LIMIT_PERCENT };
  * Every limit in a budget - the overall one and each person's - as plain percentages.
  */
 function percents(budget: BudgetStatus): number[] {
-    return [
-        ...(budget.percent === undefined ? [] : [budget.percent]),
-        ...budget.sub_budgets.map((s) => s.percent),
-    ];
+  return [...(budget.percent === undefined ? [] : [budget.percent]), ...budget.sub_budgets.map((s) => s.percent)];
 }
 
 /**
@@ -23,18 +20,18 @@ function percents(budget: BudgetStatus): number[] {
  * as if earning almost nothing were the safest possible state.
  */
 export function troublePercent(budget: BudgetStatus): number {
-    const all = percents(budget);
-    if (all.length === 0) return 0;
-    if (directionOf(budget.measures) === "ceiling") return Math.max(...all);
-    // Clamped at zero: a target that has been beaten is as untroubled as a budget gets,
-    // and a negative concern would sort it below one that is exactly on target.
-    return Math.max(0, 100 - Math.min(...all));
+  const all = percents(budget);
+  if (all.length === 0) return 0;
+  if (directionOf(budget.measures) === "ceiling") return Math.max(...all);
+  // Clamped at zero: a target that has been beaten is as untroubled as a budget gets,
+  // and a negative concern would sort it below one that is exactly on target.
+  return Math.max(0, 100 - Math.min(...all));
 }
 
 /** The highest percentage in a budget, direction ignored. Used where raw progress matters. */
 export function worstPercent(budget: BudgetStatus): number {
-    const all = percents(budget);
-    return all.length ? Math.max(...all) : 0;
+  const all = percents(budget);
+  return all.length ? Math.max(...all) : 0;
 }
 
 /**
@@ -43,24 +40,24 @@ export function worstPercent(budget: BudgetStatus): number {
  * a problem.
  */
 export function isOverCap(budget: BudgetStatus): boolean {
-    if (directionOf(budget.measures) === "floor") return false;
-    return budget.over === true || budget.sub_budgets.some((s) => s.over);
+  if (directionOf(budget.measures) === "floor") return false;
+  return budget.over === true || budget.sub_budgets.some((s) => s.over);
 }
 
 /** How many separate caps in this budget are past their limit. */
 export function overCount(budget: BudgetStatus): number {
-    if (directionOf(budget.measures) === "floor") return 0;
-    return (budget.over ? 1 : 0) + budget.sub_budgets.filter((s) => s.over).length;
+  if (directionOf(budget.measures) === "floor") return 0;
+  return (budget.over ? 1 : 0) + budget.sub_budgets.filter((s) => s.over).length;
 }
 
 /** How many separate savings targets in this budget have been reached. */
 export function metCount(budget: BudgetStatus): number {
-    if (directionOf(budget.measures) === "ceiling") return 0;
-    return (budget.over ? 1 : 0) + budget.sub_budgets.filter((s) => s.over).length;
+  if (directionOf(budget.measures) === "ceiling") return 0;
+  return (budget.over ? 1 : 0) + budget.sub_budgets.filter((s) => s.over).length;
 }
 
 export function budgetLabel(budget: BudgetStatus): string {
-    return budget.categories.length ? budget.categories.join(", ") : "Everything";
+  return budget.categories.length ? budget.categories.join(", ") : "Everything";
 }
 
 export type BudgetSortOrder = "priority" | "name_asc" | "name_desc";
@@ -78,30 +75,30 @@ export type BudgetSortOrder = "priority" | "name_asc" | "name_desc";
  * `name_asc`/`name_desc` drops the trouble banding entirely for a plain A-Z/Z-A browse.
  */
 export function sortBudgets(budgets: BudgetStatus[], orderBy: BudgetSortOrder = "priority"): BudgetStatus[] {
-    if (orderBy !== "priority") {
-        return [...budgets].sort((a, b) => {
-            const cmp = budgetLabel(a).localeCompare(budgetLabel(b), undefined, { sensitivity: "base" });
-            return orderBy === "name_asc" ? cmp : -cmp;
-        });
-    }
-    const band = (b: BudgetStatus) => {
-        if (isOverCap(b)) return 0;
-        return troublePercent(b) >= NEAR_LIMIT_PERCENT ? 1 : 2;
-    };
+  if (orderBy !== "priority") {
     return [...budgets].sort((a, b) => {
-        const byBand = band(a) - band(b);
-        if (byBand !== 0) return byBand;
-        const byLabel = budgetLabel(a).localeCompare(budgetLabel(b), undefined, { sensitivity: "base" });
-        if (byLabel !== 0) return byLabel;
-        return a.period.localeCompare(b.period);
+      const cmp = budgetLabel(a).localeCompare(budgetLabel(b), undefined, { sensitivity: "base" });
+      return orderBy === "name_asc" ? cmp : -cmp;
     });
+  }
+  const band = (b: BudgetStatus) => {
+    if (isOverCap(b)) return 0;
+    return troublePercent(b) >= NEAR_LIMIT_PERCENT ? 1 : 2;
+  };
+  return [...budgets].sort((a, b) => {
+    const byBand = band(a) - band(b);
+    if (byBand !== 0) return byBand;
+    const byLabel = budgetLabel(a).localeCompare(budgetLabel(b), undefined, { sensitivity: "base" });
+    if (byLabel !== 0) return byLabel;
+    return a.period.localeCompare(b.period);
+  });
 }
 
 export interface VerdictCounts {
-    passed: number;
-    missed: number;
-    /** passed + missed. Excludes limits with nothing in them, which are not results. */
-    judged: number;
+  passed: number;
+  missed: number;
+  /** passed + missed. Excludes limits with nothing in them, which are not results. */
+  judged: number;
 }
 
 /**
@@ -113,28 +110,28 @@ export interface VerdictCounts {
  * otherwise report a clean sweep.
  */
 export function verdictCounts(budgets: BudgetStatus[], asOf: string): VerdictCounts {
-    let passed = 0;
-    let missed = 0;
+  let passed = 0;
+  let missed = 0;
 
-    const tally = (
-        direction: ReturnType<typeof directionOf>,
-        percent: number | undefined,
-        itemCount: number,
-        periodTo: string,
-    ) => {
-        if (percent === undefined) return;
-        const { key } = budgetVerdict(direction, percent, itemCount, periodTo, asOf);
-        if (key === "pass") passed++;
-        else if (key === "miss") missed++;
-    };
+  const tally = (
+    direction: ReturnType<typeof directionOf>,
+    percent: number | undefined,
+    itemCount: number,
+    periodTo: string,
+  ) => {
+    if (percent === undefined) return;
+    const { key } = budgetVerdict(direction, percent, itemCount, periodTo, asOf);
+    if (key === "pass") passed++;
+    else if (key === "miss") missed++;
+  };
 
-    for (const b of budgets) {
-        const direction = directionOf(b.measures);
-        tally(direction, b.percent, b.item_count, b.period_to);
-        for (const sub of b.sub_budgets) {
-            tally(direction, sub.percent, sub.item_count, b.period_to);
-        }
+  for (const b of budgets) {
+    const direction = directionOf(b.measures);
+    tally(direction, b.percent, b.item_count, b.period_to);
+    for (const sub of b.sub_budgets) {
+      tally(direction, sub.percent, sub.item_count, b.period_to);
     }
+  }
 
-    return { passed, missed, judged: passed + missed };
+  return { passed, missed, judged: passed + missed };
 }

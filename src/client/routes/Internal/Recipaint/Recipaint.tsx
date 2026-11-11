@@ -27,13 +27,7 @@ import { useTitle } from "../../../hooks/useTitle";
 import { useRecipaint, usePublicRecipes, useCreateRecipe } from "../../../hooks/recipaint/useRecipaint";
 import { useSnackbar } from "notistack";
 import RecipeList from "./components/RecipeList";
-import {
-  RECIPE_FILTERS,
-  RECIPE_SORTS,
-  RecipeFilter,
-  RecipeSort,
-  applyRecipeFilters,
-} from "./recipeFilters";
+import { RECIPE_FILTERS, RECIPE_SORTS, RecipeFilter, RecipeSort, applyRecipeFilters } from "./recipeFilters";
 
 export default function Recipaint() {
   useTitle("Recipaint");
@@ -99,27 +93,27 @@ export default function Recipaint() {
         title="Recipaint"
         mb={2}
         actions={
-        <>
-          <Tooltip title="My paints">
-            <IconButton
-              aria-label="My paints"
-              onClick={() => navigate("/internal/recipaint/paints")}
-              sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1 }}
+          <>
+            <Tooltip title="My paints">
+              <IconButton
+                aria-label="My paints"
+                onClick={() => navigate("/internal/recipaint/paints")}
+                sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1 }}
+              >
+                <PaletteIcon />
+              </IconButton>
+            </Tooltip>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => {
+                setCreateDialogOpen(true);
+                setRecipeName("");
+              }}
             >
-              <PaletteIcon />
-            </IconButton>
-          </Tooltip>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => {
-              setCreateDialogOpen(true);
-              setRecipeName("");
-            }}
-          >
-            New recipe
-          </Button>
-        </>
+              New recipe
+            </Button>
+          </>
         }
       />
 
@@ -232,7 +226,11 @@ export default function Recipaint() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseCreateDialog}>Cancel</Button>
-          <Button variant="contained" onClick={handleCreateRecipe} disabled={!recipeName.trim() || createRecipe.isPending}>
+          <Button
+            variant="contained"
+            onClick={handleCreateRecipe}
+            disabled={!recipeName.trim() || createRecipe.isPending}
+          >
             {createRecipe.isPending ? "Creating..." : "Create"}
           </Button>
         </DialogActions>

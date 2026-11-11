@@ -10,4 +10,3 @@ export interface Message {
   senderUsername?: string;
   isSystemMessage?: boolean;
 }
-

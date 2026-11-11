@@ -35,7 +35,7 @@ export default function Blog() {
         blogBasePath="/blog"
         posts={posts}
         isLoading={isLoading}
-        error={isError ? (error?.message || "Failed to load blog posts") : null}
+        error={isError ? error?.message || "Failed to load blog posts" : null}
         onPostClick={handlePostClick}
         pagination={pagination}
         onPageChange={handlePageChange}

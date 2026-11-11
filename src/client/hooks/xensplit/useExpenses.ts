@@ -1,9 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
-import type {
-  CreateExpenseInput,
-  UpdateExpenseInput,
-} from "./types";
+import type { CreateExpenseInput, UpdateExpenseInput } from "./types";
 
 export function useExpenseImageUrls(groupId: string, expenseId: string | undefined, imageCount: number) {
   return useQuery<{ _id: string; signedUrl: string }[]>({

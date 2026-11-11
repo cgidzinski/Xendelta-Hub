@@ -26,11 +26,7 @@ export default function PasswordField({ showPasswordToggle = true, ...props }: P
         ),
         endAdornment: showPasswordToggle ? (
           <InputAdornment position="end">
-            <IconButton
-              aria-label="toggle password visibility"
-              onClick={handleTogglePasswordVisibility}
-              edge="end"
-            >
+            <IconButton aria-label="toggle password visibility" onClick={handleTogglePasswordVisibility} edge="end">
               {showPassword ? <VisibilityOff /> : <Visibility />}
             </IconButton>
           </InputAdornment>
@@ -39,4 +35,3 @@ export default function PasswordField({ showPasswordToggle = true, ...props }: P
     />
   );
 }
-

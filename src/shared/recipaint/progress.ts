@@ -12,8 +12,7 @@ export function sanitizeCompletedSteps(completedSteps: unknown, stepCount: numbe
   if (!Array.isArray(completedSteps)) return [];
 
   const valid = completedSteps.filter(
-    (index): index is number =>
-      typeof index === "number" && Number.isInteger(index) && index >= 0 && index < stepCount,
+    (index): index is number => typeof index === "number" && Number.isInteger(index) && index >= 0 && index < stepCount,
   );
 
   return [...new Set(valid)].sort((a, b) => a - b);

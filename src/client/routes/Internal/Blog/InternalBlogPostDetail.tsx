@@ -19,7 +19,7 @@ export default function InternalBlogPostDetail() {
       blogBasePath="/internal/blog"
       post={post}
       isLoading={isLoading}
-      error={isError ? (error?.message || "Failed to load blog post") : null}
+      error={isError ? error?.message || "Failed to load blog post" : null}
       onBackClick={handleBackClick}
     />
   );

@@ -1,15 +1,16 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import {
-    Box, Button, Card, FormControlLabel, Stack, Switch, Typography, useMediaQuery,
-} from "@mui/material";
+import { Box, Button, Card, FormControlLabel, Stack, Switch, Typography, useMediaQuery } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import SavingsIcon from "@mui/icons-material/Savings";
 import { useSnackbar } from "notistack";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import type { BookDetailContext } from "./BookDetail";
 import type {
-    ContributionInput, PiggyBankInput, XenBudgetPiggyBankContribution, XenBudgetPiggyBank,
+  ContributionInput,
+  PiggyBankInput,
+  XenBudgetPiggyBankContribution,
+  XenBudgetPiggyBank,
 } from "../../../hooks/xenbudget/types";
 import { useXenBudgetPiggyBanks } from "../../../hooks/xenbudget/usePiggyBanks";
 import PiggyBankCard from "./components/piggyBank/PiggyBankCard";
@@ -23,9 +24,9 @@ import EmptyState from "../../../components/ui/EmptyState";
 
 /** Which bank a contribution dialog is open for, and which way the money is going. */
 interface ContributionTarget {
-    bank: XenBudgetPiggyBank;
-    direction: "in" | "out";
-    contribution?: XenBudgetPiggyBankContribution | null;
+  bank: XenBudgetPiggyBank;
+  direction: "in" | "out";
+  contribution?: XenBudgetPiggyBankContribution | null;
 }
 
 /**
@@ -38,178 +39,205 @@ interface ContributionTarget {
  * still there above it, so leaving is a click on any of them.
  */
 export default function BookPiggyBanks() {
-    const { book } = useOutletContext<BookDetailContext>();
-    // The book's own currency, not the Overview's currency switcher: that picks which of
-    // the currencies present in the ITEMS to tally, and a bank is always denominated in
-    // the book's. Following the switcher would blank the header the moment someone looked
-    // at their USD spending.
-    const currency = book.default_currency;
-    const { enqueueSnackbar } = useSnackbar();
-    const confirm = useConfirm();
+  const { book } = useOutletContext<BookDetailContext>();
+  // The book's own currency, not the Overview's currency switcher: that picks which of
+  // the currencies present in the ITEMS to tally, and a bank is always denominated in
+  // the book's. Following the switcher would blank the header the moment someone looked
+  // at their USD spending.
+  const currency = book.default_currency;
+  const { enqueueSnackbar } = useSnackbar();
+  const confirm = useConfirm();
 
-    const {
-        createBankAsync, isCreatingBank,
-        updateBankAsync, isUpdatingBank,
-        deleteBankAsync, isDeletingBank,
-        addContributionAsync, isAddingContribution,
-        updateContributionAsync, isUpdatingContribution,
-        deleteContributionAsync, isDeletingContribution,
-    } = useXenBudgetPiggyBanks(book._id);
+  const {
+    createBankAsync,
+    isCreatingBank,
+    updateBankAsync,
+    isUpdatingBank,
+    deleteBankAsync,
+    isDeletingBank,
+    addContributionAsync,
+    isAddingContribution,
+    updateContributionAsync,
+    isUpdatingContribution,
+    deleteContributionAsync,
+    isDeletingContribution,
+  } = useXenBudgetPiggyBanks(book._id);
 
-    const [formOpen, setFormOpen] = useState(false);
-    const [editing, setEditing] = useState<XenBudgetPiggyBank | null>(null);
-    const [contributing, setContributing] = useState<ContributionTarget | null>(null);
-    const [showClosed, setShowClosed] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<XenBudgetPiggyBank | null>(null);
+  const [contributing, setContributing] = useState<ContributionTarget | null>(null);
+  const [showClosed, setShowClosed] = useState(false);
 
-    const banks = book.piggy_banks ?? [];
-    const closedCount = banks.filter((g) => g.status !== "active").length;
-    const visible = useMemo(
-        () => sortPiggyBanks(showClosed ? banks : banks.filter((g) => g.status === "active")),
-        [banks, showClosed],
-    );
-    const totals = useMemo(() => bankTotals(banks), [banks]);
+  const banks = book.piggy_banks ?? [];
+  const closedCount = banks.filter((g) => g.status !== "active").length;
+  const visible = useMemo(
+    () => sortPiggyBanks(showClosed ? banks : banks.filter((g) => g.status === "active")),
+    [banks, showClosed],
+  );
+  const totals = useMemo(() => bankTotals(banks), [banks]);
 
-    const isSm = useMediaQuery("(min-width:600px)");
-    const isMd = useMediaQuery("(min-width:900px)");
-    const isXl = useMediaQuery("(min-width:1536px)");
-    const columnCount = isXl ? 4 : isMd ? 3 : isSm ? 2 : 1;
-    // Same fixed-column masonry the Overview's budget cards use: expanding a bank's ledger
-    // only pushes the cards below it in its own column, so nothing jumps sideways.
-    const { columns, measureRef } = useBalancedColumns(visible, columnCount);
+  const isSm = useMediaQuery("(min-width:600px)");
+  const isMd = useMediaQuery("(min-width:900px)");
+  const isXl = useMediaQuery("(min-width:1536px)");
+  const columnCount = isXl ? 4 : isMd ? 3 : isSm ? 2 : 1;
+  // Same fixed-column masonry the Overview's budget cards use: expanding a bank's ledger
+  // only pushes the cards below it in its own column, so nothing jumps sideways.
+  const { columns, measureRef } = useBalancedColumns(visible, columnCount);
 
-    const isBusy = isCreatingBank || isUpdatingBank || isDeletingBank
-        || isAddingContribution || isUpdatingContribution || isDeletingContribution;
+  const isBusy =
+    isCreatingBank ||
+    isUpdatingBank ||
+    isDeletingBank ||
+    isAddingContribution ||
+    isUpdatingContribution ||
+    isDeletingContribution;
 
-    const handleSubmitBank = async (input: PiggyBankInput) => {
-        if (editing) await updateBankAsync({ bankId: editing._id, input });
-        else await createBankAsync(input);
-    };
+  const handleSubmitBank = async (input: PiggyBankInput) => {
+    if (editing) await updateBankAsync({ bankId: editing._id, input });
+    else await createBankAsync(input);
+  };
 
-    const handleSetStatus = async (bank: XenBudgetPiggyBank, status: XenBudgetPiggyBank["status"]) => {
-        try {
-            await updateBankAsync({ bankId: bank._id, input: { status } });
-        } catch (e) {
-            enqueueSnackbar(e instanceof Error ? e.message : "Failed to update bank", { variant: "error" });
-        }
-    };
+  const handleSetStatus = async (bank: XenBudgetPiggyBank, status: XenBudgetPiggyBank["status"]) => {
+    try {
+      await updateBankAsync({ bankId: bank._id, input: { status } });
+    } catch (e) {
+      enqueueSnackbar(e instanceof Error ? e.message : "Failed to update bank", { variant: "error" });
+    }
+  };
 
-    const handleSubmitContribution = async (input: ContributionInput) => {
-        if (!contributing) return;
-        const { bank, contribution } = contributing;
-        if (contribution) {
-            await updateContributionAsync({ bankId: bank._id, contributionId: contribution._id, input });
-        } else {
-            await addContributionAsync({ bankId: bank._id, input });
-        }
-    };
+  const handleSubmitContribution = async (input: ContributionInput) => {
+    if (!contributing) return;
+    const { bank, contribution } = contributing;
+    if (contribution) {
+      await updateContributionAsync({ bankId: bank._id, contributionId: contribution._id, input });
+    } else {
+      await addContributionAsync({ bankId: bank._id, input });
+    }
+  };
 
-    const handleDeleteContribution = async (
-        bank: XenBudgetPiggyBank, contribution: XenBudgetPiggyBankContribution,
-    ) => {
-        const ok = await confirm({
-            title: "Remove this entry?",
-            message: contribution.item_id
-                ? "The transaction it created is deleted too."
-                : "It will be taken off this bank\u2019s total.",
-            confirmLabel: "Remove",
-        });
-        if (!ok) return;
-        try {
-            await deleteContributionAsync({ bankId: bank._id, contributionId: contribution._id });
-        } catch (e) {
-            enqueueSnackbar(e instanceof Error ? e.message : "Failed to remove entry", { variant: "error" });
-        }
-    };
+  const handleDeleteContribution = async (bank: XenBudgetPiggyBank, contribution: XenBudgetPiggyBankContribution) => {
+    const ok = await confirm({
+      title: "Remove this entry?",
+      message: contribution.item_id
+        ? "The transaction it created is deleted too."
+        : "It will be taken off this bank\u2019s total.",
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
+    try {
+      await deleteContributionAsync({ bankId: bank._id, contributionId: contribution._id });
+    } catch (e) {
+      enqueueSnackbar(e instanceof Error ? e.message : "Failed to remove entry", { variant: "error" });
+    }
+  };
 
-    return (
-        <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <Box sx={{ pl: 2, pr: { xs: 2, sm: 3.5 }, pt: 2, pb: 1.5, flexShrink: 0 }}>
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
-                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                        <Typography variant="caption" sx={sectionLabelSx}>Saved so far</Typography>
-                        <Typography variant="h6" noWrap>
-                            {formatCurrency(totals.saved, currency)}
-                            <Typography component="span" variant="body2" color="text.secondary">
-                                {" of "}{formatCurrency(totals.target, currency)}
-                            </Typography>
-                        </Typography>
-                    </Box>
-                    {closedCount > 0 && (
-                        <FormControlLabel
-                            control={<Switch size="small" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />}
-                            label={<Typography variant="caption">Show finished</Typography>}
-                        />
-                    )}
-                    <Button
-                        size="small" variant="contained" startIcon={<AddIcon />}
-                        onClick={() => { setEditing(null); setFormOpen(true); }}
-                    >
-                        New bank
-                    </Button>
-                </Stack>
-            </Box>
-
-            <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pl: 2, pr: { xs: 2, sm: 3.5 }, pb: 2 }}>
-                {visible.length === 0 ? (
-                    <EmptyState
-                        icon={<SavingsIcon />}
-                        title={banks.length === 0 ? "Nothing being saved for yet" : "No banks in progress"}
-                        description="Add a bank — a new car, a trip — and put money into it whenever you like."
-                    />
-                ) : (
-                    <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
-                        <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
-                            {columns.map((col, i) => (
-                                <Stack key={i} spacing={1} sx={{ flex: 1, minWidth: 0 }}>
-                                    {col.map((bank) => (
-                                        <Box key={bank._id} ref={measureRef(bank._id)}>
-                                            <PiggyBankCard
-                                                bank={bank}
-                                                members={book.members}
-                                                categoryRegistry={book.categories}
-                                                onContribute={(g) => setContributing({ bank: g, direction: "in" })}
-                                                onWithdraw={(g) => setContributing({ bank: g, direction: "out" })}
-                                                onEdit={(g) => { setEditing(g); setFormOpen(true); }}
-                                                onSetStatus={handleSetStatus}
-                                                onEditContribution={(g, c) => setContributing({
-                                                    bank: g, direction: c.amount < 0 ? "out" : "in", contribution: c,
-                                                })}
-                                                onDeleteContribution={handleDeleteContribution}
-                                                isBusy={isBusy}
-                                            />
-                                        </Box>
-                                    ))}
-                                </Stack>
-                            ))}
-                        </Box>
-                    </Card>
-                )}
-            </Box>
-
-            <PiggyBankForm
-                open={formOpen}
-                onClose={() => { setFormOpen(false); setEditing(null); }}
-                book={book}
-                bank={editing}
-                onSubmit={handleSubmitBank}
-                isSubmitting={isCreatingBank || isUpdatingBank}
-                onDelete={editing ? () => deleteBankAsync(editing._id) : undefined}
+  return (
+    <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <Box sx={{ pl: 2, pr: { xs: 2, sm: 3.5 }, pt: 2, pb: 1.5, flexShrink: 0 }}>
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Typography variant="caption" sx={sectionLabelSx}>
+              Saved so far
+            </Typography>
+            <Typography variant="h6" noWrap>
+              {formatCurrency(totals.saved, currency)}
+              <Typography component="span" variant="body2" color="text.secondary">
+                {" of "}
+                {formatCurrency(totals.target, currency)}
+              </Typography>
+            </Typography>
+          </Box>
+          {closedCount > 0 && (
+            <FormControlLabel
+              control={<Switch size="small" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />}
+              label={<Typography variant="caption">Show finished</Typography>}
             />
+          )}
+          <Button
+            size="small"
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setEditing(null);
+              setFormOpen(true);
+            }}
+          >
+            New bank
+          </Button>
+        </Stack>
+      </Box>
 
-            {contributing && (
-                <ContributionForm
-                    open
-                    onClose={() => setContributing(null)}
-                    // Read back out of the book rather than held in state: the dialog stays
-                    // open across a save, and a stale copy would check the next withdrawal
-                    // against the balance from before the last one.
-                    bank={banks.find((g) => g._id === contributing.bank._id) ?? contributing.bank}
-                    direction={contributing.direction}
-                    contribution={contributing.contribution}
-                    onSubmit={handleSubmitContribution}
-                    isSubmitting={isAddingContribution || isUpdatingContribution}
-                />
-            )}
-        </Box>
-    );
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pl: 2, pr: { xs: 2, sm: 3.5 }, pb: 2 }}>
+        {visible.length === 0 ? (
+          <EmptyState
+            icon={<SavingsIcon />}
+            title={banks.length === 0 ? "Nothing being saved for yet" : "No banks in progress"}
+            description="Add a bank — a new car, a trip — and put money into it whenever you like."
+          />
+        ) : (
+          <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
+            <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+              {columns.map((col, i) => (
+                <Stack key={i} spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+                  {col.map((bank) => (
+                    <Box key={bank._id} ref={measureRef(bank._id)}>
+                      <PiggyBankCard
+                        bank={bank}
+                        members={book.members}
+                        categoryRegistry={book.categories}
+                        onContribute={(g) => setContributing({ bank: g, direction: "in" })}
+                        onWithdraw={(g) => setContributing({ bank: g, direction: "out" })}
+                        onEdit={(g) => {
+                          setEditing(g);
+                          setFormOpen(true);
+                        }}
+                        onSetStatus={handleSetStatus}
+                        onEditContribution={(g, c) =>
+                          setContributing({
+                            bank: g,
+                            direction: c.amount < 0 ? "out" : "in",
+                            contribution: c,
+                          })
+                        }
+                        onDeleteContribution={handleDeleteContribution}
+                        isBusy={isBusy}
+                      />
+                    </Box>
+                  ))}
+                </Stack>
+              ))}
+            </Box>
+          </Card>
+        )}
+      </Box>
+
+      <PiggyBankForm
+        open={formOpen}
+        onClose={() => {
+          setFormOpen(false);
+          setEditing(null);
+        }}
+        book={book}
+        bank={editing}
+        onSubmit={handleSubmitBank}
+        isSubmitting={isCreatingBank || isUpdatingBank}
+        onDelete={editing ? () => deleteBankAsync(editing._id) : undefined}
+      />
+
+      {contributing && (
+        <ContributionForm
+          open
+          onClose={() => setContributing(null)}
+          // Read back out of the book rather than held in state: the dialog stays
+          // open across a save, and a stale copy would check the next withdrawal
+          // against the balance from before the last one.
+          bank={banks.find((g) => g._id === contributing.bank._id) ?? contributing.bank}
+          direction={contributing.direction}
+          contribution={contributing.contribution}
+          onSubmit={handleSubmitContribution}
+          isSubmitting={isAddingContribution || isUpdatingContribution}
+        />
+      )}
+    </Box>
+  );
 }

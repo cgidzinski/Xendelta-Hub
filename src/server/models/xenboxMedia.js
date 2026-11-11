@@ -17,7 +17,7 @@ var xenboxMediaSchema = new mongoose.Schema({
 });
 
 // Pre-save hook: Generate share token if not exists
-xenboxMediaSchema.pre("save", function(next) {
+xenboxMediaSchema.pre("save", function (next) {
   if (!this.shareToken) {
     // 128 bits from the OS CSPRNG. Links already issued keep working; only new ones change.
     this.shareToken = randomToken(16);
@@ -38,7 +38,7 @@ xenboxMediaSchema.methods.isExpired = function () {
 
 // Pre-delete hook: Delete from GCS when Media document is deleted
 // This handles findOneAndDelete, findByIdAndDelete, deleteOne, etc.
-xenboxMediaSchema.pre(["findOneAndDelete", "deleteOne"], async function() {
+xenboxMediaSchema.pre(["findOneAndDelete", "deleteOne"], async function () {
   const doc = await this.model.findOne(this.getQuery());
   if (doc && doc.filename && doc.uploadedBy) {
     const userId = doc.uploadedBy.toString();
@@ -52,4 +52,3 @@ xenboxMediaSchema.pre(["findOneAndDelete", "deleteOne"], async function() {
 var XenBoxMedia = mongoose.model("XenBoxMedia", xenboxMediaSchema);
 
 module.exports = { XenBoxMedia };
-

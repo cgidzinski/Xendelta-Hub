@@ -93,9 +93,19 @@ mongoConnection.on("connected", async () => {
     registerXenSplitRecurringHandler();
 
     const scheduler = Scheduler.getInstance();
-    scheduler.register({ name: "scheduled-task-dispatcher", everyMs: TICK_INTERVAL_MS, runOnStart: true, handler: runDueTasks });
+    scheduler.register({
+      name: "scheduled-task-dispatcher",
+      everyMs: TICK_INTERVAL_MS,
+      runOnStart: true,
+      handler: runDueTasks,
+    });
     scheduler.register({ name: "xenbox-session-cleanup", everyMs: 30 * 60 * 1000, handler: cleanupOldSessions });
-    scheduler.register({ name: "xenroutine-reminders", everyMs: 60 * 60 * 1000, runOnStart: true, handler: () => runRoutineReminders() });
+    scheduler.register({
+      name: "xenroutine-reminders",
+      everyMs: 60 * 60 * 1000,
+      runOnStart: true,
+      handler: () => runRoutineReminders(),
+    });
     scheduler.start();
   } catch (e) {
     // An error thrown from an event handler would crash the process as an
@@ -116,9 +126,26 @@ const tooMany = { status: false, message: "Too many attempts. Please wait a few 
 // loads and must not be throttled.
 app.use(
   ["/api/auth/login", "/api/auth/signup", "/api/auth/verify-reset-token", "/api/auth/reset-password"],
-  rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, keyGenerator: clientKey, standardHeaders: true, legacyHeaders: false, message: tooMany }),
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 30,
+    keyGenerator: clientKey,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: tooMany,
+  }),
 );
-app.use("/api/auth/forgot-password", rateLimit({ windowMs: 60 * 60 * 1000, limit: 5, keyGenerator: clientKey, standardHeaders: true, legacyHeaders: false, message: tooMany }));
+app.use(
+  "/api/auth/forgot-password",
+  rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 5,
+    keyGenerator: clientKey,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: tooMany,
+  }),
+);
 
 // Liveness/readiness for the process manager and uptime checks.
 app.get("/api/health", (_req: any, res: any) => {
@@ -176,7 +203,7 @@ app.use(
         }
       },
     },
-  })
+  }),
 );
 
 if (Bugsnag.getPlugin("express")) {

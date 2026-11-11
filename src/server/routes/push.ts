@@ -44,7 +44,7 @@ module.exports = function (app: express.Application) {
           userAgent: req.headers["user-agent"] || "",
           lastSeenAt: new Date(),
         },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
+        { upsert: true, new: true, setDefaultsOnInsert: true },
       );
 
       return res.json({
@@ -52,7 +52,7 @@ module.exports = function (app: express.Application) {
         message: "Push subscription saved",
         data: { subscriptionId: subscription._id },
       });
-    }
+    },
   );
 
   app.delete(
@@ -70,6 +70,6 @@ module.exports = function (app: express.Application) {
         message: "Push subscription removed",
         data: {},
       });
-    }
+    },
   );
 };

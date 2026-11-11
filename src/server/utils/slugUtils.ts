@@ -1,9 +1,6 @@
 const { BlogPost } = require("../models/blogPost");
 
-export async function ensureUniqueSlug(
-  slug: string,
-  excludeId: string | null = null
-): Promise<string> {
+export async function ensureUniqueSlug(slug: string, excludeId: string | null = null): Promise<string> {
   let uniqueSlug = slug;
   let counter = 1;
 

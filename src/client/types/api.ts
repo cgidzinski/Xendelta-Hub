@@ -9,4 +9,3 @@ export interface ApiResponse<T = any> {
   data?: T;
   errors?: Array<{ path: string; message: string }>;
 }
-

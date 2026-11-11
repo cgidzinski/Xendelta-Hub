@@ -2,16 +2,16 @@ import { useEffect, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
-import {
-  filtersToParams,
-  type CookMethod,
-  type KitchenFilters,
-  type KitchenLayout,
-} from "@shared/xenkitchen/kitchen";
+import { filtersToParams, type CookMethod, type KitchenFilters, type KitchenLayout } from "@shared/xenkitchen/kitchen";
 
 export type BookRole = "owner" | "editor" | "viewer";
 
-export interface KitchenBookMember { user_id: string; role: BookRole; username: string; avatar: string | null }
+export interface KitchenBookMember {
+  user_id: string;
+  role: BookRole;
+  username: string;
+  avatar: string | null;
+}
 
 export interface KitchenBook {
   _id: string;
@@ -39,7 +39,10 @@ export interface KitchenCategory {
   count: number;
 }
 
-export interface KitchenImage { _id: string; url: string }
+export interface KitchenImage {
+  _id: string;
+  url: string;
+}
 
 export interface KitchenIngredient {
   _id?: string;
@@ -50,7 +53,11 @@ export interface KitchenIngredient {
   section: string;
 }
 
-export interface KitchenStep { _id?: string; text: string; timer_minutes: number | null }
+export interface KitchenStep {
+  _id?: string;
+  text: string;
+  timer_minutes: number | null;
+}
 
 export interface KitchenMethod {
   _id?: string;
@@ -93,12 +100,31 @@ export interface KitchenItem {
   updated_at: string;
 }
 
-export type KitchenItemInput = Partial<Omit<KitchenItem,
-  "_id" | "category" | "layout" | "images" | "share" | "created_at" | "updated_at" | "book" | "my_role" | "created_by" | "updated_by" | "favorite">> & {
+export type KitchenItemInput = Partial<
+  Omit<
+    KitchenItem,
+    | "_id"
+    | "category"
+    | "layout"
+    | "images"
+    | "share"
+    | "created_at"
+    | "updated_at"
+    | "book"
+    | "my_role"
+    | "created_by"
+    | "updated_by"
+    | "favorite"
+  >
+> & {
   image_order?: string[];
 };
 
-export interface IngredientSuggestion { name: string; unit: string; count: number }
+export interface IngredientSuggestion {
+  name: string;
+  unit: string;
+  count: number;
+}
 
 export const kitchenKeys = {
   all: ["xenkitchen"] as const,
@@ -140,7 +166,12 @@ export function useKitchenCategories(book: BookScope = "all") {
   const { data, isLoading } = useQuery({
     queryKey: kitchenKeys.categories(book),
     queryFn: async () =>
-      unwrap(await apiClient.get<ApiResponse<{ categories: KitchenCategory[]; total: number; uncategorised: number }>>(`${base}/categories`, { params: { book } })),
+      unwrap(
+        await apiClient.get<ApiResponse<{ categories: KitchenCategory[]; total: number; uncategorised: number }>>(
+          `${base}/categories`,
+          { params: { book } },
+        ),
+      ),
     placeholderData: keepPreviousData,
   });
   return {
@@ -194,7 +225,11 @@ export function useIngredientSuggestions(q: string, enabled = true) {
   const { data, isFetching } = useQuery({
     queryKey: kitchenKeys.suggest(debounced.toLowerCase()),
     queryFn: async () =>
-      unwrap(await apiClient.get<ApiResponse<{ suggestions: IngredientSuggestion[] }>>(`${base}/ingredients/suggest`, { params: { q: debounced } })).suggestions,
+      unwrap(
+        await apiClient.get<ApiResponse<{ suggestions: IngredientSuggestion[] }>>(`${base}/ingredients/suggest`, {
+          params: { q: debounced },
+        }),
+      ).suggestions,
     enabled,
     staleTime: 60_000,
     placeholderData: keepPreviousData,
@@ -234,7 +269,8 @@ export const useCreateKitchenItem = () =>
 
 export const useUpdateKitchenItem = () =>
   useKitchenMutation(async (v: { id: string; patch: KitchenItemInput }) =>
-    itemData(await apiClient.put(`${base}/items/${v.id}`, v.patch)));
+    itemData(await apiClient.put(`${base}/items/${v.id}`, v.patch)),
+  );
 
 export const useDeleteKitchenItem = () =>
   useKitchenMutation(async (id: string) => (await apiClient.delete(`${base}/items/${id}`)).data);
@@ -251,7 +287,8 @@ export const useUploadKitchenImages = () =>
 
 export const useDeleteKitchenImage = () =>
   useKitchenMutation(async (v: { id: string; imageId: string }) =>
-    itemData(await apiClient.delete(`${base}/items/${v.id}/images/${v.imageId}`)));
+    itemData(await apiClient.delete(`${base}/items/${v.id}/images/${v.imageId}`)),
+  );
 
 export const useShareKitchenItem = () =>
   useKitchenMutation(async (v: { id: string; action: "enable" | "disable" | "rotate" }) => {
@@ -261,16 +298,23 @@ export const useShareKitchenItem = () =>
   });
 
 export const useBulkMoveKitchenItems = () =>
-  useKitchenMutation(async (v: { ids: string[]; category_id: string | null }) =>
-    (await apiClient.put(`${base}/items/bulk/category`, v)).data);
+  useKitchenMutation(
+    async (v: { ids: string[]; category_id: string | null }) =>
+      (await apiClient.put(`${base}/items/bulk/category`, v)).data,
+  );
 
 export const useBulkDeleteKitchenItems = () =>
   useKitchenMutation(async (ids: string[]) => (await apiClient.post(`${base}/items/bulk/delete`, { ids })).data);
 
 export const useClonePublicKitchenItem = () =>
   useKitchenMutation(async (v: { token: string; itemId?: string; book_id?: string }) =>
-    itemData(await apiClient.post(v.itemId ? `${base}/public/book/${v.token}/items/${v.itemId}/clone` : `${base}/public/${v.token}/clone`,
-      v.book_id ? { book_id: v.book_id } : {})));
+    itemData(
+      await apiClient.post(
+        v.itemId ? `${base}/public/book/${v.token}/items/${v.itemId}/clone` : `${base}/public/${v.token}/clone`,
+        v.book_id ? { book_id: v.book_id } : {},
+      ),
+    ),
+  );
 
 export interface PublicBook {
   book: { name: string; description: string; color: string; icon: string };
@@ -292,7 +336,11 @@ export function usePublicKitchenBookItem(token: string | undefined, itemId: stri
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: kitchenKeys.publicBookItem(token ?? "", itemId ?? ""),
     queryFn: async () =>
-      unwrap(await apiClient.get<ApiResponse<{ item: KitchenItem; book: { name: string } }>>(`${base}/public/book/${token}/items/${itemId}`)),
+      unwrap(
+        await apiClient.get<ApiResponse<{ item: KitchenItem; book: { name: string } }>>(
+          `${base}/public/book/${token}/items/${itemId}`,
+        ),
+      ),
     enabled: !!token && !!itemId,
     retry: false,
   });
@@ -301,41 +349,55 @@ export function usePublicKitchenBookItem(token: string | undefined, itemId: stri
 
 export const useToggleKitchenFavorite = () =>
   useKitchenMutation(async (v: { id: string; on: boolean }) =>
-    itemData(await (v.on ? apiClient.post(`${base}/items/${v.id}/favorite`) : apiClient.delete(`${base}/items/${v.id}/favorite`))));
+    itemData(
+      await (v.on
+        ? apiClient.post(`${base}/items/${v.id}/favorite`)
+        : apiClient.delete(`${base}/items/${v.id}/favorite`)),
+    ),
+  );
 
 export const useMoveKitchenItem = () =>
   useKitchenMutation(async (v: { id: string; book_id: string }) =>
-    itemData(await apiClient.put(`${base}/items/${v.id}/move`, { book_id: v.book_id })));
+    itemData(await apiClient.put(`${base}/items/${v.id}/move`, { book_id: v.book_id })),
+  );
 
 export const useCopyKitchenItem = () =>
   useKitchenMutation(async (v: { id: string; book_id: string }) =>
-    itemData(await apiClient.post(`${base}/items/${v.id}/copy`, { book_id: v.book_id })));
+    itemData(await apiClient.post(`${base}/items/${v.id}/copy`, { book_id: v.book_id })),
+  );
 
 type BookResult = { book: KitchenBook };
 const bookData = (r: { data: ApiResponse<BookResult> }) => unwrap(r);
 
 export const useCreateKitchenBook = () =>
   useKitchenMutation(async (v: { name: string; icon?: string; color?: string; description?: string }) =>
-    bookData(await apiClient.post(`${base}/books`, v)));
+    bookData(await apiClient.post(`${base}/books`, v)),
+  );
 
 export const useUpdateKitchenBook = () =>
-  useKitchenMutation(async (v: { id: string; patch: Partial<Pick<KitchenBook, "name" | "icon" | "color" | "description">> }) =>
-    bookData(await apiClient.put(`${base}/books/${v.id}`, v.patch)));
+  useKitchenMutation(
+    async (v: { id: string; patch: Partial<Pick<KitchenBook, "name" | "icon" | "color" | "description">> }) =>
+      bookData(await apiClient.put(`${base}/books/${v.id}`, v.patch)),
+  );
 
 export const useDeleteKitchenBook = () =>
   useKitchenMutation(async (id: string) => (await apiClient.delete(`${base}/books/${id}`)).data);
 
 export const useAddKitchenBookMembers = () =>
   useKitchenMutation(async (v: { id: string; userIds: string[]; role: "editor" | "viewer" }) =>
-    bookData(await apiClient.post(`${base}/books/${v.id}/members`, { userIds: v.userIds, role: v.role })));
+    bookData(await apiClient.post(`${base}/books/${v.id}/members`, { userIds: v.userIds, role: v.role })),
+  );
 
 export const useSetKitchenBookRole = () =>
   useKitchenMutation(async (v: { id: string; userId: string; role: BookRole }) =>
-    bookData(await apiClient.put(`${base}/books/${v.id}/members/${v.userId}`, { role: v.role })));
+    bookData(await apiClient.put(`${base}/books/${v.id}/members/${v.userId}`, { role: v.role })),
+  );
 
 export const useRemoveKitchenBookMember = () =>
-  useKitchenMutation(async (v: { id: string; userId: string }) =>
-    (await apiClient.delete(`${base}/books/${v.id}/members/${v.userId}`)).data);
+  useKitchenMutation(
+    async (v: { id: string; userId: string }) =>
+      (await apiClient.delete(`${base}/books/${v.id}/members/${v.userId}`)).data,
+  );
 
 export const useShareKitchenBook = () =>
   useKitchenMutation(async (v: { id: string; action: "enable" | "disable" | "rotate" }) => {
@@ -349,17 +411,23 @@ export const bookShareUrlFor = (token: string) => `${window.location.origin}/k/b
 export const canEditBook = (role: BookRole | null | undefined) => role === "owner" || role === "editor";
 
 export const useCreateKitchenCategory = () =>
-  useKitchenMutation(async (v: { book_id: string; name: string; icon?: string; color?: string; layout?: KitchenLayout }) =>
-    (await apiClient.post(`${base}/categories`, v)).data);
+  useKitchenMutation(
+    async (v: { book_id: string; name: string; icon?: string; color?: string; layout?: KitchenLayout }) =>
+      (await apiClient.post(`${base}/categories`, v)).data,
+  );
 
 export const useUpdateKitchenCategory = () =>
-  useKitchenMutation(async (v: { id: string; patch: Partial<Pick<KitchenCategory, "name" | "icon" | "color" | "layout">> }) =>
-    (await apiClient.put(`${base}/categories/${v.id}`, v.patch)).data);
+  useKitchenMutation(
+    async (v: { id: string; patch: Partial<Pick<KitchenCategory, "name" | "icon" | "color" | "layout">> }) =>
+      (await apiClient.put(`${base}/categories/${v.id}`, v.patch)).data,
+  );
 
 export const useDeleteKitchenCategory = () =>
   useKitchenMutation(async (id: string) => (await apiClient.delete(`${base}/categories/${id}`)).data);
 
 export const useReorderKitchenCategories = () =>
-  useKitchenMutation(async (v: { book_id: string; ids: string[] }) => (await apiClient.put(`${base}/categories/order`, v)).data);
+  useKitchenMutation(
+    async (v: { book_id: string; ids: string[] }) => (await apiClient.put(`${base}/categories/order`, v)).data,
+  );
 
 export const shareUrlFor = (token: string) => `${window.location.origin}/k/${token}`;

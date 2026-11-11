@@ -22,9 +22,9 @@ export function isDeleted(row: SoftDeletable): boolean {
 }
 
 export function liveOnly<T extends SoftDeletable>(rows: T[]): T[] {
-    return rows.filter((row) => !isDeleted(row));
+  return rows.filter((row) => !isDeleted(row));
 }
 
 export function deletedOnly<T extends SoftDeletable>(rows: T[]): T[] {
-    return rows.filter(isDeleted);
+  return rows.filter(isDeleted);
 }

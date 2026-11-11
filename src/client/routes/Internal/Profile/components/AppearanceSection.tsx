@@ -14,53 +14,53 @@ import type { ThemePreference } from "../../../../hooks/user/useUserProfile";
  * choice should actually track the OS.
  */
 export default function AppearanceSection() {
-    const { profile, updateProfile, isUpdating } = useUserProfile();
-    const { enqueueSnackbar } = useSnackbar();
-    const prefersDark = useMediaQuery("(prefers-color-scheme: dark)");
+  const { profile, updateProfile, isUpdating } = useUserProfile();
+  const { enqueueSnackbar } = useSnackbar();
+  const prefersDark = useMediaQuery("(prefers-color-scheme: dark)");
 
-    const stored: ThemePreference = profile?.theme ?? "";
-    const effective = stored === "" ? "dark" : stored === "system" ? (prefersDark ? "dark" : "light") : stored;
+  const stored: ThemePreference = profile?.theme ?? "";
+  const effective = stored === "" ? "dark" : stored === "system" ? (prefersDark ? "dark" : "light") : stored;
 
-    const save = async (value: ThemePreference) => {
-        try {
-            await updateProfile({ theme: value });
-        } catch (e) {
-            enqueueSnackbar(e instanceof Error ? e.message : "Could not save your theme", { variant: "error" });
-        }
-    };
+  const save = async (value: ThemePreference) => {
+    try {
+      await updateProfile({ theme: value });
+    } catch (e) {
+      enqueueSnackbar(e instanceof Error ? e.message : "Could not save your theme", { variant: "error" });
+    }
+  };
 
-    return (
-        <Stack spacing={1.5}>
-            <Typography variant="body2" color="text.secondary">
-                {stored === ""
-                    ? "Defaulting to dark until you choose otherwise."
-                    : stored === "system"
-                        ? `Following your device, which is currently ${effective}.`
-                        : `Set by you to ${stored}.`}{" "}
-            </Typography>
-            <ToggleButtonGroup
-                exclusive
-                size="small"
-                value={stored}
-                disabled={isUpdating}
-                // null means the active button was clicked again; keep the current value
-                // rather than dropping into an unset state the server has no meaning for.
-                onChange={(_, value: ThemePreference | null) => value !== null && save(value)}
-                aria-label="Theme"
-            >
-                <ToggleButton value="system" aria-label="Follow my device">
-                    <SettingsBrightnessIcon fontSize="small" sx={{ mr: 0.75 }} />
-                    System
-                </ToggleButton>
-                <ToggleButton value="light" aria-label="Light theme">
-                    <LightModeIcon fontSize="small" sx={{ mr: 0.75 }} />
-                    Light
-                </ToggleButton>
-                <ToggleButton value="dark" aria-label="Dark theme">
-                    <DarkModeIcon fontSize="small" sx={{ mr: 0.75 }} />
-                    Dark
-                </ToggleButton>
-            </ToggleButtonGroup>
-        </Stack>
-    );
+  return (
+    <Stack spacing={1.5}>
+      <Typography variant="body2" color="text.secondary">
+        {stored === ""
+          ? "Defaulting to dark until you choose otherwise."
+          : stored === "system"
+            ? `Following your device, which is currently ${effective}.`
+            : `Set by you to ${stored}.`}{" "}
+      </Typography>
+      <ToggleButtonGroup
+        exclusive
+        size="small"
+        value={stored}
+        disabled={isUpdating}
+        // null means the active button was clicked again; keep the current value
+        // rather than dropping into an unset state the server has no meaning for.
+        onChange={(_, value: ThemePreference | null) => value !== null && save(value)}
+        aria-label="Theme"
+      >
+        <ToggleButton value="system" aria-label="Follow my device">
+          <SettingsBrightnessIcon fontSize="small" sx={{ mr: 0.75 }} />
+          System
+        </ToggleButton>
+        <ToggleButton value="light" aria-label="Light theme">
+          <LightModeIcon fontSize="small" sx={{ mr: 0.75 }} />
+          Light
+        </ToggleButton>
+        <ToggleButton value="dark" aria-label="Dark theme">
+          <DarkModeIcon fontSize="small" sx={{ mr: 0.75 }} />
+          Dark
+        </ToggleButton>
+      </ToggleButtonGroup>
+    </Stack>
+  );
 }

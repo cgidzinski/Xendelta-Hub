@@ -45,7 +45,7 @@ export default function ConversationDetail() {
     leaveConversation: leaveConversationMutation,
     isLeaving,
   } = useUserMessages();
-  
+
   const { conversation, isLoading } = useConversation(conversationId);
   const { socket, joinConversation, leaveConversation } = useSocket();
 
@@ -76,16 +76,13 @@ export default function ConversationDetail() {
     }
   }, [conversation, conversationId]);
 
-
-
-
   const handleSendMessage = () => {
     if (!conversationId || !messageText.trim() || !conversation) return;
 
     const messageToSend = messageText.trim();
     sendMessage(conversationId, messageToSend);
     setMessageText("");
-    
+
     // Optimistically update local conversation state immediately
     // Optimistic update is handled by the sendMessage mutation in useUserMessages hook
   };
@@ -140,10 +137,9 @@ export default function ConversationDetail() {
     if (message.from === profile?._id) {
       return profile?.avatar;
     }
-    const participant: ParticipantInfo | undefined = conversation?.participantInfo?.find(p => p._id === message.from);
+    const participant: ParticipantInfo | undefined = conversation?.participantInfo?.find((p) => p._id === message.from);
     return participant?.avatar;
   };
-
 
   const getParticipantDisplay = (participantId: string): string => {
     return getParticipantDisplayById(participantId, profile?._id, conversation?.participantInfo);
@@ -245,83 +241,82 @@ export default function ConversationDetail() {
         isSending={isSendingMessage}
       />
 
-        {/* Message Options Dialog */}
-        <Dialog open={messageOptionsOpen} onClose={() => setMessageOptionsOpen(false)} maxWidth="md" fullWidth>
-          <DialogTitle>Message Options</DialogTitle>
-          <DialogContent>
-            <Box sx={{ mb: 3 }}>
-              <Button
-                variant="outlined"
-                color="error"
-                onClick={handleDeleteConfirm}
-                disabled={isDeletingMessage}
-                fullWidth
-                sx={{ mb: 2 }}
-              >
-                {isDeletingMessage ? "Deleting..." : "Delete Message"}
-              </Button>
-            </Box>
-            <Box>
-              <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600, mb: 1 }}>
-                Message JSON:
-              </Typography>
-              <Box
+      {/* Message Options Dialog */}
+      <Dialog open={messageOptionsOpen} onClose={() => setMessageOptionsOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Message Options</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mb: 3 }}>
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={handleDeleteConfirm}
+              disabled={isDeletingMessage}
+              fullWidth
+              sx={{ mb: 2 }}
+            >
+              {isDeletingMessage ? "Deleting..." : "Delete Message"}
+            </Button>
+          </Box>
+          <Box>
+            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600, mb: 1 }}>
+              Message JSON:
+            </Typography>
+            <Box
+              sx={{
+                backgroundColor: "background.default",
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: 1,
+                p: 2,
+                maxHeight: "400px",
+                overflow: "auto",
+              }}
+            >
+              <Typography
+                component="pre"
                 sx={{
-                  backgroundColor: "background.default",
-                  border: "1px solid",
-                  borderColor: "divider",
-                  borderRadius: 1,
-                  p: 2,
-                  maxHeight: "400px",
-                  overflow: "auto",
+                  fontFamily: "monospace",
+                  fontSize: "0.75rem",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  margin: 0,
                 }}
               >
-                <Typography
-                  component="pre"
-                  sx={{
-                    fontFamily: "monospace",
-                    fontSize: "0.75rem",
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                    margin: 0,
-                  }}
-                >
-                  {selectedMessage ? JSON.stringify(selectedMessage, null, 2) : ""}
-                </Typography>
-              </Box>
+                {selectedMessage ? JSON.stringify(selectedMessage, null, 2) : ""}
+              </Typography>
             </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setMessageOptionsOpen(false)}>Close</Button>
-          </DialogActions>
-        </Dialog>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMessageOptionsOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
 
-        {/* Settings modal */}
-        <SettingsModal
-          open={settingsModalOpen}
-          onClose={() => setSettingsModalOpen(false)}
-          conversation={conversation}
-          onUpdateName={handleUpdateName}
-          isUpdating={isUpdatingName}
-        />
+      {/* Settings modal */}
+      <SettingsModal
+        open={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+        conversation={conversation}
+        onUpdateName={handleUpdateName}
+        isUpdating={isUpdatingName}
+      />
 
-        {/* Users modal */}
-        <UsersModal
-          open={usersModalOpen}
-          onClose={() => setUsersModalOpen(false)}
-          conversation={conversation}
-          profileId={profile?._id}
-          getParticipantDisplay={getParticipantDisplay}
-          onLeave={handleLeaveConversation}
-          isLeaving={isLeaving}
-          onAddParticipant={(participantIds) => {
-            if (conversationId) {
-              addParticipants(conversationId, participantIds);
-            }
-          }}
-          isAddingParticipants={isAddingParticipants}
-        />
+      {/* Users modal */}
+      <UsersModal
+        open={usersModalOpen}
+        onClose={() => setUsersModalOpen(false)}
+        conversation={conversation}
+        profileId={profile?._id}
+        getParticipantDisplay={getParticipantDisplay}
+        onLeave={handleLeaveConversation}
+        isLeaving={isLeaving}
+        onAddParticipant={(participantIds) => {
+          if (conversationId) {
+            addParticipants(conversationId, participantIds);
+          }
+        }}
+        isAddingParticipants={isAddingParticipants}
+      />
     </Box>
   );
 }
-

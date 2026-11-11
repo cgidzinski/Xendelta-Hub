@@ -114,10 +114,7 @@ describe("computeDueDates", () => {
   it("stops at end_date (inclusive)", () => {
     const task = makeTask({ end_date: utc("2026-01-03T09:00:00.000Z") });
     const due = computeDueDates(task, utc("2026-01-10T00:00:00.000Z"));
-    expect(due.map((d) => d.toISOString())).toEqual([
-      "2026-01-02T09:00:00.000Z",
-      "2026-01-03T09:00:00.000Z",
-    ]);
+    expect(due.map((d) => d.toISOString())).toEqual(["2026-01-02T09:00:00.000Z", "2026-01-03T09:00:00.000Z"]);
   });
 
   it("stops at max_runs", () => {
@@ -129,8 +126,9 @@ describe("computeDueDates", () => {
   it("one-shot: due exactly once at run_at", () => {
     const task = makeTask({ frequency: null, run_count: 0, run_at: utc("2026-01-05T00:00:00.000Z") });
     expect(computeDueDates(task, utc("2026-01-04T00:00:00.000Z"))).toEqual([]);
-    expect(computeDueDates(task, utc("2026-01-06T00:00:00.000Z")).map((d) => d.toISOString()))
-      .toEqual(["2026-01-05T00:00:00.000Z"]);
+    expect(computeDueDates(task, utc("2026-01-06T00:00:00.000Z")).map((d) => d.toISOString())).toEqual([
+      "2026-01-05T00:00:00.000Z",
+    ]);
   });
 });
 
@@ -152,7 +150,7 @@ describe("applyAdvance", () => {
 
   it("retires when the next run passes end_date", () => {
     const task = makeTask({ end_date: utc("2026-01-03T09:00:00.000Z") });
-    expect(applyAdvance(task, 1).enabled).toBe(true);  // next = Jan 3, still within
+    expect(applyAdvance(task, 1).enabled).toBe(true); // next = Jan 3, still within
     expect(applyAdvance(task, 2).enabled).toBe(false); // next = Jan 4, past end
   });
 

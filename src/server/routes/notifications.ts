@@ -13,10 +13,7 @@ module.exports = function (app: express.Application) {
     const userId = (req as AuthenticatedRequest).user!._id;
     await User.findByIdAndUpdate(userId, { notificationsLastCheckedAt: new Date() });
 
-    const notifications = await Notification.find({ userId })
-      .sort({ time: -1 })
-      .limit(10)
-      .exec();
+    const notifications = await Notification.find({ userId }).sort({ time: -1 }).limit(10).exec();
 
     return res.json({
       status: true,
@@ -38,10 +35,7 @@ module.exports = function (app: express.Application) {
       const socketManager = SocketManager.getInstance();
       socketManager.notifyNotificationUpdate(userId.toString(), "all", { unread: false });
 
-      const notifications = await Notification.find({ userId })
-        .sort({ time: -1 })
-        .limit(10)
-        .exec();
+      const notifications = await Notification.find({ userId }).sort({ time: -1 }).limit(10).exec();
 
       return res.json({
         status: true,
@@ -50,7 +44,7 @@ module.exports = function (app: express.Application) {
           notifications: notifications,
         },
       });
-    }
+    },
   );
 
   app.put(
@@ -63,7 +57,7 @@ module.exports = function (app: express.Application) {
       const notification = await Notification.findOneAndUpdate(
         { _id: notificationId, userId },
         { unread: false },
-        { new: true }
+        { new: true },
       );
 
       if (notification) {
@@ -83,7 +77,7 @@ module.exports = function (app: express.Application) {
           message: "Notification not found",
         });
       }
-    }
+    },
   );
 
   // Delete (dismiss) a single notification
@@ -111,7 +105,7 @@ module.exports = function (app: express.Application) {
           message: "Notification not found",
         });
       }
-    }
+    },
   );
 
   // Delete (clear) all notifications for the current user
@@ -132,7 +126,7 @@ module.exports = function (app: express.Application) {
         message: "All notifications cleared",
         data: {},
       });
-    }
+    },
   );
 
   // Admin: Send notification to all users
@@ -181,7 +175,7 @@ module.exports = function (app: express.Application) {
           pushCount,
         },
       });
-    }
+    },
   );
 
   // Admin: Send a one-off notification to a single user on chosen channels — used by the
@@ -207,6 +201,6 @@ module.exports = function (app: express.Application) {
         message: "Notification sent",
         data: { result },
       });
-    }
+    },
   );
 };

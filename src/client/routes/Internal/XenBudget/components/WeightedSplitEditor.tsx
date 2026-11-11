@@ -1,6 +1,12 @@
 import {
-    Avatar, Box, InputAdornment, Stack, TextField, ToggleButton,
-    ToggleButtonGroup, Typography,
+  Avatar,
+  Box,
+  InputAdornment,
+  Stack,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
 } from "@mui/material";
 import type { ShareType, XenBudgetMember, XenBudgetLabel } from "../../../../hooks/xenbudget/types";
 import { formatCurrency, getCurrencySymbol } from "../currency";
@@ -9,41 +15,40 @@ import { resolveLabelColor } from "./LabelChip";
 import LabelPicker from "./LabelPicker";
 
 export interface SplitDraft {
-    key: string;
-    /** Raw text, so a half-typed "12." isn't clobbered mid-keystroke. */
-    value: string;
+  key: string;
+  /** Raw text, so a half-typed "12." isn't clobbered mid-keystroke. */
+  value: string;
 }
 
 interface WeightedSplitEditorProps {
-    splitType: ShareType;
-    onSplitTypeChange: (t: ShareType) => void;
-    selected: SplitDraft[];
-    onSelectedChange: (s: SplitDraft[]) => void;
-    amount: number;
-    currency: string;
-    /**
-     * People come from a fixed roster you tick; categories are free text you can invent
-     * on the spot. Everything else about the two is identical.
-     */
-    mode: { kind: "people"; members: XenBudgetMember[] }
-    | { kind: "categories"; registry: XenBudgetLabel[] };
-    /**
-     * For pickers with no single amount to divide — the CSV import's default owners apply
-     * to every row at once. The split-type toggle and the per-part money are suppressed,
-     * since neither means anything without an amount.
-     */
-    amountless?: boolean;
-    /**
-     * For rules, which apply to items of any amount: only "even" and "percent" splits are
-     * offered (no exact amounts), and the even split never shows a per-part money figure.
-     */
-    noAmount?: boolean;
-    /**
-     * Renders only rows already in `selected`, with no checkbox/`Autocomplete` to change
-     * who or what is included — for a second "now configure the split" step that follows a
-     * dedicated picker step, so the same people/categories aren't picked twice.
-     */
-    hidePicker?: boolean;
+  splitType: ShareType;
+  onSplitTypeChange: (t: ShareType) => void;
+  selected: SplitDraft[];
+  onSelectedChange: (s: SplitDraft[]) => void;
+  amount: number;
+  currency: string;
+  /**
+   * People come from a fixed roster you tick; categories are free text you can invent
+   * on the spot. Everything else about the two is identical.
+   */
+  mode: { kind: "people"; members: XenBudgetMember[] } | { kind: "categories"; registry: XenBudgetLabel[] };
+  /**
+   * For pickers with no single amount to divide — the CSV import's default owners apply
+   * to every row at once. The split-type toggle and the per-part money are suppressed,
+   * since neither means anything without an amount.
+   */
+  amountless?: boolean;
+  /**
+   * For rules, which apply to items of any amount: only "even" and "percent" splits are
+   * offered (no exact amounts), and the even split never shows a per-part money figure.
+   */
+  noAmount?: boolean;
+  /**
+   * Renders only rows already in `selected`, with no checkbox/`Autocomplete` to change
+   * who or what is included — for a second "now configure the split" step that follows a
+   * dedicated picker step, so the same people/categories aren't picked twice.
+   */
+  hidePicker?: boolean;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -57,234 +62,274 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * quietly put the per-person or per-category figures out of step with the book total.
  */
 export default function WeightedSplitEditor({
-    splitType, onSplitTypeChange, selected, onSelectedChange, amount, currency, mode,
-    amountless = false, noAmount = false, hidePicker = false,
+  splitType,
+  onSplitTypeChange,
+  selected,
+  onSelectedChange,
+  amount,
+  currency,
+  mode,
+  amountless = false,
+  noAmount = false,
+  hidePicker = false,
 }: WeightedSplitEditorProps) {
-    const keys = selected.map((s) => s.key);
+  const keys = selected.map((s) => s.key);
 
-    const toggle = (key: string) => {
-        if (keys.includes(key)) onSelectedChange(selected.filter((s) => s.key !== key));
-        else onSelectedChange([...selected, { key, value: "" }]);
+  const toggle = (key: string) => {
+    if (keys.includes(key)) onSelectedChange(selected.filter((s) => s.key !== key));
+    else onSelectedChange([...selected, { key, value: "" }]);
+  };
+
+  const setValue = (key: string, raw: string) => {
+    const clean = sanitizeAmount(raw);
+    if (clean === null) return;
+    onSelectedChange(selected.map((s) => (s.key === key ? { ...s, value: clean } : s)));
+  };
+
+  const entered = selected.reduce((acc, s) => acc + (parseFloat(s.value) || 0), 0);
+  const perPart = selected.length > 0 ? amount / selected.length : 0;
+
+  const summary = (() => {
+    if (amountless || (noAmount && splitType === "equal")) {
+      if (selected.length === 0) {
+        return mode.kind === "people"
+          ? { text: "Pick at least one person", error: true }
+          : { text: "Uncategorised", error: false };
+      }
+      if (selected.length === 1) {
+        return { text: "", error: false };
+      }
+      return {
+        text: `Split evenly between ${selected.length} ${mode.kind === "people" ? "people" : "categories"}`,
+        error: false,
+      };
+    }
+    if (selected.length === 0) {
+      return mode.kind === "people"
+        ? { text: "Pick at least one person", error: true }
+        : // An uncategorised item is a legitimate state, not an error — it's exactly
+          // what the importer leaves behind for you to work through.
+          { text: "Uncategorised", error: false };
+    }
+    if (splitType === "equal") return { text: `${formatCurrency(round2(perPart), currency)} each`, error: false };
+    if (splitType === "percent") {
+      const diff = round2(100 - entered);
+      if (Math.abs(diff) < 0.01) return { text: "100% allocated", error: false };
+      return { text: diff > 0 ? `${round2(diff)}% left to allocate` : `${round2(-diff)}% over`, error: true };
+    }
+    const diff = round2(amount - entered);
+    if (Math.abs(diff) < 0.01) return { text: "Fully allocated", error: false };
+    return {
+      text: diff > 0 ? `${formatCurrency(diff, currency)} left to allocate` : `${formatCurrency(-diff, currency)} over`,
+      error: true,
     };
+  })();
 
-    const setValue = (key: string, raw: string) => {
-        const clean = sanitizeAmount(raw);
-        if (clean === null) return;
-        onSelectedChange(selected.map((s) => (s.key === key ? { ...s, value: clean } : s)));
-    };
+  const valueField = (draft: SplitDraft) => (
+    <TextField
+      size="small"
+      value={draft.value}
+      onChange={(e) => setValue(draft.key, e.target.value)}
+      sx={{ width: 120 }}
+      slotProps={{
+        htmlInput: { inputMode: "decimal" },
+        input:
+          splitType === "percent"
+            ? { endAdornment: <InputAdornment position="end">%</InputAdornment> }
+            : { startAdornment: <InputAdornment position="start">{getCurrencySymbol(currency)}</InputAdornment> },
+      }}
+    />
+  );
 
-    const entered = selected.reduce((acc, s) => acc + (parseFloat(s.value) || 0), 0);
-    const perPart = selected.length > 0 ? amount / selected.length : 0;
+  // The even split shows the same textbox shape as exact/percent, just read-only.
+  const evenValue = noAmount
+    ? selected.length > 0
+      ? String(Math.round((100 / selected.length) * 100) / 100)
+      : ""
+    : String(round2(perPart));
+  const evenField = () => (
+    <TextField
+      size="small"
+      value={evenValue}
+      disabled
+      sx={{ width: 120 }}
+      slotProps={{
+        input: noAmount
+          ? { endAdornment: <InputAdornment position="end">%</InputAdornment> }
+          : { startAdornment: <InputAdornment position="start">{getCurrencySymbol(currency)}</InputAdornment> },
+      }}
+    />
+  );
 
-    const summary = (() => {
-        if (amountless || (noAmount && splitType === "equal")) {
-            if (selected.length === 0) {
-                return mode.kind === "people"
-                    ? { text: "Pick at least one person", error: true }
-                    : { text: "Uncategorised", error: false };
-            }
-            if (selected.length === 1) {
-                return { text: "", error: false };
-            }
-            return {
-                text: `Split evenly between ${selected.length} ${mode.kind === "people" ? "people" : "categories"}`,
-                error: false,
-            };
-        }
-        if (selected.length === 0) {
-            return mode.kind === "people"
-                ? { text: "Pick at least one person", error: true }
-                // An uncategorised item is a legitimate state, not an error — it's exactly
-                // what the importer leaves behind for you to work through.
-                : { text: "Uncategorised", error: false };
-        }
-        if (splitType === "equal") return { text: `${formatCurrency(round2(perPart), currency)} each`, error: false };
-        if (splitType === "percent") {
-            const diff = round2(100 - entered);
-            if (Math.abs(diff) < 0.01) return { text: "100% allocated", error: false };
-            return { text: diff > 0 ? `${round2(diff)}% left to allocate` : `${round2(-diff)}% over`, error: true };
-        }
-        const diff = round2(amount - entered);
-        if (Math.abs(diff) < 0.01) return { text: "Fully allocated", error: false };
-        return {
-            text: diff > 0
-                ? `${formatCurrency(diff, currency)} left to allocate`
-                : `${formatCurrency(-diff, currency)} over`,
-            error: true,
-        };
-    })();
+  return (
+    <Box>
+      {!hidePicker && mode.kind === "people" && (
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1 }}>
+          {mode.members.map((m) => {
+            const isSelected = keys.includes(m.user_id);
+            return (
+              <Box
+                key={m.user_id}
+                onClick={() => toggle(m.user_id)}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                  px: 1.5,
+                  py: 0.75,
+                  borderRadius: 2,
+                  cursor: "pointer",
+                  bgcolor: "action.hover",
+                  color: "text.primary",
+                  border: isSelected ? "2px solid" : "2px solid transparent",
+                  borderColor: isSelected ? "primary.main" : "transparent",
+                  transition: "all 0.2s",
+                }}
+              >
+                <Avatar src={m.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
+                  {m.username[0]?.toUpperCase()}
+                </Avatar>
+                <Typography variant="caption">{m.username}</Typography>
+              </Box>
+            );
+          })}
+        </Box>
+      )}
 
-    const valueField = (draft: SplitDraft) => (
-        <TextField
-            size="small" value={draft.value}
-            onChange={(e) => setValue(draft.key, e.target.value)}
-            sx={{ width: 120 }}
-            slotProps={{
-                htmlInput: { inputMode: "decimal" },
-                input: splitType === "percent"
-                    ? { endAdornment: <InputAdornment position="end">%</InputAdornment> }
-                    : { startAdornment: <InputAdornment position="start">{getCurrencySymbol(currency)}</InputAdornment> },
-            }}
-        />
-    );
-
-    // The even split shows the same textbox shape as exact/percent, just read-only.
-    const evenValue = noAmount
-        ? (selected.length > 0 ? String(Math.round((100 / selected.length) * 100) / 100) : "")
-        : String(round2(perPart));
-    const evenField = () => (
-        <TextField
-            size="small" value={evenValue} disabled sx={{ width: 120 }}
-            slotProps={{
-                input: noAmount
-                    ? { endAdornment: <InputAdornment position="end">%</InputAdornment> }
-                    : { startAdornment: <InputAdornment position="start">{getCurrencySymbol(currency)}</InputAdornment> },
-            }}
-        />
-    );
-
-    return (
-        <Box>
-            {!hidePicker && mode.kind === "people" && (
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1 }}>
-                    {mode.members.map((m) => {
-                        const isSelected = keys.includes(m.user_id);
-                        return (
-                            <Box
-                                key={m.user_id}
-                                onClick={() => toggle(m.user_id)}
-                                sx={{
-                                    display: "flex", alignItems: "center", gap: 1,
-                                    px: 1.5, py: 0.75, borderRadius: 2, cursor: "pointer",
-                                    bgcolor: "action.hover", color: "text.primary",
-                                    border: isSelected ? "2px solid" : "2px solid transparent",
-                                    borderColor: isSelected ? "primary.main" : "transparent",
-                                    transition: "all 0.2s",
-                                }}
-                            >
-                                <Avatar src={m.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
-                                    {m.username[0]?.toUpperCase()}
-                                </Avatar>
-                                <Typography variant="caption">{m.username}</Typography>
-                            </Box>
-                        );
-                    })}
-                </Box>
-            )}
-
-            {!hidePicker && mode.kind === "categories" && (
-                /* Closed, not freeSolo: a typed name would live on the item and nowhere
+      {!hidePicker && mode.kind === "categories" && (
+        /* Closed, not freeSolo: a typed name would live on the item and nowhere
                 else - absent from the filter, from Settings and from every rule's
                 conditions - so categories come from the book's registry and are managed
                 there. */
-                <LabelPicker
-                    multiple
-                    kind="category"
-                    size="small"
-                    registry={mode.registry}
-                    value={keys}
-                    onChange={(v) => {
-                        // Keep any weight already typed for a category that survives.
-                        onSelectedChange(v.map((key) =>
-                            selected.find((s) => s.key === key) || { key, value: "" }));
-                    }}
-                    label="Categories"
-                    placeholder="What was this?"
-                    noOptionsText="No categories left to add"
-                    helperText={mode.registry.length === 0
-                        ? "Add categories in Settings → Categories to use them here."
-                        : undefined}
+        <LabelPicker
+          multiple
+          kind="category"
+          size="small"
+          registry={mode.registry}
+          value={keys}
+          onChange={(v) => {
+            // Keep any weight already typed for a category that survives.
+            onSelectedChange(v.map((key) => selected.find((s) => s.key === key) || { key, value: "" }));
+          }}
+          label="Categories"
+          placeholder="What was this?"
+          noOptionsText="No categories left to add"
+          helperText={
+            mode.registry.length === 0 ? "Add categories in Settings → Categories to use them here." : undefined
+          }
+        />
+      )}
+
+      {!amountless && (
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          fullWidth
+          value={splitType}
+          onChange={(_, v) => v && onSplitTypeChange(v)}
+          sx={{ mt: !hidePicker ? 1 : 0, mb: 1 }}
+        >
+          <ToggleButton value="equal">Even</ToggleButton>
+          <ToggleButton value="exact" disabled={noAmount}>
+            Exact
+          </ToggleButton>
+          <ToggleButton value="percent">Percent</ToggleButton>
+        </ToggleButtonGroup>
+      )}
+
+      {mode.kind === "people" ? (
+        hidePicker ? (
+          <Stack spacing={0.5}>
+            {mode.members
+              .filter((m) => keys.includes(m.user_id))
+              .map((m) => {
+                const draft = selected.find((s) => s.key === m.user_id);
+                return (
+                  <Stack key={m.user_id} direction="row" alignItems="center" spacing={1}>
+                    <Avatar src={m.avatar || undefined} sx={{ width: 26, height: 26, fontSize: 12 }}>
+                      {m.username[0]?.toUpperCase()}
+                    </Avatar>
+                    <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
+                      {m.username}
+                    </Typography>
+                    {draft && !amountless && splitType === "equal" && evenField()}
+                    {draft && !amountless && splitType !== "equal" && valueField(draft)}
+                  </Stack>
+                );
+              })}
+          </Stack>
+        ) : (
+          <Stack spacing={1}>
+            {!amountless &&
+              splitType !== "equal" &&
+              selected.map((draft) => {
+                const m = mode.members.find((mm) => mm.user_id === draft.key);
+                return (
+                  <Stack key={draft.key} direction="row" alignItems="center" spacing={1}>
+                    <Avatar src={m?.avatar || undefined} sx={{ width: 26, height: 26, fontSize: 12 }}>
+                      {m?.username[0]?.toUpperCase()}
+                    </Avatar>
+                    <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
+                      {m?.username ?? draft.key}
+                    </Typography>
+                    {valueField(draft)}
+                  </Stack>
+                );
+              })}
+          </Stack>
+        )
+      ) : (
+        <Stack spacing={1}>
+          {hidePicker &&
+            selected.map((draft) => (
+              <Stack key={draft.key} direction="row" alignItems="center" spacing={1}>
+                <Box
+                  sx={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    flexShrink: 0,
+                    bgcolor: resolveLabelColor(draft.key, mode.registry),
+                  }}
                 />
-            )}
-
-            {!amountless && (
-                <ToggleButtonGroup
-                    size="small" exclusive fullWidth value={splitType}
-                    onChange={(_, v) => v && onSplitTypeChange(v)}
-                    sx={{ mt: !hidePicker ? 1 : 0, mb: 1 }}
-                >
-                    <ToggleButton value="equal">Even</ToggleButton>
-                    <ToggleButton value="exact" disabled={noAmount}>Exact</ToggleButton>
-                    <ToggleButton value="percent">Percent</ToggleButton>
-                </ToggleButtonGroup>
-            )}
-
-            {mode.kind === "people" ? (
-                hidePicker ? (
-                    <Stack spacing={0.5}>
-                        {mode.members.filter((m) => keys.includes(m.user_id)).map((m) => {
-                            const draft = selected.find((s) => s.key === m.user_id);
-                            return (
-                                <Stack key={m.user_id} direction="row" alignItems="center" spacing={1}>
-                                    <Avatar src={m.avatar || undefined} sx={{ width: 26, height: 26, fontSize: 12 }}>
-                                        {m.username[0]?.toUpperCase()}
-                                    </Avatar>
-                                    <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
-                                        {m.username}
-                                    </Typography>
-                                    {draft && !amountless && splitType === "equal" && evenField()}
-                                    {draft && !amountless && splitType !== "equal" && valueField(draft)}
-                                </Stack>
-                            );
-                        })}
-                    </Stack>
-                ) : (
-                    <Stack spacing={1}>
-                        {!amountless && splitType !== "equal" && selected.map((draft) => {
-                            const m = mode.members.find((mm) => mm.user_id === draft.key);
-                            return (
-                                <Stack key={draft.key} direction="row" alignItems="center" spacing={1}>
-                                    <Avatar src={m?.avatar || undefined} sx={{ width: 26, height: 26, fontSize: 12 }}>
-                                        {m?.username[0]?.toUpperCase()}
-                                    </Avatar>
-                                    <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
-                                        {m?.username ?? draft.key}
-                                    </Typography>
-                                    {valueField(draft)}
-                                </Stack>
-                            );
-                        })}
-                    </Stack>
-                )
-            ) : (
-                <Stack spacing={1}>
-                    {hidePicker && selected.map((draft) => (
-                        <Stack key={draft.key} direction="row" alignItems="center" spacing={1}>
-                            <Box sx={{
-                                width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
-                                bgcolor: resolveLabelColor(draft.key, mode.registry),
-                            }} />
-                            <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
-                                {draft.key}
-                            </Typography>
-                            {!amountless && selected.length > 1 && splitType === "equal" && evenField()}
-                            {!amountless && splitType !== "equal" && valueField(draft)}
-                        </Stack>
-                    ))}
-                    {!hidePicker && selected.length > 1 && selected.map((draft) => (
-                        <Stack key={draft.key} direction="row" alignItems="center" spacing={1}>
-                            <Box sx={{
-                                width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
-                                bgcolor: resolveLabelColor(draft.key, mode.registry),
-                            }} />
-                            <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
-                                {draft.key}
-                            </Typography>
-                            {splitType === "equal" ? evenField() : valueField(draft)}
-                        </Stack>
-                    ))}
-                </Stack>
-            )}
-
-            {summary.text && (
-                <Typography
-                    variant="caption"
-                    color={summary.error ? "warning.main" : "text.secondary"}
-                    sx={{ display: "block", mt: 1 }}
-                >
-                    {summary.text}
+                <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
+                  {draft.key}
                 </Typography>
-            )}
-        </Box>
-    );
+                {!amountless && selected.length > 1 && splitType === "equal" && evenField()}
+                {!amountless && splitType !== "equal" && valueField(draft)}
+              </Stack>
+            ))}
+          {!hidePicker &&
+            selected.length > 1 &&
+            selected.map((draft) => (
+              <Stack key={draft.key} direction="row" alignItems="center" spacing={1}>
+                <Box
+                  sx={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    flexShrink: 0,
+                    bgcolor: resolveLabelColor(draft.key, mode.registry),
+                  }}
+                />
+                <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
+                  {draft.key}
+                </Typography>
+                {splitType === "equal" ? evenField() : valueField(draft)}
+              </Stack>
+            ))}
+        </Stack>
+      )}
+
+      {summary.text && (
+        <Typography
+          variant="caption"
+          color={summary.error ? "warning.main" : "text.secondary"}
+          sx={{ display: "block", mt: 1 }}
+        >
+          {summary.text}
+        </Typography>
+      )}
+    </Box>
+  );
 }

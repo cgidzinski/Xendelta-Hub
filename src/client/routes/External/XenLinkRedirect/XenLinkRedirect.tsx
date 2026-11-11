@@ -1,20 +1,10 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import {
-  Container,
-  Typography,
-  Box,
-  Button,
-  CircularProgress,
-  Alert,
-  Card,
-  CardContent,
-} from "@mui/material";
+import { Container, Typography, Box, Button, CircularProgress, Alert, Card, CardContent } from "@mui/material";
 import { useTitle } from "../../../hooks/useTitle";
 import { XenLink } from "../../../hooks/xenlink/useXenlink";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import LinkIcon from "@mui/icons-material/Link";
-
 
 export default function XenLinkRedirect() {
   const { slug } = useParams<{ slug: string }>();

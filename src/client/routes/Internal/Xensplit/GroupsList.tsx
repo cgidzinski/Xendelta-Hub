@@ -61,7 +61,7 @@ export default function GroupsList() {
             setSecondaryCurrencies([]);
             resolve();
           },
-        }
+        },
       );
     });
   };
@@ -88,11 +88,7 @@ export default function GroupsList() {
           }}
         >
           <Box>
-            <Typography
-              variant="h5"
-              component="h1"
-              sx={{ fontWeight: 700, letterSpacing: "-0.02em" }}
-            >
+            <Typography variant="h5" component="h1" sx={{ fontWeight: 700, letterSpacing: "-0.02em" }}>
               Xensplit
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
@@ -107,12 +103,7 @@ export default function GroupsList() {
                 <HelpOutlineIcon />
               </IconButton>
             </Tooltip>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setShowCreateModal(true)}
-              size="medium"
-            >
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setShowCreateModal(true)} size="medium">
               New Group
             </Button>
           </Box>
@@ -150,7 +141,6 @@ export default function GroupsList() {
             <Typography variant="body2" color="text.secondary">
               Create a group to start splitting expenses
             </Typography>
-
           </Box>
         ) : (
           <Grid container spacing={1.5}>
@@ -163,12 +153,7 @@ export default function GroupsList() {
         )}
       </PageContainer>
 
-      <Dialog
-        fullWidth
-        maxWidth="sm"
-        open={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-      >
+      <Dialog fullWidth maxWidth="sm" open={showCreateModal} onClose={() => setShowCreateModal(false)}>
         <Box sx={{ position: "relative" }}>
           <IconButton
             onClick={() => setShowCreateModal(false)}
@@ -202,7 +187,9 @@ export default function GroupsList() {
               MenuProps={STABLE_CURRENCY_MENU_PROPS}
             >
               {ALL_CURRENCIES.map((c) => (
-                <MenuItem key={c} value={c}>{c}</MenuItem>
+                <MenuItem key={c} value={c}>
+                  {c}
+                </MenuItem>
               ))}
             </Select>
           </FormControl>

@@ -46,7 +46,16 @@ const getNotificationIcon = (icon: string) => {
 
 export default function Notifications() {
   useTitle("Notifications");
-  const { notifications, isLoading, fetchNotifications, markNotificationAsRead, dismissNotification, isDismissing, clearAllNotifications, isClearing } = useUserNotifications();
+  const {
+    notifications,
+    isLoading,
+    fetchNotifications,
+    markNotificationAsRead,
+    dismissNotification,
+    isDismissing,
+    clearAllNotifications,
+    isClearing,
+  } = useUserNotifications();
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
 
   useEffect(() => {
@@ -102,11 +111,7 @@ export default function Notifications() {
         )}
 
         {!isLoading && notifications?.length === 0 && (
-          <EmptyState
-            icon={<NotificationsIcon />}
-            title="No notifications yet"
-            description="You're all caught up"
-          />
+          <EmptyState icon={<NotificationsIcon />} title="No notifications yet" description="You're all caught up" />
         )}
 
         {notifications && notifications.length > 0 && (
@@ -118,9 +123,7 @@ export default function Notifications() {
                     onClick={() => handleNotificationClick(notification)}
                     sx={{
                       cursor: "pointer",
-                      backgroundColor: notification.unread
-                        ? "action.hover"
-                        : "transparent",
+                      backgroundColor: notification.unread ? "action.hover" : "transparent",
                       "&:hover": { backgroundColor: "action.selected" },
                       py: 2,
                       px: 2,
@@ -136,7 +139,13 @@ export default function Notifications() {
                         fontWeight: notification.unread ? "bold" : "normal",
                       }}
                       secondaryTypographyProps={{
-                        sx: { mt: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 400 },
+                        sx: {
+                          mt: 0.5,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          maxWidth: 400,
+                        },
                       }}
                     />
                     <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>

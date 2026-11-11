@@ -22,13 +22,7 @@ interface SettingsModalProps {
   isUpdating: boolean;
 }
 
-export default function SettingsModal({
-  open,
-  onClose,
-  conversation,
-  onUpdateName,
-  isUpdating,
-}: SettingsModalProps) {
+export default function SettingsModal({ open, onClose, conversation, onUpdateName, isUpdating }: SettingsModalProps) {
   const [groupName, setGroupName] = useState("");
   const [muteNotifications, setMuteNotifications] = useState(false);
   const [pinConversation, setPinConversation] = useState(false);
@@ -68,12 +62,7 @@ export default function SettingsModal({
               Notification Settings
             </Typography>
             <FormControlLabel
-              control={
-                <Switch
-                  checked={muteNotifications}
-                  onChange={(e) => setMuteNotifications(e.target.checked)}
-                />
-              }
+              control={<Switch checked={muteNotifications} onChange={(e) => setMuteNotifications(e.target.checked)} />}
               label="Mute Notifications"
             />
           </Box>
@@ -83,20 +72,12 @@ export default function SettingsModal({
               Conversation Options
             </Typography>
             <FormControlLabel
-              control={
-                <Switch
-                  checked={pinConversation}
-                  onChange={(e) => setPinConversation(e.target.checked)}
-                />
-              }
+              control={<Switch checked={pinConversation} onChange={(e) => setPinConversation(e.target.checked)} />}
               label="Pin Conversation"
             />
             <FormControlLabel
               control={
-                <Switch
-                  checked={archiveConversation}
-                  onChange={(e) => setArchiveConversation(e.target.checked)}
-                />
+                <Switch checked={archiveConversation} onChange={(e) => setArchiveConversation(e.target.checked)} />
               }
               label="Archive Conversation"
             />
@@ -112,4 +93,3 @@ export default function SettingsModal({
     </Dialog>
   );
 }
-
