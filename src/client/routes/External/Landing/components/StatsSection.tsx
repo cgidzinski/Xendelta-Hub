@@ -1,7 +1,7 @@
 import { Box, Container, Grid, Card, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import { ReactNode } from "react";
-import { NEON } from "../../../../theme";
+import { gradientTextSx } from "../../../../components/ui/marketingStyles";
 
 interface Stat {
   value: string;
@@ -15,7 +15,6 @@ interface StatsSectionProps {
 
 export default function StatsSection({ stats }: StatsSectionProps) {
   const theme = useTheme();
-  const accent = theme.palette.mode === "dark" ? NEON.dark : NEON.light;
   return (
     <Box
       sx={{
@@ -38,14 +37,8 @@ export default function StatsSection({ stats }: StatsSectionProps) {
                   p: 3,
                   border: "1px solid",
                   borderColor: "divider",
-                  borderRadius: 3,
                   backgroundColor: "transparent",
-                  transition: "all 0.3s ease",
-                  "&:hover": {
-                    transform: "translateY(-8px)",
-                    borderColor: "primary.main",
-                    boxShadow: "0 12px 32px rgba(0, 245, 255, 0.2)",
-                  },
+                  "&:hover": { borderColor: "primary.main" },
                 }}
               >
                 <Box
@@ -61,14 +54,7 @@ export default function StatsSection({ stats }: StatsSectionProps) {
                 </Box>
                 <Typography
                   variant="h3"
-                  sx={{
-                    fontWeight: 700,
-                    mb: 1,
-                    background: `linear-gradient(135deg, ${accent.cyan} 0%, ${accent.blue} 100%)`,
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    backgroundClip: "text",
-                  }}
+                  sx={{ fontWeight: 700, mb: 1, ...gradientTextSx(theme, "short") }}
                 >
                   {stat.value}
                 </Typography>

@@ -86,12 +86,7 @@ export default function Features() {
                   border: "1px solid",
                   borderColor: "divider",
                   borderRadius: 3,
-                  transition: "all 0.3s ease",
-                  "&:hover": {
-                    transform: "translateY(-8px)",
-                    boxShadow: "0 12px 24px rgba(0,0,0,0.15)",
-                    borderColor: "primary.main",
-                  },
+                  "&:hover": { borderColor: "primary.main" },
                 }}
               >
                 <CardContent sx={{ p: 4, flex: 1, display: "flex", flexDirection: "column" }}>
@@ -108,12 +103,6 @@ export default function Features() {
                       justifyContent: "center",
                       color: "primary.main",
                       mb: 3,
-                      boxShadow: "0 0 15px rgba(0, 245, 255, 0.2)",
-                      transition: "all 0.3s ease",
-                      "&:hover": {
-                        boxShadow: "0 0 25px rgba(0, 245, 255, 0.4)",
-                        transform: "scale(1.05)",
-                      },
                     }}
                   >
                     {feature.icon}

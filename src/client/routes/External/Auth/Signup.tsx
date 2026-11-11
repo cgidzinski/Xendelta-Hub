@@ -149,20 +149,6 @@ export default function Signup() {
                     borderColor: "divider",
                     position: "relative",
                     overflow: "hidden",
-                    "&::before": {
-                      content: '""',
-                      position: "absolute",
-                      top: "-50%",
-                      left: "-50%",
-                      width: "200%",
-                      height: "200%",
-                      background: "radial-gradient(circle, rgba(0, 245, 255, 0.1) 0%, transparent 70%)",
-                      animation: "pulse 8s ease-in-out infinite",
-                      "@keyframes pulse": {
-                        "0%, 100%": { transform: "scale(1) rotate(0deg)" },
-                        "50%": { transform: "scale(1.1) rotate(180deg)" },
-                      },
-                    },
                     "&::after": {
                       content: '""',
                       position: "absolute",
@@ -170,7 +156,7 @@ export default function Signup() {
                       left: 0,
                       right: 0,
                       height: "2px",
-                      background: "linear-gradient(90deg, transparent, #00f5ff, transparent)",
+                      background: `linear-gradient(90deg, transparent, ${accent.cyan}, transparent)`,
                     },
                   }}
                 >
@@ -190,12 +176,6 @@ export default function Signup() {
                       color: "primary.main",
                       mb: 3,
                       mx: { xs: "auto", md: 0 },
-                      boxShadow: "0 0 30px rgba(0, 245, 255, 0.4)",
-                      animation: "glow 2s ease-in-out infinite alternate",
-                      "@keyframes glow": {
-                        from: { boxShadow: "0 0 30px rgba(0, 245, 255, 0.4)" },
-                        to: { boxShadow: "0 0 50px rgba(0, 245, 255, 0.7)" },
-                      },
                     }}
                   >
                     <SignupIcon sx={{ fontSize: 40 }} />
@@ -359,10 +339,8 @@ export default function Signup() {
                           fontSize: "1.1rem",
                           fontWeight: 600,
                           backgroundColor: "primary.main",
-                          boxShadow: "0 0 20px rgba(0, 245, 255, 0.3)",
                           "&:hover": {
                             backgroundColor: "primary.dark",
-                            boxShadow: "0 0 30px rgba(0, 245, 255, 0.5)",
                           },
                           "&:disabled": {
                             boxShadow: "none",

@@ -1,7 +1,7 @@
 import { Box, Container, Grid, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import CheckCircle from "@mui/icons-material/CheckCircle";
-import { NEON } from "../../../../theme";
+import { gradientTextSx } from "../../../../components/ui/marketingStyles";
 
 interface HighlightsSectionProps {
   highlights: string[];
@@ -9,7 +9,6 @@ interface HighlightsSectionProps {
 
 export default function HighlightsSection({ highlights }: HighlightsSectionProps) {
   const theme = useTheme();
-  const accent = theme.palette.mode === "dark" ? NEON.dark : NEON.light;
   return (
     <Box sx={{ py: { xs: 8, md: 12 }, position: "relative" }}>
       <Container maxWidth="lg">
@@ -17,14 +16,7 @@ export default function HighlightsSection({ highlights }: HighlightsSectionProps
           <Typography
             variant="h3"
             component="h2"
-            sx={{
-              fontWeight: 700,
-              mb: 2,
-              background: `linear-gradient(135deg, ${accent.cyan} 0%, ${accent.cyanMid} 50%, ${accent.blue} 100%)`,
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-            }}
+            sx={{ fontWeight: 700, mb: 2, ...gradientTextSx(theme, "short") }}
           >
             Why Choose Xendelta Hub?
           </Typography>
@@ -44,12 +36,7 @@ export default function HighlightsSection({ highlights }: HighlightsSectionProps
                   borderRadius: 2,
                   border: "1px solid",
                   borderColor: "divider",
-                  transition: "all 0.3s ease",
-                  "&:hover": {
-                    borderColor: "primary.main",
-                    backgroundColor: "rgba(0, 245, 255, 0.05)",
-                    transform: "translateX(8px)",
-                  },
+                  "&:hover": { borderColor: "primary.main", backgroundColor: "action.hover" },
                 }}
               >
                 <CheckCircle
