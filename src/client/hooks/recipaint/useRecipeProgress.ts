@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
-import { ApiResponse } from "../../types/api";
+import { api } from "../../config/api";
 import { useAuth } from "../../contexts/AuthContext";
 import { recipaintKeys } from "./useRecipaint";
 
@@ -10,15 +9,15 @@ interface ProgressResponse {
 }
 
 const fetchProgress = async (id: string): Promise<number[]> => {
-  const response = await apiClient.get<ApiResponse<ProgressResponse>>(`/api/recipaint/${id}/progress`);
-  return response.data.data!.completedSteps;
+  return (await api.get<ProgressResponse>(`/api/recipaint/${id}/progress`)).completedSteps;
 };
 
 const saveProgress = async ({ id, completedSteps }: { id: string; completedSteps: number[] }): Promise<number[]> => {
-  const response = await apiClient.put<ApiResponse<ProgressResponse>>(`/api/recipaint/${id}/progress`, {
-    completedSteps,
-  });
-  return response.data.data!.completedSteps;
+  return (
+    await api.put<ProgressResponse>(`/api/recipaint/${id}/progress`, {
+      completedSteps,
+    })
+  ).completedSteps;
 };
 
 export const recipeProgressKey = (id: string) => [...recipaintKeys.all, "progress", id] as const;

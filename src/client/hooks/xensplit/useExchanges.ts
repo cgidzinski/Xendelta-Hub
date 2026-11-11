@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { apiClient, api } from "../../config/api";
 import type { CreateExchangeInput } from "./types";
 
 export function useXenSplitExchanges(groupId: string) {
@@ -29,8 +29,7 @@ export function useXenSplitExchanges(groupId: string) {
 
   const liveRateMutation = useMutation({
     mutationFn: async ({ from, to }: { from: string; to: string }) => {
-      const res = await apiClient.get(`/api/xensplit/exchange-rate`, { params: { from, to } });
-      return res.data.data as { rate: number };
+      return api.get<{ rate: number }>(`/api/xensplit/exchange-rate`, { params: { from, to } });
     },
   });
 
@@ -64,8 +63,7 @@ export function useLiveRateQuery(from: string, to: string, enabled: boolean) {
   return useQuery({
     queryKey: ["xensplit", "rate", from, to],
     queryFn: async () => {
-      const res = await apiClient.get(`/api/xensplit/exchange-rate`, { params: { from, to } });
-      return res.data.data as { rate: number; fetchedAt: number };
+      return api.get<{ rate: number; fetchedAt: number }>(`/api/xensplit/exchange-rate`, { params: { from, to } });
     },
     enabled,
     staleTime: 60 * 60 * 1000,

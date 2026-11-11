@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { apiClient, api } from "../../config/api";
 import type { XenSplitBalancesData, SettleDebtInput } from "./types";
 
 export function useXenSplitBalances(groupId: string) {
@@ -8,8 +8,7 @@ export function useXenSplitBalances(groupId: string) {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["xensplit", "balances", groupId],
     queryFn: async () => {
-      const res = await apiClient.get(`/api/xensplit/groups/${groupId}/balances`);
-      return res.data.data as XenSplitBalancesData;
+      return api.get<XenSplitBalancesData>(`/api/xensplit/groups/${groupId}/balances`);
     },
     enabled: !!groupId,
     staleTime: 0, // Always refetch in background

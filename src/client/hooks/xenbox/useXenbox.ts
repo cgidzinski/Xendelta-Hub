@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient, UPLOAD_TIMEOUT_MS } from "../../config/api";
-import { ApiResponse } from "../../types/api";
+import { apiClient, UPLOAD_TIMEOUT_MS, api } from "../../config/api";
 import { XenBoxFile, XenBoxFileListResponse } from "../../types/XenBoxFile";
 
 // Chunk size constant (10MB)
@@ -79,12 +78,11 @@ const initiateUpload = async (
   totalChunks: number,
   fileSize: number,
 ): Promise<UploadSessionResponse> => {
-  const response = await apiClient.post<ApiResponse<UploadSessionResponse>>("/api/xenbox/initiate", {
+  return api.post<UploadSessionResponse>("/api/xenbox/initiate", {
     filename,
     totalChunks,
     fileSize,
   });
-  return response.data.data!;
 };
 
 const uploadChunkApi = async (
@@ -93,7 +91,7 @@ const uploadChunkApi = async (
   totalChunks: number,
   chunkData: string,
 ): Promise<ChunkUploadResponse> => {
-  const response = await apiClient.post<ApiResponse<ChunkUploadResponse>>(
+  return api.post<ChunkUploadResponse>(
     "/api/xenbox/chunk",
     {
       uploadId,
@@ -101,17 +99,14 @@ const uploadChunkApi = async (
       totalChunks,
       chunkData,
     },
-    // A chunk is ~13 MB of base64: it needs the upload timeout, not the 20 s default.
     { timeout: UPLOAD_TIMEOUT_MS },
   );
-  return response.data.data!;
 };
 
 const finalizeUpload = async (uploadId: string): Promise<XenboxUploadResponse> => {
-  const response = await apiClient.post<ApiResponse<XenboxUploadResponse>>("/api/xenbox/finalize", {
+  return api.post<XenboxUploadResponse>("/api/xenbox/finalize", {
     uploadId,
   });
-  return response.data.data!;
 };
 
 const cancelUpload = async (uploadId: string): Promise<void> => {
@@ -124,19 +119,17 @@ const deleteXenboxFile = async (fileId: string): Promise<void> => {
 
 const fetchXenboxFiles = async (search?: string): Promise<XenBoxFile[]> => {
   const params = search ? { search } : {};
-  const response = await apiClient.get<ApiResponse<XenBoxFileListResponse>>("/api/xenbox/files", { params });
-  return response.data.data!.files;
+  return (await api.get<XenBoxFileListResponse>("/api/xenbox/files", { params })).files;
 };
 
 const updateFileSettings = async (
   fileId: string,
   settings: { password?: string | null; expiry?: string | null },
 ): Promise<{ shareUrl: string; hasPassword: boolean; expiry: string | null }> => {
-  const response = await apiClient.put<ApiResponse<{ shareUrl: string; hasPassword: boolean; expiry: string | null }>>(
+  return api.put<{ shareUrl: string; hasPassword: boolean; expiry: string | null }>(
     `/api/xenbox/files/${fileId}/settings`,
     settings,
   );
-  return response.data.data!;
 };
 
 // Hook for chunked file uploads

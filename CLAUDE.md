@@ -48,6 +48,9 @@ plus `npm audit --omit=dev --audit-level=high`.
 - **Uploads** (client): the shared axios client times ordinary requests out at 20 s, but any FormData body gets
   `UPLOAD_TIMEOUT_MS` (10 min) automatically. For progress, use `useUploadProgress()` and pass its
   `onUploadProgress` to the request, then render `<UploadProgress percent={percent} />` (`components/ui`).
+- **API calls (client):** use `api.get<T>(url)` / `api.post<T>(url, body)` (`config/api.ts`); they return the
+  envelope's `data` already unwrapped. Use `apiClient` directly only when you need the raw response. The sign-in token
+  lives in `config/tokenStore.ts`; never read `localStorage` for it.
 - Changes to a *populated* document are not saved by saving its parent. Update the referenced model directly.
 
 ## Databases and migrations

@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
-import { ApiResponse } from "../../types/api";
+import { apiClient, api } from "../../config/api";
 import { BlogPost } from "../../types/BlogPost";
 import { blogKeys } from "../blog/useBlog";
 import { blogPostKeys } from "../blog/useBlogPost";
@@ -40,18 +39,15 @@ export const adminBlogKeys = {
 
 // API functions
 const fetchAdminBlogPosts = async (): Promise<BlogPost[]> => {
-  const response = await apiClient.get<ApiResponse<BlogPostsResponse>>("/api/admin/blog");
-  return response.data.data!.posts;
+  return (await api.get<BlogPostsResponse>("/api/admin/blog")).posts;
 };
 
 const createBlogPost = async (payload: CreateBlogPostPayload): Promise<BlogPost> => {
-  const response = await apiClient.post<ApiResponse<{ post: BlogPost }>>("/api/admin/blog", payload);
-  return response.data.data!.post;
+  return (await api.post<{ post: BlogPost }>("/api/admin/blog", payload)).post;
 };
 
 const updateBlogPost = async (id: string, payload: UpdateBlogPostPayload): Promise<BlogPost> => {
-  const response = await apiClient.put<ApiResponse<{ post: BlogPost }>>(`/api/admin/blog/${id}`, payload);
-  return response.data.data!.post;
+  return (await api.put<{ post: BlogPost }>(`/api/admin/blog/${id}`, payload)).post;
 };
 
 const deleteBlogPost = async (id: string): Promise<void> => {
@@ -65,8 +61,7 @@ const uploadBlogAsset = async (file: File, postId?: string): Promise<BlogAssetUp
     formData.append("postId", postId);
   }
 
-  const response = await apiClient.post<ApiResponse<BlogAssetUploadResponse>>("/api/admin/blog/upload-asset", formData);
-  return response.data.data!;
+  return api.post<BlogAssetUploadResponse>("/api/admin/blog/upload-asset", formData);
 };
 
 const deleteBlogAsset = async (postId: string, assetUrl: string): Promise<void> => {

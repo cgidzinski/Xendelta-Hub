@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { apiClient, api } from "../../config/api";
 import type { XenBudgetBook, CreateBookInput } from "./types";
 
 export function useXenBudgetBooks() {
@@ -8,15 +8,13 @@ export function useXenBudgetBooks() {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["xenbudget", "books"],
     queryFn: async () => {
-      const res = await apiClient.get("/api/xenbudget/books");
-      return res.data.data as XenBudgetBook[];
+      return api.get<XenBudgetBook[]>("/api/xenbudget/books");
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (input: CreateBookInput) => {
-      const res = await apiClient.post("/api/xenbudget/books", input);
-      return res.data.data as XenBudgetBook;
+      return api.post<XenBudgetBook>("/api/xenbudget/books", input);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["xenbudget", "books"] });

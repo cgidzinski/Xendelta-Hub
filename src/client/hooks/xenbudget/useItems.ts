@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { apiClient, api } from "../../config/api";
 import { invalidateItemDerived } from "./invalidate";
 import type { XenBudgetItem, ItemsPage, CreateItemInput, UpdateItemInput } from "./types";
 
@@ -99,16 +99,14 @@ export function useXenBudgetItemMutations(bookId: string) {
 
   const createMutation = useMutation({
     mutationFn: async (input: CreateItemInput) => {
-      const res = await apiClient.post(`/api/xenbudget/books/${bookId}/items`, input);
-      return res.data.data as XenBudgetItem;
+      return api.post<XenBudgetItem>(`/api/xenbudget/books/${bookId}/items`, input);
     },
     onSuccess: invalidate,
   });
 
   const updateMutation = useMutation({
     mutationFn: async ({ itemId, input }: { itemId: string; input: UpdateItemInput }) => {
-      const res = await apiClient.put(`/api/xenbudget/books/${bookId}/items/${itemId}`, input);
-      return res.data.data as XenBudgetItem;
+      return api.put<XenBudgetItem>(`/api/xenbudget/books/${bookId}/items/${itemId}`, input);
     },
     onSuccess: invalidate,
   });
@@ -177,10 +175,9 @@ export function useXenBudgetItems(bookId: string, filters: ItemFilters = {}) {
   const query = useInfiniteQuery({
     queryKey: ["xenbudget", "items", bookId, filters],
     queryFn: async ({ pageParam }) => {
-      const res = await apiClient.get(`/api/xenbudget/books/${bookId}/items`, {
+      return api.get<ItemsPage>(`/api/xenbudget/books/${bookId}/items`, {
         params: { ...toParams(filters), ...(pageParam ? { cursor: pageParam } : {}) },
       });
-      return res.data.data as ItemsPage;
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,

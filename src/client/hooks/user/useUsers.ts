@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
-import { apiClient } from "../../config/api";
-import { ApiResponse } from "../../types/api";
+import { api } from "../../config/api";
 
 // Types
 export interface User {
@@ -22,8 +21,7 @@ export const usersKeys = {
 
 // API functions
 const fetchUsers = async (): Promise<User[]> => {
-  const response = await apiClient.get<ApiResponse<UsersResponse>>("/api/users");
-  return response.data.data!.users;
+  return (await api.get<UsersResponse>("/api/users")).users;
 };
 
 // Hooks
