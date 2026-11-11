@@ -1,3 +1,4 @@
+import { brandGradient } from "../../theme";
 import { Outlet } from "react-router-dom";
 import {
   Box,
@@ -29,7 +30,6 @@ import LockIcon from "@mui/icons-material/Lock";
 import DoneAllIcon from "@mui/icons-material/DoneAll";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import { formatDistance } from "date-fns";
-import CssBaseline from "@mui/material/CssBaseline";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useRef } from "react";
 import ProfileListItem from "../ProfileListItem";
@@ -218,7 +218,6 @@ export default function BaseNavBar({
 
   return (
     <Box sx={{ display: "flex" }}>
-      <CssBaseline />
       <Drawer
         sx={{
           width: isNavBarOpen && !isMobile ? DRAWER_WIDTH : 0,
@@ -261,7 +260,7 @@ export default function BaseNavBar({
               component="div"
               sx={{
                 fontWeight: 700,
-                background: "linear-gradient(90deg, #2196f3 0%, #1e88e5 50%, #1976d2 100%)",
+                background: brandGradient(theme),
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",

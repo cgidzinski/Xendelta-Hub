@@ -1,7 +1,8 @@
-import { Paper, Box, Typography, Button, IconButton, Slide } from "@mui/material";
+import { Box, Typography, Button, IconButton, Slide } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import IosShareIcon from "@mui/icons-material/IosShare";
 import GetAppIcon from "@mui/icons-material/GetApp";
+import Banner from "../../components/ui/Banner";
 import { usePWAInstall } from "../hooks/usePWAInstall";
 
 export default function PWAInstallBanner() {
@@ -12,22 +13,7 @@ export default function PWAInstallBanner() {
 
   return (
     <Slide direction="up" in={visible} mountOnEnter unmountOnExit>
-      <Paper
-        elevation={8}
-        sx={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 1300,
-          borderTop: "1px solid",
-          borderColor: "divider",
-          borderRadius: 0,
-          px: 2,
-          py: 1.5,
-        }}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, maxWidth: 600, mx: "auto" }}>
+      <Banner zIndex={1300}>
           <GetAppIcon sx={{ color: "primary.main", flexShrink: 0 }} />
 
           <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -60,8 +46,7 @@ export default function PWAInstallBanner() {
           <IconButton size="small" onClick={dismiss} aria-label="Dismiss install banner">
             <CloseIcon fontSize="small" />
           </IconButton>
-        </Box>
-      </Paper>
+      </Banner>
     </Slide>
   );
 }

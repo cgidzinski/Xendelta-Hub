@@ -1,3 +1,4 @@
+import { alpha } from "@mui/material/styles";
 import SecurityIcon from "@mui/icons-material/Security";
 import PeopleIcon from "@mui/icons-material/People";
 import ArticleIcon from "@mui/icons-material/Article";
@@ -52,9 +53,9 @@ export default function AdminNavBar() {
         <IconButton
           sx={{
             color: "primary.main",
-            backgroundColor: "rgba(33, 150, 243, 0.1)",
+            backgroundColor: (t) => alpha(t.palette.primary.main, 0.1),
             "&:hover": {
-              backgroundColor: "rgba(33, 150, 243, 0.2)",
+              backgroundColor: (t) => alpha(t.palette.primary.main, 0.2),
             },
           }}
         >

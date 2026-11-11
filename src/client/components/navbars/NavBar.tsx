@@ -1,3 +1,4 @@
+import { alpha } from "@mui/material/styles";
 import HomeIcon from "@mui/icons-material/Home";
 import ArticleIcon from "@mui/icons-material/Article";
 import SecurityIcon from "@mui/icons-material/Security";
@@ -144,9 +145,9 @@ export default function Root() {
           <IconButton
             sx={{
               color: "warning.main",
-              backgroundColor: "rgba(255, 193, 7, 0.1)",
+              backgroundColor: (t) => alpha(t.palette.warning.main, 0.1),
               "&:hover": {
-                backgroundColor: "rgba(255, 193, 7, 0.2)",
+                backgroundColor: (t) => alpha(t.palette.warning.main, 0.2),
               },
             }}
           >
