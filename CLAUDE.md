@@ -32,6 +32,11 @@ plus `npm audit --omit=dev --audit-level=high`.
 - Throw `AppError(status, message)` from `utils/http.ts` instead of building a 4xx body by hand; the global
   `errorHandler` answers it as `{ status: false, message }`. `loadCaller(req)` returns the authenticated user's
   document or a 401, and `callerId(req)` their id.
+- **Every route validates its input.** Path params with `validateParams`, JSON bodies with `validate`, query
+  strings with `validateQuery`, all from `utils/validation` (schemas live in one file per area under
+  `utils/validation/`; `idParams("x")` builds an ObjectId params schema). `validationCoverage.test.ts` fails if a
+  new route takes a path param or a body without it; a genuine exception goes in that test's exempt list with a
+  reason.
 - Changes to a *populated* document are not saved by saving its parent. Update the referenced model directly.
 
 ## Environment

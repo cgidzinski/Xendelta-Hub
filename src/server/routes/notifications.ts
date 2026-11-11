@@ -4,7 +4,14 @@ import { User } from "../models/user";
 import { authenticateToken } from "../middleware/auth";
 import { requireAdmin } from "../middleware/admin";
 import { SocketManager } from "../infrastructure/SocketManager";
-import { validate, createNotificationSchema, adminNotifyUserSchema } from "../utils/validation";
+import {
+  adminNotifyUserSchema,
+  createNotificationSchema,
+  notificationIdParamSchema,
+  userIdParamSchema,
+  validate,
+  validateParams,
+} from "../utils/validation";
 import { notify } from "../utils/notificationUtils";
 import { AuthenticatedRequest } from "../types";
 
@@ -50,6 +57,7 @@ module.exports = function (app: express.Application) {
   app.put(
     "/api/user/notifications/:notificationId/mark-read",
     authenticateToken,
+    validateParams(notificationIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const { notificationId } = req.params;
       const userId = (req as AuthenticatedRequest).user!._id;
@@ -84,6 +92,7 @@ module.exports = function (app: express.Application) {
   app.delete(
     "/api/user/notifications/:notificationId",
     authenticateToken,
+    validateParams(notificationIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const { notificationId } = req.params;
       const userId = (req as AuthenticatedRequest).user!._id;
@@ -184,6 +193,7 @@ module.exports = function (app: express.Application) {
     "/api/admin/notifications/user/:userId",
     authenticateToken,
     requireAdmin,
+    validateParams(userIdParamSchema),
     validate(adminNotifyUserSchema),
     async function (req: express.Request, res: express.Response) {
       const { userId } = req.params;

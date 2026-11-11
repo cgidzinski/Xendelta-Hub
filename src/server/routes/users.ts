@@ -7,7 +7,17 @@ import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { uploadAvatarFile } from "../utils/mediaUtils";
 import { deleteFromGCS } from "../utils/gcsUtils";
-import { validate, updateProfileSchema } from "../utils/validation";
+import {
+  addPasswordSchema,
+  inventoryItemIdParamSchema,
+  pinnedAppsSchema,
+  unlinkProviderSchema,
+  updateProfileSchema,
+  userSearchQuerySchema,
+  validate,
+  validateParams,
+  validateQuery,
+} from "../utils/validation";
 import { upload } from "../config/multer";
 import { AuthenticatedRequest } from "../types";
 import { DEFAULT_CURRENCY } from "@shared/currencies";
@@ -382,6 +392,7 @@ module.exports = function (app: express.Application) {
   app.post(
     "/api/user/unlink-provider",
     authenticateToken,
+    validate(unlinkProviderSchema),
     async function (req: express.Request, res: express.Response) {
       try {
         const user = (req as AuthenticatedRequest).user!;
@@ -431,44 +442,49 @@ module.exports = function (app: express.Application) {
   );
 
   // Add password to Google-only account
-  app.post("/api/user/add-password", authenticateToken, async function (req: express.Request, res: express.Response) {
-    try {
-      const user = (req as AuthenticatedRequest).user!;
-      const { password } = req.body;
+  app.post(
+    "/api/user/add-password",
+    authenticateToken,
+    validate(addPasswordSchema),
+    async function (req: express.Request, res: express.Response) {
+      try {
+        const user = (req as AuthenticatedRequest).user!;
+        const { password } = req.body;
 
-      if (!password) {
+        if (!password) {
+          return res.json({
+            success: false,
+            message: "Password is required",
+          });
+        }
+
+        const fullUser = await User.findById(user._id).exec();
+        if (!fullUser) throw new AppError(404, "User not found");
+
+        if (fullUser.password) {
+          return res.json({
+            success: false,
+            message: "Account already has a password",
+          });
+        }
+
+        fullUser.password = fullUser.generateHash(password);
+        await fullUser.addAuthProvider("local", undefined, fullUser.email);
+
+        return res.json({
+          success: true,
+          message: "Password added successfully. You can now sign in with email and password.",
+          providers: fullUser.getActiveProviders(),
+        });
+      } catch (error) {
+        console.error("Add password error:", error);
         return res.json({
           success: false,
-          message: "Password is required",
+          message: "Failed to add password",
         });
       }
-
-      const fullUser = await User.findById(user._id).exec();
-      if (!fullUser) throw new AppError(404, "User not found");
-
-      if (fullUser.password) {
-        return res.json({
-          success: false,
-          message: "Account already has a password",
-        });
-      }
-
-      fullUser.password = fullUser.generateHash(password);
-      await fullUser.addAuthProvider("local", undefined, fullUser.email);
-
-      return res.json({
-        success: true,
-        message: "Password added successfully. You can now sign in with email and password.",
-        providers: fullUser.getActiveProviders(),
-      });
-    } catch (error) {
-      console.error("Add password error:", error);
-      return res.json({
-        success: false,
-        message: "Failed to add password",
-      });
-    }
-  });
+    },
+  );
 
   // Directory for the message participant picker. Deliberately just the public profile
   // (id, username, avatar): emails and roles are admin-only (see /api/admin/users).
@@ -489,31 +505,36 @@ module.exports = function (app: express.Application) {
   });
 
   // Search users by username (for UserSelect autocomplete)
-  app.get("/api/users/search", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const { q } = req.query;
-    const currentUserId = (req as AuthenticatedRequest).user!._id;
+  app.get(
+    "/api/users/search",
+    authenticateToken,
+    validateQuery(userSearchQuerySchema),
+    async function (req: express.Request, res: express.Response) {
+      const { q } = req.query;
+      const currentUserId = (req as AuthenticatedRequest).user!._id;
 
-    const query: any = {};
-    if (q && typeof q === "string") {
-      query.username = { $regex: q, $options: "i" };
-    }
+      const query: any = {};
+      if (q && typeof q === "string") {
+        query.username = { $regex: q, $options: "i" };
+      }
 
-    const users = await User.find(query, "username _id avatar").limit(20).exec();
+      const users = await User.find(query, "username _id avatar").limit(20).exec();
 
-    return res.json({
-      status: true,
-      message: "",
-      data: {
-        users: users
-          .filter((u: any) => u._id.toString() !== currentUserId.toString())
-          .map((user: any) => ({
-            _id: user._id,
-            username: user.username,
-            avatar: user.avatar || "/avatars/default-avatar.png",
-          })),
-      },
-    });
-  });
+      return res.json({
+        status: true,
+        message: "",
+        data: {
+          users: users
+            .filter((u: any) => u._id.toString() !== currentUserId.toString())
+            .map((user: any) => ({
+              _id: user._id,
+              username: user.username,
+              avatar: user.avatar || "/avatars/default-avatar.png",
+            })),
+        },
+      });
+    },
+  );
 
   // Get user's pinned apps
   app.get("/api/user/pinned-apps", authenticateToken, async function (req: express.Request, res: express.Response) {
@@ -527,18 +548,23 @@ module.exports = function (app: express.Application) {
   });
 
   // Update user's pinned apps
-  app.put("/api/user/pinned-apps", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const userId = (req as AuthenticatedRequest).user!._id;
-    const { pinnedApps } = req.body;
-    const user = await User.findById(userId).exec();
-    if (!user) throw new AppError(404, "User not found");
-    user.pinnedApps = pinnedApps || [];
-    await user.save();
-    return res.json({
-      status: true,
-      data: { pinnedApps: user.pinnedApps },
-    });
-  });
+  app.put(
+    "/api/user/pinned-apps",
+    authenticateToken,
+    validate(pinnedAppsSchema),
+    async function (req: express.Request, res: express.Response) {
+      const userId = (req as AuthenticatedRequest).user!._id;
+      const { pinnedApps } = req.body;
+      const user = await User.findById(userId).exec();
+      if (!user) throw new AppError(404, "User not found");
+      user.pinnedApps = pinnedApps || [];
+      await user.save();
+      return res.json({
+        status: true,
+        data: { pinnedApps: user.pinnedApps },
+      });
+    },
+  );
 
   // Get user's inventory
   app.get("/api/user/inventory", authenticateToken, async function (req: express.Request, res: express.Response) {
@@ -555,6 +581,7 @@ module.exports = function (app: express.Application) {
   app.post(
     "/api/user/inventory/:inventoryItemId/use",
     authenticateToken,
+    validateParams(inventoryItemIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const userId = (req as AuthenticatedRequest).user!._id;
       const { inventoryItemId } = req.params;
@@ -597,6 +624,7 @@ module.exports = function (app: express.Application) {
   app.delete(
     "/api/user/inventory/:inventoryItemId",
     authenticateToken,
+    validateParams(inventoryItemIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const userId = (req as AuthenticatedRequest).user!._id;
       const { inventoryItemId } = req.params;

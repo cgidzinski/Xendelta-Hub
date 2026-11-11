@@ -10,7 +10,9 @@ import { join } from "path";
 // Asserting on the source is deliberate - the route module pulls in the database models and
 // auth middleware, so standing the real router up in a unit test is not worth it, and the
 // property being protected is literally the order the lines appear in.
-const source = readFileSync(join(__dirname, "recipaint.ts"), "utf8");
+// Whitespace is stripped first: Prettier wraps long registrations onto several lines, and the
+// order is all that matters here.
+const source = readFileSync(join(__dirname, "recipaint.ts"), "utf8").replace(/\s+/g, "");
 
 const registrationIndex = (method: string, path: string): number => {
   const at = source.indexOf(`app.${method}("${path}"`);
