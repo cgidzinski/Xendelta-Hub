@@ -1,3 +1,4 @@
+import { xenbudgetKeys } from "./keys";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, api } from "../../config/api";
 import type { XenBudgetBook, CreateBookInput } from "./types";
@@ -6,7 +7,7 @@ export function useXenBudgetBooks() {
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["xenbudget", "books"],
+    queryKey: xenbudgetKeys.books(),
     queryFn: async () => {
       return api.get<XenBudgetBook[]>("/api/xenbudget/books");
     },
@@ -17,7 +18,7 @@ export function useXenBudgetBooks() {
       return api.post<XenBudgetBook>("/api/xenbudget/books", input);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xenbudget", "books"] });
+      queryClient.invalidateQueries({ queryKey: xenbudgetKeys.books() });
     },
   });
 
@@ -26,7 +27,7 @@ export function useXenBudgetBooks() {
       await apiClient.delete(`/api/xenbudget/books/${bookId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xenbudget", "books"] });
+      queryClient.invalidateQueries({ queryKey: xenbudgetKeys.books() });
     },
   });
 

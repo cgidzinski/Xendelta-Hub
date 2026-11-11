@@ -1,3 +1,4 @@
+import { xensplitKeys } from "./keys";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { api } from "../../config/api";
 import type { XenSplitLogPage } from "./types";
@@ -6,12 +7,12 @@ import type { XenSplitLogPage } from "./types";
  * The group's activity log, newest first. Owner only - the server answers 403 to anyone
  * else, so callers pass `enabled: isCreator`.
  *
- * Keyed under ["xensplit", "group", groupId] so every mutation and socket update that
+ * Keyed under xensplitKeys.group(groupId) so every mutation and socket update that
  * invalidates the group invalidates the log with it.
  */
 export function useXenSplitGroupLog(groupId: string, enabled: boolean) {
   const query = useInfiniteQuery({
-    queryKey: ["xensplit", "group", groupId, "log"],
+    queryKey: xensplitKeys.groupLog(groupId),
     queryFn: async ({ pageParam }) => {
       return api.get<XenSplitLogPage>(`/api/xensplit/groups/${groupId}/log`, {
         params: pageParam ? { before: pageParam } : {},

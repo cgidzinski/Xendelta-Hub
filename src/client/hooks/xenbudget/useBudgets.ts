@@ -1,3 +1,4 @@
+import { xenbudgetKeys } from "./keys";
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../config/api";
@@ -27,7 +28,7 @@ export function useXenBudgetStatus(bookId: string, currency?: string, range?: Bu
   const from = range?.from;
   const to = range?.to;
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["xenbudget", "budget-status", bookId, currency, from, to, history],
+    queryKey: xenbudgetKeys.budgetStatus(bookId, currency, from, to, history),
     queryFn: async () => {
       return api.get<BudgetStatusResponse>(`/api/xenbudget/books/${bookId}/budget-status`, {
         params: {
@@ -71,8 +72,8 @@ export function useXenBudgetBudgets(bookId: string) {
   const queryClient = useQueryClient();
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
-    queryClient.invalidateQueries({ queryKey: ["xenbudget", "budget-status", bookId] });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.book(bookId) });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.budgetStatus(bookId) });
   };
 
   const createMutation = useMutation({

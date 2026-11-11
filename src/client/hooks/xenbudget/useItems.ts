@@ -1,3 +1,4 @@
+import { xenbudgetKeys } from "./keys";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, api } from "../../config/api";
 import { invalidateItemDerived } from "./invalidate";
@@ -126,7 +127,7 @@ export function useXenBudgetItemMutations(bookId: string) {
     },
     onSuccess: (_data, { itemId }) => {
       invalidate();
-      queryClient.invalidateQueries({ queryKey: ["xenbudget", "item-image-urls", bookId, itemId] });
+      queryClient.invalidateQueries({ queryKey: xenbudgetKeys.itemImageUrls(bookId, itemId) });
     },
   });
 
@@ -136,7 +137,7 @@ export function useXenBudgetItemMutations(bookId: string) {
     },
     onSuccess: (_data, { itemId }) => {
       invalidate();
-      queryClient.invalidateQueries({ queryKey: ["xenbudget", "item-image-urls", bookId, itemId] });
+      queryClient.invalidateQueries({ queryKey: xenbudgetKeys.itemImageUrls(bookId, itemId) });
     },
   });
 
@@ -157,7 +158,7 @@ export function useXenBudgetItemMutations(bookId: string) {
 /** Signed display URLs for an item's images, fetched on demand (short-lived GCS URLs). */
 export function useXenBudgetItemImageUrls(bookId: string, itemId: string | undefined, imageCount: number) {
   return useQuery<{ _id: string; signedUrl: string }[]>({
-    queryKey: ["xenbudget", "item-image-urls", bookId, itemId],
+    queryKey: xenbudgetKeys.itemImageUrls(bookId, itemId),
     queryFn: async () => {
       const res = await apiClient.get(`/api/xenbudget/books/${bookId}/items/${itemId}/image-urls`);
       return res.data.data;
@@ -173,7 +174,7 @@ export function useXenBudgetItemImageUrls(bookId: string, itemId: string | undef
  */
 export function useXenBudgetItems(bookId: string, filters: ItemFilters = {}) {
   const query = useInfiniteQuery({
-    queryKey: ["xenbudget", "items", bookId, filters],
+    queryKey: xenbudgetKeys.items(bookId, filters),
     queryFn: async ({ pageParam }) => {
       return api.get<ItemsPage>(`/api/xenbudget/books/${bookId}/items`, {
         params: { ...toParams(filters), ...(pageParam ? { cursor: pageParam } : {}) },

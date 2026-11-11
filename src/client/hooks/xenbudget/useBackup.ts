@@ -1,3 +1,4 @@
+import { xenbudgetKeys } from "./keys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, api } from "../../config/api";
 
@@ -17,7 +18,7 @@ export function useXenBudgetBackup(bookId: string) {
   const queryClient = useQueryClient();
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["xenbudget"] });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.all });
   };
 
   /**

@@ -1,3 +1,4 @@
+import { xenbudgetKeys } from "./keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../config/api";
 import type { XenBudgetBook } from "./types";
@@ -22,10 +23,10 @@ export function useXenBudgetLabels(bookId: string, kind: LabelKind) {
   const queryClient = useQueryClient();
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
-    queryClient.invalidateQueries({ queryKey: ["xenbudget", "items", bookId] });
-    queryClient.invalidateQueries({ queryKey: ["xenbudget", "summary", bookId] });
-    queryClient.invalidateQueries({ queryKey: ["xenbudget", "budget-status", bookId] });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.book(bookId) });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.items(bookId) });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.summary(bookId) });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.budgetStatus(bookId) });
   };
 
   const base = `/api/xenbudget/books/${bookId}/${kind}`;
@@ -70,7 +71,7 @@ export function useXenBudgetLabels(bookId: string, kind: LabelKind) {
  */
 export function useXenBudgetCategoryItemCounts(bookId: string) {
   const query = useQuery({
-    queryKey: ["xenbudget", "category-item-counts", bookId],
+    queryKey: xenbudgetKeys.categoryItemCounts(bookId),
     queryFn: async () => {
       return api.get<Record<string, number>>(`/api/xenbudget/books/${bookId}/categories/counts`);
     },
@@ -92,10 +93,10 @@ export function useXenBudgetReseedLabels(bookId: string) {
       return api.post<XenBudgetBook>(`/api/xenbudget/books/${bookId}/reseed-labels`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
-      queryClient.invalidateQueries({ queryKey: ["xenbudget", "items", bookId] });
-      queryClient.invalidateQueries({ queryKey: ["xenbudget", "summary", bookId] });
-      queryClient.invalidateQueries({ queryKey: ["xenbudget", "budget-status", bookId] });
+      queryClient.invalidateQueries({ queryKey: xenbudgetKeys.book(bookId) });
+      queryClient.invalidateQueries({ queryKey: xenbudgetKeys.items(bookId) });
+      queryClient.invalidateQueries({ queryKey: xenbudgetKeys.summary(bookId) });
+      queryClient.invalidateQueries({ queryKey: xenbudgetKeys.budgetStatus(bookId) });
     },
   });
 

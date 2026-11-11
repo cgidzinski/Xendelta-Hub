@@ -1,3 +1,4 @@
+import { xensplitKeys } from "../../../hooks/xensplit/keys";
 import { useUploadProgress } from "../../../hooks/useUploadProgress";
 import DetailHeader from "../../../components/ui/DetailHeader";
 import SectionLabel from "../../../components/ui/SectionLabel";
@@ -369,8 +370,8 @@ export default function GroupDetail() {
     try {
       await apiClient.post(`/api/xensplit/groups/${groupId}/transfer`, { newOwnerId: menuMemberId });
       enqueueSnackbar("Ownership transferred", { variant: "success" });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "groups"] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.groups() });
     } catch {
       enqueueSnackbar("Failed to transfer ownership", { variant: "error" });
     } finally {

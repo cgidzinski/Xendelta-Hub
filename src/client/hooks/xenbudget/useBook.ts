@@ -1,3 +1,4 @@
+import { xenbudgetKeys } from "./keys";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, api } from "../../config/api";
 import type { XenBudgetBook, UpdateBookInput } from "./types";
@@ -6,7 +7,7 @@ export function useXenBudgetBook(bookId: string) {
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["xenbudget", "book", bookId],
+    queryKey: xenbudgetKeys.book(bookId),
     queryFn: async () => {
       return api.get<XenBudgetBook>(`/api/xenbudget/books/${bookId}`);
     },
@@ -18,8 +19,8 @@ export function useXenBudgetBook(bookId: string) {
   });
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
-    queryClient.invalidateQueries({ queryKey: ["xenbudget", "books"] });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.book(bookId) });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.books() });
   };
 
   const updateMutation = useMutation({
@@ -48,8 +49,8 @@ export function useXenBudgetBook(bookId: string) {
       await apiClient.delete(`/api/xenbudget/books/${bookId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xenbudget", "books"] });
-      queryClient.removeQueries({ queryKey: ["xenbudget", "book", bookId] });
+      queryClient.invalidateQueries({ queryKey: xenbudgetKeys.books() });
+      queryClient.removeQueries({ queryKey: xenbudgetKeys.book(bookId) });
     },
   });
 

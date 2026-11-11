@@ -1,3 +1,4 @@
+import { xensplitKeys } from "./keys";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, api } from "../../config/api";
 import type { XenSplit, CreateXenSplitInput } from "./types";
@@ -7,7 +8,7 @@ export function useXenSplits() {
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["xensplit", "groups"],
+    queryKey: xensplitKeys.groups(),
     queryFn: async () => {
       return api.get<XenSplit[]>("/api/xensplit/groups");
     },
@@ -21,7 +22,7 @@ export function useXenSplits() {
       return api.post<XenSplit>("/api/xensplit/groups", input);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "groups"] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.groups() });
     },
   });
 
@@ -30,7 +31,7 @@ export function useXenSplits() {
       await apiClient.delete(`/api/xensplit/groups/${groupId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "groups"] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.groups() });
     },
   });
 

@@ -1,3 +1,4 @@
+import { xensplitKeys } from "./keys";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, api } from "../../config/api";
 import type { XenSplit } from "./types";
@@ -7,7 +8,7 @@ export function useXenSplit(groupId: string) {
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["xensplit", "group", groupId],
+    queryKey: xensplitKeys.group(groupId),
     queryFn: async () => {
       return api.get<XenSplit>(`/api/xensplit/groups/${groupId}`);
     },
@@ -38,8 +39,8 @@ export function useXenSplit(groupId: string) {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "groups"] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.groups() });
     },
   });
 
@@ -50,8 +51,8 @@ export function useXenSplit(groupId: string) {
       return api.post<XenSplit>(`/api/xensplit/groups/${groupId}/image`, formData);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "groups"] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.groups() });
     },
   });
 
@@ -60,7 +61,7 @@ export function useXenSplit(groupId: string) {
       return api.post<XenSplit>(`/api/xensplit/groups/${groupId}/members`, { memberIds });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
     },
   });
 
@@ -70,7 +71,7 @@ export function useXenSplit(groupId: string) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
     },
   });
 

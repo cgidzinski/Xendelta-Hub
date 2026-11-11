@@ -1,3 +1,4 @@
+import { xenboxKeys } from "./keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, UPLOAD_TIMEOUT_MS, api } from "../../config/api";
 import { XenBoxFile, XenBoxFileListResponse } from "../../types/XenBoxFile";
@@ -167,7 +168,7 @@ export const useXenboxUpload = () => {
       const result = await finalizeUpload(uploadId);
 
       // Invalidate queries to refresh file list and user profile
-      queryClient.invalidateQueries({ queryKey: ["xenboxFiles"] });
+      queryClient.invalidateQueries({ queryKey: xenboxKeys.files() });
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
 
       return result;
@@ -183,7 +184,7 @@ export const useXenboxUpload = () => {
 // Hook for listing xenbox files
 export const useXenboxFiles = (search?: string) => {
   return useQuery({
-    queryKey: ["xenboxFiles", search],
+    queryKey: xenboxKeys.files(search),
     queryFn: () => fetchXenboxFiles(search),
     retry: 1, // Only retry once to avoid duplicate errors
     retryDelay: 1000,
@@ -204,7 +205,7 @@ export const useXenboxFileSettings = () => {
       settings: { password?: string | null; expiry?: string | null };
     }) => updateFileSettings(fileId, settings),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xenboxFiles"] });
+      queryClient.invalidateQueries({ queryKey: xenboxKeys.files() });
     },
   });
 };
@@ -218,7 +219,7 @@ export const useXenbox = () => {
     mutationFn: deleteXenboxFile,
     onSuccess: () => {
       // Invalidate queries to refresh file list and user profile
-      queryClient.invalidateQueries({ queryKey: ["xenboxFiles"] });
+      queryClient.invalidateQueries({ queryKey: xenboxKeys.files() });
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
     },
   });
