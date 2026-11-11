@@ -1,4 +1,5 @@
 import mongoose, { Schema, type InferSchemaType } from "mongoose";
+import { memberSchema, rosterSync } from "../utils/membership";
 
 const splitSchema = new Schema(
   {
@@ -122,6 +123,8 @@ const xenSplitSchema = new Schema({
   created_by: { type: String, required: true },
   created_at: { type: Date, default: Date.now },
   members: [{ type: Schema.Types.ObjectId, ref: "User" }],
+  // The standard membership shape, derived from created_by + members on every save (utils/membership.ts).
+  roster: { type: [memberSchema], default: [] },
   expenses: [expenseSchema],
   settlements: [settlementSchema],
   exchanges: [exchangeSchema],
@@ -130,6 +133,8 @@ const xenSplitSchema = new Schema({
 
 // Every "my groups" list is find({ members: userId }); without this it scans the collection.
 xenSplitSchema.index({ members: 1 });
+xenSplitSchema.index({ "roster.user_id": 1 });
+rosterSync(xenSplitSchema);
 
 export type XenSplitAttrs = InferSchemaType<typeof xenSplitSchema>;
 

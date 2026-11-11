@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { accessOf, canManage, canView } from "../utils/membership";
 import { AppError } from "../utils/http";
 import { XenSplit } from "../models/xenSplit";
 import { User } from "../models/user";
@@ -155,7 +156,7 @@ module.exports = function (app: any) {
         }
 
         // Check if user is a member
-        if (!group.members.some((m: any) => m.toString() === userId)) {
+        if (!canView(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Not a member of this group" });
         }
 
@@ -195,7 +196,7 @@ module.exports = function (app: any) {
           return res.status(404).json({ status: false, message: "Group not found" });
         }
 
-        if (group.created_by !== userId) {
+        if (!canManage(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Only the creator can update the group" });
         }
 
@@ -246,7 +247,7 @@ module.exports = function (app: any) {
           return res.status(404).json({ status: false, message: "Group not found" });
         }
 
-        if (group.created_by !== userId) {
+        if (!canManage(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Only the creator can update the group image" });
         }
 
@@ -289,7 +290,7 @@ module.exports = function (app: any) {
           return res.status(404).json({ status: false, message: "Group not found" });
         }
 
-        if (group.created_by !== userId) {
+        if (!canManage(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Only the creator can delete the group" });
         }
 
@@ -326,12 +327,12 @@ module.exports = function (app: any) {
         }
 
         // Only creator can transfer
-        if (group.created_by !== userId) {
+        if (!canManage(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Only the creator can transfer ownership" });
         }
 
         // Verify new owner is a member
-        if (!group.members.some((m: any) => m.toString() === newOwnerId)) {
+        if (!canView(accessOf(group), newOwnerId)) {
           return res.status(400).json({ status: false, message: "New owner must be a member" });
         }
 
@@ -378,7 +379,7 @@ module.exports = function (app: any) {
           return res.status(404).json({ status: false, message: "Group not found" });
         }
 
-        if (!group.members.some((m: any) => m.toString() === userId)) {
+        if (!canView(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Not a member of this group" });
         }
 
@@ -390,7 +391,7 @@ module.exports = function (app: any) {
         const newMemberIds: string[] = [];
         for (const u of users) {
           const uid = (u._id as any).toString();
-          if (!group.members.some((m: any) => m.toString() === uid)) {
+          if (!canView(accessOf(group), uid)) {
             group.members.push(uid);
             newMemberIds.push(uid);
           }
@@ -442,7 +443,7 @@ module.exports = function (app: any) {
         }
 
         // Can only remove self or if you're the creator
-        if (targetUserId !== userId && group.created_by !== userId) {
+        if (targetUserId !== userId && !canManage(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Cannot remove this member" });
         }
 
@@ -454,7 +455,7 @@ module.exports = function (app: any) {
         const balances = calculateBalances(groupForCalc);
         const userBalance = balances[targetUserId] || {};
         const hasOutstanding = Object.values(userBalance).some((b: number) => Math.abs(b) > 0.01);
-        const isCreatorRemoving = group.created_by === userId && targetUserId !== userId;
+        const isCreatorRemoving = canManage(accessOf(group), userId) && targetUserId !== userId;
 
         // Block if member has outstanding balance and is leaving voluntarily (not being removed by creator)
         if (hasOutstanding && targetUserId === userId && !isCreatorRemoving) {
@@ -466,7 +467,7 @@ module.exports = function (app: any) {
 
         // If creator is leaving, transfer ownership to next member
         let inheritedOwnerId: string | null = null;
-        if (group.created_by === targetUserId) {
+        if (canManage(accessOf(group), targetUserId)) {
           const remainingMembers = group.members.filter((m: any) => m.toString() !== targetUserId);
           if (remainingMembers.length > 0) {
             inheritedOwnerId = remainingMembers[0].toString();
@@ -539,12 +540,12 @@ module.exports = function (app: any) {
           return res.status(404).json({ status: false, message: "Group not found" });
         }
 
-        if (!group.members.some((m: any) => m.toString() === userId)) {
+        if (!canView(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Not a member of this group" });
         }
 
         // Validate payer is a member
-        if (!group.members.some((m: any) => m.toString() === paid_by)) {
+        if (!canView(accessOf(group), paid_by)) {
           return res.status(400).json({ status: false, message: "Payer must be a group member" });
         }
 
@@ -706,7 +707,7 @@ module.exports = function (app: any) {
         const expense = group.expenses[expenseIndex];
 
         // Only the expense creator or group owner may edit
-        if (expense.created_by && expense.created_by !== userId && group.created_by !== userId) {
+        if (expense.created_by && expense.created_by !== userId && !canManage(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Not authorised to edit this expense" });
         }
 
@@ -757,7 +758,7 @@ module.exports = function (app: any) {
         if (updates.split_type !== undefined) expense.split_type = updates.split_type;
         if (updates.splits !== undefined) expense.splits = updates.splits;
         if (updates.on_hold !== undefined) {
-          const isGroupCreator = group.created_by === userId;
+          const isGroupCreator = canManage(accessOf(group), userId);
           if (!isGroupCreator && updates.on_hold === true && expense.on_hold !== true) {
             return res
               .status(400)
@@ -905,7 +906,7 @@ module.exports = function (app: any) {
 
         // Only the expense creator or group owner may delete. Checked before anything is
         // touched - an unauthorised caller must leave no trace.
-        if (expense.created_by && expense.created_by !== userId && group.created_by !== userId) {
+        if (expense.created_by && expense.created_by !== userId && !canManage(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Not authorised to delete this expense" });
         }
 
@@ -960,7 +961,7 @@ module.exports = function (app: any) {
           return res.status(404).json({ status: false, message: "Group not found" });
         }
 
-        if (!group.members.some((m: any) => m.toString() === userId)) {
+        if (!canView(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Not a member of this group" });
         }
 
@@ -971,7 +972,7 @@ module.exports = function (app: any) {
 
         // Only the series creator or group owner may cancel (a missing created_by
         // does not bypass the check — the group owner still can)
-        if (series.created_by !== userId && group.created_by !== userId) {
+        if (series.created_by !== userId && !canManage(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Not authorised to cancel this recurring expense" });
         }
 
@@ -1014,7 +1015,7 @@ module.exports = function (app: any) {
           return res.status(404).json({ status: false, message: "Group not found" });
         }
 
-        if (!group.members.some((m: any) => m.toString() === userId)) {
+        if (!canView(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Not a member of this group" });
         }
 
@@ -1090,7 +1091,7 @@ module.exports = function (app: any) {
           return res.status(404).json({ status: false, message: "Group not found" });
         }
 
-        if (!group.members.some((m: any) => m.toString() === userId)) {
+        if (!canView(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Not a member of this group" });
         }
 
@@ -1144,7 +1145,7 @@ module.exports = function (app: any) {
           return res.status(404).json({ status: false, message: "Group not found" });
         }
 
-        if (!group.members.some((m: any) => m.toString() === userId)) {
+        if (!canView(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Not a member of this group" });
         }
 
@@ -1217,7 +1218,7 @@ module.exports = function (app: any) {
           return res.status(404).json({ status: false, message: "Group not found" });
         }
 
-        if (!group.members.some((m: any) => m.toString() === userId)) {
+        if (!canView(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Not a member of this group" });
         }
 
@@ -1296,7 +1297,7 @@ module.exports = function (app: any) {
           return res.status(404).json({ status: false, message: "Group not found" });
         }
 
-        if (!group.members.some((m: any) => m.toString() === userId)) {
+        if (!canView(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Not a member of this group" });
         }
 
@@ -1356,7 +1357,7 @@ module.exports = function (app: any) {
           return res.status(404).json({ status: false, message: "Group not found" });
         }
 
-        if (!group.members.some((m: any) => m.toString() === userId)) {
+        if (!canView(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Not a member of this group" });
         }
 
@@ -1367,7 +1368,7 @@ module.exports = function (app: any) {
 
         const settlement = group.settlements[settlementIndex];
         // Only the debtor, creditor, or group owner may undo a settlement
-        if (settlement.from !== userId && settlement.to !== userId && group.created_by !== userId) {
+        if (settlement.from !== userId && settlement.to !== userId && !canManage(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Not authorised to undo this settlement" });
         }
 
@@ -1412,15 +1413,15 @@ module.exports = function (app: any) {
           return res.status(404).json({ status: false, message: "Group not found" });
         }
 
-        if (!group.members.some((m: any) => m.toString() === userId)) {
+        if (!canView(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Not a member of this group" });
         }
 
-        if (!group.members.some((m: any) => m.toString() === party_a)) {
+        if (!canView(accessOf(group), party_a)) {
           return res.status(400).json({ status: false, message: "Party A must be a group member" });
         }
 
-        if (!group.members.some((m: any) => m.toString() === party_b)) {
+        if (!canView(accessOf(group), party_b)) {
           return res.status(400).json({ status: false, message: "Party B must be a group member" });
         }
 
@@ -1488,7 +1489,7 @@ module.exports = function (app: any) {
           return res.status(404).json({ status: false, message: "Group not found" });
         }
 
-        if (!group.members.some((m: any) => m.toString() === userId)) {
+        if (!canView(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Not a member of this group" });
         }
 
@@ -1503,7 +1504,7 @@ module.exports = function (app: any) {
           exchange.created_by !== userId &&
           exchange.party_a !== userId &&
           exchange.party_b !== userId &&
-          group.created_by !== userId
+          !canManage(accessOf(group), userId)
         ) {
           return res.status(403).json({ status: false, message: "Not authorised to delete this exchange" });
         }
@@ -1543,12 +1544,12 @@ module.exports = function (app: any) {
         const userId = (req.user as any)._id.toString();
         const { groupId } = req.params;
 
-        const group = await XenSplit.findById(groupId).select("created_by");
+        const group = await XenSplit.findById(groupId).select("created_by members");
         if (!group) {
           return res.status(404).json({ status: false, message: "Group not found" });
         }
 
-        if (group.created_by !== userId) {
+        if (!canManage(accessOf(group), userId)) {
           return res.status(403).json({ status: false, message: "Only the group owner can view the activity log" });
         }
 
@@ -1616,7 +1617,7 @@ module.exports = function (app: any) {
       return res.status(404).json({ status: false, message: "Group not found" });
     }
 
-    if (group.created_by !== userId) {
+    if (!canManage(accessOf(group), userId)) {
       return res.status(403).json({ status: false, message: `Only the group owner can restore a deleted ${kind}` });
     }
 

@@ -8,7 +8,7 @@ import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 
 let t: TestApp;
 beforeAll(async () => {
-  t = await startTestApp([() => import("./xenbudget/index.js")]);
+  t = await startTestApp([() => import("./xenbudget/index.js"), () => import("./xensplit.js")]);
 }, 180_000);
 afterAll(async () => {
   await t?.stop();
@@ -83,5 +83,82 @@ describe("XenBudget roster", () => {
       [A, "editor"],
       [B, "owner"],
     ]);
+  });
+});
+
+describe("XenSplit roster", () => {
+  it("follows create, add member, transfer, and the owner leaving", async () => {
+    const [a, b, c] = await Promise.all([createUser(), createUser(), createUser()]);
+    const [A, B, C] = [a.user._id.toString(), b.user._id.toString(), c.user._id.toString()];
+    const rosterOf = async (id: string) =>
+      (
+        (await mongoose.connection.collection("xensplits").findOne({ _id: new mongoose.Types.ObjectId(id) }))!
+          .roster as Array<{
+          user_id: string;
+          role: string;
+        }>
+      ).map((r) => [r.user_id, r.role]);
+
+    const created = await request(t.app)
+      .post("/api/xensplit/groups")
+      .set(auth(a.token))
+      .send({ name: "Trip", default_currency: "CAD", memberIds: [B] });
+    expect(created.status, JSON.stringify(created.body)).toBe(200);
+    const id = created.body.data.group?._id ?? created.body.data._id;
+    expect(await rosterOf(id)).toEqual([
+      [A, "owner"],
+      [B, "editor"],
+    ]);
+
+    // any member adds people; a stranger cannot
+    const stranger = await createUser();
+    expect(
+      (
+        await request(t.app)
+          .post(`/api/xensplit/groups/${id}/members`)
+          .set(auth(stranger.token))
+          .send({ memberIds: [C] })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(t.app)
+          .post(`/api/xensplit/groups/${id}/members`)
+          .set(auth(b.token))
+          .send({ memberIds: [C] })
+      ).status,
+    ).toBe(200);
+    expect((await rosterOf(id)).length).toBe(3);
+
+    // only the owner transfers, and only to a member
+    expect(
+      (await request(t.app).post(`/api/xensplit/groups/${id}/transfer`).set(auth(b.token)).send({ newOwnerId: C }))
+        .status,
+    ).toBe(403);
+    expect(
+      (
+        await request(t.app)
+          .post(`/api/xensplit/groups/${id}/transfer`)
+          .set(auth(a.token))
+          .send({ newOwnerId: stranger.user._id.toString() })
+      ).status,
+    ).toBe(400);
+    expect(
+      (await request(t.app).post(`/api/xensplit/groups/${id}/transfer`).set(auth(a.token)).send({ newOwnerId: B }))
+        .status,
+    ).toBe(200);
+    expect(await rosterOf(id)).toEqual([
+      [A, "editor"],
+      [B, "owner"],
+      [C, "editor"],
+    ]);
+
+    // the owner leaving hands the group to someone else, and the roster agrees
+    expect((await request(t.app).delete(`/api/xensplit/groups/${id}/members/${B}`).set(auth(b.token))).status).toBe(
+      200,
+    );
+    const after = await rosterOf(id);
+    expect(after.map((r) => r[0]).sort()).toEqual([A, C].sort());
+    expect(after.filter((r) => r[1] === "owner").length).toBe(1);
   });
 });
