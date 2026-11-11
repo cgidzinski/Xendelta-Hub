@@ -13,7 +13,7 @@ import {
   RECIPAINT_THUMB_MAX_EDGE,
   thumbGcsPathFor,
   filenameFromAssetUrl,
-} from "../../shared/recipaint/assetUrls";
+} from "@shared/recipaint/assetUrls";
 
 // Recipaint filenames are unique per upload (timestamp + random), so the objects are
 // immutable and can be cached hard - the default no-store would refetch every photo.

@@ -4,7 +4,7 @@ import { Delete as DeleteIcon, Save as SaveIcon } from "@mui/icons-material";
 import { Recipe } from "../../../../types/Recipe";
 import { RecipeStep } from "../../../../types/RecipeStep";
 import { useRecipaintAssets } from "../../../../hooks/recipaint/useRecipaint";
-import { cleanPaints } from "../../../../../shared/recipaint/paints";
+import { cleanPaints } from "@shared/recipaint/paints";
 import ImageUploader from "./ImageUploader";
 import StepEditor from "./StepEditor";
 import { cardSx } from "../../../../components/ui/surfaceStyles";

@@ -1,4 +1,3 @@
-import React from "react";
 import { Box, Typography, IconButton, Toolbar } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -18,7 +17,6 @@ interface ConversationHeaderProps {
 export default function ConversationHeader({
   conversation,
   profileId,
-  onRemoveParticipant,
   getParticipantDisplay,
   onSettingsClick,
   onUsersClick,

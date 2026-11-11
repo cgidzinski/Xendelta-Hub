@@ -7,7 +7,7 @@ import { useTheme } from "@mui/material/styles";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import {
   COOK_METHODS, COOK_METHOD_LABELS, EMPTY_FILTERS, type CookMethod, type KitchenFilters, type KitchenSort,
-} from "../../../../../shared/xenkitchen/kitchen";
+} from "@shared/xenkitchen/kitchen";
 import { useIngredientSuggestions, useKitchenTags } from "../../../../hooks/xenkitchen/useKitchen";
 import { MethodIconView } from "./kitchenIcons";
 

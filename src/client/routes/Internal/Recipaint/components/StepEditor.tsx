@@ -2,7 +2,7 @@ import { memo } from "react";
 import { Autocomplete, Box, TextField, IconButton, Card, CardContent, Typography, Chip } from "@mui/material";
 import { Delete as DeleteIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon } from "@mui/icons-material";
 import { RecipeStep } from "../../../../types/RecipeStep";
-import { PAINT_METHODS } from "../../../../../shared/recipaint/paints";
+import { PAINT_METHODS } from "@shared/recipaint/paints";
 import type { StepAction } from "./RecipeForm";
 import ImageUploader from "./ImageUploader";
 import PaintListEditor from "./PaintListEditor";

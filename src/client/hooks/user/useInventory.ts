@@ -27,7 +27,7 @@ interface UseInventoryReturn {
   isError: boolean;
   error: Error | null;
   refetch: () => void;
-  useItem: (inventoryItemId: string) => Promise<boolean>;
+  redeemItem: (inventoryItemId: string) => Promise<boolean>;
   trashItem: (inventoryItemId: string) => Promise<boolean>;
   isUsing: boolean;
   isTrashing: boolean;
@@ -38,7 +38,7 @@ const fetchInventory = async (): Promise<InventoryItem[]> => {
   return response.data.data!.inventory;
 };
 
-const useItem = async (inventoryItemId: string): Promise<boolean> => {
+const redeemInventoryItem = async (inventoryItemId: string): Promise<boolean> => {
   const response = await apiClient.post<ApiResponse<boolean>>(`/api/user/inventory/${inventoryItemId}/use`);
   return response.data.status;
 };
@@ -73,7 +73,7 @@ export const useInventory = (): UseInventoryReturn => {
   });
 
   const useMutationObj = useMutation({
-    mutationFn: useItem,
+    mutationFn: redeemInventoryItem,
     onSuccess: (data) => {
       if (data) {
         queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
@@ -103,7 +103,7 @@ export const useInventory = (): UseInventoryReturn => {
     isError,
     error: error as Error | null,
     refetch,
-    useItem: useMutationObj.mutateAsync,
+    redeemItem: useMutationObj.mutateAsync,
     trashItem: trashMutationObj.mutateAsync,
     isUsing: useMutationObj.isPending,
     isTrashing: trashMutationObj.isPending,

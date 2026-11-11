@@ -16,7 +16,7 @@ import { cardSx, sectionLabelSx } from "../../../../components/ui/surfaceStyles"
 import { useWakeLock } from "../../../../hooks/useWakeLock";
 import {
   COOK_METHOD_LABELS, formatMinuteRange, formatMinutes, scaleQuantity,
-} from "../../../../../shared/xenkitchen/kitchen";
+} from "@shared/xenkitchen/kitchen";
 import type { KitchenIngredient, KitchenItem, KitchenMethod, KitchenStep } from "../../../../hooks/xenkitchen/useKitchen";
 import { CategoryIconView, MethodIconView } from "./kitchenIcons";
 

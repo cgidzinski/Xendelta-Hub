@@ -1,4 +1,4 @@
-import { RecipePaint } from "../../shared/recipaint/paints";
+import { RecipePaint } from "@shared/recipaint/paints";
 
 /**
  * Recipe step interface

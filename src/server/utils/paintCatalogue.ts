@@ -1,4 +1,4 @@
-import { PaintType } from "../../shared/recipaint/paints";
+import { PaintType } from "@shared/recipaint/paints";
 import catalogueJson from "../data/paintCatalogue.json";
 
 // The shared paint catalogue: 2,164 real paints across Citadel Colour, Vallejo, Army Painter

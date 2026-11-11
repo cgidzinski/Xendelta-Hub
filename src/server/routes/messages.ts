@@ -2,7 +2,6 @@ import express = require("express");
 const { User } = require("../models/user");
 const Conversation = require("../models/conversation");
 import { authenticateToken } from "../middleware/auth";
-import { requireAdmin } from "../middleware/admin";
 import { SocketManager } from "../infrastructure/SocketManager";
 import {
   validate,

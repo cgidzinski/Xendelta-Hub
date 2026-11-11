@@ -3,7 +3,7 @@
  * Utility functions for working with conversations
  */
 
-import { ConversationDocument, Message } from "../types";
+import { ConversationDocument } from "../types";
 
 /**
  * Normalize a date value to an ISO string. Dates are stored as Date in the

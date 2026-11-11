@@ -9,15 +9,14 @@
 //     so a half-finished run can be re-run safely.
 //   * Always write a real `down`. If the change genuinely cannot be reversed, throw
 //     with a one-line reason instead of leaving it empty.
-import type { Connection } from "mongoose";
 
-export async function up(connection: Connection): Promise<void> {
+export async function up(): Promise<void> {
   // const items = connection.collection("xenbudgetitems");
   // await items.updateMany({ currency: { $exists: false } }, { $set: { currency: "CAD" } });
   throw new Error("migration not implemented");
 }
 
-export async function down(connection: Connection): Promise<void> {
+export async function down(): Promise<void> {
   // Reverse of up(). If irreversible:
   //   throw new Error("irreversible: <reason>");
   throw new Error("down not implemented");

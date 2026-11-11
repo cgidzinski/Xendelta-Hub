@@ -1,4 +1,3 @@
-import React from "react";
 import { Button } from "@mui/material";
 import { Google as GoogleIcon, GitHub as GitHubIcon, Email as EmailIcon } from "@mui/icons-material";
 import DiscordIcon from "../../../../components/icons/DiscordIcon";

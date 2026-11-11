@@ -1,4 +1,4 @@
-import { Box, Grid, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import AppCard from "./AppCard";
 import { APPS_REGISTRY } from "../../../../constants/apps";
 

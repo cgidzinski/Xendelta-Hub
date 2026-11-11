@@ -2,7 +2,7 @@ const XenSplit = require("../models/xenSplit");
 import { SocketManager } from "../infrastructure/SocketManager";
 import { notify } from "./notificationUtils";
 import { registerTaskHandler, TaskRunResult } from "../infrastructure/TaskDispatcher";
-import { isDeleted } from "../../shared/xensplit/softDelete";
+import { isDeleted } from "@shared/xensplit/softDelete";
 import { logXenSplit } from "./xenSplitLog";
 
 export const XENSPLIT_RECURRING_TASK_TYPE = "xensplit:recurring-expense";

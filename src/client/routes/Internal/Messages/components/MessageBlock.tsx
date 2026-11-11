@@ -20,8 +20,6 @@ interface MessageBlockProps {
 
 export default function MessageBlock({
   message,
-  previousMessage,
-  nextMessage,
   isMyMessage,
   showAvatar,
   showTimestamp,

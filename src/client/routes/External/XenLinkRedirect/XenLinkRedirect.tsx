@@ -7,26 +7,14 @@ import {
   Button,
   CircularProgress,
   Alert,
-  TextField,
   Card,
   CardContent,
 } from "@mui/material";
-import DownloadIcon from "@mui/icons-material/Download";
-import LockIcon from "@mui/icons-material/Lock";
 import { useTitle } from "../../../hooks/useTitle";
-import { formatDistanceToNow } from "date-fns";
 import { XenLink } from "../../../hooks/xenlink/useXenlink";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import LinkIcon from "@mui/icons-material/Link";
 
-interface FileInfo {
-  filename: string;
-  size: number;
-  mimeType: string;
-  requiresPassword: boolean;
-  isExpired: boolean;
-  expiry: string | null;
-}
 
 export default function XenLinkRedirect() {
   const { slug } = useParams<{ slug: string }>();
@@ -68,7 +56,7 @@ export default function XenLinkRedirect() {
     }
   };
 
-  const handleRedirect = async (skipCheck = false) => {
+  const handleRedirect = async (_skipCheck = false) => {
     if (!slug) return;
 
     setError(null);

@@ -18,7 +18,7 @@ import {
 import FilterListIcon from "@mui/icons-material/FilterList";
 import SearchIcon from "@mui/icons-material/Search";
 import { useSnackbar } from "notistack";
-import { PAINT_TYPES, formatPaint } from "../../../../../shared/recipaint/paints";
+import { PAINT_TYPES, formatPaint } from "@shared/recipaint/paints";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { CollectionPaint, PaintDraft, usePaintMutations, usePaints } from "../../../../hooks/recipaint/usePaints";
 import {

@@ -23,7 +23,7 @@ import AirIcon from "@mui/icons-material/Air";
 import LocalFireDepartmentIcon from "@mui/icons-material/LocalFireDepartment";
 import OutdoorGrillIcon from "@mui/icons-material/OutdoorGrill";
 import KitchenIcon from "@mui/icons-material/Kitchen";
-import type { CategoryIcon, CookMethod } from "../../../../../shared/xenkitchen/kitchen";
+import type { CategoryIcon, CookMethod } from "@shared/xenkitchen/kitchen";
 
 export const CATEGORY_ICON_COMPONENTS: Record<CategoryIcon, React.ComponentType<SvgIconProps>> = {
   restaurant: RestaurantIcon,

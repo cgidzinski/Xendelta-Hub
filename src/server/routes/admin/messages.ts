@@ -8,7 +8,7 @@ import { SocketManager } from "../../infrastructure/SocketManager";
 module.exports = function (app: express.Application) {
   // Admin broadcast messages functionality removed - system user no longer exists
 
-  app.delete("/api/admin/messages/all", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+  app.delete("/api/admin/messages/all", authenticateToken, requireAdmin, async function (_req: express.Request, res: express.Response) {
     const allConversations = await Conversation.find({}).exec();
     let totalMessagesDeleted = 0;
 

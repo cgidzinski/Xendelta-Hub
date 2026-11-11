@@ -64,9 +64,6 @@ export function useXenBudgetLabels(bookId: string, kind: LabelKind) {
     };
 }
 
-export const useXenBudgetCategories = (bookId: string) => useXenBudgetLabels(bookId, "categories");
-export const useXenBudgetFlags = (bookId: string) => useXenBudgetLabels(bookId, "flags");
-
 /**
  * How many items currently carry each category, keyed by name — for the count shown next
  * to a chip in Settings > Categories, and to decide whether deleting one needs a

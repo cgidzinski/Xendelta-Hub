@@ -3,7 +3,7 @@ import { Box, Button, MenuItem, TextField, Typography } from "@mui/material";
 import { useSnackbar } from "notistack";
 import { useUserProfile } from "../../../../hooks/user/useUserProfile";
 import { ALL_CURRENCIES, DEFAULT_CURRENCY, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
-import { ETRANSFER_MAX, isValidEtransfer } from "../../../../../shared/etransfer";
+import { ETRANSFER_MAX, isValidEtransfer } from "@shared/etransfer";
 
 /**
  * Where people should send this user their money. XenSplit shows it to the other party

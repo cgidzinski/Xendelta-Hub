@@ -10,7 +10,7 @@ const { ITEMS } = require("../constants/items");
 module.exports = function (app: express.Application) {
 
     //Get points shop items
-    app.get("/api/points/shop", authenticateToken, async function (req: express.Request, res: express.Response) {
+    app.get("/api/points/shop", authenticateToken, async function (_req: express.Request, res: express.Response) {
         const itemsWithDetails = SHOP_ITEMS.map((shopItem: ShopItem) => ({
             ...shopItem,
             item: ITEMS[shopItem.itemKey],

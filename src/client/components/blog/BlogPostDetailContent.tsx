@@ -1,4 +1,3 @@
-import React from "react";
 import {
   Container,
   Typography,
@@ -97,7 +96,6 @@ interface BlogPostDetailContentProps {
 }
 
 export default function BlogPostDetailContent({
-  blogBasePath,
   post,
   isLoading,
   error,

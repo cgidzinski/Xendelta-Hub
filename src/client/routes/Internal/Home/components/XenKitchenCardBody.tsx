@@ -1,5 +1,5 @@
 import { Box, Skeleton, Typography } from "@mui/material";
-import { EMPTY_FILTERS } from "../../../../../shared/xenkitchen/kitchen";
+import { EMPTY_FILTERS } from "@shared/xenkitchen/kitchen";
 import { useKitchenItems } from "../../../../hooks/xenkitchen/useKitchen";
 
 export default function XenKitchenCardBody() {

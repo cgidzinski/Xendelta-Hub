@@ -1,5 +1,5 @@
 import PageContainer from "../../../components/ui/PageContainer";
-import { Box, Container, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { useTitle } from "../../../hooks/useTitle";
 import CompactHomeHeader from "./components/CompactHomeHeader";
 import PinnedAppsSection from "./components/PinnedAppsSection";

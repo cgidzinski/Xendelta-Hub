@@ -26,13 +26,15 @@ export interface BudgetStatusRange {
 export function useXenBudgetStatus(
     bookId: string, currency?: string, range?: BudgetStatusRange, history?: number,
 ) {
+    const from = range?.from;
+    const to = range?.to;
     const { data, isLoading, isError, error, refetch } = useQuery({
-        queryKey: ["xenbudget", "budget-status", bookId, currency, range?.from, range?.to, history],
+        queryKey: ["xenbudget", "budget-status", bookId, currency, from, to, history],
         queryFn: async () => {
             const res = await apiClient.get(`/api/xenbudget/books/${bookId}/budget-status`, {
                 params: {
                     ...(currency ? { currency } : {}),
-                    ...(range ? { from: range.from, to: range.to } : {}),
+                    ...(from !== undefined && to !== undefined ? { from, to } : {}),
                     ...(history ? { history } : {}),
                 },
             });

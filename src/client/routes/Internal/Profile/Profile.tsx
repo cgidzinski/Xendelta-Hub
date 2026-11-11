@@ -2,7 +2,6 @@ import PageContainer from "../../../components/ui/PageContainer";
 import { useEffect, useState } from "react";
 import {
   Box,
-  Container,
   Card,
   CardContent,
   Typography,
@@ -28,14 +27,12 @@ import {
   Settings as SettingsIcon,
   Notifications,
   Palette,
-  Language,
   VolumeUp,
 } from "@mui/icons-material";
 import { useTitle } from "../../../hooks/useTitle";
 import { useUserProfile, userProfileKeys, UserProfile } from "../../../hooks/user/useUserProfile";
 import { OverlaySpinner } from "../../../components/LoadingSpinner";
 import { useSnackbar } from "notistack";
-import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../../contexts/AuthContext";
 import AuthProviderManager from "./components/AuthProviderManager";
@@ -89,7 +86,6 @@ export default function Profile() {
   const { profile, isLoading, refetch, updateProfile, isUpdating: isUpdatingProfile } = useUserProfile();
   const { logout } = useAuth();
   const { uploadAvatar, isUploading: isUploadingAvatar } = useUserAvatar();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   useTitle("Profile");

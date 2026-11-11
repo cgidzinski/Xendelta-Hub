@@ -3,7 +3,7 @@ import {
   formatMinuteRange,
   formatMinutes,
   totalMinutes,
-} from "../../../shared/xenkitchen/kitchen";
+} from "@shared/xenkitchen/kitchen";
 import type { KitchenItem, KitchenMethod } from "./useKitchen";
 
 export function methodHeadline(m: KitchenMethod): string {

@@ -31,7 +31,7 @@ import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
 import EmptyState from "../../../components/ui/EmptyState";
-import { describePaintDetail, formatPaint } from "../../../../shared/recipaint/paints";
+import { describePaintDetail, formatPaint } from "@shared/recipaint/paints";
 import PaintFormDialog from "./components/PaintFormDialog";
 
 export default function Paints() {

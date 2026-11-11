@@ -40,7 +40,7 @@ export const useConversationSocket = ({ socket, conversationId }: UseConversatio
                     ? data.message
                     : msg
                 )
-                .filter((msg, index, arr) => {
+                .filter((msg) => {
                   // Remove duplicate temp messages, keep only the real one
                   if (msg._id === data.message._id) return true;
                   if (msg._id?.startsWith("temp-") && msg.message === data.message.message) {

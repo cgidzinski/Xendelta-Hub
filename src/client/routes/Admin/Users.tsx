@@ -2,7 +2,6 @@ import PageContainer from "../../components/ui/PageContainer";
 import { useState, useMemo } from "react";
 import {
   Box,
-  Container,
   Card,
   Typography,
   Avatar,
@@ -13,7 +12,6 @@ import {
   TableHead,
   TableRow,
   Chip,
-  CircularProgress,
   Alert,
   TextField,
   InputAdornment,
@@ -26,7 +24,6 @@ import {
   IconButton,
   Tabs,
   Tab,
-  Grid,
   Tooltip,
   FormControlLabel,
   Checkbox,
@@ -40,7 +37,6 @@ import StorageIcon from "@mui/icons-material/Storage";
 import InventoryIcon from "@mui/icons-material/Inventory2";
 import SettingsIcon from "@mui/icons-material/Settings";
 import PersonIcon from "@mui/icons-material/Person";
-import StarsIcon from "@mui/icons-material/Stars";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import SendIcon from "@mui/icons-material/Send";
 import { useSnackbar } from "notistack";
@@ -50,7 +46,6 @@ import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { useAdminUsers, User, NotifyChannel } from "../../hooks/admin/useAdminUsers";
 import { formatFileSize } from "../../utils/fileUtils";
 
-const AVAILABLE_ROLES = ["admin", "user"];
 
 const ITEM_OPTIONS = [
   { value: "1000-point-voucher", label: "1000 Point Voucher" },
@@ -82,7 +77,7 @@ export default function Users() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [userModalOpen, setUserModalOpen] = useState(false);
-  const [editingRoles, setEditingRoles] = useState<string[]>([]);
+  const [, setEditingRoles] = useState<string[]>([]);
   const [editingQuota, setEditingQuota] = useState<string>("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedGiftItem, setSelectedGiftItem] = useState<string>("");
@@ -168,21 +163,6 @@ export default function Users() {
     setActiveTab(0);
   };
 
-  const handleSaveRoles = async () => {
-    if (!selectedUser) return;
-    updateUser(selectedUser._id, { roles: editingRoles })
-      .then(() => {
-        enqueueSnackbar("Roles updated successfully", { variant: "success" });
-        // Update selected user
-        const updatedUser = users.find(u => u._id === selectedUser._id);
-        if (updatedUser) {
-          setSelectedUser({ ...updatedUser, roles: editingRoles });
-        }
-      })
-      .catch((error) => {
-        enqueueSnackbar(error.message || "Failed to update roles", { variant: "error" });
-      });
-  };
 
   const parseQuotaInput = (input: string): number | null => {
     const trimmed = input.trim().toUpperCase();
@@ -298,7 +278,6 @@ export default function Users() {
       });
   };
 
-  const isCurrentUser = selectedUser?._id === profile?._id;
 
   if (isLoading) {
     return (
@@ -436,7 +415,7 @@ export default function Users() {
           </DialogTitle>
           <Tabs
             value={activeTab}
-            onChange={(e, v) => setActiveTab(v)}
+            onChange={(_e, v) => setActiveTab(v)}
             sx={{
               px: 2,
               borderBottom: 1,

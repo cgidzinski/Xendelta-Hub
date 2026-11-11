@@ -1,17 +1,14 @@
 import { pageTitleSx } from "../../../components/ui/surfaceStyles";
 import PageContainer from "../../../components/ui/PageContainer";
-import PageHeader from "../../../components/ui/PageHeader";
 import { useState, useEffect, useMemo } from "react";
 import {
   Box,
-  Container,
   Card,
   Typography,
   List,
   ListItem,
   ListItemText,
   ListItemIcon,
-  Badge,
   CircularProgress,
   Button,
   Dialog,
@@ -22,7 +19,6 @@ import {
   Avatar,
   InputAdornment,
   IconButton,
-  Tooltip,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { formatDistance } from "date-fns";
@@ -48,7 +44,7 @@ export default function Messages() {
   const { conversations, isLoading, isError, error, refetch, createConversation, isCreatingConversation } = useUserMessages();
   const { profile, refetch: refetchProfile } = useUserProfile();
   const { socket } = useSocket();
-  const { enqueueSnackbar } = useSnackbar();
+  useSnackbar();
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -65,12 +61,12 @@ export default function Messages() {
   useEffect(() => {
     if (!socket) return;
 
-    const handleNewMessage = (data: { conversationId: string; message: any }) => {
+    const handleNewMessage = () => {
       queryClient.invalidateQueries({ queryKey: ["userConversations"], exact: false });
       refetchProfile();
     };
 
-    const handleNewConversation = (data: { conversation: Conversation }) => {
+    const handleNewConversation = () => {
       queryClient.invalidateQueries({ queryKey: ["userConversations"], exact: false });
       refetchProfile();
     };
@@ -151,7 +147,7 @@ export default function Messages() {
             {!isLoading && !isError && (
               <List sx={{ p: 1 }}>
                 {conversations && conversations.length > 0 ? (
-                  conversations.map((conversation, index) => (
+                  conversations.map((conversation) => (
                     <Box key={conversation._id} sx={{ p: 0, m: 0 }}>
                       <ListItem
                         onClick={() => navigate(`/internal/messages/${conversation._id}`)}

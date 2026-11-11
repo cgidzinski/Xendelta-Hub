@@ -1,5 +1,5 @@
 import EmptyState from "../../../../components/ui/EmptyState";
-import { Box, Typography, Skeleton } from "@mui/material";
+import { Box, Skeleton } from "@mui/material";
 import { useXenSplits } from "../../../../hooks/xensplit/useGroups";
 import { useAuth } from "../../../../contexts/AuthContext";
 import GroupCard from "../../Xensplit/components/GroupCard";

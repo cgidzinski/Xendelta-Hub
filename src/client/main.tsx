@@ -238,17 +238,7 @@ const router = createBrowserRouter(
               <Route path="budgets" element={<XenBudgetBudgetsSection />} />
               <Route path="csv-maps" element={<XenBudgetCsvMapsSection />} />
               <Route path="imports" element={<XenBudgetImportsSection />} />
-              {/* Old section paths, so a tab or bookmark open mid-development doesn't land on
-                  nothing. Safe to drop once this ships. */}
-              <Route path="book" element={<Navigate to="../general" replace />} />
-              <Route path="people" element={<Navigate to="../general" replace />} />
-              <Route path="backup" element={<Navigate to="../general" replace />} />
-              <Route path="rules" element={<Navigate to="../tagging" replace />} />
             </Route>
-            {/* Budgets and Rules used to be top-level tabs. Redirect rather than blank,
-                for a tab left open across the change. Safe to drop once this ships. */}
-            <Route path="budgets" element={<Navigate to="../settings/budgets" replace />} />
-            <Route path="rules" element={<Navigate to="../settings/tagging" replace />} />
           </Route>
         </Route>
       </Route>

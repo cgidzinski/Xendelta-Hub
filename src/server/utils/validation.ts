@@ -1,8 +1,8 @@
 import { z } from "zod";
 import mongoose from "mongoose";
 import { VALIDATION_LIMITS } from "../constants";
-import { ALL_CURRENCIES } from "../../shared/currencies";
-import { ETRANSFER_MAX, isValidEtransfer } from "../../shared/etransfer";
+import { ALL_CURRENCIES } from "@shared/currencies";
+import { ETRANSFER_MAX, isValidEtransfer } from "@shared/etransfer";
 
 // Helper to validate MongoDB ObjectId
 const objectIdSchema = z.string().refine(

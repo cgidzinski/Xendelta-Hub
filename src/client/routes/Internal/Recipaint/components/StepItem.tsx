@@ -3,7 +3,7 @@ import { RecipeStep } from "../../../../types/RecipeStep";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
 import ImageGallery from "./ImageGallery";
 import PaintChip from "./PaintChip";
-import { cleanPaints, formatPaint } from "../../../../../shared/recipaint/paints";
+import { cleanPaints, formatPaint } from "@shared/recipaint/paints";
 
 interface StepItemProps {
   step: RecipeStep;

@@ -44,7 +44,7 @@ const googleOptions = {
 };
 
 // Google OAuth Strategy
-passport.use(new GoogleStrategy(googleOptions, async (accessToken, refreshToken, profile, done) => {
+passport.use(new GoogleStrategy(googleOptions, async (_accessToken, _refreshToken, profile, done) => {
   try {
     // Check if user already exists with this Google ID
     let user = await User.findOne({ 
@@ -95,7 +95,7 @@ const githubOptions = {
 };
 
 // GitHub OAuth Strategy
-passport.use(new GitHubStrategy(githubOptions, async (accessToken: string, refreshToken: string, profile: any, done: (error: any, user?: any) => void) => {
+passport.use(new GitHubStrategy(githubOptions, async (_accessToken: string, _refreshToken: string, profile: any, done: (error: any, user?: any) => void) => {
   try {
     // Get email from profile (now available with user:email scope)
     const userEmail = profile.emails?.[0]?.value?.toLowerCase();
@@ -156,7 +156,7 @@ const discordOptions = {
 };
 
 // Discord OAuth Strategy
-passport.use(new DiscordStrategy(discordOptions, async (accessToken: string, refreshToken: string, profile: any, done: (error: any, user?: any) => void) => {
+passport.use(new DiscordStrategy(discordOptions, async (_accessToken: string, _refreshToken: string, profile: any, done: (error: any, user?: any) => void) => {
   try {
     const userEmail = (profile.email || profile.emails?.[0]?.value)?.toLowerCase();
 

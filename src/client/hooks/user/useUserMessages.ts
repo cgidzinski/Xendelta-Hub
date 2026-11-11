@@ -263,7 +263,7 @@ export const useUserMessages = (): UseUserMessagesReturn => {
       queryClient.invalidateQueries({ queryKey: userMessagesKeys.conversations() });
       queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
     },
-    onError: (error, variables, context) => {
+    onError: (_error, _variables, context) => {
       // Rollback on error
       if (context?.previousConversations) {
         queryClient.setQueryData(userMessagesKeys.conversations(), context.previousConversations);

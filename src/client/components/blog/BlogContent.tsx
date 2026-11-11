@@ -1,4 +1,3 @@
-import React from "react";
 import {
   Container,
   Typography,
@@ -57,7 +56,7 @@ interface BlogContentProps {
   onPageChange?: (page: number) => void;
 }
 
-export default function BlogContent({ blogBasePath, posts, isLoading, error, onPostClick, pagination, onPageChange }: BlogContentProps) {
+export default function BlogContent({ posts, isLoading, error, onPostClick, pagination, onPageChange }: BlogContentProps) {
   return (
     <Container maxWidth="lg" sx={{ py: 2, flex: 1 }}>
       {isLoading ? (

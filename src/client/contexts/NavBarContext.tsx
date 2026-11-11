@@ -10,10 +10,10 @@ interface NavBarContextType {
 
 const NavBarContext = createContext<NavBarContextType>({
   title: "",
-  setTitle: (value: string) => {},
+  setTitle: () => {},
   isNavBarOpen: true,
   toggleNavBar: () => {},
-  setNavBar: (value: boolean) => {},
+  setNavBar: () => {},
 });
 
 export const NavBarProvider = ({ children }: { children: React.ReactNode }) => {

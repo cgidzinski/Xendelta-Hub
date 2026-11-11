@@ -2,7 +2,6 @@ import PageContainer from "../../components/ui/PageContainer";
 import PageHeader from "../../components/ui/PageHeader";
 import {
   Box,
-  Container,
   Card,
   Typography,
   Button,
@@ -12,7 +11,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  CircularProgress,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -21,27 +19,15 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import ListSkeleton from "../../components/ui/ListSkeleton";
-import { useConfirm } from "../../components/ui/ConfirmProvider";
 import { format } from "date-fns";
 import { useTitle } from "../../hooks/useTitle";
 import { useAdminBlog } from "../../hooks/admin/useAdminBlog";
 
 export default function Blog() {
   const navigate = useNavigate();
-  const { enqueueSnackbar } = useSnackbar();
-  const confirm = useConfirm();
-  const { posts, isLoading, deletePost, isDeleting } = useAdminBlog();
+  useSnackbar();
+  const { posts, isLoading } = useAdminBlog();
 
-  const handleDelete = async (postId: string) => {
-    const ok = await confirm({
-      title: "Delete this blog post?",
-      message: "The post will be removed from the blog.",
-    });
-    if (!ok) return;
-
-    deletePost(postId);
-    enqueueSnackbar("Blog post deleted successfully", { variant: "success" });
-  };
 
   const handleEdit = (postId: string) => {
     navigate(`/admin/blog/${postId}/edit`);

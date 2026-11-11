@@ -4,7 +4,7 @@ import LayersIcon from "@mui/icons-material/Layers";
 import { format } from "date-fns";
 import { RecipeSummary } from "../../../../types/Recipe";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
-import { thumbUrlFor } from "../../../../../shared/recipaint/assetUrls";
+import { thumbUrlFor } from "@shared/recipaint/assetUrls";
 
 interface RecipeCardProps {
   recipe: RecipeSummary;

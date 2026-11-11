@@ -8,7 +8,7 @@ import ImageGallery from "./ImageGallery";
 import PaintChip from "./PaintChip";
 import RecipeSteps from "./RecipeSteps";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
-import { aggregatePaints } from "../../../../../shared/recipaint/paints";
+import { aggregatePaints } from "@shared/recipaint/paints";
 
 interface RecipeViewProps {
   recipe: Recipe;

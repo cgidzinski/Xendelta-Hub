@@ -63,7 +63,6 @@ module.exports = function (app: express.Application) {
   app.post("/api/xenbox/chunk", authenticateToken, async function (req: express.Request, res: express.Response) {
     const uploadId = req.body.uploadId as string;
     const chunkIndex = parseInt(req.body.chunkIndex as string);
-    const totalChunks = parseInt(req.body.totalChunks as string);
     const chunkData = req.body.chunkData;
 
     if (!uploadId) {

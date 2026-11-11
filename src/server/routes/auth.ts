@@ -310,9 +310,7 @@ module.exports = function (app: express.Application) {
   // Helper function for OAuth callbacks
   const handleOAuthCallback = async (
     req: express.Request,
-    res: express.Response,
-    provider: 'google' | 'github' | 'discord'
-  ) => {
+    res: express.Response  ) => {
     const user = req.user as any; // Passport sets full User document, not AuthenticatedRequest structure
     // Regular OAuth flow
     const token = generateToken({
@@ -334,7 +332,7 @@ module.exports = function (app: express.Application) {
     passport.authenticate('google', { failureRedirect: '/login', session: false }),
     async function (req: express.Request, res: express.Response) {
       try {
-        await handleOAuthCallback(req, res, 'google');
+        await handleOAuthCallback(req, res);
       } catch (error) {
         console.error("Google OAuth callback error:", error);
         res.redirect(`/login?error=oauth_failed`);
@@ -351,7 +349,7 @@ module.exports = function (app: express.Application) {
     passport.authenticate('github', { failureRedirect: '/login', session: false }),
     async function (req: express.Request, res: express.Response) {
       try {
-        await handleOAuthCallback(req, res, 'github');
+        await handleOAuthCallback(req, res);
       } catch (error) {
         console.error("GitHub OAuth callback error:", error);
         res.redirect(`/login?error=oauth_failed`);
@@ -368,7 +366,7 @@ module.exports = function (app: express.Application) {
     passport.authenticate('discord', { failureRedirect: '/login', session: false }),
     async function (req: express.Request, res: express.Response) {
       try {
-        await handleOAuthCallback(req, res, 'discord');
+        await handleOAuthCallback(req, res);
       } catch (error) {
         console.error("Discord OAuth callback error:", error);
         res.redirect(`/login?error=oauth_failed`);

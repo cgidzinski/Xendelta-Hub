@@ -7,7 +7,7 @@
 export {
   calculateBalances,
   calculateMinimumTransfers,
-} from "../../shared/xensplit/balances";
+} from "@shared/xensplit/balances";
 export type {
   Transfer,
   BalanceMap,
@@ -15,7 +15,7 @@ export type {
   Settlement,
   Exchange,
   XenSplitDocument,
-} from "../../shared/xensplit/balances";
+} from "@shared/xensplit/balances";
 
 // Resolves the splits to store for an expense given its split_type. Mirrors the
 // pre-existing inline logic from the create/update expense route handlers:

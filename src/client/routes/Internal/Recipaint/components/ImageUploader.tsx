@@ -5,7 +5,7 @@ import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import { useSnackbar } from "notistack";
 import PWAImageCapture from "../../../../pwa/components/PWAImageCapture";
 import { useRecipaintAssets } from "../../../../hooks/recipaint/useRecipaint";
-import { MAX_RECIPAINT_ASSET_SIZE, thumbUrlFor } from "../../../../../shared/recipaint/assetUrls";
+import { MAX_RECIPAINT_ASSET_SIZE, thumbUrlFor } from "@shared/recipaint/assetUrls";
 
 interface ImageUploaderProps {
   images: string[];

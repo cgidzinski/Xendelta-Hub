@@ -1,5 +1,4 @@
 import { ShopItem } from "../types/shopItem";
-import { ITEMS } from "./items";
 
 export const SHOP_ITEMS: ShopItem[] = [
   {

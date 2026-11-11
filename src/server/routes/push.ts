@@ -8,7 +8,7 @@ import { AuthenticatedRequest } from "../types";
 module.exports = function (app: express.Application) {
   // Served at runtime rather than baked in at build time, so the VAPID key lives only in
   // the server's .env and rotating it doesn't require a rebuild.
-  app.get("/api/push/public-key", function (req: express.Request, res: express.Response) {
+  app.get("/api/push/public-key", function (_req: express.Request, res: express.Response) {
     const publicKey = getVapidPublicKey();
 
     if (!publicKey) {

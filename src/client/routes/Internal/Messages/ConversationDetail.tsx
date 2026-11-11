@@ -16,11 +16,9 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import { useUserMessages, useConversation } from "../../../hooks/user/useUserMessages";
 import { Message } from "../../../types/Message";
-import { Conversation } from "../../../types/Conversation";
 import { ParticipantInfo } from "../../../types/ParticipantInfo";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
 import { useSocket } from "../../../hooks/useSocket";
-import { useQueryClient } from "@tanstack/react-query";
 import { useConversationSocket } from "../../../hooks/useConversationSocket";
 import ConversationHeader from "./components/ConversationHeader";
 import ConversationBody from "./components/ConversationBody";
@@ -33,7 +31,6 @@ export default function ConversationDetail() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const navigate = useNavigate();
   const { profile } = useUserProfile();
-  const queryClient = useQueryClient();
   const {
     markConversationAsRead,
     sendMessage,
@@ -43,7 +40,6 @@ export default function ConversationDetail() {
     addParticipants,
     isAddingParticipants,
     removeParticipant,
-    isRemovingParticipant,
     updateConversationName,
     isUpdatingName,
     leaveConversation: leaveConversationMutation,
@@ -148,9 +144,6 @@ export default function ConversationDetail() {
     return participant?.avatar;
   };
 
-  const isSystemMessage = (message: Message): boolean => {
-    return message.from === "system" || message.isSystemMessage === true;
-  };
 
   const getParticipantDisplay = (participantId: string): string => {
     return getParticipantDisplayById(participantId, profile?._id, conversation?.participantInfo);
