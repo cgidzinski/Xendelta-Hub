@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { roundMoney } from "@shared/money";
 import {
   Avatar,
   AvatarGroup,
@@ -180,7 +181,7 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
     setSplitType(t);
     if (!currentItem || selectedCategories.length === 0) return;
     if (t === "exact") {
-      const each = Math.round((currentItem.amount / selectedCategories.length) * 100) / 100;
+      const each = roundMoney(currentItem.amount / selectedCategories.length);
       setCategoryValues(Object.fromEntries(selectedCategories.map((name) => [name, String(each)])));
     } else if (t === "percent") {
       const each = Math.round((100 / selectedCategories.length) * 100) / 100;
@@ -195,7 +196,7 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
     setPeopleShareType(t);
     if (!currentItem || peopleDrafts.length === 0) return;
     if (t === "exact") {
-      const each = Math.round((currentItem.amount / peopleDrafts.length) * 100) / 100;
+      const each = roundMoney(currentItem.amount / peopleDrafts.length);
       setPeopleDrafts((prev) => prev.map((p) => ({ ...p, value: String(each) })));
     } else if (t === "percent") {
       const each = Math.round((100 / peopleDrafts.length) * 100) / 100;

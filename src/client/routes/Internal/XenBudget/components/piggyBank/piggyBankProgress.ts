@@ -1,4 +1,5 @@
 import type { XenBudgetPiggyBank, PiggyBankStatus } from "../../../../../hooks/xenbudget/types";
+import { roundMoney } from "@shared/money";
 
 /**
  * How a piggy bank is doing, and in what order banks are worth reading.
@@ -23,7 +24,7 @@ export function bankProgress(saved: number, target: number): BankProgress {
   // schema requires a positive amount), but a bank is still either funded or not.
   const percent = target > 0 ? Math.round((saved / target) * 100) : saved > 0 ? 100 : 0;
   return {
-    remaining: Math.round((target - saved) * 100) / 100,
+    remaining: roundMoney(target - saved),
     percent,
     reached: saved >= target && target > 0,
   };
@@ -93,8 +94,8 @@ export function bankTotals(banks: XenBudgetPiggyBank[]): BankTotals {
     target += bank.target_amount;
   }
   return {
-    saved: Math.round(saved * 100) / 100,
-    target: Math.round(target * 100) / 100,
+    saved: roundMoney(saved),
+    target: roundMoney(target),
     activeCount,
     completedCount,
   };

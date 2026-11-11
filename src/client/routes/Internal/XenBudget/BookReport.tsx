@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { roundMoney, formatMoney } from "@shared/money";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import { Box, Button, Card, MenuItem, Stack, TextField, Typography, useMediaQuery } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
@@ -194,7 +195,7 @@ export default function BookReport() {
     if (sorted.length <= MAX_BARS) return sorted.map((r) => ({ name: label(r), total: r.total }));
     const head = sorted.slice(0, MAX_BARS - 1).map((r) => ({ name: label(r), total: r.total }));
     const rest = sorted.slice(MAX_BARS - 1).reduce((sum, r) => sum + r.total, 0);
-    return [...head, { name: `Other (${sorted.length - MAX_BARS + 1})`, total: Math.round(rest * 100) / 100 }];
+    return [...head, { name: `Other (${sorted.length - MAX_BARS + 1})`, total: roundMoney(rest) }];
   };
 
   // Deliberately the GROSS outgoings (`c.total`), not the netted figure the table shows:
@@ -289,8 +290,8 @@ export default function BookReport() {
       allowed += capped[p.key] ?? 0;
       return {
         key: labels[i],
-        Spent: Math.round(spent * 100) / 100,
-        Budget: Math.round(allowed * 100) / 100,
+        Spent: roundMoney(spent),
+        Budget: roundMoney(allowed),
       };
     });
   }, [summary, budgets, range.from, range.to]);
@@ -304,8 +305,8 @@ export default function BookReport() {
       .slice(0, MAX_BARS);
     return rows.map((r) => ({
       name: r.label,
-      Budgeted: Math.round((r.budgeted ?? 0) * 100) / 100,
-      Spent: Math.round(r.spent * 100) / 100,
+      Budgeted: roundMoney(r.budgeted ?? 0),
+      Spent: roundMoney(r.spent),
     }));
   }, [categoryReport.rows]);
 
@@ -341,7 +342,7 @@ export default function BookReport() {
       const bucket = cells.get(p.key) ?? {};
       return {
         key: labels[i],
-        ...Object.fromEntries(series.map((s) => [s, Math.round((bucket[s] ?? 0) * 100) / 100])),
+        ...Object.fromEntries(series.map((s) => [s, roundMoney(bucket[s] ?? 0)])),
       };
     });
     return { rows, series };
@@ -410,34 +411,14 @@ export default function BookReport() {
   if (!summary) return null;
 
   const money = (v: number) => formatCurrency(v, summary.currency);
-  const compact = (v: number) => {
-    const abs = Math.abs(v);
-    if (abs >= 1000) {
-      return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: summary.currency,
-        currencyDisplay: "narrowSymbol",
-        notation: "compact",
-        maximumFractionDigits: 1,
-      }).format(v);
-    }
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: summary.currency,
-      currencyDisplay: "narrowSymbol",
-      maximumFractionDigits: 0,
-    }).format(v);
-  };
+  const compact = (v: number) =>
+    Math.abs(v) >= 1000
+      ? formatMoney(v, summary.currency, { symbol: "narrow", compact: true, maximumFractionDigits: 1 })
+      : formatMoney(v, summary.currency, { symbol: "narrow", maximumFractionDigits: 0 });
   // Category breakdown grid: cents only when the value actually has them, so whole
   // amounts stay compact while a $12.50 row shows its $12.50.
   const round = (v: number) =>
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: summary.currency,
-      currencyDisplay: "narrowSymbol",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(v);
+    formatMoney(v, summary.currency, { symbol: "narrow", minimumFractionDigits: 0, maximumFractionDigits: 2 });
   return (
     <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
       <Box sx={{ pl: 2, pr: { xs: 2, sm: 3.5 }, pt: 2, flexShrink: 0 }}>

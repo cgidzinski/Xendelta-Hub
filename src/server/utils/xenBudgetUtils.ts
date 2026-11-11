@@ -1,3 +1,4 @@
+import { roundMoney } from "@shared/money";
 import crypto from "crypto";
 import { resolveSplits } from "./xenSplitUtils";
 
@@ -299,6 +300,6 @@ export function computeImportHash(date: Date | string, amount: number, descripti
 
 // Round money to cents. Amounts are stored as floats in major units (the convention
 // across this codebase), so anything derived from arithmetic needs pinning.
-export function roundMoney(amount: number): number {
-  return Math.round(amount * 100) / 100;
-}
+// Rounding lives in shared/money (the client uses the same function); re-exported here so the
+// XenBudget modules that import it from this file keep working.
+export { roundMoney };

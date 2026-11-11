@@ -1,4 +1,5 @@
 import type { BudgetPeriod } from "../../../../../hooks/xenbudget/types";
+import { roundMoney } from "@shared/money";
 
 /**
  * How a budget's period is shown to people.
@@ -102,10 +103,10 @@ export function normalizedAmounts(period: BudgetPeriod, amount: number | undefin
   if (period === "custom" || amount === undefined || amount <= 0) return {};
   const perMonth = amount * MONTHLY_FACTORS[period];
   return {
-    weekly: Math.round((perMonth / 4) * 100) / 100,
-    monthly: Math.round(perMonth * 100) / 100,
-    quarterly: Math.round(perMonth * 3 * 100) / 100,
-    yearly: Math.round(perMonth * 12 * 100) / 100,
+    weekly: roundMoney(perMonth / 4),
+    monthly: roundMoney(perMonth),
+    quarterly: roundMoney(perMonth * 3),
+    yearly: roundMoney(perMonth * 12),
   };
 }
 

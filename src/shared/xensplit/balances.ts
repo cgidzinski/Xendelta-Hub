@@ -9,6 +9,7 @@
 // Node or DOM APIs, no mongoose.
 
 import { isDeleted } from "./softDelete";
+import { roundMoneyExact } from "../money";
 import type { SoftDeletable } from "./softDelete";
 
 export interface Transfer {
@@ -212,7 +213,7 @@ export function calculateMinimumTransfers(balances: BalanceMap): Transfer[] {
         transfers.push({
           from: debtors[j].id,
           to: creditors[i].id,
-          amount: Number(pay.toFixed(2)),
+          amount: roundMoneyExact(pay),
           currency,
         });
       }

@@ -1,4 +1,5 @@
 import type { RecurringFrequency, XenBudgetRecurringSeries } from "../../../../../hooks/xenbudget/types";
+import { roundMoney } from "@shared/money";
 
 /**
  * Presentation helpers for recurring series, kept out of the component so the date and
@@ -55,5 +56,5 @@ export function commitmentsIn(series: XenBudgetRecurringSeries[], from: Date, to
 
 /** What the charges still to come in a window add up to. */
 export function commitmentTotal(series: XenBudgetRecurringSeries[], from: Date, to: Date): number {
-  return Math.round(commitmentsIn(series, from, to).reduce((sum, s) => sum + s.amount, 0) * 100) / 100;
+  return roundMoney(commitmentsIn(series, from, to).reduce((sum, s) => sum + s.amount, 0));
 }
