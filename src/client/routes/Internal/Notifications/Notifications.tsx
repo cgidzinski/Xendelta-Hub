@@ -1,3 +1,5 @@
+import PageContainer from "../../../components/ui/PageContainer";
+import PageHeader from "../../../components/ui/PageHeader";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -71,7 +73,7 @@ export default function Notifications() {
 
   return (
     <Box>
-      <Container maxWidth="md" sx={{ mt: { xs: 2, sm: 4 } }}>
+      <PageContainer width="narrow">
         <Box sx={{ mb: { xs: 2, sm: 3 }, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
           <Box>
             <Typography variant="h5" component="h1" sx={{ fontWeight: 700, letterSpacing: "-0.02em" }}>
@@ -168,7 +170,7 @@ export default function Notifications() {
           open={Boolean(selectedNotification)}
           onClose={handleCloseModal}
         />
-      </Container>
+      </PageContainer>
     </Box>
   );
 }

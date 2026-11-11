@@ -1,3 +1,6 @@
+import { pageTitleSx } from "../../../components/ui/surfaceStyles";
+import PageContainer from "../../../components/ui/PageContainer";
+import PageHeader from "../../../components/ui/PageHeader";
 import { useState, useEffect, useMemo } from "react";
 import {
   Box,
@@ -108,14 +111,14 @@ export default function Messages() {
 
   return (
     <Box>
-      <Container maxWidth="xl" sx={{ mt: 4 }}>
+      <PageContainer width="wide">
         {/* Header */}
         <Box sx={{ mb: 4, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <Box>
-            <Typography variant="h3" component="h1" gutterBottom>
+            <Typography variant="h5" component="h1" sx={pageTitleSx}>
               Messages
             </Typography>
-            <Typography variant="h6" color="text.secondary">
+            <Typography variant="body2" color="text.secondary">
               Manage your conversations and messages
             </Typography>
           </Box>
@@ -328,7 +331,7 @@ export default function Messages() {
             </Button>
           </DialogActions>
         </Dialog>
-      </Container>
+      </PageContainer>
     </Box>
   );
 }

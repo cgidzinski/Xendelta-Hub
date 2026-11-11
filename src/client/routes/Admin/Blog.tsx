@@ -1,3 +1,5 @@
+import PageContainer from "../../components/ui/PageContainer";
+import PageHeader from "../../components/ui/PageHeader";
 import {
   Box,
   Container,
@@ -53,15 +55,15 @@ export default function Blog() {
 
   return (
     <Box>
-    <Container maxWidth="lg" sx={{ mt: 4 }}>
-      <Box sx={{ mb: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
-          Blog Management
-        </Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
-          Create Post
-        </Button>
-      </Box>
+    <PageContainer>
+      <PageHeader
+        title="Blog Management"
+        actions={
+          <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
+            Create Post
+          </Button>
+        }
+      />
 
       {isLoading ? (
         <Box sx={{ py: 4 }}>
@@ -116,7 +118,7 @@ export default function Blog() {
           </TableContainer>
         </Card>
       )}
-    </Container>
+    </PageContainer>
     </Box>
   );
 }

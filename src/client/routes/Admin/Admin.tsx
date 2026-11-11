@@ -1,3 +1,6 @@
+import { pageTitleSx } from "../../components/ui/surfaceStyles";
+import PageContainer from "../../components/ui/PageContainer";
+import PageHeader from "../../components/ui/PageHeader";
 import { useState, useEffect } from "react";
 import {
   Box,
@@ -146,13 +149,13 @@ export default function Admin() {
 
   return (
     <Box>
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
+      <PageContainer>
         {/* Header */}
         <Box sx={{ mb: 4 }}>
-          <Typography variant="h3" component="h1" gutterBottom>
+          <Typography variant="h5" component="h1" sx={pageTitleSx}>
             General
           </Typography>
-          <Typography variant="h6" color="text.secondary">
+          <Typography variant="body2" color="text.secondary">
             Administrative functions and controls
           </Typography>
         </Box>
@@ -252,7 +255,7 @@ export default function Admin() {
           </Box>
         </Card>
 
-      </Container>
+      </PageContainer>
     </Box>
   );
 }

@@ -1,3 +1,5 @@
+import PageContainer from "../../../components/ui/PageContainer";
+import PageHeader from "../../../components/ui/PageHeader";
 import { Box, Card, CardActionArea, CardActions, CardContent, CardMedia, Container, DialogActions, DialogContent, Typography, Button, Dialog, Grid, Chip, IconButton, Divider } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { PointsShopItem, usePointsShopItems } from "../../../hooks/user/usePoints";
@@ -38,7 +40,7 @@ export default function Shop() {
 
     return (
         <Box>
-            <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+            <PageContainer>
                 {/* Points Header */}
                 <Box sx={{ mb: 4, textAlign: "center" }}>
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, mb: 1 }}>
@@ -262,7 +264,7 @@ export default function Shop() {
                         </Button>
                     </DialogActions>
                 </Dialog>
-            </Container>
+            </PageContainer>
         </Box>
     );
 }
