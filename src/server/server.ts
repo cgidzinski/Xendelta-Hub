@@ -171,7 +171,7 @@ require("./routes/paintCatalogue.ts")(app);
 require("./routes/xenbox.ts")(app);
 require("./routes/xenlink.ts")(app);
 require("./routes/xensplit")(app);
-require("./routes/xenbudget.ts")(app);
+require("./routes/xenbudget")(app);
 require("./routes/xenroutine.ts")(app);
 require("./routes/xenkitchen.ts")(app);
 

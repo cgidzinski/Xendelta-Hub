@@ -37,6 +37,10 @@ plus `npm audit --omit=dev --audit-level=high`.
   `utils/validation/`; `idParams("x")` builds an ObjectId params schema). `validationCoverage.test.ts` fails if a
   new route takes a path param or a body without it; a genuine exception goes in that test's exempt list with a
   reason.
+- **Route files stay small.** A big app gets a folder: `routes/xenbudget/` has `index.ts` (registers the sections
+  in order), `shared.ts` (helpers used by more than one section) and one file per area (`books`, `labels`, `rules`,
+  `backup`, `importCsv`, `budgets`, `piggyBanks`, `summary`, `items`). Each exports `register<Area>Routes(app)`.
+  Registration order matters in Express (a literal path must come before a `:param` path), so keep it in `index.ts`.
 - Changes to a *populated* document are not saved by saving its parent. Update the referenced model directly.
 
 ## Environment
