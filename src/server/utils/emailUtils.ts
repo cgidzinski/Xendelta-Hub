@@ -38,7 +38,7 @@ export async function sendPasswordResetEmail(data: PasswordResetEmailData): Prom
   };
 
   try {
-    const { data: result, error } = await resend.emails.send(emailConfig);
+    const { error } = await resend.emails.send(emailConfig);
     
     if (error) {
       return { success: false, error };

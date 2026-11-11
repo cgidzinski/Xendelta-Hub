@@ -8,7 +8,6 @@ const passport = require("passport");
 const cors = require("cors");
 const helmet = require("helmet");
 const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
-const { initializeDefaultUsers } = require("./utils/defaultUsers");
 const ViteExpress = require("vite-express");
 const { SocketManager } = require("./infrastructure/SocketManager.js");
 const Mongo = require("./infrastructure/MongoDB.js");
@@ -76,7 +75,6 @@ const mongoConnection = Mongo.getConnection();
 let schedulingInitialized = false;
 mongoConnection.on("connected", async () => {
   console.log(">>> MongoDB connected");
-  // await initializeDefaultUsers();
   if (schedulingInitialized) return;
   schedulingInitialized = true;
   try {
@@ -123,7 +121,7 @@ app.use(
 app.use("/api/auth/forgot-password", rateLimit({ windowMs: 60 * 60 * 1000, limit: 5, keyGenerator: clientKey, standardHeaders: true, legacyHeaders: false, message: tooMany }));
 
 // Liveness/readiness for the process manager and uptime checks.
-app.get("/api/health", (req: any, res: any) => {
+app.get("/api/health", (_req: any, res: any) => {
   const connected = Mongo.getConnection().readyState === 1;
   res.status(connected ? 200 : 503).json({ status: connected, uptime: Math.round(process.uptime()) });
 });
@@ -184,7 +182,7 @@ app.use(
 if (Bugsnag.getPlugin("express")) {
   app.use(Bugsnag.getPlugin("express").errorHandler);
 }
-app.use((err: any, req: any, res: any, next: any) => {
+app.use((err: any, _req: any, res: any, _next: any) => {
   console.error(">>> Unhandled error:", err);
   const status = err.status || err.statusCode || 500;
   res.status(status).json({

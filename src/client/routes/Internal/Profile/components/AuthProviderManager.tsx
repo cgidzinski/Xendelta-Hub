@@ -101,7 +101,7 @@ export default function AuthProviderManager() {
     return null;
   }
 
-  const { providers, canUnlinkLocal } = authProviders;
+  const { providers } = authProviders;
 
   // Check which providers are already linked
   const linkedProviders = new Set(providers.map((p) => p.provider));

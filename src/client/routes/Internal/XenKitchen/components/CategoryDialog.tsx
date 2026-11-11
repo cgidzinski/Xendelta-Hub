@@ -11,7 +11,7 @@ import AddIcon from "@mui/icons-material/Add";
 import { useSnackbar } from "notistack";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
-import { CATEGORY_COLORS, CATEGORY_ICONS, type KitchenLayout } from "../../../../../shared/xenkitchen/kitchen";
+import { CATEGORY_COLORS, CATEGORY_ICONS, type KitchenLayout } from "@shared/xenkitchen/kitchen";
 import {
   useCreateKitchenCategory, useDeleteKitchenCategory, useKitchenCategories, useReorderKitchenCategories,
   useUpdateKitchenCategory, type KitchenCategory,

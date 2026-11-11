@@ -1,9 +1,6 @@
 import { alpha } from "@mui/material/styles";
 import HomeIcon from "@mui/icons-material/Home";
-import ArticleIcon from "@mui/icons-material/Article";
 import SecurityIcon from "@mui/icons-material/Security";
-import InventoryIcon from "@mui/icons-material/Inventory2";
-import EditIcon from "@mui/icons-material/Edit";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import { APPS_REGISTRY, AppRegistryItem, resolvePinnedApps } from "../../constants/apps";

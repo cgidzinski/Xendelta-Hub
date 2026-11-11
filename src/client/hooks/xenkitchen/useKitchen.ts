@@ -7,7 +7,7 @@ import {
   type CookMethod,
   type KitchenFilters,
   type KitchenLayout,
-} from "../../../shared/xenkitchen/kitchen";
+} from "@shared/xenkitchen/kitchen";
 
 export type BookRole = "owner" | "editor" | "viewer";
 

@@ -110,7 +110,6 @@ export const useAuthProviders = () => {
   const {
     data: authProviders,
     isLoading: loading,
-    isError,
     error,
     refetch: fetchAuthProviders,
   } = useQuery({

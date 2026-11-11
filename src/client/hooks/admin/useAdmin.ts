@@ -7,12 +7,6 @@ interface RolesResponse {
   roles: string[];
 }
 
-interface SendNotificationResponse {
-  message: string;
-  data?: {
-    successCount?: number;
-  };
-}
 
 interface DeleteMessagesResponse {
   message: string;

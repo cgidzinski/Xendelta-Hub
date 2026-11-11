@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PAINT_TYPES, catalogueKey } from "../../shared/recipaint/paints";
+import { PAINT_TYPES, catalogueKey } from "@shared/recipaint/paints";
 import {
   DEFAULT_SEARCH_LIMIT,
   MAX_SEARCH_LIMIT,

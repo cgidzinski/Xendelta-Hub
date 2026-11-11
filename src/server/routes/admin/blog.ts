@@ -10,7 +10,7 @@ import { deleteFromGCS } from "../../utils/gcsUtils";
 import { AuthenticatedRequest } from "../../types";
 
 module.exports = function (app: express.Application) {
-  app.get("/api/admin/blog", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+  app.get("/api/admin/blog", authenticateToken, requireAdmin, async function (_req: express.Request, res: express.Response) {
     const posts = await BlogPost.find({})
       .populate("author", "username avatar")
       .sort({ createdAt: -1 })

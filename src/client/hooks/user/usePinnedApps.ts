@@ -23,7 +23,7 @@ export const usePinnedApps = () => {
 
   const { mutateAsync: updatePinnedAppsMutation, isPending: isUpdating, error: updateError } = useMutation({
     mutationFn: updatePinnedApps,
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
     },
   });

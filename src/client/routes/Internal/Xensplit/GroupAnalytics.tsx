@@ -2,7 +2,6 @@ import SectionLabel from "../../../components/ui/SectionLabel";
 import { useState, useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Box, Typography, Button, IconButton } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
@@ -16,7 +15,6 @@ import { CHART_COLORS } from "../../../components/ui/chartColors";
 
 export default function GroupAnalytics() {
     const { group, user, balancesData } = useOutletContext<GroupDetailContext>();
-    const theme = useTheme();
 
     const defaultCurrency = group.default_currency || "CAD";
 

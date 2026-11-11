@@ -1,4 +1,4 @@
-import type { EtransferInfo } from "../../../shared/etransfer";
+import type { EtransferInfo } from "@shared/etransfer";
 
 export type { EtransferInfo };
 

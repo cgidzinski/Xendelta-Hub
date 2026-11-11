@@ -1,6 +1,6 @@
 const ScheduledTask = require("../models/scheduledTask");
 import { XENSPLIT_RECURRING_TASK_TYPE } from "./xensplitRecurringHandler";
-import { DEFAULT_CURRENCY } from "../../shared/currencies";
+import { DEFAULT_CURRENCY } from "@shared/currencies";
 
 /**
  * The member fields a group is populated with. Members settle up with each other, so

@@ -4,7 +4,7 @@ import {
   pickTargetCategory, removeMember, roleIn, generateShareToken, itemFieldsFromBody, SHARE_TOKEN_PATTERN,
   serializeItem, suggestIngredients,
 } from "./xenKitchen";
-import { EMPTY_FILTERS } from "../../shared/xenkitchen/kitchen";
+import { EMPTY_FILTERS } from "@shared/xenkitchen/kitchen";
 
 const dinner = { _id: "c1", layout: "recipe" as const, name: "Dinner", color: "#e57373", icon: "dinner" };
 const frozen = { _id: "c2", layout: "instructions" as const, name: "Frozen", color: "#7986cb", icon: "frozen" };

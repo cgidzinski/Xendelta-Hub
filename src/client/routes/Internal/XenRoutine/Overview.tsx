@@ -94,7 +94,6 @@ function PendingCard({ occ }: { occ: Occurrence }) {
 export default function Overview() {
     const { openCreate } = useOutletContext<XenRoutineOutletContext>();
     const { routines, isLoading, isError, error, refetch } = useRoutines();
-    const invalidate = useInvalidateRoutines();
     // The three view settings are remembered per browser (localStorage), and a stored value
     // is only used if it is still one of the choices on offer.
     const [filter, setFilter] = useLocalStorageState<Filter>(

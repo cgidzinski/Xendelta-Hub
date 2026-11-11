@@ -28,7 +28,7 @@ function StatItem({
 
 export default function CompactHomeHeader() {
     const { profile, isLoading: profileLoading } = useUserProfile();
-    const { totalUnread, conversationsUnread, notificationsUnread, isLoading: inboxLoading } = useInbox();
+    const { conversationsUnread, notificationsUnread, isLoading: inboxLoading } = useInbox();
     const isLoading = profileLoading || inboxLoading;
 
     if (isLoading) {

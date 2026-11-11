@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Box, Dialog, IconButton, useMediaQuery, useTheme } from "@mui/material";
-import { thumbUrlFor } from "../../../../../shared/recipaint/assetUrls";
+import { thumbUrlFor } from "@shared/recipaint/assetUrls";
 import {
   Close as CloseIcon,
   ChevronLeft as ChevronLeftIcon,

@@ -23,7 +23,7 @@ import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import {
   COOK_METHODS, COOK_METHOD_LABELS, MAX_KITCHEN_IMAGES, ingredientLine, normalizeTag, parseIngredientBlock, parseIngredientLine,
   type CookMethod, type KitchenLayout,
-} from "../../../../../shared/xenkitchen/kitchen";
+} from "@shared/xenkitchen/kitchen";
 import {
   canEditBook, useCreateKitchenItem, useDeleteKitchenImage, useIngredientSuggestions, useKitchenBooks, useKitchenCategories,
   useKitchenTags, useUpdateKitchenItem, useUploadKitchenImages,

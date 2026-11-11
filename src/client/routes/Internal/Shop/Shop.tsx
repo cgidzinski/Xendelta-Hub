@@ -1,6 +1,5 @@
 import PageContainer from "../../../components/ui/PageContainer";
-import PageHeader from "../../../components/ui/PageHeader";
-import { Box, Card, CardActionArea, CardActions, CardContent, CardMedia, Container, DialogActions, DialogContent, Typography, Button, Dialog, Grid, Chip, IconButton, Divider } from "@mui/material";
+import { Box, Card, CardActionArea, CardActions, CardContent, CardMedia, DialogActions, DialogContent, Typography, Button, Dialog, Grid, Chip, IconButton, Divider } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { PointsShopItem, usePointsShopItems } from "../../../hooks/user/usePoints";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
@@ -13,7 +12,7 @@ import { POINTS_GOLD } from "../../../theme";
 const CATEGORIES = ["All", "Roles", "Items", "Perks"];
 
 export default function Shop() {
-    const { pointsShopItems, isLoading, isError, error, refetch, buyPointsItemMutation, isBuyingPointsItem, buyPointsItemError } = usePointsShopItems();
+    const { pointsShopItems, isLoading, isError, error, refetch, buyPointsItemMutation, isBuyingPointsItem } = usePointsShopItems();
     const { profile } = useUserProfile();
     const [showBuyModal, setShowBuyModal] = useState<boolean>(false);
     const [selectedItem, setSelectedItem] = useState<PointsShopItem | null>(null);

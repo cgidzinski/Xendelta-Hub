@@ -23,10 +23,6 @@ interface ChunkUploadResponse {
   chunkIndex: number;
 }
 
-interface UploadStatus {
-  totalChunks: number;
-  receivedChunks: number;
-}
 
 // Calculate total chunks based on file size
 function calculateTotalChunks(fileSize: number): number {
@@ -114,10 +110,6 @@ const cancelUpload = async (uploadId: string): Promise<void> => {
   await apiClient.delete(`/api/xenbox/${uploadId}`);
 };
 
-const getUploadStatus = async (uploadId: string): Promise<UploadStatus> => {
-  const response = await apiClient.get<ApiResponse<UploadStatus>>(`/api/xenbox/status/${uploadId}`);
-  return response.data.data!;
-};
 
 const deleteXenboxFile = async (fileId: string): Promise<void> => {
   await apiClient.delete(`/api/xenbox/files/${fileId}`);
@@ -127,11 +119,6 @@ const fetchXenboxFiles = async (search?: string): Promise<XenBoxFile[]> => {
   const params = search ? { search } : {};
   const response = await apiClient.get<ApiResponse<XenBoxFileListResponse>>("/api/xenbox/files", { params });
   return response.data.data!.files;
-};
-
-const generateSignedUrl = async (fileId: string): Promise<string> => {
-  const response = await apiClient.get<ApiResponse<{ url: string }>>(`/api/xenbox/files/${fileId}/url`);
-  return response.data.data!.url;
 };
 
 const updateFileSettings = async (fileId: string, settings: { password?: string | null; expiry?: string | null }): Promise<{ shareUrl: string; hasPassword: boolean; expiry: string | null }> => {
@@ -198,13 +185,6 @@ export const useXenboxFiles = (search?: string) => {
     retry: 1, // Only retry once to avoid duplicate errors
     retryDelay: 1000,
     placeholderData: (previousData) => previousData,
-  });
-};
-
-// Hook for generating signed URL
-export const useXenboxSignedUrl = () => {
-  return useMutation({
-    mutationFn: generateSignedUrl,
   });
 };
 

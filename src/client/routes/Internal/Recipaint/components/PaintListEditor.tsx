@@ -10,7 +10,7 @@ import {
   describePaintDetail,
   formatPaint,
   paintKey,
-} from "../../../../../shared/recipaint/paints";
+} from "@shared/recipaint/paints";
 import { CollectionPaint, usePaints } from "../../../../hooks/recipaint/usePaints";
 import { usePaintCatalogueSearch } from "../../../../hooks/recipaint/usePaintCatalogue";
 import PaintFormDialog from "./PaintFormDialog";

@@ -216,7 +216,7 @@ export function applyMapping(rows: CsvRow[], config: MappingConfig): MappingResu
             return;
         }
 
-        let signedAmount: number | null = null;
+        let signedAmount: number;
         if (!usesAmount && !usesDebitCredit) {
             errors.push({ index, reason: "No amount, debit, or credit column mapped" });
             return;

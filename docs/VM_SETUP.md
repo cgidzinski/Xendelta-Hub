@@ -1,3 +1,8 @@
+> **Superseded.** This describes the original generic-VM setup. Production now runs on the home
+> server described in [home-server-setup.md](home-server-setup.md) (Cloudflare Tunnel, Traefik, pm2
+> processes `xenhub-prod` / `xenhub-staging`, deploys via GitHub Actions). Kept for the env-var and
+> nginx/TLS background only; see `.env.example` for the current variable list.
+
 # VM Setup Instructions for Xendelta Hub
 
 This guide walks you through setting up a production server for Xendelta Hub on a fresh VM instance.

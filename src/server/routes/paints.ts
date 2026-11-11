@@ -2,7 +2,7 @@ import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types";
 import { isSameId } from "../utils/objectId";
-import { normalizePaintInput } from "../../shared/recipaint/paints";
+import { normalizePaintInput } from "@shared/recipaint/paints";
 const { Paint } = require("../models/paint");
 const mongoose = require("mongoose");
 const {

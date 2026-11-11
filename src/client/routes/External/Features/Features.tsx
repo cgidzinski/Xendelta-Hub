@@ -1,5 +1,5 @@
-import { Box, Container, Typography, Grid, Card, CardContent, CardHeader } from "@mui/material";
-import { Security, Chat, Notifications, Speed, Group, CloudDone, Receipt } from "@mui/icons-material";
+import { Box, Container, Typography, Grid, Card, CardContent } from "@mui/material";
+import { Chat, Speed, Group, Receipt } from "@mui/icons-material";
 import { useTheme } from "@mui/material/styles";
 import LandingHeader from "../../../components/LandingHeader";
 import { NEON } from "../../../theme";

@@ -26,7 +26,7 @@ import {
   xenSplitExchangeParamSchema,
 } from "../utils/validation";
 import { calculateBalances, calculateMinimumTransfers, resolveSplits } from "../utils/xenSplitUtils";
-import { isDeleted } from "../../shared/xensplit/softDelete";
+import { isDeleted } from "@shared/xensplit/softDelete";
 import { notify } from "../utils/notificationUtils";
 import { advanceDate, applyAdvance } from "../utils/scheduleUtils";
 import { dispatchTask } from "../infrastructure/TaskDispatcher";

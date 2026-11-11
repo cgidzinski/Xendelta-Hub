@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { groupByDay } from "./dateGrouping";
-import { settlementsNewestFirst } from "../../shared/xensplit/rewind";
+import { settlementsNewestFirst } from "@shared/xensplit/rewind";
 
 // groupByDay only ever merges into the LAST group, so it produces one header per
 // *run* of same-day items, not one per day. Feeding it an unsorted list silently

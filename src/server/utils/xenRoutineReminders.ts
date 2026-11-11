@@ -1,7 +1,7 @@
 const XenRoutine = require("../models/xenRoutine");
 const XenRoutineSettings = require("../models/xenRoutineSettings");
 const { User } = require("../models/user");
-import { notify, type NotifyChannel } from "./notificationUtils";
+import { notify } from "./notificationUtils";
 import {
   activityRecipients, ALL_CHANNELS, channelsFor, DEFAULT_REMIND_HOUR, effectiveTimezone, groupForDigest, reminderKindFor,
   type ChannelPrefs, type ReminderItem, type ReminderKind, type RoutineLike, type RoutineMember,

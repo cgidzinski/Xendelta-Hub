@@ -56,7 +56,6 @@ export default function CreateExchangeDialog({
     addExchange,
     isAddingExchange,
     fetchLiveRate,
-    isFetchingLiveRate,
 }: CreateExchangeDialogProps) {
     const { enqueueSnackbar } = useSnackbar();
     const isMobile = useMediaQuery("(max-width:600px)");

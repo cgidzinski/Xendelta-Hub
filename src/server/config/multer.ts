@@ -9,7 +9,7 @@ import { Request } from "express";
 import { MAX_FILE_SIZE, MAX_BLOG_ASSET_SIZE, MAX_RECIPAINT_ASSET_SIZE, MAX_XENSPLIT_IMAGE_SIZE, MAX_XENBUDGET_IMAGE_SIZE, MAX_XENKITCHEN_IMAGE_SIZE, ALLOWED_IMAGE_MIMES } from "../constants";
 
 // File filter function for images only
-const imageFileFilter = function (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) {
+const imageFileFilter = function (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) {
   // Accept only image files
   if (ALLOWED_IMAGE_MIMES.includes(file.mimetype as typeof ALLOWED_IMAGE_MIMES[number])) {
     cb(null, true);
@@ -19,7 +19,7 @@ const imageFileFilter = function (req: Request, file: Express.Multer.File, cb: m
 };
 
 // File filter function for all file types (for blog assets)
-const allFileFilter = function (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) {
+const allFileFilter = function (_req: Request, _file: Express.Multer.File, cb: multer.FileFilterCallback) {
   // Accept all file types for blog assets
   cb(null, true);
 };

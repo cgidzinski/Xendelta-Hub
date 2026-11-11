@@ -16,9 +16,6 @@ import {
   AvatarGroup,
   Tabs,
   Tab,
-  List,
-  ListItem,
-  ListItemAvatar,
   ListItemText,
   Chip,
   IconButton,
@@ -34,8 +31,6 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import MoreVertIcon from "@mui/icons-material/MoreVert";
 import DeleteIcon from "@mui/icons-material/Delete";
 import GroupRemoveIcon from "@mui/icons-material/GroupRemove";
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -110,11 +105,11 @@ export default function GroupDetail() {
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
-  const { group, isLoading, isError, error, refetch, addMembers, isAddingMembers, removeMember, isRemovingMember, updateGroup, isUpdating, uploadGroupImage, isUploadingImage } = useXenSplit(groupId!);
+  const { group, isLoading, isError, error, refetch, addMembers, isAddingMembers, removeMember, updateGroup, isUpdating, uploadGroupImage, isUploadingImage } = useXenSplit(groupId!);
   useTitle("Xensplit");
   const { deleteGroup } = useXenSplits();
   const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useXenSplitBalances(groupId!);
-  const { updateExpense, updateExpenseAsync, isUpdatingExpense, addExpense, addExpenseAsync, isAddingExpense, deleteExpense, isDeletingExpense, cancelRecurring, isCancellingRecurring, uploadExpenseImages, isUploadingImages, deleteExpenseImage, isDeletingExpenseImage } = useXenSplitExpenses(groupId!);
+  const { updateExpense, isUpdatingExpense, addExpense, isAddingExpense, deleteExpense, isDeletingExpense, cancelRecurring, isCancellingRecurring, uploadExpenseImages, isUploadingImages, deleteExpenseImage, isDeletingExpenseImage } = useXenSplitExpenses(groupId!);
   const { addExchange, isAddingExchange, deleteExchange, isDeletingExchange, fetchLiveRate, isFetchingLiveRate } = useXenSplitExchanges(groupId!);
   useXenSplitSocket(groupId!);
   const { profile } = useUserProfile();

@@ -14,7 +14,7 @@ import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import ImageGallery from "./components/ImageGallery";
 import PaintChip from "./components/PaintChip";
-import { cleanPaints } from "../../../../shared/recipaint/paints";
+import { cleanPaints } from "@shared/recipaint/paints";
 
 /**
  * One step at a time, for painting from rather than reading. Big images, the paints for

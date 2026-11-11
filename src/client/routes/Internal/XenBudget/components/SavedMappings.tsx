@@ -2,11 +2,10 @@ import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 import { useState } from "react";
 import {
     Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
-    Stack, TextField, Typography, useMediaQuery,
+    Stack, TextField, Typography,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
-import CloseIcon from "@mui/icons-material/Close";
 import { useSnackbar } from "notistack";
 import { useOutletContext } from "react-router-dom";
 import type { BookDetailContext } from "../BookDetail";
@@ -28,7 +27,6 @@ export default function SavedMappings() {
     const { book } = useOutletContext<BookDetailContext>();
     const { updatePresetAsync, deletePresetAsync } = useXenBudgetImport(book._id);
     const { enqueueSnackbar } = useSnackbar();
-    const isMobile = useMediaQuery("(max-width:600px)");
     const [editing, setEditing] = useState<EditDraft | null>(null);
     const [deleting, setDeleting] = useState<XenBudgetImportPreset | null>(null);
 

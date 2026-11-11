@@ -1,5 +1,5 @@
 // The list itself lives in shared/ so the server validates against the same one.
-export { ALL_CURRENCIES, DEFAULT_CURRENCY } from "../../shared/currencies";
+export { ALL_CURRENCIES, DEFAULT_CURRENCY } from "@shared/currencies";
 
 // MUI's default Select menu grows in with a Grow/scale transition anchored to the
 // center of the select — inside a Dialog this reads as the list "jumping" left/up

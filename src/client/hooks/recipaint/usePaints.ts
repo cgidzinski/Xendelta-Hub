@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
-import { PaintType } from "../../../shared/recipaint/paints";
+import { PaintType } from "@shared/recipaint/paints";
 
 /** A paint the user owns. The recipe-step shape (RecipePaint) is a snapshot of these fields. */
 export interface CollectionPaint {

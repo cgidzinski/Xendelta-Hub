@@ -7,7 +7,7 @@ import {
   deleteRecipaintAssetByUrl,
 } from "../utils/mediaUtils";
 import { AuthenticatedRequest } from "../types";
-import { sanitizeCompletedSteps } from "../../shared/recipaint/progress";
+import { sanitizeCompletedSteps } from "@shared/recipaint/progress";
 import { isSameId } from "../utils/objectId";
 const { Recipe } = require("../models/recipe");
 const { RecipeProgress } = require("../models/recipeProgress");

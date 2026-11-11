@@ -1,5 +1,5 @@
 import { Box, Chip, Tooltip } from "@mui/material";
-import { RecipePaint, formatPaint } from "../../../../../shared/recipaint/paints";
+import { RecipePaint, formatPaint } from "@shared/recipaint/paints";
 
 interface PaintChipProps {
   paint: RecipePaint;

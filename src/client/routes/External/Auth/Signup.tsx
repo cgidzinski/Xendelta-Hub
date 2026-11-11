@@ -95,7 +95,7 @@ export default function Signup() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
+  const handleSubmit = async () => {
     if (!validateForm()) {
       return;
     }

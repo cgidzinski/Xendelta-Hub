@@ -16,8 +16,8 @@ import { formatCurrency, getGroupCurrencies } from "../../../utils/currencyUtils
 import { groupByDay } from "../../../utils/dateGrouping";
 import SettlementDetailDialog, { PendingSettlementDialog } from "./components/SettlementDetailDialog";
 import CreateSettlementDialog from "./components/CreateSettlementDialog";
-import { calculateBalances, calculateMinimumTransfers } from "../../../../shared/xensplit/balances";
-import { rewindBefore, excludedSettlementIds, settlementsNewestFirst } from "../../../../shared/xensplit/rewind";
+import { calculateBalances, calculateMinimumTransfers } from "@shared/xensplit/balances";
+import { rewindBefore, excludedSettlementIds, settlementsNewestFirst } from "@shared/xensplit/rewind";
 
 const listGridSx = {
     display: "grid",

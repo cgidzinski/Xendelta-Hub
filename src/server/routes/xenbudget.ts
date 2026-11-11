@@ -837,7 +837,7 @@ function toDraft(item: any): DraftItem {
 }
 
 /** A candidate row (a mapped CSV line, or a manual add) as the engine sees it. */
-function draftFromRow(row: any, book: any): DraftItem {
+function draftFromRow(row: any, _book: any): DraftItem {
   return {
     type: row.type === "income" ? "income" : "expense",
     amount: roundMoney(Number(row.amount) || 0),
@@ -2380,7 +2380,7 @@ module.exports = function (app: any) {
         // asked for, or for a one-off budget, which has no repeating window to look back
         // over.
         const historyRanges = budgets.map((b: any) => previousPeriodRanges(b, asOf, history));
-        const ranges = budgets.map((b: any, i: number) => (useRange
+        const ranges = budgets.map((_b: any, i: number) => (useRange
           ? { from: rangeFrom as Date, to: rangeTo as Date }
           : ownRanges[i]));
         // The base match has to cover both the requested window and each budget's own
@@ -2601,7 +2601,7 @@ module.exports = function (app: any) {
                 // These figures are per whole period and are never scaled to a requested
                 // range - a column means "that month", whatever window is on screen.
                 ...(historyRanges[i].length === 0 ? {} : {
-                  periods: historyRanges[i].map((r: any, k: number) => {
+                  periods: historyRanges[i].map((r: any) => {
                     // $bucket keys each bucket by its lower boundary and omits empty ones
                     // entirely, so a month with no items has to be filled back in as a
                     // zero rather than shifting every later column left.

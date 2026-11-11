@@ -1,8 +1,7 @@
 import DetailHeader from "../../../components/ui/DetailHeader";
 import { useState } from "react";
-import { Box, Button, IconButton, Stack, Tab, Tabs, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { Box, Button, Tab, Tabs, useMediaQuery, useTheme } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import InsightsIcon from "@mui/icons-material/Insights";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";

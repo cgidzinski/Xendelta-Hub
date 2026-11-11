@@ -1,7 +1,7 @@
 import PageContainer from "../../../components/ui/PageContainer";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Badge, Box, Button, Chip, Container, Fab, IconButton, InputAdornment, Menu, MenuItem, Paper, Skeleton, Slide, Stack,
+  Badge, Box, Button, Chip, Fab, IconButton, InputAdornment, Menu, MenuItem, Paper, Skeleton, Slide, Stack,
   TextField, Tooltip, Typography,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
@@ -26,7 +26,7 @@ import ErrorDisplay from "../../../components/ErrorDisplay";
 import {
   COOK_METHOD_LABELS, KITCHEN_SORTS, activeFilterCount, filtersFromParams, filtersToParams,
   type KitchenFilters, type KitchenLayout, type KitchenSort,
-} from "../../../../shared/xenkitchen/kitchen";
+} from "@shared/xenkitchen/kitchen";
 import {
   canEditBook, useBulkDeleteKitchenItems, useBulkMoveKitchenItems, useKitchenBooks, useKitchenCategories, useKitchenItems,
   useToggleKitchenFavorite, type KitchenBook, type KitchenItem,

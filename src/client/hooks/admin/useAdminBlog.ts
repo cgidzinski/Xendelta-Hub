@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 import { BlogPost } from "../../types/BlogPost";
-import { BlogAssetWithMetadata } from "../../types/BlogAssetWithMetadata";
 import { blogKeys } from "../blog/useBlog";
 import { blogPostKeys } from "../blog/useBlogPost";
 
@@ -100,7 +99,7 @@ export const useAdminBlog = () => {
   // Mutation for creating blog post
   const { mutate: createPostMutation, isPending: isCreating } = useMutation({
     mutationFn: createBlogPost,
-    onSuccess: (newPost) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminBlogKeys.posts() });
       queryClient.invalidateQueries({ queryKey: blogKeys.lists() });
     },

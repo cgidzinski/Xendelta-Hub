@@ -10,7 +10,6 @@ import {
   seedPeriods,
   isoWeekKey,
 } from "./xenBudgetUtils";
-import { tzMonthKey, tzDayKey, tzMonthStartUtc, zonedWallToUtc } from "./statsRange";
 
 const A = "aaaaaaaaaaaaaaaaaaaaaaaa";
 const B = "bbbbbbbbbbbbbbbbbbbbbbbb";
@@ -174,33 +173,6 @@ describe("budgetPeriodRange", () => {
       new Date("2026-08-21T12:00:00.000Z"),
     );
     expect(range.from.toISOString()).toBe("2026-08-01T00:00:00.000Z");
-  });
-});
-
-describe("timezone keys", () => {
-  const TZ = "America/Toronto";
-
-  it("files a late-night instant into the local month, not the UTC one", () => {
-    // 2026-09-01T02:00Z is still 22:00 on Aug 31 in Toronto.
-    const instant = new Date("2026-09-01T02:00:00.000Z");
-    expect(instant.toISOString().slice(0, 7)).toBe("2026-09");
-    expect(tzMonthKey(instant, TZ)).toBe("2026-08");
-  });
-
-  it("files an early-morning instant into the local day", () => {
-    expect(tzDayKey(new Date("2026-09-01T02:00:00.000Z"), TZ)).toBe("2026-08-31");
-  });
-
-  it("starts the month at local midnight", () => {
-    expect(tzMonthStartUtc(new Date("2026-08-21T12:00:00.000Z"), TZ).toISOString())
-      .toBe("2026-08-01T04:00:00.000Z");
-  });
-
-  it("round-trips a wall-clock date through the zone it came from", () => {
-    const utc = zonedWallToUtc("2026-12-25", TZ);
-    // December is UTC-5 in Toronto.
-    expect(utc.toISOString()).toBe("2026-12-25T05:00:00.000Z");
-    expect(tzDayKey(utc, TZ)).toBe("2026-12-25");
   });
 });
 

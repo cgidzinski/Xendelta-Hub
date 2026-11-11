@@ -47,7 +47,7 @@ import {
   serializeItem,
   suggestIngredients,
 } from "../utils/xenKitchen";
-import { CATEGORY_ICONS, filtersFromParams, STARTER_CATEGORIES } from "../../shared/xenkitchen/kitchen";
+import { CATEGORY_ICONS, filtersFromParams, STARTER_CATEGORIES } from "@shared/xenkitchen/kitchen";
 
 const callerId = (req: Request) => (req as AuthenticatedRequest).user!._id.toString();
 const callerName = (req: Request) => (req as AuthenticatedRequest).user!.username;
@@ -563,7 +563,7 @@ module.exports = function (app: any) {
     const uid = callerId(req);
     const { ids, category_id } = xenKitchenBulkCategorySchema.parse(req.body);
     const items = await editableIds(uid, ids);
-    let moved = 0;
+    let moved: number;
     if (category_id) {
       // A category belongs to one book, so only that book's items can go into it.
       const cat = await XenKitchenCategory.findById(category_id).lean().exec();

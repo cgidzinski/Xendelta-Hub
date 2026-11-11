@@ -5,10 +5,6 @@ import { ApiResponse } from "../../types/api";
 import { enqueueSnackbar, useSnackbar } from "notistack";
 import { userProfileKeys } from "../user/useUserProfile";
 
-interface XenLinkResponse {
-  status: boolean;
-  message: string;
-}
 
 // Types
 export interface XenLink {
@@ -27,7 +23,8 @@ interface XenLinksResponse {
 // Query keys
 export const xenLinkKeys = {
   all: ["xenLink"] as const,
-  list: () => [...xenLinkKeys.all, "list"] as const,
+  // The search text is part of the key: results for different searches must not share a cache entry.
+  list: (search?: string) => [...xenLinkKeys.all, "list", search ?? ""] as const,
 };
 
 // API functions
@@ -54,9 +51,8 @@ const deleteXenLink = async (linkId: string): Promise<XenLink> => {
 
 // Hooks
 export const useXenLink = (search?: string) => {
-  const { user, isAuthenticated } = useAuth();
-  const queryClient = useQueryClient();
-  const { enqueueSnackbar } = useSnackbar();
+  const { isAuthenticated } = useAuth();
+  useSnackbar();
   const {
     data: xenLink,
     isLoading,
@@ -64,7 +60,7 @@ export const useXenLink = (search?: string) => {
     error,
     refetch,
   } = useQuery({
-    queryKey: xenLinkKeys.list(),
+    queryKey: xenLinkKeys.list(search),
     queryFn: () => fetchXenLink(search),
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000, // 5 minutes

@@ -2,7 +2,6 @@ import PageContainer from "../../components/ui/PageContainer";
 import { useState, useEffect } from "react";
 import {
   Box,
-  Container,
   Card,
   Typography,
   Button,
@@ -49,11 +48,9 @@ export default function BlogPostForm() {
     deletePost,
     isCreating,
     isUpdating,
-    isDeleting,
     uploadAsset,
     isUploadingAsset,
     deleteAsset,
-    isDeletingAsset,
   } = useAdminBlog();
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [currentTab, setCurrentTab] = useState(0);
@@ -316,7 +313,7 @@ export default function BlogPostForm() {
       <Box sx={{ mb: 2 }}>
         <Tabs
           value={currentTab}
-          onChange={(e, newValue) => {
+          onChange={(_e, newValue) => {
             if (newValue === 1) {
               if (!id) {
                 enqueueSnackbar("Please create the blog post first", { variant: "info" });

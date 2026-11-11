@@ -2,7 +2,6 @@ import PageContainer from "../../components/ui/PageContainer";
 import { useState, useMemo } from "react";
 import {
   Box,
-  Container,
   Card,
   Typography,
   Avatar,
@@ -13,7 +12,6 @@ import {
   TableHead,
   TableRow,
   Chip,
-  CircularProgress,
   Alert,
   TextField,
   InputAdornment,
@@ -26,7 +24,6 @@ import {
   IconButton,
   Tabs,
   Tab,
-  Grid,
   Tooltip,
   FormControlLabel,
   Checkbox,
@@ -40,7 +37,6 @@ import StorageIcon from "@mui/icons-material/Storage";
 import InventoryIcon from "@mui/icons-material/Inventory2";
 import SettingsIcon from "@mui/icons-material/Settings";
 import PersonIcon from "@mui/icons-material/Person";
-import StarsIcon from "@mui/icons-material/Stars";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import SendIcon from "@mui/icons-material/Send";
 import { useSnackbar } from "notistack";
@@ -49,6 +45,7 @@ import { useTitle } from "../../hooks/useTitle";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { useAdminUsers, User, NotifyChannel } from "../../hooks/admin/useAdminUsers";
 import { formatFileSize } from "../../utils/fileUtils";
+
 
 const AVAILABLE_ROLES = ["admin", "user"];
 
@@ -168,16 +165,16 @@ export default function Users() {
     setActiveTab(0);
   };
 
+
   const handleSaveRoles = async () => {
     if (!selectedUser) return;
     updateUser(selectedUser._id, { roles: editingRoles })
       .then(() => {
         enqueueSnackbar("Roles updated successfully", { variant: "success" });
-        // Update selected user
-        const updatedUser = users.find(u => u._id === selectedUser._id);
-        if (updatedUser) {
-          setSelectedUser({ ...updatedUser, roles: editingRoles });
-        }
+        // Keep the open dialog in step with what was just saved.
+        setSelectedUser({ ...selectedUser, roles: editingRoles });
+        // Changing your own roles changes what the sidebar offers.
+        if (selectedUser._id === profile?._id) refetchProfile();
       })
       .catch((error) => {
         enqueueSnackbar(error.message || "Failed to update roles", { variant: "error" });
@@ -298,6 +295,9 @@ export default function Users() {
       });
   };
 
+
+  // You can edit anyone else's roles, but not your own: removing your own admin role would lock
+  // you out of this page mid-session.
   const isCurrentUser = selectedUser?._id === profile?._id;
 
   if (isLoading) {
@@ -436,7 +436,7 @@ export default function Users() {
           </DialogTitle>
           <Tabs
             value={activeTab}
-            onChange={(e, v) => setActiveTab(v)}
+            onChange={(_e, v) => setActiveTab(v)}
             sx={{
               px: 2,
               borderBottom: 1,
@@ -571,6 +571,50 @@ export default function Users() {
 
             {activeTab === 2 && selectedUser && (
               <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    Roles
+                  </Typography>
+                  <FormGroup row>
+                    {AVAILABLE_ROLES.map((role) => (
+                      <FormControlLabel
+                        key={role}
+                        label={<Typography variant="body2" sx={{ textTransform: "capitalize" }}>{role}</Typography>}
+                        control={
+                          <Checkbox
+                            size="small"
+                            checked={editingRoles.includes(role)}
+                            disabled={isCurrentUser || isUpdatingUser}
+                            onChange={(e) =>
+                              setEditingRoles((prev) =>
+                                e.target.checked ? [...prev, role] : prev.filter((r) => r !== role),
+                              )
+                            }
+                          />
+                        }
+                      />
+                    ))}
+                  </FormGroup>
+                  {isCurrentUser ? (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                      You can't change your own roles.
+                    </Typography>
+                  ) : (
+                    <Button
+                      variant="contained"
+                      size="small"
+                      sx={{ mt: 1 }}
+                      onClick={handleSaveRoles}
+                      disabled={
+                        isUpdatingUser ||
+                        [...editingRoles].sort().join() === [...(selectedUser.roles ?? [])].sort().join()
+                      }
+                    >
+                      {isUpdatingUser ? "Saving..." : "Update roles"}
+                    </Button>
+                  )}
+                </Box>
+
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
                     XenBox Quota

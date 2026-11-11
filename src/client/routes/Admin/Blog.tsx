@@ -2,7 +2,6 @@ import PageContainer from "../../components/ui/PageContainer";
 import PageHeader from "../../components/ui/PageHeader";
 import {
   Box,
-  Container,
   Card,
   Typography,
   Button,
@@ -12,19 +11,21 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  CircularProgress,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
 import {
   Add as AddIcon,
   Star as StarIcon,
+  Delete as DeleteIcon,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import ListSkeleton from "../../components/ui/ListSkeleton";
-import { useConfirm } from "../../components/ui/ConfirmProvider";
 import { format } from "date-fns";
 import { useTitle } from "../../hooks/useTitle";
 import { useAdminBlog } from "../../hooks/admin/useAdminBlog";
+import { useConfirm } from "../../components/ui/ConfirmProvider";
 
 export default function Blog() {
   const navigate = useNavigate();
@@ -42,6 +43,7 @@ export default function Blog() {
     deletePost(postId);
     enqueueSnackbar("Blog post deleted successfully", { variant: "success" });
   };
+
 
   const handleEdit = (postId: string) => {
     navigate(`/admin/blog/${postId}/edit`);
@@ -79,6 +81,7 @@ export default function Blog() {
                   <TableCell sx={{ fontWeight: 700 }}>Slug</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Featured</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Publish Date</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }} align="right" />
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -110,6 +113,24 @@ export default function Blog() {
                       <Typography variant="body2" color="text.secondary">
                         {format(new Date(post.publishDate), "MMM d, yyyy")}
                       </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Tooltip title="Delete post">
+                        <span>
+                          <IconButton
+                            size="small"
+                            aria-label={`Delete ${post.title}`}
+                            disabled={isDeleting}
+                            onClick={(e) => {
+                              // The row itself opens the editor.
+                              e.stopPropagation();
+                              handleDelete(post._id);
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))}

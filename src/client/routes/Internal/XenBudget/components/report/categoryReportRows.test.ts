@@ -237,7 +237,6 @@ describe("period columns", () => {
 });
 
 describe("summary rows", () => {
-    const MONTHS = ["2026-01", "2026-02", "2026-03"];
 
     const quarter = {
         ...base,
@@ -471,7 +470,6 @@ describe("every category gets a row", () => {
 });
 
 describe("income targets", () => {
-    const MONTHS = ["2026-01", "2026-02", "2026-03"];
 
     const withSavings = {
         ...base,

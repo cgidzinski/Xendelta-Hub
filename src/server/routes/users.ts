@@ -9,14 +9,14 @@ import { deleteFromGCS } from "../utils/gcsUtils";
 import { validate, updateProfileSchema } from "../utils/validation";
 import { upload } from "../config/multer";
 import { AuthenticatedRequest } from "../types";
-import { DEFAULT_CURRENCY } from "../../shared/currencies";
+import { DEFAULT_CURRENCY } from "@shared/currencies";
 
 /** "timezone", "timezone and username", "timezone, username and e-transfer details". */
 function formatList(items: string[]): string {
   if (items.length <= 1) return items[0] ?? "";
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
-import { normalizeEtransfer } from "../../shared/etransfer";
+import { normalizeEtransfer } from "@shared/etransfer";
 
 /** The profile's e-transfer destination on the wire: always present, blank handle when unset. */
 function etransferPayload(user: any) {
@@ -464,7 +464,7 @@ module.exports = function (app: express.Application) {
 
   // Directory for the message participant picker. Deliberately just the public profile
   // (id, username, avatar): emails and roles are admin-only (see /api/admin/users).
-  app.get("/api/users", authenticateToken, async function (req: express.Request, res: express.Response) {
+  app.get("/api/users", authenticateToken, async function (_req: express.Request, res: express.Response) {
     const users = await User.find({}, "username _id avatar").exec();
 
     return res.json({

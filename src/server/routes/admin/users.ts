@@ -9,7 +9,7 @@ const Notification = require("../../models/notification");
 const { SocketManager } = require("../../infrastructure/SocketManager");
 
 module.exports = function (app: express.Application) {
-  app.get("/api/admin/users", authenticateToken, requireAdmin, async function (req: express.Request, res: express.Response) {
+  app.get("/api/admin/users", authenticateToken, requireAdmin, async function (_req: express.Request, res: express.Response) {
     const users = await User.find({}, "username email _id roles avatar xenbox points inventory").populate("xenbox.files").exec();
     
     return res.json({

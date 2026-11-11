@@ -1,5 +1,5 @@
 import {
-    Box, Card, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography, alpha,
+    Box, Card, Table, TableBody, TableCell, TableHead, TableRow, Typography, alpha,
 } from "@mui/material";
 import type { SxProps, Theme } from "@mui/material";
 import type { CategoryReport, CategoryReportRow, PeriodTotals } from "./categoryReportRows";
@@ -307,27 +307,3 @@ export default function CategoryReportTable({
     );
 }
 
-function TotalRow({ label, value, color, muted }: {
-    label: string;
-    value: string;
-    color?: string;
-    muted?: boolean;
-}) {
-    return (
-        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
-            <Typography
-                variant="caption"
-                sx={{ ...sectionLabelSx, color: muted ? "text.disabled" : "text.secondary" }}
-            >
-                {label}
-            </Typography>
-            <Typography
-                variant={muted ? "body2" : "subtitle2"}
-                noWrap
-                sx={{ flexShrink: 0, fontWeight: muted ? 400 : 700, color: color ?? "text.primary" }}
-            >
-                {value}
-            </Typography>
-        </Stack>
-    );
-}

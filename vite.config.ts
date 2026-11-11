@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+import path from "node:path";
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -32,6 +33,8 @@ export default defineConfig({
     }),
   ],
   root: process.cwd(),
+  // Same alias as tsconfig "paths": code shared by client and server lives in src/shared.
+  resolve: { alias: { "@shared": path.resolve(process.cwd(), "src/shared") } },
   build: {
     outDir: "dist",
     // "hidden": .map files are generated but never referenced via a //# sourceMappingURL

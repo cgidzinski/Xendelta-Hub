@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
-import { PaintType } from "../../../shared/recipaint/paints";
+import { PaintType } from "@shared/recipaint/paints";
 
 /** An entry in the shared catalogue. Read-only: it comes from a committed JSON, not the DB. */
 export interface CataloguePaint {

@@ -1,7 +1,6 @@
 import { pageTitleSx } from "../../../components/ui/surfaceStyles";
 import PageContainer from "../../../components/ui/PageContainer";
-import PageHeader from "../../../components/ui/PageHeader";
-import { Box, Container, Typography, Button, Card, CardActionArea, CardMedia, CardContent, Grid, Chip, Dialog, DialogContent, DialogActions, IconButton, Switch, FormControlLabel } from "@mui/material";
+import { Box, Typography, Button, Card, CardActionArea, CardMedia, CardContent, Grid, Chip, Dialog, DialogContent, DialogActions, IconButton, Switch, FormControlLabel } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -11,7 +10,7 @@ import { formatDistance } from "date-fns";
 import { useState } from "react";
 
 export default function Inventory() {
-  const { inventory, isLoading, useItem, trashItem, isUsing, isTrashing } = useInventory();
+  const { inventory, isLoading, redeemItem, trashItem, isUsing, isTrashing } = useInventory();
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [showUsed, setShowUsed] = useState(false);
 
@@ -194,7 +193,7 @@ export default function Inventory() {
                   startIcon={<CheckCircleIcon />}
                   disabled={isUsing}
                   onClick={() => {
-                    useItem(selectedItem._id);
+                    redeemItem(selectedItem._id);
                     setSelectedItem(null);
                   }}
                   sx={{ flexGrow: 1 }}

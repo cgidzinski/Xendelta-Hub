@@ -1,4 +1,4 @@
-import { liveOnly, deletedOnly } from "../../../shared/xensplit/softDelete";
+import { liveOnly, deletedOnly } from "@shared/xensplit/softDelete";
 import type { XenSplit } from "./types";
 
 /**

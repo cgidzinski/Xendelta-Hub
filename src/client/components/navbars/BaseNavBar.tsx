@@ -15,7 +15,6 @@ import {
   Divider,
   Badge,
   Menu,
-  ListItemIcon as MuiListItemIcon,
   useMediaQuery,
   useTheme,
   Tooltip,
@@ -38,8 +37,6 @@ import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { useUserNotifications, Notification } from "../../hooks/user/useUserNotifications";
 import { useNavBarSocket } from "../../hooks/useNavBarSocket";
 import NotificationModal from "../notifications/NotificationModal";
-import { PointsIcon } from "../icons/PointsIcon";
-import PointsListItem from "../PointsListItem";
 import LoadingSpinner from "../LoadingSpinner";
 
 const DRAWER_WIDTH = 240;

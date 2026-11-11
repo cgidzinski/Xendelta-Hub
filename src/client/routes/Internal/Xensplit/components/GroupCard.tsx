@@ -1,4 +1,4 @@
-﻿import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Card,
   CardActionArea,
@@ -20,7 +20,7 @@ function getUserNetBalance(group: XenSplit, userId: string): { [currency: string
     if (paid_by === userId) balances[currency] += amount;
     const mySplit = splits.find((s) => s.user_id === userId);
     if (mySplit) {
-      let owed = 0;
+      let owed: number;
       if (mySplit.amount_owed !== undefined) {
         owed = mySplit.amount_owed;
       } else if (mySplit.percentage !== undefined) {

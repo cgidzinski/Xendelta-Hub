@@ -96,7 +96,7 @@ export const useInbox = (): UseInboxReturn => {
       });
     };
 
-    const handleNewMessage = (data: { conversationId: string; message: any }) => {
+    const handleNewMessage = () => {
       queryClient.invalidateQueries({ queryKey: ["userConversations"], exact: false });
       queryClient.setQueryData(userProfileKeys.profile(), (oldProfileData: any) => {
         if (oldProfileData) {
@@ -106,7 +106,7 @@ export const useInbox = (): UseInboxReturn => {
       });
     };
 
-    const handleNewConversation = (data: { conversation: Conversation }) => {
+    const handleNewConversation = () => {
       queryClient.invalidateQueries({ queryKey: ["userConversations"], exact: false });
       queryClient.setQueryData(userProfileKeys.profile(), (oldProfileData: any) => {
         if (oldProfileData) {

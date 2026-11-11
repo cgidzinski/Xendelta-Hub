@@ -5,7 +5,7 @@ import {
   normalizeIngredientName,
   normalizeTag,
   totalMinutes,
-} from "../../shared/xenkitchen/kitchen";
+} from "@shared/xenkitchen/kitchen";
 
 /** 128 random bits, URL safe: 22 characters. Unguessable, so a link is the only way in. */
 export function generateShareToken(): string {
