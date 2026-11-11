@@ -55,26 +55,6 @@ import Shop from "./routes/Internal/Shop/Shop";
 import Inventory from "./routes/Internal/Inventory/Inventory";
 import XenLink from "./routes/Internal/XenLink/XenLink";
 import XenLinkRedirect from "./routes/External/XenLinkRedirect/XenLinkRedirect";
-// Routes - XenCasino
-import XenCasinoLayout from "./routes/Internal/XenCasino/XenCasinoLayout";
-import GamesIndex from "./routes/Internal/XenCasino/GamesIndex";
-import Ledger from "./routes/Internal/XenCasino/Ledger";
-import Leaderboard from "./routes/Internal/XenCasino/Leaderboard";
-import EasySpin from "./routes/Internal/XenCasino/games/EasySpin/EasySpin";
-import Spinmania from "./routes/Internal/XenCasino/games/Spinmania/Spinmania";
-import KittyScratch from "./routes/Internal/XenCasino/games/KittyScratch/KittyScratch";
-import Crossword from "./routes/Internal/XenCasino/games/Crossword/Crossword";
-import Plinko from "./routes/Internal/XenCasino/games/Plinko/Plinko";
-import Pachinko from "./routes/Internal/XenCasino/games/Pachinko/Pachinko";
-import Memory from "./routes/Internal/XenCasino/games/Memory/Memory";
-import Printer from "./routes/Internal/XenCasino/games/Printer/Printer";
-import CheddarRanch from "./routes/Internal/XenCasino/games/CheddarRanch/CheddarRanch";
-import RanchTab from "./routes/Internal/XenCasino/games/CheddarRanch/RanchTab";
-import RaceTab from "./routes/Internal/XenCasino/games/CheddarRanch/RaceTab";
-import InventoryTab from "./routes/Internal/XenCasino/games/CheddarRanch/InventoryTab";
-import ShopTab from "./routes/Internal/XenCasino/games/CheddarRanch/ShopTab";
-import MineTab from "./routes/Internal/XenCasino/games/CheddarRanch/MineTab";
-import GardenTab from "./routes/Internal/XenCasino/games/CheddarRanch/GardenTab";
 // Routes - Xensplit
 import XensplitGroupsList from "./routes/Internal/Xensplit/GroupsList";
 import XensplitGroupDetail from "./routes/Internal/Xensplit/GroupDetail";
@@ -117,7 +97,6 @@ import Admin from "./routes/Admin/Admin";
 import Users from "./routes/Admin/Users";
 import AdminBlog from "./routes/Admin/Blog";
 import BlogPostForm from "./routes/Admin/BlogPostForm";
-import Casino from "./routes/Admin/Casino";
 import RecipaintPublic from "./routes/External/RecipaintPublic/RecipaintPublic";
 
 const router = createBrowserRouter(
@@ -221,28 +200,6 @@ const router = createBrowserRouter(
         <Route path="xenlink" element={<XenLink />} />
         <Route path="shop" element={<Shop />} />
         <Route path="inventory" element={<Inventory />} />
-        <Route path="xencasino" element={<XenCasinoLayout />}>
-          <Route index element={<GamesIndex />} />
-          <Route path="ledger" element={<Ledger />} />
-          <Route path="leaderboard" element={<Leaderboard />} />
-          <Route path="games/easy-spin" element={<EasySpin />} />
-          <Route path="games/spinmania" element={<Spinmania />} />
-          <Route path="games/kitty-scratch" element={<KittyScratch />} />
-          <Route path="games/crossword" element={<Crossword />} />
-          <Route path="games/plinko" element={<Plinko />} />
-          <Route path="games/pachinko" element={<Pachinko />} />
-          <Route path="games/memory" element={<Memory />} />
-          <Route path="games/printer" element={<Printer />} />
-          <Route path="games/cheddar-ranch" element={<CheddarRanch />}>
-            <Route index element={null} />
-            <Route path="ranch" element={<RanchTab />} />
-            <Route path="race" element={<RaceTab />} />
-            <Route path="inventory" element={<InventoryTab />} />
-            <Route path="shop" element={<ShopTab />} />
-            <Route path="mine" element={<MineTab />} />
-            <Route path="garden" element={<GardenTab />} />
-          </Route>
-        </Route>
         <Route path="xensplit" index element={<Navigate to="groups" replace />} />
         <Route path="xensplit/groups" element={<XensplitGroupsList />} />
         <Route path="xensplit/groups/:groupId" element={<XensplitGroupDetail />}>
@@ -310,7 +267,6 @@ const router = createBrowserRouter(
         <Route path="blog" element={<AdminBlog />} />
         <Route path="blog/new" element={<BlogPostForm />} />
         <Route path="blog/:id/edit" element={<BlogPostForm />} />
-        <Route path="casino" element={<Casino />} />
       </Route>
     </>,
   ),
