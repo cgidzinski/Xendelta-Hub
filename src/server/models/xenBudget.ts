@@ -1,4 +1,5 @@
 import mongoose, { Schema, type InferSchemaType } from "mongoose";
+import { memberSchema, rosterSync } from "../utils/membership";
 
 // XenBudget stores its line items in a SEPARATE top-level collection rather than
 // embedding them in the book (the way XenSplit embeds expenses in a group). A book fed
@@ -270,6 +271,8 @@ const bookSchema = new Schema({
   // book, delete it, or restore over it. Every other member can do everything else.
   created_by: { type: String, required: true },
   members: [{ type: Schema.Types.ObjectId, ref: "User" }],
+  // The standard membership shape, derived from created_by + members on every save (utils/membership.ts).
+  roster: { type: [memberSchema], default: [] },
   categories: [labelSchema],
   flags: [labelSchema],
   budgets: [budgetSchema],
@@ -284,6 +287,8 @@ const bookSchema = new Schema({
 // The books-list query is find({ members: userId }); XenSplit's equivalent is an
 // unindexed collection scan, which is worth not repeating.
 bookSchema.index({ members: 1 });
+bookSchema.index({ "roster.user_id": 1 });
+rosterSync(bookSchema);
 
 // --- Item -------------------------------------------------------------------
 

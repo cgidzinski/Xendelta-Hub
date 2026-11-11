@@ -22,13 +22,13 @@ interface AuthVerifyResponse {
 }
 
 interface LoginResponse {
-  success: boolean;
+  status: boolean;
   token?: string;
   user?: AuthUser;
 }
 
 interface SignupResponse {
-  success: boolean;
+  status: boolean;
   token?: string;
   user?: AuthUser;
 }
@@ -91,7 +91,7 @@ const loginUser = async (email: string, password: string): Promise<LoginResponse
 
   const data = response.data;
 
-  if (data.success && data.token && data.user) {
+  if (data.status && data.token && data.user) {
     localStorage.setItem("token", data.token);
   }
 
@@ -103,7 +103,7 @@ const signupUser = async (signupData: SignupData): Promise<SignupResponse> => {
 
   const data = response.data;
 
-  if (data.success && data.token && data.user) {
+  if (data.status && data.token && data.user) {
     localStorage.setItem("token", data.token);
   }
 
@@ -156,7 +156,7 @@ export const useAuthHook = () => {
   const { mutateAsync: loginMutation } = useMutation({
     mutationFn: ({ email, password }: { email: string; password: string }) => loginUser(email, password),
     onSuccess: (data) => {
-      if (data.success && data.user) {
+      if (data.status && data.user) {
         // Clear all queries first to remove any previous user's data
         queryClient.clear();
 
@@ -179,7 +179,7 @@ export const useAuthHook = () => {
   const { mutateAsync: signupMutation } = useMutation({
     mutationFn: signupUser,
     onSuccess: (data) => {
-      if (data.success && data.user) {
+      if (data.status && data.user) {
         // Clear all queries first to remove any previous user's data
         queryClient.clear();
 
@@ -243,12 +243,12 @@ export const useAuthHook = () => {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     const result = await loginMutation({ email, password });
-    return result.success || false;
+    return result.status || false;
   };
 
   const signup = async (data: SignupData): Promise<boolean> => {
     const result = await signupMutation(data);
-    return result.success || false;
+    return result.status || false;
   };
 
   const resetPassword = async (email: string): Promise<boolean> => {

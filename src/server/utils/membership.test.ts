@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { roleOf, canView, canEdit, canManage, changeRole, removeMember, type HasMembers } from "./membership";
+import {
+  roleOf,
+  canView,
+  canEdit,
+  canManage,
+  changeRole,
+  removeMember,
+  legacyRoster,
+  accessOf,
+  type HasMembers,
+} from "./membership";
 
 const doc: HasMembers = {
   members: [
@@ -70,5 +80,32 @@ describe("removeMember", () => {
   it("a stranger learns nothing (404)", () => {
     expect(removeMember(doc, "x", "e")).toMatchObject({ ok: false, code: 404 });
     expect(removeMember(doc, "o", "x")).toMatchObject({ ok: false, code: 404 });
+  });
+});
+
+describe("legacy shape (members + created_by)", () => {
+  it("the creator is the owner and everyone else an editor", () => {
+    expect(legacyRoster({ created_by: "a", members: ["a", "b"] })).toEqual([
+      { user_id: "a", role: "owner" },
+      { user_id: "b", role: "editor" },
+    ]);
+  });
+
+  it("reads ObjectId-like and populated members, and drops duplicates", () => {
+    const oid = (s: string) => ({ toString: () => s });
+    expect(legacyRoster({ created_by: "a", members: [oid("a"), { _id: oid("b") }, "b"] })).toEqual([
+      { user_id: "a", role: "owner" },
+      { user_id: "b", role: "editor" },
+    ]);
+  });
+
+  it("an owner who is not in members gets no access (as before)", () => {
+    expect(legacyRoster({ created_by: "z", members: ["a"] })).toEqual([{ user_id: "a", role: "editor" }]);
+    expect(canView(accessOf({ created_by: "z", members: ["a"] }), "z")).toBe(false);
+  });
+
+  it("handles missing fields", () => {
+    expect(legacyRoster({})).toEqual([]);
+    expect(legacyRoster(null)).toEqual([]);
   });
 });

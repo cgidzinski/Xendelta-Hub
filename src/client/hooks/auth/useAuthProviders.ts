@@ -17,18 +17,18 @@ export interface AuthProvidersData {
 }
 
 interface LinkProviderResponse {
-  success: boolean;
+  status: boolean;
   message?: string;
   redirectUrl?: string;
 }
 
 interface UnlinkProviderResponse {
-  success: boolean;
+  status: boolean;
   message?: string;
 }
 
 interface AddPasswordResponse {
-  success: boolean;
+  status: boolean;
   message?: string;
 }
 
@@ -40,7 +40,7 @@ export const authProviderKeys = {
 
 // API functions
 const fetchAuthProvidersData = async (): Promise<AuthProvidersData> => {
-  // Note: This endpoint returns { success, providers, canUnlinkLocal } directly
+  // Note: This endpoint returns { status, providers, canUnlinkLocal } directly
   // Not wrapped in data field like standard ApiResponse
   const response = await apiClient.get<AuthProvidersData>("/api/user/auth-providers");
   return response.data;
@@ -50,7 +50,7 @@ const linkGoogleAccountRequest = async (): Promise<LinkProviderResponse> => {
   const response = await apiClient.post<LinkProviderResponse>("/api/user/link-google");
   const data = response.data;
 
-  if (data.success && data.redirectUrl) {
+  if (data.status && data.redirectUrl) {
     // Redirect to Google OAuth
     window.location.href = data.redirectUrl;
   } else {
@@ -64,7 +64,7 @@ const linkGitHubAccountRequest = async (): Promise<LinkProviderResponse> => {
   const response = await apiClient.post<LinkProviderResponse>("/api/user/link-github");
   const data = response.data;
 
-  if (data.success && data.redirectUrl) {
+  if (data.status && data.redirectUrl) {
     // Redirect to GitHub OAuth
     window.location.href = data.redirectUrl;
   } else {
@@ -78,7 +78,7 @@ const linkDiscordAccountRequest = async (): Promise<LinkProviderResponse> => {
   const response = await apiClient.post<LinkProviderResponse>("/api/user/link-discord");
   const data = response.data;
 
-  if (data.success && data.redirectUrl) {
+  if (data.status && data.redirectUrl) {
     // Redirect to Discord OAuth
     window.location.href = data.redirectUrl;
   } else {
@@ -172,7 +172,7 @@ export const useAuthProviders = () => {
 
   const unlinkProvider = async (provider: string) => {
     const result = await unlinkProviderMutation(provider);
-    if (result.success) {
+    if (result.status) {
       return { success: true, message: result.message || "Provider unlinked successfully" };
     } else {
       return { success: false, message: result.message || "Failed to unlink provider" };
@@ -181,7 +181,7 @@ export const useAuthProviders = () => {
 
   const addPassword = async (password: string) => {
     const result = await addPasswordMutation(password);
-    if (result.success) {
+    if (result.status) {
       return { success: true, message: result.message || "Password added successfully" };
     } else {
       return { success: false, message: result.message || "Failed to add password" };

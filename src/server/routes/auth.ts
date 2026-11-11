@@ -84,6 +84,7 @@ module.exports = function (app: express.Application) {
       });
       return res.json({
         success: true,
+        status: true,
         token: token,
         user: {
           id: user._id,
@@ -95,6 +96,7 @@ module.exports = function (app: express.Application) {
     } else {
       return res.json({
         success: false,
+        status: false,
         message: "User Not Found.",
       });
     }
@@ -127,6 +129,7 @@ module.exports = function (app: express.Application) {
 
       return res.json({
         success: true,
+        status: true,
         token: token,
         user: {
           id: newUser._id,
@@ -143,6 +146,7 @@ module.exports = function (app: express.Application) {
       if (hasGoogle && !hasLocal) {
         return res.json({
           success: false,
+          status: false,
           message:
             "An account with this email already exists through Google. Please sign in with Google or use a different email.",
           existingProvider: "google",
@@ -150,12 +154,14 @@ module.exports = function (app: express.Application) {
       } else if (hasLocal) {
         return res.json({
           success: false,
+          status: false,
           message: "An account with this email already exists. Please sign in or use a different email.",
           existingProvider: "local",
         });
       } else {
         return res.json({
           success: false,
+          status: false,
           message: "An account with this email already exists. Please sign in or use a different email.",
           existingProvider: "unknown",
         });

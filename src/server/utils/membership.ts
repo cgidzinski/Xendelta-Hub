@@ -80,3 +80,53 @@ export function removeMember<M extends MemberLike>(doc: HasMembers<M>, actor: st
     return { ok: false, code: 403, message: "Only the owner can remove people" };
   return { ok: true, members: doc.members.filter((m) => m.user_id !== target) };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Apps that still store `members: ObjectId[]` + `created_by` (XenBudget, XenSplit)
+//
+// Those two predate roles: the creator is the owner and everyone else is an editor. During the
+// move to the standard shape they also keep a `roster: [{ user_id, role }]` that is derived from
+// those two fields on every save (see `rosterSync`) and backfilled by a migration. The helpers
+// below always derive from the original fields, so a permission check is right even for a
+// document nobody has saved since the roster was added.
+// ---------------------------------------------------------------------------------------------
+
+type IdLike = string | { _id?: unknown; toString(): string };
+interface LegacyMembership {
+  created_by?: string | null;
+  members?: ArrayLike<IdLike> | null;
+}
+
+const idString = (m: IdLike): string =>
+  typeof m === "string" ? m : m && (m as { _id?: unknown })._id ? String((m as { _id: unknown })._id) : String(m);
+
+/** The roster implied by `members` + `created_by`: the creator is the owner, everyone else an editor. */
+export function legacyRoster(doc: Maybe<LegacyMembership>): MemberLike[] {
+  const ids = Array.from(doc?.members ?? [], idString);
+  return [...new Set(ids)].map((user_id) => ({ user_id, role: user_id === doc?.created_by ? "owner" : "editor" }));
+}
+
+/** A document in the legacy shape, viewed through the standard helpers: `canManage(accessOf(book), uid)`. */
+export const accessOf = (doc: Maybe<LegacyMembership>): HasMembers => ({ members: legacyRoster(doc) });
+
+/**
+ * Keeps `roster` in step with `members` + `created_by` whenever the document is saved. Existing
+ * `added_at` values are kept so a save does not rewrite when someone joined.
+ */
+export function rosterSync(schema: Schema): void {
+  schema.pre("validate", function () {
+    const previous = new Map<string, unknown>(
+      Array.from((this.get("roster") ?? []) as Array<{ user_id: string; added_at?: Date }>, (r) => [
+        r.user_id,
+        r.added_at,
+      ]),
+    );
+    this.set(
+      "roster",
+      legacyRoster(this as unknown as LegacyMembership).map((r) => ({
+        ...r,
+        added_at: previous.get(r.user_id) ?? new Date(),
+      })),
+    );
+  });
+}
