@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import { accessOf, canManage, canView } from "../utils/membership";
 import { roundMoneyExact } from "@shared/money";
-import { AppError } from "../utils/http";
 import { XenSplit } from "../models/xenSplit";
 import { User } from "../models/user";
 import { authenticateToken } from "../middleware/auth";
@@ -730,7 +729,6 @@ module.exports = function (app: any) {
           "payload.group_id": groupId,
           "payload.genesis_expense_id": expenseId,
         });
-        if (!series) throw new AppError(404, "ScheduledTask not found");
         if (
           series &&
           updates.date !== undefined &&
@@ -839,7 +837,7 @@ module.exports = function (app: any) {
             changes: expenseChanges,
           });
         }
-        if (recurringAction) {
+        if (recurringAction && series) {
           await logXenSplit(groupId, userId, recurringAction, {
             targetType: "recurring",
             targetId: series._id,
@@ -850,7 +848,7 @@ module.exports = function (app: any) {
 
         // Resuming backfills the paused gap
         let respGroup = group;
-        if (resumed) {
+        if (resumed && series) {
           const generated = await dispatchTask(series);
           if (generated > 0) respGroup = (await XenSplit.findById(groupId)) ?? respGroup;
         }
