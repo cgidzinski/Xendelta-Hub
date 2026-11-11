@@ -52,10 +52,10 @@ export default function AdminNavBar() {
       <Link to="/internal" style={{ color: "inherit", display: "flex" }}>
         <IconButton
           sx={{
-            color: "primary.main",
-            backgroundColor: (t) => alpha(t.palette.primary.main, 0.1),
+            color: (t) => (t.palette.mode === "dark" ? t.palette.primary.main : t.palette.common.white),
+            backgroundColor: (t) => alpha(t.palette.mode === "dark" ? t.palette.primary.main : t.palette.common.white, 0.15),
             "&:hover": {
-              backgroundColor: (t) => alpha(t.palette.primary.main, 0.2),
+              backgroundColor: (t) => alpha(t.palette.mode === "dark" ? t.palette.primary.main : t.palette.common.white, 0.28),
             },
           }}
         >

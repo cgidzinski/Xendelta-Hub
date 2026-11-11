@@ -365,14 +365,14 @@ export default function BaseNavBar({
           {(showMessages || showNotifications) && (
             <Box sx={{ display: "flex", alignItems: "center" }}>
               {showMessages && (
-                <IconButton sx={{ width: 50, height: 50 }} onClick={() => navigate(messagesPath)}>
+                <IconButton color="inherit" aria-label="Messages" sx={{ width: 50, height: 50 }} onClick={() => navigate(messagesPath)}>
                   <Badge badgeContent={profile?.unread_messages ? 1 : 0} color="error" variant="dot">
                     <MailIcon />
                   </Badge>
                 </IconButton>
               )}
               {showNotifications && (
-                <IconButton sx={{ width: 50, height: 50, p: 0 }} onClick={handleNotificationClick}>
+                <IconButton color="inherit" aria-label="Notifications" sx={{ width: 50, height: 50, p: 0 }} onClick={handleNotificationClick}>
                   <Badge badgeContent={profile?.has_new_notifications ? 1 : 0} color="error" variant="dot">
                     <NotificationsIcon />
                   </Badge>
