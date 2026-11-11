@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import * as ReactDOM from "react-dom/client";
-import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route, Navigate } from "react-router-dom";
+import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route } from "react-router-dom";
 import AppThemeProvider from "./theme/AppThemeProvider";
 import { SnackbarProvider } from "notistack";
 import { QueryClient, QueryCache, MutationCache, QueryClientProvider } from "@tanstack/react-query";
@@ -23,6 +23,13 @@ import AdminNavBar from "./components/navbars/AdminNavBar";
 
 // Contexts
 import { lazyPage } from "./utils/lazyPage";
+import { recipaintRoutes } from "./routes/Internal/Recipaint/routes";
+import { xenboxRoutes } from "./routes/Internal/XenBox/routes";
+import { xenlinkRoutes } from "./routes/Internal/XenLink/routes";
+import { xensplitRoutes } from "./routes/Internal/Xensplit/routes";
+import { xenroutineRoutes } from "./routes/Internal/XenRoutine/routes";
+import { xenkitchenRoutes } from "./routes/Internal/XenKitchen/routes";
+import { xenbudgetRoutes } from "./routes/Internal/XenBudget/routes";
 import { NavBarProvider } from "./contexts/NavBarContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SocketProvider } from "./contexts/SocketContext";
@@ -46,53 +53,16 @@ const ConversationDetail = lazyPage(() => import("./routes/Internal/Messages/Con
 const Notifications = lazyPage(() => import("./routes/Internal/Notifications/Notifications"));
 const InternalBlog = lazyPage(() => import("./routes/Internal/Blog/InternalBlog"));
 const InternalBlogPostDetail = lazyPage(() => import("./routes/Internal/Blog/InternalBlogPostDetail"));
-const Recipaint = lazyPage(() => import("./routes/Internal/Recipaint/Recipaint"));
-const RecipeDetail = lazyPage(() => import("./routes/Internal/Recipaint/RecipeDetail"));
-const PaintAlong = lazyPage(() => import("./routes/Internal/Recipaint/PaintAlong"));
-const Paints = lazyPage(() => import("./routes/Internal/Recipaint/Paints"));
-const XenBox = lazyPage(() => import("./routes/Internal/XenBox/XenBox"));
-const FileDetail = lazyPage(() => import("./routes/Internal/XenBox/FileDetail"));
 const Shop = lazyPage(() => import("./routes/Internal/Shop/Shop"));
 const Inventory = lazyPage(() => import("./routes/Internal/Inventory/Inventory"));
-const XenLink = lazyPage(() => import("./routes/Internal/XenLink/XenLink"));
 const XenLinkRedirect = lazyPage(() => import("./routes/External/XenLinkRedirect/XenLinkRedirect"));
 // Routes - Xensplit
-const XensplitGroupsList = lazyPage(() => import("./routes/Internal/Xensplit/GroupsList"));
-const XensplitGroupDetail = lazyPage(() => import("./routes/Internal/Xensplit/GroupDetail"));
-const GroupOverview = lazyPage(() => import("./routes/Internal/Xensplit/GroupOverview"));
-const GroupAnalytics = lazyPage(() => import("./routes/Internal/Xensplit/GroupAnalytics"));
-const GroupExpenses = lazyPage(() => import("./routes/Internal/Xensplit/GroupExpenses"));
-const GroupBalances = lazyPage(() => import("./routes/Internal/Xensplit/GroupBalances"));
-const GroupSettlements = lazyPage(() => import("./routes/Internal/Xensplit/GroupSettlements"));
-const GroupExplain = lazyPage(() => import("./routes/Internal/Xensplit/GroupExplain"));
-const GroupSettings = lazyPage(() => import("./routes/Internal/Xensplit/GroupSettings"));
-const GroupActivityLog = lazyPage(() => import("./routes/Internal/Xensplit/GroupActivityLog"));
 // Routes - XenRoutine
-const XenRoutine = lazyPage(() => import("./routes/Internal/XenRoutine/XenRoutine"));
-const XenRoutineOverview = lazyPage(() => import("./routes/Internal/XenRoutine/Overview"));
-const XenRoutineRoutines = lazyPage(() => import("./routes/Internal/XenRoutine/Routines"));
 
 // Routes - XenKitchen
-const XenKitchen = lazyPage(() => import("./routes/Internal/XenKitchen/XenKitchen"));
-const XenKitchenItemDetail = lazyPage(() => import("./routes/Internal/XenKitchen/ItemDetail"));
 const XenKitchenPublic = lazyPage(() => import("./routes/External/XenKitchenPublic/XenKitchenPublic"));
 const XenKitchenPublicBook = lazyPage(() => import("./routes/External/XenKitchenPublic/XenKitchenPublicBook"));
 // Routes - XenBudget
-const XenBudgetBooksList = lazyPage(() => import("./routes/Internal/XenBudget/BooksList"));
-const XenBudgetBookDetail = lazyPage(() => import("./routes/Internal/XenBudget/BookDetail"));
-const XenBudgetBookOverview = lazyPage(() => import("./routes/Internal/XenBudget/BookOverview"));
-const XenBudgetBookItems = lazyPage(() => import("./routes/Internal/XenBudget/BookItems"));
-const XenBudgetBookPiggyBanks = lazyPage(() => import("./routes/Internal/XenBudget/BookPiggyBanks"));
-const XenBudgetBookReport = lazyPage(() => import("./routes/Internal/XenBudget/BookReport"));
-const XenBudgetBookSettings = lazyPage(() => import("./routes/Internal/XenBudget/BookSettings"));
-const SettingsIndexRedirect = lazyPage(() => import("./routes/Internal/XenBudget/settings/SettingsIndexRedirect"));
-const XenBudgetGeneralSection = lazyPage(() => import("./routes/Internal/XenBudget/settings/GeneralSection"));
-const XenBudgetCategoriesSection = lazyPage(() => import("./routes/Internal/XenBudget/settings/CategoriesSection"));
-const XenBudgetFlagsSection = lazyPage(() => import("./routes/Internal/XenBudget/settings/FlagsSection"));
-const XenBudgetTaggingSection = lazyPage(() => import("./routes/Internal/XenBudget/settings/TaggingSection"));
-const XenBudgetBudgetsSection = lazyPage(() => import("./routes/Internal/XenBudget/settings/BudgetsSection"));
-const XenBudgetCsvMapsSection = lazyPage(() => import("./routes/Internal/XenBudget/settings/CsvMapsSection"));
-const XenBudgetImportsSection = lazyPage(() => import("./routes/Internal/XenBudget/settings/ImportsSection"));
 // Routes - Admin
 const Admin = lazyPage(() => import("./routes/Admin/Admin"));
 const Users = lazyPage(() => import("./routes/Admin/Users"));
@@ -192,56 +162,15 @@ const router = createBrowserRouter(
         <Route path="notifications" element={<Notifications />} />
         <Route path="blog" element={<InternalBlog />} />
         <Route path="blog/:slug" element={<InternalBlogPostDetail />} />
-        <Route path="recipaint" element={<Recipaint />} />
-        <Route path="recipaint/paints" element={<Paints />} />
-        <Route path="recipaint/:id" element={<RecipeDetail />} />
-        <Route path="recipaint/:id/paint" element={<PaintAlong />} />
-        <Route path="xenbox" element={<XenBox />} />
-        <Route path="xenbox/:fileId" element={<FileDetail />} />
-        <Route path="xenlink" element={<XenLink />} />
+        {recipaintRoutes}
+        {xenboxRoutes}
+        {xenlinkRoutes}
         <Route path="shop" element={<Shop />} />
         <Route path="inventory" element={<Inventory />} />
-        <Route path="xensplit" index element={<Navigate to="groups" replace />} />
-        <Route path="xensplit/groups" element={<XensplitGroupsList />} />
-        <Route path="xensplit/groups/:groupId" element={<XensplitGroupDetail />}>
-          <Route index element={<Navigate to="overview" replace />} />
-          <Route path="overview" element={<GroupOverview />} />
-          <Route path="expenses" element={<GroupExpenses />} />
-          <Route path="balances" element={<GroupBalances />} />
-          <Route path="settlements" element={<GroupSettlements />} />
-          <Route path="analytics" element={<GroupAnalytics />} />
-          <Route path="explain" element={<GroupExplain />} />
-          <Route path="settings" element={<GroupSettings />} />
-          <Route path="activity" element={<GroupActivityLog />} />
-        </Route>
-        <Route path="xenroutine" element={<XenRoutine />}>
-          <Route index element={<Navigate to="overview" replace />} />
-          <Route path="overview" element={<XenRoutineOverview />} />
-          <Route path="routines" element={<XenRoutineRoutines />} />
-        </Route>
-        <Route path="xenkitchen" element={<XenKitchen />} />
-        <Route path="xenkitchen/:id" element={<XenKitchenItemDetail />} />
-        <Route path="xenbudget">
-          <Route index element={<Navigate to="books" replace />} />
-          <Route path="books" element={<XenBudgetBooksList />} />
-          <Route path="books/:bookId" element={<XenBudgetBookDetail />}>
-            <Route index element={<Navigate to="overview" replace />} />
-            <Route path="overview" element={<XenBudgetBookOverview />} />
-            <Route path="items" element={<XenBudgetBookItems />} />
-            <Route path="piggy-banks" element={<XenBudgetBookPiggyBanks />} />
-            <Route path="report" element={<XenBudgetBookReport />} />
-            <Route path="settings" element={<XenBudgetBookSettings />}>
-              <Route index element={<SettingsIndexRedirect />} />
-              <Route path="general" element={<XenBudgetGeneralSection />} />
-              <Route path="categories" element={<XenBudgetCategoriesSection />} />
-              <Route path="flags" element={<XenBudgetFlagsSection />} />
-              <Route path="tagging" element={<XenBudgetTaggingSection />} />
-              <Route path="budgets" element={<XenBudgetBudgetsSection />} />
-              <Route path="csv-maps" element={<XenBudgetCsvMapsSection />} />
-              <Route path="imports" element={<XenBudgetImportsSection />} />
-            </Route>
-          </Route>
-        </Route>
+        {xensplitRoutes}
+        {xenroutineRoutes}
+        {xenkitchenRoutes}
+        {xenbudgetRoutes}
       </Route>
       {/* Admin routes - require admin role and use AdminNavBar */}
       <Route
