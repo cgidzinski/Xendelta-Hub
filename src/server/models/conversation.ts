@@ -17,6 +17,9 @@ const conversationSchema = new Schema({
   messages: [messageSchema], // array of messages in this conversation/group
 });
 
+// "My conversations" is find({ participants: userId }).
+conversationSchema.index({ participants: 1 });
+
 export type ConversationAttrs = InferSchemaType<typeof conversationSchema>;
 export type ConversationMessage = ConversationAttrs["messages"][number];
 export type ConversationDocument = HydratedDocument<ConversationAttrs>;

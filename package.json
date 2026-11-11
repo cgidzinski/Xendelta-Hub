@@ -13,6 +13,7 @@
     "test": "vitest run",
     "db:export": "tsx scripts/db-backup.ts export",
     "db:import": "tsx scripts/db-backup.ts import",
+    "db:stats": "tsx scripts/db-stats.ts",
     "db:migrate": "migrate up -f migrate.ts",
     "db:migrate:down": "migrate down -f migrate.ts",
     "db:migrate:status": "migrate list -f migrate.ts",

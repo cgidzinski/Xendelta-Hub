@@ -128,6 +128,9 @@ const xenSplitSchema = new Schema({
   recurring_expenses: [recurringExpenseSchema], // DEPRECATED — see note above
 });
 
+// Every "my groups" list is find({ members: userId }); without this it scans the collection.
+xenSplitSchema.index({ members: 1 });
+
 export type XenSplitAttrs = InferSchemaType<typeof xenSplitSchema>;
 
 export const XenSplit = mongoose.model("XenSplit", xenSplitSchema);

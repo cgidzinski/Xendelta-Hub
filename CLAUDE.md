@@ -43,6 +43,13 @@ plus `npm audit --omit=dev --audit-level=high`.
   Registration order matters in Express (a literal path must come before a `:param` path), so keep it in `index.ts`.
 - Changes to a *populated* document are not saved by saving its parent. Update the referenced model directly.
 
+## Databases and migrations
+- **Starting the server runs pending migrations** on whatever database `MONGODB_URI` points at. Do not run a
+  branch that contains an unmerged migration against staging or production; rehearse on a restored copy
+  (`npm run db:export`, restore into a scratch DB). See `migrations/README.md`.
+- `npm run db:stats` is a read-only health report (document sizes vs the 16 MB limit, busiest groups, float noise in
+  money). Safe on production; use it to decide whether a data-model change is worth its risk.
+
 ## Environment
 Copy `.env.example` to `.env`. The server refuses to start without `MONGODB_URI` and `JWT_SECRET`.
 Deployment and server setup: `docs/home-server-setup.md`. Deploys run checks, then build, then `db:migrate`.
