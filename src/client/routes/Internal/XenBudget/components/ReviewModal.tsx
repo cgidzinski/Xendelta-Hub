@@ -332,7 +332,6 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
     return (
         <Dialog
             open={open} onClose={onClose} fullWidth maxWidth="xs" fullScreen={isMobile}
-            slotProps={{ paper: { sx: { borderRadius: isMobile ? 0 : 2 } } }}
         >
             <DialogTitle sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
                 <Stack direction="row" alignItems="baseline" spacing={1}>

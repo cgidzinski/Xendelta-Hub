@@ -30,7 +30,7 @@ export default function EtransferPromptDialog({ open, onClose }: Props) {
     };
 
     return (
-        <Dialog fullWidth maxWidth="xs" open={open} onClose={close} PaperProps={{ sx: { borderRadius: 3 } }}>
+        <Dialog fullWidth maxWidth="xs" open={open} onClose={close}>
             <Box sx={{ p: 3, pb: 1 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>Add your e-transfer info</Typography>
                 <Typography variant="body2" color="text.secondary">

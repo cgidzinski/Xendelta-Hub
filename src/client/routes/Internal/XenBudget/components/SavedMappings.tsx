@@ -116,7 +116,6 @@ export default function SavedMappings() {
             <Dialog
                 open={!!editing} onClose={() => setEditing(null)} fullWidth maxWidth="md"
                 fullScreen={isMobile}
-                slotProps={{ paper: { sx: { borderRadius: isMobile ? 0 : 2 } } }}
             >
                 <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     Edit mapping

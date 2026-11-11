@@ -306,8 +306,7 @@ export default function ItemEditor({ open, onClose, item, defaultCategoryId = nu
   const openExtra = (e: Extra) => setOpened((o) => new Set(o).add(e));
 
   return (
-    <Dialog open={open} onClose={requestClose} fullScreen={phone} fullWidth maxWidth="sm"
-      slotProps={{ paper: { sx: { borderRadius: phone ? 0 : 3 } } }}>
+    <Dialog open={open} onClose={requestClose} fullScreen={phone} fullWidth maxWidth="sm">
       <AppBar position="sticky" color="inherit" elevation={0} sx={{ borderBottom: "1px solid", borderColor: "divider" }}>
         <Toolbar sx={{ gap: 1 }} variant="dense">
           <IconButton edge="start" onClick={requestClose} aria-label="Close"><CloseIcon /></IconButton>

@@ -169,7 +169,6 @@ export default function GroupsList() {
         maxWidth="sm"
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        PaperProps={{ sx: { borderRadius: 2 } }}
       >
         <Box sx={{ position: "relative" }}>
           <IconButton

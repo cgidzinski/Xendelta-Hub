@@ -168,7 +168,6 @@ export default function HelpModal({ open, onClose }: HelpModalProps) {
             maxWidth="sm"
             fullWidth
             fullScreen={isMobile}
-            PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3 } }}
         >
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 3, pt: 2.5, pb: 1 }}>
                 <Typography variant="h6" sx={{ fontWeight: 700 }}>

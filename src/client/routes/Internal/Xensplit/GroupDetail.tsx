@@ -749,7 +749,6 @@ export default function GroupDetail() {
         maxWidth="xs"
         open={showAddMemberModal}
         onClose={() => setShowAddMemberModal(false)}
-        PaperProps={{ sx: { borderRadius: 2 } }}
       >
         <DialogTitle sx={{ fontWeight: 700 }}>Add Members</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -782,7 +781,6 @@ export default function GroupDetail() {
         maxWidth="sm"
         open={showConfirmDialog}
         onClose={() => setShowConfirmDialog(false)}
-        PaperProps={{ sx: { borderRadius: 2 } }}
       >
         <DialogTitle sx={{ fontWeight: 700 }}>Confirm</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -804,7 +802,6 @@ export default function GroupDetail() {
         fullScreen={isMobile}
         open={showAddExpenseModal}
         onClose={(_, reason) => { if (reason !== "backdropClick") { setShowAddExpenseModal(false); setAddImages([]); } }}
-        PaperProps={{ sx: { borderRadius: isMobile ? 0 : 2 } }}
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
           <DialogTitle sx={{ fontWeight: 700, p: 0 }}>New Expense</DialogTitle>
@@ -867,7 +864,6 @@ export default function GroupDetail() {
         fullScreen={isMobile}
         open={showEditExpenseModal}
         onClose={() => { setShowEditExpenseModal(false); setEditImages([]); }}
-        PaperProps={{ sx: { borderRadius: isMobile ? 0 : 2 } }}
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -978,7 +974,6 @@ export default function GroupDetail() {
         maxWidth="xs"
         open={showViewExpenseModal}
         onClose={() => setShowViewExpenseModal(false)}
-        PaperProps={{ sx: { borderRadius: 3 } }}
       >
         {viewExpenseItem && (() => {
           const e = viewExpenseItem;

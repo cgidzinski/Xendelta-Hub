@@ -43,8 +43,6 @@ const ON_IMAGE_OVERLAY = [
   "routes/Admin/BlogPostForm/components/AssetManager.tsx",
   "components/blog/BlogContent.tsx",
 ];
-// Game boards are canvas drawing with their own palette.
-const SKIP_DIRS = ["routes/Internal/XenCasino"];
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -64,7 +62,6 @@ describe("design language: no stray colour literals", () => {
     const offenders: string[] = [];
     for (const file of walk(ROOT)) {
       const rel = relative(ROOT, file).split("\\").join("/");
-      if (SKIP_DIRS.some((d) => rel.startsWith(d))) continue;
       if (rel in ALLOWED || ON_IMAGE_OVERLAY.includes(rel)) continue;
       if (COLOUR.test(stripComments(readFileSync(file, "utf8")))) offenders.push(rel);
     }

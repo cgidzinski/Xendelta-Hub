@@ -112,7 +112,7 @@ export default function LandingHeader() {
               py: 1,
               fontWeight: 600,
               fontSize: { xs: "0.875rem", md: "1rem" },
-              backgroundColor: "primary.main",
+              backgroundColor: "primary.main",
               flexShrink: 0,
               order: { xs: 2, md: 3 },
               "&:hover": { backgroundColor: "primary.dark" },

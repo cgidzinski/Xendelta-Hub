@@ -89,7 +89,7 @@ export function PendingSettlementDialog({ settlement, onClose, userId, settleDeb
     };
 
     return (
-        <Dialog fullWidth maxWidth="xs" open={!!settlement} onClose={onClose} PaperProps={{ sx: { borderRadius: 3 } }}>
+        <Dialog fullWidth maxWidth="xs" open={!!settlement} onClose={onClose}>
             <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
                 <IconButton onClick={onClose} size="small" sx={{ position: "absolute", top: 12, right: 12 }}>
                     <CloseIcon fontSize="small" />
@@ -199,7 +199,7 @@ export default function SettlementDetailDialog({ settlement, onClose, getMember,
 
     return (
         <>
-            <Dialog fullWidth maxWidth="xs" open={!!settlement && !confirmUndo} onClose={onClose} PaperProps={{ sx: { borderRadius: 3 } }}>
+            <Dialog fullWidth maxWidth="xs" open={!!settlement && !confirmUndo} onClose={onClose}>
                 <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
                     <IconButton onClick={onClose} size="small" sx={{ position: "absolute", top: 12, right: 12 }}>
                         <CloseIcon fontSize="small" />
