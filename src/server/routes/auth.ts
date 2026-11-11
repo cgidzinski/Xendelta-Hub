@@ -12,6 +12,9 @@ import {
 import { randomToken, hashToken } from "../utils/tokens";
 import { AuthenticatedRequest } from "../types";
 
+// A recovery link is good for one hour. Keep in step with the wording in utils/emailUtils.ts.
+export const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
+
 module.exports = function (app: express.Application) {
   // Role verification endpoint - returns user's roles from database
   app.get("/api/auth/roles/verify", authenticateToken, async function (req: express.Request, res: express.Response) {
@@ -161,7 +164,7 @@ module.exports = function (app: express.Application) {
     if (user) {
       // Generate a secure random token
       const resetToken = randomToken(32);
-      const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
+      const resetTokenExpiry = new Date(Date.now() + RESET_TOKEN_TTL_MS);
 
       // Save the token and expiry to the user
       // Only the hash is stored; the raw token exists only in the emailed link.
