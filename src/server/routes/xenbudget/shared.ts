@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { XenBudgetBook } from "../../models/xenBudget";
+import { accessOf, canManage, canView } from "../../utils/membership";
 import { SocketManager } from "../../infrastructure/SocketManager";
 
 import { resolveShares, resolveCategories, roundMoney } from "../../utils/xenBudgetUtils";
@@ -17,7 +18,7 @@ export function memberIds(book: any): string[] {
 }
 
 export function isMember(book: any, userId: string): boolean {
-  return memberIds(book).includes(userId);
+  return canView(accessOf(book), userId);
 }
 
 // XenSplit repeats its 404/403 block in every handler; XenBudget keeps it here so the
@@ -40,7 +41,7 @@ export async function loadBookForMember(req: Request, res: Response): Promise<an
 export async function loadBookForCreator(req: Request, res: Response): Promise<any | null> {
   const book = await loadBookForMember(req, res);
   if (!book) return null;
-  if (book.created_by !== callerId(req)) {
+  if (!canManage(accessOf(book), callerId(req))) {
     res.status(403).json({ status: false, message: "Only the book owner can do that" });
     return null;
   }

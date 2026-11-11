@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { accessOf, canManage } from "../../utils/membership";
 import { XenBudgetBook, XenBudgetItem } from "../../models/xenBudget";
 import { User } from "../../models/user";
 import { SocketManager } from "../../infrastructure/SocketManager";
@@ -252,10 +253,10 @@ export function registerBookRoutes(app: any) {
         const userId = callerId(req);
         const target = req.params.userId;
 
-        if (target !== userId && book.created_by !== userId) {
+        if (target !== userId && !canManage(accessOf(book), userId)) {
           return res.status(403).json({ status: false, message: "Only the book owner can remove other members" });
         }
-        if (target === book.created_by) {
+        if (canManage(accessOf(book), target)) {
           return res
             .status(400)
             .json({ status: false, message: "Transfer or delete the book instead of removing its owner" });
