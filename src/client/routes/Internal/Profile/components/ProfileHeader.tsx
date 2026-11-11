@@ -7,11 +7,7 @@ interface ProfileHeaderProps {
   avatarKey: number;
 }
 
-export default function ProfileHeader({
-  profile,
-  avatarUrl,
-  avatarKey,
-}: ProfileHeaderProps) {
+export default function ProfileHeader({ profile, avatarUrl, avatarKey }: ProfileHeaderProps) {
   return (
     <Box sx={{ textAlign: "center", mb: 4 }}>
       <Avatar
@@ -47,4 +43,3 @@ export default function ProfileHeader({
     </Box>
   );
 }
-

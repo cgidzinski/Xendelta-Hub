@@ -35,12 +35,7 @@ export default function AvatarUploadSection({
           <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
             <Button variant="outlined" component="label" disabled={isUploading || isUploadingAvatar}>
               Choose File
-              <input
-                type="file"
-                hidden
-                accept="image/jpeg,image/jpg,image/png,image/gif"
-                onChange={onFileSelect}
-              />
+              <input type="file" hidden accept="image/jpeg,image/jpg,image/png,image/gif" onChange={onFileSelect} />
             </Button>
             <Button
               variant="contained"
@@ -53,9 +48,7 @@ export default function AvatarUploadSection({
           </Box>
           {selectedFile && (
             <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-              {filePreviewUrl && (
-                <Avatar src={filePreviewUrl} sx={{ width: 128, height: 128, borderRadius: 2 }} />
-              )}
+              {filePreviewUrl && <Avatar src={filePreviewUrl} sx={{ width: 128, height: 128, borderRadius: 2 }} />}
               <Box>
                 <Typography variant="body2" color="text.secondary">
                   Selected: {selectedFile.name}
@@ -74,4 +67,3 @@ export default function AvatarUploadSection({
     </Card>
   );
 }
-

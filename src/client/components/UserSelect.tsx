@@ -1,12 +1,5 @@
 import { useState } from "react";
-import {
-  Autocomplete,
-  TextField,
-  Avatar,
-  Box,
-  Typography,
-  CircularProgress,
-} from "@mui/material";
+import { Autocomplete, TextField, Avatar, Box, Typography, CircularProgress } from "@mui/material";
 import { useUserSearch, SearchedUser } from "../hooks/useUserSearch";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -55,15 +48,8 @@ export function UserSelect({
       getOptionLabel={(option) => option.username}
       isOptionEqualToValue={(option, val) => option._id === val._id}
       renderOption={(props, option) => (
-        <Box
-          component="li"
-          {...props}
-          sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1 }}
-        >
-          <Avatar
-            src={option.avatar || undefined}
-            sx={{ width: 32, height: 32 }}
-          >
+        <Box component="li" {...props} sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1 }}>
+          <Avatar src={option.avatar || undefined} sx={{ width: 32, height: 32 }}>
             {option.username[0]?.toUpperCase()}
           </Avatar>
           <Typography variant="body2">{option.username}</Typography>
@@ -79,9 +65,7 @@ export function UserSelect({
             ...params.InputProps,
             endAdornment: (
               <>
-                {isLoading ? (
-                  <CircularProgress color="inherit" size={20} />
-                ) : null}
+                {isLoading ? <CircularProgress color="inherit" size={20} /> : null}
                 {params.InputProps.endAdornment}
               </>
             ),
@@ -103,10 +87,7 @@ export function UserSelect({
               py: 0.5,
             }}
           >
-            <Avatar
-              src={option.avatar || undefined}
-              sx={{ width: 20, height: 20, fontSize: 10 }}
-            >
+            <Avatar src={option.avatar || undefined} sx={{ width: 20, height: 20, fontSize: 10 }}>
               {option.username[0]?.toUpperCase()}
             </Avatar>
             <Typography variant="caption">{option.username}</Typography>

@@ -15,19 +15,19 @@ const DEFAULT_SECTION = SETTINGS_SECTIONS[0].path;
  * a section that has since been renamed or removed falls back instead of routing nowhere.
  */
 export function loadSection(bookId: string): string {
-    try {
-        const stored = localStorage.getItem(key(bookId));
-        if (stored && SETTINGS_SECTIONS.some((s) => s.path === stored)) return stored;
-    } catch {
-        // Private mode, or storage disabled — fall through to the default.
-    }
-    return DEFAULT_SECTION;
+  try {
+    const stored = localStorage.getItem(key(bookId));
+    if (stored && SETTINGS_SECTIONS.some((s) => s.path === stored)) return stored;
+  } catch {
+    // Private mode, or storage disabled — fall through to the default.
+  }
+  return DEFAULT_SECTION;
 }
 
 export function saveSection(bookId: string, path: string): void {
-    try {
-        localStorage.setItem(key(bookId), path);
-    } catch {
-        // Nothing to do if the write fails; the section still applies for this visit.
-    }
+  try {
+    localStorage.setItem(key(bookId), path);
+  } catch {
+    // Nothing to do if the write fails; the section still applies for this visit.
+  }
 }

@@ -77,7 +77,9 @@ const fetchUserConversations = async (): Promise<Conversation[]> => {
 };
 
 const fetchConversationById = async (conversationId: string): Promise<Conversation> => {
-  const response = await apiClient.get<ApiResponse<{ conversation: Conversation }>>(`/api/user/messages/${conversationId}`);
+  const response = await apiClient.get<ApiResponse<{ conversation: Conversation }>>(
+    `/api/user/messages/${conversationId}`,
+  );
   return response.data.data!.conversation;
 };
 
@@ -85,7 +87,11 @@ const markConversationAsRead = async (conversationId: string): Promise<void> => 
   await apiClient.put(`/api/user/messages/${conversationId}/mark-read`);
 };
 
-const sendMessageToConversation = async (conversationId: string, message: string, parentMessageId?: string): Promise<Message> => {
+const sendMessageToConversation = async (
+  conversationId: string,
+  message: string,
+  parentMessageId?: string,
+): Promise<Message> => {
   const response = await apiClient.post<ApiResponse<{ message: Message }>>(`/api/user/messages/${conversationId}`, {
     message,
     parentMessageId,
@@ -94,9 +100,12 @@ const sendMessageToConversation = async (conversationId: string, message: string
 };
 
 const replyToMessage = async (conversationId: string, messageId: string, message: string): Promise<Message> => {
-  const response = await apiClient.post<ApiResponse<{ message: Message }>>(`/api/user/messages/${conversationId}/reply/${messageId}`, {
-    message,
-  });
+  const response = await apiClient.post<ApiResponse<{ message: Message }>>(
+    `/api/user/messages/${conversationId}/reply/${messageId}`,
+    {
+      message,
+    },
+  );
   return response.data.data!.message;
 };
 
@@ -112,20 +121,33 @@ const createNewConversation = async (participants: string[], message?: string): 
   return response.data.data!.conversation;
 };
 
-const addParticipantsToConversation = async (conversationId: string, participantIds: string[]): Promise<Conversation> => {
-  const response = await apiClient.post<ApiResponse<{ conversation: Conversation }>>(`/api/user/messages/${conversationId}/participants`, {
-    participantIds,
-  });
+const addParticipantsToConversation = async (
+  conversationId: string,
+  participantIds: string[],
+): Promise<Conversation> => {
+  const response = await apiClient.post<ApiResponse<{ conversation: Conversation }>>(
+    `/api/user/messages/${conversationId}/participants`,
+    {
+      participantIds,
+    },
+  );
   return response.data.data!.conversation;
 };
 
-const removeParticipantFromConversation = async (conversationId: string, participantId: string): Promise<Conversation> => {
-  const response = await apiClient.delete<ApiResponse<{ conversation: Conversation }>>(`/api/user/messages/${conversationId}/participants/${participantId}`);
+const removeParticipantFromConversation = async (
+  conversationId: string,
+  participantId: string,
+): Promise<Conversation> => {
+  const response = await apiClient.delete<ApiResponse<{ conversation: Conversation }>>(
+    `/api/user/messages/${conversationId}/participants/${participantId}`,
+  );
   return response.data.data!.conversation;
 };
 
 const updateConversationNameFn = async (conversationId: string, name: string): Promise<boolean> => {
-  const response = await apiClient.put<ApiResponse<{ status: boolean }>>(`/api/user/messages/${conversationId}/name`, { name });
+  const response = await apiClient.put<ApiResponse<{ status: boolean }>>(`/api/user/messages/${conversationId}/name`, {
+    name,
+  });
   return response.data.data!.status;
 };
 
@@ -164,9 +186,9 @@ export const useUserMessages = (): UseUserMessagesReturn => {
   // Function to fetch a single conversation
   const fetchConversation = async (conversationId: string): Promise<Conversation | undefined> => {
     if (!isAuthenticated) return undefined;
-    
+
     const cached = queryClient.getQueryData<Conversation[]>(userMessagesKeys.conversations());
-    const cachedConv = cached?.find(c => c._id === conversationId);
+    const cachedConv = cached?.find((c) => c._id === conversationId);
     if (cachedConv && cachedConv.messages) {
       return cachedConv;
     }
@@ -174,9 +196,7 @@ export const useUserMessages = (): UseUserMessagesReturn => {
     const conversation = await fetchConversationById(conversationId);
     queryClient.setQueryData(userMessagesKeys.conversations(), (oldData: Conversation[] | undefined) => {
       if (!oldData) return oldData;
-      return oldData.map(conv => 
-        conv._id === conversationId ? conversation : conv
-      );
+      return oldData.map((conv) => (conv._id === conversationId ? conversation : conv));
     });
     return conversation;
   };
@@ -187,9 +207,7 @@ export const useUserMessages = (): UseUserMessagesReturn => {
     onSuccess: (_, conversationId) => {
       queryClient.setQueryData(userMessagesKeys.conversations(), (oldData: Conversation[] | undefined) => {
         if (!oldData) return oldData;
-        return oldData.map(conv => 
-          conv._id === conversationId ? { ...conv, unread: false } : conv
-        );
+        return oldData.map((conv) => (conv._id === conversationId ? { ...conv, unread: false } : conv));
       });
       // Also invalidate user profile to update unread_messages
       queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
@@ -201,8 +219,15 @@ export const useUserMessages = (): UseUserMessagesReturn => {
 
   // Mutation for sending a message
   const { mutate: sendMessageMutation, isPending: isSendingMessage } = useMutation({
-    mutationFn: ({ conversationId, message, parentMessageId }: { conversationId: string; message: string; parentMessageId?: string }) =>
-      sendMessageToConversation(conversationId, message, parentMessageId),
+    mutationFn: ({
+      conversationId,
+      message,
+      parentMessageId,
+    }: {
+      conversationId: string;
+      message: string;
+      parentMessageId?: string;
+    }) => sendMessageToConversation(conversationId, message, parentMessageId),
     onMutate: async ({ conversationId, message, parentMessageId }) => {
       // Cancel any outgoing refetches to avoid overwriting optimistic update
       await queryClient.cancelQueries({ queryKey: userMessagesKeys.conversations() });
@@ -246,9 +271,7 @@ export const useUserMessages = (): UseUserMessagesReturn => {
         return oldData.map((conv) => {
           if (conv._id === conversationId) {
             // Remove temporary message and add real one
-            const messagesWithoutTemp = (conv.messages || []).filter(
-              (msg) => !msg._id.startsWith("temp-")
-            );
+            const messagesWithoutTemp = (conv.messages || []).filter((msg) => !msg._id.startsWith("temp-"));
             return {
               ...conv,
               messages: [...messagesWithoutTemp, newMessage],
@@ -274,8 +297,15 @@ export const useUserMessages = (): UseUserMessagesReturn => {
 
   // Mutation for replying to a message
   const { mutate: replyToMessageMutation, isPending: isReplying } = useMutation({
-    mutationFn: ({ conversationId, messageId, message }: { conversationId: string; messageId: string; message: string }) =>
-      replyToMessage(conversationId, messageId, message),
+    mutationFn: ({
+      conversationId,
+      messageId,
+      message,
+    }: {
+      conversationId: string;
+      messageId: string;
+      message: string;
+    }) => replyToMessage(conversationId, messageId, message),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: userMessagesKeys.conversations() });
       queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
@@ -376,8 +406,7 @@ export const useUserMessages = (): UseUserMessagesReturn => {
     replyToMessage: (conversationId: string, messageId: string, message: string) =>
       replyToMessageMutation({ conversationId, messageId, message }),
     isReplying,
-    deleteMessage: (conversationId: string, messageId: string) =>
-      deleteMessageMutation({ conversationId, messageId }),
+    deleteMessage: (conversationId: string, messageId: string) => deleteMessageMutation({ conversationId, messageId }),
     isDeletingMessage,
     createConversation: (participants: string[], message?: string) =>
       createConversationMutation({ participants, message }),

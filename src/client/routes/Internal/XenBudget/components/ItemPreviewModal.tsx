@@ -1,7 +1,16 @@
 import { useState } from "react";
 import {
-    Avatar, AvatarGroup, Box, Dialog, DialogContent,
-    DialogTitle, IconButton, Stack, Tooltip, Typography, alpha,
+  Avatar,
+  AvatarGroup,
+  Box,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  Stack,
+  Tooltip,
+  Typography,
+  alpha,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import EditIcon from "@mui/icons-material/Edit";
@@ -9,9 +18,7 @@ import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import useMediaQuery from "@mui/material/useMediaQuery";
-import type {
-    XenBudgetBook, XenBudgetItem, XenBudgetMember,
-} from "../../../../hooks/xenbudget/types";
+import type { XenBudgetBook, XenBudgetItem, XenBudgetMember } from "../../../../hooks/xenbudget/types";
 import { useXenBudgetItemImageUrls } from "../../../../hooks/xenbudget/useItems";
 import { formatCurrency } from "../currency";
 import { formatDateOnly } from "../../../../utils/dateGrouping";
@@ -20,208 +27,264 @@ import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { FLAG_UNCATEGORISED } from "../../../../constants/xenbudget";
 
 interface ItemPreviewModalProps {
-    open: boolean;
-    onClose: () => void;
-    book: XenBudgetBook;
-    item: XenBudgetItem | null;
-    onEdit: (item: XenBudgetItem) => void;
-    /** Removes one flag from the item without opening the edit form. */
-    onRemoveFlag: (item: XenBudgetItem, flagName: string) => Promise<void>;
+  open: boolean;
+  onClose: () => void;
+  book: XenBudgetBook;
+  item: XenBudgetItem | null;
+  onEdit: (item: XenBudgetItem) => void;
+  /** Removes one flag from the item without opening the edit form. */
+  onRemoveFlag: (item: XenBudgetItem, flagName: string) => Promise<void>;
 }
 
 /** Read-only preview of an item, opened before the edit form. */
 export default function ItemPreviewModal({ open, onClose, book, item, onEdit, onRemoveFlag }: ItemPreviewModalProps) {
-    const isMobile = useMediaQuery("(max-width:600px)");
-    const { data: imageUrls } = useXenBudgetItemImageUrls(book._id, item?._id, item?.images?.length ?? 0);
-    // Which flag is being removed right now — disables the chips while the save is in flight.
-    const [removingFlag, setRemovingFlag] = useState<string | null>(null);
+  const isMobile = useMediaQuery("(max-width:600px)");
+  const { data: imageUrls } = useXenBudgetItemImageUrls(book._id, item?._id, item?.images?.length ?? 0);
+  // Which flag is being removed right now — disables the chips while the save is in flight.
+  const [removingFlag, setRemovingFlag] = useState<string | null>(null);
 
-    const handleRemoveFlag = async (flagName: string) => {
-        if (!item || removingFlag) return;
-        setRemovingFlag(flagName);
-        try {
-            await onRemoveFlag(item, flagName);
-        } finally {
-            setRemovingFlag(null);
-        }
-    };
+  const handleRemoveFlag = async (flagName: string) => {
+    if (!item || removingFlag) return;
+    setRemovingFlag(flagName);
+    try {
+      await onRemoveFlag(item, flagName);
+    } finally {
+      setRemovingFlag(null);
+    }
+  };
 
-    const isIncome = item?.type === "income";
-    const provenance = !item ? "" : item.source === "manual" ? "Added manually"
-        : item.source_label ? `Imported via ${item.source_label}` : "Imported";
-    const people = (item?.shares ?? [])
-        .map((s) => book.members.find((m) => m.user_id === s.user_id))
-        .filter((m): m is XenBudgetMember => !!m);
-    const autoTagNames = (item?.applied_rule_ids ?? [])
-        .map((id) => book.rules.find((r) => r._id === id)?.name)
-        .filter((n): n is string => !!n);
-    const autoTagged = (item?.applied_rule_ids.length ?? 0) > 0;
+  const isIncome = item?.type === "income";
+  const provenance = !item
+    ? ""
+    : item.source === "manual"
+      ? "Added manually"
+      : item.source_label
+        ? `Imported via ${item.source_label}`
+        : "Imported";
+  const people = (item?.shares ?? [])
+    .map((s) => book.members.find((m) => m.user_id === s.user_id))
+    .filter((m): m is XenBudgetMember => !!m);
+  const autoTagNames = (item?.applied_rule_ids ?? [])
+    .map((id) => book.rules.find((r) => r._id === id)?.name)
+    .filter((n): n is string => !!n);
+  const autoTagged = (item?.applied_rule_ids.length ?? 0) > 0;
 
-    return (
-        <Dialog
-            fullWidth maxWidth="sm" fullScreen={isMobile} open={open} onClose={onClose}
-        >
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2, gap: 1 }}>
-                <DialogTitle sx={{ fontWeight: 700, p: 0 }}>Item</DialogTitle>
-                {/* Edit lives up here beside the close button rather than as a footer bar:
+  return (
+    <Dialog fullWidth maxWidth="sm" fullScreen={isMobile} open={open} onClose={onClose}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2, gap: 1 }}>
+        <DialogTitle sx={{ fontWeight: 700, p: 0 }}>Item</DialogTitle>
+        {/* Edit lives up here beside the close button rather than as a footer bar:
                 the preview is short enough that a full-width button at the bottom was a
                 scroll away from the item it edits on a phone. */}
-                <Stack direction="row" alignItems="center" spacing={0.5}>
-                    {item && (
-                        <Tooltip title="Edit">
-                            <IconButton onClick={() => onEdit(item)} size="small" aria-label="Edit item">
-                                <EditIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    )}
-                    <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
-                </Stack>
+        <Stack direction="row" alignItems="center" spacing={0.5}>
+          {item && (
+            <Tooltip title="Edit">
+              <IconButton onClick={() => onEdit(item)} size="small" aria-label="Edit item">
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+          <IconButton onClick={onClose} size="small">
+            <CloseIcon />
+          </IconButton>
+        </Stack>
+      </Box>
+
+      {item && (
+        <DialogContent sx={{ pt: 2, pb: 3 }}>
+          <Stack spacing={2}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.25 }}>
+              <Box
+                sx={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 1.5,
+                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  bgcolor: (theme) => alpha(isIncome ? theme.palette.success.main : theme.palette.error.main, 0.15),
+                  color: isIncome ? "success.main" : "error.main",
+                }}
+              >
+                {isIncome ? <TrendingUpIcon fontSize="small" /> : <TrendingDownIcon fontSize="small" />}
+              </Box>
+              <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                <Typography variant="body1" sx={{ fontWeight: 600 }} noWrap>
+                  {item.description}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                  {isIncome ? "Income" : "Expense"} ·{" "}
+                  {formatDateOnly(item.date, { year: "numeric", month: "short", day: "numeric" })}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                  {provenance}
+                </Typography>
+              </Box>
+              <Typography
+                variant="h6"
+                sx={{ fontWeight: 700, flexShrink: 0, color: isIncome ? "success.main" : "error.main" }}
+              >
+                {isIncome ? "+" : "−"}
+                {formatCurrency(item.amount, item.currency)}
+              </Typography>
             </Box>
 
-            {item && (
-                <DialogContent sx={{ pt: 2, pb: 3 }}>
-                    <Stack spacing={2}>
-                        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.25 }}>
-                            <Box
-                                sx={{
-                                    width: 40, height: 40, borderRadius: 1.5, flexShrink: 0,
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                    bgcolor: (theme) => alpha(
-                                        isIncome ? theme.palette.success.main : theme.palette.error.main, 0.15,
-                                    ),
-                                    color: isIncome ? "success.main" : "error.main",
-                                }}
-                            >
-                                {isIncome ? <TrendingUpIcon fontSize="small" /> : <TrendingDownIcon fontSize="small" />}
-                            </Box>
-                            <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                                <Typography variant="body1" sx={{ fontWeight: 600 }} noWrap>
-                                    {item.description}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                                    {isIncome ? "Income" : "Expense"} · {formatDateOnly(item.date, { year: "numeric", month: "short", day: "numeric" })}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                                    {provenance}
-                                </Typography>
-                            </Box>
-                            <Typography
-                                variant="h6" sx={{ fontWeight: 700, flexShrink: 0, color: isIncome ? "success.main" : "error.main" }}
-                            >
-                                {isIncome ? "+" : "−"}{formatCurrency(item.amount, item.currency)}
-                            </Typography>
-                        </Box>
+            {item.categories.length > 0 && (
+              <Box
+                sx={{
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 1.5,
+                  bgcolor: "action.hover",
+                  px: 1.5,
+                  py: 1.25,
+                }}
+              >
+                <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5 }}>
+                  {item.categories.map((c) => (
+                    <CategoryChip
+                      key={c.name}
+                      name={c.name}
+                      registry={book.categories}
+                      sx={{ height: 24, fontSize: 12 }}
+                    />
+                  ))}
+                </Stack>
+              </Box>
+            )}
 
-                        {item.categories.length > 0 && (
-                            <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "action.hover", px: 1.5, py: 1.25 }}>
-                                <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5 }}>
-                                    {item.categories.map((c) => (
-                                        <CategoryChip
-                                            key={c.name} name={c.name} registry={book.categories}
-                                            sx={{ height: 24, fontSize: 12 }}
-                                        />
-                                    ))}
-                                </Stack>
-                            </Box>
-                        )}
-
-                        {item.flags.length > 0 && (
-                            <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "action.hover", px: 1.5, py: 1.25 }}>
-                                <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5 }}>
-                                    {/* "Uncategorised" is derived from the categories, so it
+            {item.flags.length > 0 && (
+              <Box
+                sx={{
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 1.5,
+                  bgcolor: "action.hover",
+                  px: 1.5,
+                  py: 1.25,
+                }}
+              >
+                <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5 }}>
+                  {/* "Uncategorised" is derived from the categories, so it
                                     gets no delete affordance - removing it would only make the
                                     server put it straight back. It goes away by categorising
                                     the item, which is what the Edit button is for. */}
-                                    {item.flags.map((t) => (
-                                        <FlagChip
-                                            key={t} name={t} registry={book.flags}
-                                            onDelete={t === FLAG_UNCATEGORISED
-                                                ? undefined
-                                                : () => handleRemoveFlag(t)}
-                                            disabled={removingFlag !== null}
-                                            sx={{ height: 24, fontSize: 12 }}
-                                        />
-                                    ))}
-                                </Stack>
-                            </Box>
-                        )}
-
-                        {item.notes && (
-                            <Box>
-                                <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.75 }}>
-                                    Notes
-                                </Typography>
-                                <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "action.hover", px: 1.5, py: 1.25 }}>
-                                    <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                                        {item.notes}
-                                    </Typography>
-                                </Box>
-                            </Box>
-                        )}
-
-                        {people.length > 0 && (
-                            <Box>
-                                <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.75 }}>
-                                    Attributed to
-                                </Typography>
-                                <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "action.hover", px: 1.5, py: 1.25 }}>
-                                    <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                                        <AvatarGroup max={5}>
-                                            {people.map((m) => (
-                                                <Avatar key={m.user_id} src={m.avatar || undefined} alt={m.username}>
-                                                    {m.username[0]?.toUpperCase()}
-                                                </Avatar>
-                                            ))}
-                                        </AvatarGroup>
-                                        <Typography variant="body2" color="text.secondary">
-                                            {people.map((m) => m.username).join(", ")}
-                                        </Typography>
-                                    </Stack>
-                                </Box>
-                            </Box>
-                        )}
-
-                        {(item.images?.length ?? 0) > 0 && (
-                            <Box>
-                                <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.75 }}>
-                                    Photos
-                                </Typography>
-                                <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "action.hover", px: 1.5, py: 1.25 }}>
-                                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                                        {item.images!.map((img) => {
-                                            const urlEntry = imageUrls?.find((u) => u._id === img._id);
-                                            return (
-                                                <Box key={img._id} sx={{ width: 80, height: 80, flexShrink: 0 }}>
-                                                    {urlEntry ? (
-                                                        <Box
-                                                            component="img" src={urlEntry.signedUrl}
-                                                            sx={{ width: 80, height: 80, objectFit: "cover", borderRadius: 1, display: "block" }}
-                                                        />
-                                                    ) : (
-                                                        <Box sx={{ width: 80, height: 80, bgcolor: "background.paper", borderRadius: 1 }} />
-                                                    )}
-                                                </Box>
-                                            );
-                                        })}
-                                    </Box>
-                                </Box>
-                            </Box>
-                        )}
-
-                        {autoTagged && (
-                            <Stack
-                                direction="row" spacing={0.5}
-                                sx={{ alignItems: "center", justifyContent: "flex-end" }}
-                            >
-                                <LocalOfferIcon sx={{ fontSize: 14, color: "text.secondary", flexShrink: 0 }} />
-                                <Typography variant="caption" color="text.secondary">
-                                    Auto-tagged{autoTagNames.length > 0 ? ` by ${autoTagNames.join(", ")}` : ""}
-                                </Typography>
-                            </Stack>
-                        )}
-                    </Stack>
-                </DialogContent>
+                  {item.flags.map((t) => (
+                    <FlagChip
+                      key={t}
+                      name={t}
+                      registry={book.flags}
+                      onDelete={t === FLAG_UNCATEGORISED ? undefined : () => handleRemoveFlag(t)}
+                      disabled={removingFlag !== null}
+                      sx={{ height: 24, fontSize: 12 }}
+                    />
+                  ))}
+                </Stack>
+              </Box>
             )}
-        </Dialog>
-    );
+
+            {item.notes && (
+              <Box>
+                <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.75 }}>
+                  Notes
+                </Typography>
+                <Box
+                  sx={{
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 1.5,
+                    bgcolor: "action.hover",
+                    px: 1.5,
+                    py: 1.25,
+                  }}
+                >
+                  <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+                    {item.notes}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+
+            {people.length > 0 && (
+              <Box>
+                <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.75 }}>
+                  Attributed to
+                </Typography>
+                <Box
+                  sx={{
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 1.5,
+                    bgcolor: "action.hover",
+                    px: 1.5,
+                    py: 1.25,
+                  }}
+                >
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                    <AvatarGroup max={5}>
+                      {people.map((m) => (
+                        <Avatar key={m.user_id} src={m.avatar || undefined} alt={m.username}>
+                          {m.username[0]?.toUpperCase()}
+                        </Avatar>
+                      ))}
+                    </AvatarGroup>
+                    <Typography variant="body2" color="text.secondary">
+                      {people.map((m) => m.username).join(", ")}
+                    </Typography>
+                  </Stack>
+                </Box>
+              </Box>
+            )}
+
+            {(item.images?.length ?? 0) > 0 && (
+              <Box>
+                <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.75 }}>
+                  Photos
+                </Typography>
+                <Box
+                  sx={{
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 1.5,
+                    bgcolor: "action.hover",
+                    px: 1.5,
+                    py: 1.25,
+                  }}
+                >
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                    {item.images!.map((img) => {
+                      const urlEntry = imageUrls?.find((u) => u._id === img._id);
+                      return (
+                        <Box key={img._id} sx={{ width: 80, height: 80, flexShrink: 0 }}>
+                          {urlEntry ? (
+                            <Box
+                              component="img"
+                              src={urlEntry.signedUrl}
+                              sx={{ width: 80, height: 80, objectFit: "cover", borderRadius: 1, display: "block" }}
+                            />
+                          ) : (
+                            <Box sx={{ width: 80, height: 80, bgcolor: "background.paper", borderRadius: 1 }} />
+                          )}
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Box>
+              </Box>
+            )}
+
+            {autoTagged && (
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", justifyContent: "flex-end" }}>
+                <LocalOfferIcon sx={{ fontSize: 14, color: "text.secondary", flexShrink: 0 }} />
+                <Typography variant="caption" color="text.secondary">
+                  Auto-tagged{autoTagNames.length > 0 ? ` by ${autoTagNames.join(", ")}` : ""}
+                </Typography>
+              </Stack>
+            )}
+          </Stack>
+        </DialogContent>
+      )}
+    </Dialog>
+  );
 }

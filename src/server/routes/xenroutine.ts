@@ -18,8 +18,15 @@ import {
   xenRoutineMemberParamSchema,
 } from "../utils/validation";
 import {
-  addInterval, applyComplete, applyPostpone, canAct, canEdit, computeDueStatus, doneAheadIndices,
-  DEFAULT_REMIND_HOUR, effectiveTimezone,
+  addInterval,
+  applyComplete,
+  applyPostpone,
+  canAct,
+  canEdit,
+  computeDueStatus,
+  doneAheadIndices,
+  DEFAULT_REMIND_HOUR,
+  effectiveTimezone,
 } from "../utils/xenRoutine";
 import { sendActivityNotices } from "../utils/xenRoutineReminders";
 
@@ -27,8 +34,7 @@ const callerId = (req: Request) => (req as AuthenticatedRequest).user!._id.toStr
 
 const actorName = (req: Request) => (req as AuthenticatedRequest).user!.username;
 
-const fail = (res: Response, code: number, message: string) =>
-  res.status(code).json({ status: false, message });
+const fail = (res: Response, code: number, message: string) => res.status(code).json({ status: false, message });
 
 // Loads a routine and enforces the permission level in one place. Returns null after
 // having already sent the response.
@@ -49,7 +55,9 @@ async function loadRoutine(req: Request, res: Response, need: "edit" | "act") {
 
 async function serialize(routines: any[], uid: string) {
   const ids = [...new Set(routines.flatMap((r) => r.members.map((m: any) => m.user_id)))];
-  const users = await User.find({ _id: { $in: ids } }, "username avatar").lean().exec();
+  const users = await User.find({ _id: { $in: ids } }, "username avatar")
+    .lean()
+    .exec();
   const byId = new Map<string, any>(users.map((u: any) => [u._id.toString(), u]));
   const now = new Date();
 
@@ -122,7 +130,11 @@ module.exports = function (app: any) {
       if (remind_hour !== undefined) set.remind_hour = remind_hour;
       if (channels !== undefined) set.channels = channels;
       if (browser_timezone !== undefined) set.browser_timezone = browser_timezone;
-      await XenRoutineSettings.updateOne({ user_id: uid }, { $set: set, $setOnInsert: { user_id: uid } }, { upsert: true });
+      await XenRoutineSettings.updateOne(
+        { user_id: uid },
+        { $set: set, $setOnInsert: { user_id: uid } },
+        { upsert: true },
+      );
       return res.json({ status: true, message: "Settings saved", data: { settings: await settingsPayload(uid) } });
     } catch (e) {
       console.error("xenroutine settings save failed:", e);
@@ -166,7 +178,10 @@ module.exports = function (app: any) {
     }
   });
 
-  app.put("/api/xenroutine/routines/:id", validateParams(xenRoutineIdParamSchema), validate(updateXenRoutineSchema),
+  app.put(
+    "/api/xenroutine/routines/:id",
+    validateParams(xenRoutineIdParamSchema),
+    validate(updateXenRoutineSchema),
     async (req: Request, res: Response) => {
       try {
         const routine = await loadRoutine(req, res, "edit");
@@ -186,21 +201,29 @@ module.exports = function (app: any) {
         console.error("xenroutine update failed:", e);
         return fail(res, 500, "Failed to update routine");
       }
-    });
+    },
+  );
 
-  app.delete("/api/xenroutine/routines/:id", validateParams(xenRoutineIdParamSchema), async (req: Request, res: Response) => {
-    try {
-      const routine = await loadRoutine(req, res, "edit");
-      if (!routine) return;
-      await routine.deleteOne();
-      return res.json({ status: true, message: "Routine deleted" });
-    } catch (e) {
-      console.error("xenroutine delete failed:", e);
-      return fail(res, 500, "Failed to delete routine");
-    }
-  });
+  app.delete(
+    "/api/xenroutine/routines/:id",
+    validateParams(xenRoutineIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const routine = await loadRoutine(req, res, "edit");
+        if (!routine) return;
+        await routine.deleteOne();
+        return res.json({ status: true, message: "Routine deleted" });
+      } catch (e) {
+        console.error("xenroutine delete failed:", e);
+        return fail(res, 500, "Failed to delete routine");
+      }
+    },
+  );
 
-  app.post("/api/xenroutine/routines/:id/complete", validateParams(xenRoutineIdParamSchema), validate(completeXenRoutineSchema),
+  app.post(
+    "/api/xenroutine/routines/:id/complete",
+    validateParams(xenRoutineIdParamSchema),
+    validate(completeXenRoutineSchema),
     async (req: Request, res: Response) => {
       try {
         const routine = await loadRoutine(req, res, "act");
@@ -226,9 +249,13 @@ module.exports = function (app: any) {
         console.error("xenroutine complete failed:", e);
         return fail(res, 500, "Failed to complete routine");
       }
-    });
+    },
+  );
 
-  app.post("/api/xenroutine/routines/:id/postpone", validateParams(xenRoutineIdParamSchema), validate(postponeXenRoutineSchema),
+  app.post(
+    "/api/xenroutine/routines/:id/postpone",
+    validateParams(xenRoutineIdParamSchema),
+    validate(postponeXenRoutineSchema),
     async (req: Request, res: Response) => {
       try {
         const routine = await loadRoutine(req, res, "act");
@@ -236,20 +263,35 @@ module.exports = function (app: any) {
         const now = new Date();
         const until = req.body.until ? new Date(req.body.until) : undefined;
         if (until && until.getTime() <= now.getTime()) return fail(res, 400, "Pick a date in the future");
-        const patch = applyPostpone(routine.toObject(), { by: callerId(req), now, days: req.body.days, until, note: req.body.note });
+        const patch = applyPostpone(routine.toObject(), {
+          by: callerId(req),
+          now,
+          days: req.body.days,
+          until,
+          note: req.body.note,
+        });
         routine.set(patch);
         await routine.save();
         const [out] = await serialize([routine], callerId(req));
-        void sendActivityNotices(routine, callerId(req), actorName(req), `postponed "${routine.name}" to ${routine.due_at.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`);
+        void sendActivityNotices(
+          routine,
+          callerId(req),
+          actorName(req),
+          `postponed "${routine.name}" to ${routine.due_at.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`,
+        );
         return res.json({ status: true, message: "Postponed", data: { routine: out } });
       } catch (e) {
         console.error("xenroutine postpone failed:", e);
         return fail(res, 500, "Failed to postpone routine");
       }
-    });
+    },
+  );
 
   // My own notification options for this routine (works for owner and sharers alike).
-  app.put("/api/xenroutine/routines/:id/notifications", validateParams(xenRoutineIdParamSchema), validate(xenRoutineNotificationsSchema),
+  app.put(
+    "/api/xenroutine/routines/:id/notifications",
+    validateParams(xenRoutineIdParamSchema),
+    validate(xenRoutineNotificationsSchema),
     async (req: Request, res: Response) => {
       try {
         const routine = await loadRoutine(req, res, "act");
@@ -268,15 +310,21 @@ module.exports = function (app: any) {
         console.error("xenroutine notifications failed:", e);
         return fail(res, 500, "Failed to save notification options");
       }
-    });
+    },
+  );
 
-  app.post("/api/xenroutine/routines/:id/share", validateParams(xenRoutineIdParamSchema), validate(shareXenRoutineSchema),
+  app.post(
+    "/api/xenroutine/routines/:id/share",
+    validateParams(xenRoutineIdParamSchema),
+    validate(shareXenRoutineSchema),
     async (req: Request, res: Response) => {
       try {
         const routine = await loadRoutine(req, res, "edit");
         if (!routine) return;
         const existing = new Set(routine.members.map((m: any) => m.user_id));
-        const users = await User.find({ _id: { $in: req.body.userIds } }, "_id").lean().exec();
+        const users = await User.find({ _id: { $in: req.body.userIds } }, "_id")
+          .lean()
+          .exec();
         for (const u of users) {
           const id = u._id.toString();
           if (!existing.has(id)) routine.members.push({ user_id: id, role: "sharer" });
@@ -288,10 +336,13 @@ module.exports = function (app: any) {
         console.error("xenroutine share failed:", e);
         return fail(res, 500, "Failed to share routine");
       }
-    });
+    },
+  );
 
   // Owner removes anyone; a sharer may remove only themselves. The owner cannot be removed.
-  app.delete("/api/xenroutine/routines/:id/share/:userId", validateParams(xenRoutineMemberParamSchema),
+  app.delete(
+    "/api/xenroutine/routines/:id/share/:userId",
+    validateParams(xenRoutineMemberParamSchema),
     async (req: Request, res: Response) => {
       try {
         const routine = await loadRoutine(req, res, "act");
@@ -312,5 +363,6 @@ module.exports = function (app: any) {
         console.error("xenroutine unshare failed:", e);
         return fail(res, 500, "Failed to update sharing");
       }
-    });
+    },
+  );
 };

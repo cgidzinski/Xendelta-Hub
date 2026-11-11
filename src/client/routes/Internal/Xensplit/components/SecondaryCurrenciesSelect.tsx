@@ -1,11 +1,4 @@
-import {
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Checkbox,
-  ListItemText,
-} from "@mui/material";
+import { FormControl, InputLabel, Select, MenuItem, Checkbox, ListItemText } from "@mui/material";
 import { ALL_CURRENCIES, withoutCurrency, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 
 interface SecondaryCurrenciesSelectProps {

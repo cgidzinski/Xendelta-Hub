@@ -14,11 +14,11 @@ interface ErrorDisplayProps {
  * Standardized error display component
  * Used consistently across the application for error states
  */
-export default function ErrorDisplay({ 
-  error, 
-  onRetry, 
+export default function ErrorDisplay({
+  error,
+  onRetry,
   title = "Something went wrong",
-  fullHeight = false 
+  fullHeight = false,
 }: ErrorDisplayProps) {
   const errorMessage = error instanceof Error ? error.message : error || "An unexpected error occurred";
 
@@ -42,16 +42,10 @@ export default function ErrorDisplay({
         {errorMessage}
       </Typography>
       {onRetry && (
-        <Button
-          variant="outlined"
-          startIcon={<RefreshIcon />}
-          onClick={onRetry}
-          sx={{ mt: 1 }}
-        >
+        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={onRetry} sx={{ mt: 1 }}>
           Try Again
         </Button>
       )}
     </Box>
   );
 }
-

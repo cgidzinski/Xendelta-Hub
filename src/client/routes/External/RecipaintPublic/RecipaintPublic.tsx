@@ -100,11 +100,7 @@ export default function RecipaintPublic() {
         {isLoading && <LoadingSpinner message="Loading recipe..." />}
 
         {!isLoading && (isError || !recipe) && (
-          <ErrorDisplay
-            error={error}
-            title="This recipe isn't available"
-            onRetry={() => refetch()}
-          />
+          <ErrorDisplay error={error} title="This recipe isn't available" onRetry={() => refetch()} />
         )}
 
         {!isLoading && !isError && recipe && (

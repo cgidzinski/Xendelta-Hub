@@ -52,12 +52,11 @@ import { CATEGORY_ICONS, filtersFromParams, STARTER_CATEGORIES } from "@shared/x
 const callerId = (req: Request) => (req as AuthenticatedRequest).user!._id.toString();
 const callerName = (req: Request) => (req as AuthenticatedRequest).user!.username;
 
-const fail = (res: Response, code: number, message: string) =>
-  res.status(code).json({ status: false, message });
+const fail = (res: Response, code: number, message: string) => res.status(code).json({ status: false, message });
 
 // Express 5 forwards rejected promises, but a JSON error beats the default HTML page.
-const handle = (fn: (req: Request, res: Response) => Promise<unknown>) =>
-  (req: Request, res: Response, _next: NextFunction) =>
+const handle =
+  (fn: (req: Request, res: Response) => Promise<unknown>) => (req: Request, res: Response, _next: NextFunction) =>
     fn(req, res).catch((err) => {
       console.error(">>> XenKitchen error:", err);
       if (!res.headersSent) fail(res, 500, "Something went wrong");
@@ -96,7 +95,10 @@ async function createStarterBook(uid: string): Promise<void> {
   await XenKitchenCategory.insertMany(STARTER_CATEGORIES.map((c, i) => ({ ...c, book_id: id, order: i })));
   try {
     await XenKitchenBook.create({
-      _id: id, name: STARTER_BOOK_NAME, icon: "restaurant", default_for: uid,
+      _id: id,
+      name: STARTER_BOOK_NAME,
+      icon: "restaurant",
+      default_for: uid,
       members: [{ user_id: uid, role: "owner" }],
     });
   } catch (e: any) {
@@ -151,12 +153,19 @@ async function loadItem(req: Request, res: Response, need: Need) {
 
 async function usernamesFor(ids: Array<string | null | undefined>): Promise<Map<string, any>> {
   const unique = [...new Set(ids.filter(Boolean))] as string[];
-  const users = unique.length ? await User.find({ _id: { $in: unique } }, "username avatar").lean().exec() : [];
+  const users = unique.length
+    ? await User.find({ _id: { $in: unique } }, "username avatar")
+        .lean()
+        .exec()
+    : [];
   return new Map(users.map((u: any) => [u._id.toString(), u]));
 }
 
 async function categoriesForBooks(bookIds: any[]) {
-  const cats = await XenKitchenCategory.find({ book_id: { $in: bookIds } }).sort({ order: 1, created_at: 1 }).lean().exec();
+  const cats = await XenKitchenCategory.find({ book_id: { $in: bookIds } })
+    .sort({ order: 1, created_at: 1 })
+    .lean()
+    .exec();
   return { list: cats as any[], map: new Map<string, CategoryLike>(cats.map((c: any) => [String(c._id), c])) };
 }
 
@@ -193,7 +202,7 @@ async function serializeBook(book: any, uid: string) {
       avatar: people.get(m.user_id)?.avatar ?? null,
     })),
     // Only the owner manages the link, so only they see the token.
-    share: { enabled: !!book.share?.enabled, token: owner && book.share?.enabled ? book.share.token ?? null : null },
+    share: { enabled: !!book.share?.enabled, token: owner && book.share?.enabled ? (book.share.token ?? null) : null },
   };
 }
 
@@ -226,7 +235,13 @@ async function cloneItem(src: any, bookId: any, uid: string, categoryId: any, ti
     steps: (src.steps || []).map(({ _id, ...rest }: any) => rest),
     methods: (src.methods || []).map(({ _id, ...rest }: any) => rest),
   });
-  const copy = new XenKitchenItem({ ...fields, book_id: bookId, category_id: categoryId ?? null, created_by: uid, updated_by: uid });
+  const copy = new XenKitchenItem({
+    ...fields,
+    book_id: bookId,
+    category_id: categoryId ?? null,
+    created_by: uid,
+    updated_by: uid,
+  });
   const { publicBucket } = require("../config/gcs");
   for (const img of src.images || []) {
     const name = img.gcs_path.split("/").pop();
@@ -251,53 +266,100 @@ async function targetCategory(srcItem: any, targetBookId: any, requested?: strin
   return pickTargetCategory(target, fromCat ?? undefined, requested);
 }
 
-const copyToBookSchema = z.object({ book_id: z.string().regex(/^[a-f0-9]{24}$/i), category_id: z.string().regex(/^[a-f0-9]{24}$/i).nullable().optional() });
-const cloneSchema = z.object({ book_id: z.string().regex(/^[a-f0-9]{24}$/i).optional() }).optional();
+const copyToBookSchema = z.object({
+  book_id: z.string().regex(/^[a-f0-9]{24}$/i),
+  category_id: z
+    .string()
+    .regex(/^[a-f0-9]{24}$/i)
+    .nullable()
+    .optional(),
+});
+const cloneSchema = z
+  .object({
+    book_id: z
+      .string()
+      .regex(/^[a-f0-9]{24}$/i)
+      .optional(),
+  })
+  .optional();
 
 module.exports = function (app: any) {
   // ---------- public links (no auth) ----------
 
-  app.get("/api/xenkitchen/public/:token", validateParams(xenKitchenTokenParamSchema), handle(async (req, res) => {
-    const item = await XenKitchenItem.findOne({ "share.token": req.params.token, "share.enabled": true }).lean().exec();
-    if (!item) return fail(res, 404, "This link isn't available");
-    const { map } = await categoriesForBooks([item.book_id]);
-    const creator = item.created_by ? await User.findById(item.created_by, "username").lean().exec() : null;
-    res.json({ status: true, message: "OK", data: { item: serializeItem(item, map, { isPublic: true }), owner: creator?.username ?? null } });
-  }));
+  app.get(
+    "/api/xenkitchen/public/:token",
+    validateParams(xenKitchenTokenParamSchema),
+    handle(async (req, res) => {
+      const item = await XenKitchenItem.findOne({ "share.token": req.params.token, "share.enabled": true })
+        .lean()
+        .exec();
+      if (!item) return fail(res, 404, "This link isn't available");
+      const { map } = await categoriesForBooks([item.book_id]);
+      const creator = item.created_by ? await User.findById(item.created_by, "username").lean().exec() : null;
+      res.json({
+        status: true,
+        message: "OK",
+        data: { item: serializeItem(item, map, { isPublic: true }), owner: creator?.username ?? null },
+      });
+    }),
+  );
 
   async function loadPublicBook(token: string) {
     return XenKitchenBook.findOne({ "share.token": token, "share.enabled": true }).lean().exec();
   }
 
-  app.get("/api/xenkitchen/public/book/:token", validateParams(xenKitchenTokenParamSchema), handle(async (req, res) => {
-    const book = await loadPublicBook(req.params.token);
-    if (!book) return fail(res, 404, "This link isn't available");
-    const [items, { list, map }] = await Promise.all([
-      XenKitchenItem.find({ book_id: book._id }).sort({ updated_at: -1 }).lean().exec(),
-      categoriesForBooks([book._id]),
-    ]);
-    res.json({
-      status: true,
-      message: "OK",
-      data: {
-        book: { name: book.name, description: book.description || "", color: book.color, icon: book.icon },
-        categories: list.map((c) => ({ _id: String(c._id), name: c.name, icon: c.icon, color: c.color, layout: c.layout })),
-        items: items.map((i: any) => serializeItem(i, map, { isPublic: true })),
-      },
-    });
-  }));
+  app.get(
+    "/api/xenkitchen/public/book/:token",
+    validateParams(xenKitchenTokenParamSchema),
+    handle(async (req, res) => {
+      const book = await loadPublicBook(req.params.token);
+      if (!book) return fail(res, 404, "This link isn't available");
+      const [items, { list, map }] = await Promise.all([
+        XenKitchenItem.find({ book_id: book._id }).sort({ updated_at: -1 }).lean().exec(),
+        categoriesForBooks([book._id]),
+      ]);
+      res.json({
+        status: true,
+        message: "OK",
+        data: {
+          book: { name: book.name, description: book.description || "", color: book.color, icon: book.icon },
+          categories: list.map((c) => ({
+            _id: String(c._id),
+            name: c.name,
+            icon: c.icon,
+            color: c.color,
+            layout: c.layout,
+          })),
+          items: items.map((i: any) => serializeItem(i, map, { isPublic: true })),
+        },
+      });
+    }),
+  );
 
-  app.get("/api/xenkitchen/public/book/:token/items/:itemId", validateParams(xenKitchenBookItemParamSchema), handle(async (req, res) => {
-    const book = await loadPublicBook(req.params.token);
-    const item = book ? await XenKitchenItem.findOne({ _id: req.params.itemId, book_id: book._id }).lean().exec() : null;
-    if (!book || !item) return fail(res, 404, "This link isn't available");
-    const { map } = await categoriesForBooks([book._id]);
-    res.json({ status: true, message: "OK", data: { item: serializeItem(item, map, { isPublic: true }), owner: null, book: { name: book.name } } });
-  }));
+  app.get(
+    "/api/xenkitchen/public/book/:token/items/:itemId",
+    validateParams(xenKitchenBookItemParamSchema),
+    handle(async (req, res) => {
+      const book = await loadPublicBook(req.params.token);
+      const item = book
+        ? await XenKitchenItem.findOne({ _id: req.params.itemId, book_id: book._id }).lean().exec()
+        : null;
+      if (!book || !item) return fail(res, 404, "This link isn't available");
+      const { map } = await categoriesForBooks([book._id]);
+      res.json({
+        status: true,
+        message: "OK",
+        data: { item: serializeItem(item, map, { isPublic: true }), owner: null, book: { name: book.name } },
+      });
+    }),
+  );
 
   /** Save a shared item into one of my books (the given one, else the first I can edit). */
-  app.post(["/api/xenkitchen/public/:token/clone", "/api/xenkitchen/public/book/:token/items/:itemId/clone"], authenticateToken,
-    validate(cloneSchema), handle(async (req, res) => {
+  app.post(
+    ["/api/xenkitchen/public/:token/clone", "/api/xenkitchen/public/book/:token/items/:itemId/clone"],
+    authenticateToken,
+    validate(cloneSchema),
+    handle(async (req, res) => {
       const uid = callerId(req);
       let src: any;
       if (req.params.itemId) {
@@ -315,26 +377,44 @@ module.exports = function (app: any) {
       if (!target) return fail(res, 400, "You don't have a book you can add to");
       const copy = await cloneItem(src, target._id, uid, await targetCategory(src, target._id));
       await respondItem(res, copy, target, uid);
-    }));
+    }),
+  );
 
   // ---------- books ----------
 
-  app.get("/api/xenkitchen/books", authenticateToken, handle(async (req, res) => {
-    const uid = callerId(req);
-    const books = await ensureBooks(uid);
-    res.json({ status: true, message: "OK", data: { books: await Promise.all(books.map((b) => serializeBook(b, uid))) } });
-  }));
+  app.get(
+    "/api/xenkitchen/books",
+    authenticateToken,
+    handle(async (req, res) => {
+      const uid = callerId(req);
+      const books = await ensureBooks(uid);
+      res.json({
+        status: true,
+        message: "OK",
+        data: { books: await Promise.all(books.map((b) => serializeBook(b, uid))) },
+      });
+    }),
+  );
 
-  app.post("/api/xenkitchen/books", authenticateToken, validate(xenKitchenBookSchema), handle(async (req, res) => {
-    const uid = callerId(req);
-    const body = xenKitchenBookSchema.parse(req.body);
-    const owned = await XenKitchenBook.countDocuments({ members: { $elemMatch: { user_id: uid, role: "owner" } } });
-    if (owned >= 30) return fail(res, 400, "30 books is the limit");
-    const book = await createBook(uid, body);
-    res.json({ status: true, message: "Book created", data: { book: await serializeBook(book.toObject(), uid) } });
-  }));
+  app.post(
+    "/api/xenkitchen/books",
+    authenticateToken,
+    validate(xenKitchenBookSchema),
+    handle(async (req, res) => {
+      const uid = callerId(req);
+      const body = xenKitchenBookSchema.parse(req.body);
+      const owned = await XenKitchenBook.countDocuments({ members: { $elemMatch: { user_id: uid, role: "owner" } } });
+      if (owned >= 30) return fail(res, 400, "30 books is the limit");
+      const book = await createBook(uid, body);
+      res.json({ status: true, message: "Book created", data: { book: await serializeBook(book.toObject(), uid) } });
+    }),
+  );
 
-  app.put("/api/xenkitchen/books/:id", authenticateToken, validateParams(xenKitchenIdParamSchema), validate(xenKitchenBookUpdateSchema),
+  app.put(
+    "/api/xenkitchen/books/:id",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    validate(xenKitchenBookUpdateSchema),
     handle(async (req, res) => {
       const book = await loadBook(req, res, req.params.id, "manage");
       if (!book) return;
@@ -343,42 +423,67 @@ module.exports = function (app: any) {
       book.set(body);
       await book.save();
       res.json({ status: true, message: "Saved", data: { book: await serializeBook(book.toObject(), callerId(req)) } });
-    }));
+    }),
+  );
 
-  app.delete("/api/xenkitchen/books/:id", authenticateToken, validateParams(xenKitchenIdParamSchema), handle(async (req, res) => {
-    const uid = callerId(req);
-    const book = await loadBook(req, res, req.params.id, "manage");
-    if (!book) return;
-    const items = await XenKitchenItem.find({ book_id: book._id }, "images").lean().exec();
-    await XenKitchenItem.deleteMany({ book_id: book._id }).exec();
-    await XenKitchenCategory.deleteMany({ book_id: book._id }).exec();
-    await book.deleteOne();
-    await deleteImages(items.flatMap((i: any) => i.images || []));
-    await ensureBooks(uid);
-    res.json({ status: true, message: "Book deleted" });
-  }));
+  app.delete(
+    "/api/xenkitchen/books/:id",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    handle(async (req, res) => {
+      const uid = callerId(req);
+      const book = await loadBook(req, res, req.params.id, "manage");
+      if (!book) return;
+      const items = await XenKitchenItem.find({ book_id: book._id }, "images").lean().exec();
+      await XenKitchenItem.deleteMany({ book_id: book._id }).exec();
+      await XenKitchenCategory.deleteMany({ book_id: book._id }).exec();
+      await book.deleteOne();
+      await deleteImages(items.flatMap((i: any) => i.images || []));
+      await ensureBooks(uid);
+      res.json({ status: true, message: "Book deleted" });
+    }),
+  );
 
-  app.post("/api/xenkitchen/books/:id/members", authenticateToken, validateParams(xenKitchenIdParamSchema), validate(xenKitchenAddMembersSchema),
+  app.post(
+    "/api/xenkitchen/books/:id/members",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    validate(xenKitchenAddMembersSchema),
     handle(async (req, res) => {
       const uid = callerId(req);
       const book = await loadBook(req, res, req.params.id, "manage");
       if (!book) return;
       const { userIds, role } = xenKitchenAddMembersSchema.parse(req.body);
-      const found = await User.find({ _id: { $in: userIds } }, "_id").lean().exec();
+      const found = await User.find({ _id: { $in: userIds } }, "_id")
+        .lean()
+        .exec();
       const existing = new Set(book.members.map((m: any) => m.user_id));
       const added = found.map((u: any) => u._id.toString()).filter((id: string) => !existing.has(id));
       if (book.members.length + added.length > 50) return fail(res, 400, "50 people per book is the limit");
       added.forEach((id: string) => book.members.push({ user_id: id, role }));
       await book.save();
-      await Promise.all(added.map((id: string) => notify(id, {
-        title: "Recipe book shared with you",
-        message: `${callerName(req)} added you to "${book.name}" as ${role === "viewer" ? "a viewer" : "an editor"}.`,
-        link: `/internal/xenkitchen?book=${book._id}`,
-      }).catch(() => {})));
-      res.json({ status: true, message: added.length ? `Added ${added.length}` : "Already members", data: { book: await serializeBook(book.toObject(), uid) } });
-    }));
+      await Promise.all(
+        added.map((id: string) =>
+          notify(id, {
+            title: "Recipe book shared with you",
+            message: `${callerName(req)} added you to "${book.name}" as ${role === "viewer" ? "a viewer" : "an editor"}.`,
+            link: `/internal/xenkitchen?book=${book._id}`,
+          }).catch(() => {}),
+        ),
+      );
+      res.json({
+        status: true,
+        message: added.length ? `Added ${added.length}` : "Already members",
+        data: { book: await serializeBook(book.toObject(), uid) },
+      });
+    }),
+  );
 
-  app.put("/api/xenkitchen/books/:id/members/:userId", authenticateToken, validateParams(xenKitchenMemberParamSchema), validate(xenKitchenMemberRoleSchema),
+  app.put(
+    "/api/xenkitchen/books/:id/members/:userId",
+    authenticateToken,
+    validateParams(xenKitchenMemberParamSchema),
+    validate(xenKitchenMemberRoleSchema),
     handle(async (req, res) => {
       const uid = callerId(req);
       const book = await loadBook(req, res, req.params.id, "view");
@@ -391,9 +496,13 @@ module.exports = function (app: any) {
       if (req.body.role === "owner") book.default_for = undefined;
       await book.save();
       res.json({ status: true, message: "Saved", data: { book: await serializeBook(book.toObject(), uid) } });
-    }));
+    }),
+  );
 
-  app.delete("/api/xenkitchen/books/:id/members/:userId", authenticateToken, validateParams(xenKitchenMemberParamSchema),
+  app.delete(
+    "/api/xenkitchen/books/:id/members/:userId",
+    authenticateToken,
+    validateParams(xenKitchenMemberParamSchema),
     handle(async (req, res) => {
       const uid = callerId(req);
       const book = await loadBook(req, res, req.params.id, "view");
@@ -406,88 +515,144 @@ module.exports = function (app: any) {
       // Their stars on this book's items go with them.
       await XenKitchenItem.updateMany({ book_id: book._id }, { $pull: { favorited_by: target } }).exec();
       if (target === uid) await ensureBooks(uid);
-      res.json({ status: true, message: target === uid ? "You left the book" : "Removed", data: target === uid ? {} : { book: await serializeBook(book.toObject(), uid) } });
-    }));
+      res.json({
+        status: true,
+        message: target === uid ? "You left the book" : "Removed",
+        data: target === uid ? {} : { book: await serializeBook(book.toObject(), uid) },
+      });
+    }),
+  );
 
-  const bookShare = (action: "enable" | "disable" | "rotate") => handle(async (req, res) => {
-    const book = await loadBook(req, res, req.params.id, "manage");
-    if (!book) return;
-    if (action === "rotate" || !book.share?.token) book.share = { enabled: action !== "disable", token: generateShareToken() };
-    else book.share.enabled = action === "enable";
-    await book.save();
-    res.json({ status: true, message: "OK", data: { book: await serializeBook(book.toObject(), callerId(req)) } });
-  });
-  app.post("/api/xenkitchen/books/:id/share", authenticateToken, validateParams(xenKitchenIdParamSchema), bookShare("enable"));
-  app.post("/api/xenkitchen/books/:id/share/rotate", authenticateToken, validateParams(xenKitchenIdParamSchema), bookShare("rotate"));
-  app.delete("/api/xenkitchen/books/:id/share", authenticateToken, validateParams(xenKitchenIdParamSchema), bookShare("disable"));
+  const bookShare = (action: "enable" | "disable" | "rotate") =>
+    handle(async (req, res) => {
+      const book = await loadBook(req, res, req.params.id, "manage");
+      if (!book) return;
+      if (action === "rotate" || !book.share?.token)
+        book.share = { enabled: action !== "disable", token: generateShareToken() };
+      else book.share.enabled = action === "enable";
+      await book.save();
+      res.json({ status: true, message: "OK", data: { book: await serializeBook(book.toObject(), callerId(req)) } });
+    });
+  app.post(
+    "/api/xenkitchen/books/:id/share",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    bookShare("enable"),
+  );
+  app.post(
+    "/api/xenkitchen/books/:id/share/rotate",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    bookShare("rotate"),
+  );
+  app.delete(
+    "/api/xenkitchen/books/:id/share",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    bookShare("disable"),
+  );
 
   // ---------- categories ----------
 
   /** ?book=<id> for one book, or ?book=all (default) for every book I'm in. */
-  app.get("/api/xenkitchen/categories", authenticateToken, handle(async (req, res) => {
-    const uid = callerId(req);
-    const books = await ensureBooks(uid);
-    const which = typeof req.query.book === "string" ? req.query.book : "all";
-    const scope = which === "all" ? books : books.filter((b) => String(b._id) === which);
-    if (!scope.length) return fail(res, 404, "Book not found");
-    const ids = scope.map((b) => b._id);
-    const [{ list }, counts] = await Promise.all([
-      categoriesForBooks(ids),
-      XenKitchenItem.aggregate([
-        { $match: { book_id: { $in: ids } } },
-        { $group: { _id: "$category_id", count: { $sum: 1 } } },
-      ]).exec(),
-    ]);
-    const byId = new Map<string, number>(counts.map((c: any) => [String(c._id), c.count]));
-    const known = new Set(list.map((c) => String(c._id)));
-    const total = counts.reduce((s: number, c: any) => s + c.count, 0);
-    const uncategorised = counts.filter((c: any) => !c._id || !known.has(String(c._id))).reduce((s: number, c: any) => s + c.count, 0);
-    res.json({
-      status: true,
-      message: "OK",
-      data: {
-        categories: list.map((c) => ({
-          _id: String(c._id), book_id: String(c.book_id), name: c.name, icon: c.icon, color: c.color, layout: c.layout, order: c.order,
-          count: byId.get(String(c._id)) ?? 0,
-        })),
-        total,
-        uncategorised,
-      },
-    });
-  }));
+  app.get(
+    "/api/xenkitchen/categories",
+    authenticateToken,
+    handle(async (req, res) => {
+      const uid = callerId(req);
+      const books = await ensureBooks(uid);
+      const which = typeof req.query.book === "string" ? req.query.book : "all";
+      const scope = which === "all" ? books : books.filter((b) => String(b._id) === which);
+      if (!scope.length) return fail(res, 404, "Book not found");
+      const ids = scope.map((b) => b._id);
+      const [{ list }, counts] = await Promise.all([
+        categoriesForBooks(ids),
+        XenKitchenItem.aggregate([
+          { $match: { book_id: { $in: ids } } },
+          { $group: { _id: "$category_id", count: { $sum: 1 } } },
+        ]).exec(),
+      ]);
+      const byId = new Map<string, number>(counts.map((c: any) => [String(c._id), c.count]));
+      const known = new Set(list.map((c) => String(c._id)));
+      const total = counts.reduce((s: number, c: any) => s + c.count, 0);
+      const uncategorised = counts
+        .filter((c: any) => !c._id || !known.has(String(c._id)))
+        .reduce((s: number, c: any) => s + c.count, 0);
+      res.json({
+        status: true,
+        message: "OK",
+        data: {
+          categories: list.map((c) => ({
+            _id: String(c._id),
+            book_id: String(c.book_id),
+            name: c.name,
+            icon: c.icon,
+            color: c.color,
+            layout: c.layout,
+            order: c.order,
+            count: byId.get(String(c._id)) ?? 0,
+          })),
+          total,
+          uncategorised,
+        },
+      });
+    }),
+  );
 
   const createCategorySchema = xenKitchenCategorySchema.extend({ book_id: z.string().regex(/^[a-f0-9]{24}$/i) });
-  app.post("/api/xenkitchen/categories", authenticateToken, validate(createCategorySchema), handle(async (req, res) => {
-    const body = createCategorySchema.parse(req.body);
-    const book = await loadBook(req, res, body.book_id, "edit");
-    if (!book) return;
-    const count = await XenKitchenCategory.countDocuments({ book_id: book._id });
-    if (count >= 50) return fail(res, 400, "That's a lot of categories — 50 is the limit");
-    const cat = await XenKitchenCategory.create({ ...body, book_id: book._id, icon: validIcon(body.icon) ? body.icon : "restaurant", order: count });
-    res.json({ status: true, message: "Category created", data: { category: cat } });
-  }));
+  app.post(
+    "/api/xenkitchen/categories",
+    authenticateToken,
+    validate(createCategorySchema),
+    handle(async (req, res) => {
+      const body = createCategorySchema.parse(req.body);
+      const book = await loadBook(req, res, body.book_id, "edit");
+      if (!book) return;
+      const count = await XenKitchenCategory.countDocuments({ book_id: book._id });
+      if (count >= 50) return fail(res, 400, "That's a lot of categories — 50 is the limit");
+      const cat = await XenKitchenCategory.create({
+        ...body,
+        book_id: book._id,
+        icon: validIcon(body.icon) ? body.icon : "restaurant",
+        order: count,
+      });
+      res.json({ status: true, message: "Category created", data: { category: cat } });
+    }),
+  );
 
   // Registered before /:id so "order" isn't read as an id.
   const orderSchema = xenKitchenCategoryOrderSchema.extend({ book_id: z.string().regex(/^[a-f0-9]{24}$/i) });
-  app.put("/api/xenkitchen/categories/order", authenticateToken, validate(orderSchema), handle(async (req, res) => {
-    const { ids, book_id } = orderSchema.parse(req.body);
-    const book = await loadBook(req, res, book_id, "edit");
-    if (!book) return;
-    await XenKitchenCategory.bulkWrite(
-      ids.map((id, i) => ({ updateOne: { filter: { _id: id, book_id: book._id }, update: { $set: { order: i } } } })),
-    );
-    res.json({ status: true, message: "Order saved" });
-  }));
+  app.put(
+    "/api/xenkitchen/categories/order",
+    authenticateToken,
+    validate(orderSchema),
+    handle(async (req, res) => {
+      const { ids, book_id } = orderSchema.parse(req.body);
+      const book = await loadBook(req, res, book_id, "edit");
+      if (!book) return;
+      await XenKitchenCategory.bulkWrite(
+        ids.map((id, i) => ({ updateOne: { filter: { _id: id, book_id: book._id }, update: { $set: { order: i } } } })),
+      );
+      res.json({ status: true, message: "Order saved" });
+    }),
+  );
 
   async function loadCategory(req: Request, res: Response) {
     const cat = await XenKitchenCategory.findById(req.params.id).exec();
-    if (!cat) { fail(res, 404, "Category not found"); return null; }
+    if (!cat) {
+      fail(res, 404, "Category not found");
+      return null;
+    }
     const book = await loadBook(req, res, cat.book_id, "edit");
     return book ? cat : null;
   }
 
-  app.put("/api/xenkitchen/categories/:id", authenticateToken, validateParams(xenKitchenIdParamSchema),
-    validate(xenKitchenCategoryUpdateSchema), handle(async (req, res) => {
+  app.put(
+    "/api/xenkitchen/categories/:id",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    validate(xenKitchenCategoryUpdateSchema),
+    handle(async (req, res) => {
       const cat = await loadCategory(req, res);
       if (!cat) return;
       const body = xenKitchenCategoryUpdateSchema.parse(req.body);
@@ -495,111 +660,190 @@ module.exports = function (app: any) {
       cat.set(body);
       await cat.save();
       res.json({ status: true, message: "Category saved", data: { category: cat } });
-    }));
+    }),
+  );
 
-  app.delete("/api/xenkitchen/categories/:id", authenticateToken, validateParams(xenKitchenIdParamSchema), handle(async (req, res) => {
-    const cat = await loadCategory(req, res);
-    if (!cat) return;
-    await cat.deleteOne();
-    // Items are kept, just uncategorised.
-    await XenKitchenItem.updateMany({ book_id: cat.book_id, category_id: cat._id }, { $set: { category_id: null } }).exec();
-    res.json({ status: true, message: "Category deleted" });
-  }));
+  app.delete(
+    "/api/xenkitchen/categories/:id",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    handle(async (req, res) => {
+      const cat = await loadCategory(req, res);
+      if (!cat) return;
+      await cat.deleteOne();
+      // Items are kept, just uncategorised.
+      await XenKitchenItem.updateMany(
+        { book_id: cat.book_id, category_id: cat._id },
+        { $set: { category_id: null } },
+      ).exec();
+      res.json({ status: true, message: "Category deleted" });
+    }),
+  );
 
   // ---------- autocomplete (across every book I'm in, so a housemate's ingredients count) ----------
 
   const myBookIds = async (uid: string) => (await myBooks(uid)).map((b) => b._id);
 
-  app.get("/api/xenkitchen/ingredients/suggest", authenticateToken, handle(async (req, res) => {
-    const items = await XenKitchenItem.find({ book_id: { $in: await myBookIds(callerId(req)) } },
-      "ingredients.name ingredients.name_key ingredients.unit").lean().exec();
-    const q = typeof req.query.q === "string" ? req.query.q.slice(0, 60) : "";
-    res.json({ status: true, message: "OK", data: { suggestions: suggestIngredients(items, q) } });
-  }));
+  app.get(
+    "/api/xenkitchen/ingredients/suggest",
+    authenticateToken,
+    handle(async (req, res) => {
+      const items = await XenKitchenItem.find(
+        { book_id: { $in: await myBookIds(callerId(req)) } },
+        "ingredients.name ingredients.name_key ingredients.unit",
+      )
+        .lean()
+        .exec();
+      const q = typeof req.query.q === "string" ? req.query.q.slice(0, 60) : "";
+      res.json({ status: true, message: "OK", data: { suggestions: suggestIngredients(items, q) } });
+    }),
+  );
 
-  app.get("/api/xenkitchen/tags", authenticateToken, handle(async (req, res) => {
-    const items = await XenKitchenItem.find({ book_id: { $in: await myBookIds(callerId(req)) } }, "tags").lean().exec();
-    res.json({ status: true, message: "OK", data: { tags: collectTags(items) } });
-  }));
+  app.get(
+    "/api/xenkitchen/tags",
+    authenticateToken,
+    handle(async (req, res) => {
+      const items = await XenKitchenItem.find({ book_id: { $in: await myBookIds(callerId(req)) } }, "tags")
+        .lean()
+        .exec();
+      res.json({ status: true, message: "OK", data: { tags: collectTags(items) } });
+    }),
+  );
 
   // ---------- items ----------
 
-  app.get("/api/xenkitchen/items", authenticateToken, handle(async (req, res) => {
-    const uid = callerId(req);
-    const params = new URLSearchParams(req.url.split("?")[1] || "");
-    const filters = filtersFromParams(params);
-    const books = await ensureBooks(uid);
-    const which = params.get("book") || "all";
-    const scope = which === "all" ? books : books.filter((b) => String(b._id) === which);
-    if (!scope.length) return fail(res, 404, "Book not found");
-    const items = await XenKitchenItem.find({ book_id: { $in: scope.map((b) => b._id) } }).lean().exec();
-    const { map } = await categoriesForBooks(scope.map((b) => b._id));
-    const filtered = applyKitchenFilters(items, filters, map, uid);
-    res.json({ status: true, message: "OK", data: { items: await serializeFor(uid, filtered, scope), total: items.length } });
-  }));
+  app.get(
+    "/api/xenkitchen/items",
+    authenticateToken,
+    handle(async (req, res) => {
+      const uid = callerId(req);
+      const params = new URLSearchParams(req.url.split("?")[1] || "");
+      const filters = filtersFromParams(params);
+      const books = await ensureBooks(uid);
+      const which = params.get("book") || "all";
+      const scope = which === "all" ? books : books.filter((b) => String(b._id) === which);
+      if (!scope.length) return fail(res, 404, "Book not found");
+      const items = await XenKitchenItem.find({ book_id: { $in: scope.map((b) => b._id) } })
+        .lean()
+        .exec();
+      const { map } = await categoriesForBooks(scope.map((b) => b._id));
+      const filtered = applyKitchenFilters(items, filters, map, uid);
+      res.json({
+        status: true,
+        message: "OK",
+        data: { items: await serializeFor(uid, filtered, scope), total: items.length },
+      });
+    }),
+  );
 
   const createItemSchema = xenKitchenItemSchema.extend({ book_id: z.string().regex(/^[a-f0-9]{24}$/i) });
-  app.post("/api/xenkitchen/items", authenticateToken, validate(createItemSchema), handle(async (req, res) => {
-    const uid = callerId(req);
-    const body = createItemSchema.parse(req.body);
-    const book = await loadBook(req, res, body.book_id, "edit");
-    if (!book) return;
-    if (!(await categoryBelongs(book._id, body.category_id))) return fail(res, 400, "That category isn't in this book");
-    const count = await XenKitchenItem.countDocuments({ book_id: book._id });
-    if (count >= 5000) return fail(res, 400, "This book is full (5000 items)");
-    const item = await XenKitchenItem.create({ ...itemFieldsFromBody(body), book_id: book._id, created_by: uid, updated_by: uid });
-    await respondItem(res, item, book.toObject(), uid);
-  }));
+  app.post(
+    "/api/xenkitchen/items",
+    authenticateToken,
+    validate(createItemSchema),
+    handle(async (req, res) => {
+      const uid = callerId(req);
+      const body = createItemSchema.parse(req.body);
+      const book = await loadBook(req, res, body.book_id, "edit");
+      if (!book) return;
+      if (!(await categoryBelongs(book._id, body.category_id)))
+        return fail(res, 400, "That category isn't in this book");
+      const count = await XenKitchenItem.countDocuments({ book_id: book._id });
+      if (count >= 5000) return fail(res, 400, "This book is full (5000 items)");
+      const item = await XenKitchenItem.create({
+        ...itemFieldsFromBody(body),
+        book_id: book._id,
+        created_by: uid,
+        updated_by: uid,
+      });
+      await respondItem(res, item, book.toObject(), uid);
+    }),
+  );
 
   /** For bulk actions: the ids among these that sit in books the caller can edit. */
   async function editableIds(uid: string, ids: string[]) {
     const books = (await myBooks(uid)).filter((b) => canEdit(b, uid));
-    const items = await XenKitchenItem.find({ _id: { $in: ids }, book_id: { $in: books.map((b) => b._id) } }, "book_id images").lean().exec();
+    const items = await XenKitchenItem.find(
+      { _id: { $in: ids }, book_id: { $in: books.map((b) => b._id) } },
+      "book_id images",
+    )
+      .lean()
+      .exec();
     return items as any[];
   }
 
   // Bulk routes sit before /items/:id for the same reason as categories/order.
-  app.put("/api/xenkitchen/items/bulk/category", authenticateToken, validate(xenKitchenBulkCategorySchema), handle(async (req, res) => {
-    const uid = callerId(req);
-    const { ids, category_id } = xenKitchenBulkCategorySchema.parse(req.body);
-    const items = await editableIds(uid, ids);
-    let moved: number;
-    if (category_id) {
-      // A category belongs to one book, so only that book's items can go into it.
-      const cat = await XenKitchenCategory.findById(category_id).lean().exec();
-      if (!cat) return fail(res, 400, "Unknown category");
-      const inBook = items.filter((i) => String(i.book_id) === String(cat.book_id)).map((i) => i._id);
-      if (!inBook.length) return fail(res, 400, "Those items aren't in that category's book");
-      moved = (await XenKitchenItem.updateMany({ _id: { $in: inBook } }, { $set: { category_id, updated_at: new Date(), updated_by: uid } }).exec()).modifiedCount;
-    } else {
-      moved = (await XenKitchenItem.updateMany({ _id: { $in: items.map((i) => i._id) } }, { $set: { category_id: null, updated_at: new Date(), updated_by: uid } }).exec()).modifiedCount;
-    }
-    res.json({ status: true, message: `Moved ${moved}`, data: { moved } });
-  }));
+  app.put(
+    "/api/xenkitchen/items/bulk/category",
+    authenticateToken,
+    validate(xenKitchenBulkCategorySchema),
+    handle(async (req, res) => {
+      const uid = callerId(req);
+      const { ids, category_id } = xenKitchenBulkCategorySchema.parse(req.body);
+      const items = await editableIds(uid, ids);
+      let moved: number;
+      if (category_id) {
+        // A category belongs to one book, so only that book's items can go into it.
+        const cat = await XenKitchenCategory.findById(category_id).lean().exec();
+        if (!cat) return fail(res, 400, "Unknown category");
+        const inBook = items.filter((i) => String(i.book_id) === String(cat.book_id)).map((i) => i._id);
+        if (!inBook.length) return fail(res, 400, "Those items aren't in that category's book");
+        moved = (
+          await XenKitchenItem.updateMany(
+            { _id: { $in: inBook } },
+            { $set: { category_id, updated_at: new Date(), updated_by: uid } },
+          ).exec()
+        ).modifiedCount;
+      } else {
+        moved = (
+          await XenKitchenItem.updateMany(
+            { _id: { $in: items.map((i) => i._id) } },
+            { $set: { category_id: null, updated_at: new Date(), updated_by: uid } },
+          ).exec()
+        ).modifiedCount;
+      }
+      res.json({ status: true, message: `Moved ${moved}`, data: { moved } });
+    }),
+  );
 
-  app.post("/api/xenkitchen/items/bulk/delete", authenticateToken, validate(xenKitchenBulkDeleteSchema), handle(async (req, res) => {
-    const uid = callerId(req);
-    const { ids } = xenKitchenBulkDeleteSchema.parse(req.body);
-    const items = await editableIds(uid, ids);
-    await XenKitchenItem.deleteMany({ _id: { $in: items.map((i) => i._id) } }).exec();
-    await deleteImages(items.flatMap((i) => i.images || []));
-    res.json({ status: true, message: `Deleted ${items.length}`, data: { deleted: items.length } });
-  }));
+  app.post(
+    "/api/xenkitchen/items/bulk/delete",
+    authenticateToken,
+    validate(xenKitchenBulkDeleteSchema),
+    handle(async (req, res) => {
+      const uid = callerId(req);
+      const { ids } = xenKitchenBulkDeleteSchema.parse(req.body);
+      const items = await editableIds(uid, ids);
+      await XenKitchenItem.deleteMany({ _id: { $in: items.map((i) => i._id) } }).exec();
+      await deleteImages(items.flatMap((i) => i.images || []));
+      res.json({ status: true, message: `Deleted ${items.length}`, data: { deleted: items.length } });
+    }),
+  );
 
-  app.get("/api/xenkitchen/items/:id", authenticateToken, validateParams(xenKitchenIdParamSchema), handle(async (req, res) => {
-    const loaded = await loadItem(req, res, "view");
-    if (!loaded) return;
-    await respondItem(res, loaded.item, loaded.book, callerId(req));
-  }));
+  app.get(
+    "/api/xenkitchen/items/:id",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    handle(async (req, res) => {
+      const loaded = await loadItem(req, res, "view");
+      if (!loaded) return;
+      await respondItem(res, loaded.item, loaded.book, callerId(req));
+    }),
+  );
 
-  app.put("/api/xenkitchen/items/:id", authenticateToken, validateParams(xenKitchenIdParamSchema),
-    validate(xenKitchenItemSchema), handle(async (req, res) => {
+  app.put(
+    "/api/xenkitchen/items/:id",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    validate(xenKitchenItemSchema),
+    handle(async (req, res) => {
       const uid = callerId(req);
       const loaded = await loadItem(req, res, "edit");
       if (!loaded) return;
       const { item, book } = loaded;
       const body = xenKitchenItemSchema.parse(req.body);
-      if (!(await categoryBelongs(book._id, body.category_id))) return fail(res, 400, "That category isn't in this book");
+      if (!(await categoryBelongs(book._id, body.category_id)))
+        return fail(res, 400, "That category isn't in this book");
       item.set({ ...itemFieldsFromBody(body), updated_by: uid });
       if (body.image_order) {
         const rank = new Map(body.image_order.map((id, i) => [id, i]));
@@ -609,40 +853,75 @@ module.exports = function (app: any) {
       }
       await item.save();
       await respondItem(res, item, book, uid);
-    }));
+    }),
+  );
 
-  app.delete("/api/xenkitchen/items/:id", authenticateToken, validateParams(xenKitchenIdParamSchema), handle(async (req, res) => {
-    const loaded = await loadItem(req, res, "edit");
-    if (!loaded) return;
-    const images = loaded.item.images.map((i: any) => ({ gcs_path: i.gcs_path }));
-    await loaded.item.deleteOne();
-    await deleteImages(images);
-    res.json({ status: true, message: "Deleted" });
-  }));
+  app.delete(
+    "/api/xenkitchen/items/:id",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    handle(async (req, res) => {
+      const loaded = await loadItem(req, res, "edit");
+      if (!loaded) return;
+      const images = loaded.item.images.map((i: any) => ({ gcs_path: i.gcs_path }));
+      await loaded.item.deleteOne();
+      await deleteImages(images);
+      res.json({ status: true, message: "Deleted" });
+    }),
+  );
 
   // Favorites are per person and allowed for viewers too.
-  const setFavorite = (on: boolean) => handle(async (req, res) => {
-    const uid = callerId(req);
-    const loaded = await loadItem(req, res, "view");
-    if (!loaded) return;
-    await XenKitchenItem.updateOne({ _id: loaded.item._id }, on ? { $addToSet: { favorited_by: uid } } : { $pull: { favorited_by: uid } }).exec();
-    const fresh = await XenKitchenItem.findById(loaded.item._id).lean().exec();
-    await respondItem(res, fresh, loaded.book, uid);
-  });
-  app.post("/api/xenkitchen/items/:id/favorite", authenticateToken, validateParams(xenKitchenIdParamSchema), setFavorite(true));
-  app.delete("/api/xenkitchen/items/:id/favorite", authenticateToken, validateParams(xenKitchenIdParamSchema), setFavorite(false));
+  const setFavorite = (on: boolean) =>
+    handle(async (req, res) => {
+      const uid = callerId(req);
+      const loaded = await loadItem(req, res, "view");
+      if (!loaded) return;
+      await XenKitchenItem.updateOne(
+        { _id: loaded.item._id },
+        on ? { $addToSet: { favorited_by: uid } } : { $pull: { favorited_by: uid } },
+      ).exec();
+      const fresh = await XenKitchenItem.findById(loaded.item._id).lean().exec();
+      await respondItem(res, fresh, loaded.book, uid);
+    });
+  app.post(
+    "/api/xenkitchen/items/:id/favorite",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    setFavorite(true),
+  );
+  app.delete(
+    "/api/xenkitchen/items/:id/favorite",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    setFavorite(false),
+  );
 
-  app.post("/api/xenkitchen/items/:id/duplicate", authenticateToken, validateParams(xenKitchenIdParamSchema), handle(async (req, res) => {
-    const uid = callerId(req);
-    const loaded = await loadItem(req, res, "edit");
-    if (!loaded) return;
-    const { item, book } = loaded;
-    const copy = await cloneItem(item.toObject(), book._id, uid, item.category_id, `${item.title || "Untitled"} (copy)`);
-    await respondItem(res, copy, book, uid);
-  }));
+  app.post(
+    "/api/xenkitchen/items/:id/duplicate",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    handle(async (req, res) => {
+      const uid = callerId(req);
+      const loaded = await loadItem(req, res, "edit");
+      if (!loaded) return;
+      const { item, book } = loaded;
+      const copy = await cloneItem(
+        item.toObject(),
+        book._id,
+        uid,
+        item.category_id,
+        `${item.title || "Untitled"} (copy)`,
+      );
+      await respondItem(res, copy, book, uid);
+    }),
+  );
 
   /** Copy into another book. Viewers of the source may copy, into a book they can edit. */
-  app.post("/api/xenkitchen/items/:id/copy", authenticateToken, validateParams(xenKitchenIdParamSchema), validate(copyToBookSchema),
+  app.post(
+    "/api/xenkitchen/items/:id/copy",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    validate(copyToBookSchema),
     handle(async (req, res) => {
       const uid = callerId(req);
       const loaded = await loadItem(req, res, "view");
@@ -652,9 +931,14 @@ module.exports = function (app: any) {
       const src = loaded.item.toObject();
       const copy = await cloneItem(src, target._id, uid, await targetCategory(src, target._id, req.body.category_id));
       await respondItem(res, copy, target.toObject(), uid);
-    }));
+    }),
+  );
 
-  app.put("/api/xenkitchen/items/:id/move", authenticateToken, validateParams(xenKitchenIdParamSchema), validate(xenKitchenMoveSchema),
+  app.put(
+    "/api/xenkitchen/items/:id/move",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    validate(xenKitchenMoveSchema),
     handle(async (req, res) => {
       const uid = callerId(req);
       const loaded = await loadItem(req, res, "edit");
@@ -672,12 +956,17 @@ module.exports = function (app: any) {
         await item.save();
       }
       await respondItem(res, item, target.toObject(), uid);
-    }));
+    }),
+  );
 
   // ---------- images ----------
 
-  app.post("/api/xenkitchen/items/:id/images", authenticateToken, validateParams(xenKitchenIdParamSchema),
-    uploadXenKitchenImages.array("images", MAX_XENKITCHEN_IMAGES), handle(async (req, res) => {
+  app.post(
+    "/api/xenkitchen/items/:id/images",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    uploadXenKitchenImages.array("images", MAX_XENKITCHEN_IMAGES),
+    handle(async (req, res) => {
       const uid = callerId(req);
       const loaded = await loadItem(req, res, "edit");
       if (!loaded) return;
@@ -699,16 +988,26 @@ module.exports = function (app: any) {
         }
         const name = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}.${processed.ext}`;
         const gcsPath = `xenkitchen/${book._id}/${item._id}/${name}`;
-        const url = (await uploadToGCS(processed.buffer, gcsPath, processed.contentType, false, IMMUTABLE_CACHE)) as string;
+        const url = (await uploadToGCS(
+          processed.buffer,
+          gcsPath,
+          processed.contentType,
+          false,
+          IMMUTABLE_CACHE,
+        )) as string;
         item.images.push({ gcs_path: gcsPath, url });
         item.updated_by = uid;
         // Save after each photo, so one bad file doesn't orphan the ones already stored.
         await item.save();
       }
       await respondItem(res, item, book, uid);
-    }));
+    }),
+  );
 
-  app.delete("/api/xenkitchen/items/:id/images/:imageId", authenticateToken, validateParams(xenKitchenImageParamSchema),
+  app.delete(
+    "/api/xenkitchen/items/:id/images/:imageId",
+    authenticateToken,
+    validateParams(xenKitchenImageParamSchema),
     handle(async (req, res) => {
       const loaded = await loadItem(req, res, "edit");
       if (!loaded) return;
@@ -720,21 +1019,39 @@ module.exports = function (app: any) {
       await item.save();
       await deleteImages([{ gcs_path: gcsPath }]);
       await respondItem(res, item, book, callerId(req));
-    }));
+    }),
+  );
 
   // ---------- single-item public link (editors manage it) ----------
 
-  const itemShare = (action: "enable" | "disable" | "rotate") => handle(async (req, res) => {
-    const loaded = await loadItem(req, res, "edit");
-    if (!loaded) return;
-    const { item, book } = loaded;
-    // Turning sharing back on restores the same link; "reset" is how old links get revoked.
-    if (action === "rotate" || !item.share?.token) item.share = { enabled: action !== "disable", token: generateShareToken() };
-    else item.share.enabled = action === "enable";
-    await item.save();
-    await respondItem(res, item, book, callerId(req));
-  });
-  app.post("/api/xenkitchen/items/:id/share", authenticateToken, validateParams(xenKitchenIdParamSchema), itemShare("enable"));
-  app.post("/api/xenkitchen/items/:id/share/rotate", authenticateToken, validateParams(xenKitchenIdParamSchema), itemShare("rotate"));
-  app.delete("/api/xenkitchen/items/:id/share", authenticateToken, validateParams(xenKitchenIdParamSchema), itemShare("disable"));
+  const itemShare = (action: "enable" | "disable" | "rotate") =>
+    handle(async (req, res) => {
+      const loaded = await loadItem(req, res, "edit");
+      if (!loaded) return;
+      const { item, book } = loaded;
+      // Turning sharing back on restores the same link; "reset" is how old links get revoked.
+      if (action === "rotate" || !item.share?.token)
+        item.share = { enabled: action !== "disable", token: generateShareToken() };
+      else item.share.enabled = action === "enable";
+      await item.save();
+      await respondItem(res, item, book, callerId(req));
+    });
+  app.post(
+    "/api/xenkitchen/items/:id/share",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    itemShare("enable"),
+  );
+  app.post(
+    "/api/xenkitchen/items/:id/share/rotate",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    itemShare("rotate"),
+  );
+  app.delete(
+    "/api/xenkitchen/items/:id/share",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    itemShare("disable"),
+  );
 };

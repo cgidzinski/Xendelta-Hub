@@ -1,9 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
-import type {
-  XenSplit,
-  CreateXenSplitInput,
-} from "./types";
+import type { XenSplit, CreateXenSplitInput } from "./types";
 import { splitDeleted } from "./splitDeleted";
 
 export function useXenSplits() {

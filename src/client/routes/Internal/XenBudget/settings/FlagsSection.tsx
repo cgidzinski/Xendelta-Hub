@@ -11,40 +11,42 @@ import { FlagChip } from "../components/LabelChip";
  * Custom flags are yours to name, so there is nothing here to explain about them.
  */
 const BUILT_IN_FLAG_MEANINGS = [
-    { name: "Needs review", meaning: "A human should look at this one." },
-    { name: "Uncategorised", meaning: "Imported, but nothing managed to categorise it." },
-    { name: "Possible duplicate", meaning: "Looks like a row you already have — imported anyway." },
-    { name: "Ignored", meaning: "Deliberately set aside; review mode skips these." },
-    { name: "Off budget", meaning: "Kept on the book, but never counted in any total." },
+  { name: "Needs review", meaning: "A human should look at this one." },
+  { name: "Uncategorised", meaning: "Imported, but nothing managed to categorise it." },
+  { name: "Possible duplicate", meaning: "Looks like a row you already have — imported anyway." },
+  { name: "Ignored", meaning: "Deliberately set aside; review mode skips these." },
+  { name: "Off budget", meaning: "Kept on the book, but never counted in any total." },
 ] as const;
 
 export default function FlagsSection() {
-    const { book } = useOutletContext<BookDetailContext>();
+  const { book } = useOutletContext<BookDetailContext>();
 
-    return (
-        <Stack spacing={2}>
-            <SectionCard
-                title="Flags"
-                description="Things needing attention. The built-in ones are used by imports and rules, so they can't be renamed, recoloured or removed — flags you add are yours to customise."
-            >
-                <LabelManager book={book} kind="flags" />
-            </SectionCard>
+  return (
+    <Stack spacing={2}>
+      <SectionCard
+        title="Flags"
+        description="Things needing attention. The built-in ones are used by imports and rules, so they can't be renamed, recoloured or removed — flags you add are yours to customise."
+      >
+        <LabelManager book={book} kind="flags" />
+      </SectionCard>
 
-            <SectionCard
-                title="What each built-in flag means"
-                description="The ones the importer and rules engine rely on, and what they signal. Flags you add yourself mean whatever their name says."
-            >
-                <Stack spacing={1}>
-                    {BUILT_IN_FLAG_MEANINGS.map(({ name, meaning }) => (
-                        <Stack key={name} direction="row" alignItems="flex-start" spacing={1}>
-                            <Box sx={{ flexShrink: 0, mt: 0.25 }}>
-                                <FlagChip name={name} registry={book.flags} />
-                            </Box>
-                            <Typography variant="body2" color="text.secondary">{meaning}</Typography>
-                        </Stack>
-                    ))}
-                </Stack>
-            </SectionCard>
+      <SectionCard
+        title="What each built-in flag means"
+        description="The ones the importer and rules engine rely on, and what they signal. Flags you add yourself mean whatever their name says."
+      >
+        <Stack spacing={1}>
+          {BUILT_IN_FLAG_MEANINGS.map(({ name, meaning }) => (
+            <Stack key={name} direction="row" alignItems="flex-start" spacing={1}>
+              <Box sx={{ flexShrink: 0, mt: 0.25 }}>
+                <FlagChip name={name} registry={book.flags} />
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                {meaning}
+              </Typography>
+            </Stack>
+          ))}
         </Stack>
-    );
+      </SectionCard>
+    </Stack>
+  );
 }

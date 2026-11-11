@@ -18,9 +18,29 @@ import { roundMoney } from "./xenBudgetUtils";
 // shop arrives as "SQ *COFFEE", "TST* COFFEE" and "POS COFFEE" across three cards. These
 // are stripped from the FRONT only — a merchant legitimately named "SPA" must survive.
 const PROCESSOR_PREFIXES = [
-  "SQ *", "SQ*", "TST* ", "TST*", "PAYPAL *", "PAYPAL*", "PP*", "PP *",
-  "SP *", "SP*", "POS ", "POS/", "DEBIT ", "CREDIT ", "VISA ", "MC ",
-  "PURCHASE ", "PRE-AUTH ", "PREAUTH ", "RECURRING ", "WWW.", "HTTP://", "HTTPS://",
+  "SQ *",
+  "SQ*",
+  "TST* ",
+  "TST*",
+  "PAYPAL *",
+  "PAYPAL*",
+  "PP*",
+  "PP *",
+  "SP *",
+  "SP*",
+  "POS ",
+  "POS/",
+  "DEBIT ",
+  "CREDIT ",
+  "VISA ",
+  "MC ",
+  "PURCHASE ",
+  "PRE-AUTH ",
+  "PREAUTH ",
+  "RECURRING ",
+  "WWW.",
+  "HTTP://",
+  "HTTPS://",
 ];
 
 /**
@@ -148,8 +168,13 @@ export function classifyFrequency(gapDays: number[]): ScheduleFrequency | null {
 }
 
 function shapeFor(frequency: ScheduleFrequency) {
-  return FREQUENCY_SHAPES.find((s) => s.frequency === frequency)
-    ?? { frequency, days: PER_MONTH[frequency] ? 30.44 / PER_MONTH[frequency] : 30.44, tolerance: 5 };
+  return (
+    FREQUENCY_SHAPES.find((s) => s.frequency === frequency) ?? {
+      frequency,
+      days: PER_MONTH[frequency] ? 30.44 / PER_MONTH[frequency] : 30.44,
+      tolerance: 5,
+    }
+  );
 }
 
 // --- Price levels -----------------------------------------------------------
@@ -176,9 +201,8 @@ export function priceLevels(amounts: number[]): { amount: number; startIndex: nu
   const levels: { amount: number; startIndex: number }[] = [];
   for (let i = 0; i < amounts.length; i++) {
     const current = levels[levels.length - 1];
-    const drift = current && current.amount !== 0
-      ? Math.abs(amounts[i] - current.amount) / Math.abs(current.amount)
-      : Infinity;
+    const drift =
+      current && current.amount !== 0 ? Math.abs(amounts[i] - current.amount) / Math.abs(current.amount) : Infinity;
     if (!current || drift > SAME_PRICE_TOLERANCE) {
       levels.push({ amount: amounts[i], startIndex: i });
     }
@@ -287,9 +311,8 @@ export function detectRecurring(items: RecurringInputItem[], now: Date): Recurri
     const shape = shapeFor(frequency);
     const overdueDays = (now.getTime() - nextExpected.getTime()) / DAY_MS;
     const silentDays = (now.getTime() - last.date.getTime()) / DAY_MS;
-    const status: RecurringStatus = overdueDays <= shape.tolerance
-      ? "active"
-      : silentDays > shape.days * 2 + shape.tolerance ? "ended" : "missing";
+    const status: RecurringStatus =
+      overdueDays <= shape.tolerance ? "active" : silentDays > shape.days * 2 + shape.tolerance ? "ended" : "missing";
 
     // Most recent first: a series that was recategorised should lead with what it is now.
     const categories: string[] = [];
@@ -318,8 +341,7 @@ export function detectRecurring(items: RecurringInputItem[], now: Date): Recurri
 
   // What it costs per month, not what it costs per charge — otherwise a yearly renewal
   // outranks the monthly bills that actually dominate the budget.
-  series.sort((a, b) => b.monthly_equivalent - a.monthly_equivalent
-    || a.merchant.localeCompare(b.merchant));
+  series.sort((a, b) => b.monthly_equivalent - a.monthly_equivalent || a.merchant.localeCompare(b.merchant));
 
   return series;
 }
@@ -331,7 +353,5 @@ export function detectRecurring(items: RecurringInputItem[], now: Date): Recurri
  * a MISSING one is counted, because a bill that hasn't posted yet is still owed.
  */
 export function monthlyCommitted(series: RecurringSeries[]): number {
-  return roundMoney(series
-    .filter((s) => s.status !== "ended")
-    .reduce((sum, s) => sum + s.monthly_equivalent, 0));
+  return roundMoney(series.filter((s) => s.status !== "ended").reduce((sum, s) => sum + s.monthly_equivalent, 0));
 }

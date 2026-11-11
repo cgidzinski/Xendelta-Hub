@@ -1,12 +1,7 @@
 import { pageTitleSx } from "../../components/ui/surfaceStyles";
 import PageContainer from "../../components/ui/PageContainer";
 import { useState, useEffect } from "react";
-import {
-  Box,
-  Card,
-  Typography,
-  Button,
-} from "@mui/material";
+import { Box, Card, Typography, Button } from "@mui/material";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import AnnouncementIcon from "@mui/icons-material/Announcement";
 import SecurityIcon from "@mui/icons-material/Security";
@@ -69,16 +64,19 @@ export default function Admin() {
   }, [navigate, enqueueSnackbar, verifyAdminRole]);
 
   const handleSendNotification = async (title: string, message: string, icon: string = "announcement") => {
-    sendNotificationToAll({ title, message, icon }, {
-      onSuccess: (data) => {
-        enqueueSnackbar(data.message || `Notification sent successfully`, {
-          variant: "success",
-        });
+    sendNotificationToAll(
+      { title, message, icon },
+      {
+        onSuccess: (data) => {
+          enqueueSnackbar(data.message || `Notification sent successfully`, {
+            variant: "success",
+          });
+        },
+        onError: (error) => {
+          enqueueSnackbar(error.message || "Failed to send notification", { variant: "error" });
+        },
       },
-      onError: (error) => {
-        enqueueSnackbar(error.message || "Failed to send notification", { variant: "error" });
-      },
-    });
+    );
   };
 
   const handleDeleteAllMessages = async () => {
@@ -172,14 +170,14 @@ export default function Admin() {
                 demo.icon === "announcement"
                   ? AnnouncementIcon
                   : demo.icon === "security"
-                  ? SecurityIcon
-                  : demo.icon === "mail"
-                  ? MailIcon
-                  : demo.icon === "person"
-                  ? PersonIcon
-                  : demo.icon === "lock"
-                  ? LockIcon
-                  : NotificationsIcon;
+                    ? SecurityIcon
+                    : demo.icon === "mail"
+                      ? MailIcon
+                      : demo.icon === "person"
+                        ? PersonIcon
+                        : demo.icon === "lock"
+                          ? LockIcon
+                          : NotificationsIcon;
 
               return (
                 <Button
@@ -224,10 +222,9 @@ export default function Admin() {
             Error Monitoring
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Deliberately trigger a test error to confirm Bugsnag is capturing and reporting
-            correctly. Only reports anywhere when a Bugsnag API key is configured for this
-            environment (production/staging) - a no-op on local dev. Triggering the client
-            error blanks the page, since it tests the same top-level error boundary a real
+            Deliberately trigger a test error to confirm Bugsnag is capturing and reporting correctly. Only reports
+            anywhere when a Bugsnag API key is configured for this environment (production/staging) - a no-op on local
+            dev. Triggering the client error blanks the page, since it tests the same top-level error boundary a real
             render crash would hit - refresh afterward.
           </Typography>
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
@@ -252,9 +249,7 @@ export default function Admin() {
             </Button>
           </Box>
         </Card>
-
       </PageContainer>
     </Box>
   );
 }
-

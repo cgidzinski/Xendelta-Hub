@@ -249,14 +249,30 @@ export interface CreateExchangeInput {
   date?: string;
 }
 export type XenSplitLogAction =
-  | "group_created" | "group_updated" | "group_image_updated" | "ownership_transferred"
-  | "member_added" | "member_removed"
-  | "expense_created" | "expense_updated" | "expense_deleted" | "expense_restored"
-  | "expense_images_added" | "expense_image_removed"
-  | "recurring_scheduled" | "recurring_generated" | "recurring_cancelled" | "recurring_paused"
-  | "recurring_resumed" | "recurring_updated"
-  | "settlement_created" | "settlement_deleted" | "settlement_restored"
-  | "exchange_created" | "exchange_deleted" | "exchange_restored";
+  | "group_created"
+  | "group_updated"
+  | "group_image_updated"
+  | "ownership_transferred"
+  | "member_added"
+  | "member_removed"
+  | "expense_created"
+  | "expense_updated"
+  | "expense_deleted"
+  | "expense_restored"
+  | "expense_images_added"
+  | "expense_image_removed"
+  | "recurring_scheduled"
+  | "recurring_generated"
+  | "recurring_cancelled"
+  | "recurring_paused"
+  | "recurring_resumed"
+  | "recurring_updated"
+  | "settlement_created"
+  | "settlement_deleted"
+  | "settlement_restored"
+  | "exchange_created"
+  | "exchange_deleted"
+  | "exchange_restored";
 
 export interface XenSplitLogChange {
   field: string;

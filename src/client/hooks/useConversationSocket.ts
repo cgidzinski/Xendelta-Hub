@@ -28,7 +28,7 @@ export const useConversationSocket = ({ socket, conversationId }: UseConversatio
               msg._id === data.message._id ||
               (msg._id?.startsWith("temp-") &&
                 msg.message === data.message.message &&
-                Math.abs(new Date(msg.time).getTime() - new Date(data.message.time).getTime()) < 5000)
+                Math.abs(new Date(msg.time).getTime() - new Date(data.message.time).getTime()) < 5000),
           );
           if (messageExists) {
             // Replace temp message with real one
@@ -36,9 +36,7 @@ export const useConversationSocket = ({ socket, conversationId }: UseConversatio
               ...prevConv,
               messages: (prevConv.messages || [])
                 .map((msg) =>
-                  msg._id?.startsWith("temp-") && msg.message === data.message.message
-                    ? data.message
-                    : msg
+                  msg._id?.startsWith("temp-") && msg.message === data.message.message ? data.message : msg,
                 )
                 .filter((msg) => {
                   // Remove duplicate temp messages, keep only the real one
@@ -104,4 +102,3 @@ export const useConversationSocket = ({ socket, conversationId }: UseConversatio
     };
   }, [socket, conversationId, queryClient]);
 };
-

@@ -122,7 +122,7 @@ export async function uploadChunk(uploadId: string, chunkIndex: number, chunkDat
     const url = new URL(session.resumableUri);
 
     // For the last chunk, include total size; otherwise use * for unknown total
-    const totalSize = isLastChunk ? (endByte + 1) : "*";
+    const totalSize = isLastChunk ? endByte + 1 : "*";
     const contentRange = `bytes ${startByte}-${endByte}/${totalSize}`;
 
     const options = {
@@ -174,7 +174,9 @@ export async function uploadChunk(uploadId: string, chunkIndex: number, chunkDat
  * @param uploadId - Upload session ID
  * @returns Object with _id, url, filename, mimeType, and size
  */
-export async function finalizeChunkedUpload(uploadId: string): Promise<{ _id: string; url: string; filename: string; mimeType: string; size: number }> {
+export async function finalizeChunkedUpload(
+  uploadId: string,
+): Promise<{ _id: string; url: string; filename: string; mimeType: string; size: number }> {
   const session = uploadSessions.get(uploadId);
   if (!session) {
     throw new Error(`Upload session not found: ${uploadId}`);
@@ -182,7 +184,9 @@ export async function finalizeChunkedUpload(uploadId: string): Promise<{ _id: st
 
   // Check if all chunks are received
   if (session.receivedChunks.size !== session.totalChunks) {
-    throw new Error(`Not all chunks received. Expected: ${session.totalChunks}, Received: ${session.receivedChunks.size}`);
+    throw new Error(
+      `Not all chunks received. Expected: ${session.totalChunks}, Received: ${session.receivedChunks.size}`,
+    );
   }
 
   // Get file metadata from GCS (file is already uploaded)

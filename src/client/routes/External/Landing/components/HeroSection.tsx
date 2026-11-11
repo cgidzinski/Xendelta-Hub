@@ -13,11 +13,7 @@ export default function HeroSection() {
       <Container maxWidth="lg" sx={{ position: "relative", zIndex: 1 }}>
         <Box sx={{ textAlign: "center", maxWidth: 900, mx: "auto" }}>
           <Box sx={{ display: "flex", justifyContent: "center", mb: 3 }}>
-            <Chip
-              label="New: Enhanced Security Features"
-              color="primary"
-              sx={{ fontWeight: 600, px: 1 }}
-            />
+            <Chip label="New: Enhanced Security Features" color="primary" sx={{ fontWeight: 600, px: 1 }} />
           </Box>
           <Typography
             variant="h1"
@@ -79,8 +75,7 @@ export default function HeroSection() {
               fontSize: { xs: "0.95rem", md: "1rem" },
             }}
           >
-            Note: Some information is fictional and for demonstration purposes only. Some apps may not be available
-            yet.
+            Note: Some information is fictional and for demonstration purposes only. Some apps may not be available yet.
           </Typography>
         </Box>
       </Container>

@@ -21,40 +21,40 @@ import { INCOME_COLOR } from "../../../../../components/ui/chartColors";
 
 /** Resolved against the theme, since `error.main` is a token and INCOME_COLOR is a hex. */
 function hueOf(verdict: BudgetVerdict, theme: Theme): string {
-    if (verdict.key === "pass") return INCOME_COLOR;
-    if (verdict.key === "miss") return theme.palette.error.main;
-    return theme.palette.text.secondary;
+  if (verdict.key === "pass") return INCOME_COLOR;
+  if (verdict.key === "miss") return theme.palette.error.main;
+  return theme.palette.text.secondary;
 }
 
 function iconFor(key: BudgetVerdict["key"]) {
-    if (key === "pass") return <CheckIcon sx={{ fontSize: 14 }} />;
-    if (key === "miss") return <CloseIcon sx={{ fontSize: 14 }} />;
-    return <RemoveIcon sx={{ fontSize: 14 }} />;
+  if (key === "pass") return <CheckIcon sx={{ fontSize: 14 }} />;
+  if (key === "miss") return <CloseIcon sx={{ fontSize: 14 }} />;
+  return <RemoveIcon sx={{ fontSize: 14 }} />;
 }
 
 export default function VerdictChip({ verdict }: { verdict: BudgetVerdict }) {
-    if (verdict.key === "open") return null;
+  if (verdict.key === "open") return null;
 
-    return (
-        <Chip
-            size="small"
-            icon={iconFor(verdict.key)}
-            label={verdict.word}
-            // Matches CategoryChip's filled treatment, so the verdict sits in the heading
-            // row as a peer of the chips already there rather than as a foreign badge.
-            sx={{
-                height: 20,
-                fontSize: 11,
-                fontWeight: 600,
-                bgcolor: (theme) => alpha(hueOf(verdict, theme), 0.18),
-                color: (theme) => hueOf(verdict, theme),
-                border: "1px solid",
-                borderColor: (theme) => alpha(hueOf(verdict, theme), 0.55),
-                "& .MuiChip-icon": {
-                    color: (theme) => hueOf(verdict, theme),
-                    marginLeft: "6px",
-                },
-            }}
-        />
-    );
+  return (
+    <Chip
+      size="small"
+      icon={iconFor(verdict.key)}
+      label={verdict.word}
+      // Matches CategoryChip's filled treatment, so the verdict sits in the heading
+      // row as a peer of the chips already there rather than as a foreign badge.
+      sx={{
+        height: 20,
+        fontSize: 11,
+        fontWeight: 600,
+        bgcolor: (theme) => alpha(hueOf(verdict, theme), 0.18),
+        color: (theme) => hueOf(verdict, theme),
+        border: "1px solid",
+        borderColor: (theme) => alpha(hueOf(verdict, theme), 0.55),
+        "& .MuiChip-icon": {
+          color: (theme) => hueOf(verdict, theme),
+          marginLeft: "6px",
+        },
+      }}
+    />
+  );
 }

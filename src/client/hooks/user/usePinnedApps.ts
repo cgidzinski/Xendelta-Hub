@@ -21,7 +21,11 @@ export const usePinnedApps = () => {
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
 
-  const { mutateAsync: updatePinnedAppsMutation, isPending: isUpdating, error: updateError } = useMutation({
+  const {
+    mutateAsync: updatePinnedAppsMutation,
+    isPending: isUpdating,
+    error: updateError,
+  } = useMutation({
     mutationFn: updatePinnedApps,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
@@ -38,9 +42,7 @@ export const usePinnedApps = () => {
 
   const togglePinnedApp = async (appKey: string, currentPinned: string[]): Promise<boolean> => {
     const isPinned = currentPinned.includes(appKey);
-    const newPinned = isPinned
-      ? currentPinned.filter((key) => key !== appKey)
-      : [...currentPinned, appKey];
+    const newPinned = isPinned ? currentPinned.filter((key) => key !== appKey) : [...currentPinned, appKey];
     return setPinnedApps(newPinned);
   };
 

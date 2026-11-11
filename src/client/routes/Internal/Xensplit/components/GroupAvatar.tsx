@@ -16,7 +16,13 @@ interface GroupAvatarProps {
  * image layered on top. The letter is visible while the image loads and if it fails,
  * and the image covers it once decoded.
  */
-export default function GroupAvatar({ name, imageUrl, size = 48, borderRadius = 2, fontSize = "1.2rem" }: GroupAvatarProps) {
+export default function GroupAvatar({
+  name,
+  imageUrl,
+  size = 48,
+  borderRadius = 2,
+  fontSize = "1.2rem",
+}: GroupAvatarProps) {
   const [errored, setErrored] = useState(false);
   const showImage = Boolean(imageUrl) && !errored;
 

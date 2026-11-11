@@ -24,7 +24,8 @@ export interface OgKitchenItem {
 export function buildKitchenMetaTags(item: OgKitchenItem, pageUrl: string): string {
   const title = escapeHtmlAttribute(item.title || "Untitled");
   const description = escapeHtmlAttribute(
-    toPreviewText(item.description) || (item.brand ? `${item.brand} — cooking instructions` : "A recipe from XenKitchen on Xendelta Hub."),
+    toPreviewText(item.description) ||
+      (item.brand ? `${item.brand} — cooking instructions` : "A recipe from XenKitchen on Xendelta Hub."),
   );
   const image = item.images?.[0]?.url;
   const tags = [
@@ -82,15 +83,29 @@ const loadSharedItem: KitchenLoader = (token) => {
 const loadSharedBook: KitchenBookLoader = async (token, itemId) => {
   const { XenKitchenBook, XenKitchenItem } = require("../models/xenKitchen");
   const book = await XenKitchenBook.findOne({ "share.token": token, "share.enabled": true })
-    .select("name description").maxTimeMS(OG_LOOKUP_TIMEOUT_MS).lean().exec();
+    .select("name description")
+    .maxTimeMS(OG_LOOKUP_TIMEOUT_MS)
+    .lean()
+    .exec();
   if (!book) return null;
   if (itemId) {
     return XenKitchenItem.findOne({ _id: itemId, book_id: book._id })
-      .select("title description brand images").maxTimeMS(OG_LOOKUP_TIMEOUT_MS).lean().exec();
+      .select("title description brand images")
+      .maxTimeMS(OG_LOOKUP_TIMEOUT_MS)
+      .lean()
+      .exec();
   }
   const cover = await XenKitchenItem.findOne({ book_id: book._id, "images.0": { $exists: true } })
-    .sort({ updated_at: -1 }).select("images").maxTimeMS(OG_LOOKUP_TIMEOUT_MS).lean().exec();
-  return { title: book.name, description: book.description || "A recipe book on XenKitchen.", images: cover?.images ?? [] };
+    .sort({ updated_at: -1 })
+    .select("images")
+    .maxTimeMS(OG_LOOKUP_TIMEOUT_MS)
+    .lean()
+    .exec();
+  return {
+    title: book.name,
+    description: book.description || "A recipe book on XenKitchen.",
+    images: cover?.images ?? [],
+  };
 };
 
 export const kitchenHtmlTransformer = createKitchenHtmlTransformer(loadSharedItem, loadSharedBook);

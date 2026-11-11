@@ -48,6 +48,4 @@ module.exports = function (app: express.Application) {
       data: { post },
     });
   });
-
-
 };

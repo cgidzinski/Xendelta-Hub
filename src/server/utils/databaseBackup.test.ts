@@ -85,7 +85,7 @@ describe("databaseBackup", () => {
       expect.arrayContaining([
         { name: "users", count: 2 },
         { name: "posts", count: 1 },
-      ])
+      ]),
     );
   });
 
@@ -94,10 +94,12 @@ describe("databaseBackup", () => {
     const userId = new ObjectId();
     const createdAt = new Date("2024-01-15T10:00:00.000Z");
     sourceDb.collection("users").docs.push({ _id: userId, username: "alice", createdAt, roles: ["admin"] });
-    sourceDb.collection("posts").docs.push(
-      { _id: new ObjectId(), title: "first", author: userId },
-      { _id: new ObjectId(), title: "second", author: userId }
-    );
+    sourceDb
+      .collection("posts")
+      .docs.push(
+        { _id: new ObjectId(), title: "first", author: userId },
+        { _id: new ObjectId(), title: "second", author: userId },
+      );
 
     // Export
     const dest = new PassThrough();

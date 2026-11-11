@@ -40,20 +40,15 @@ export default function AppThemeProvider({ children }: { children: ReactNode }) 
 
   // Explicit light wins, explicit system follows the OS query, and everything else
   // (never chosen, or explicit dark) defaults to dark.
-  const mode: ThemeMode = preference === "light"
-    ? "light"
-    : preference === "system"
-      ? (prefersDark ? "dark" : "light")
-      : "dark";
+  const mode: ThemeMode =
+    preference === "light" ? "light" : preference === "system" ? (prefersDark ? "dark" : "light") : "dark";
 
   const theme = useMemo(() => createAppTheme(mode), [mode]);
 
   // The PWA's status bar colour is baked into index.html and would otherwise stay the
   // dark blue regardless of which theme is actually on screen.
   useEffect(() => {
-    document
-      .querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", theme.palette.background.default);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.palette.background.default);
   }, [theme]);
 
   return (

@@ -130,10 +130,22 @@ export default function Profile() {
 
   const handleSaveUsername = async () => {
     const trimmed = editUsername.trim();
-    if (!trimmed) { setUsernameError("Username cannot be empty"); return; }
-    if (trimmed.length < 3) { setUsernameError("Username must be at least 3 characters"); return; }
-    if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) { setUsernameError("Username can only contain letters, numbers, and underscores"); return; }
-    if (trimmed === profile?.username) { setUsernameError("That's already your username"); return; }
+    if (!trimmed) {
+      setUsernameError("Username cannot be empty");
+      return;
+    }
+    if (trimmed.length < 3) {
+      setUsernameError("Username must be at least 3 characters");
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
+      setUsernameError("Username can only contain letters, numbers, and underscores");
+      return;
+    }
+    if (trimmed === profile?.username) {
+      setUsernameError("That's already your username");
+      return;
+    }
     setUsernameError("");
     setIsSavingUsername(true);
     try {
@@ -166,7 +178,10 @@ export default function Profile() {
   };
 
   const handleUpdateAvatar = async () => {
-    if (!selectedFile) { enqueueSnackbar("Please select an image file", { variant: "error" }); return; }
+    if (!selectedFile) {
+      enqueueSnackbar("Please select an image file", { variant: "error" });
+      return;
+    }
     setIsUploading(true);
     try {
       const data = await uploadAvatar(selectedFile);
@@ -243,14 +258,22 @@ export default function Profile() {
                     <TextField
                       label="Username"
                       value={editUsername}
-                      onChange={(e) => { setEditUsername(e.target.value); setUsernameError(""); }}
+                      onChange={(e) => {
+                        setEditUsername(e.target.value);
+                        setUsernameError("");
+                      }}
                       error={!!usernameError}
                       helperText={usernameError || "Letters, numbers, and underscores only"}
                       size="small"
                       sx={{ flex: 1, maxWidth: 320 }}
                       inputProps={{ maxLength: 50 }}
                     />
-                    <Button variant="contained" onClick={handleSaveUsername} disabled={isSavingUsername} sx={{ mt: 0.5 }}>
+                    <Button
+                      variant="contained"
+                      onClick={handleSaveUsername}
+                      disabled={isSavingUsername}
+                      sx={{ mt: 0.5 }}
+                    >
                       {isSavingUsername ? "Saving..." : "Save"}
                     </Button>
                   </Box>
@@ -300,7 +323,9 @@ export default function Profile() {
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <Box>
                       <Typography variant="body1">Logout</Typography>
-                      <Typography variant="body2" color="text.secondary">Logout of your account</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Logout of your account
+                      </Typography>
                     </Box>
                     <Button variant="outlined" size="small" color="error" onClick={() => logout()}>
                       Logout
@@ -333,8 +358,8 @@ export default function Profile() {
                   </Typography>
                   {pushNeedsInstall && (
                     <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-                      On iPhone, tap Share → Add to Home Screen, then open Xendelta Hub from
-                      that icon to turn on notifications.
+                      On iPhone, tap Share → Add to Home Screen, then open Xendelta Hub from that icon to turn on
+                      notifications.
                     </Typography>
                   )}
                   {!pushSupported && !pushNeedsInstall && (
@@ -443,25 +468,37 @@ export default function Profile() {
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
                     <Box>
                       <Typography variant="body1">Two-Factor Authentication</Typography>
-                      <Typography variant="body2" color="text.secondary">Add an extra layer of security to your account</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Add an extra layer of security to your account
+                      </Typography>
                     </Box>
-                    <Button variant="outlined" size="small" disabled>Enable</Button>
+                    <Button variant="outlined" size="small" disabled>
+                      Enable
+                    </Button>
                   </Box>
                   <Divider sx={{ my: 2 }} />
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
                     <Box>
                       <Typography variant="body1">Change Password</Typography>
-                      <Typography variant="body2" color="text.secondary">Update your account password</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Update your account password
+                      </Typography>
                     </Box>
-                    <Button variant="outlined" size="small" disabled>Change</Button>
+                    <Button variant="outlined" size="small" disabled>
+                      Change
+                    </Button>
                   </Box>
                   <Divider sx={{ my: 2 }} />
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <Box>
                       <Typography variant="body1">Active Sessions</Typography>
-                      <Typography variant="body2" color="text.secondary">Manage your active login sessions</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Manage your active login sessions
+                      </Typography>
                     </Box>
-                    <Button variant="outlined" size="small" disabled>Manage</Button>
+                    <Button variant="outlined" size="small" disabled>
+                      Manage
+                    </Button>
                   </Box>
                 </CardContent>
               </Card>

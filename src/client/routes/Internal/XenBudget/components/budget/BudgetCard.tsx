@@ -1,13 +1,14 @@
 import { useState } from "react";
-import {
-    Box, ButtonBase, Card, Chip, Collapse, Divider, IconButton, Stack, Tooltip, Typography,
-} from "@mui/material";
+import { Box, ButtonBase, Card, Chip, Collapse, Divider, IconButton, Stack, Tooltip, Typography } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import PublicIcon from "@mui/icons-material/Public";
 import PersonIcon from "@mui/icons-material/Person";
 import type {
-    BudgetStatus, SubBudgetStatus, XenBudgetLabel, XenBudgetMember,
+  BudgetStatus,
+  SubBudgetStatus,
+  XenBudgetLabel,
+  XenBudgetMember,
 } from "../../../../../hooks/xenbudget/types";
 import { CategoryChip } from "../LabelChip";
 import { cardSx, sectionLabelSx } from "../../../../../components/ui/surfaceStyles";
@@ -27,17 +28,17 @@ const MAX_CHIPS = 3;
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 interface BudgetCardProps {
-    budget: BudgetStatus;
-    currency: string;
-    categoryRegistry: XenBudgetLabel[];
-    members: XenBudgetMember[];
-    asOf: string;
-    /**
-     * Names the window the figures cover, for when they've been restated for a report
-     * range rather than measured over the budget's own period.
-     */
-    periodLabel?: string;
-    onViewItems?: (budget: BudgetStatus) => void;
+  budget: BudgetStatus;
+  currency: string;
+  categoryRegistry: XenBudgetLabel[];
+  members: XenBudgetMember[];
+  asOf: string;
+  /**
+   * Names the window the figures cover, for when they've been restated for a report
+   * range rather than measured over the budget's own period.
+   */
+  periodLabel?: string;
+  onViewItems?: (budget: BudgetStatus) => void;
 }
 
 /**
@@ -53,277 +54,299 @@ interface BudgetCardProps {
  * reveals the per-person limits (and the overall detail panel) on click.
  */
 export default function BudgetCard({
-    budget, currency, categoryRegistry, members, asOf, periodLabel,
-    onViewItems,
+  budget,
+  currency,
+  categoryRegistry,
+  members,
+  asOf,
+  periodLabel,
+  onViewItems,
 }: BudgetCardProps) {
-    // One click expands both the selected-range and whole-period sections at once.
-    const [open, setOpen] = useState(false);
-    // Which person's limit is expanded, if any.
-    const [openSub, setOpenSub] = useState<string | null>(null);
-    const hasOverall = budget.amount !== undefined;
+  // One click expands both the selected-range and whole-period sections at once.
+  const [open, setOpen] = useState(false);
+  // Which person's limit is expanded, if any.
+  const [openSub, setOpenSub] = useState<string | null>(null);
+  const hasOverall = budget.amount !== undefined;
 
-    const color = scopeColor(budget.categories, categoryRegistry);
-    const chips = budget.categories.slice(0, MAX_CHIPS);
-    const extra = budget.categories.length - chips.length;
-    const hasPersonLimits = budget.sub_budgets.length > 0;
-    const pace = budgetPace(budget.period_from, budget.period_to, asOf, budget.spent, budget.amount ?? 0);
-    // A budget with no overarching amount is read as the sum of its per-person limits, so
-    // the headline still shows one normal bar instead of an orphaned category heading.
-    const summedAmount = budget.sub_budgets.reduce((sum, s) => sum + s.amount, 0);
-    const summedSpent = budget.sub_budgets.reduce((sum, s) => sum + s.spent, 0);
-    const headlineAmount = hasOverall ? (budget.amount ?? 0) : summedAmount;
-    const headlineSpent = hasOverall ? budget.spent : summedSpent;
-    const headlinePercent = hasOverall
-        ? (budget.percent ?? 0)
-        : headlineAmount > 0 ? Math.round((headlineSpent / headlineAmount) * 100) : 0;
-    const headlineOver = hasOverall ? (budget.over ?? false) : headlineSpent > headlineAmount;
-    // The whole-period figures, for the second bar shown only when the budget's own period
-    // is longer than the selected range (so the whole-period total is the larger number).
-    const periodAmount = budget.period_amount;
-    const periodSpent = budget.period_spent ?? 0;
-    const periodPercent = periodAmount !== undefined && periodAmount > 0
-        ? Math.round((periodSpent / periodAmount) * 100) : 0;
-    const periodOver = periodAmount !== undefined && periodSpent > periodAmount;
-    const showWholePeriod = periodAmount !== undefined && periodAmount > headlineAmount;
-    const direction = directionOf(budget.measures);
-    // The headline bar is measured over whatever window was asked for, so it is judged
-    // against THAT window's end. The whole-period bar below is judged against the budget's
-    // own - "the selected range has closed" and "the budget's own month has closed" are
-    // different questions, and on a report range they routinely disagree.
-    const verdict = budgetVerdict(
-        direction, headlinePercent, budget.item_count, budget.period_to, asOf,
-    );
-    const periodVerdict = budgetVerdict(
-        direction, periodPercent, budget.period_item_count ?? 0,
-        budget.own_period_to ?? budget.period_to, asOf,
-    );
+  const color = scopeColor(budget.categories, categoryRegistry);
+  const chips = budget.categories.slice(0, MAX_CHIPS);
+  const extra = budget.categories.length - chips.length;
+  const hasPersonLimits = budget.sub_budgets.length > 0;
+  const pace = budgetPace(budget.period_from, budget.period_to, asOf, budget.spent, budget.amount ?? 0);
+  // A budget with no overarching amount is read as the sum of its per-person limits, so
+  // the headline still shows one normal bar instead of an orphaned category heading.
+  const summedAmount = budget.sub_budgets.reduce((sum, s) => sum + s.amount, 0);
+  const summedSpent = budget.sub_budgets.reduce((sum, s) => sum + s.spent, 0);
+  const headlineAmount = hasOverall ? (budget.amount ?? 0) : summedAmount;
+  const headlineSpent = hasOverall ? budget.spent : summedSpent;
+  const headlinePercent = hasOverall
+    ? (budget.percent ?? 0)
+    : headlineAmount > 0
+      ? Math.round((headlineSpent / headlineAmount) * 100)
+      : 0;
+  const headlineOver = hasOverall ? (budget.over ?? false) : headlineSpent > headlineAmount;
+  // The whole-period figures, for the second bar shown only when the budget's own period
+  // is longer than the selected range (so the whole-period total is the larger number).
+  const periodAmount = budget.period_amount;
+  const periodSpent = budget.period_spent ?? 0;
+  const periodPercent =
+    periodAmount !== undefined && periodAmount > 0 ? Math.round((periodSpent / periodAmount) * 100) : 0;
+  const periodOver = periodAmount !== undefined && periodSpent > periodAmount;
+  const showWholePeriod = periodAmount !== undefined && periodAmount > headlineAmount;
+  const direction = directionOf(budget.measures);
+  // The headline bar is measured over whatever window was asked for, so it is judged
+  // against THAT window's end. The whole-period bar below is judged against the budget's
+  // own - "the selected range has closed" and "the budget's own month has closed" are
+  // different questions, and on a report range they routinely disagree.
+  const verdict = budgetVerdict(direction, headlinePercent, budget.item_count, budget.period_to, asOf);
+  const periodVerdict = budgetVerdict(
+    direction,
+    periodPercent,
+    budget.period_item_count ?? 0,
+    budget.own_period_to ?? budget.period_to,
+    asOf,
+  );
 
-    const heading = (
-        <Stack
-            direction="row" alignItems="center"
-            sx={{ flexWrap: "wrap", gap: 0.5, minWidth: 0 }}
-        >
-            {budget.categories.length === 0
-                ? <Typography variant="body2" color="text.secondary">Everything</Typography>
-                : chips.map((c) => <CategoryChip key={c} name={c} registry={categoryRegistry} />)}
-            {extra > 0 && (
-                <Chip size="small" label={`+${extra}`} sx={{ height: 20, fontSize: 11 }} />
-            )}
-            {/* The word, not an initial. "M" only ever meant "monthly" via a hover
+  const heading = (
+    <Stack direction="row" alignItems="center" sx={{ flexWrap: "wrap", gap: 0.5, minWidth: 0 }}>
+      {budget.categories.length === 0 ? (
+        <Typography variant="body2" color="text.secondary">
+          Everything
+        </Typography>
+      ) : (
+        chips.map((c) => <CategoryChip key={c} name={c} registry={categoryRegistry} />)
+      )}
+      {extra > 0 && <Chip size="small" label={`+${extra}`} sx={{ height: 20, fontSize: 11 }} />}
+      {/* The word, not an initial. "M" only ever meant "monthly" via a hover
             tooltip, which is nothing at all on a touch screen. */}
-            <Chip
-                size="small"
-                label={capitalize(periodWord(budget.period))}
-                sx={{ height: 20, fontSize: 11 }}
-            />
-            <VerdictChip verdict={verdict} />
-            {hasOverall && (
-                <Tooltip title="Shared limit">
-                    <PublicIcon sx={{ fontSize: 14, color: "text.disabled" }} />
-                </Tooltip>
-            )}
-            {hasPersonLimits && (
-                <Tooltip title="Per-person limits">
-                    <PersonIcon sx={{ fontSize: 14, color: "text.disabled" }} />
-                </Tooltip>
-            )}
-        </Stack>
-    );
+      <Chip size="small" label={capitalize(periodWord(budget.period))} sx={{ height: 20, fontSize: 11 }} />
+      <VerdictChip verdict={verdict} />
+      {hasOverall && (
+        <Tooltip title="Shared limit">
+          <PublicIcon sx={{ fontSize: 14, color: "text.disabled" }} />
+        </Tooltip>
+      )}
+      {hasPersonLimits && (
+        <Tooltip title="Per-person limits">
+          <PersonIcon sx={{ fontSize: 14, color: "text.disabled" }} />
+        </Tooltip>
+      )}
+    </Stack>
+  );
 
-    const detailsFor = (focus: SubBudgetStatus | null, section?: "range" | "whole") => (
-        <BudgetDetails
-            budget={budget}
-            focus={focus}
-            section={section}
+  const detailsFor = (focus: SubBudgetStatus | null, section?: "range" | "whole") => (
+    <BudgetDetails
+      budget={budget}
+      focus={focus}
+      section={section}
+      currency={currency}
+      asOf={asOf}
+      periodLabel={periodLabel}
+      members={members}
+    />
+  );
+
+  const chevron = (expanded: boolean) => (
+    <ExpandMoreIcon
+      fontSize="small"
+      sx={{
+        color: "text.disabled",
+        flexShrink: 0,
+        transform: expanded ? "rotate(180deg)" : "none",
+        transition: "transform 150ms",
+      }}
+    />
+  );
+
+  return (
+    <Card
+      variant="outlined"
+      sx={{
+        ...cardSx,
+        p: 1.5,
+        borderWidth: 4,
+        // The rail: only the LEFT edge takes the verdict's colour, so a column of
+        // cards gains a spine you can run your eye down without reading any of
+        // them. Colouring all four sides (or glowing) puts the same signal on
+        // twelve cards at once and stops being a signal at all.
+        ...(verdict.color ? { borderLeftColor: verdict.color } : {}),
+        ...(open ? { cursor: "pointer" } : {}),
+      }}
+      onClick={() => {
+        if (open) setOpen(false);
+      }}
+    >
+      {/* One click expands both periods, each with its detail under its own bar. */}
+      <ButtonBase
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        sx={{
+          width: "100%",
+          display: "block",
+          textAlign: "left",
+          minHeight: 44,
+          borderRadius: 1,
+        }}
+      >
+        <Stack spacing={0.75} sx={{ minWidth: 0 }}>
+          <Stack direction="row" alignItems="center" sx={{ minWidth: 0 }}>
+            <Box sx={{ flexGrow: 1, minWidth: 0 }}>{heading}</Box>
+            {chevron(open)}
+          </Stack>
+
+          <BudgetLimitLine
+            label={
+              <Typography variant="caption" color="text.secondary">
+                {periodLabel ?? capitalize(periodWord(budget.period))}
+              </Typography>
+            }
+            amount={headlineAmount}
+            spent={headlineSpent}
+            percent={headlinePercent}
+            over={headlineOver}
+            direction={direction}
             currency={currency}
-            asOf={asOf}
-            periodLabel={periodLabel}
-            members={members}
-        />
-    );
+            color={color}
+            height={8}
+            pace={pace.elapsed}
+            verdict={verdict}
+            itemCount={budget.item_count}
+            barLabel={`${budget.categories.join(", ") || "Everything"}: ${formatCurrency(
+              headlineSpent,
+              currency,
+            )} of ${formatCurrency(headlineAmount, currency)}, ${headlinePercent}% of the ${limitNoun(direction)}`}
+          />
+        </Stack>
+      </ButtonBase>
 
-    const chevron = (expanded: boolean) => (
-        <ExpandMoreIcon
-            fontSize="small"
+      <Collapse in={open} unmountOnExit>
+        {detailsFor(null, "range")}
+      </Collapse>
+
+      {showWholePeriod && periodAmount !== undefined && (
+        <>
+          <Divider sx={{ my: 0.25, ml: 0.5 }} />
+          <ButtonBase
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
             sx={{
-                color: "text.disabled", flexShrink: 0,
-                transform: expanded ? "rotate(180deg)" : "none",
-                transition: "transform 150ms",
+              width: "100%",
+              display: "block",
+              textAlign: "left",
+              minHeight: 44,
+              borderRadius: 1,
             }}
-        />
-    );
+          >
+            <BudgetLimitLine
+              label={
+                <Typography variant="caption" color="text.secondary">
+                  {capitalize(periodWord(budget.period))}
+                </Typography>
+              }
+              amount={periodAmount}
+              spent={periodSpent}
+              percent={periodPercent}
+              over={periodOver}
+              direction={direction}
+              currency={currency}
+              color={color}
+              height={6}
+              verdict={periodVerdict}
+              itemCount={budget.period_item_count}
+              barLabel={`${capitalize(periodWord(budget.period))}: ${formatCurrency(
+                periodSpent,
+                currency,
+              )} of ${formatCurrency(periodAmount, currency)}, ${periodPercent}% of the ${limitNoun(direction)}`}
+            />
+          </ButtonBase>
+          <Collapse in={open} unmountOnExit>
+            {detailsFor(null, "whole")}
+          </Collapse>
+        </>
+      )}
 
-    return (
-        <Card
-            variant="outlined"
-            sx={{
-                ...cardSx,
-                p: 1.5,
-                borderWidth: 4,
-                // The rail: only the LEFT edge takes the verdict's colour, so a column of
-                // cards gains a spine you can run your eye down without reading any of
-                // them. Colouring all four sides (or glowing) puts the same signal on
-                // twelve cards at once and stops being a signal at all.
-                ...(verdict.color ? { borderLeftColor: verdict.color } : {}),
-                ...(open ? { cursor: "pointer" } : {}),
-            }}
-            onClick={() => { if (open) setOpen(false); }}
-        >
-            {/* One click expands both periods, each with its detail under its own bar. */}
-            <ButtonBase
-                onClick={() => setOpen((v) => !v)}
-                aria-expanded={open}
-                sx={{
-                    width: "100%", display: "block", textAlign: "left",
-                    minHeight: 44, borderRadius: 1,
-                }}
-            >
-                <Stack spacing={0.75} sx={{ minWidth: 0 }}>
-                    <Stack direction="row" alignItems="center" sx={{ minWidth: 0 }}>
-                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>{heading}</Box>
-                        {chevron(open)}
-                    </Stack>
-
-                    <BudgetLimitLine
-                        label={(
-                            <Typography variant="caption" color="text.secondary">
-                                {periodLabel ?? capitalize(periodWord(budget.period))}
-                            </Typography>
-                        )}
-                        amount={headlineAmount}
-                        spent={headlineSpent}
-                        percent={headlinePercent}
-                        over={headlineOver}
+      {budget.sub_budgets.length > 0 && (
+        <Box sx={{ ...cardSx, mt: 1.5, p: 1.25 }}>
+          <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
+            {direction === "floor"
+              ? budget.amount === undefined
+                ? "Per-person targets"
+                : "Per-person sub targets"
+              : budget.amount === undefined
+                ? "Per-person limits"
+                : "Per-person sub limits"}
+          </Typography>
+          <Stack spacing={1.25}>
+            {budget.sub_budgets.map((sub) => (
+              <Box key={sub._id}>
+                <ButtonBase
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenSub((c) => (c === sub._id ? null : sub._id));
+                  }}
+                  aria-expanded={openSub === sub._id}
+                  sx={{
+                    width: "100%",
+                    display: "block",
+                    textAlign: "left",
+                    minHeight: 44,
+                    borderRadius: 1,
+                  }}
+                >
+                  <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ minWidth: 0 }}>
+                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                      <BudgetLimitLine
+                        label={<BudgetTarget personId={sub.person_id} personName={sub.person_name} members={members} />}
+                        amount={sub.amount}
+                        spent={sub.spent}
+                        percent={sub.percent}
+                        over={sub.over}
                         direction={direction}
                         currency={currency}
-                        color={color}
-                        height={8}
+                        color={memberColor(sub.person_id, members)}
+                        height={6}
                         pace={pace.elapsed}
-                        verdict={verdict}
-                        itemCount={budget.item_count}
-                        barLabel={`${budget.categories.join(", ") || "Everything"}: ${formatCurrency(headlineSpent, currency)
-                            } of ${formatCurrency(headlineAmount, currency)}, ${headlinePercent}% of the ${limitNoun(direction)}`}
-                    />
-                </Stack>
-            </ButtonBase>
+                        // Judged over the parent's window, since a
+                        // sub-limit is measured over exactly it.
+                        // It can disagree with the headline - the
+                        // shared cap holding while one person's
+                        // didn't is a real and useful result.
+                        verdict={budgetVerdict(direction, sub.percent, sub.item_count, budget.period_to, asOf)}
+                        itemCount={sub.item_count}
+                        barLabel={`${sub.person_name}: ${formatCurrency(
+                          sub.spent,
+                          currency,
+                        )} of ${formatCurrency(sub.amount, currency)}, ${sub.percent}% of their ${limitNoun(direction)}`}
+                      />
+                    </Box>
+                    {chevron(openSub === sub._id)}
+                  </Stack>
+                </ButtonBase>
+                <Collapse in={openSub === sub._id} unmountOnExit>
+                  {detailsFor(sub)}
+                </Collapse>
+              </Box>
+            ))}
+          </Stack>
+        </Box>
+      )}
 
-            <Collapse in={open} unmountOnExit>
-                {detailsFor(null, "range")}
-            </Collapse>
-
-            {showWholePeriod && periodAmount !== undefined && (
-                <>
-                    <Divider sx={{ my: 0.25, ml: 0.5 }} />
-                    <ButtonBase
-                        onClick={() => setOpen((v) => !v)}
-                        aria-expanded={open}
-                        sx={{
-                            width: "100%", display: "block", textAlign: "left",
-                            minHeight: 44, borderRadius: 1,
-                        }}
-                    >
-                        <BudgetLimitLine
-                            label={(
-                                <Typography variant="caption" color="text.secondary">
-                                    {capitalize(periodWord(budget.period))}
-                                </Typography>
-                            )}
-                            amount={periodAmount}
-                            spent={periodSpent}
-                            percent={periodPercent}
-                            over={periodOver}
-                            direction={direction}
-                            currency={currency}
-                            color={color}
-                            height={6}
-                            verdict={periodVerdict}
-                            itemCount={budget.period_item_count}
-                            barLabel={`${capitalize(periodWord(budget.period))}: ${formatCurrency(periodSpent, currency)
-                                } of ${formatCurrency(periodAmount, currency)}, ${periodPercent}% of the ${limitNoun(direction)}`}
-                        />
-                    </ButtonBase>
-                    <Collapse in={open} unmountOnExit>
-                        {detailsFor(null, "whole")}
-                    </Collapse>
-                </>
-            )}
-
-            {budget.sub_budgets.length > 0 && (
-                <Box sx={{ ...cardSx, mt: 1.5, p: 1.25 }}>
-                    <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-                        {direction === "floor"
-                            ? (budget.amount === undefined ? "Per-person targets" : "Per-person sub targets")
-                            : (budget.amount === undefined ? "Per-person limits" : "Per-person sub limits")}
-                    </Typography>
-                    <Stack spacing={1.25}>
-                        {budget.sub_budgets.map((sub) => (
-                            <Box key={sub._id}>
-                                <ButtonBase
-                                    onClick={(e) => { e.stopPropagation(); setOpenSub((c) => (c === sub._id ? null : sub._id)); }}
-                                    aria-expanded={openSub === sub._id}
-                                    sx={{
-                                        width: "100%", display: "block", textAlign: "left",
-                                        minHeight: 44, borderRadius: 1,
-                                    }}
-                                >
-                                    <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ minWidth: 0 }}>
-                                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                                            <BudgetLimitLine
-                                                label={(
-                                                    <BudgetTarget
-                                                        personId={sub.person_id}
-                                                        personName={sub.person_name}
-                                                        members={members}
-                                                    />
-                                                )}
-                                                amount={sub.amount}
-                                                spent={sub.spent}
-                                                percent={sub.percent}
-                                                over={sub.over}
-                                                direction={direction}
-                                                currency={currency}
-                                                color={memberColor(sub.person_id, members)}
-                                                height={6}
-                                                pace={pace.elapsed}
-                                                // Judged over the parent's window, since a
-                                                // sub-limit is measured over exactly it.
-                                                // It can disagree with the headline - the
-                                                // shared cap holding while one person's
-                                                // didn't is a real and useful result.
-                                                verdict={budgetVerdict(
-                                                    direction, sub.percent, sub.item_count,
-                                                    budget.period_to, asOf,
-                                                )}
-                                                itemCount={sub.item_count}
-                                                barLabel={`${sub.person_name}: ${formatCurrency(sub.spent, currency)
-                                                    } of ${formatCurrency(sub.amount, currency)}, ${sub.percent}% of their ${limitNoun(direction)}`}
-                                            />
-                                        </Box>
-                                        {chevron(openSub === sub._id)}
-                                    </Stack>
-                                </ButtonBase>
-                                <Collapse in={openSub === sub._id} unmountOnExit>
-                                    {detailsFor(sub)}
-                                </Collapse>
-                            </Box>
-                        ))}
-                    </Stack>
-                </Box>
-            )}
-
-            {open && onViewItems && (
-                <Stack direction="row" justifyContent="flex-end" spacing={0.5} sx={{ pt: 1 }}>
-                    <Tooltip title="View items">
-                        <IconButton
-                            size="small"
-                            aria-label="View items"
-                            onClick={(e) => { e.stopPropagation(); onViewItems(budget); }}
-                        >
-                            <ReceiptLongIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
-                </Stack>
-            )}
-        </Card>
-    );
+      {open && onViewItems && (
+        <Stack direction="row" justifyContent="flex-end" spacing={0.5} sx={{ pt: 1 }}>
+          <Tooltip title="View items">
+            <IconButton
+              size="small"
+              aria-label="View items"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewItems(budget);
+              }}
+            >
+              <ReceiptLongIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      )}
+    </Card>
+  );
 }

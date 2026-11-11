@@ -20,15 +20,15 @@ export function transformMembers(obj: any): any {
     ...obj,
     members: Array.isArray(obj.members)
       ? obj.members.map((m: any) =>
-        m._id
-          ? {
-            user_id: m._id.toString(),
-            username: m.username || "Unknown",
-            avatar: m.avatar || null,
-            etransfer: serializeEtransfer(m.etransfer),
-          }
-          : { user_id: m.toString(), username: "Unknown", avatar: null, etransfer: null }
-      )
+          m._id
+            ? {
+                user_id: m._id.toString(),
+                username: m.username || "Unknown",
+                avatar: m.avatar || null,
+                etransfer: serializeEtransfer(m.etransfer),
+              }
+            : { user_id: m.toString(), username: "Unknown", avatar: null, etransfer: null },
+        )
       : obj.members,
   };
 }

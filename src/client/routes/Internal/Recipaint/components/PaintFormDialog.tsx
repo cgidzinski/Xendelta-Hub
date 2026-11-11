@@ -93,9 +93,7 @@ export default function PaintFormDialog({
   const rangeOptions = catalogueBrands.find((b) => b.name === brandFilter)?.ranges || [];
   // Restates the active filter on the picker, so a short result list never looks like a bug -
   // it is the filter, and it says so.
-  const activeFilterLabel = brandFilter
-    ? `Showing ${brandFilter}${rangeFilter ? ` - ${rangeFilter}` : ""}`
-    : " ";
+  const activeFilterLabel = brandFilter ? `Showing ${brandFilter}${rangeFilter ? ` - ${rangeFilter}` : ""}` : " ";
 
   // Brands the user already owns, so a custom range is typed once and picked thereafter.
   const brandOptions = [...new Set(paints.map((p) => p.brand.trim()).filter(Boolean))].sort((a, b) =>
@@ -225,46 +223,45 @@ export default function PaintFormDialog({
                 )}
               </Stack>
               <Stack direction="row" spacing={1}>
-
-              <TextField
-                select
-                size="small"
-                label="Brand"
-                value={brandFilter}
-                onChange={(e) => {
-                  setBrandFilter(e.target.value);
-                  // Ranges belong to a brand, so a stale one would silently match nothing.
-                  setRangeFilter("");
-                }}
-                sx={{ flex: 1, minWidth: 0 }}
-              >
-                <MenuItem value="">
-                  <em>Any brand</em>
-                </MenuItem>
-                {catalogueBrands.map((brand) => (
-                  <MenuItem key={brand.name} value={brand.name}>
-                    {brand.name}
+                <TextField
+                  select
+                  size="small"
+                  label="Brand"
+                  value={brandFilter}
+                  onChange={(e) => {
+                    setBrandFilter(e.target.value);
+                    // Ranges belong to a brand, so a stale one would silently match nothing.
+                    setRangeFilter("");
+                  }}
+                  sx={{ flex: 1, minWidth: 0 }}
+                >
+                  <MenuItem value="">
+                    <em>Any brand</em>
                   </MenuItem>
-                ))}
-              </TextField>
-              <TextField
-                select
-                size="small"
-                label="Range"
-                value={rangeFilter}
-                disabled={!brandFilter}
-                onChange={(e) => setRangeFilter(e.target.value)}
-                sx={{ flex: 1, minWidth: 0 }}
-              >
-                <MenuItem value="">
-                  <em>Any range</em>
-                </MenuItem>
-                {rangeOptions.map((range) => (
-                  <MenuItem key={range} value={range}>
-                    {range}
+                  {catalogueBrands.map((brand) => (
+                    <MenuItem key={brand.name} value={brand.name}>
+                      {brand.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Range"
+                  value={rangeFilter}
+                  disabled={!brandFilter}
+                  onChange={(e) => setRangeFilter(e.target.value)}
+                  sx={{ flex: 1, minWidth: 0 }}
+                >
+                  <MenuItem value="">
+                    <em>Any range</em>
                   </MenuItem>
-                ))}
-              </TextField>
+                  {rangeOptions.map((range) => (
+                    <MenuItem key={range} value={range}>
+                      {range}
+                    </MenuItem>
+                  ))}
+                </TextField>
               </Stack>
             </Box>
             <Autocomplete

@@ -80,9 +80,7 @@ export function serializePiggyBank(goal: any, includeContributions: boolean): an
     status: obj.status || "active",
     completed_at: obj.completed_at instanceof Date ? obj.completed_at.toISOString() : obj.completed_at,
     ...summary,
-    ...(includeContributions
-      ? { contributions: (contributions || []).map(serializeContribution) }
-      : {}),
+    ...(includeContributions ? { contributions: (contributions || []).map(serializeContribution) } : {}),
   };
 }
 

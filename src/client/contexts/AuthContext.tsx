@@ -22,7 +22,11 @@ interface AuthContextType {
   signup: (data: SignupData) => Promise<boolean>;
   resetPassword: (email: string) => Promise<boolean>;
   verifyResetToken: (token: string, email: string) => Promise<{ status: boolean; user?: any; message?: string }>;
-  resetPasswordWithToken: (token: string, newPassword: string, email: string) => Promise<{ status: boolean; message?: string }>;
+  resetPasswordWithToken: (
+    token: string,
+    newPassword: string,
+    email: string,
+  ) => Promise<{ status: boolean; message?: string }>;
   logout: () => void;
   checkAuth: () => Promise<void>;
 }

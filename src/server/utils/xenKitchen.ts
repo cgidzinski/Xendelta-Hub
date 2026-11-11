@@ -17,7 +17,11 @@ export const SHARE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 // ---------- book membership ----------
 
 export type BookRole = "owner" | "editor" | "viewer";
-export interface BookLike { _id: any; name?: string; members: Array<{ user_id: string; role: BookRole }> }
+export interface BookLike {
+  _id: any;
+  name?: string;
+  members: Array<{ user_id: string; role: BookRole }>;
+}
 
 export function roleIn(book: BookLike | null | undefined, uid: string): BookRole | null {
   return book?.members.find((m) => m.user_id === uid)?.role ?? null;
@@ -59,8 +63,10 @@ export function changeRole(book: BookLike, actor: string, target: string, role: 
 export function removeMember(book: BookLike, actor: string, target: string): MemberChange {
   const role = roleIn(book, target);
   if (!role || !canView(book, actor)) return { ok: false, code: 404, message: "Not a member" };
-  if (role === "owner") return { ok: false, code: 400, message: "The owner can't leave — hand the book to someone else first" };
-  if (actor !== target && !canManage(book, actor)) return { ok: false, code: 403, message: "Only the owner can remove people" };
+  if (role === "owner")
+    return { ok: false, code: 400, message: "The owner can't leave — hand the book to someone else first" };
+  if (actor !== target && !canManage(book, actor))
+    return { ok: false, code: 403, message: "Only the owner can remove people" };
   return { ok: true, members: book.members.filter((m) => m.user_id !== target) };
 }
 
@@ -75,13 +81,21 @@ export function pickTargetCategory(
 ): string | null {
   if (requested) return targetCategories.some((c) => String(c._id) === requested) ? requested : null;
   if (!fromCategory) return null;
-  const sameName = targetCategories.find((c) => (c.name || "").toLowerCase() === (fromCategory.name || "").toLowerCase() && c.layout === fromCategory.layout);
+  const sameName = targetCategories.find(
+    (c) => (c.name || "").toLowerCase() === (fromCategory.name || "").toLowerCase() && c.layout === fromCategory.layout,
+  );
   if (sameName) return String(sameName._id);
   const sameLayout = targetCategories.find((c) => c.layout === fromCategory.layout);
   return sameLayout ? String(sameLayout._id) : null;
 }
 
-export interface CategoryLike { _id: any; layout: KitchenLayout; name?: string; color?: string; icon?: string }
+export interface CategoryLike {
+  _id: any;
+  layout: KitchenLayout;
+  name?: string;
+  color?: string;
+  icon?: string;
+}
 
 export function layoutFor(item: { category_id?: any }, categories: Map<string, CategoryLike>): KitchenLayout {
   const id = item.category_id ? String(item.category_id) : "";
@@ -90,8 +104,7 @@ export function layoutFor(item: { category_id?: any }, categories: Map<string, C
 
 // ---------- input cleaning ----------
 
-const cleanNum = (v: unknown): number | null =>
-  typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null;
+const cleanNum = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
 
 /**
  * Turns a validated body into the fields stored on an item. Only keys present in the body
@@ -99,7 +112,9 @@ const cleanNum = (v: unknown): number | null =>
  */
 export function itemFieldsFromBody(body: any): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  const copyStr = (k: string) => { if (typeof body[k] === "string") out[k] = body[k].trim(); };
+  const copyStr = (k: string) => {
+    if (typeof body[k] === "string") out[k] = body[k].trim();
+  };
   ["title", "description", "notes", "brand", "storage_note"].forEach(copyStr);
 
   if ("category_id" in body) out.category_id = body.category_id || null;
@@ -151,10 +166,15 @@ export function itemFieldsFromBody(body: any): Record<string, unknown> {
 
 function searchableText(item: any): string {
   return [
-    item.title, item.description, item.brand, item.notes,
+    item.title,
+    item.description,
+    item.brand,
+    item.notes,
     ...(item.tags || []),
     ...(item.ingredients || []).map((i: any) => i.name),
-  ].join(" \n ").toLowerCase();
+  ]
+    .join(" \n ")
+    .toLowerCase();
 }
 
 /**
@@ -162,7 +182,12 @@ function searchableText(item: any): string {
  * so this runs in memory rather than as a Mongo query; that keeps "time" (which depends on
  * the category's layout) and free-text search over ingredients simple and exact.
  */
-export function applyKitchenFilters(items: any[], f: KitchenFilters, categories: Map<string, CategoryLike>, uid = ""): any[] {
+export function applyKitchenFilters(
+  items: any[],
+  f: KitchenFilters,
+  categories: Map<string, CategoryLike>,
+  uid = "",
+): any[] {
   const words = f.q.toLowerCase().split(/\s+/).filter(Boolean);
   const wantTags = f.tags.map(normalizeTag);
   const wantIngredients = f.ingredients.map(normalizeIngredientName);
@@ -193,10 +218,14 @@ export function applyKitchenFilters(items: any[], f: KitchenFilters, categories:
   const ts = (d: any) => (d ? new Date(d).getTime() : 0);
   out.sort((a, b) => {
     switch (f.sort) {
-      case "title": return (a.title || "").localeCompare(b.title || "", undefined, { sensitivity: "base" });
-      case "created": return ts(b.created_at) - ts(a.created_at);
-      case "time": return time(a) - time(b) || ts(b.updated_at) - ts(a.updated_at);
-      default: return ts(b.updated_at) - ts(a.updated_at);
+      case "title":
+        return (a.title || "").localeCompare(b.title || "", undefined, { sensitivity: "base" });
+      case "created":
+        return ts(b.created_at) - ts(a.created_at);
+      case "time":
+        return time(a) - time(b) || ts(b.updated_at) - ts(a.updated_at);
+      default:
+        return ts(b.updated_at) - ts(a.updated_at);
     }
   });
   return out;
@@ -204,7 +233,11 @@ export function applyKitchenFilters(items: any[], f: KitchenFilters, categories:
 
 // ---------- autocomplete ----------
 
-export interface IngredientSuggestion { name: string; unit: string; count: number }
+export interface IngredientSuggestion {
+  name: string;
+  unit: string;
+  count: number;
+}
 
 /**
  * Every ingredient a person has used, grouped case-insensitively. The display name and unit
@@ -228,10 +261,12 @@ export function suggestIngredients(items: any[], query: string, limit = 15): Ing
   const top = (m: Map<string, number>) => [...m.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
   return [...groups.entries()]
     .map(([key, g]) => ({ key, name: top(g.names), unit: top(g.units), count: g.count }))
-    .sort((a, b) =>
-      (q ? Number(b.key.startsWith(q)) - Number(a.key.startsWith(q)) : 0) ||
-      b.count - a.count ||
-      a.key.localeCompare(b.key))
+    .sort(
+      (a, b) =>
+        (q ? Number(b.key.startsWith(q)) - Number(a.key.startsWith(q)) : 0) ||
+        b.count - a.count ||
+        a.key.localeCompare(b.key),
+    )
     .slice(0, limit)
     .map(({ name, unit, count }) => ({ name, unit, count }));
 }
@@ -239,16 +274,19 @@ export function suggestIngredients(items: any[], query: string, limit = 15): Ing
 export function collectTags(items: any[]): Array<{ tag: string; count: number }> {
   const counts = new Map<string, number>();
   for (const item of items) for (const t of item.tags || []) counts.set(t, (counts.get(t) ?? 0) + 1);
-  return [...counts.entries()].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+  return [...counts.entries()]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 }
 
 // ---------- serializing ----------
 
-const pick = (sub: any[] | undefined) => (sub || []).map((s: any) => {
-  const o = s.toObject ? s.toObject() : { ...s };
-  delete o.name_key;
-  return o;
-});
+const pick = (sub: any[] | undefined) =>
+  (sub || []).map((s: any) => {
+    const o = s.toObject ? s.toObject() : { ...s };
+    delete o.name_key;
+    return o;
+  });
 
 export interface SerializeOpts {
   isPublic?: boolean;
@@ -267,7 +305,9 @@ export function serializeItem(raw: any, categories: Map<string, CategoryLike>, o
     _id: String(item._id),
     title: item.title || "",
     description: item.description || "",
-    category: cat ? { _id: String(cat._id), name: cat.name, color: cat.color, icon: cat.icon, layout: cat.layout } : null,
+    category: cat
+      ? { _id: String(cat._id), name: cat.name, color: cat.color, icon: cat.icon, layout: cat.layout }
+      : null,
     layout: cat?.layout ?? "recipe",
     tags: item.tags || [],
     notes: item.notes || "",
@@ -285,7 +325,7 @@ export function serializeItem(raw: any, categories: Map<string, CategoryLike>, o
   };
   if (opts.isPublic) return base;
   const book = opts.books?.get(String(item.book_id));
-  const name = (id: string | null | undefined) => (id ? opts.usernames?.get(id) ?? null : null);
+  const name = (id: string | null | undefined) => (id ? (opts.usernames?.get(id) ?? null) : null);
   return {
     ...base,
     book_id: String(item.book_id),
@@ -295,6 +335,6 @@ export function serializeItem(raw: any, categories: Map<string, CategoryLike>, o
     updated_by: name(item.updated_by),
     category_id: catId && cat ? catId : null,
     favorite: !!opts.uid && (item.favorited_by || []).includes(opts.uid),
-    share: { enabled: !!item.share?.enabled, token: item.share?.enabled ? item.share.token ?? null : null },
+    share: { enabled: !!item.share?.enabled, token: item.share?.enabled ? (item.share.token ?? null) : null },
   };
 }

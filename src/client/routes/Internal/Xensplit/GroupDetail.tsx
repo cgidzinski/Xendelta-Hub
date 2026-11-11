@@ -60,7 +60,15 @@ import CreateExchangeDialog from "./components/CreateExchangeDialog";
 import EtransferPromptDialog, { isEtransferPromptDismissed } from "./components/EtransferPromptDialog";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
 import { apiClient } from "../../../config/api";
-import type { XenSplit, XenSplitBalancesData, XenSplitExpense, SettleDebtInput, CreateExchangeInput, RecurringFrequency, UpdateExpenseInput } from "../../../hooks/xensplit/types";
+import type {
+  XenSplit,
+  XenSplitBalancesData,
+  XenSplitExpense,
+  SettleDebtInput,
+  CreateExchangeInput,
+  RecurringFrequency,
+  UpdateExpenseInput,
+} from "../../../hooks/xensplit/types";
 
 export interface GroupDetailContext {
   group: XenSplit;
@@ -73,13 +81,19 @@ export interface GroupDetailContext {
   settleDebt: (input: SettleDebtInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
   isSettlingDebt: boolean;
   onAddExchange: () => void;
-  addExchange: (input: CreateExchangeInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
+  addExchange: (
+    input: CreateExchangeInput,
+    options?: { onSuccess?: () => void; onError?: (error: Error) => void },
+  ) => void;
   isAddingExchange: boolean;
   deleteExchange: (exchangeId: string) => void;
   isDeletingExchange: boolean;
   onAddMembers: () => void;
   onMemberMenu: (memberId: string, anchor: HTMLElement) => void;
-  updateGroup: (updates: { name?: string; default_currency?: string; secondary_currencies?: string[] }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
+  updateGroup: (
+    updates: { name?: string; default_currency?: string; secondary_currencies?: string[] },
+    options?: { onSuccess?: () => void; onError?: (error: Error) => void },
+  ) => void;
   isUpdating: boolean;
   uploadGroupImage: (file: File, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
   isUploadingImage: boolean;
@@ -105,12 +119,41 @@ export default function GroupDetail() {
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
-  const { group, isLoading, isError, error, refetch, addMembers, isAddingMembers, removeMember, updateGroup, isUpdating, uploadGroupImage, isUploadingImage } = useXenSplit(groupId!);
+  const {
+    group,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    addMembers,
+    isAddingMembers,
+    removeMember,
+    updateGroup,
+    isUpdating,
+    uploadGroupImage,
+    isUploadingImage,
+  } = useXenSplit(groupId!);
   useTitle("Xensplit");
   const { deleteGroup } = useXenSplits();
-  const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useXenSplitBalances(groupId!);
-  const { updateExpense, isUpdatingExpense, addExpense, isAddingExpense, deleteExpense, isDeletingExpense, cancelRecurring, isCancellingRecurring, uploadExpenseImages, isUploadingImages, deleteExpenseImage, isDeletingExpenseImage } = useXenSplitExpenses(groupId!);
-  const { addExchange, isAddingExchange, deleteExchange, isDeletingExchange, fetchLiveRate, isFetchingLiveRate } = useXenSplitExchanges(groupId!);
+  const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useXenSplitBalances(
+    groupId!,
+  );
+  const {
+    updateExpense,
+    isUpdatingExpense,
+    addExpense,
+    isAddingExpense,
+    deleteExpense,
+    isDeletingExpense,
+    cancelRecurring,
+    isCancellingRecurring,
+    uploadExpenseImages,
+    isUploadingImages,
+    deleteExpenseImage,
+    isDeletingExpenseImage,
+  } = useXenSplitExpenses(groupId!);
+  const { addExchange, isAddingExchange, deleteExchange, isDeletingExchange, fetchLiveRate, isFetchingLiveRate } =
+    useXenSplitExchanges(groupId!);
   useXenSplitSocket(groupId!);
   const { profile } = useUserProfile();
   const [showEtransferPrompt, setShowEtransferPrompt] = useState(false);
@@ -135,9 +178,16 @@ export default function GroupDetail() {
       : location.pathname.endsWith("/balances")
         ? 2
         : false;
-  const hideAddExpense = location.pathname.endsWith("/analytics") || location.pathname.endsWith("/settings") || location.pathname.endsWith("/explain") || location.pathname.endsWith("/settlements") || location.pathname.endsWith("/activity");
+  const hideAddExpense =
+    location.pathname.endsWith("/analytics") ||
+    location.pathname.endsWith("/settings") ||
+    location.pathname.endsWith("/explain") ||
+    location.pathname.endsWith("/settlements") ||
+    location.pathname.endsWith("/activity");
   // Routes whose page header stays fixed while only the list underneath scrolls.
-  const paneled = ["/overview", "/expenses", "/balances", "/settings", "/explain", "/activity"].some((p) => location.pathname.endsWith(p));
+  const paneled = ["/overview", "/expenses", "/balances", "/settings", "/explain", "/activity"].some((p) =>
+    location.pathname.endsWith(p),
+  );
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<SearchedUser[]>([]);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
@@ -195,7 +245,7 @@ export default function GroupDetail() {
   const [showAddExchangeModal, setShowAddExchangeModal] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [confirmDialogText, setConfirmDialogText] = useState("");
-  const [confirmAction, setConfirmAction] = useState<() => void>(() => { });
+  const [confirmAction, setConfirmAction] = useState<() => void>(() => {});
   const [addImages, setAddImages] = useState<File[]>([]);
   const [editImages, setEditImages] = useState<File[]>([]);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -204,17 +254,17 @@ export default function GroupDetail() {
   const { data: viewImageUrls = [] } = useExpenseImageUrls(
     groupId ?? "",
     viewExpenseItem?._id,
-    viewExpenseItem?.images?.length ?? 0
+    viewExpenseItem?.images?.length ?? 0,
   );
   const { data: editImageUrls = [] } = useExpenseImageUrls(
     groupId ?? "",
     selectedExpense?._id,
-    selectedExpense?.images?.length ?? 0
+    selectedExpense?.images?.length ?? 0,
   );
 
   const finalExpenseIds = useMemo(
     () => computeFinalExpenseIds(group?.expenses ?? [], group?.recurring_expenses),
-    [group?.expenses, group?.recurring_expenses]
+    [group?.expenses, group?.recurring_expenses],
   );
 
   const handleConfirm = () => {
@@ -223,19 +273,30 @@ export default function GroupDetail() {
   };
 
   // Check if exact splits total matches amount
-  const isExactValid = addSplitType !== "exact" || addSelectedParticipants.length === 0 ||
-    Math.abs(Object.values(addExactSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - (parseFloat(addAmount) || 0)) < 0.01;
+  const isExactValid =
+    addSplitType !== "exact" ||
+    addSelectedParticipants.length === 0 ||
+    Math.abs(
+      Object.values(addExactSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - (parseFloat(addAmount) || 0),
+    ) < 0.01;
 
   // Check if percent splits total equals 100
-  const isPercentValid = addSplitType !== "percent" || addSelectedParticipants.length === 0 ||
+  const isPercentValid =
+    addSplitType !== "percent" ||
+    addSelectedParticipants.length === 0 ||
     Math.abs(Object.values(addPercentSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - 100) < 0.01;
 
   // Same for edit
-  const isEditExactValid = editSplitType !== "exact" || editSelectedParticipants.length === 0 ||
-    Math.abs(Object.values(editExactSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - (parseFloat(editAmount) || 0)) < 0.01;
-  const isEditPercentValid = editSplitType !== "percent" || editSelectedParticipants.length === 0 ||
+  const isEditExactValid =
+    editSplitType !== "exact" ||
+    editSelectedParticipants.length === 0 ||
+    Math.abs(
+      Object.values(editExactSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - (parseFloat(editAmount) || 0),
+    ) < 0.01;
+  const isEditPercentValid =
+    editSplitType !== "percent" ||
+    editSelectedParticipants.length === 0 ||
     Math.abs(Object.values(editPercentSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - 100) < 0.01;
-
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
@@ -253,18 +314,21 @@ export default function GroupDetail() {
   const handleAddMembers = async () => {
     if (selectedMembers.length === 0) return;
     await new Promise<void>((resolve) => {
-      addMembers(selectedMembers.map((m) => m._id), {
-        onSuccess: () => {
-          enqueueSnackbar("Members added", { variant: "success" });
-          setShowAddMemberModal(false);
-          setSelectedMembers([]);
-          resolve();
+      addMembers(
+        selectedMembers.map((m) => m._id),
+        {
+          onSuccess: () => {
+            enqueueSnackbar("Members added", { variant: "success" });
+            setShowAddMemberModal(false);
+            setSelectedMembers([]);
+            resolve();
+          },
+          onError: (error: Error) => {
+            enqueueSnackbar(error?.message || "Failed to add members", { variant: "error" });
+            resolve();
+          },
         },
-        onError: (error: Error) => {
-          enqueueSnackbar(error?.message || "Failed to add members", { variant: "error" });
-          resolve();
-        },
-      });
+      );
     });
   };
 
@@ -355,10 +419,10 @@ export default function GroupDetail() {
           on_hold: addOnHold,
           recurring: addIsRecurring
             ? {
-              frequency: addFrequency,
-              end_date: addRecurringEndDate ? addRecurringEndDate.toISOString() : undefined,
-              max_occurrences: addMaxOccurrences ? parseInt(addMaxOccurrences, 10) : undefined,
-            }
+                frequency: addFrequency,
+                end_date: addRecurringEndDate ? addRecurringEndDate.toISOString() : undefined,
+                max_occurrences: addMaxOccurrences ? parseInt(addMaxOccurrences, 10) : undefined,
+              }
             : undefined,
         },
         {
@@ -371,10 +435,9 @@ export default function GroupDetail() {
                 enqueueSnackbar("Expense added but some images failed to upload", { variant: "warning" });
               }
             }
-            enqueueSnackbar(
-              addIsRecurring && !newExpenseId ? "Recurring expense scheduled" : "Expense added",
-              { variant: "success" }
-            );
+            enqueueSnackbar(addIsRecurring && !newExpenseId ? "Recurring expense scheduled" : "Expense added", {
+              variant: "success",
+            });
             setShowAddExpenseModal(false);
             setAddTitle("");
             setAddNotes("");
@@ -399,7 +462,7 @@ export default function GroupDetail() {
             enqueueSnackbar(error?.message || "Failed to add expense", { variant: "error" });
             resolve();
           },
-        }
+        },
       );
     });
   };
@@ -430,17 +493,18 @@ export default function GroupDetail() {
     if (selectedExpenseSeries) {
       recurring = editIsRecurring
         ? {
-          end_date: editRecurringEndDate ? editRecurringEndDate.toISOString() : null,
-          max_occurrences: editMaxOccurrences ? parseInt(editMaxOccurrences, 10) : null,
-          active: editSeriesActive,
-        }
+            end_date: editRecurringEndDate ? editRecurringEndDate.toISOString() : null,
+            max_occurrences: editMaxOccurrences ? parseInt(editMaxOccurrences, 10) : null,
+            active: editSeriesActive,
+          }
         : { cancel: true };
     }
 
     await new Promise<void>((resolve) => {
       updateExpense(
         {
-          expenseId: selectedExpense._id, updates: {
+          expenseId: selectedExpense._id,
+          updates: {
             paid_by: editPaidBy,
             amount: numAmount,
             currency: editCurrency,
@@ -452,7 +516,7 @@ export default function GroupDetail() {
             splits,
             on_hold: editOnHold,
             recurring,
-          }
+          },
         },
         {
           onSuccess: async () => {
@@ -472,7 +536,7 @@ export default function GroupDetail() {
             enqueueSnackbar(error?.message || "Failed to update expense", { variant: "error" });
             resolve();
           },
-        }
+        },
       );
     });
   };
@@ -489,7 +553,9 @@ export default function GroupDetail() {
     setEditCurrency(expense.currency);
     setEditPaidBy(expense.paid_by);
     const payerMember = group.members.find((m) => m.user_id === expense.paid_by);
-    setEditPaidByUser(payerMember ? { _id: payerMember.user_id, username: payerMember.username, avatar: payerMember.avatar } : null);
+    setEditPaidByUser(
+      payerMember ? { _id: payerMember.user_id, username: payerMember.username, avatar: payerMember.avatar } : null,
+    );
     setEditSplitType(expense.split_type as "equal" | "exact" | "percent");
     if (expense.splits && expense.splits.length > 0) {
       const participants = expense.splits
@@ -600,13 +666,13 @@ export default function GroupDetail() {
         sx={
           paneled
             ? {
-              px: { xs: 2, sm: 3 },
-              pt: { xs: 1, sm: 2 },
-              height: { xs: "calc(100dvh - 56px)", sm: "calc(100dvh - 64px)" },
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
-            }
+                px: { xs: 2, sm: 3 },
+                pt: { xs: 1, sm: 2 },
+                height: { xs: "calc(100dvh - 56px)", sm: "calc(100dvh - 64px)" },
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+              }
             : { mt: { xs: 1, sm: 4 }, mb: 4, px: { xs: 2, sm: 3 }, pb: { xs: hideAddExpense ? 0 : 12, md: 0 } }
         }
       >
@@ -614,7 +680,11 @@ export default function GroupDetail() {
         <DetailHeader
           title={group.name}
           backLabel={activeTab === false ? "Back to group" : "All groups"}
-          onBack={() => navigate(activeTab === false ? `/internal/xensplit/groups/${groupId}/overview` : "/internal/xensplit/groups")}
+          onBack={() =>
+            navigate(
+              activeTab === false ? `/internal/xensplit/groups/${groupId}/overview` : "/internal/xensplit/groups",
+            )
+          }
           leading={
             <GroupAvatar
               name={group.name}
@@ -628,7 +698,15 @@ export default function GroupDetail() {
             <Box sx={{ display: "flex", alignItems: "center", mt: 0.25 }}>
               <AvatarGroup
                 max={4}
-                sx={{ "& .MuiAvatar-root": { width: 20, height: 20, fontSize: 9, border: "1.5px solid", borderColor: "background.paper" } }}
+                sx={{
+                  "& .MuiAvatar-root": {
+                    width: 20,
+                    height: 20,
+                    fontSize: 9,
+                    border: "1.5px solid",
+                    borderColor: "background.paper",
+                  },
+                }}
               >
                 {group.members.map((m) => (
                   <Avatar key={m.user_id} src={m.avatar || undefined}>
@@ -674,12 +752,41 @@ export default function GroupDetail() {
           <Box sx={{ bgcolor: "action.hover", borderRadius: "8px 8px 0 0", mb: 3, flexShrink: 0 }}>
             <Tabs
               value={activeTab}
-              onChange={(_, v) => navigate(`/internal/xensplit/groups/${groupId}/${["overview", "expenses", "balances"][v]}`)}
+              onChange={(_, v) =>
+                navigate(`/internal/xensplit/groups/${groupId}/${["overview", "expenses", "balances"][v]}`)
+              }
               variant="fullWidth"
             >
-              <Tab icon={<GridViewIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />} iconPosition="top" label="Overview" sx={{ minHeight: { xs: 56, sm: 64 }, fontSize: { xs: "0.65rem", sm: "0.875rem" }, py: { xs: 0.5, sm: 1 } }} />
-              <Tab icon={<ReceiptLongIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />} iconPosition="top" label="Expenses" sx={{ minHeight: { xs: 56, sm: 64 }, fontSize: { xs: "0.65rem", sm: "0.875rem" }, py: { xs: 0.5, sm: 1 } }} />
-              <Tab icon={<AccountBalanceWalletIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />} iconPosition="top" label="Balances" sx={{ minHeight: { xs: 56, sm: 64 }, fontSize: { xs: "0.65rem", sm: "0.875rem" }, py: { xs: 0.5, sm: 1 } }} />
+              <Tab
+                icon={<GridViewIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />}
+                iconPosition="top"
+                label="Overview"
+                sx={{
+                  minHeight: { xs: 56, sm: 64 },
+                  fontSize: { xs: "0.65rem", sm: "0.875rem" },
+                  py: { xs: 0.5, sm: 1 },
+                }}
+              />
+              <Tab
+                icon={<ReceiptLongIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />}
+                iconPosition="top"
+                label="Expenses"
+                sx={{
+                  minHeight: { xs: 56, sm: 64 },
+                  fontSize: { xs: "0.65rem", sm: "0.875rem" },
+                  py: { xs: 0.5, sm: 1 },
+                }}
+              />
+              <Tab
+                icon={<AccountBalanceWalletIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />}
+                iconPosition="top"
+                label="Balances"
+                sx={{
+                  minHeight: { xs: 56, sm: 64 },
+                  fontSize: { xs: "0.65rem", sm: "0.875rem" },
+                  py: { xs: 0.5, sm: 1 },
+                }}
+              />
             </Tabs>
           </Box>
         )}
@@ -689,7 +796,12 @@ export default function GroupDetail() {
           color="primary"
           aria-label="Add expense"
           onClick={openAddExpenseModal}
-          sx={{ display: hideAddExpense ? "none" : { xs: "flex", md: "none" }, position: "fixed", bottom: 24, right: 24 }}
+          sx={{
+            display: hideAddExpense ? "none" : { xs: "flex", md: "none" },
+            position: "fixed",
+            bottom: 24,
+            right: 24,
+          }}
         >
           <AddIcon />
         </Fab>
@@ -702,51 +814,58 @@ export default function GroupDetail() {
               <GroupRemoveIcon sx={{ mr: 1 }} fontSize="small" />
               <ListItemText>Transfer Ownership</ListItemText>
             </MenuItem>
-            <MenuItem onClick={() => {
-              setConfirmDialogText("Leave this group? You will no longer be a member.");
-              setConfirmAction(() => () => handleRemoveMember(menuMemberId));
-              setShowConfirmDialog(true);
-            }} sx={{ color: "error.main" }}>
+            <MenuItem
+              onClick={() => {
+                setConfirmDialogText("Leave this group? You will no longer be a member.");
+                setConfirmAction(() => () => handleRemoveMember(menuMemberId));
+                setShowConfirmDialog(true);
+              }}
+              sx={{ color: "error.main" }}
+            >
               <GroupRemoveIcon sx={{ mr: 1 }} fontSize="small" />
               <ListItemText>Leave Group</ListItemText>
             </MenuItem>
-            <MenuItem onClick={() => {
-              setConfirmDialogText("Close this group? All expenses and data will be permanently deleted.");
-              setConfirmAction(() => handleCloseGroup);
-              setShowConfirmDialog(true);
-            }} sx={{ color: "error.main" }}>
+            <MenuItem
+              onClick={() => {
+                setConfirmDialogText("Close this group? All expenses and data will be permanently deleted.");
+                setConfirmAction(() => handleCloseGroup);
+                setShowConfirmDialog(true);
+              }}
+              sx={{ color: "error.main" }}
+            >
               <DeleteIcon sx={{ mr: 1 }} fontSize="small" />
               <ListItemText>Close Group</ListItemText>
             </MenuItem>
           </>
         ) : menuMemberId && menuMemberId === user?.id ? (
-          <MenuItem onClick={() => {
-            setConfirmDialogText("Leave this group? You will no longer be a member.");
-            setConfirmAction(() => () => handleRemoveMember(menuMemberId));
-            setShowConfirmDialog(true);
-          }} sx={{ color: "error.main" }}>
+          <MenuItem
+            onClick={() => {
+              setConfirmDialogText("Leave this group? You will no longer be a member.");
+              setConfirmAction(() => () => handleRemoveMember(menuMemberId));
+              setShowConfirmDialog(true);
+            }}
+            sx={{ color: "error.main" }}
+          >
             <GroupRemoveIcon sx={{ mr: 1 }} fontSize="small" />
             <ListItemText>Leave Group</ListItemText>
           </MenuItem>
         ) : menuMemberId && isCreator && menuMemberId !== group.created_by ? (
-          <MenuItem onClick={() => {
-            const memberName = group.members.find(m => m.user_id === menuMemberId)?.username || "this member";
-            setConfirmDialogText(`Remove ${memberName} from this group?`);
-            setConfirmAction(() => () => handleRemoveMember(menuMemberId));
-            setShowConfirmDialog(true);
-          }} sx={{ color: "error.main" }}>
+          <MenuItem
+            onClick={() => {
+              const memberName = group.members.find((m) => m.user_id === menuMemberId)?.username || "this member";
+              setConfirmDialogText(`Remove ${memberName} from this group?`);
+              setConfirmAction(() => () => handleRemoveMember(menuMemberId));
+              setShowConfirmDialog(true);
+            }}
+            sx={{ color: "error.main" }}
+          >
             <DeleteIcon sx={{ mr: 1 }} fontSize="small" />
             <ListItemText>Remove from Group</ListItemText>
           </MenuItem>
         ) : null}
       </Menu>
 
-      <Dialog
-        fullWidth
-        maxWidth="xs"
-        open={showAddMemberModal}
-        onClose={() => setShowAddMemberModal(false)}
-      >
+      <Dialog fullWidth maxWidth="xs" open={showAddMemberModal} onClose={() => setShowAddMemberModal(false)}>
         <DialogTitle sx={{ fontWeight: 700 }}>Add Members</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <UserSelect
@@ -773,12 +892,7 @@ export default function GroupDetail() {
         </DialogActions>
       </Dialog>
 
-      <Dialog
-        fullWidth
-        maxWidth="sm"
-        open={showConfirmDialog}
-        onClose={() => setShowConfirmDialog(false)}
-      >
+      <Dialog fullWidth maxWidth="sm" open={showConfirmDialog} onClose={() => setShowConfirmDialog(false)}>
         <DialogTitle sx={{ fontWeight: 700 }}>Confirm</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Typography>{confirmDialogText}</Typography>
@@ -798,7 +912,12 @@ export default function GroupDetail() {
         maxWidth="sm"
         fullScreen={isMobile}
         open={showAddExpenseModal}
-        onClose={(_, reason) => { if (reason !== "backdropClick") { setShowAddExpenseModal(false); setAddImages([]); } }}
+        onClose={(_, reason) => {
+          if (reason !== "backdropClick") {
+            setShowAddExpenseModal(false);
+            setAddImages([]);
+          }
+        }}
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
           <DialogTitle sx={{ fontWeight: 700, p: 0 }}>New Expense</DialogTitle>
@@ -860,7 +979,10 @@ export default function GroupDetail() {
         maxWidth="sm"
         fullScreen={isMobile}
         open={showEditExpenseModal}
-        onClose={() => { setShowEditExpenseModal(false); setEditImages([]); }}
+        onClose={() => {
+          setShowEditExpenseModal(false);
+          setEditImages([]);
+        }}
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -944,9 +1066,7 @@ export default function GroupDetail() {
             onHold={editOnHold}
             onOnHoldChange={setEditOnHold}
             holdMode={
-              group.created_by === user.id ? "free" :
-                selectedExpense?.created_by === user.id ? "oneWay" :
-                  "hidden"
+              group.created_by === user.id ? "free" : selectedExpense?.created_by === user.id ? "oneWay" : "hidden"
             }
             recurringMode={selectedExpenseSeries ? "editSeries" : "off"}
             isRecurring={editIsRecurring}
@@ -966,233 +1086,279 @@ export default function GroupDetail() {
       </Dialog>
 
       {/* View Expense Modal (read-only) */}
-      <Dialog
-        fullWidth
-        maxWidth="xs"
-        open={showViewExpenseModal}
-        onClose={() => setShowViewExpenseModal(false)}
-      >
-        {viewExpenseItem && (() => {
-          const e = viewExpenseItem;
-          const payer = group.members.find((m) => m.user_id === e.paid_by);
-          const splitTypeLabel = e.split_type === "equal" ? "Equal split" : e.split_type === "exact" ? "Exact amounts" : "By percentage";
-          return (
-            <>
-              <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
-                <IconButton
-                  onClick={() => setShowViewExpenseModal(false)}
-                  size="small"
-                  sx={{ position: "absolute", top: 12, right: 12 }}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-                <Typography variant="h4" sx={{ fontWeight: 800, color: "success.main", letterSpacing: "-0.02em" }}>
-                  {formatCurrency(e.amount, e.currency)}
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 600, mt: 0.5 }}>
-                  {e.title}
-                </Typography>
-                <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", flexWrap: "wrap", gap: 0.5, mt: 1 }}>
-                  <Chip label={splitTypeLabel} size="small" sx={{ fontWeight: 600, fontSize: "0.7rem" }} />
-                  {e.category && (
-                    <Chip label={e.category} size="small" variant="outlined" sx={{ fontWeight: 500, fontSize: "0.7rem" }} />
-                  )}
-                  {e.on_hold && (
-                    <Chip
-                      icon={<PauseCircleOutlineIcon sx={{ fontSize: "14px !important" }} />}
-                      label="On Hold"
-                      size="small"
-                      color="warning"
-                      sx={{ fontWeight: 600, fontSize: "0.7rem" }}
-                    />
-                  )}
-                  {(() => {
-                    const series = findSeriesForGenesis(e._id);
-                    if (!series && !e.recurring_id) return null;
-                    const isFinal = finalExpenseIds.has(e._id);
-                    const label = series
-                      ? `Recurring · ${recurringSeriesCaption(series)}`
-                      : "Recurring";
-                    return (
-                      <Chip
-                        icon={<RepeatIcon sx={{ fontSize: "14px !important" }} />}
-                        label={isFinal ? `${label} · Final` : label}
-                        size="small"
-                        color="secondary"
-                        sx={{ fontWeight: 600, fontSize: "0.7rem" }}
-                      />
-                    );
-                  })()}
-                </Box>
-              </Box>
-
-              <DialogContent sx={{ px: 3, pt: 1, pb: 2 }}>
-                {/* Paid by */}
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.25, mb: 1.5 }}>
-                  <Avatar src={payer?.avatar || undefined} sx={{ width: 32, height: 32, flexShrink: 0 }}>
-                    {payer?.username?.[0]?.toUpperCase()}
-                  </Avatar>
-                  <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.2 }}>Paid by</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{payer?.username ?? "Unknown"}</Typography>
-                  </Box>
-                  <Box sx={{ textAlign: "right", flexShrink: 0 }}>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.3 }}>
-                      {new Date(e.date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.3 }}>
-                      {new Date(e.date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
-                    </Typography>
-                  </Box>
-                </Box>
-
-                {/* Notes */}
-                {e.notes && (
-                  <Box sx={{ bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.25, mb: 1.5 }}>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.25 }}>Notes</Typography>
-                    <Typography variant="body2">{e.notes}</Typography>
-                  </Box>
-                )}
-
-                {/* Splits */}
-                {e.splits && e.splits.length > 0 && (
-                  <>
-                    <Divider sx={{ my: 1.5 }} />
-                    <SectionLabel sx={{ color: "text.secondary", mb: 1 }}>
-                      Split
-                    </SectionLabel>
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
-                      {e.splits.map((split) => {
-                        const member = group.members.find((m) => m.user_id === split.user_id);
-                        return (
-                          <Box key={split.user_id} sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                            <Avatar src={member?.avatar || undefined} sx={{ width: 28, height: 28, fontSize: 11 }}>
-                              {member?.username?.[0]?.toUpperCase()}
-                            </Avatar>
-                            <Typography variant="body2" sx={{ flexGrow: 1 }}>{member?.username ?? "?"}</Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                              {e.split_type === "percent" && split.percentage != null
-                                ? `${split.percentage.toFixed(2)}% · ${formatCurrency(split.amount_owed ?? 0, e.currency)}`
-                                : formatCurrency(split.amount_owed ?? e.amount / e.splits.length, e.currency)}
-                            </Typography>
-                          </Box>
-                        );
-                      })}
-                    </Box>
-                  </>
-                )}
-
-                {/* Images */}
-                {e.images && e.images.length > 0 && (
-                  <>
-                    <Divider sx={{ my: 1.5 }} />
-                    <SectionLabel sx={{ color: "text.secondary", mb: 1 }}>
-                      Photos
-                    </SectionLabel>
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                      {e.images.map((img) => {
-                        const urlEntry = viewImageUrls.find((u) => u._id === img._id);
-                        return (
-                          <Box
-                            key={img._id}
-                            sx={{ width: 80, height: 80, flexShrink: 0, borderRadius: 1, overflow: "hidden", cursor: urlEntry ? "pointer" : "default", bgcolor: "action.hover", display: "flex", alignItems: "center", justifyContent: "center" }}
-                            onClick={() => urlEntry && setLightboxUrl(urlEntry.signedUrl)}
-                          >
-                            {urlEntry ? (
-                              <Box component="img" src={urlEntry.signedUrl} sx={{ width: 80, height: 80, objectFit: "cover", display: "block" }} />
-                            ) : (
-                              <CircularProgress size={20} />
-                            )}
-                          </Box>
-                        );
-                      })}
-                    </Box>
-                  </>
-                )}
-              </DialogContent>
-
-              <DialogActions sx={{ px: 3, pb: 2.5 }}>
-                {/* A deleted expense cannot be edited - the server rejects it - so offer
-                    nothing but the route back. */}
-                {e.deleted_at != null ? (
-                  <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", width: "100%" }}>
-                    This expense was deleted. It is kept as group history and cannot be restored.
+      <Dialog fullWidth maxWidth="xs" open={showViewExpenseModal} onClose={() => setShowViewExpenseModal(false)}>
+        {viewExpenseItem &&
+          (() => {
+            const e = viewExpenseItem;
+            const payer = group.members.find((m) => m.user_id === e.paid_by);
+            const splitTypeLabel =
+              e.split_type === "equal" ? "Equal split" : e.split_type === "exact" ? "Exact amounts" : "By percentage";
+            return (
+              <>
+                <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
+                  <IconButton
+                    onClick={() => setShowViewExpenseModal(false)}
+                    size="small"
+                    sx={{ position: "absolute", top: 12, right: 12 }}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                  <Typography variant="h4" sx={{ fontWeight: 800, color: "success.main", letterSpacing: "-0.02em" }}>
+                    {formatCurrency(e.amount, e.currency)}
                   </Typography>
-                ) : e.recurring_id ? (
-                  (() => {
-                    const genesisExpense = group.expenses.find((x) => x._id === e.recurring_id);
-                    const canDelete = canEditExpense(e);
-                    return (
-                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%" }}>
-                        {genesisExpense ? (
-                          <Button
-                            fullWidth
-                            variant="outlined"
-                            color="secondary"
-                            startIcon={<RepeatIcon />}
-                            onClick={() => setViewExpenseItem(genesisExpense)}
-                          >
-                            View Original Expense
-                          </Button>
-                        ) : (
-                          <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
-                            Created by a recurring expense that no longer exists
-                          </Typography>
-                        )}
-                        {canDelete && (
-                          <Button
-                            fullWidth
-                            variant="outlined"
-                            color="error"
-                            startIcon={<DeleteIcon />}
-                            disabled={isDeletingExpense}
-                            onClick={async () => {
-                              const ok = await confirm({
-                                title: "Delete this occurrence?",
-                                message: "The recurring schedule is unaffected — future occurrences will still be created.",
-                              });
-                              if (ok) {
-                                deleteExpense(e._id, {
-                                  onSuccess: () => {
-                                    enqueueSnackbar("Expense deleted", { variant: "success" });
-                                    setShowViewExpenseModal(false);
-                                    setViewExpenseItem(null);
-                                  },
-                                  onError: (error: Error) => {
-                                    enqueueSnackbar(error?.message || "Failed to delete expense", { variant: "error" });
-                                  },
-                                });
-                              }
-                            }}
-                          >
-                            Delete This Occurrence
-                          </Button>
-                        )}
-                      </Box>
-                    );
-                  })()
-                ) : canEditExpense(e) ? (
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    onClick={() => {
-                      setShowViewExpenseModal(false);
-                      handleOpenEditExpense(e);
+                  <Typography variant="h6" sx={{ fontWeight: 600, mt: 0.5 }}>
+                    {e.title}
+                  </Typography>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: 0.5,
+                      mt: 1,
                     }}
                   >
-                    Edit Expense
-                  </Button>
-                ) : (
-                  /* Mirrors the server's edit check so a non-editor learns up front,
+                    <Chip label={splitTypeLabel} size="small" sx={{ fontWeight: 600, fontSize: "0.7rem" }} />
+                    {e.category && (
+                      <Chip
+                        label={e.category}
+                        size="small"
+                        variant="outlined"
+                        sx={{ fontWeight: 500, fontSize: "0.7rem" }}
+                      />
+                    )}
+                    {e.on_hold && (
+                      <Chip
+                        icon={<PauseCircleOutlineIcon sx={{ fontSize: "14px !important" }} />}
+                        label="On Hold"
+                        size="small"
+                        color="warning"
+                        sx={{ fontWeight: 600, fontSize: "0.7rem" }}
+                      />
+                    )}
+                    {(() => {
+                      const series = findSeriesForGenesis(e._id);
+                      if (!series && !e.recurring_id) return null;
+                      const isFinal = finalExpenseIds.has(e._id);
+                      const label = series ? `Recurring · ${recurringSeriesCaption(series)}` : "Recurring";
+                      return (
+                        <Chip
+                          icon={<RepeatIcon sx={{ fontSize: "14px !important" }} />}
+                          label={isFinal ? `${label} · Final` : label}
+                          size="small"
+                          color="secondary"
+                          sx={{ fontWeight: 600, fontSize: "0.7rem" }}
+                        />
+                      );
+                    })()}
+                  </Box>
+                </Box>
+
+                <DialogContent sx={{ px: 3, pt: 1, pb: 2 }}>
+                  {/* Paid by */}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1.5,
+                      bgcolor: "action.hover",
+                      borderRadius: 2,
+                      px: 2,
+                      py: 1.25,
+                      mb: 1.5,
+                    }}
+                  >
+                    <Avatar src={payer?.avatar || undefined} sx={{ width: 32, height: 32, flexShrink: 0 }}>
+                      {payer?.username?.[0]?.toUpperCase()}
+                    </Avatar>
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.2 }}>
+                        Paid by
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {payer?.username ?? "Unknown"}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: "right", flexShrink: 0 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.3 }}>
+                        {new Date(e.date).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.3 }}>
+                        {new Date(e.date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {/* Notes */}
+                  {e.notes && (
+                    <Box sx={{ bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.25, mb: 1.5 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.25 }}>
+                        Notes
+                      </Typography>
+                      <Typography variant="body2">{e.notes}</Typography>
+                    </Box>
+                  )}
+
+                  {/* Splits */}
+                  {e.splits && e.splits.length > 0 && (
+                    <>
+                      <Divider sx={{ my: 1.5 }} />
+                      <SectionLabel sx={{ color: "text.secondary", mb: 1 }}>Split</SectionLabel>
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
+                        {e.splits.map((split) => {
+                          const member = group.members.find((m) => m.user_id === split.user_id);
+                          return (
+                            <Box key={split.user_id} sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                              <Avatar src={member?.avatar || undefined} sx={{ width: 28, height: 28, fontSize: 11 }}>
+                                {member?.username?.[0]?.toUpperCase()}
+                              </Avatar>
+                              <Typography variant="body2" sx={{ flexGrow: 1 }}>
+                                {member?.username ?? "?"}
+                              </Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                {e.split_type === "percent" && split.percentage != null
+                                  ? `${split.percentage.toFixed(2)}% · ${formatCurrency(split.amount_owed ?? 0, e.currency)}`
+                                  : formatCurrency(split.amount_owed ?? e.amount / e.splits.length, e.currency)}
+                              </Typography>
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                    </>
+                  )}
+
+                  {/* Images */}
+                  {e.images && e.images.length > 0 && (
+                    <>
+                      <Divider sx={{ my: 1.5 }} />
+                      <SectionLabel sx={{ color: "text.secondary", mb: 1 }}>Photos</SectionLabel>
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                        {e.images.map((img) => {
+                          const urlEntry = viewImageUrls.find((u) => u._id === img._id);
+                          return (
+                            <Box
+                              key={img._id}
+                              sx={{
+                                width: 80,
+                                height: 80,
+                                flexShrink: 0,
+                                borderRadius: 1,
+                                overflow: "hidden",
+                                cursor: urlEntry ? "pointer" : "default",
+                                bgcolor: "action.hover",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                              onClick={() => urlEntry && setLightboxUrl(urlEntry.signedUrl)}
+                            >
+                              {urlEntry ? (
+                                <Box
+                                  component="img"
+                                  src={urlEntry.signedUrl}
+                                  sx={{ width: 80, height: 80, objectFit: "cover", display: "block" }}
+                                />
+                              ) : (
+                                <CircularProgress size={20} />
+                              )}
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                    </>
+                  )}
+                </DialogContent>
+
+                <DialogActions sx={{ px: 3, pb: 2.5 }}>
+                  {/* A deleted expense cannot be edited - the server rejects it - so offer
+                    nothing but the route back. */}
+                  {e.deleted_at != null ? (
+                    <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", width: "100%" }}>
+                      This expense was deleted. It is kept as group history and cannot be restored.
+                    </Typography>
+                  ) : e.recurring_id ? (
+                    (() => {
+                      const genesisExpense = group.expenses.find((x) => x._id === e.recurring_id);
+                      const canDelete = canEditExpense(e);
+                      return (
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%" }}>
+                          {genesisExpense ? (
+                            <Button
+                              fullWidth
+                              variant="outlined"
+                              color="secondary"
+                              startIcon={<RepeatIcon />}
+                              onClick={() => setViewExpenseItem(genesisExpense)}
+                            >
+                              View Original Expense
+                            </Button>
+                          ) : (
+                            <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+                              Created by a recurring expense that no longer exists
+                            </Typography>
+                          )}
+                          {canDelete && (
+                            <Button
+                              fullWidth
+                              variant="outlined"
+                              color="error"
+                              startIcon={<DeleteIcon />}
+                              disabled={isDeletingExpense}
+                              onClick={async () => {
+                                const ok = await confirm({
+                                  title: "Delete this occurrence?",
+                                  message:
+                                    "The recurring schedule is unaffected — future occurrences will still be created.",
+                                });
+                                if (ok) {
+                                  deleteExpense(e._id, {
+                                    onSuccess: () => {
+                                      enqueueSnackbar("Expense deleted", { variant: "success" });
+                                      setShowViewExpenseModal(false);
+                                      setViewExpenseItem(null);
+                                    },
+                                    onError: (error: Error) => {
+                                      enqueueSnackbar(error?.message || "Failed to delete expense", {
+                                        variant: "error",
+                                      });
+                                    },
+                                  });
+                                }
+                              }}
+                            >
+                              Delete This Occurrence
+                            </Button>
+                          )}
+                        </Box>
+                      );
+                    })()
+                  ) : canEditExpense(e) ? (
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      onClick={() => {
+                        setShowViewExpenseModal(false);
+                        handleOpenEditExpense(e);
+                      }}
+                    >
+                      Edit Expense
+                    </Button>
+                  ) : (
+                    /* Mirrors the server's edit check so a non-editor learns up front,
                      not after filling out the form and hitting Save. */
-                  <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", width: "100%" }}>
-                    Only the person who added this expense or the group owner can edit it.
-                  </Typography>
-                )}
-              </DialogActions>
-            </>
-          );
-        })()}
+                    <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", width: "100%" }}>
+                      Only the person who added this expense or the group owner can edit it.
+                    </Typography>
+                  )}
+                </DialogActions>
+              </>
+            );
+          })()}
       </Dialog>
 
       <CreateExchangeDialog
@@ -1231,7 +1397,15 @@ export default function GroupDetail() {
               target="_blank"
               rel="noopener noreferrer"
               size="small"
-              sx={{ position: "absolute", top: 8, right: 48, zIndex: 1, bgcolor: "rgba(0,0,0,0.55)", color: "white", "&:hover": { bgcolor: "rgba(0,0,0,0.75)" } }}
+              sx={{
+                position: "absolute",
+                top: 8,
+                right: 48,
+                zIndex: 1,
+                bgcolor: "rgba(0,0,0,0.55)",
+                color: "white",
+                "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
+              }}
             >
               <FileDownloadIcon />
             </IconButton>
@@ -1239,7 +1413,15 @@ export default function GroupDetail() {
           <IconButton
             onClick={() => setLightboxUrl(null)}
             size="small"
-            sx={{ position: "absolute", top: 8, right: 8, zIndex: 1, bgcolor: "rgba(0,0,0,0.55)", color: "white", "&:hover": { bgcolor: "rgba(0,0,0,0.75)" } }}
+            sx={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              zIndex: 1,
+              bgcolor: "rgba(0,0,0,0.55)",
+              color: "white",
+              "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
+            }}
           >
             <CloseIcon />
           </IconButton>

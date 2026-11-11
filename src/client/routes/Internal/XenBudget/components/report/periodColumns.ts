@@ -6,10 +6,7 @@
  * key rather than threading `group_by` down beside it.
  */
 
-const MONTHS = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /**
  * Past this many buckets a grid stops being readable and starts being a spreadsheet you
@@ -20,11 +17,11 @@ export const MAX_PERIOD_COLUMNS = 13;
 
 /** Whether a range's buckets are worth pivoting into columns at all. */
 export function shouldPivot(periodKeys: string[]): boolean {
-    return periodKeys.length > 1 && periodKeys.length <= MAX_PERIOD_COLUMNS;
+  return periodKeys.length > 1 && periodKeys.length <= MAX_PERIOD_COLUMNS;
 }
 
 function yearOf(key: string): string {
-    return key.slice(0, 4);
+  return key.slice(0, 4);
 }
 
 /**
@@ -33,33 +30,32 @@ function yearOf(key: string): string {
  * every column needs the year, not just January's.
  */
 function label(key: string, multiYear: boolean): string {
-    const year = yearOf(key);
-    const short = `'${year.slice(2)}`;
+  const year = yearOf(key);
+  const short = `'${year.slice(2)}`;
 
-    // "2026-W34"
-    const week = /^\d{4}-W(\d{2})$/.exec(key);
-    if (week) return multiYear ? `W${Number(week[1])} ${short}` : `W${Number(week[1])}`;
+  // "2026-W34"
+  const week = /^\d{4}-W(\d{2})$/.exec(key);
+  if (week) return multiYear ? `W${Number(week[1])} ${short}` : `W${Number(week[1])}`;
 
-    // "2026-08-21"
-    const day = /^\d{4}-(\d{2})-(\d{2})$/.exec(key);
-    if (day) return `${MONTHS[Number(day[1]) - 1] ?? day[1]} ${Number(day[2])}`;
+  // "2026-08-21"
+  const day = /^\d{4}-(\d{2})-(\d{2})$/.exec(key);
+  if (day) return `${MONTHS[Number(day[1]) - 1] ?? day[1]} ${Number(day[2])}`;
 
-    // "2026-08"
-    const month = /^\d{4}-(\d{2})$/.exec(key);
-    if (month) {
-        const name = MONTHS[Number(month[1]) - 1] ?? month[1];
-        return multiYear ? `${name} ${short}` : name;
-    }
+  // "2026-08"
+  const month = /^\d{4}-(\d{2})$/.exec(key);
+  if (month) {
+    const name = MONTHS[Number(month[1]) - 1] ?? month[1];
+    return multiYear ? `${name} ${short}` : name;
+  }
 
-    return key;
+  return key;
 }
 
 /** Headings for a set of period keys, in the order given. */
 export function periodColumnLabels(periodKeys: string[]): string[] {
-    const multiYear = new Set(periodKeys.map(yearOf)).size > 1;
-    return periodKeys.map((key) => label(key, multiYear));
+  const multiYear = new Set(periodKeys.map(yearOf)).size > 1;
+  return periodKeys.map((key) => label(key, multiYear));
 }
-
 
 /**
  * The window a period key covers, as a half-open [from, to).
@@ -69,36 +65,36 @@ export function periodColumnLabels(periodKeys: string[]): string[] {
  * headings above are derived.
  */
 export function periodKeyRange(key: string): { from: Date; to: Date } | null {
-    const week = /^(\d{4})-W(\d{2})$/.exec(key);
-    if (week) {
-        // ISO week 1 is the week containing January 4th; step back from Jan 4 to its
-        // Monday, then forward (week - 1) weeks. All in UTC, matching the period keys
-        // the server's $dateToString produces.
-        const year = Number(week[1]);
-        const jan4 = new Date(Date.UTC(year, 0, 4));
-        const from = new Date(Date.UTC(year, 0, 4 - ((jan4.getUTCDay() + 6) % 7) + (Number(week[2]) - 1) * 7));
-        return { from, to: new Date(from.getTime() + 7 * 86400000) };
-    }
+  const week = /^(\d{4})-W(\d{2})$/.exec(key);
+  if (week) {
+    // ISO week 1 is the week containing January 4th; step back from Jan 4 to its
+    // Monday, then forward (week - 1) weeks. All in UTC, matching the period keys
+    // the server's $dateToString produces.
+    const year = Number(week[1]);
+    const jan4 = new Date(Date.UTC(year, 0, 4));
+    const from = new Date(Date.UTC(year, 0, 4 - ((jan4.getUTCDay() + 6) % 7) + (Number(week[2]) - 1) * 7));
+    return { from, to: new Date(from.getTime() + 7 * 86400000) };
+  }
 
-    const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
-    if (day) {
-        const from = new Date(Date.UTC(Number(day[1]), Number(day[2]) - 1, Number(day[3])));
-        return { from, to: new Date(from.getTime() + 86400000) };
-    }
+  const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+  if (day) {
+    const from = new Date(Date.UTC(Number(day[1]), Number(day[2]) - 1, Number(day[3])));
+    return { from, to: new Date(from.getTime() + 86400000) };
+  }
 
-    const month = /^(\d{4})-(\d{2})$/.exec(key);
-    if (month) {
-        const from = new Date(Date.UTC(Number(month[1]), Number(month[2]) - 1, 1));
-        return { from, to: new Date(Date.UTC(Number(month[1]), Number(month[2]), 1)) };
-    }
+  const month = /^(\d{4})-(\d{2})$/.exec(key);
+  if (month) {
+    const from = new Date(Date.UTC(Number(month[1]), Number(month[2]) - 1, 1));
+    return { from, to: new Date(Date.UTC(Number(month[1]), Number(month[2]), 1)) };
+  }
 
-    return null;
+  return null;
 }
 
 /** Whether a period key's window contains today — the column a report grid highlights as "now". */
 export function isCurrentPeriod(key: string): boolean {
-    const range = periodKeyRange(key);
-    if (!range) return false;
-    const now = new Date();
-    return now >= range.from && now < range.to;
+  const range = periodKeyRange(key);
+  if (!range) return false;
+  const now = new Date();
+  return now >= range.from && now < range.to;
 }

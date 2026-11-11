@@ -17,7 +17,9 @@ describe("normaliseLogValue", () => {
   });
 
   it("reduces splits to their user id and amounts", () => {
-    expect(normaliseLogValue([{ user_id: A, amount_owed: 5, percentage: null, extra: 1 }])).toEqual([{ user_id: A, amount_owed: 5 }]);
+    expect(normaliseLogValue([{ user_id: A, amount_owed: 5, percentage: null, extra: 1 }])).toEqual([
+      { user_id: A, amount_owed: 5 },
+    ]);
   });
 
   it("unwraps values that expose toObject (mongoose arrays)", () => {
@@ -36,7 +38,10 @@ describe("diffFields", () => {
     category: undefined,
     notes: "",
     split_type: "equal",
-    splits: [{ user_id: A, amount_owed: 20 }, { user_id: B, amount_owed: 20 }],
+    splits: [
+      { user_id: A, amount_owed: 20 },
+      { user_id: B, amount_owed: 20 },
+    ],
     on_hold: false,
   };
 
@@ -45,14 +50,28 @@ describe("diffFields", () => {
   });
 
   it("reports each changed field with before and after", () => {
-    const after = { ...base, amount: 42, title: "Food", splits: [{ user_id: A, amount_owed: 21 }, { user_id: B, amount_owed: 21 }] };
+    const after = {
+      ...base,
+      amount: 42,
+      title: "Food",
+      splits: [
+        { user_id: A, amount_owed: 21 },
+        { user_id: B, amount_owed: 21 },
+      ],
+    };
     expect(diffFields(base, after, EXPENSE_LOG_FIELDS)).toEqual([
       { field: "title", from: "Groceries", to: "Food" },
       { field: "amount", from: 40, to: 42 },
       {
         field: "splits",
-        from: [{ user_id: A, amount_owed: 20 }, { user_id: B, amount_owed: 20 }],
-        to: [{ user_id: A, amount_owed: 21 }, { user_id: B, amount_owed: 21 }],
+        from: [
+          { user_id: A, amount_owed: 20 },
+          { user_id: B, amount_owed: 20 },
+        ],
+        to: [
+          { user_id: A, amount_owed: 21 },
+          { user_id: B, amount_owed: 21 },
+        ],
       },
     ]);
   });

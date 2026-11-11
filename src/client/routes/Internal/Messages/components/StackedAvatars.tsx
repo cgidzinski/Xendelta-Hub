@@ -27,9 +27,7 @@ export default function StackedAvatars({
   if (participantsProp) {
     participants = participantsProp;
   } else if (conversation?.participantInfo) {
-    participants = conversation.participantInfo.filter(
-      (p) => p._id !== "system"
-    );
+    participants = conversation.participantInfo.filter((p) => p._id !== "system");
   } else if (conversation) {
     // If no participantInfo, construct from participants array
     // Include current user if we have their info
@@ -51,11 +49,11 @@ export default function StackedAvatars({
     // Fallback: show system or single avatar
     const isSystem = conversation?.participants.includes("system") ?? false;
     return (
-      <Avatar 
-        src={isSystem ? undefined : participants.find(p => p._id === currentUserId)?.avatar}
+      <Avatar
+        src={isSystem ? undefined : participants.find((p) => p._id === currentUserId)?.avatar}
         sx={{ width: size, height: size, borderRadius: 2 }}
       >
-        {isSystem ? "S" : (currentUserId ? currentUserId.charAt(0).toUpperCase() : "?")}
+        {isSystem ? "S" : currentUserId ? currentUserId.charAt(0).toUpperCase() : "?"}
       </Avatar>
     );
   }

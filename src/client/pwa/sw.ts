@@ -69,7 +69,7 @@ self.addEventListener("push", (event) => {
       badge: "/favicon-32x32.png",
       tag: payload.notificationId,
       data: { url: payload.url || "/internal/notifications" },
-    })
+    }),
   );
 });
 
@@ -95,6 +95,6 @@ self.addEventListener("notificationclick", (event) => {
       }
 
       await self.clients.openWindow(target);
-    })()
+    })(),
   );
 });

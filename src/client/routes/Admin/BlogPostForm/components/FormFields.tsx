@@ -1,4 +1,14 @@
-import { Stack, TextField, Box, Typography, Chip, InputAdornment, Button, FormControlLabel, Switch } from "@mui/material";
+import {
+  Stack,
+  TextField,
+  Box,
+  Typography,
+  Chip,
+  InputAdornment,
+  Button,
+  FormControlLabel,
+  Switch,
+} from "@mui/material";
 import { BlogAssetWithMetadata } from "../../../../types/BlogAssetWithMetadata";
 
 interface FormFieldsProps {
@@ -62,13 +72,7 @@ export default function FormFields({
 
   return (
     <Stack spacing={3}>
-      <TextField
-        fullWidth
-        label="Title"
-        value={title}
-        onChange={(e) => onTitleChange(e.target.value)}
-        required
-      />
+      <TextField fullWidth label="Title" value={title} onChange={(e) => onTitleChange(e.target.value)} required />
       <TextField
         fullWidth
         label="Slug"
@@ -147,12 +151,7 @@ export default function FormFields({
         </Typography>
         <Box sx={{ display: "flex", gap: 1, mb: 1, flexWrap: "wrap" }}>
           {categories.map((category) => (
-            <Chip
-              key={category}
-              label={category}
-              onDelete={() => onRemoveCategory(category)}
-              size="small"
-            />
+            <Chip key={category} label={category} onDelete={() => onRemoveCategory(category)} size="small" />
           ))}
         </Box>
         <TextField
@@ -223,4 +222,3 @@ export default function FormFields({
     </Stack>
   );
 }
-

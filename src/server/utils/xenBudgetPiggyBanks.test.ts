@@ -59,12 +59,14 @@ describe("summarizePiggyBank", () => {
   });
 
   it("groups by person, biggest first, netting each person's withdrawals", () => {
-    const summary = summarizePiggyBank(bank([
-      contribution(100, { user_id: "u1" }),
-      contribution(400, { user_id: "u2" }),
-      contribution(-50, { user_id: "u2" }),
-      contribution(200, { user_id: "u1" }),
-    ]));
+    const summary = summarizePiggyBank(
+      bank([
+        contribution(100, { user_id: "u1" }),
+        contribution(400, { user_id: "u2" }),
+        contribution(-50, { user_id: "u2" }),
+        contribution(200, { user_id: "u1" }),
+      ]),
+    );
     expect(summary.by_person).toEqual([
       { user_id: "u2", amount: 350 },
       { user_id: "u1", amount: 300 },
@@ -72,10 +74,12 @@ describe("summarizePiggyBank", () => {
   });
 
   it("takes the latest date, whatever order the ledger is stored in", () => {
-    const summary = summarizePiggyBank(bank([
-      contribution(100, { date: new Date("2026-05-04T00:00:00.000Z") }),
-      contribution(100, { date: new Date("2026-01-09T00:00:00.000Z") }),
-    ]));
+    const summary = summarizePiggyBank(
+      bank([
+        contribution(100, { date: new Date("2026-05-04T00:00:00.000Z") }),
+        contribution(100, { date: new Date("2026-01-09T00:00:00.000Z") }),
+      ]),
+    );
     expect(summary.last_contribution_at).toBe("2026-05-04T00:00:00.000Z");
   });
 
@@ -102,9 +106,7 @@ describe("serializePiggyBank", () => {
   });
 
   it("stringifies the id of a linked item so the client can match it to one", () => {
-    const wire = serializePiggyBank(
-      bank([contribution(500, { item_id: { toString: () => "item-1" } })]), true,
-    );
+    const wire = serializePiggyBank(bank([contribution(500, { item_id: { toString: () => "item-1" } })]), true);
     expect(wire.contributions[0].item_id).toBe("item-1");
   });
 
@@ -115,24 +117,23 @@ describe("serializePiggyBank", () => {
 
 describe("serializePiggyBanks", () => {
   it("maps a list, and treats a missing one as empty", () => {
-    expect(serializePiggyBanks([bank([contribution(10)]), bank([])], false).map((g) => g.saved))
-      .toEqual([10, 0]);
+    expect(serializePiggyBanks([bank([contribution(10)]), bank([])], false).map((g) => g.saved)).toEqual([10, 0]);
     expect(serializePiggyBanks(undefined, false)).toEqual([]);
   });
 });
 
 describe("createXenBudgetPiggyBankSchema", () => {
-    const valid = { name: "New telescope", target_amount: 400, category: "Hobbies" };
+  const valid = { name: "New telescope", target_amount: 400, category: "Hobbies" };
 
-    it("accepts a bank that names a category", () => {
-        expect(createXenBudgetPiggyBankSchema.safeParse(valid).success).toBe(true);
-    });
+  it("accepts a bank that names a category", () => {
+    expect(createXenBudgetPiggyBankSchema.safeParse(valid).success).toBe(true);
+  });
 
-    it("refuses one with no category", () => {
-        // A contribution IS an expense now, so a bank with nowhere to book it would file
-        // every contribution as uncategorised.
-        const { category, ...noCategory } = valid;
-        expect(createXenBudgetPiggyBankSchema.safeParse(noCategory).success).toBe(false);
-        expect(createXenBudgetPiggyBankSchema.safeParse({ ...valid, category: "" }).success).toBe(false);
-    });
+  it("refuses one with no category", () => {
+    // A contribution IS an expense now, so a bank with nowhere to book it would file
+    // every contribution as uncategorised.
+    const { category, ...noCategory } = valid;
+    expect(createXenBudgetPiggyBankSchema.safeParse(noCategory).success).toBe(false);
+    expect(createXenBudgetPiggyBankSchema.safeParse({ ...valid, category: "" }).success).toBe(false);
+  });
 });

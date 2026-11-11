@@ -19,9 +19,10 @@ function toISO(value: Date | string | undefined | null): string | undefined {
 /**
  * Derive lastMessage and lastMessageTime from messages array
  */
-export function getLastMessageInfo(
-  conversation: ConversationDocument
-): { lastMessage: string; lastMessageTime: string } {
+export function getLastMessageInfo(conversation: ConversationDocument): {
+  lastMessage: string;
+  lastMessageTime: string;
+} {
   if (conversation.messages && conversation.messages.length > 0) {
     const lastMsg = conversation.messages[conversation.messages.length - 1];
     return {
@@ -39,9 +40,7 @@ export function getLastMessageInfo(
  * Generate default conversation name from participant usernames
  * Includes all participants including the current user
  */
-export function generateDefaultConversationName(
-  participantInfo: Array<{ _id: string; username: string }>
-): string {
+export function generateDefaultConversationName(participantInfo: Array<{ _id: string; username: string }>): string {
   if (participantInfo.length === 0) {
     return "Chat";
   }
@@ -52,4 +51,3 @@ export function generateDefaultConversationName(
 
   return participantInfo.map((p) => p.username).join(", ");
 }
-

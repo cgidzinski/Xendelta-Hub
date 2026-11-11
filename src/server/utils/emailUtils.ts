@@ -39,7 +39,7 @@ export async function sendPasswordResetEmail(data: PasswordResetEmailData): Prom
 
   try {
     const { error } = await resend.emails.send(emailConfig);
-    
+
     if (error) {
       return { success: false, error };
     }
@@ -61,9 +61,7 @@ export interface NotificationEmailData {
 /**
  * Send a general notification email. Used by the "email" channel of notify().
  */
-export async function sendNotificationEmail(
-  data: NotificationEmailData
-): Promise<{ success: boolean; error?: any }> {
+export async function sendNotificationEmail(data: NotificationEmailData): Promise<{ success: boolean; error?: any }> {
   const { username, email, title, message, link } = data;
 
   // Notification links are stored as app-relative paths (e.g. /internal/xensplit/groups/x),

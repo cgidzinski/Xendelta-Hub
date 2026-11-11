@@ -40,9 +40,7 @@ export interface CoverageEntry {
  * off-budget. Any of those means an auto tag already has an opinion about this merchant,
  * and a second rule would duplicate it.
  */
-export function coverageByMerchant(
-  entries: CoverageEntry[], rules: Rule[],
-): Map<string, MerchantRuleCoverage> {
+export function coverageByMerchant(entries: CoverageEntry[], rules: Rule[]): Map<string, MerchantRuleCoverage> {
   const coverage = new Map<string, MerchantRuleCoverage>();
   // A book with no rules is the common case: every merchant is uncovered and there is
   // nothing to evaluate. Callers read a missing entry as "none".
@@ -57,9 +55,7 @@ export function coverageByMerchant(
     // skipBecomesOffBudget mirrors the sweep: a "skip" rule can't retroactively delete an
     // item that already exists, and here nothing is being written at all — what matters is
     // only that the rule is recorded as having fired.
-    const { item: after } = applyRules(
-      stripRuleEffects(draft), rules, { skipBecomesOffBudget: true },
-    );
+    const { item: after } = applyRules(stripRuleEffects(draft), rules, { skipBecomesOffBudget: true });
     if (after.applied_rule_ids.length > 0) {
       entry.matched += 1;
       const perRule = hitsByMerchant.get(merchant) ?? new Map<string, number>();
@@ -74,9 +70,7 @@ export function coverageByMerchant(
   for (const [merchant, perRule] of hitsByMerchant) {
     const entry = coverage.get(merchant);
     if (entry) {
-      entry.rule_ids = [...perRule.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(([id]) => id);
+      entry.rule_ids = [...perRule.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
     }
   }
 

@@ -14,7 +14,14 @@ interface BannerProps {
 }
 
 /** Fixed, full-width strip shared by the PWA install/push/update/offline messages. */
-export default function Banner({ children, position = "bottom", color = "default", zIndex, ref, ...transition }: BannerProps) {
+export default function Banner({
+  children,
+  position = "bottom",
+  color = "default",
+  zIndex,
+  ref,
+  ...transition
+}: BannerProps) {
   const filled = color !== "default";
   return (
     <Paper
@@ -30,14 +37,10 @@ export default function Banner({ children, position = "bottom", color = "default
         zIndex: zIndex ?? ((t: Theme) => t.zIndex.snackbar),
         borderLeft: 0,
         borderRight: 0,
-        ...(filled
-          ? { bgcolor: `${color}.main`, color: `${color}.contrastText`, borderColor: `${color}.main` }
-          : {}),
+        ...(filled ? { bgcolor: `${color}.main`, color: `${color}.contrastText`, borderColor: `${color}.main` } : {}),
       }}
     >
-      <Box sx={{ maxWidth: 600, mx: "auto", p: 1.5, display: "flex", alignItems: "center", gap: 1.5 }}>
-        {children}
-      </Box>
+      <Box sx={{ maxWidth: 600, mx: "auto", p: 1.5, display: "flex", alignItems: "center", gap: 1.5 }}>{children}</Box>
     </Paper>
   );
 }

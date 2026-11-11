@@ -1,12 +1,4 @@
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Typography,
-  Box,
-} from "@mui/material";
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Box } from "@mui/material";
 import PersonIcon from "@mui/icons-material/Person";
 import SecurityIcon from "@mui/icons-material/Security";
 import AnnouncementIcon from "@mui/icons-material/Announcement";
@@ -43,12 +35,7 @@ export default function NotificationModal({ notification, open, onClose }: Notif
   if (!notification) return null;
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-    >
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle
         sx={{
           position: "relative",
@@ -74,11 +61,7 @@ export default function NotificationModal({ notification, open, onClose }: Notif
             {getNotificationIcon(notification.icon)}
           </Box>
           <Box sx={{ flex: 1 }}>
-            <Typography
-              variant="h6"
-              component="div"
-              sx={{ fontWeight: notification.unread ? "bold" : "normal" }}
-            >
+            <Typography variant="h6" component="div" sx={{ fontWeight: notification.unread ? "bold" : "normal" }}>
               {notification.title}
             </Typography>
             {notification.unread && (
@@ -104,10 +87,7 @@ export default function NotificationModal({ notification, open, onClose }: Notif
         </Button>
       </DialogTitle>
       <DialogContent sx={{ m: 3 }}>
-        <Typography
-          variant="body1"
-          sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.7 }}
-        >
+        <Typography variant="body1" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.7 }}>
           {notification.message}
         </Typography>
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>
@@ -116,7 +96,13 @@ export default function NotificationModal({ notification, open, onClose }: Notif
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         {notification.link && (
-          <Button variant="contained" onClick={() => { navigate(notification.link!); onClose(); }}>
+          <Button
+            variant="contained"
+            onClick={() => {
+              navigate(notification.link!);
+              onClose();
+            }}
+          >
             Go to
           </Button>
         )}

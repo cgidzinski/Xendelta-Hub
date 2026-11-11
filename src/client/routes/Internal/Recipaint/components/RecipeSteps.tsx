@@ -40,7 +40,12 @@ export default function RecipeSteps({ steps, completedSteps, onStepToggle, onRes
             {doneCount} of {steps.length} done
           </Typography>
           {onResetProgress && doneCount > 0 && (
-            <Button size="small" startIcon={<RestartAltIcon />} onClick={onResetProgress} sx={{ textTransform: "none" }}>
+            <Button
+              size="small"
+              startIcon={<RestartAltIcon />}
+              onClick={onResetProgress}
+              sx={{ textTransform: "none" }}
+            >
               Reset
             </Button>
           )}

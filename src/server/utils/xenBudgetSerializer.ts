@@ -10,10 +10,10 @@ export function transformMembers(obj: any): any {
     ...obj,
     members: Array.isArray(obj.members)
       ? obj.members.map((m: any) =>
-        m._id
-          ? { user_id: m._id.toString(), username: m.username || "Unknown", avatar: m.avatar || null }
-          : { user_id: m.toString(), username: "Unknown", avatar: null }
-      )
+          m._id
+            ? { user_id: m._id.toString(), username: m.username || "Unknown", avatar: m.avatar || null }
+            : { user_id: m.toString(), username: "Unknown", avatar: null },
+        )
       : obj.members,
   };
 }
@@ -28,7 +28,11 @@ export function transformMembers(obj: any): any {
  * payload for a screen that never draws one.
  */
 export function serializeBook(
-  book: any, itemCount?: number, reviewCount?: number, needsReviewCount?: number, lastItemAt?: Date,
+  book: any,
+  itemCount?: number,
+  reviewCount?: number,
+  needsReviewCount?: number,
+  lastItemAt?: Date,
   withPiggyBankLedgers = true,
 ): any {
   const obj = typeof book.toObject === "function" ? book.toObject() : book;
@@ -36,7 +40,7 @@ export function serializeBook(
     ...transformMembers(obj),
     _id: obj._id.toString(),
     piggy_banks: serializePiggyBanks(obj.piggy_banks, withPiggyBankLedgers),
-    is_creator: undefined,  // filled in per-request by the route; see serializeBookFor
+    is_creator: undefined, // filled in per-request by the route; see serializeBookFor
     ...(itemCount === undefined ? {} : { item_count: itemCount }),
     ...(reviewCount === undefined ? {} : { review_count: reviewCount }),
     ...(needsReviewCount === undefined ? {} : { needs_review_count: needsReviewCount }),
@@ -49,7 +53,12 @@ export function serializeBook(
  * member-management and book-deletion controls; the server still enforces it separately.
  */
 export function serializeBookFor(
-  book: any, userId: string, itemCount?: number, reviewCount?: number, needsReviewCount?: number, lastItemAt?: Date,
+  book: any,
+  userId: string,
+  itemCount?: number,
+  reviewCount?: number,
+  needsReviewCount?: number,
+  lastItemAt?: Date,
   withPiggyBankLedgers = true,
 ): any {
   const obj = serializeBook(book, itemCount, reviewCount, needsReviewCount, lastItemAt, withPiggyBankLedgers);
@@ -58,12 +67,22 @@ export function serializeBookFor(
 }
 
 export function serializeBooksFor(
-  books: any[], userId: string, counts?: Map<string, number>, lastItemAt?: Map<string, Date>,
+  books: any[],
+  userId: string,
+  counts?: Map<string, number>,
+  lastItemAt?: Map<string, Date>,
 ): any[] {
-  return books.map((b) => serializeBookFor(
-    b, userId, counts?.get(b._id.toString()) ?? 0, undefined, undefined, lastItemAt?.get(b._id.toString()),
-    false,
-  ));
+  return books.map((b) =>
+    serializeBookFor(
+      b,
+      userId,
+      counts?.get(b._id.toString()) ?? 0,
+      undefined,
+      undefined,
+      lastItemAt?.get(b._id.toString()),
+      false,
+    ),
+  );
 }
 
 export function serializeItem(item: any, batchLabelById?: Map<string, string>): any {
@@ -82,9 +101,9 @@ export function serializeItem(item: any, batchLabelById?: Map<string, string>): 
     applied_rule_ids: (obj.applied_rule_ids || []).map((id: any) => id.toString()),
     images: Array.isArray(obj.images)
       ? obj.images.map((img: any) => ({
-        _id: img._id?.toString() ?? img._id,
-        gcs_path: img.gcs_path,
-      }))
+          _id: img._id?.toString() ?? img._id,
+          gcs_path: img.gcs_path,
+        }))
       : obj.images,
     ...(sourceLabel ? { source_label: sourceLabel } : {}),
   };

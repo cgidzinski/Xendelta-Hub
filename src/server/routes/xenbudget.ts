@@ -41,23 +41,41 @@ import {
   xenBudgetRestoreSchema,
 } from "../utils/validation";
 import {
-  resolveShares, resolveCategories, computeImportHash, roundMoney, seedPeriods,
+  resolveShares,
+  resolveCategories,
+  computeImportHash,
+  roundMoney,
+  seedPeriods,
   budgetPeriodRange,
   previousPeriodRanges,
 } from "../utils/xenBudgetUtils";
 import {
-  SYSTEM_FLAGS, STARTER_CATEGORIES, FLAG_UNCATEGORISED, FLAG_POSSIBLE_DUPLICATE,
-  FLAG_NEEDS_REVIEW, FLAG_IGNORED, FLAG_OFF_BUDGET, MAX_XENBUDGET_IMAGES_PER_ITEM,
+  SYSTEM_FLAGS,
+  STARTER_CATEGORIES,
+  FLAG_UNCATEGORISED,
+  FLAG_POSSIBLE_DUPLICATE,
+  FLAG_NEEDS_REVIEW,
+  FLAG_IGNORED,
+  FLAG_OFF_BUDGET,
+  MAX_XENBUDGET_IMAGES_PER_ITEM,
 } from "../constants";
 import { uploadXenBudgetImages } from "../config/multer";
 import { uploadToGCS, deleteFromGCS, generateSignedUrl } from "../utils/gcsUtils";
 import { generateUniqueFilename } from "../utils/mediaUtils";
 import {
-  applyRules, ruleMatches, stripRuleEffects, normalizeFlagNames, withDerivedUncategorised,
-  type DraftItem, type Rule,
+  applyRules,
+  ruleMatches,
+  stripRuleEffects,
+  normalizeFlagNames,
+  withDerivedUncategorised,
+  type DraftItem,
+  type Rule,
 } from "../utils/xenBudgetRules";
 import {
-  detectRecurring, monthlyCommitted, normalizeMerchant, merchantMatchPattern,
+  detectRecurring,
+  monthlyCommitted,
+  normalizeMerchant,
+  merchantMatchPattern,
 } from "../utils/xenBudgetRecurring";
 import { coverageByMerchant } from "../utils/xenBudgetCoverage";
 import { serializeBookFor, serializeBooksFor, serializeItem, serializeItems } from "../utils/xenBudgetSerializer";
@@ -260,8 +278,7 @@ async function resolveRestoreMembers(
   const unmatched: string[] = [];
   const members: string[] = [importerId];
 
-  const ids = exported.map((m) => m.user_id).filter((id): id is string =>
-    !!id && mongoose.Types.ObjectId.isValid(id));
+  const ids = exported.map((m) => m.user_id).filter((id): id is string => !!id && mongoose.Types.ObjectId.isValid(id));
   const usernames = exported.map((m) => m.username).filter(Boolean) as string[];
 
   const found = await User.find({
@@ -269,7 +286,9 @@ async function resolveRestoreMembers(
       ...(ids.length ? [{ _id: { $in: ids.map((id) => new mongoose.Types.ObjectId(id)) } }] : []),
       ...(usernames.length ? [{ username: { $in: usernames } }] : []),
     ],
-  }).select("_id username").lean();
+  })
+    .select("_id username")
+    .lean();
 
   const byId = new Map<string, any>();
   const byUsername = new Map<string, any>();
@@ -279,8 +298,7 @@ async function resolveRestoreMembers(
   });
 
   for (const entry of exported) {
-    const match = (entry.user_id && byId.get(entry.user_id))
-      || (entry.username && byUsername.get(entry.username));
+    const match = (entry.user_id && byId.get(entry.user_id)) || (entry.username && byUsername.get(entry.username));
     if (!match) {
       unmatched.push(entry.username || entry.user_id || "unknown");
       continue;
@@ -333,7 +351,7 @@ function remapRules(rules: any[], idMap: Map<string, string>): any[] {
     ...r,
     actions: {
       ...(r.actions || {}),
-      set_people: ((r.actions?.set_people) || []).map((id: string) => remapUser(id, idMap)),
+      set_people: (r.actions?.set_people || []).map((id: string) => remapUser(id, idMap)),
     },
   }));
 }
@@ -443,12 +461,13 @@ async function insertRestoredItems(
 function ensureSystemLabels(book: any): boolean {
   let changed = false;
   for (const seed of SYSTEM_FLAGS) {
-    const existing = (book.flags || []).find(
-      (t: any) => t.name.toLowerCase() === seed.name.toLowerCase(),
-    );
+    const existing = (book.flags || []).find((t: any) => t.name.toLowerCase() === seed.name.toLowerCase());
     if (existing) {
       // Keep an existing flag's colour; only mark it as built-in if it wasn't.
-      if (!existing.system) { existing.system = true; changed = true; }
+      if (!existing.system) {
+        existing.system = true;
+        changed = true;
+      }
       continue;
     }
     book.flags.push({ name: seed.name, color: seed.color, system: true });
@@ -468,9 +487,7 @@ function ensureSystemLabels(book: any): boolean {
 function ensureStarterCategories(book: any): boolean {
   let changed = false;
   for (const seed of STARTER_CATEGORIES) {
-    const existing = (book.categories || []).find(
-      (c: any) => c.name.toLowerCase() === seed.name.toLowerCase(),
-    );
+    const existing = (book.categories || []).find((c: any) => c.name.toLowerCase() === seed.name.toLowerCase());
     if (existing) continue;
     book.categories.push({ name: seed.name, color: seed.color });
     changed = true;
@@ -505,15 +522,16 @@ function findLabelReferences(book: any, kind: "categories" | "flags", name: stri
 
   for (const rule of book.rules || []) {
     const actions = rule.actions || {};
-    const lists: string[][] = kind === "categories"
-      ? [actions.set_categories || [], (actions.set_category_weights || []).map((w: any) => w.name)]
-      : [actions.add_flags || [], actions.remove_flags || []];
-    const referencedInActions = lists.some((list) =>
-      list.some((n) => (n || "").toLowerCase() === lower));
+    const lists: string[][] =
+      kind === "categories"
+        ? [actions.set_categories || [], (actions.set_category_weights || []).map((w: any) => w.name)]
+        : [actions.add_flags || [], actions.remove_flags || []];
+    const referencedInActions = lists.some((list) => list.some((n) => (n || "").toLowerCase() === lower));
 
     const conditionField = kind === "categories" ? "category" : "flags";
-    const referencedInConditions = ((rule.match && rule.match.conditions) || [])
-      .some((c: any) => c.field === conditionField && (c.value || "").toLowerCase() === lower);
+    const referencedInConditions = ((rule.match && rule.match.conditions) || []).some(
+      (c: any) => c.field === conditionField && (c.value || "").toLowerCase() === lower,
+    );
 
     if (referencedInActions || referencedInConditions) {
       blockers.push(`rule "${rule.name || "unnamed"}"`);
@@ -542,27 +560,31 @@ function registerLabelRoutes(app: any, kind: "categories" | "flags") {
 
   // Items store a category as a subdocument and a flag as a bare string, so renaming and
   // removing them reach one level apart.
-  const renameOnItems = (bookId: any, from: string, to: string) => (kind === "categories"
-    ? XenBudgetItem.updateMany(
-      { book_id: bookId, "categories.name": from },
-      { $set: { "categories.$[el].name": to } },
-      { arrayFilters: [{ "el.name": from }] },
-    )
-    : XenBudgetItem.updateMany(
-      { book_id: bookId, flags: from },
-      { $set: { "flags.$[el]": to } },
-      { arrayFilters: [{ el: from }] },
-    ));
+  const renameOnItems = (bookId: any, from: string, to: string) =>
+    kind === "categories"
+      ? XenBudgetItem.updateMany(
+          { book_id: bookId, "categories.name": from },
+          { $set: { "categories.$[el].name": to } },
+          { arrayFilters: [{ "el.name": from }] },
+        )
+      : XenBudgetItem.updateMany(
+          { book_id: bookId, flags: from },
+          { $set: { "flags.$[el]": to } },
+          { arrayFilters: [{ el: from }] },
+        );
 
-  const removeFromItems = (bookId: any, name: string) => (kind === "categories"
-    // Dropping the entry leaves the item partially uncategorised rather than silently
-    // re-weighting money across the categories that remain - which the user never asked
-    // for and would quietly change what their reports say.
-    ? XenBudgetItem.updateMany({ book_id: bookId, "categories.name": name }, { $pull: { categories: { name } } })
-    : XenBudgetItem.updateMany({ book_id: bookId, flags: name }, { $pull: { flags: name } }));
+  const removeFromItems = (bookId: any, name: string) =>
+    kind === "categories"
+      ? // Dropping the entry leaves the item partially uncategorised rather than silently
+        // re-weighting money across the categories that remain - which the user never asked
+        // for and would quietly change what their reports say.
+        XenBudgetItem.updateMany({ book_id: bookId, "categories.name": name }, { $pull: { categories: { name } } })
+      : XenBudgetItem.updateMany({ book_id: bookId, flags: name }, { $pull: { flags: name } });
 
-  app.post(base,
-    validateParams(xenBudgetBookIdParamSchema), validate(createXenBudgetLabelSchema),
+  app.post(
+    base,
+    validateParams(xenBudgetBookIdParamSchema),
+    validate(createXenBudgetLabelSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -584,10 +606,13 @@ function registerLabelRoutes(app: any, kind: "categories" | "flags") {
         console.error(`Error creating ${kind}:`, error);
         res.status(500).json({ status: false, message: `Failed to create ${singular.toLowerCase()}` });
       }
-    });
+    },
+  );
 
-  app.put(`${base}/:labelId`,
-    validateParams(xenBudgetLabelParamSchema), validate(updateXenBudgetLabelSchema),
+  app.put(
+    `${base}/:labelId`,
+    validateParams(xenBudgetLabelParamSchema),
+    validate(updateXenBudgetLabelSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -606,8 +631,11 @@ function registerLabelRoutes(app: any, kind: "categories" | "flags") {
             });
           }
           const name = req.body.name.trim();
-          if (book[kind].some((l: any) => l._id.toString() !== label._id.toString()
-            && l.name.toLowerCase() === name.toLowerCase())) {
+          if (
+            book[kind].some(
+              (l: any) => l._id.toString() !== label._id.toString() && l.name.toLowerCase() === name.toLowerCase(),
+            )
+          ) {
             return res.status(400).json({ status: false, message: `That ${singular.toLowerCase()} already exists` });
           }
           label.name = name;
@@ -654,58 +682,57 @@ function registerLabelRoutes(app: any, kind: "categories" | "flags") {
         console.error(`Error updating ${kind}:`, error);
         res.status(500).json({ status: false, message: `Failed to update ${singular.toLowerCase()}` });
       }
-    });
+    },
+  );
 
-  app.delete(`${base}/:labelId`,
-    validateParams(xenBudgetLabelParamSchema),
-    async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const label = book[kind].id(req.params.labelId);
-        if (!label) return res.status(404).json({ status: false, message: `${singular} not found` });
+  app.delete(`${base}/:labelId`, validateParams(xenBudgetLabelParamSchema), async (req: Request, res: Response) => {
+    try {
+      const book = await loadBookForMember(req, res);
+      if (!book) return;
+      const label = book[kind].id(req.params.labelId);
+      if (!label) return res.status(404).json({ status: false, message: `${singular} not found` });
 
-        if (label.system) {
-          return res.status(400).json({
-            status: false,
-            message: `"${label.name}" is built in and can't be deleted — rules and imports refer to it by name.`,
-          });
-        }
-        if (kind === "categories") {
-          // A budget on a category that no longer exists could never match again, so this
-          // is refused rather than left quietly broken.
-          const budget = book.budgets.find((b: any) => (b.categories || []).includes(label.name));
-          if (budget) {
-            return res.status(400).json({
-              status: false,
-              message: `"${label.name}" still has a budget on it. Delete that budget first.`,
-            });
-          }
-        }
-
-        // A rule or import preset that still points at this name would be left dangling,
-        // so this is refused rather than silently changing what it does.
-        const blockers = findLabelReferences(book, kind, label.name);
-        if (blockers.length > 0) {
-          return res.status(400).json({
-            status: false,
-            message: `"${label.name}" is still used by ${blockers.join(" and ")}. Update or delete ${blockers.length === 1 ? "it" : "them"} first.`,
-          });
-        }
-
-        const name = label.name;
-        book[kind].pull({ _id: label._id });
-        await book.save();
-        await removeFromItems(book._id, name);
-
-        await book.populate("members", "username avatar");
-        broadcastBook(book);
-        res.json({ status: true, message: `${singular} deleted`, data: serializeBookFor(book, callerId(req)) });
-      } catch (error) {
-        console.error(`Error deleting ${kind}:`, error);
-        res.status(500).json({ status: false, message: `Failed to delete ${singular.toLowerCase()}` });
+      if (label.system) {
+        return res.status(400).json({
+          status: false,
+          message: `"${label.name}" is built in and can't be deleted — rules and imports refer to it by name.`,
+        });
       }
-    });
+      if (kind === "categories") {
+        // A budget on a category that no longer exists could never match again, so this
+        // is refused rather than left quietly broken.
+        const budget = book.budgets.find((b: any) => (b.categories || []).includes(label.name));
+        if (budget) {
+          return res.status(400).json({
+            status: false,
+            message: `"${label.name}" still has a budget on it. Delete that budget first.`,
+          });
+        }
+      }
+
+      // A rule or import preset that still points at this name would be left dangling,
+      // so this is refused rather than silently changing what it does.
+      const blockers = findLabelReferences(book, kind, label.name);
+      if (blockers.length > 0) {
+        return res.status(400).json({
+          status: false,
+          message: `"${label.name}" is still used by ${blockers.join(" and ")}. Update or delete ${blockers.length === 1 ? "it" : "them"} first.`,
+        });
+      }
+
+      const name = label.name;
+      book[kind].pull({ _id: label._id });
+      await book.save();
+      await removeFromItems(book._id, name);
+
+      await book.populate("members", "username avatar");
+      broadcastBook(book);
+      res.json({ status: true, message: `${singular} deleted`, data: serializeBookFor(book, callerId(req)) });
+    } catch (error) {
+      console.error(`Error deleting ${kind}:`, error);
+      res.status(500).json({ status: false, message: `Failed to delete ${singular.toLowerCase()}` });
+    }
+  });
 }
 
 /**
@@ -713,15 +740,20 @@ function registerLabelRoutes(app: any, kind: "categories" | "flags") {
  * caller that wants an uneven split (the item form) resolves its own and passes them in.
  */
 function evenCategoryWeights(names: string[], amount: number) {
-  return resolveCategories("equal", amount, (names || []).map((name) => ({ name })));
+  return resolveCategories(
+    "equal",
+    amount,
+    (names || []).map((name) => ({ name })),
+  );
 }
 
 /** Resolves a rule's categories into stored weights, honouring a percentage split. */
 function draftCategoryWeights(draft: DraftItem, amount: number) {
   const splitType = draft.category_split_type ?? "equal";
-  const parts = draft.category_weights && draft.category_weights.length > 0
-    ? draft.category_weights
-    : (draft.categories || []).map((name) => ({ name }));
+  const parts =
+    draft.category_weights && draft.category_weights.length > 0
+      ? draft.category_weights
+      : (draft.categories || []).map((name) => ({ name }));
   return resolveCategories(splitType, amount, parts);
 }
 
@@ -763,9 +795,7 @@ function buildRuleShares(after: any, book: any): { share_type: string; shares: a
       share_type: splitType,
       shares: people.map((p: string) => ({
         user_id: p,
-        ...(splitType === "percent"
-          ? { percentage: weights.find((w: any) => w.user_id === p)?.percentage ?? 0 }
-          : {}),
+        ...(splitType === "percent" ? { percentage: weights.find((w: any) => w.user_id === p)?.percentage ?? 0 } : {}),
       })),
     },
     book,
@@ -795,7 +825,11 @@ function plainRules(book: any): Rule[] {
     match: {
       mode: r.match?.mode,
       conditions: (r.match?.conditions || []).map((c: any) => ({
-        field: c.field, op: c.op, value: c.value, value2: c.value2, case_sensitive: c.case_sensitive,
+        field: c.field,
+        op: c.op,
+        value: c.value,
+        value2: c.value2,
+        case_sensitive: c.case_sensitive,
       })),
     },
     actions: {
@@ -825,7 +859,9 @@ function toDraft(item: any): DraftItem {
     original_description: item.original_description,
     categories: (item.categories || []).map((c: any) => c.name),
     category_weights: (item.categories || []).map((c: any) => ({
-      name: c.name, amount: c.amount, percentage: c.percentage,
+      name: c.name,
+      amount: c.amount,
+      percentage: c.percentage,
     })),
     category_split_type: item.category_split_type,
     flags: [...(item.flags || [])],
@@ -874,21 +910,26 @@ function sameNames(a: string[], b: string[]): boolean {
  * fields are compared — a sweep never touches amount, date, currency or notes.
  */
 function describeChange(item: any, before: DraftItem, after: DraftItem): any | null {
-  const changed = !sameNames(before.categories, after.categories)
-    || !sameNames(before.flags, after.flags)
-    || before.description !== after.description
-    || before.type !== after.type;
+  const changed =
+    !sameNames(before.categories, after.categories) ||
+    !sameNames(before.flags, after.flags) ||
+    before.description !== after.description ||
+    before.type !== after.type;
   if (!changed) return null;
   return {
     _id: item._id.toString(),
     description: after.description,
     before: {
-      categories: before.categories, flags: before.flags,
-      description: before.description, type: before.type,
+      categories: before.categories,
+      flags: before.flags,
+      description: before.description,
+      type: before.type,
     },
     after: {
-      categories: after.categories, flags: after.flags,
-      description: after.description, type: after.type,
+      categories: after.categories,
+      flags: after.flags,
+      description: after.description,
+      type: after.type,
     },
   };
 }
@@ -960,7 +1001,13 @@ function contributionDescription(bank: any, out: boolean, note?: string): string
 }
 
 async function createContributionItem(
-  book: any, bank: any, userId: string, magnitude: number, out: boolean, date: Date, note?: string,
+  book: any,
+  bank: any,
+  userId: string,
+  magnitude: number,
+  out: boolean,
+  date: Date,
+  note?: string,
 ): Promise<any> {
   const description = contributionDescription(bank, out, note);
   const item = new XenBudgetItem({
@@ -974,10 +1021,7 @@ async function createContributionItem(
     category_split_type: "equal",
     // Attributed to whoever moved the money, the same way the bank's own per-person
     // breakdown is.
-    ...buildShares(
-      { amount: magnitude, share_type: "exact", shares: [{ user_id: userId, amount: magnitude }] },
-      book,
-    ),
+    ...buildShares({ amount: magnitude, share_type: "exact", shares: [{ user_id: userId, amount: magnitude }] }, book),
     source: "manual",
     // A re-apply sweep skips hand-edited items, which is exactly what this is: the bank
     // decided its category, and a later sweep must not move it somewhere else.
@@ -1001,7 +1045,6 @@ async function saveAndRespond(req: Request, res: Response, book: any, message: s
   broadcastBook(book);
   res.json({ status: true, message, data: serializeBookFor(book, callerId(req)) });
 }
-
 
 module.exports = function (app: any) {
   // Auth for every XenBudget route
@@ -1052,7 +1095,9 @@ module.exports = function (app: any) {
       const members: string[] = [userId];
       if (requestedMemberIds && requestedMemberIds.length > 0) {
         const objectIds = requestedMemberIds.map((id: string) => new mongoose.Types.ObjectId(id));
-        const users = await User.find({ _id: { $in: objectIds } }).select("_id").lean();
+        const users = await User.find({ _id: { $in: objectIds } })
+          .select("_id")
+          .lean();
         for (const u of users) {
           const uid = (u._id as any).toString();
           if (!members.includes(uid)) members.push(uid);
@@ -1091,31 +1136,41 @@ module.exports = function (app: any) {
   });
 
   // GET /api/xenbudget/books/:bookId
-  app.get("/api/xenbudget/books/:bookId", validateParams(xenBudgetBookIdParamSchema), async (req: Request, res: Response) => {
-    try {
-      const book = await loadBookForMember(req, res);
-      if (!book) return;
-      // Self-healing: a book that predates a newly added built-in gets it here rather
-      // than needing a migration.
-      if (ensureSystemLabels(book)) await book.save();
-      await book.populate("members", "username avatar");
-      const count = await XenBudgetItem.countDocuments({ book_id: book._id, flags: { $nin: [FLAG_OFF_BUDGET] } });
-      // Reuses the review-queue filter so the count always matches what the modal shows.
-      const reviewCount = await XenBudgetItem.countDocuments(baseItemMatch(book._id, { review: "true" }));
-      const needsReviewCount = await XenBudgetItem.countDocuments({
-        book_id: book._id,
-        flags: { $nin: [FLAG_OFF_BUDGET], $in: [FLAG_NEEDS_REVIEW] },
-      });
-      res.json({ status: true, message: "Book retrieved", data: serializeBookFor(book, callerId(req), count, reviewCount, needsReviewCount) });
-    } catch (error) {
-      console.error("Error fetching book:", error);
-      res.status(500).json({ status: false, message: "Failed to fetch book" });
-    }
-  });
+  app.get(
+    "/api/xenbudget/books/:bookId",
+    validateParams(xenBudgetBookIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
+        // Self-healing: a book that predates a newly added built-in gets it here rather
+        // than needing a migration.
+        if (ensureSystemLabels(book)) await book.save();
+        await book.populate("members", "username avatar");
+        const count = await XenBudgetItem.countDocuments({ book_id: book._id, flags: { $nin: [FLAG_OFF_BUDGET] } });
+        // Reuses the review-queue filter so the count always matches what the modal shows.
+        const reviewCount = await XenBudgetItem.countDocuments(baseItemMatch(book._id, { review: "true" }));
+        const needsReviewCount = await XenBudgetItem.countDocuments({
+          book_id: book._id,
+          flags: { $nin: [FLAG_OFF_BUDGET], $in: [FLAG_NEEDS_REVIEW] },
+        });
+        res.json({
+          status: true,
+          message: "Book retrieved",
+          data: serializeBookFor(book, callerId(req), count, reviewCount, needsReviewCount),
+        });
+      } catch (error) {
+        console.error("Error fetching book:", error);
+        res.status(500).json({ status: false, message: "Failed to fetch book" });
+      }
+    },
+  );
 
   // PUT /api/xenbudget/books/:bookId - any member may rename/retime the book
-  app.put("/api/xenbudget/books/:bookId",
-    validateParams(xenBudgetBookIdParamSchema), validate(updateXenBudgetBookSchema),
+  app.put(
+    "/api/xenbudget/books/:bookId",
+    validateParams(xenBudgetBookIdParamSchema),
+    validate(updateXenBudgetBookSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -1133,36 +1188,45 @@ module.exports = function (app: any) {
         console.error("Error updating book:", error);
         res.status(500).json({ status: false, message: "Failed to update book" });
       }
-    });
+    },
+  );
 
   // DELETE /api/xenbudget/books/:bookId - owner only; takes the items with it
-  app.delete("/api/xenbudget/books/:bookId", validateParams(xenBudgetBookIdParamSchema), async (req: Request, res: Response) => {
-    try {
-      const book = await loadBookForCreator(req, res);
-      if (!book) return;
-      const notifyIds = memberIds(book);
-      await XenBudgetItem.deleteMany({ book_id: book._id });
-      await XenBudgetBook.deleteOne({ _id: book._id });
-      SocketManager.getInstance().notifyXenBudgetBooksUpdated(notifyIds);
-      res.json({ status: true, message: "Book deleted" });
-    } catch (error) {
-      console.error("Error deleting book:", error);
-      res.status(500).json({ status: false, message: "Failed to delete book" });
-    }
-  });
+  app.delete(
+    "/api/xenbudget/books/:bookId",
+    validateParams(xenBudgetBookIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForCreator(req, res);
+        if (!book) return;
+        const notifyIds = memberIds(book);
+        await XenBudgetItem.deleteMany({ book_id: book._id });
+        await XenBudgetBook.deleteOne({ _id: book._id });
+        SocketManager.getInstance().notifyXenBudgetBooksUpdated(notifyIds);
+        res.json({ status: true, message: "Book deleted" });
+      } catch (error) {
+        console.error("Error deleting book:", error);
+        res.status(500).json({ status: false, message: "Failed to delete book" });
+      }
+    },
+  );
 
   // --- Members -------------------------------------------------------------
 
   // POST /api/xenbudget/books/:bookId/members - owner only
-  app.post("/api/xenbudget/books/:bookId/members",
-    validateParams(xenBudgetBookIdParamSchema), validate(addXenBudgetMembersSchema),
+  app.post(
+    "/api/xenbudget/books/:bookId/members",
+    validateParams(xenBudgetBookIdParamSchema),
+    validate(addXenBudgetMembersSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForCreator(req, res);
         if (!book) return;
         const existing = memberIds(book);
         const objectIds = req.body.memberIds.map((id: string) => new mongoose.Types.ObjectId(id));
-        const users = await User.find({ _id: { $in: objectIds } }).select("_id").lean();
+        const users = await User.find({ _id: { $in: objectIds } })
+          .select("_id")
+          .lean();
 
         const added: string[] = [];
         for (const u of users) {
@@ -1193,11 +1257,13 @@ module.exports = function (app: any) {
         console.error("Error adding members:", error);
         res.status(500).json({ status: false, message: "Failed to add members" });
       }
-    });
+    },
+  );
 
   // DELETE /api/xenbudget/books/:bookId/members/:userId - owner removing anyone, or a
   // member leaving. The owner can't leave their own book; they transfer or delete it.
-  app.delete("/api/xenbudget/books/:bookId/members/:userId",
+  app.delete(
+    "/api/xenbudget/books/:bookId/members/:userId",
     validateParams(xenBudgetMemberParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -1210,7 +1276,9 @@ module.exports = function (app: any) {
           return res.status(403).json({ status: false, message: "Only the book owner can remove other members" });
         }
         if (target === book.created_by) {
-          return res.status(400).json({ status: false, message: "Transfer or delete the book instead of removing its owner" });
+          return res
+            .status(400)
+            .json({ status: false, message: "Transfer or delete the book instead of removing its owner" });
         }
         if (!isMember(book, target)) {
           return res.status(404).json({ status: false, message: "That user is not a member" });
@@ -1227,11 +1295,14 @@ module.exports = function (app: any) {
         console.error("Error removing member:", error);
         res.status(500).json({ status: false, message: "Failed to remove member" });
       }
-    });
+    },
+  );
 
   // POST /api/xenbudget/books/:bookId/transfer - hand the book to another member
-  app.post("/api/xenbudget/books/:bookId/transfer",
-    validateParams(xenBudgetBookIdParamSchema), validate(transferXenBudgetBookSchema),
+  app.post(
+    "/api/xenbudget/books/:bookId/transfer",
+    validateParams(xenBudgetBookIdParamSchema),
+    validate(transferXenBudgetBookSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForCreator(req, res);
@@ -1256,7 +1327,8 @@ module.exports = function (app: any) {
         console.error("Error transferring book:", error);
         res.status(500).json({ status: false, message: "Failed to transfer book" });
       }
-    });
+    },
+  );
 
   // --- Labels: categories and flags -----------------------------------------
   //
@@ -1272,7 +1344,8 @@ module.exports = function (app: any) {
   //   type. Deliberately not the summary endpoint's by_category count, which is
   //   expense-only and scoped to whatever date window the caller passes; deleting a
   //   category needs the true total regardless of when the items landed.
-  app.get("/api/xenbudget/books/:bookId/categories/counts",
+  app.get(
+    "/api/xenbudget/books/:bookId/categories/counts",
     validateParams(xenBudgetBookIdParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -1284,19 +1357,23 @@ module.exports = function (app: any) {
           { $group: { _id: "$categories.name", count: { $sum: 1 } } },
         ]);
         const counts: Record<string, number> = {};
-        rows.forEach((row: any) => { counts[row._id] = row.count; });
+        rows.forEach((row: any) => {
+          counts[row._id] = row.count;
+        });
         res.json({ status: true, message: "Category item counts retrieved", data: counts });
       } catch (error) {
         console.error("Error fetching category item counts:", error);
         res.status(500).json({ status: false, message: "Failed to fetch category item counts" });
       }
-    });
+    },
+  );
 
   // POST /api/xenbudget/books/:bookId/reseed-labels
   // Re-adds any starter categories and built-in flags the book is missing - e.g. a book
   // created before a later release added more. Additive only: existing names and colours
   // are left untouched, and a category or flag the user deliberately deleted comes back.
-  app.post("/api/xenbudget/books/:bookId/reseed-labels",
+  app.post(
+    "/api/xenbudget/books/:bookId/reseed-labels",
     validateParams(xenBudgetBookIdParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -1315,18 +1392,24 @@ module.exports = function (app: any) {
         await book.save();
         await book.populate("members", "username avatar");
         broadcastBook(book);
-        res.json({ status: true, message: "Categories and flags re-seeded", data: serializeBookFor(book, callerId(req)) });
+        res.json({
+          status: true,
+          message: "Categories and flags re-seeded",
+          data: serializeBookFor(book, callerId(req)),
+        });
       } catch (error) {
         console.error("Error reseeding labels:", error);
         res.status(500).json({ status: false, message: "Failed to re-seed labels" });
       }
-    });
-
+    },
+  );
 
   // --- Rules ---------------------------------------------------------------
 
-  app.post("/api/xenbudget/books/:bookId/rules",
-    validateParams(xenBudgetBookIdParamSchema), validate(createXenBudgetRuleSchema),
+  app.post(
+    "/api/xenbudget/books/:bookId/rules",
+    validateParams(xenBudgetBookIdParamSchema),
+    validate(createXenBudgetRuleSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -1334,9 +1417,8 @@ module.exports = function (app: any) {
         const error = validateRulePeople(req.body, book);
         if (error) return res.status(400).json({ status: false, message: error });
         // New rules land at the end of the chain unless they say otherwise.
-        const priority = req.body.priority ?? (book.rules.length
-          ? Math.max(...book.rules.map((r: any) => r.priority ?? 0)) + 1
-          : 0);
+        const priority =
+          req.body.priority ?? (book.rules.length ? Math.max(...book.rules.map((r: any) => r.priority ?? 0)) + 1 : 0);
         book.rules.push({ ...req.body, priority });
         await book.save();
         await book.populate("members", "username avatar");
@@ -1346,10 +1428,13 @@ module.exports = function (app: any) {
         console.error("Error creating rule:", error);
         res.status(500).json({ status: false, message: "Failed to create rule" });
       }
-    });
+    },
+  );
 
-  app.put("/api/xenbudget/books/:bookId/rules/:ruleId",
-    validateParams(xenBudgetRuleParamSchema), validate(updateXenBudgetRuleSchema),
+  app.put(
+    "/api/xenbudget/books/:bookId/rules/:ruleId",
+    validateParams(xenBudgetRuleParamSchema),
+    validate(updateXenBudgetRuleSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -1367,14 +1452,17 @@ module.exports = function (app: any) {
         console.error("Error updating rule:", error);
         res.status(500).json({ status: false, message: "Failed to update rule" });
       }
-    });
+    },
+  );
 
   // POST /api/xenbudget/books/:bookId/rules/preview
   //
   // Shows which existing items a not-yet-saved rule would match, so an edit can be checked
   // against real transactions before committing. Writes nothing.
-  app.post("/api/xenbudget/books/:bookId/rules/preview",
-    validateParams(xenBudgetBookIdParamSchema), validate(createXenBudgetRuleSchema),
+  app.post(
+    "/api/xenbudget/books/:bookId/rules/preview",
+    validateParams(xenBudgetBookIdParamSchema),
+    validate(createXenBudgetRuleSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -1429,9 +1517,11 @@ module.exports = function (app: any) {
         console.error("Error previewing rule:", error);
         res.status(500).json({ status: false, message: "Failed to preview rule" });
       }
-    });
+    },
+  );
 
-  app.delete("/api/xenbudget/books/:bookId/rules/:ruleId",
+  app.delete(
+    "/api/xenbudget/books/:bookId/rules/:ruleId",
     validateParams(xenBudgetRuleParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -1454,15 +1544,18 @@ module.exports = function (app: any) {
         console.error("Error deleting rule:", error);
         res.status(500).json({ status: false, message: "Failed to delete rule" });
       }
-    });
+    },
+  );
 
   // POST /api/xenbudget/books/:bookId/rules/reapply
   //
   // Sweeps the current rule set over existing items. Every item is first stripped of what
   // rules previously did to it and then re-evaluated, so the result is identical to
   // importing it fresh — which is what makes deleting a rule actually reverse its effects.
-  app.post("/api/xenbudget/books/:bookId/rules/reapply",
-    validateParams(xenBudgetBookIdParamSchema), validate(reapplyXenBudgetRulesSchema),
+  app.post(
+    "/api/xenbudget/books/:bookId/rules/reapply",
+    validateParams(xenBudgetBookIdParamSchema),
+    validate(reapplyXenBudgetRulesSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -1535,13 +1628,15 @@ module.exports = function (app: any) {
         console.error("Error re-applying rules:", error);
         res.status(500).json({ status: false, message: "Failed to re-apply rules" });
       }
-    });
+    },
+  );
 
   // POST /api/xenbudget/books/:bookId/items/preview
   //
   // Runs the rule set over candidate rows and writes nothing. The CSV wizard's preview
   // step calls this so what it shows is produced by exactly the same code as the import.
-  app.post("/api/xenbudget/books/:bookId/items/preview",
+  app.post(
+    "/api/xenbudget/books/:bookId/items/preview",
     validateParams(xenBudgetBookIdParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -1566,8 +1661,10 @@ module.exports = function (app: any) {
             skipped: result.skipped,
             skipped_by: result.skippedByRuleName,
             original: {
-              description: draft.description, categories: draft.categories,
-              type: draft.type, amount: draft.amount,
+              description: draft.description,
+              categories: draft.categories,
+              type: draft.type,
+              amount: draft.amount,
             },
             item: {
               type: result.item.type,
@@ -1597,7 +1694,8 @@ module.exports = function (app: any) {
         console.error("Error previewing items:", error);
         res.status(500).json({ status: false, message: "Failed to preview items" });
       }
-    });
+    },
+  );
 
   // --- Backup: export and restore ------------------------------------------
   //
@@ -1606,7 +1704,8 @@ module.exports = function (app: any) {
   // This is deliberately a different format: plain, inspectable JSON, one book.
 
   // GET /api/xenbudget/books/:bookId/export
-  app.get("/api/xenbudget/books/:bookId/export",
+  app.get(
+    "/api/xenbudget/books/:bookId/export",
     validateParams(xenBudgetBookIdParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -1616,29 +1715,37 @@ module.exports = function (app: any) {
 
         const safeName = book.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
         res.setHeader("Content-Type", "application/json; charset=utf-8");
-        res.setHeader("Content-Disposition",
-          `attachment; filename="xenbudget-${safeName}-${new Date().toISOString().slice(0, 10)}.json"`);
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="xenbudget-${safeName}-${new Date().toISOString().slice(0, 10)}.json"`,
+        );
 
         // format_version is carried from day one so a future schema change can migrate an
         // older file rather than reject it.
         res.write('{\n  "format_version": 1,\n');
         res.write(`  "exported_at": ${JSON.stringify(new Date().toISOString())},\n`);
-        res.write(`  "book": ${JSON.stringify({
-          name: book.name,
-          default_currency: book.default_currency,
-          categories: book.categories,
-          flags: book.flags,
-          budgets: book.budgets,
-          piggy_banks: book.piggy_banks,
-          rules: book.rules,
-          import_presets: book.import_presets,
-          // Both id and username: the id is exact when the same users still exist, and
-          // the username lets a restore re-match people on a different deployment.
-          members: (book.members as any[]).map((m: any) => ({
-            user_id: m._id ? m._id.toString() : m.toString(),
-            username: m.username || undefined,
-          })),
-        }, null, 2)},\n`);
+        res.write(
+          `  "book": ${JSON.stringify(
+            {
+              name: book.name,
+              default_currency: book.default_currency,
+              categories: book.categories,
+              flags: book.flags,
+              budgets: book.budgets,
+              piggy_banks: book.piggy_banks,
+              rules: book.rules,
+              import_presets: book.import_presets,
+              // Both id and username: the id is exact when the same users still exist, and
+              // the username lets a restore re-match people on a different deployment.
+              members: (book.members as any[]).map((m: any) => ({
+                user_id: m._id ? m._id.toString() : m.toString(),
+                username: m.username || undefined,
+              })),
+            },
+            null,
+            2,
+          )},\n`,
+        );
         res.write('  "items": [');
 
         // Streamed from a cursor rather than loaded whole: a well-used book is tens of
@@ -1659,61 +1766,62 @@ module.exports = function (app: any) {
         if (res.headersSent) res.end();
         else res.status(500).json({ status: false, message: "Failed to export book" });
       }
-    });
+    },
+  );
 
   // POST /api/xenbudget/books/import - restore as a NEW book
-  app.post("/api/xenbudget/books/import", validate(xenBudgetRestoreSchema),
-    async (req: Request, res: Response) => {
-      try {
-        const userId = callerId(req);
-        const payload = req.body;
-        const { members, idMap, unmatched } = await resolveRestoreMembers(payload.book.members || [], userId);
+  app.post("/api/xenbudget/books/import", validate(xenBudgetRestoreSchema), async (req: Request, res: Response) => {
+    try {
+      const userId = callerId(req);
+      const payload = req.body;
+      const { members, idMap, unmatched } = await resolveRestoreMembers(payload.book.members || [], userId);
 
-        const book = new XenBudgetBook({
-          name: payload.book.name,
-          default_currency: payload.book.default_currency || "CAD",
-          created_by: userId,
-          members,
-          categories: stripIds(payload.book.categories),
-          flags: stripIds(payload.book.flags),
-          budgets: remapBudgets(stripIds(payload.book.budgets), idMap),
-          piggy_banks: remapPiggyBanks(stripIds(payload.book.piggy_banks), idMap),
-          rules: remapRules(stripIds(payload.book.rules), idMap),
-          import_presets: stripIds(payload.book.import_presets),
-        });
-        // A restore must still end up with the built-ins, even from an older export.
-        ensureSystemLabels(book);
-        await book.save();
+      const book = new XenBudgetBook({
+        name: payload.book.name,
+        default_currency: payload.book.default_currency || "CAD",
+        created_by: userId,
+        members,
+        categories: stripIds(payload.book.categories),
+        flags: stripIds(payload.book.flags),
+        budgets: remapBudgets(stripIds(payload.book.budgets), idMap),
+        piggy_banks: remapPiggyBanks(stripIds(payload.book.piggy_banks), idMap),
+        rules: remapRules(stripIds(payload.book.rules), idMap),
+        import_presets: stripIds(payload.book.import_presets),
+      });
+      // A restore must still end up with the built-ins, even from an older export.
+      ensureSystemLabels(book);
+      await book.save();
 
-        const inserted = await insertRestoredItems(book, payload.items, idMap, userId, "merge");
-        await book.populate("members", "username avatar");
-        SocketManager.getInstance().notifyXenBudgetBooksUpdated(members.map(String));
+      const inserted = await insertRestoredItems(book, payload.items, idMap, userId, "merge");
+      await book.populate("members", "username avatar");
+      SocketManager.getInstance().notifyXenBudgetBooksUpdated(members.map(String));
 
-        res.json({
-          status: true,
-          message: `Restored ${inserted} item${inserted === 1 ? "" : "s"}`,
-          data: { book: serializeBookFor(book, userId, inserted), restored: inserted, unmatched_people: unmatched },
-        });
-      } catch (error) {
-        console.error("Error restoring book:", error);
-        res.status(500).json({ status: false, message: "Failed to restore book" });
-      }
-    });
+      res.json({
+        status: true,
+        message: `Restored ${inserted} item${inserted === 1 ? "" : "s"}`,
+        data: { book: serializeBookFor(book, userId, inserted), restored: inserted, unmatched_people: unmatched },
+      });
+    } catch (error) {
+      console.error("Error restoring book:", error);
+      res.status(500).json({ status: false, message: "Failed to restore book" });
+    }
+  });
 
   // POST /api/xenbudget/books/:bookId/import - restore INTO this book
-  app.post("/api/xenbudget/books/:bookId/import",
-    validateParams(xenBudgetBookIdParamSchema), validate(xenBudgetRestoreSchema),
+  app.post(
+    "/api/xenbudget/books/:bookId/import",
+    validateParams(xenBudgetBookIdParamSchema),
+    validate(xenBudgetRestoreSchema),
     async (req: Request, res: Response) => {
       try {
         // scope wins over the legacy mode field; a request with neither is an items-only
         // merge, which is what a bare restore has always done.
-        const scope = (req.body.scope as "items" | "config" | "everything" | undefined)
-          || (req.body.mode === "replace" ? "everything" : "items");
+        const scope =
+          (req.body.scope as "items" | "config" | "everything" | undefined) ||
+          (req.body.mode === "replace" ? "everything" : "items");
         // Config and everything overwrite book-level settings (and everything also wipes
         // items), so they are the owner's call; a plain items merge is member-safe.
-        const book = scope === "items"
-          ? await loadBookForMember(req, res)
-          : await loadBookForCreator(req, res);
+        const book = scope === "items" ? await loadBookForMember(req, res) : await loadBookForCreator(req, res);
         if (!book) return;
 
         const userId = callerId(req);
@@ -1735,17 +1843,20 @@ module.exports = function (app: any) {
         await book.populate("members", "username avatar");
         broadcastBook(book);
 
-        const message = scope === "config"
-          ? "Imported settings"
-          : scope === "everything"
-            ? `Replaced ${removed} item${removed === 1 ? "" : "s"} with ${inserted}`
-            : `Added ${inserted} item${inserted === 1 ? "" : "s"}`;
+        const message =
+          scope === "config"
+            ? "Imported settings"
+            : scope === "everything"
+              ? `Replaced ${removed} item${removed === 1 ? "" : "s"} with ${inserted}`
+              : `Added ${inserted} item${inserted === 1 ? "" : "s"}`;
 
         res.json({
           status: true,
           message,
           data: {
-            scope, restored: inserted, removed,
+            scope,
+            restored: inserted,
+            removed,
             skipped_duplicates: scope === "items" ? req.body.items.length - inserted : 0,
             unmatched_people: unmatched,
           },
@@ -1754,7 +1865,8 @@ module.exports = function (app: any) {
         console.error("Error restoring into book:", error);
         res.status(500).json({ status: false, message: "Failed to restore into book" });
       }
-    });
+    },
+  );
 
   // --- CSV import ----------------------------------------------------------
 
@@ -1763,8 +1875,10 @@ module.exports = function (app: any) {
   // Flags rows that look like transactions the book already has. Deliberately advisory:
   // two identical $4 coffees on the same day are both real, so this is never enforced as
   // a constraint — the user decides row by row.
-  app.post("/api/xenbudget/books/:bookId/items/check-duplicates",
-    validateParams(xenBudgetBookIdParamSchema), validate(xenBudgetCheckDuplicatesSchema),
+  app.post(
+    "/api/xenbudget/books/:bookId/items/check-duplicates",
+    validateParams(xenBudgetBookIdParamSchema),
+    validate(xenBudgetCheckDuplicatesSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -1775,36 +1889,53 @@ module.exports = function (app: any) {
         const existing = await XenBudgetItem.find({
           book_id: book._id,
           import_hash: { $in: hashes },
-        }).select("import_hash description date amount").lean();
+        })
+          .select("import_hash description date amount")
+          .lean();
 
         const byHash = new Map<string, any>();
-        existing.forEach((e: any) => { if (!byHash.has(e.import_hash)) byHash.set(e.import_hash, e); });
+        existing.forEach((e: any) => {
+          if (!byHash.has(e.import_hash)) byHash.set(e.import_hash, e);
+        });
 
         res.json({
           status: true,
           message: "Duplicate check complete",
           data: {
-            duplicates: rows.map((_: any, i: number) => {
-              const match = byHash.get(hashes[i]);
-              return match
-                ? { index: i, existing: { _id: match._id.toString(), description: match.description, date: match.date, amount: match.amount } }
-                : null;
-            }).filter(Boolean),
+            duplicates: rows
+              .map((_: any, i: number) => {
+                const match = byHash.get(hashes[i]);
+                return match
+                  ? {
+                      index: i,
+                      existing: {
+                        _id: match._id.toString(),
+                        description: match.description,
+                        date: match.date,
+                        amount: match.amount,
+                      },
+                    }
+                  : null;
+              })
+              .filter(Boolean),
           },
         });
       } catch (error) {
         console.error("Error checking duplicates:", error);
         res.status(500).json({ status: false, message: "Failed to check duplicates" });
       }
-    });
+    },
+  );
 
   // POST /api/xenbudget/books/:bookId/items/bulk
   //
   // The CSV import itself. Every row goes through the same rules engine the preview used,
   // so what the user approved is what gets written. Rows a rule skips are counted and
   // named rather than silently dropped.
-  app.post("/api/xenbudget/books/:bookId/items/bulk",
-    validateParams(xenBudgetBookIdParamSchema), validate(xenBudgetBulkItemsSchema),
+  app.post(
+    "/api/xenbudget/books/:bookId/items/bulk",
+    validateParams(xenBudgetBookIdParamSchema),
+    validate(xenBudgetBulkItemsSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -1835,17 +1966,24 @@ module.exports = function (app: any) {
         // Rows matching something already in the book are marked rather than refused —
         // two identical charges on the same day are both real, and the user already chose
         // to import these. The flag keeps that decision visible after the wizard closes.
-        const incomingHashes = req.body.items.map((row: any) => computeImportHash(
-          row.date || new Date(), roundMoney(Number(row.amount) || 0), row.description || "",
-        ));
+        const incomingHashes = req.body.items.map((row: any) =>
+          computeImportHash(row.date || new Date(), roundMoney(Number(row.amount) || 0), row.description || ""),
+        );
         const seenBefore = new Set<string>(
-          (await XenBudgetItem.find({ book_id: book._id, import_hash: { $in: incomingHashes } })
-            .select("import_hash").lean()).map((r: any) => r.import_hash),
+          (
+            await XenBudgetItem.find({ book_id: book._id, import_hash: { $in: incomingHashes } })
+              .select("import_hash")
+              .lean()
+          ).map((r: any) => r.import_hash),
         );
 
         req.body.items.forEach((row: any, index: number) => {
           const draft = draftFromRow({ ...row, source: "csv" }, book);
-          const { item: ruled, skipped: wasSkipped, skippedByRuleName } = req.body.skip_rules
+          const {
+            item: ruled,
+            skipped: wasSkipped,
+            skippedByRuleName,
+          } = req.body.skip_rules
             ? { item: draft, skipped: false, skippedByRuleName: undefined }
             : applyRules(draft, rules);
           if (wasSkipped) {
@@ -1936,10 +2074,12 @@ module.exports = function (app: any) {
         console.error("Error importing items:", error);
         res.status(500).json({ status: false, message: "Failed to import items" });
       }
-    });
+    },
+  );
 
   // GET /api/xenbudget/books/:bookId/imports - what has been imported, newest first
-  app.get("/api/xenbudget/books/:bookId/imports",
+  app.get(
+    "/api/xenbudget/books/:bookId/imports",
     validateParams(xenBudgetBookIdParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -1958,7 +2098,9 @@ module.exports = function (app: any) {
         rows.forEach((r: any) => counts.set(r._id.toString(), r.count));
 
         const memberById = new Map<string, any>();
-        (book.members as any[]).forEach((m: any) => { if (m._id) memberById.set(m._id.toString(), m); });
+        (book.members as any[]).forEach((m: any) => {
+          if (m._id) memberById.set(m._id.toString(), m);
+        });
 
         const batches = [...book.import_batches]
           .sort((a: any, b: any) => new Date(b.imported_at).getTime() - new Date(a.imported_at).getTime())
@@ -1978,10 +2120,12 @@ module.exports = function (app: any) {
         console.error("Error listing imports:", error);
         res.status(500).json({ status: false, message: "Failed to list imports" });
       }
-    });
+    },
+  );
 
   // DELETE /api/xenbudget/books/:bookId/imports/:batchId - undo one import wholesale
-  app.delete("/api/xenbudget/books/:bookId/imports/:batchId",
+  app.delete(
+    "/api/xenbudget/books/:bookId/imports/:batchId",
     validateParams(xenBudgetBatchParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -2003,12 +2147,15 @@ module.exports = function (app: any) {
         console.error("Error undoing import:", error);
         res.status(500).json({ status: false, message: "Failed to undo import" });
       }
-    });
+    },
+  );
 
   // --- Import presets ------------------------------------------------------
 
-  app.post("/api/xenbudget/books/:bookId/import-presets",
-    validateParams(xenBudgetBookIdParamSchema), validate(createXenBudgetPresetSchema),
+  app.post(
+    "/api/xenbudget/books/:bookId/import-presets",
+    validateParams(xenBudgetBookIdParamSchema),
+    validate(createXenBudgetPresetSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -2028,10 +2175,13 @@ module.exports = function (app: any) {
         console.error("Error saving preset:", error);
         res.status(500).json({ status: false, message: "Failed to save preset" });
       }
-    });
+    },
+  );
 
-  app.put("/api/xenbudget/books/:bookId/import-presets/:presetId",
-    validateParams(xenBudgetPresetParamSchema), validate(updateXenBudgetPresetSchema),
+  app.put(
+    "/api/xenbudget/books/:bookId/import-presets/:presetId",
+    validateParams(xenBudgetPresetParamSchema),
+    validate(updateXenBudgetPresetSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -2047,9 +2197,11 @@ module.exports = function (app: any) {
         console.error("Error updating preset:", error);
         res.status(500).json({ status: false, message: "Failed to update preset" });
       }
-    });
+    },
+  );
 
-  app.delete("/api/xenbudget/books/:bookId/import-presets/:presetId",
+  app.delete(
+    "/api/xenbudget/books/:bookId/import-presets/:presetId",
     validateParams(xenBudgetPresetParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -2066,12 +2218,15 @@ module.exports = function (app: any) {
         console.error("Error deleting preset:", error);
         res.status(500).json({ status: false, message: "Failed to delete preset" });
       }
-    });
+    },
+  );
 
   // --- Budgets -------------------------------------------------------------
 
-  app.post("/api/xenbudget/books/:bookId/budgets",
-    validateParams(xenBudgetBookIdParamSchema), validate(createXenBudgetBudgetSchema),
+  app.post(
+    "/api/xenbudget/books/:bookId/budgets",
+    validateParams(xenBudgetBookIdParamSchema),
+    validate(createXenBudgetBudgetSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -2088,10 +2243,13 @@ module.exports = function (app: any) {
         console.error("Error creating budget:", error);
         res.status(500).json({ status: false, message: "Failed to create budget" });
       }
-    });
+    },
+  );
 
-  app.put("/api/xenbudget/books/:bookId/budgets/:budgetId",
-    validateParams(xenBudgetBudgetParamSchema), validate(updateXenBudgetBudgetSchema),
+  app.put(
+    "/api/xenbudget/books/:bookId/budgets/:budgetId",
+    validateParams(xenBudgetBudgetParamSchema),
+    validate(updateXenBudgetBudgetSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -2110,9 +2268,11 @@ module.exports = function (app: any) {
         console.error("Error updating budget:", error);
         res.status(500).json({ status: false, message: "Failed to update budget" });
       }
-    });
+    },
+  );
 
-  app.delete("/api/xenbudget/books/:bookId/budgets/:budgetId",
+  app.delete(
+    "/api/xenbudget/books/:bookId/budgets/:budgetId",
     validateParams(xenBudgetBudgetParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -2129,7 +2289,8 @@ module.exports = function (app: any) {
         console.error("Error deleting budget:", error);
         res.status(500).json({ status: false, message: "Failed to delete budget" });
       }
-    });
+    },
+  );
 
   // --- Piggy banks ---------------------------------------------------------
   //
@@ -2139,8 +2300,10 @@ module.exports = function (app: any) {
   // book, the way the budget routes do, so one response refreshes the client and one
   // socket broadcast reaches everyone else in the book.
 
-  app.post("/api/xenbudget/books/:bookId/piggy-banks",
-    validateParams(xenBudgetBookIdParamSchema), validate(createXenBudgetPiggyBankSchema),
+  app.post(
+    "/api/xenbudget/books/:bookId/piggy-banks",
+    validateParams(xenBudgetBookIdParamSchema),
+    validate(createXenBudgetPiggyBankSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -2157,10 +2320,13 @@ module.exports = function (app: any) {
         console.error("Error creating piggy bank:", error);
         res.status(500).json({ status: false, message: "Failed to create piggy bank" });
       }
-    });
+    },
+  );
 
-  app.put("/api/xenbudget/books/:bookId/piggy-banks/:bankId",
-    validateParams(xenBudgetPiggyBankParamSchema), validate(updateXenBudgetPiggyBankSchema),
+  app.put(
+    "/api/xenbudget/books/:bookId/piggy-banks/:bankId",
+    validateParams(xenBudgetPiggyBankParamSchema),
+    validate(updateXenBudgetPiggyBankSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -2176,12 +2342,14 @@ module.exports = function (app: any) {
         console.error("Error updating piggy bank:", error);
         res.status(500).json({ status: false, message: "Failed to update piggy bank" });
       }
-    });
+    },
+  );
 
   // Deleting a piggy bank takes its ledger but LEAVES the transactions it created: those are
   // real money movements that already happened, and silently removing a year of them
   // because a target was abandoned would rewrite the book's history.
-  app.delete("/api/xenbudget/books/:bookId/piggy-banks/:bankId",
+  app.delete(
+    "/api/xenbudget/books/:bookId/piggy-banks/:bankId",
     validateParams(xenBudgetPiggyBankParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -2194,26 +2362,38 @@ module.exports = function (app: any) {
         // from the Items tab since, and promising to leave one behind that isn't there
         // any more would be a lie in the only message the user gets about it.
         const linkedIds = (bank.contributions || []).map((c: any) => c.item_id).filter(Boolean);
-        const kept = linkedIds.length === 0 ? 0 : await XenBudgetItem.countDocuments({
-          _id: { $in: linkedIds }, book_id: book._id,
-        });
+        const kept =
+          linkedIds.length === 0
+            ? 0
+            : await XenBudgetItem.countDocuments({
+                _id: { $in: linkedIds },
+                book_id: book._id,
+              });
         book.piggy_banks.pull({ _id: bank._id });
-        await saveAndRespond(req, res, book, kept > 0
-          ? `Piggy bank deleted — ${kept} transaction${kept === 1 ? "" : "s"} left in the book`
-          : "Piggy bank deleted");
+        await saveAndRespond(
+          req,
+          res,
+          book,
+          kept > 0
+            ? `Piggy bank deleted — ${kept} transaction${kept === 1 ? "" : "s"} left in the book`
+            : "Piggy bank deleted",
+        );
       } catch (error) {
         console.error("Error deleting piggy bank:", error);
         res.status(500).json({ status: false, message: "Failed to delete piggy bank" });
       }
-    });
+    },
+  );
 
   // POST .../piggyBank/:bankId/contributions - put money in, or take it back out
   //
   // `amount` is always positive and `direction` carries the sign, so a "contribute"
   // button can't subtract by sending a minus. The matching book item is always written -
   // see createContributionItem for why it books the way round it does.
-  app.post("/api/xenbudget/books/:bookId/piggy-banks/:bankId/contributions",
-    validateParams(xenBudgetPiggyBankParamSchema), validate(createXenBudgetContributionSchema),
+  app.post(
+    "/api/xenbudget/books/:bookId/piggy-banks/:bankId/contributions",
+    validateParams(xenBudgetPiggyBankParamSchema),
+    validate(createXenBudgetContributionSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -2250,14 +2430,17 @@ module.exports = function (app: any) {
         console.error("Error adding contribution:", error);
         res.status(500).json({ status: false, message: "Failed to add contribution" });
       }
-    });
+    },
+  );
 
   // Editing a contribution keeps its linked transaction in step, so the two can never
   // disagree about what moved. Its DIRECTION is fixed: a deposit that becomes a withdrawal
   // is a different movement, and turning one into the other in place would leave the
   // linked item booked the wrong way round.
-  app.put("/api/xenbudget/books/:bookId/piggy-banks/:bankId/contributions/:contributionId",
-    validateParams(xenBudgetContributionParamSchema), validate(updateXenBudgetContributionSchema),
+  app.put(
+    "/api/xenbudget/books/:bookId/piggy-banks/:bankId/contributions/:contributionId",
+    validateParams(xenBudgetContributionParamSchema),
+    validate(updateXenBudgetContributionSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -2270,9 +2453,7 @@ module.exports = function (app: any) {
         }
 
         const out = contribution.amount < 0;
-        const magnitude = req.body.amount === undefined
-          ? Math.abs(contribution.amount)
-          : roundMoney(req.body.amount);
+        const magnitude = req.body.amount === undefined ? Math.abs(contribution.amount) : roundMoney(req.body.amount);
         if (out) {
           const otherSaved = summarizePiggyBank(bank).saved + Math.abs(contribution.amount);
           if (magnitude > otherSaved) {
@@ -2290,8 +2471,12 @@ module.exports = function (app: any) {
           item.date = contribution.date;
           item.description = contributionDescription(bank, out, contribution.note);
           item.categories = bank.category ? evenCategoryWeights([bank.category], magnitude) : [];
-          item.shares = resolveShares("exact", magnitude,
-            [{ user_id: contribution.user_id, amount: magnitude }], memberIds(book));
+          item.shares = resolveShares(
+            "exact",
+            magnitude,
+            [{ user_id: contribution.user_id, amount: magnitude }],
+            memberIds(book),
+          );
           item.manually_edited = true;
           await item.save();
         }
@@ -2301,11 +2486,13 @@ module.exports = function (app: any) {
         console.error("Error updating contribution:", error);
         res.status(500).json({ status: false, message: "Failed to update contribution" });
       }
-    });
+    },
+  );
 
   // The linked transaction goes with it: it only existed to mirror this contribution, and
   // leaving it behind would double-count the money against the book's spending.
-  app.delete("/api/xenbudget/books/:bookId/piggy-banks/:bankId/contributions/:contributionId",
+  app.delete(
+    "/api/xenbudget/books/:bookId/piggy-banks/:bankId/contributions/:contributionId",
     validateParams(xenBudgetContributionParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -2321,13 +2508,18 @@ module.exports = function (app: any) {
         const item = await linkedItem(book, contribution);
         if (item) await XenBudgetItem.deleteOne({ _id: item._id });
         bank.contributions.pull({ _id: contribution._id });
-        await saveAndRespond(req, res, book,
-          item ? "Contribution and its transaction removed" : "Contribution removed");
+        await saveAndRespond(
+          req,
+          res,
+          book,
+          item ? "Contribution and its transaction removed" : "Contribution removed",
+        );
       } catch (error) {
         console.error("Error deleting contribution:", error);
         res.status(500).json({ status: false, message: "Failed to delete contribution" });
       }
-    });
+    },
+  );
 
   // GET /api/xenbudget/books/:bookId/budget-status?as_of&currency&from&to
   //
@@ -2340,7 +2532,8 @@ module.exports = function (app: any) {
   // is what a report covering an arbitrary range needs. Only the SPEND changes - `amount`
   // stays each budget's own per-period figure, and scaling it to the range is the client's
   // job (see scaleBudgetToRange), so that date maths lives in exactly one place.
-  app.get("/api/xenbudget/books/:bookId/budget-status",
+  app.get(
+    "/api/xenbudget/books/:bookId/budget-status",
     validateParams(xenBudgetBookIdParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -2363,9 +2556,12 @@ module.exports = function (app: any) {
 
         const rangeFrom = q.from ? new Date(q.from) : null;
         const rangeTo = q.to ? new Date(q.to) : null;
-        const useRange = !!rangeFrom && !!rangeTo
-          && !isNaN(rangeFrom.getTime()) && !isNaN(rangeTo.getTime())
-          && rangeTo.getTime() > rangeFrom.getTime();
+        const useRange =
+          !!rangeFrom &&
+          !!rangeTo &&
+          !isNaN(rangeFrom.getTime()) &&
+          !isNaN(rangeTo.getTime()) &&
+          rangeTo.getTime() > rangeFrom.getTime();
 
         // How many of each budget's own past periods to measure, for the history strip.
         // Opt-in and clamped: it widens the scan from one period to `history` of them, and
@@ -2380,17 +2576,14 @@ module.exports = function (app: any) {
         // asked for, or for a one-off budget, which has no repeating window to look back
         // over.
         const historyRanges = budgets.map((b: any) => previousPeriodRanges(b, asOf, history));
-        const ranges = budgets.map((_b: any, i: number) => (useRange
-          ? { from: rangeFrom as Date, to: rangeTo as Date }
-          : ownRanges[i]));
+        const ranges = budgets.map((_b: any, i: number) =>
+          useRange ? { from: rangeFrom as Date, to: rangeTo as Date } : ownRanges[i],
+        );
         // The base match has to cover both the requested window and each budget's own
         // period, or a whole-period bar would be clipped to the requested range.
         // History windows go into the union too, or the base $match below clips them and
         // every bucket comes back empty.
-        const union = [
-          ...(useRange ? [...ranges, ...ownRanges] : ranges),
-          ...historyRanges.flat(),
-        ];
+        const union = [...(useRange ? [...ranges, ...ownRanges] : ranges), ...historyRanges.flat()];
         const unionFrom = new Date(Math.min(...union.map((r: any) => r.from.getTime())));
         const unionTo = new Date(Math.max(...union.map((r: any) => r.to.getTime())));
 
@@ -2437,12 +2630,12 @@ module.exports = function (app: any) {
           // a Groceries budget $35 - 50% of the $70 weight, not $70 and not $100.
           const personAmount: any = cats
             ? signed({
-              $cond: [
-                { $eq: ["$amount", 0] },
-                0,
-                { $divide: [{ $multiply: ["$categories.amount", "$shares.amount"] }, "$amount"] },
-              ],
-            })
+                $cond: [
+                  { $eq: ["$amount", 0] },
+                  0,
+                  { $divide: [{ $multiply: ["$categories.amount", "$shares.amount"] }, "$amount"] },
+                ],
+              })
             : "$shares.amount";
 
           // The scope's own spend, computed whether or not there is an overall limit to
@@ -2494,9 +2687,7 @@ module.exports = function (app: any) {
             facet[`b${i}h`] = [
               { $match: { date: { $gte: hist[0].from, $lt: hist[hist.length - 1].to } } },
               ...scopeStages,
-              ...(cats
-                ? [{ $group: { _id: "$_id", date: { $first: "$date" }, total: { $sum: scopeAmount } } }]
-                : []),
+              ...(cats ? [{ $group: { _id: "$_id", date: { $first: "$date" }, total: { $sum: scopeAmount } } }] : []),
               {
                 $bucket: {
                   groupBy: "$date",
@@ -2555,13 +2746,15 @@ module.exports = function (app: any) {
                 item_count: row?.count || 0,
                 period_spent: periodSpent,
                 period_item_count: periodRow?.count || 0,
-                ...(amount === undefined ? {} : {
-                  amount,
-                  remaining: roundMoney(amount - spent),
-                  // Uncapped rather than clamped, so the bar can show how far over it went.
-                  percent: amount > 0 ? Math.round((spent / amount) * 100) : 0,
-                  over: spent > amount,
-                }),
+                ...(amount === undefined
+                  ? {}
+                  : {
+                      amount,
+                      remaining: roundMoney(amount - spent),
+                      // Uncapped rather than clamped, so the bar can show how far over it went.
+                      percent: amount > 0 ? Math.round((spent / amount) * 100) : 0,
+                      over: spent > amount,
+                    }),
                 by_person: (results?.[`b${i}p`] || [])
                   .filter((p: any) => p._id)
                   .map((p: any) => ({
@@ -2600,28 +2793,32 @@ module.exports = function (app: any) {
                 // was asked for, so the default response is byte-identical to before.
                 // These figures are per whole period and are never scaled to a requested
                 // range - a column means "that month", whatever window is on screen.
-                ...(historyRanges[i].length === 0 ? {} : {
-                  periods: historyRanges[i].map((r: any) => {
-                    // $bucket keys each bucket by its lower boundary and omits empty ones
-                    // entirely, so a month with no items has to be filled back in as a
-                    // zero rather than shifting every later column left.
-                    const bucket = (results?.[`b${i}h`] || [])
-                      .find((row: any) => row._id instanceof Date
-                        && row._id.getTime() === r.from.getTime());
-                    const periodSpentHere = roundMoney(bucket?.total || 0);
-                    return {
-                      from: r.from.toISOString(),
-                      to: r.to.toISOString(),
-                      spent: periodSpentHere,
-                      item_count: bucket?.count || 0,
-                      ...(amount === undefined ? {} : {
-                        amount,
-                        percent: amount > 0 ? Math.round((periodSpentHere / amount) * 100) : 0,
-                        over: periodSpentHere > amount,
+                ...(historyRanges[i].length === 0
+                  ? {}
+                  : {
+                      periods: historyRanges[i].map((r: any) => {
+                        // $bucket keys each bucket by its lower boundary and omits empty ones
+                        // entirely, so a month with no items has to be filled back in as a
+                        // zero rather than shifting every later column left.
+                        const bucket = (results?.[`b${i}h`] || []).find(
+                          (row: any) => row._id instanceof Date && row._id.getTime() === r.from.getTime(),
+                        );
+                        const periodSpentHere = roundMoney(bucket?.total || 0);
+                        return {
+                          from: r.from.toISOString(),
+                          to: r.to.toISOString(),
+                          spent: periodSpentHere,
+                          item_count: bucket?.count || 0,
+                          ...(amount === undefined
+                            ? {}
+                            : {
+                                amount,
+                                percent: amount > 0 ? Math.round((periodSpentHere / amount) * 100) : 0,
+                                over: periodSpentHere > amount,
+                              }),
+                        };
                       }),
-                    };
-                  }),
-                }),
+                    }),
               };
             }),
           },
@@ -2630,7 +2827,8 @@ module.exports = function (app: any) {
         console.error("Error building budget status:", error);
         res.status(500).json({ status: false, message: "Failed to build budget status" });
       }
-    });
+    },
+  );
 
   // --- Summary -------------------------------------------------------------
 
@@ -2639,7 +2837,8 @@ module.exports = function (app: any) {
   // The engine behind both the live tally and the report page. One $facet pass, so the
   // per-period, per-category, per-person and top-line numbers are computed over exactly the
   // same set of items and always reconcile with each other.
-  app.get("/api/xenbudget/books/:bookId/summary",
+  app.get(
+    "/api/xenbudget/books/:bookId/summary",
     validateParams(xenBudgetBookIdParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -2653,9 +2852,12 @@ module.exports = function (app: any) {
         // currencies present comes back too, so the UI can offer a switcher rather than
         // silently hiding money.
         const currencies: string[] = await XenBudgetItem.distinct("currency", { book_id: book._id });
-        const currency = q.currency && currencies.includes(q.currency)
-          ? q.currency
-          : (currencies.includes(book.default_currency) ? book.default_currency : currencies[0]);
+        const currency =
+          q.currency && currencies.includes(q.currency)
+            ? q.currency
+            : currencies.includes(book.default_currency)
+              ? book.default_currency
+              : currencies[0];
 
         const groupBy = q.group_by === "day" ? "day" : q.group_by === "week" ? "week" : "month";
         const format = groupBy === "day" ? "%Y-%m-%d" : groupBy === "week" ? "%G-W%V" : "%Y-%m";
@@ -2676,123 +2878,122 @@ module.exports = function (app: any) {
         // Narrowing to specific people changes what each document contributes: instead of
         // the item's full amount, the rollups sum each selected person's actual share.
         const shareStages: any[] = people
-          ? [
-            { $unwind: "$shares" },
-            { $match: { "shares.user_id": { $in: people } } },
-          ]
+          ? [{ $unwind: "$shares" }, { $match: { "shares.user_id": { $in: people } } }]
           : [];
         const amountField: any = people ? "$shares.amount" : "$amount";
         // A person's share of one category weight: share × (category weight ÷ item amount).
         const categoryTotalExpr: any = people
           ? {
-            $cond: [
-              { $eq: ["$amount", 0] },
-              0,
-              { $divide: [{ $multiply: ["$shares.amount", "$categories.amount"] }, "$amount"] },
-            ],
-          }
+              $cond: [
+                { $eq: ["$amount", 0] },
+                0,
+                { $divide: [{ $multiply: ["$shares.amount", "$categories.amount"] }, "$amount"] },
+              ],
+            }
           : "$categories.amount";
 
-        const [facets] = currency ? await XenBudgetItem.aggregate([
-          { $match: match },
-          ...shareStages,
-          {
-            $facet: {
-              byPeriod: [
-                {
-                  $group: {
-                    _id: { $dateToString: { format, date: "$date" } },
-                    expense: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, amountField, 0] } },
-                    income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, amountField, 0] } },
-                    count: { $sum: 1 },
-                  },
-                },
-                { $sort: { _id: 1 } },
-              ],
-              // Sums the category's WEIGHT (or the selected person's share of it), not the
-              // item's full amount. Unwinding and summing $amount - which is what the old
-              // tags array did - counts an item once per label, so anything carrying two of
-              // them inflated the totals.
-              //
-              // Both directions are counted, kept apart: money that came back INTO a named
-              // category (a refund, a repayment, an internal transfer) offsets what went out
-              // of it, and a rollup that only ever saw expenses reported the gross outgoings
-              // of a category that had been paid back in full. `total` stays gross so the
-              // charts that can't draw a negative slice keep working; the client nets.
-              byCategory: [
-                { $unwind: "$categories" },
-                {
-                  $group: {
-                    _id: "$categories.name",
-                    total: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, categoryTotalExpr, 0] } },
-                    income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, categoryTotalExpr, 0] } },
-                    count: { $sum: 1 },
-                  },
-                },
-                { $sort: { total: -1 } },
-              ],
-              byPerson: [
-                { $unwind: "$shares" },
-                {
-                  $group: {
-                    _id: "$shares.user_id",
-                    total: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$shares.amount", 0] } },
-                    income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, "$shares.amount", 0] } },
-                    count: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, 1, 0] } },
-                  },
-                },
-                { $sort: { total: -1 } },
-              ],
-              // The same two rollups again, but cut by period as well as category - what
-              // the report's month-by-month grid is built from. Kept as their own facets
-              // rather than derived on the client, because only the server can weight a
-              // split purchase correctly, and re-deriving it from the flat by_category
-              // rows is impossible: those have already been summed across time.
-              byCategoryPeriod: [
-                { $unwind: "$categories" },
-                {
-                  $group: {
-                    _id: {
-                      category: "$categories.name",
-                      period: { $dateToString: { format, date: "$date" } },
+        const [facets] = currency
+          ? await XenBudgetItem.aggregate([
+              { $match: match },
+              ...shareStages,
+              {
+                $facet: {
+                  byPeriod: [
+                    {
+                      $group: {
+                        _id: { $dateToString: { format, date: "$date" } },
+                        expense: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, amountField, 0] } },
+                        income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, amountField, 0] } },
+                        count: { $sum: 1 },
+                      },
                     },
-                    total: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, categoryTotalExpr, 0] } },
-                    income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, categoryTotalExpr, 0] } },
-                  },
+                    { $sort: { _id: 1 } },
+                  ],
+                  // Sums the category's WEIGHT (or the selected person's share of it), not the
+                  // item's full amount. Unwinding and summing $amount - which is what the old
+                  // tags array did - counts an item once per label, so anything carrying two of
+                  // them inflated the totals.
+                  //
+                  // Both directions are counted, kept apart: money that came back INTO a named
+                  // category (a refund, a repayment, an internal transfer) offsets what went out
+                  // of it, and a rollup that only ever saw expenses reported the gross outgoings
+                  // of a category that had been paid back in full. `total` stays gross so the
+                  // charts that can't draw a negative slice keep working; the client nets.
+                  byCategory: [
+                    { $unwind: "$categories" },
+                    {
+                      $group: {
+                        _id: "$categories.name",
+                        total: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, categoryTotalExpr, 0] } },
+                        income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, categoryTotalExpr, 0] } },
+                        count: { $sum: 1 },
+                      },
+                    },
+                    { $sort: { total: -1 } },
+                  ],
+                  byPerson: [
+                    { $unwind: "$shares" },
+                    {
+                      $group: {
+                        _id: "$shares.user_id",
+                        total: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$shares.amount", 0] } },
+                        income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, "$shares.amount", 0] } },
+                        count: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, 1, 0] } },
+                      },
+                    },
+                    { $sort: { total: -1 } },
+                  ],
+                  // The same two rollups again, but cut by period as well as category - what
+                  // the report's month-by-month grid is built from. Kept as their own facets
+                  // rather than derived on the client, because only the server can weight a
+                  // split purchase correctly, and re-deriving it from the flat by_category
+                  // rows is impossible: those have already been summed across time.
+                  byCategoryPeriod: [
+                    { $unwind: "$categories" },
+                    {
+                      $group: {
+                        _id: {
+                          category: "$categories.name",
+                          period: { $dateToString: { format, date: "$date" } },
+                        },
+                        total: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, categoryTotalExpr, 0] } },
+                        income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, categoryTotalExpr, 0] } },
+                      },
+                    },
+                  ],
+                  // Deliberately still expense-only, unlike the two facets above: netting is
+                  // something a category opts into by being NAMED. An uncategorised paycheque
+                  // is not a refund of uncategorised spending, and letting it offset one would
+                  // swamp the row with salary.
+                  uncategorised: [
+                    expenseOnly,
+                    { $match: { $or: [{ categories: { $size: 0 } }, { categories: { $exists: false } }] } },
+                    { $group: { _id: null, total: { $sum: amountField }, count: { $sum: 1 } } },
+                  ],
+                  uncategorisedByPeriod: [
+                    expenseOnly,
+                    { $match: { $or: [{ categories: { $size: 0 } }, { categories: { $exists: false } }] } },
+                    {
+                      $group: {
+                        _id: { $dateToString: { format, date: "$date" } },
+                        total: { $sum: amountField },
+                      },
+                    },
+                  ],
+                  totals: [
+                    {
+                      $group: {
+                        _id: null,
+                        expense: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, amountField, 0] } },
+                        income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, amountField, 0] } },
+                        count: { $sum: 1 },
+                      },
+                    },
+                  ],
                 },
-              ],
-              // Deliberately still expense-only, unlike the two facets above: netting is
-              // something a category opts into by being NAMED. An uncategorised paycheque
-              // is not a refund of uncategorised spending, and letting it offset one would
-              // swamp the row with salary.
-              uncategorised: [
-                expenseOnly,
-                { $match: { $or: [{ categories: { $size: 0 } }, { categories: { $exists: false } }] } },
-                { $group: { _id: null, total: { $sum: amountField }, count: { $sum: 1 } } },
-              ],
-              uncategorisedByPeriod: [
-                expenseOnly,
-                { $match: { $or: [{ categories: { $size: 0 } }, { categories: { $exists: false } }] } },
-                {
-                  $group: {
-                    _id: { $dateToString: { format, date: "$date" } },
-                    total: { $sum: amountField },
-                  },
-                },
-              ],
-              totals: [
-                {
-                  $group: {
-                    _id: null,
-                    expense: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, amountField, 0] } },
-                    income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, amountField, 0] } },
-                    count: { $sum: 1 },
-                  },
-                },
-              ],
-            },
-          },
-        ]) : [null];
+              },
+            ])
+          : [null];
 
         const byPeriodRaw: any[] = facets?.byPeriod ?? [];
         const byCategory: any[] = facets?.byCategory ?? [];
@@ -2807,7 +3008,9 @@ module.exports = function (app: any) {
         if (personIds.length > 0) {
           const users = await User.find({
             _id: { $in: personIds.filter((id: string) => mongoose.Types.ObjectId.isValid(id)) },
-          }).select("username avatar").lean();
+          })
+            .select("username avatar")
+            .lean();
           users.forEach((u: any) => userMap.set(u._id.toString(), u));
         }
 
@@ -2866,7 +3069,8 @@ module.exports = function (app: any) {
         console.error("Error building summary:", error);
         res.status(500).json({ status: false, message: "Failed to build summary" });
       }
-    });
+    },
+  );
 
   // --- Derived from history -------------------------------------------------
 
@@ -2881,19 +3085,19 @@ module.exports = function (app: any) {
   async function analysisScope(book: any, q: Record<string, string>, defaultMonths: number) {
     const currencies: string[] = await XenBudgetItem.distinct("currency", { book_id: book._id });
     if (currencies.length === 0) return null;
-    const currency = q.currency && currencies.includes(q.currency)
-      ? q.currency
-      : (currencies.includes(book.default_currency) ? book.default_currency : currencies[0]);
+    const currency =
+      q.currency && currencies.includes(q.currency)
+        ? q.currency
+        : currencies.includes(book.default_currency)
+          ? book.default_currency
+          : currencies[0];
 
     const to = q.to ? new Date(q.to) : new Date();
     let from: Date;
     if (q.from) {
       from = new Date(q.from);
     } else {
-      const months = Math.min(
-        MAX_RECURRING_LOOKBACK_MONTHS,
-        Math.max(1, Number(q.lookback_months) || defaultMonths),
-      );
+      const months = Math.min(MAX_RECURRING_LOOKBACK_MONTHS, Math.max(1, Number(q.lookback_months) || defaultMonths));
       from = new Date(to);
       from.setUTCMonth(from.getUTCMonth() - months);
     }
@@ -2917,7 +3121,8 @@ module.exports = function (app: any) {
    *     filter and the coverage check.
    */
   async function analysisRows(
-    book: any, scope: { currency: string; from: Date; to: Date },
+    book: any,
+    scope: { currency: string; from: Date; to: Date },
   ): Promise<{ item: any; merchant: string }[]> {
     const match = baseItemMatch(book._id, {
       currency: scope.currency,
@@ -2929,8 +3134,10 @@ module.exports = function (app: any) {
     // engine, and a condition can test type, flags, category, source or date. A projection
     // that omitted them would silently evaluate rules against half an item.
     const items = await XenBudgetItem.find(match)
-      .select("date amount type description original_description categories flags "
-        + "category_split_type rule_categories rule_flags applied_rule_ids source")
+      .select(
+        "date amount type description original_description categories flags " +
+          "category_split_type rule_categories rule_flags applied_rule_ids source",
+      )
       .sort({ date: -1 })
       .limit(MAX_ANALYSIS_ITEMS)
       .lean();
@@ -2946,7 +3153,8 @@ module.exports = function (app: any) {
   // Subscriptions and bills, derived from what has already been imported. Read-only: the
   // real transactions keep arriving by CSV, so generating occurrences of our own would
   // only double-count them.
-  app.get("/api/xenbudget/books/:bookId/recurring",
+  app.get(
+    "/api/xenbudget/books/:bookId/recurring",
     validateParams(xenBudgetBookIdParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -2960,8 +3168,12 @@ module.exports = function (app: any) {
             status: true,
             message: "Recurring charges retrieved",
             data: {
-              currency: book.default_currency, currencies: [],
-              from: null, to: null, series: [], monthly_committed: 0,
+              currency: book.default_currency,
+              currencies: [],
+              from: null,
+              to: null,
+              series: [],
+              monthly_committed: 0,
             },
           });
         }
@@ -2987,7 +3199,8 @@ module.exports = function (app: any) {
         // nothing about rules, and it should stay that way.
         const seriesMerchants = new Set(series.map((s) => s.merchant));
         const coverage = coverageByMerchant(
-          rows.filter((r) => seriesMerchants.has(r.merchant))
+          rows
+            .filter((r) => seriesMerchants.has(r.merchant))
             .map(({ merchant, item }) => ({ merchant, draft: toDraft(item) })),
           plainRules(book),
         );
@@ -3008,13 +3221,15 @@ module.exports = function (app: any) {
         console.error("Error detecting recurring charges:", error);
         res.status(500).json({ status: false, message: "Failed to detect recurring charges" });
       }
-    });
+    },
+  );
 
   // GET /api/xenbudget/books/:bookId/merchants?currency&from&to&limit
   //
   // Where the money actually went. Category answers "what kind of spending"; this answers
   // "who was paid", which is the question a rule gets written from.
-  app.get("/api/xenbudget/books/:bookId/merchants",
+  app.get(
+    "/api/xenbudget/books/:bookId/merchants",
     validateParams(xenBudgetBookIdParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -3022,18 +3237,20 @@ module.exports = function (app: any) {
         if (!book) return;
         const q = req.query as Record<string, string>;
 
-        const limit = Math.min(
-          MAX_MERCHANT_LIMIT,
-          Math.max(1, Number(q.limit) || DEFAULT_MERCHANT_LIMIT),
-        );
+        const limit = Math.min(MAX_MERCHANT_LIMIT, Math.max(1, Number(q.limit) || DEFAULT_MERCHANT_LIMIT));
         const scope = await analysisScope(book, q, DEFAULT_RECURRING_LOOKBACK_MONTHS);
         if (!scope) {
           return res.json({
             status: true,
             message: "Merchants retrieved",
             data: {
-              currency: book.default_currency, currencies: [],
-              from: null, to: null, merchants: [], total: 0, merchant_count: 0,
+              currency: book.default_currency,
+              currencies: [],
+              from: null,
+              to: null,
+              merchants: [],
+              total: 0,
+              merchant_count: 0,
             },
           });
         }
@@ -3045,8 +3262,12 @@ module.exports = function (app: any) {
         // $regexReplace should be asked to reproduce — and keeping ONE implementation is
         // what lets a merchant row and a recurring series agree on what a merchant is.
         interface MerchantGroup {
-          merchant: string; total: number; count: number;
-          last_date: Date; sample_description: string; categories: string[];
+          merchant: string;
+          total: number;
+          count: number;
+          last_date: Date;
+          sample_description: string;
+          categories: string[];
         }
         const groups = new Map<string, MerchantGroup>();
         let total = 0;
@@ -3084,8 +3305,7 @@ module.exports = function (app: any) {
         // to finish first, so this can't fold into the grouping pass above.
         const shown = new Set(page.map((g) => g.merchant));
         const coverage = coverageByMerchant(
-          rows.filter((r) => shown.has(r.merchant))
-            .map(({ merchant, item }) => ({ merchant, draft: toDraft(item) })),
+          rows.filter((r) => shown.has(r.merchant)).map(({ merchant, item }) => ({ merchant, draft: toDraft(item) })),
           plainRules(book),
         );
 
@@ -3116,213 +3336,244 @@ module.exports = function (app: any) {
         console.error("Error building merchant rollup:", error);
         res.status(500).json({ status: false, message: "Failed to build merchant rollup" });
       }
-    });
+    },
+  );
 
   // --- Items ---------------------------------------------------------------
 
   // GET /api/xenbudget/books/:bookId/items
   //   ?from&to&categories=a,b&flags=a,b&people=id,id&type&uncategorised&excluded&q&limit&cursor&sort
-  app.get("/api/xenbudget/books/:bookId/items", validateParams(xenBudgetBookIdParamSchema), async (req: Request, res: Response) => {
-    try {
-      const book = await loadBookForMember(req, res);
-      if (!book) return;
+  app.get(
+    "/api/xenbudget/books/:bookId/items",
+    validateParams(xenBudgetBookIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const book = await loadBookForMember(req, res);
+        if (!book) return;
 
-      const q = req.query as Record<string, string>;
-      const filter = baseItemMatch(book._id, q);
+        const q = req.query as Record<string, string>;
+        const filter = baseItemMatch(book._id, q);
 
-      // Need/Want is a classification on the category registry, not on the item, so it
-      // must be resolved to names first. An item matches when ANY of its categories
-      // carries the requested classification.
-      if (q.need_want === "need" || q.need_want === "want") {
-        const names = (book.categories || [])
-          .filter((c: any) => c.need_want === q.need_want)
-          .map((c: any) => c.name);
-        filter.$and = [...(filter.$and || []), { "categories.name": { $in: names } }];
-      }
-
-      if (q.q) filter.description = { $regex: escapeRegex(q.q), $options: "i" };
-
-      // One merchant, as the recurring and merchant analyses group them. Not a plain text
-      // search: normalising is lossy ("NETFLIX.COM 8829472" -> "NETFLIX COM"), so the name
-      // has to be turned back into a pattern that tolerates the punctuation and reference
-      // numbers it dropped. Matched against original_description too, so a rule that
-      // renamed the row for readability doesn't hide it from its own merchant.
-      if (q.merchant) {
-        const pattern = merchantMatchPattern(q.merchant);
-        // A name that normalises away to nothing would produce an empty pattern, which
-        // matches EVERY row — silently returning the whole book instead of one merchant.
-        if (pattern) {
-          const rx = { $regex: pattern, $options: "i" };
-          filter.$and = [...(filter.$and || []), {
-            $or: [{ description: rx }, { original_description: rx }],
-          }];
+        // Need/Want is a classification on the category registry, not on the item, so it
+        // must be resolved to names first. An item matches when ANY of its categories
+        // carries the requested classification.
+        if (q.need_want === "need" || q.need_want === "want") {
+          const names = (book.categories || []).filter((c: any) => c.need_want === q.need_want).map((c: any) => c.name);
+          filter.$and = [...(filter.$and || []), { "categories.name": { $in: names } }];
         }
-      }
 
-      // Filtering by card means "every batch that used this saved mapping", since the
-      // batch is what links items back to a preset.
-      if (q.card) {
-        const batchIds = (book.import_batches || [])
-          .filter((b: any) => b.preset_id && b.preset_id.toString() === q.card)
-          .map((b: any) => b._id);
-        filter.import_batch_id = { $in: batchIds };
-      }
+        if (q.q) filter.description = { $regex: escapeRegex(q.q), $options: "i" };
 
-      // CSV export of exactly this view.
-      //
-      // Handled INSIDE the list handler, on the far side of the filter construction above
-      // and before pagination, so the export and the list can never be filtered
-      // differently — the one property that matters for a file someone hands to somebody
-      // else. Exporting from the client would only ever cover the pages it had loaded.
-      if (q.format === "csv") {
-        await book.populate("members", "username avatar");
-        const usernameById = new Map<string, string>(
-          (book.members as any[]).map((m: any) => [m._id.toString(), m.username || "Unknown"]),
-        );
-        const batchLabels = new Map<string, string>();
-        (book.import_batches || []).forEach((b: any) => {
-          const label = resolveBatchLabel(b, book);
-          if (label) batchLabels.set(b._id.toString(), label);
+        // One merchant, as the recurring and merchant analyses group them. Not a plain text
+        // search: normalising is lossy ("NETFLIX.COM 8829472" -> "NETFLIX COM"), so the name
+        // has to be turned back into a pattern that tolerates the punctuation and reference
+        // numbers it dropped. Matched against original_description too, so a rule that
+        // renamed the row for readability doesn't hide it from its own merchant.
+        if (q.merchant) {
+          const pattern = merchantMatchPattern(q.merchant);
+          // A name that normalises away to nothing would produce an empty pattern, which
+          // matches EVERY row — silently returning the whole book instead of one merchant.
+          if (pattern) {
+            const rx = { $regex: pattern, $options: "i" };
+            filter.$and = [
+              ...(filter.$and || []),
+              {
+                $or: [{ description: rx }, { original_description: rx }],
+              },
+            ];
+          }
+        }
+
+        // Filtering by card means "every batch that used this saved mapping", since the
+        // batch is what links items back to a preset.
+        if (q.card) {
+          const batchIds = (book.import_batches || [])
+            .filter((b: any) => b.preset_id && b.preset_id.toString() === q.card)
+            .map((b: any) => b._id);
+          filter.import_batch_id = { $in: batchIds };
+        }
+
+        // CSV export of exactly this view.
+        //
+        // Handled INSIDE the list handler, on the far side of the filter construction above
+        // and before pagination, so the export and the list can never be filtered
+        // differently — the one property that matters for a file someone hands to somebody
+        // else. Exporting from the client would only ever cover the pages it had loaded.
+        if (q.format === "csv") {
+          await book.populate("members", "username avatar");
+          const usernameById = new Map<string, string>(
+            (book.members as any[]).map((m: any) => [m._id.toString(), m.username || "Unknown"]),
+          );
+          const batchLabels = new Map<string, string>();
+          (book.import_batches || []).forEach((b: any) => {
+            const label = resolveBatchLabel(b, book);
+            if (label) batchLabels.set(b._id.toString(), label);
+          });
+
+          const safeName = book.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+          res.setHeader("Content-Type", "text/csv; charset=utf-8");
+          res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="xenbudget-${safeName}-items-${new Date().toISOString().slice(0, 10)}.csv"`,
+          );
+
+          res.write(
+            csvLine([
+              "Date",
+              "Description",
+              "Amount",
+              "Type",
+              "Currency",
+              "Categories",
+              "Flags",
+              "People",
+              "Notes",
+              "Source",
+              "Card",
+            ]),
+          );
+
+          // Streamed from a cursor rather than loaded whole, the same way the book export
+          // does it: a filtered view can still be tens of thousands of rows, and buffering
+          // them all would spike memory per request.
+          //
+          // Always date order regardless of the on-screen `sort` - a spreadsheet reviewed
+          // chronologically is the more useful default, and it isn't worth wiring the sort
+          // param through this separate streaming path for a control most people leave at
+          // "Newest first".
+          const cursor = XenBudgetItem.find(filter).sort({ date: -1, _id: -1 }).lean().cursor();
+          for await (const item of cursor as any) {
+            res.write(
+              csvLine([
+                new Date(item.date).toISOString().slice(0, 10),
+                item.description || "",
+                // Always positive on the row, with `type` carrying the sign — the same
+                // convention the schema stores, so a re-import reads back what it wrote.
+                item.amount,
+                item.type || "expense",
+                item.currency || book.default_currency,
+                // A weighted category keeps its share, otherwise the row would claim the
+                // whole amount landed in each of them.
+                (item.categories || [])
+                  .map((c: any) =>
+                    c.percentage != null && c.percentage < 100 ? `${c.name} (${c.percentage}%)` : c.name,
+                  )
+                  .join("; "),
+                withDerivedUncategorised(item.flags, item.categories).join("; "),
+                (item.shares || []).map((s: any) => usernameById.get(s.user_id) || s.user_id).join("; "),
+                item.notes || "",
+                item.source || "manual",
+                (item.import_batch_id && batchLabels.get(item.import_batch_id.toString())) || "",
+              ]),
+            );
+          }
+          return res.end();
+        }
+
+        // The headline for the filtered list, computed over EVERY matching item rather
+        // than the pages loaded so far - a total that grows as you press "Load more" is
+        // worse than no total at all. Snapshotted before the cursor narrows the filter
+        // below, so page two doesn't come back with a total for page two.
+        //
+        // Only the first page carries it: the figure is the same for every page of a given
+        // filter, and a book fed by CSV imports is exactly the size where re-aggregating
+        // the whole thing per "Load more" would be felt.
+        const totalsFilter = { ...filter };
+        const wantsTotals = !q.cursor;
+
+        const { field: sortField, dir: sortDir } = ITEM_SORT_MODES[q.sort] ?? ITEM_SORT_MODES.date_desc;
+        const collation = sortField === "description" ? NAME_COLLATION : undefined;
+
+        // Keyset pagination on the (sortField, _id) sort, so a page boundary can't drop or
+        // repeat an item the way a skip/limit offset does when rows are inserted. The cursor
+        // is ignored (falls back to page one) if it names a different field than the current
+        // sort — a defensive guard against a stale cursor, since `sort` is part of the
+        // client's query key and the two should never actually diverge in normal use.
+        const cursor = q.cursor ? decodeItemCursor(q.cursor) : null;
+        if (cursor && cursor.field === sortField && mongoose.Types.ObjectId.isValid(cursor.id)) {
+          const cmp = sortDir === -1 ? "$lt" : "$gt";
+          const value = sortField === "date" ? new Date(cursor.value as string) : cursor.value;
+          filter.$or = [
+            { [sortField]: { [cmp]: value } },
+            { [sortField]: value, _id: { [cmp]: new mongoose.Types.ObjectId(cursor.id) } },
+          ];
+        }
+
+        const limit = Math.min(parseInt(q.limit || "100", 10) || 100, MAX_ITEMS_PAGE);
+        let itemsQuery = XenBudgetItem.find(filter).sort({ [sortField]: sortDir, _id: sortDir });
+        if (collation) itemsQuery = itemsQuery.collation(collation);
+        const [items, totalsRows] = await Promise.all([
+          itemsQuery.limit(limit + 1).lean(),
+          // Amounts in different currencies can't be added together (the same rule the
+          // summary route follows), so the total is per currency and the client shows one
+          // line each - which for almost every book is exactly one line.
+          wantsTotals
+            ? XenBudgetItem.aggregate([
+                { $match: totalsFilter },
+                {
+                  $group: {
+                    _id: "$currency",
+                    income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] } },
+                    expense: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] } },
+                    count: { $sum: 1 },
+                  },
+                },
+                { $sort: { count: -1, _id: 1 } },
+              ])
+            : [],
+        ]);
+
+        const totals = totalsRows.map((row: any) => {
+          const income = roundMoney(row.income);
+          const expense = roundMoney(row.expense);
+          return {
+            currency: row._id,
+            income,
+            expense,
+            net: roundMoney(income - expense),
+            count: row.count,
+          };
         });
 
-        const safeName = book.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-        res.setHeader("Content-Type", "text/csv; charset=utf-8");
-        res.setHeader("Content-Disposition",
-          `attachment; filename="xenbudget-${safeName}-items-${new Date().toISOString().slice(0, 10)}.csv"`);
+        const hasMore = items.length > limit;
+        const page = hasMore ? items.slice(0, limit) : items;
+        const last = page[page.length - 1];
+        const lastSortValue = last
+          ? sortField === "date"
+            ? new Date(last.date).toISOString()
+            : (last as any)[sortField]
+          : null;
+        const nextCursor = hasMore && last ? encodeItemCursor(sortField, lastSortValue, String(last._id)) : null;
 
-        res.write(csvLine([
-          "Date", "Description", "Amount", "Type", "Currency",
-          "Categories", "Flags", "People", "Notes", "Source", "Card",
-        ]));
+        // Resolve each item's import batch to a card label ("Chase Visa") so the client
+        // can show provenance without an extra lookup per item. The label comes from the
+        // preset the batch points at, not a denormalized name on the batch itself.
+        const batchLabelById = new Map<string, string>();
+        (book.import_batches || []).forEach((b: any) => {
+          const label = resolveBatchLabel(b, book);
+          if (label) batchLabelById.set(b._id.toString(), label);
+        });
 
-        // Streamed from a cursor rather than loaded whole, the same way the book export
-        // does it: a filtered view can still be tens of thousands of rows, and buffering
-        // them all would spike memory per request.
-        //
-        // Always date order regardless of the on-screen `sort` - a spreadsheet reviewed
-        // chronologically is the more useful default, and it isn't worth wiring the sort
-        // param through this separate streaming path for a control most people leave at
-        // "Newest first".
-        const cursor = XenBudgetItem.find(filter).sort({ date: -1, _id: -1 }).lean().cursor();
-        for await (const item of cursor as any) {
-          res.write(csvLine([
-            new Date(item.date).toISOString().slice(0, 10),
-            item.description || "",
-            // Always positive on the row, with `type` carrying the sign — the same
-            // convention the schema stores, so a re-import reads back what it wrote.
-            item.amount,
-            item.type || "expense",
-            item.currency || book.default_currency,
-            // A weighted category keeps its share, otherwise the row would claim the
-            // whole amount landed in each of them.
-            (item.categories || []).map((c: any) => (
-              c.percentage != null && c.percentage < 100 ? `${c.name} (${c.percentage}%)` : c.name
-            )).join("; "),
-            withDerivedUncategorised(item.flags, item.categories).join("; "),
-            (item.shares || []).map((s: any) => usernameById.get(s.user_id) || s.user_id).join("; "),
-            item.notes || "",
-            item.source || "manual",
-            (item.import_batch_id && batchLabels.get(item.import_batch_id.toString())) || "",
-          ]));
-        }
-        return res.end();
+        res.json({
+          status: true,
+          message: "Items retrieved",
+          data: { items: serializeItems(page, batchLabelById), totals, next_cursor: nextCursor, has_more: hasMore },
+        });
+      } catch (error) {
+        console.error("Error fetching items:", error);
+        // A CSV export may already be streaming, in which case the headers are long gone and
+        // the only honest signal left is an abrupt end.
+        if (res.headersSent) res.end();
+        else res.status(500).json({ status: false, message: "Failed to fetch items" });
       }
-
-      // The headline for the filtered list, computed over EVERY matching item rather
-      // than the pages loaded so far - a total that grows as you press "Load more" is
-      // worse than no total at all. Snapshotted before the cursor narrows the filter
-      // below, so page two doesn't come back with a total for page two.
-      //
-      // Only the first page carries it: the figure is the same for every page of a given
-      // filter, and a book fed by CSV imports is exactly the size where re-aggregating
-      // the whole thing per "Load more" would be felt.
-      const totalsFilter = { ...filter };
-      const wantsTotals = !q.cursor;
-
-      const { field: sortField, dir: sortDir } = ITEM_SORT_MODES[q.sort] ?? ITEM_SORT_MODES.date_desc;
-      const collation = sortField === "description" ? NAME_COLLATION : undefined;
-
-      // Keyset pagination on the (sortField, _id) sort, so a page boundary can't drop or
-      // repeat an item the way a skip/limit offset does when rows are inserted. The cursor
-      // is ignored (falls back to page one) if it names a different field than the current
-      // sort — a defensive guard against a stale cursor, since `sort` is part of the
-      // client's query key and the two should never actually diverge in normal use.
-      const cursor = q.cursor ? decodeItemCursor(q.cursor) : null;
-      if (cursor && cursor.field === sortField && mongoose.Types.ObjectId.isValid(cursor.id)) {
-        const cmp = sortDir === -1 ? "$lt" : "$gt";
-        const value = sortField === "date" ? new Date(cursor.value as string) : cursor.value;
-        filter.$or = [
-          { [sortField]: { [cmp]: value } },
-          { [sortField]: value, _id: { [cmp]: new mongoose.Types.ObjectId(cursor.id) } },
-        ];
-      }
-
-      const limit = Math.min(parseInt(q.limit || "100", 10) || 100, MAX_ITEMS_PAGE);
-      let itemsQuery = XenBudgetItem.find(filter).sort({ [sortField]: sortDir, _id: sortDir });
-      if (collation) itemsQuery = itemsQuery.collation(collation);
-      const [items, totalsRows] = await Promise.all([
-        itemsQuery.limit(limit + 1).lean(),
-        // Amounts in different currencies can't be added together (the same rule the
-        // summary route follows), so the total is per currency and the client shows one
-        // line each - which for almost every book is exactly one line.
-        wantsTotals ? XenBudgetItem.aggregate([
-          { $match: totalsFilter },
-          {
-            $group: {
-              _id: "$currency",
-              income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] } },
-              expense: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] } },
-              count: { $sum: 1 },
-            },
-          },
-          { $sort: { count: -1, _id: 1 } },
-        ]) : [],
-      ]);
-
-      const totals = totalsRows.map((row: any) => {
-        const income = roundMoney(row.income);
-        const expense = roundMoney(row.expense);
-        return {
-          currency: row._id,
-          income,
-          expense,
-          net: roundMoney(income - expense),
-          count: row.count,
-        };
-      });
-
-      const hasMore = items.length > limit;
-      const page = hasMore ? items.slice(0, limit) : items;
-      const last = page[page.length - 1];
-      const lastSortValue = last ? (sortField === "date" ? new Date(last.date).toISOString() : (last as any)[sortField]) : null;
-      const nextCursor = hasMore && last ? encodeItemCursor(sortField, lastSortValue, String(last._id)) : null;
-
-      // Resolve each item's import batch to a card label ("Chase Visa") so the client
-      // can show provenance without an extra lookup per item. The label comes from the
-      // preset the batch points at, not a denormalized name on the batch itself.
-      const batchLabelById = new Map<string, string>();
-      (book.import_batches || []).forEach((b: any) => {
-        const label = resolveBatchLabel(b, book);
-        if (label) batchLabelById.set(b._id.toString(), label);
-      });
-
-      res.json({
-        status: true,
-        message: "Items retrieved",
-        data: { items: serializeItems(page, batchLabelById), totals, next_cursor: nextCursor, has_more: hasMore },
-      });
-    } catch (error) {
-      console.error("Error fetching items:", error);
-      // A CSV export may already be streaming, in which case the headers are long gone and
-      // the only honest signal left is an abrupt end.
-      if (res.headersSent) res.end();
-      else res.status(500).json({ status: false, message: "Failed to fetch items" });
-    }
-  });
+    },
+  );
 
   // POST /api/xenbudget/books/:bookId/items
-  app.post("/api/xenbudget/books/:bookId/items",
-    validateParams(xenBudgetBookIdParamSchema), validate(createXenBudgetItemSchema),
+  app.post(
+    "/api/xenbudget/books/:bookId/items",
+    validateParams(xenBudgetBookIdParamSchema),
+    validate(createXenBudgetItemSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -3334,7 +3585,11 @@ module.exports = function (app: any) {
         // transaction would be tagged one way through a CSV and another way by hand.
         // "Skip auto-tagging" leaves the item exactly as it was entered.
         const draft = draftFromRow({ ...body, source: "manual" }, book);
-        const { item: ruled, skipped, skippedByRuleName } = body.skip_rules
+        const {
+          item: ruled,
+          skipped,
+          skippedByRuleName,
+        } = body.skip_rules
           ? { item: draft, skipped: false, skippedByRuleName: undefined }
           : applyRules(draft, plainRules(book));
         if (skipped) {
@@ -3348,16 +3603,15 @@ module.exports = function (app: any) {
 
         // A rule that named categories overrides what the form asked for; otherwise the
         // form's own weights are resolved, which is what allows an uneven split.
-        const manualCategories = ruled.rule_categories.length > 0
-          ? draftCategoryWeights(ruled, ruled.amount)
-          : resolveCategories(body.category_split_type || "equal", ruled.amount, body.categories || []);
+        const manualCategories =
+          ruled.rule_categories.length > 0
+            ? draftCategoryWeights(ruled, ruled.amount)
+            : resolveCategories(body.category_split_type || "equal", ruled.amount, body.categories || []);
 
         let shares;
         try {
           // A rule's set_people overrides what the form asked for.
-          shares = ruled.people && ruled.people.length > 0
-            ? buildRuleShares(ruled, book)
-            : buildShares(body, book);
+          shares = ruled.people && ruled.people.length > 0 ? buildRuleShares(ruled, book) : buildShares(body, book);
         } catch (e: any) {
           return res.status(400).json({ status: false, message: e.message });
         }
@@ -3375,9 +3629,10 @@ module.exports = function (app: any) {
           original_description: ruled.original_description || body.description,
           notes: body.notes,
           categories: manualCategories,
-          category_split_type: ruled.rule_categories.length > 0
-            ? (ruled.category_split_type ?? "equal")
-            : (body.category_split_type || "equal"),
+          category_split_type:
+            ruled.rule_categories.length > 0
+              ? (ruled.category_split_type ?? "equal")
+              : body.category_split_type || "equal",
           rule_categories: ruled.rule_categories,
           flags: withDerivedUncategorised(ruled.flags, manualCategories),
           rule_flags: ruled.rule_flags,
@@ -3395,11 +3650,14 @@ module.exports = function (app: any) {
         console.error("Error creating item:", error);
         res.status(500).json({ status: false, message: "Failed to create item" });
       }
-    });
+    },
+  );
 
   // PUT /api/xenbudget/books/:bookId/items/:itemId
-  app.put("/api/xenbudget/books/:bookId/items/:itemId",
-    validateParams(xenBudgetItemParamSchema), validate(updateXenBudgetItemSchema),
+  app.put(
+    "/api/xenbudget/books/:bookId/items/:itemId",
+    validateParams(xenBudgetItemParamSchema),
+    validate(updateXenBudgetItemSchema),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -3421,15 +3679,16 @@ module.exports = function (app: any) {
           // after the user removed - or deliberately re-added - that flag is a flag the
           // next sweep silently deletes.
           item.rule_flags = (item.rule_flags || []).filter((f: string) =>
-            item.flags.some((n: string) => n.toLowerCase() === f.toLowerCase()));
+            item.flags.some((n: string) => n.toLowerCase() === f.toLowerCase()),
+          );
         }
-        if (body.categories !== undefined || body.category_split_type !== undefined
-          || body.amount !== undefined) {
+        if (body.categories !== undefined || body.category_split_type !== undefined || body.amount !== undefined) {
           // Weights have to be recomputed whenever the amount or the split changes, or
           // the per-category rollup stops summing to the item.
-          const requested = body.categories !== undefined
-            ? body.categories
-            : item.categories.map((c: any) => ({ name: c.name, amount: c.amount, percentage: c.percentage }));
+          const requested =
+            body.categories !== undefined
+              ? body.categories
+              : item.categories.map((c: any) => ({ name: c.name, amount: c.amount, percentage: c.percentage }));
           item.category_split_type = body.category_split_type || item.category_split_type || "equal";
           item.categories = resolveCategories(item.category_split_type, item.amount, requested);
         }
@@ -3443,13 +3702,17 @@ module.exports = function (app: any) {
         // per-person totals stop reconciling with the item.
         if (body.shares !== undefined || body.share_type !== undefined || body.amount !== undefined) {
           try {
-            const resolved = buildShares({
-              amount: item.amount,
-              share_type: body.share_type || item.share_type,
-              shares: body.shares !== undefined
-                ? body.shares
-                : item.shares.map((s: any) => ({ user_id: s.user_id, amount: s.amount, percentage: s.percentage })),
-            }, book);
+            const resolved = buildShares(
+              {
+                amount: item.amount,
+                share_type: body.share_type || item.share_type,
+                shares:
+                  body.shares !== undefined
+                    ? body.shares
+                    : item.shares.map((s: any) => ({ user_id: s.user_id, amount: s.amount, percentage: s.percentage })),
+              },
+              book,
+            );
             item.share_type = resolved.share_type;
             item.shares = resolved.shares;
           } catch (e: any) {
@@ -3467,10 +3730,12 @@ module.exports = function (app: any) {
         console.error("Error updating item:", error);
         res.status(500).json({ status: false, message: "Failed to update item" });
       }
-    });
+    },
+  );
 
   // DELETE /api/xenbudget/books/:bookId/items/:itemId
-  app.delete("/api/xenbudget/books/:bookId/items/:itemId",
+  app.delete(
+    "/api/xenbudget/books/:bookId/items/:itemId",
     validateParams(xenBudgetItemParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -3486,11 +3751,14 @@ module.exports = function (app: any) {
         console.error("Error deleting item:", error);
         res.status(500).json({ status: false, message: "Failed to delete item" });
       }
-    });
+    },
+  );
 
   // POST /api/xenbudget/books/:bookId/items/:itemId/images - Upload item images
-  app.post("/api/xenbudget/books/:bookId/items/:itemId/images",
-    validateParams(xenBudgetItemParamSchema), uploadXenBudgetImages.array("images", MAX_XENBUDGET_IMAGES_PER_ITEM),
+  app.post(
+    "/api/xenbudget/books/:bookId/items/:itemId/images",
+    validateParams(xenBudgetItemParamSchema),
+    uploadXenBudgetImages.array("images", MAX_XENBUDGET_IMAGES_PER_ITEM),
     async (req: Request, res: Response) => {
       try {
         const book = await loadBookForMember(req, res);
@@ -3505,7 +3773,9 @@ module.exports = function (app: any) {
 
         if (!item.images) item.images = [];
         if (item.images.length + files.length > MAX_XENBUDGET_IMAGES_PER_ITEM) {
-          return res.status(400).json({ status: false, message: `Cannot exceed ${MAX_XENBUDGET_IMAGES_PER_ITEM} images per item` });
+          return res
+            .status(400)
+            .json({ status: false, message: `Cannot exceed ${MAX_XENBUDGET_IMAGES_PER_ITEM} images per item` });
         }
 
         for (const file of files) {
@@ -3522,10 +3792,12 @@ module.exports = function (app: any) {
         console.error("Error uploading item images:", error);
         res.status(500).json({ status: false, message: "Failed to upload images" });
       }
-    });
+    },
+  );
 
   // DELETE /api/xenbudget/books/:bookId/items/:itemId/images/:imageId - Delete an item image
-  app.delete("/api/xenbudget/books/:bookId/items/:itemId/images/:imageId",
+  app.delete(
+    "/api/xenbudget/books/:bookId/items/:itemId/images/:imageId",
     validateParams(xenBudgetItemImageParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -3539,7 +3811,7 @@ module.exports = function (app: any) {
           return res.status(404).json({ status: false, message: "Image not found" });
         }
 
-        await deleteFromGCS(item.images[imageIndex].gcs_path, true).catch(() => { });
+        await deleteFromGCS(item.images[imageIndex].gcs_path, true).catch(() => {});
         item.images.splice(imageIndex, 1);
         await item.save();
         broadcastBook(book);
@@ -3548,10 +3820,12 @@ module.exports = function (app: any) {
         console.error("Error deleting item image:", error);
         res.status(500).json({ status: false, message: "Failed to delete image" });
       }
-    });
+    },
+  );
 
   // GET /api/xenbudget/books/:bookId/items/:itemId/image-urls - Signed URLs for item images
-  app.get("/api/xenbudget/books/:bookId/items/:itemId/image-urls",
+  app.get(
+    "/api/xenbudget/books/:bookId/items/:itemId/image-urls",
     validateParams(xenBudgetItemParamSchema),
     async (req: Request, res: Response) => {
       try {
@@ -3568,7 +3842,7 @@ module.exports = function (app: any) {
           item.images.map(async (img: any) => ({
             _id: img._id.toString(),
             signedUrl: await generateSignedUrl(img.gcs_path, 15),
-          }))
+          })),
         );
 
         res.json({ status: true, data: signedUrls });
@@ -3576,7 +3850,8 @@ module.exports = function (app: any) {
         console.error("Error generating signed URLs:", error);
         res.status(500).json({ status: false, message: "Failed to generate image URLs" });
       }
-    });
+    },
+  );
 };
 
 // Search text goes into a $regex, so metacharacters in it must be literal - otherwise a

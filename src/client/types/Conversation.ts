@@ -17,4 +17,3 @@ export interface Conversation {
   messageCount?: number;
   messages?: Message[];
 }
-

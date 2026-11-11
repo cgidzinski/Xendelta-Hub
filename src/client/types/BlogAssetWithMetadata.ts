@@ -8,4 +8,3 @@ export interface BlogAssetWithMetadata extends BlogAsset {
   id: string; // Unique identifier
   isFeatured: boolean; // Whether this is the featured image
 }
-

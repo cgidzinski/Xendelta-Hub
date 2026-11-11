@@ -1,11 +1,7 @@
 import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { uploadRecipaintAsset as multerUploadRecipaintAsset } from "../config/multer";
-import {
-  uploadRecipaintAsset,
-  generateUniqueFilename,
-  deleteRecipaintAssetByUrl,
-} from "../utils/mediaUtils";
+import { uploadRecipaintAsset, generateUniqueFilename, deleteRecipaintAssetByUrl } from "../utils/mediaUtils";
 import { AuthenticatedRequest } from "../types";
 import { sanitizeCompletedSteps } from "@shared/recipaint/progress";
 import { isSameId } from "../utils/objectId";
@@ -26,7 +22,8 @@ const MAX_LIST_LIMIT = 100;
 function parsePaging(req: express.Request): { limit: number; offset: number } {
   const rawLimit = Number(req.query.limit);
   const rawOffset = Number(req.query.offset);
-  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.floor(rawLimit), MAX_LIST_LIMIT) : DEFAULT_LIST_LIMIT;
+  const limit =
+    Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.floor(rawLimit), MAX_LIST_LIMIT) : DEFAULT_LIST_LIMIT;
   const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? Math.floor(rawOffset) : 0;
   return { limit, offset };
 }
@@ -83,11 +80,7 @@ module.exports = function (app: express.Application) {
     const userId = (req as AuthenticatedRequest).user!._id;
     const { limit, offset } = parsePaging(req);
 
-    const recipes = await findRecipeSummaries(
-      { isPublic: true, owner: { $ne: new ObjectId(userId) } },
-      limit,
-      offset,
-    );
+    const recipes = await findRecipeSummaries({ isPublic: true, owner: { $ne: new ObjectId(userId) } }, limit, offset);
 
     return res.json({
       status: true,

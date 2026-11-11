@@ -1,14 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import {
-  Card,
-  CardActionArea,
-  CardContent,
-  Typography,
-  Box,
-  Avatar,
-  AvatarGroup,
-  Chip,
-} from "@mui/material";
+import { Card, CardActionArea, CardContent, Typography, Box, Avatar, AvatarGroup, Chip } from "@mui/material";
 import GroupAvatar from "./GroupAvatar";
 import type { XenSplit } from "../../../../hooks/xensplit/types";
 
@@ -53,9 +44,19 @@ export function GroupCard({ group, userId }: GroupCardProps) {
 
   const formatBalance = (currency: string, amount: number) => {
     const formatted = new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Math.abs(amount));
-    return amount > 0
-      ? <Typography key={currency} variant="caption" sx={{ fontWeight: 700, color: "success.main", whiteSpace: "nowrap" }}>Owed {formatted}</Typography>
-      : <Typography key={currency} variant="caption" sx={{ fontWeight: 700, color: "error.main", whiteSpace: "nowrap" }}>Owes {formatted}</Typography>;
+    return amount > 0 ? (
+      <Typography
+        key={currency}
+        variant="caption"
+        sx={{ fontWeight: 700, color: "success.main", whiteSpace: "nowrap" }}
+      >
+        Owed {formatted}
+      </Typography>
+    ) : (
+      <Typography key={currency} variant="caption" sx={{ fontWeight: 700, color: "error.main", whiteSpace: "nowrap" }}>
+        Owes {formatted}
+      </Typography>
+    );
   };
 
   const displayedEntries = nonZeroEntries.slice(0, 2);
@@ -75,9 +76,7 @@ export function GroupCard({ group, userId }: GroupCardProps) {
         },
       }}
     >
-      <CardActionArea
-        onClick={() => navigate(`/internal/xensplit/groups/${group._id}`)}
-      >
+      <CardActionArea onClick={() => navigate(`/internal/xensplit/groups/${group._id}`)}>
         <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
           <Box sx={{ display: "grid", gridTemplateColumns: "48px 1fr auto", alignItems: "center", columnGap: 2 }}>
             {/* Group image, or colored group initial fallback */}
@@ -85,24 +84,24 @@ export function GroupCard({ group, userId }: GroupCardProps) {
 
             {/* Name + members */}
             <Box sx={{ minWidth: 0 }}>
-              <Typography
-                variant="subtitle1"
-                sx={{ fontWeight: 700, lineHeight: 1.25, mb: 0.5 }}
-                noWrap
-              >
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25, mb: 0.5 }} noWrap>
                 {group.name}
               </Typography>
               <Box sx={{ display: "flex", alignItems: "center" }}>
                 <AvatarGroup
                   max={4}
-                  sx={{ "& .MuiAvatar-root": { width: 24, height: 24, fontSize: 10, border: "1.5px solid", borderColor: "background.paper" } }}
+                  sx={{
+                    "& .MuiAvatar-root": {
+                      width: 24,
+                      height: 24,
+                      fontSize: 10,
+                      border: "1.5px solid",
+                      borderColor: "background.paper",
+                    },
+                  }}
                 >
                   {group.members.map((member) => (
-                    <Avatar
-                      key={member.user_id}
-                      src={member.avatar || undefined}
-                      sx={{}}
-                    >
+                    <Avatar key={member.user_id} src={member.avatar || undefined} sx={{}}>
                       {member.username[0]?.toUpperCase()}
                     </Avatar>
                   ))}
@@ -111,7 +110,15 @@ export function GroupCard({ group, userId }: GroupCardProps) {
             </Box>
 
             {/* Right side */}
-            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", alignSelf: "flex-start", gap: 0.25 }}>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-end",
+                alignSelf: "flex-start",
+                gap: 0.25,
+              }}
+            >
               {isSettledUp && (group.expenses?.length ?? 0) > 0 ? (
                 <Typography variant="caption" sx={{ fontWeight: 700, color: "text.primary", whiteSpace: "nowrap" }}>
                   Settled up

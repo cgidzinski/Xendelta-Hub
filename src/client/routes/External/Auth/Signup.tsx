@@ -21,7 +21,12 @@ import LandingHeader from "../../../components/LandingHeader";
 import PasswordField from "../../../components/PasswordField";
 import FormErrorAlert from "../../../components/forms/FormErrorAlert";
 import FormLoadingButton from "../../../components/forms/FormLoadingButton";
-import { validateUsername, validateEmail, validateSignupPassword, validatePasswordMatch } from "../../../utils/formValidation";
+import {
+  validateUsername,
+  validateEmail,
+  validateSignupPassword,
+  validatePasswordMatch,
+} from "../../../utils/formValidation";
 
 interface SignupFormData {
   username: string;
@@ -52,21 +57,20 @@ export default function Signup() {
   const [errors, setErrors] = useState<SignupErrors>({});
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleInputChange =
-    (field: keyof SignupFormData) => (event: React.ChangeEvent<HTMLInputElement>) => {
-      const value = event.target.value;
-      setFormData((prev) => ({
+  const handleInputChange = (field: keyof SignupFormData) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors((prev) => ({
         ...prev,
-        [field]: value,
+        [field]: undefined,
       }));
-      // Clear error when user starts typing
-      if (errors[field]) {
-        setErrors((prev) => ({
-          ...prev,
-          [field]: undefined,
-        }));
-      }
-    };
+    }
+  };
 
   const validateForm = (): boolean => {
     const newErrors: SignupErrors = {};
@@ -114,10 +118,9 @@ export default function Signup() {
     } else {
       setErrors({ general: "Signup failed. Username or email may already be taken." });
     }
-    
+
     setIsLoading(false);
   };
-
 
   return (
     <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>

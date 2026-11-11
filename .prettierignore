@@ -1,0 +1,11 @@
+# Generated, vendored or data files
+node_modules
+dist
+coverage
+backups
+public
+src/server/public
+package-lock.json
+*.md
+# Hand-formatted on purpose
+.github/workflows/*.yml

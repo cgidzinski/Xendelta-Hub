@@ -55,14 +55,14 @@ export class SocketManager {
     if (this.isInitialized && this.io === io) {
       return;
     }
-    
+
     this.io = io;
     this.isInitialized = true;
 
     // Socket authentication middleware
     io.use(async (socket: AuthenticatedSocket, next) => {
       const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.replace("Bearer ", "");
-      
+
       if (!token) {
         return next(new Error("Authentication error: No token provided"));
       }
@@ -70,7 +70,7 @@ export class SocketManager {
       try {
         const decoded = jwt.verify(token, getJwtSecret()) as JWTPayload;
         const user = await User.findOne({ _id: decoded._id }).exec();
-        
+
         if (!user) {
           return next(new Error("Authentication error: User not found"));
         }
@@ -149,7 +149,7 @@ export class SocketManager {
         if (currentSocketId === socket.id) {
           console.log(`User ${socket.username} (${socket.userId}) disconnected`);
           this.connectedUsers.delete(socket.userId!);
-          
+
           // Emit offline status
           socket.broadcast.emit("user:offline", {
             userId: socket.userId,
@@ -164,7 +164,7 @@ export class SocketManager {
   sendNewMessage(conversationId: string, message: Message & { senderUsername?: string }, participants: string[]) {
     const conversationRoom = `conversation:${conversationId}`;
     const roomSockets = this.io.sockets.adapter.rooms.get(conversationRoom);
-    
+
     // Send to conversation room (users actively viewing)
     this.io.to(conversationRoom).emit("message:new", {
       conversationId,
@@ -200,7 +200,10 @@ export class SocketManager {
   }
 
   // Notify participants about conversation update (e.g., new participant)
-  notifyConversationUpdate(conversationId: string, update: { participants?: string[]; name?: string; deleted?: boolean }) {
+  notifyConversationUpdate(
+    conversationId: string,
+    update: { participants?: string[]; name?: string; deleted?: boolean },
+  ) {
     this.io.to(`conversation:${conversationId}`).emit("conversation:update", {
       conversationId,
       update,

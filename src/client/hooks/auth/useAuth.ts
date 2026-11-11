@@ -126,7 +126,7 @@ const verifyResetTokenRequest = async (token: string, email: string): Promise<Ve
 const resetPasswordWithTokenRequest = async (
   token: string,
   newPassword: string,
-  email: string
+  email: string,
 ): Promise<ResetPasswordResponse> => {
   const response = await apiClient.post<ResetPasswordResponse>("/api/auth/reset-password", {
     token,
@@ -154,8 +154,7 @@ export const useAuthHook = () => {
 
   // Mutation for login
   const { mutateAsync: loginMutation } = useMutation({
-    mutationFn: ({ email, password }: { email: string; password: string }) =>
-      loginUser(email, password),
+    mutationFn: ({ email, password }: { email: string; password: string }) => loginUser(email, password),
     onSuccess: (data) => {
       if (data.success && data.user) {
         // Clear all queries first to remove any previous user's data
@@ -209,8 +208,7 @@ export const useAuthHook = () => {
 
   // Mutation for verify reset token
   const { mutateAsync: verifyResetTokenMutation } = useMutation({
-    mutationFn: ({ token, email }: { token: string; email: string }) =>
-      verifyResetTokenRequest(token, email),
+    mutationFn: ({ token, email }: { token: string; email: string }) => verifyResetTokenRequest(token, email),
     onError: () => {
       // Error handled by mutation error state
     },
@@ -264,7 +262,7 @@ export const useAuthHook = () => {
   const resetPasswordWithToken = async (
     token: string,
     newPassword: string,
-    email: string
+    email: string,
   ): Promise<ResetPasswordResponse> => {
     return await resetPasswordWithTokenMutation({ token, newPassword, email });
   };

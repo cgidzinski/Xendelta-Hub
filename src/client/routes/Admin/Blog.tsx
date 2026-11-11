@@ -14,11 +14,7 @@ import {
   IconButton,
   Tooltip,
 } from "@mui/material";
-import {
-  Add as AddIcon,
-  Star as StarIcon,
-  Delete as DeleteIcon,
-} from "@mui/icons-material";
+import { Add as AddIcon, Star as StarIcon, Delete as DeleteIcon } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import ListSkeleton from "../../components/ui/ListSkeleton";
@@ -44,7 +40,6 @@ export default function Blog() {
     enqueueSnackbar("Blog post deleted successfully", { variant: "success" });
   };
 
-
   const handleEdit = (postId: string) => {
     navigate(`/admin/blog/${postId}/edit`);
   };
@@ -57,89 +52,87 @@ export default function Blog() {
 
   return (
     <Box>
-    <PageContainer>
-      <PageHeader
-        title="Blog Management"
-        actions={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
-            Create Post
-          </Button>
-        }
-      />
+      <PageContainer>
+        <PageHeader
+          title="Blog Management"
+          actions={
+            <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
+              Create Post
+            </Button>
+          }
+        />
 
-      {isLoading ? (
-        <Box sx={{ py: 4 }}>
-          <ListSkeleton rows={6} height={52} gap={1} />
-        </Box>
-      ) : (
-        <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider" }}>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 700 }}>Title</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Slug</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Featured</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Publish Date</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }} align="right" />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {posts.map((post) => (
-                  <TableRow
-                    key={post._id}
-                    onClick={() => handleEdit(post._id)}
-                    sx={{
-                      cursor: "pointer",
-                      "&:hover": {
-                        backgroundColor: "action.hover",
-                      },
-                    }}
-                  >
-                    <TableCell>
-                      <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                        {post.title}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">
-                        {post.slug}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      {post.featured && <StarIcon color="warning" />}
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">
-                        {format(new Date(post.publishDate), "MMM d, yyyy")}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right">
-                      <Tooltip title="Delete post">
-                        <span>
-                          <IconButton
-                            size="small"
-                            aria-label={`Delete ${post.title}`}
-                            disabled={isDeleting}
-                            onClick={(e) => {
-                              // The row itself opens the editor.
-                              e.stopPropagation();
-                              handleDelete(post._id);
-                            }}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    </TableCell>
+        {isLoading ? (
+          <Box sx={{ py: 4 }}>
+            <ListSkeleton rows={6} height={52} gap={1} />
+          </Box>
+        ) : (
+          <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider" }}>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 700 }}>Title</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Slug</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Featured</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Publish Date</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right" />
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Card>
-      )}
-    </PageContainer>
+                </TableHead>
+                <TableBody>
+                  {posts.map((post) => (
+                    <TableRow
+                      key={post._id}
+                      onClick={() => handleEdit(post._id)}
+                      sx={{
+                        cursor: "pointer",
+                        "&:hover": {
+                          backgroundColor: "action.hover",
+                        },
+                      }}
+                    >
+                      <TableCell>
+                        <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                          {post.title}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {post.slug}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{post.featured && <StarIcon color="warning" />}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {format(new Date(post.publishDate), "MMM d, yyyy")}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Tooltip title="Delete post">
+                          <span>
+                            <IconButton
+                              size="small"
+                              aria-label={`Delete ${post.title}`}
+                              disabled={isDeleting}
+                              onClick={(e) => {
+                                // The row itself opens the editor.
+                                e.stopPropagation();
+                                handleDelete(post._id);
+                              }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Card>
+        )}
+      </PageContainer>
     </Box>
   );
 }

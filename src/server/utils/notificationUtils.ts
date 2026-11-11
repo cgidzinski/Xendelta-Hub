@@ -96,7 +96,7 @@ export async function notify(userId: string, input: NotifyInput): Promise<Notify
         } catch (e) {
           console.error("Notification (socket) failed:", e);
         }
-      })()
+      })(),
     );
   }
 
@@ -113,7 +113,7 @@ export async function notify(userId: string, input: NotifyInput): Promise<Notify
         } catch (e) {
           console.error("Notification (push) failed:", e);
         }
-      })()
+      })(),
     );
   }
 
@@ -138,7 +138,7 @@ export async function notify(userId: string, input: NotifyInput): Promise<Notify
         } catch (e) {
           console.error("Notification (email) failed:", e);
         }
-      })()
+      })(),
     );
   }
 

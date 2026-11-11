@@ -1,5 +1,9 @@
 import type {
-    BudgetMeasures, BudgetStatus, SummaryCategory, SummaryCategoryPeriod, SummaryPeriod,
+  BudgetMeasures,
+  BudgetStatus,
+  SummaryCategory,
+  SummaryCategoryPeriod,
+  SummaryPeriod,
 } from "../../../../../hooks/xenbudget/types";
 import { budgetedForRange } from "../budget/budgetForRange";
 import { countsItemType, directionOf } from "../budget/budgetKind";
@@ -7,364 +11,366 @@ import { periodKeyRange, shouldPivot } from "./periodColumns";
 
 /** One line of the budget-vs-actual table. */
 export interface CategoryReportRow {
-    /** Stable React key. */
-    key: string;
-    label: string;
-    /** The categories this line covers - one for a category row, several for a spanning one. */
-    categories: string[];
-    /**
-     * Net: what went out of this line, less anything that came back into it. A category
-     * used in both directions - a bill paid then repaid, a purchase refunded - was
-     * reporting its gross outgoings, which is not what it cost.
-     */
-    spent: number;
-    /** The gross halves behind `spent`, so a netted figure can still be checked. */
-    out: number;
-    returned: number;
-    /** Absent when no budget covers this line, which is different from a budget of zero. */
-    budgeted?: number;
-    /**
-     * Which way `budgeted` points. A row can only be one or the other: a category with
-     * both a cap and a target on it would be contradictory, so the first budget seen wins
-     * and the other is left out of the column rather than silently added to it.
-     */
-    measures?: BudgetMeasures;
-    /** Spend per period bucket, keyed as `by_period` is. Empty when the table isn't pivoted. */
-    byPeriod: Record<string, number>;
+  /** Stable React key. */
+  key: string;
+  label: string;
+  /** The categories this line covers - one for a category row, several for a spanning one. */
+  categories: string[];
+  /**
+   * Net: what went out of this line, less anything that came back into it. A category
+   * used in both directions - a bill paid then repaid, a purchase refunded - was
+   * reporting its gross outgoings, which is not what it cost.
+   */
+  spent: number;
+  /** The gross halves behind `spent`, so a netted figure can still be checked. */
+  out: number;
+  returned: number;
+  /** Absent when no budget covers this line, which is different from a budget of zero. */
+  budgeted?: number;
+  /**
+   * Which way `budgeted` points. A row can only be one or the other: a category with
+   * both a cap and a target on it would be contradictory, so the first budget seen wins
+   * and the other is left out of the column rather than silently added to it.
+   */
+  measures?: BudgetMeasures;
+  /** Spend per period bucket, keyed as `by_period` is. Empty when the table isn't pivoted. */
+  byPeriod: Record<string, number>;
 }
 
 export interface CategoryReport {
-    /** One per category: everything with spending in the range, or a budget of its own. */
-    rows: CategoryReportRow[];
-    /**
-     * Budgets covering several categories at once. They can't fill a cell on any single
-     * category's row without inventing a split, so they get their own lines - and their
-     * spend is money already counted in `rows`, which is why the totals below come from
-     * the summary rather than from adding these up.
-     */
-    spanning: CategoryReportRow[];
-    /** Budgets with no categories at all: a cap on the whole book. */
-    wholeBook: number;
-    /**
-     * Expense caps and income targets scaled to the range, kept apart. Adding a $9,600
-     * spending cap to a $6,000 income target produces a number that means nothing.
-     */
-    totalCapped: number;
-    totalTarget: number;
-    /** Spending inside categories that actually carry a cap - what `totalCapped` measures. */
-    cappedSpend: number;
-    /** Income that landed in categories carrying a target - what `totalTarget` measures. */
-    towardTargets: number;
-    /**
-     * Money that came back INTO a category over the range. The rows are net of it, so this
-     * is what reconciles them with the gross `spent` figure in the summary.
-     */
-    returned: number;
-    /** True once anything at all is budgeted, so the column can be dropped when nothing is. */
-    hasBudgets: boolean;
-    hasTargets: boolean;
-    /**
-     * The period columns to render, in order. Empty when the range has only one bucket or
-     * too many to read, in which case the table falls back to a single Spent column.
-     */
-    periodKeys: string[];
-    /** Number of period buckets in the selected range — denominator for the Average column. */
-    periodCount: number;
-    /** The bottom block, each measure carrying a figure for every column. */
-    summary: ReportSummaryRows;
+  /** One per category: everything with spending in the range, or a budget of its own. */
+  rows: CategoryReportRow[];
+  /**
+   * Budgets covering several categories at once. They can't fill a cell on any single
+   * category's row without inventing a split, so they get their own lines - and their
+   * spend is money already counted in `rows`, which is why the totals below come from
+   * the summary rather than from adding these up.
+   */
+  spanning: CategoryReportRow[];
+  /** Budgets with no categories at all: a cap on the whole book. */
+  wholeBook: number;
+  /**
+   * Expense caps and income targets scaled to the range, kept apart. Adding a $9,600
+   * spending cap to a $6,000 income target produces a number that means nothing.
+   */
+  totalCapped: number;
+  totalTarget: number;
+  /** Spending inside categories that actually carry a cap - what `totalCapped` measures. */
+  cappedSpend: number;
+  /** Income that landed in categories carrying a target - what `totalTarget` measures. */
+  towardTargets: number;
+  /**
+   * Money that came back INTO a category over the range. The rows are net of it, so this
+   * is what reconciles them with the gross `spent` figure in the summary.
+   */
+  returned: number;
+  /** True once anything at all is budgeted, so the column can be dropped when nothing is. */
+  hasBudgets: boolean;
+  hasTargets: boolean;
+  /**
+   * The period columns to render, in order. Empty when the range has only one bucket or
+   * too many to read, in which case the table falls back to a single Spent column.
+   */
+  periodKeys: string[];
+  /** Number of period buckets in the selected range — denominator for the Average column. */
+  periodCount: number;
+  /** The bottom block, each measure carrying a figure for every column. */
+  summary: ReportSummaryRows;
 }
 
 /** One measure across the columns, plus its figure for the whole range. */
 export interface PeriodTotals {
-    byPeriod: Record<string, number>;
-    total: number;
+  byPeriod: Record<string, number>;
+  total: number;
 }
 
 export interface ReportSummaryRows {
-    /** Spending caps, restated for the range. */
-    capped: PeriodTotals;
-    /** Income targets, restated for the range. Kept apart from caps deliberately. */
-    targets: PeriodTotals;
-    /** What actually landed in the categories carrying those targets. */
-    towardTargets: PeriodTotals;
-    /** Every outgoing, capped or not. Gross: the rows above have netted, this has not. */
-    spent: PeriodTotals;
-    /** What came back into a category, already netted off the rows above. */
-    returned: PeriodTotals;
-    /**
-     * Caps minus the spending inside CAPPED categories - a like-for-like comparison.
-     * Measuring partial coverage against the book's entire outgoings, as this used to,
-     * produced a number that looked alarming whenever anything was left unbudgeted.
-     */
-    capsLeft: PeriodTotals;
-    income: PeriodTotals;
-    /** income - spent, the book's actual bottom line. */
-    net: PeriodTotals;
+  /** Spending caps, restated for the range. */
+  capped: PeriodTotals;
+  /** Income targets, restated for the range. Kept apart from caps deliberately. */
+  targets: PeriodTotals;
+  /** What actually landed in the categories carrying those targets. */
+  towardTargets: PeriodTotals;
+  /** Every outgoing, capped or not. Gross: the rows above have netted, this has not. */
+  spent: PeriodTotals;
+  /** What came back into a category, already netted off the rows above. */
+  returned: PeriodTotals;
+  /**
+   * Caps minus the spending inside CAPPED categories - a like-for-like comparison.
+   * Measuring partial coverage against the book's entire outgoings, as this used to,
+   * produced a number that looked alarming whenever anything was left unbudgeted.
+   */
+  capsLeft: PeriodTotals;
+  income: PeriodTotals;
+  /** income - spent, the book's actual bottom line. */
+  net: PeriodTotals;
 }
 
 interface BuildInput {
-    /**
-     * Every category the book defines. They all get a row, spent on or not - a report
-     * that silently omits the categories nobody touched can't answer "what did we not
-     * spend on", and a budgeted category dropping out because it went unused is exactly
-     * the thing worth seeing.
-     */
-    allCategories: string[];
-    byCategory: SummaryCategory[];
-    byCategoryPeriod: SummaryCategoryPeriod[];
-    uncategorised: { total: number; count: number };
-    uncategorisedByPeriod: { key: string; total: number }[];
-    /** Every bucket in the range, in order, straight from `by_period`. */
-    byPeriod: SummaryPeriod[];
-    budgets: BudgetStatus[];
-    rangeFrom: Date;
-    rangeTo: Date;
+  /**
+   * Every category the book defines. They all get a row, spent on or not - a report
+   * that silently omits the categories nobody touched can't answer "what did we not
+   * spend on", and a budgeted category dropping out because it went unused is exactly
+   * the thing worth seeing.
+   */
+  allCategories: string[];
+  byCategory: SummaryCategory[];
+  byCategoryPeriod: SummaryCategoryPeriod[];
+  uncategorised: { total: number; count: number };
+  uncategorisedByPeriod: { key: string; total: number }[];
+  /** Every bucket in the range, in order, straight from `by_period`. */
+  byPeriod: SummaryPeriod[];
+  budgets: BudgetStatus[];
+  rangeFrom: Date;
+  rangeTo: Date;
 }
 
 /** Categories are matched by name, and a name can be spelled differently across items. */
 const key = (name: string) => name.toLowerCase();
 
 export function buildCategoryReport({
-    allCategories, byCategory, byCategoryPeriod, uncategorised, uncategorisedByPeriod,
-    byPeriod, budgets, rangeFrom, rangeTo,
+  allCategories,
+  byCategory,
+  byCategoryPeriod,
+  uncategorised,
+  uncategorisedByPeriod,
+  byPeriod,
+  budgets,
+  rangeFrom,
+  rangeTo,
 }: BuildInput): CategoryReport {
-    const kept = budgets;
-    const periodKeys = byPeriod.map((p) => p.key);
-    const pivoted = shouldPivot(periodKeys);
+  const kept = budgets;
+  const periodKeys = byPeriod.map((p) => p.key);
+  const pivoted = shouldPivot(periodKeys);
 
-    const registryLabels = new Map(allCategories.map((name) => [key(name), name]));
+  const registryLabels = new Map(allCategories.map((name) => [key(name), name]));
 
-    // Net (out less returned) is what a category cost, and what the rows, the budget
-    // comparison and the caps-left figure are all measured in. The gross halves are kept
-    // beside it so a netted line can still be reconciled against a statement.
-    const spentByCategory = new Map<string, {
-        label: string; spent: number; out: number; returned: number;
-    }>();
-    for (const row of byCategory) {
-        spentByCategory.set(key(row.category), {
-            label: row.category,
-            spent: row.total - row.income,
-            out: row.total,
-            returned: row.income,
-        });
+  // Net (out less returned) is what a category cost, and what the rows, the budget
+  // comparison and the caps-left figure are all measured in. The gross halves are kept
+  // beside it so a netted line can still be reconciled against a statement.
+  const spentByCategory = new Map<
+    string,
+    {
+      label: string;
+      spent: number;
+      out: number;
+      returned: number;
     }
-
-    // Cells for the grid. Only assembled when the table is actually pivoted - a month
-    // view would build 31 buckets per category and then throw them away.
-    //
-    // `incomeCells` holds the GROSS money that arrived in a category, which the summary
-    // block reports on its own line - without it the netted rows above would no longer add
-    // up to the book's gross outgoings, and this table's whole point is that they do.
-    const cellsByCategory = new Map<string, Record<string, number>>();
-    const incomeCellsByCategory = new Map<string, Record<string, number>>();
-    if (pivoted) {
-        for (const cell of byCategoryPeriod) {
-            const bucket = cellsByCategory.get(key(cell.category)) ?? {};
-            bucket[cell.key] = (bucket[cell.key] ?? 0) + cell.total - cell.income;
-            cellsByCategory.set(key(cell.category), bucket);
-            const income = incomeCellsByCategory.get(key(cell.category)) ?? {};
-            income[cell.key] = (income[cell.key] ?? 0) + cell.income;
-            incomeCellsByCategory.set(key(cell.category), income);
-        }
-    }
-
-    const budgetedByCategory = new Map<string, { label: string; budgeted: number; measures: BudgetMeasures }>();
-    const spanning: CategoryReportRow[] = [];
-    // Which categories carry a cap and which carry a target, so the totals below can compare
-    // each against the spending that actually belongs to it.
-    //
-    // The two floors are kept apart because they count opposite things: a savings budget
-    // measures money leaving for its category, an income target measures money arriving in
-    // one. Summing both out of the spend map, as this used to, left every income target
-    // reporting nothing however much came in.
-    const cappedNames = new Set<string>();
-    const savingNames = new Set<string>();
-    const incomeTargetNames = new Set<string>();
-    let wholeBook = 0;
-    let totalCapped = 0;
-    let totalTarget = 0;
-    let hasTargets = false;
-
-    for (const budget of kept) {
-        const budgeted = budgetedForRange(
-            {
-                period: budget.period,
-                amount: budget.amount,
-                period_from: budget.period_from,
-                period_to: budget.period_to,
-            },
-            rangeFrom, rangeTo,
-        );
-        if (budgeted <= 0) continue;
-        if (directionOf(budget.measures) === "floor") {
-            hasTargets = true;
-            totalTarget += budgeted;
-        } else {
-            totalCapped += budgeted;
-        }
-        for (const name of budget.categories) {
-            if (directionOf(budget.measures) !== "floor") {
-                cappedNames.add(key(name));
-                continue;
-            }
-            (countsItemType(budget.measures) === "income" ? incomeTargetNames : savingNames)
-                .add(key(name));
-        }
-
-        if (budget.categories.length === 0) {
-            wholeBook += budgeted;
-        } else if (budget.categories.length === 1) {
-            const name = budget.categories[0];
-            const existing = budgetedByCategory.get(key(name));
-            // Two budgets of the same direction on one category add up; opposing ones
-            // can't, so the first direction seen holds the cell.
-            const sameKind = !existing || existing.measures === budget.measures;
-            budgetedByCategory.set(key(name), {
-                label: existing?.label ?? name,
-                budgeted: sameKind ? (existing?.budgeted ?? 0) + budgeted : (existing?.budgeted ?? 0),
-                measures: existing?.measures ?? budget.measures,
-            });
-        } else {
-            spanning.push({
-                key: budget._id,
-                label: budget.categories.join(" + "),
-                categories: budget.categories,
-                // Money already on the category rows above, restated so it can be read
-                // against this budget's own combined cap.
-                spent: budget.categories.reduce(
-                    (sum, name) => sum + (spentByCategory.get(key(name))?.spent ?? 0), 0,
-                ),
-                out: budget.categories.reduce(
-                    (sum, name) => sum + (spentByCategory.get(key(name))?.out ?? 0), 0,
-                ),
-                returned: budget.categories.reduce(
-                    (sum, name) => sum + (spentByCategory.get(key(name))?.returned ?? 0), 0,
-                ),
-                byPeriod: sumCells(budget.categories.map((name) => cellsByCategory.get(key(name)))),
-                budgeted,
-                measures: budget.measures,
-            });
-        }
-    }
-
-    // Every registered category, plus anything spent on or budgeted that the registry
-    // doesn't know about - a CSV import or a rule can name a category before anyone adds
-    // it to the book.
-    const names = new Set([
-        ...registryLabels.keys(),
-        ...spentByCategory.keys(),
-        ...budgetedByCategory.keys(),
-    ]);
-    const rows: CategoryReportRow[] = [...names].map((name) => {
-        const spend = spentByCategory.get(name);
-        const budget = budgetedByCategory.get(name);
-        const label = registryLabels.get(name) ?? spend?.label ?? budget?.label ?? name;
-        return {
-            key: name,
-            label,
-            categories: [label],
-            spent: spend?.spent ?? 0,
-            out: spend?.out ?? 0,
-            returned: spend?.returned ?? 0,
-            byPeriod: cellsByCategory.get(name) ?? {},
-            budgeted: budget?.budgeted,
-            measures: budget?.measures,
-        };
+  >();
+  for (const row of byCategory) {
+    spentByCategory.set(key(row.category), {
+      label: row.category,
+      spent: row.total - row.income,
+      out: row.total,
+      returned: row.income,
     });
+  }
 
-    rows.sort((a, b) => b.spent - a.spent
-        || a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  // Cells for the grid. Only assembled when the table is actually pivoted - a month
+  // view would build 31 buckets per category and then throw them away.
+  //
+  // `incomeCells` holds the GROSS money that arrived in a category, which the summary
+  // block reports on its own line - without it the netted rows above would no longer add
+  // up to the book's gross outgoings, and this table's whole point is that they do.
+  const cellsByCategory = new Map<string, Record<string, number>>();
+  const incomeCellsByCategory = new Map<string, Record<string, number>>();
+  if (pivoted) {
+    for (const cell of byCategoryPeriod) {
+      const bucket = cellsByCategory.get(key(cell.category)) ?? {};
+      bucket[cell.key] = (bucket[cell.key] ?? 0) + cell.total - cell.income;
+      cellsByCategory.set(key(cell.category), bucket);
+      const income = incomeCellsByCategory.get(key(cell.category)) ?? {};
+      income[cell.key] = (income[cell.key] ?? 0) + cell.income;
+      incomeCellsByCategory.set(key(cell.category), income);
+    }
+  }
 
-    if (uncategorised.count > 0) {
-        rows.push({
-            key: "__uncategorised__",
-            label: "Uncategorised",
-            categories: [],
-            // No netting here, and none in the summary endpoint that feeds it: netting is
-            // something a category opts into by being named. An uncategorised paycheque is
-            // not a refund of uncategorised spending.
-            spent: uncategorised.total,
-            out: uncategorised.total,
-            returned: 0,
-            byPeriod: pivoted
-                ? Object.fromEntries(uncategorisedByPeriod.map((r) => [r.key, r.total]))
-                : {},
-        });
+  const budgetedByCategory = new Map<string, { label: string; budgeted: number; measures: BudgetMeasures }>();
+  const spanning: CategoryReportRow[] = [];
+  // Which categories carry a cap and which carry a target, so the totals below can compare
+  // each against the spending that actually belongs to it.
+  //
+  // The two floors are kept apart because they count opposite things: a savings budget
+  // measures money leaving for its category, an income target measures money arriving in
+  // one. Summing both out of the spend map, as this used to, left every income target
+  // reporting nothing however much came in.
+  const cappedNames = new Set<string>();
+  const savingNames = new Set<string>();
+  const incomeTargetNames = new Set<string>();
+  let wholeBook = 0;
+  let totalCapped = 0;
+  let totalTarget = 0;
+  let hasTargets = false;
+
+  for (const budget of kept) {
+    const budgeted = budgetedForRange(
+      {
+        period: budget.period,
+        amount: budget.amount,
+        period_from: budget.period_from,
+        period_to: budget.period_to,
+      },
+      rangeFrom,
+      rangeTo,
+    );
+    if (budgeted <= 0) continue;
+    if (directionOf(budget.measures) === "floor") {
+      hasTargets = true;
+      totalTarget += budgeted;
+    } else {
+      totalCapped += budgeted;
+    }
+    for (const name of budget.categories) {
+      if (directionOf(budget.measures) !== "floor") {
+        cappedNames.add(key(name));
+        continue;
+      }
+      (countsItemType(budget.measures) === "income" ? incomeTargetNames : savingNames).add(key(name));
     }
 
-    spanning.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+    if (budget.categories.length === 0) {
+      wholeBook += budgeted;
+    } else if (budget.categories.length === 1) {
+      const name = budget.categories[0];
+      const existing = budgetedByCategory.get(key(name));
+      // Two budgets of the same direction on one category add up; opposing ones
+      // can't, so the first direction seen holds the cell.
+      const sameKind = !existing || existing.measures === budget.measures;
+      budgetedByCategory.set(key(name), {
+        label: existing?.label ?? name,
+        budgeted: sameKind ? (existing?.budgeted ?? 0) + budgeted : (existing?.budgeted ?? 0),
+        measures: existing?.measures ?? budget.measures,
+      });
+    } else {
+      spanning.push({
+        key: budget._id,
+        label: budget.categories.join(" + "),
+        categories: budget.categories,
+        // Money already on the category rows above, restated so it can be read
+        // against this budget's own combined cap.
+        spent: budget.categories.reduce((sum, name) => sum + (spentByCategory.get(key(name))?.spent ?? 0), 0),
+        out: budget.categories.reduce((sum, name) => sum + (spentByCategory.get(key(name))?.out ?? 0), 0),
+        returned: budget.categories.reduce((sum, name) => sum + (spentByCategory.get(key(name))?.returned ?? 0), 0),
+        byPeriod: sumCells(budget.categories.map((name) => cellsByCategory.get(key(name)))),
+        budgeted,
+        measures: budget.measures,
+      });
+    }
+  }
 
-    const columns = pivoted ? periodKeys : [];
-
-    const { capped: cappedByPeriod, targets: targetByPeriod } = allowanceByPeriod(
-        kept, columns, rangeFrom, rangeTo,
-    );
-
-    const spentByPeriod = fromPeriods(byPeriod, columns, (p) => p.expense);
-    const incomeByPeriod = fromPeriods(byPeriod, columns, (p) => p.income);
-
-    const totals = byPeriod.reduce(
-        (acc, p) => ({ expense: acc.expense + p.expense, income: acc.income + p.income }),
-        { expense: 0, income: 0 },
-    );
-
-    // Spending that belongs to each direction, so "Caps left" compares like with like
-    // instead of measuring partial coverage against the book's entire outgoings. A
-    // whole-book cap covers everything, so it brings all the spending with it.
-    const sumOver = (names: Set<string>, all: boolean) => (all
-        ? totals.expense
-        : [...names].reduce((sum, n) => sum + (spentByCategory.get(n)?.spent ?? 0), 0));
-    const cappedSpend = sumOver(cappedNames, wholeBook > 0);
-    // What has gone toward each floor, measured in whatever that floor counts: money OUT
-    // for a savings budget, money IN for an income target. Both net, like a cap.
-    const netSpend = (n: string) => spentByCategory.get(n)?.spent ?? 0;
-    const towardTargets = [...savingNames].reduce((sum, n) => sum + netSpend(n), 0)
-        + [...incomeTargetNames].reduce((sum, n) => sum - netSpend(n), 0);
-    // Everything that came back into a named category, on its own line: the rows above are
-    // net, so without it they no longer reconcile with the gross Spent figure below.
-    const returned = [...spentByCategory.values()].reduce((sum, c) => sum + c.returned, 0);
-
-    // A whole-book cap keeps its gross outgoings, matching what /budget-status counts for
-    // one: netting there would let salary pay down the cap.
-    const cappedSpendByPeriod = wholeBook > 0
-        ? spentByPeriod
-        : cellsFor(cappedNames, cellsByCategory, columns);
-
+  // Every registered category, plus anything spent on or budgeted that the registry
+  // doesn't know about - a CSV import or a rule can name a category before anyone adds
+  // it to the book.
+  const names = new Set([...registryLabels.keys(), ...spentByCategory.keys(), ...budgetedByCategory.keys()]);
+  const rows: CategoryReportRow[] = [...names].map((name) => {
+    const spend = spentByCategory.get(name);
+    const budget = budgetedByCategory.get(name);
+    const label = registryLabels.get(name) ?? spend?.label ?? budget?.label ?? name;
     return {
-        rows, spanning, wholeBook,
-        totalCapped, totalTarget, cappedSpend, towardTargets, returned,
-        hasBudgets: totalCapped > 0 || totalTarget > 0,
-        hasTargets,
-        periodKeys: columns,
-        periodCount: byPeriod.length,
-        summary: {
-            capped: { byPeriod: cappedByPeriod, total: totalCapped },
-            targets: { byPeriod: targetByPeriod, total: totalTarget },
-            towardTargets: {
-                byPeriod: add(
-                    cellsFor(savingNames, cellsByCategory, columns),
-                    // The mirror of the netted spend cells: what arrived, less what left.
-                    negate(cellsFor(incomeTargetNames, cellsByCategory, columns), columns),
-                    columns,
-                ),
-                total: towardTargets,
-            },
-            spent: { byPeriod: spentByPeriod, total: totals.expense },
-            returned: {
-                byPeriod: cellsFor(new Set(spentByCategory.keys()), incomeCellsByCategory, columns),
-                total: returned,
-            },
-            capsLeft: {
-                byPeriod: subtract(cappedByPeriod, cappedSpendByPeriod, columns),
-                total: totalCapped - cappedSpend,
-            },
-            income: { byPeriod: incomeByPeriod, total: totals.income },
-            net: {
-                byPeriod: subtract(incomeByPeriod, spentByPeriod, columns),
-                total: totals.income - totals.expense,
-            },
-        },
+      key: name,
+      label,
+      categories: [label],
+      spent: spend?.spent ?? 0,
+      out: spend?.out ?? 0,
+      returned: spend?.returned ?? 0,
+      byPeriod: cellsByCategory.get(name) ?? {},
+      budgeted: budget?.budgeted,
+      measures: budget?.measures,
     };
+  });
+
+  rows.sort((a, b) => b.spent - a.spent || a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+
+  if (uncategorised.count > 0) {
+    rows.push({
+      key: "__uncategorised__",
+      label: "Uncategorised",
+      categories: [],
+      // No netting here, and none in the summary endpoint that feeds it: netting is
+      // something a category opts into by being named. An uncategorised paycheque is
+      // not a refund of uncategorised spending.
+      spent: uncategorised.total,
+      out: uncategorised.total,
+      returned: 0,
+      byPeriod: pivoted ? Object.fromEntries(uncategorisedByPeriod.map((r) => [r.key, r.total])) : {},
+    });
+  }
+
+  spanning.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+
+  const columns = pivoted ? periodKeys : [];
+
+  const { capped: cappedByPeriod, targets: targetByPeriod } = allowanceByPeriod(kept, columns, rangeFrom, rangeTo);
+
+  const spentByPeriod = fromPeriods(byPeriod, columns, (p) => p.expense);
+  const incomeByPeriod = fromPeriods(byPeriod, columns, (p) => p.income);
+
+  const totals = byPeriod.reduce((acc, p) => ({ expense: acc.expense + p.expense, income: acc.income + p.income }), {
+    expense: 0,
+    income: 0,
+  });
+
+  // Spending that belongs to each direction, so "Caps left" compares like with like
+  // instead of measuring partial coverage against the book's entire outgoings. A
+  // whole-book cap covers everything, so it brings all the spending with it.
+  const sumOver = (names: Set<string>, all: boolean) =>
+    all ? totals.expense : [...names].reduce((sum, n) => sum + (spentByCategory.get(n)?.spent ?? 0), 0);
+  const cappedSpend = sumOver(cappedNames, wholeBook > 0);
+  // What has gone toward each floor, measured in whatever that floor counts: money OUT
+  // for a savings budget, money IN for an income target. Both net, like a cap.
+  const netSpend = (n: string) => spentByCategory.get(n)?.spent ?? 0;
+  const towardTargets =
+    [...savingNames].reduce((sum, n) => sum + netSpend(n), 0) +
+    [...incomeTargetNames].reduce((sum, n) => sum - netSpend(n), 0);
+  // Everything that came back into a named category, on its own line: the rows above are
+  // net, so without it they no longer reconcile with the gross Spent figure below.
+  const returned = [...spentByCategory.values()].reduce((sum, c) => sum + c.returned, 0);
+
+  // A whole-book cap keeps its gross outgoings, matching what /budget-status counts for
+  // one: netting there would let salary pay down the cap.
+  const cappedSpendByPeriod = wholeBook > 0 ? spentByPeriod : cellsFor(cappedNames, cellsByCategory, columns);
+
+  return {
+    rows,
+    spanning,
+    wholeBook,
+    totalCapped,
+    totalTarget,
+    cappedSpend,
+    towardTargets,
+    returned,
+    hasBudgets: totalCapped > 0 || totalTarget > 0,
+    hasTargets,
+    periodKeys: columns,
+    periodCount: byPeriod.length,
+    summary: {
+      capped: { byPeriod: cappedByPeriod, total: totalCapped },
+      targets: { byPeriod: targetByPeriod, total: totalTarget },
+      towardTargets: {
+        byPeriod: add(
+          cellsFor(savingNames, cellsByCategory, columns),
+          // The mirror of the netted spend cells: what arrived, less what left.
+          negate(cellsFor(incomeTargetNames, cellsByCategory, columns), columns),
+          columns,
+        ),
+        total: towardTargets,
+      },
+      spent: { byPeriod: spentByPeriod, total: totals.expense },
+      returned: {
+        byPeriod: cellsFor(new Set(spentByCategory.keys()), incomeCellsByCategory, columns),
+        total: returned,
+      },
+      capsLeft: {
+        byPeriod: subtract(cappedByPeriod, cappedSpendByPeriod, columns),
+        total: totalCapped - cappedSpend,
+      },
+      income: { byPeriod: incomeByPeriod, total: totals.income },
+      net: {
+        byPeriod: subtract(incomeByPeriod, spentByPeriod, columns),
+        total: totals.income - totals.expense,
+      },
+    },
+  };
 }
 
 /**
@@ -379,84 +385,83 @@ export function buildCategoryReport({
  * what a line wants.
  */
 export function allowanceByPeriod(
-    budgets: BudgetStatus[],
-    periodKeys: string[],
-    rangeFrom: Date,
-    rangeTo: Date,
+  budgets: BudgetStatus[],
+  periodKeys: string[],
+  rangeFrom: Date,
+  rangeTo: Date,
 ): { capped: Record<string, number>; targets: Record<string, number> } {
-    const capped: Record<string, number> = {};
-    const targets: Record<string, number> = {};
-    for (const periodKey of periodKeys) {
-        const bucket = periodKeyRange(periodKey);
-        if (!bucket) continue;
-        const from = new Date(Math.max(bucket.from.getTime(), rangeFrom.getTime()));
-        const to = new Date(Math.min(bucket.to.getTime(), rangeTo.getTime()));
-        for (const budget of budgets) {
-            const value = budgetedForRange(
-                {
-                    period: budget.period,
-                    amount: budget.amount,
-                    period_from: budget.period_from,
-                    period_to: budget.period_to,
-                },
-                from, to,
-            );
-            if (value <= 0) continue;
-            const bucketFor = directionOf(budget.measures) === "floor" ? targets : capped;
-            bucketFor[periodKey] = (bucketFor[periodKey] ?? 0) + value;
-        }
+  const capped: Record<string, number> = {};
+  const targets: Record<string, number> = {};
+  for (const periodKey of periodKeys) {
+    const bucket = periodKeyRange(periodKey);
+    if (!bucket) continue;
+    const from = new Date(Math.max(bucket.from.getTime(), rangeFrom.getTime()));
+    const to = new Date(Math.min(bucket.to.getTime(), rangeTo.getTime()));
+    for (const budget of budgets) {
+      const value = budgetedForRange(
+        {
+          period: budget.period,
+          amount: budget.amount,
+          period_from: budget.period_from,
+          period_to: budget.period_to,
+        },
+        from,
+        to,
+      );
+      if (value <= 0) continue;
+      const bucketFor = directionOf(budget.measures) === "floor" ? targets : capped;
+      bucketFor[periodKey] = (bucketFor[periodKey] ?? 0) + value;
     }
-    return { capped, targets };
+  }
+  return { capped, targets };
 }
 
 /** Per-column spend across a set of categories. */
 function cellsFor(
-    names: Set<string>,
-    cellsByCategory: Map<string, Record<string, number>>,
-    columns: string[],
+  names: Set<string>,
+  cellsByCategory: Map<string, Record<string, number>>,
+  columns: string[],
 ): Record<string, number> {
-    if (columns.length === 0) return {};
-    return Object.fromEntries(columns.map((periodKey) => [
-        periodKey,
-        [...names].reduce((sum, n) => sum + (cellsByCategory.get(n)?.[periodKey] ?? 0), 0),
-    ]));
+  if (columns.length === 0) return {};
+  return Object.fromEntries(
+    columns.map((periodKey) => [
+      periodKey,
+      [...names].reduce((sum, n) => sum + (cellsByCategory.get(n)?.[periodKey] ?? 0), 0),
+    ]),
+  );
 }
 
 function fromPeriods(
-    byPeriod: SummaryPeriod[], columns: string[], pick: (p: SummaryPeriod) => number,
+  byPeriod: SummaryPeriod[],
+  columns: string[],
+  pick: (p: SummaryPeriod) => number,
 ): Record<string, number> {
-    if (columns.length === 0) return {};
-    const wanted = new Set(columns);
-    return Object.fromEntries(
-        byPeriod.filter((p) => wanted.has(p.key)).map((p) => [p.key, pick(p)]),
-    );
+  if (columns.length === 0) return {};
+  const wanted = new Set(columns);
+  return Object.fromEntries(byPeriod.filter((p) => wanted.has(p.key)).map((p) => [p.key, pick(p)]));
 }
 
-function subtract(
-    a: Record<string, number>, b: Record<string, number>, columns: string[],
-): Record<string, number> {
-    return Object.fromEntries(columns.map((k) => [k, (a[k] ?? 0) - (b[k] ?? 0)]));
+function subtract(a: Record<string, number>, b: Record<string, number>, columns: string[]): Record<string, number> {
+  return Object.fromEntries(columns.map((k) => [k, (a[k] ?? 0) - (b[k] ?? 0)]));
 }
 
 /** Flips netted spend cells into netted income cells, which is the same pair read the
  *  other way up. */
 function negate(a: Record<string, number>, columns: string[]): Record<string, number> {
-    return Object.fromEntries(columns.map((k) => [k, -(a[k] ?? 0)]));
+  return Object.fromEntries(columns.map((k) => [k, -(a[k] ?? 0)]));
 }
 
-function add(
-    a: Record<string, number>, b: Record<string, number>, columns: string[],
-): Record<string, number> {
-    return Object.fromEntries(columns.map((k) => [k, (a[k] ?? 0) + (b[k] ?? 0)]));
+function add(a: Record<string, number>, b: Record<string, number>, columns: string[]): Record<string, number> {
+  return Object.fromEntries(columns.map((k) => [k, (a[k] ?? 0) + (b[k] ?? 0)]));
 }
 
 /** Adds several categories' period cells together for a budget that spans them. */
 function sumCells(buckets: (Record<string, number> | undefined)[]): Record<string, number> {
-    const total: Record<string, number> = {};
-    for (const bucket of buckets) {
-        for (const [periodKey, value] of Object.entries(bucket ?? {})) {
-            total[periodKey] = (total[periodKey] ?? 0) + value;
-        }
+  const total: Record<string, number> = {};
+  for (const bucket of buckets) {
+    for (const [periodKey, value] of Object.entries(bucket ?? {})) {
+      total[periodKey] = (total[periodKey] ?? 0) + value;
     }
-    return total;
+  }
+  return total;
 }

@@ -31,7 +31,12 @@ import { notify } from "../utils/notificationUtils";
 import { advanceDate, applyAdvance } from "../utils/scheduleUtils";
 import { dispatchTask } from "../infrastructure/TaskDispatcher";
 import { XENSPLIT_RECURRING_TASK_TYPE } from "../utils/xensplitRecurringHandler";
-import { serializeXenSplitGroup, serializeXenSplitGroups, serializeEtransfer, MEMBER_FIELDS } from "../utils/xenSplitSerializer";
+import {
+  serializeXenSplitGroup,
+  serializeXenSplitGroups,
+  serializeEtransfer,
+  MEMBER_FIELDS,
+} from "../utils/xenSplitSerializer";
 import { logXenSplit, deleteXenSplitLogs } from "../utils/xenSplitLog";
 import { diffFields, collectLogUserIds, EXPENSE_LOG_FIELDS, GROUP_LOG_FIELDS } from "../utils/xenSplitLogUtils";
 const mongoose = require("mongoose");
@@ -44,8 +49,12 @@ function sanitizeSecondaryCurrencies(primary: string, secondaries: string[]): st
 
 function exchangeLogMeta(exchange: any) {
   return {
-    party_a: exchange.party_a, amount_a: exchange.amount_a, currency_a: exchange.currency_a,
-    party_b: exchange.party_b, amount_b: exchange.amount_b, currency_b: exchange.currency_b,
+    party_a: exchange.party_a,
+    amount_a: exchange.amount_a,
+    currency_a: exchange.currency_a,
+    party_b: exchange.party_b,
+    amount_b: exchange.amount_b,
+    currency_b: exchange.currency_b,
   };
 }
 
@@ -84,7 +93,9 @@ module.exports = function (app: any) {
       if (memberIds && memberIds.length > 0) {
         const mongoose = require("mongoose");
         const objectIds = memberIds.map((id: string) => new mongoose.Types.ObjectId(id));
-        const users = await User.find({ _id: { $in: objectIds } }).select("_id").lean();
+        const users = await User.find({ _id: { $in: objectIds } })
+          .select("_id")
+          .lean();
         for (const u of users) {
           const uid = (u._id as any).toString();
           if (uid !== userId && !members.includes(uid)) {
@@ -105,9 +116,17 @@ module.exports = function (app: any) {
       });
 
       await group.save();
-      await logXenSplit(group._id, userId, "group_created", { targetType: "group", targetId: group._id, summary: name });
+      await logXenSplit(group._id, userId, "group_created", {
+        targetType: "group",
+        targetId: group._id,
+        summary: name,
+      });
       for (const memberId of members.filter((m) => m !== userId)) {
-        await logXenSplit(group._id, userId, "member_added", { targetType: "member", targetId: memberId, meta: { user_id: memberId } });
+        await logXenSplit(group._id, userId, "member_added", {
+          targetType: "member",
+          targetId: memberId,
+          meta: { user_id: memberId },
+        });
       }
       await group.populate("members", MEMBER_FIELDS);
       const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
@@ -120,836 +139,1016 @@ module.exports = function (app: any) {
   });
 
   // GET /api/xensplit/groups/:groupId - Get group details
-  app.get("/api/xensplit/groups/:groupId", validateParams(xenSplitIdParamSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId } = req.params;
+  app.get(
+    "/api/xensplit/groups/:groupId",
+    validateParams(xenSplitIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId } = req.params;
 
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
+
+        // Check if user is a member
+        if (!group.members.some((m: any) => m.toString() === userId)) {
+          return res.status(403).json({ status: false, message: "Not a member of this group" });
+        }
+
+        await group.populate("members", MEMBER_FIELDS);
+        const groupObj = await serializeXenSplitGroup(group);
+        const memberMap: any = {};
+        for (const m of groupObj.members) {
+          memberMap[m.user_id] = m;
+        }
+        // Enrich expenses with payer info from members
+        groupObj.expenses = groupObj.expenses.map((expense: any) => ({
+          ...expense,
+          payer: memberMap[expense.paid_by] || null,
+        }));
+
+        res.json({ status: true, message: "Group retrieved", data: groupObj });
+      } catch (error) {
+        console.error("Error fetching group:", error);
+        res.status(500).json({ status: false, message: "Failed to fetch group" });
       }
-
-      // Check if user is a member
-      if (!group.members.some((m: any) => m.toString() === userId)) {
-        return res.status(403).json({ status: false, message: "Not a member of this group" });
-      }
-
-      await group.populate("members", MEMBER_FIELDS);
-      const groupObj = await serializeXenSplitGroup(group);
-      const memberMap: any = {};
-      for (const m of groupObj.members) {
-        memberMap[m.user_id] = m;
-      }
-      // Enrich expenses with payer info from members
-      groupObj.expenses = groupObj.expenses.map((expense: any) => ({
-        ...expense,
-        payer: memberMap[expense.paid_by] || null,
-      }));
-
-      res.json({ status: true, message: "Group retrieved", data: groupObj });
-    } catch (error) {
-      console.error("Error fetching group:", error);
-      res.status(500).json({ status: false, message: "Failed to fetch group" });
-    }
-  });
+    },
+  );
 
   // PUT /api/xensplit/groups/:groupId - Update group
-  app.put("/api/xensplit/groups/:groupId", validateParams(xenSplitIdParamSchema), validate(updateXenSplitSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId } = req.params;
-      const { name, default_currency, secondary_currencies } = req.body;
+  app.put(
+    "/api/xensplit/groups/:groupId",
+    validateParams(xenSplitIdParamSchema),
+    validate(updateXenSplitSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId } = req.params;
+        const { name, default_currency, secondary_currencies } = req.body;
 
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
+
+        if (group.created_by !== userId) {
+          return res.status(403).json({ status: false, message: "Only the creator can update the group" });
+        }
+
+        const before = group.toObject();
+        if (name) group.name = name;
+        if (default_currency) group.default_currency = default_currency;
+        if (secondary_currencies !== undefined || default_currency) {
+          group.secondary_currencies = sanitizeSecondaryCurrencies(
+            group.default_currency,
+            secondary_currencies ?? group.secondary_currencies,
+          );
+        }
+        await group.save();
+        const groupChanges = diffFields(before, group.toObject(), GROUP_LOG_FIELDS);
+        if (groupChanges.length > 0) {
+          await logXenSplit(groupId, userId, "group_updated", {
+            targetType: "group",
+            targetId: groupId,
+            summary: group.name,
+            changes: groupChanges,
+          });
+        }
+        await group.populate("members", MEMBER_FIELDS);
+
+        const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+        SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
+
+        res.json({ status: true, message: "Group updated", data: await serializeXenSplitGroup(group) });
+      } catch (error) {
+        console.error("Error updating group:", error);
+        res.status(500).json({ status: false, message: "Failed to update group" });
       }
-
-      if (group.created_by !== userId) {
-        return res.status(403).json({ status: false, message: "Only the creator can update the group" });
-      }
-
-      const before = group.toObject();
-      if (name) group.name = name;
-      if (default_currency) group.default_currency = default_currency;
-      if (secondary_currencies !== undefined || default_currency) {
-        group.secondary_currencies = sanitizeSecondaryCurrencies(group.default_currency, secondary_currencies ?? group.secondary_currencies);
-      }
-      await group.save();
-      const groupChanges = diffFields(before, group.toObject(), GROUP_LOG_FIELDS);
-      if (groupChanges.length > 0) {
-        await logXenSplit(groupId, userId, "group_updated", { targetType: "group", targetId: groupId, summary: group.name, changes: groupChanges });
-      }
-      await group.populate("members", MEMBER_FIELDS);
-
-      const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
-      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
-
-      res.json({ status: true, message: "Group updated", data: await serializeXenSplitGroup(group) });
-    } catch (error) {
-      console.error("Error updating group:", error);
-      res.status(500).json({ status: false, message: "Failed to update group" });
-    }
-  });
+    },
+  );
 
   // POST /api/xensplit/groups/:groupId/image - Upload/replace the group image (creator only)
-  app.post("/api/xensplit/groups/:groupId/image", validateParams(xenSplitIdParamSchema), uploadXenSplitImages.single("image"), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId } = req.params;
+  app.post(
+    "/api/xensplit/groups/:groupId/image",
+    validateParams(xenSplitIdParamSchema),
+    uploadXenSplitImages.single("image"),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId } = req.params;
 
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
+
+        if (group.created_by !== userId) {
+          return res.status(403).json({ status: false, message: "Only the creator can update the group image" });
+        }
+
+        if (!req.file) {
+          return res.status(400).json({ status: false, message: "No image provided" });
+        }
+
+        const { url } = await uploadXenSplitGroupImageFile(req.file, groupId);
+        group.image_url = url;
+        await group.save();
+        await logXenSplit(groupId, userId, "group_image_updated", {
+          targetType: "group",
+          targetId: groupId,
+          summary: group.name,
+        });
+        await group.populate("members", MEMBER_FIELDS);
+
+        const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+        SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
+
+        res.json({ status: true, message: "Group image updated", data: await serializeXenSplitGroup(group) });
+      } catch (error) {
+        console.error("Error uploading group image:", error);
+        res.status(500).json({ status: false, message: "Failed to upload group image" });
       }
-
-      if (group.created_by !== userId) {
-        return res.status(403).json({ status: false, message: "Only the creator can update the group image" });
-      }
-
-      if (!req.file) {
-        return res.status(400).json({ status: false, message: "No image provided" });
-      }
-
-      const { url } = await uploadXenSplitGroupImageFile(req.file, groupId);
-      group.image_url = url;
-      await group.save();
-      await logXenSplit(groupId, userId, "group_image_updated", { targetType: "group", targetId: groupId, summary: group.name });
-      await group.populate("members", MEMBER_FIELDS);
-
-      const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
-      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
-
-      res.json({ status: true, message: "Group image updated", data: await serializeXenSplitGroup(group) });
-    } catch (error) {
-      console.error("Error uploading group image:", error);
-      res.status(500).json({ status: false, message: "Failed to upload group image" });
-    }
-  });
+    },
+  );
 
   // DELETE /api/xensplit/groups/:groupId - Delete group
-  app.delete("/api/xensplit/groups/:groupId", validateParams(xenSplitIdParamSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId } = req.params;
+  app.delete(
+    "/api/xensplit/groups/:groupId",
+    validateParams(xenSplitIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId } = req.params;
 
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
-      }
-
-      if (group.created_by !== userId) {
-        return res.status(403).json({ status: false, message: "Only the creator can delete the group" });
-      }
-
-      const memberIds = group.members.map((m: any) => m.toString());
-
-      await XenSplit.findByIdAndDelete(groupId);
-      await ScheduledTask.deleteMany({ task_type: XENSPLIT_RECURRING_TASK_TYPE, "payload.group_id": groupId });
-      await deleteXenSplitLogs(groupId);
-
-      SocketManager.getInstance().notifyXenSplitGroupsUpdated(memberIds);
-
-      res.json({ status: true, message: "Group deleted" });
-    } catch (error) {
-      console.error("Error deleting group:", error);
-      res.status(500).json({ status: false, message: "Failed to delete group" });
-    }
-  });
-
-  // POST /api/xensplit/groups/:groupId/transfer - Transfer ownership
-  app.post("/api/xensplit/groups/:groupId/transfer", validateParams(xenSplitIdParamSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId } = req.params;
-      const { newOwnerId } = req.body;
-
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
-      }
-
-      // Only creator can transfer
-      if (group.created_by !== userId) {
-        return res.status(403).json({ status: false, message: "Only the creator can transfer ownership" });
-      }
-
-      // Verify new owner is a member
-      if (!group.members.some((m: any) => m.toString() === newOwnerId)) {
-        return res.status(400).json({ status: false, message: "New owner must be a member" });
-      }
-
-      group.created_by = newOwnerId;
-      await group.save();
-      await logXenSplit(groupId, userId, "ownership_transferred", { targetType: "member", targetId: newOwnerId, meta: { from: userId, to: newOwnerId } });
-      await group.populate("members", MEMBER_FIELDS);
-
-      const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
-      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
-
-      await notify(newOwnerId, { title: "Group Ownership", message: `You are now the owner of ${group.name}`, link: `/internal/xensplit/groups/${groupId}/overview`, icon: "person" });
-
-      res.json({ status: true, message: "Ownership transferred", data: await serializeXenSplitGroup(group) });
-    } catch (error) {
-      console.error("Error transferring ownership:", error);
-      res.status(500).json({ status: false, message: "Failed to transfer ownership" });
-    }
-  });
-
-  // POST /api/xensplit/groups/:groupId/members - Add members
-  app.post("/api/xensplit/groups/:groupId/members", validateParams(xenSplitIdParamSchema), validate(addXenSplitMembersSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId } = req.params;
-      const { memberIds } = req.body;
-
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
-      }
-
-      if (!group.members.some((m: any) => m.toString() === userId)) {
-        return res.status(403).json({ status: false, message: "Not a member of this group" });
-      }
-
-      const mongoose = require("mongoose");
-      const objectIds = memberIds.map((id: string) => new mongoose.Types.ObjectId(id));
-      const users = await User.find({ _id: { $in: objectIds } }).select("_id").lean();
-      const newMemberIds: string[] = [];
-      for (const u of users) {
-        const uid = (u._id as any).toString();
-        if (!group.members.some((m: any) => m.toString() === uid)) {
-          group.members.push(uid);
-          newMemberIds.push(uid);
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
         }
-      }
 
-      await group.save();
-      for (const memberId of newMemberIds) {
-        await logXenSplit(groupId, userId, "member_added", { targetType: "member", targetId: memberId, meta: { user_id: memberId } });
-      }
-      await group.populate("members", MEMBER_FIELDS);
-
-      const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
-      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
-      SocketManager.getInstance().notifyXenSplitGroupsUpdated(newMemberIds);
-
-      for (const memberId of newMemberIds) {
-        await notify(memberId, { title: "Added to Group", message: `You've been added to ${group.name}`, link: `/internal/xensplit/groups/${groupId}/overview`, icon: "person" });
-      }
-
-      res.json({ status: true, message: "Members added", data: await serializeXenSplitGroup(group) });
-    } catch (error) {
-      console.error("Error adding members:", error);
-      res.status(500).json({ status: false, message: "Failed to add members" });
-    }
-  });
-
-  // DELETE /api/xensplit/groups/:groupId/members/:userId - Remove member (leave)
-  app.delete("/api/xensplit/groups/:groupId/members/:userId", validateParams(xenSplitMemberParamSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId, userId: targetUserId } = req.params;
-
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
-      }
-
-      // Can only remove self or if you're the creator
-      if (targetUserId !== userId && group.created_by !== userId) {
-        return res.status(403).json({ status: false, message: "Cannot remove this member" });
-      }
-
-      // Check for outstanding balances
-      const groupForCalc = { ...group.toObject(), members: group.toObject().members.map((m: any) => m.toString()) };
-      const balances = calculateBalances(groupForCalc);
-      const userBalance = balances[targetUserId] || {};
-      const hasOutstanding = Object.values(userBalance).some((b: number) => Math.abs(b) > 0.01);
-      const isCreatorRemoving = group.created_by === userId && targetUserId !== userId;
-
-      // Block if member has outstanding balance and is leaving voluntarily (not being removed by creator)
-      if (hasOutstanding && targetUserId === userId && !isCreatorRemoving) {
-        return res.status(400).json({
-          status: false,
-          message: "You have an outstanding balance. Please settle up before leaving."
-        });
-      }
-
-      // If creator is leaving, transfer ownership to next member
-      let inheritedOwnerId: string | null = null;
-      if (group.created_by === targetUserId) {
-        const remainingMembers = group.members.filter((m: any) => m.toString() !== targetUserId);
-        if (remainingMembers.length > 0) {
-          inheritedOwnerId = remainingMembers[0].toString();
-          group.created_by = inheritedOwnerId;
+        if (group.created_by !== userId) {
+          return res.status(403).json({ status: false, message: "Only the creator can delete the group" });
         }
-      }
 
-      group.members = group.members.filter((m: any) => m.toString() !== targetUserId);
-      await group.save();
-      if (group.members.length > 0) {
-        await logXenSplit(groupId, userId, "member_removed", { targetType: "member", targetId: targetUserId, meta: { user_id: targetUserId, left: targetUserId === userId } });
-        if (inheritedOwnerId) {
-          await logXenSplit(groupId, userId, "ownership_transferred", { targetType: "member", targetId: inheritedOwnerId, meta: { from: targetUserId, to: inheritedOwnerId, automatic: true } });
-        }
-      }
-      await group.populate("members", MEMBER_FIELDS);
+        const memberIds = group.members.map((m: any) => m.toString());
 
-      // Notify removed user if they were removed by someone else (not a voluntary leave)
-      if (targetUserId !== userId) {
-        await notify(targetUserId, { title: "Removed from Group", message: `You've been removed from ${group.name}`, icon: "person" });
-      }
-
-      // Delete group if no members left
-      if (group.members.length === 0) {
         await XenSplit.findByIdAndDelete(groupId);
         await ScheduledTask.deleteMany({ task_type: XENSPLIT_RECURRING_TASK_TYPE, "payload.group_id": groupId });
         await deleteXenSplitLogs(groupId);
-        SocketManager.getInstance().notifyXenSplitGroupsUpdated([targetUserId]);
-        return res.json({ status: true, message: "Member removed and group deleted" });
+
+        SocketManager.getInstance().notifyXenSplitGroupsUpdated(memberIds);
+
+        res.json({ status: true, message: "Group deleted" });
+      } catch (error) {
+        console.error("Error deleting group:", error);
+        res.status(500).json({ status: false, message: "Failed to delete group" });
       }
+    },
+  );
 
-      const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
-      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
-      SocketManager.getInstance().notifyXenSplitGroupsUpdated([targetUserId]);
+  // POST /api/xensplit/groups/:groupId/transfer - Transfer ownership
+  app.post(
+    "/api/xensplit/groups/:groupId/transfer",
+    validateParams(xenSplitIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId } = req.params;
+        const { newOwnerId } = req.body;
 
-      res.json({ status: true, message: "Member removed", data: await serializeXenSplitGroup(group) });
-    } catch (error) {
-      console.error("Error removing member:", error);
-      res.status(500).json({ status: false, message: "Failed to remove member" });
-    }
-  });
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
 
-  // POST /api/xensplit/groups/:groupId/expenses - Add expense
-  app.post("/api/xensplit/groups/:groupId/expenses", validateParams(xenSplitIdParamSchema), validate(createExpenseSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId } = req.params;
-      const { paid_by, amount, currency, title, notes, category, date, split_type, splits, on_hold, recurring } = req.body;
+        // Only creator can transfer
+        if (group.created_by !== userId) {
+          return res.status(403).json({ status: false, message: "Only the creator can transfer ownership" });
+        }
 
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
-      }
+        // Verify new owner is a member
+        if (!group.members.some((m: any) => m.toString() === newOwnerId)) {
+          return res.status(400).json({ status: false, message: "New owner must be a member" });
+        }
 
-      if (!group.members.some((m: any) => m.toString() === userId)) {
-        return res.status(403).json({ status: false, message: "Not a member of this group" });
-      }
-
-      // Validate payer is a member
-      if (!group.members.some((m: any) => m.toString() === paid_by)) {
-        return res.status(400).json({ status: false, message: "Payer must be a group member" });
-      }
-
-      // Resolve splits
-      const resolvedSplits = resolveSplits(
-        split_type,
-        amount,
-        splits || [],
-        group.members.map((m: any) => m.toString()),
-      );
-
-      const expenseCurrency = currency || group.default_currency || "CAD";
-      const expense = {
-        paid_by,
-        created_by: userId,
-        amount,
-        currency: expenseCurrency,
-        title,
-        notes,
-        category: category || undefined,
-        date: date ? new Date(date) : new Date(),
-        split_type,
-        splits: resolvedSplits,
-        // Hold is per-expense state; a recurring series is stopped by pausing it
-        on_hold: recurring ? false : on_hold === true,
-        created_at: new Date(),
-      };
-
-      // Future-start recurring series: no expense yet — snapshot the body into a task
-      // whose handler births the genesis (with a pre-allocated id) when the start
-      // date arrives
-      if (recurring && expense.date > new Date()) {
-        await ScheduledTask.create({
-          task_type: XENSPLIT_RECURRING_TASK_TYPE,
-          enabled: true,
-          run_at: expense.date,
-          anchor_date: expense.date,
-          frequency: recurring.frequency,
-          end_date: recurring.end_date ? new Date(recurring.end_date) : undefined,
-          max_runs: recurring.max_occurrences,
-          run_count: 0,
-          catch_up: "all",
-          created_by: userId,
-          payload: {
-            group_id: groupId,
-            genesis_expense_id: new mongoose.Types.ObjectId().toString(),
-            pending_expense: expense,
-          },
-        });
-        await logXenSplit(groupId, userId, "recurring_scheduled", {
-          targetType: "recurring",
-          summary: title,
-          meta: { amount, currency: expenseCurrency, paid_by, frequency: recurring.frequency, start_date: expense.date },
+        group.created_by = newOwnerId;
+        await group.save();
+        await logXenSplit(groupId, userId, "ownership_transferred", {
+          targetType: "member",
+          targetId: newOwnerId,
+          meta: { from: userId, to: newOwnerId },
         });
         await group.populate("members", MEMBER_FIELDS);
-        const scheduledMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
-        SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, scheduledMemberIds);
-        return res.json({ status: true, message: "Recurring expense scheduled", data: { group: await serializeXenSplitGroup(group), newExpenseId: null } });
-      }
 
-      group.expenses.push(expense as any);
-      const newExpense = group.expenses[group.expenses.length - 1];
-      await group.save();
-      await logXenSplit(groupId, userId, "expense_created", {
-        targetType: "expense",
-        targetId: newExpense._id,
-        summary: title,
-        meta: { amount, currency: expenseCurrency, paid_by, ...(recurring ? { frequency: recurring.frequency } : {}) },
-      });
+        const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+        SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
 
-      // Backfill occurrences immediately when the series started in the past
-      let respGroup = group;
-      if (recurring) {
-        const task = await ScheduledTask.create({
-          task_type: XENSPLIT_RECURRING_TASK_TYPE,
-          enabled: true,
-          run_at: advanceDate(expense.date, recurring.frequency, 1),
-          anchor_date: expense.date,
-          frequency: recurring.frequency,
-          end_date: recurring.end_date ? new Date(recurring.end_date) : undefined,
-          max_runs: recurring.max_occurrences,
-          run_count: 1, // the genesis is occurrence 0
-          catch_up: "all",
-          created_by: userId,
-          payload: {
-            group_id: groupId,
-            genesis_expense_id: newExpense._id.toString(),
-          },
+        await notify(newOwnerId, {
+          title: "Group Ownership",
+          message: `You are now the owner of ${group.name}`,
+          link: `/internal/xensplit/groups/${groupId}/overview`,
+          icon: "person",
         });
-        const generated = await dispatchTask(task);
-        if (generated > 0) respGroup = await XenSplit.findById(groupId);
-      }
-      await respGroup.populate("members", MEMBER_FIELDS);
 
-      const actor = (respGroup.members as any[]).find((m: any) => m._id.toString() === userId);
-      const actorName = actor?.username || "Someone";
-      const involvedIds = new Set<string>([
-        paid_by,
-        ...resolvedSplits.map((s: any) => s.user_id.toString()),
-      ]);
-      for (const member of respGroup.members as any[]) {
-        const mid = member._id.toString();
-        if (mid !== userId && involvedIds.has(mid)) {
-          await notify(mid, { title: "New Expense", message: `${actorName} added: ${title} (${amount} ${expenseCurrency})`, link: `/internal/xensplit/groups/${groupId}/expenses` });
+        res.json({ status: true, message: "Ownership transferred", data: await serializeXenSplitGroup(group) });
+      } catch (error) {
+        console.error("Error transferring ownership:", error);
+        res.status(500).json({ status: false, message: "Failed to transfer ownership" });
+      }
+    },
+  );
+
+  // POST /api/xensplit/groups/:groupId/members - Add members
+  app.post(
+    "/api/xensplit/groups/:groupId/members",
+    validateParams(xenSplitIdParamSchema),
+    validate(addXenSplitMembersSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId } = req.params;
+        const { memberIds } = req.body;
+
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
         }
-      }
 
-      const memberIds = (respGroup.members as any[]).map((m: any) => m._id.toString());
-      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
-
-      res.json({ status: true, message: "Expense added", data: { group: await serializeXenSplitGroup(respGroup), newExpenseId: newExpense._id } });
-    } catch (error) {
-      console.error("Error adding expense:", error);
-      res.status(500).json({ status: false, message: "Failed to add expense" });
-    }
-  });
-
-  // PUT /api/xensplit/groups/:groupId/expenses/:expenseId - Update expense
-  app.put("/api/xensplit/groups/:groupId/expenses/:expenseId", validateParams(xenSplitExpenseParamSchema), validate(updateExpenseSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId, expenseId } = req.params;
-
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
-      }
-
-      const expenseIndex = group.expenses.findIndex((e: any) => e._id.toString() === expenseId);
-      if (expenseIndex === -1) {
-        return res.status(404).json({ status: false, message: "Expense not found" });
-      }
-
-      const expense = group.expenses[expenseIndex];
-
-      // Only the expense creator or group owner may edit
-      if (expense.created_by && expense.created_by !== userId && group.created_by !== userId) {
-        return res.status(403).json({ status: false, message: "Not authorised to edit this expense" });
-      }
-
-      if (isDeleted(expense)) {
-        return res.status(404).json({ status: false, message: "Expense has been deleted" });
-      }
-
-      // Occurrences are clones of their genesis — only the genesis is editable
-      if (expense.recurring_id) {
-        return res.status(400).json({ status: false, message: "This expense is part of a recurring series — edit the original recurring expense instead" });
-      }
-
-      const updates = req.body;
-      const series = await ScheduledTask.findOne({
-        task_type: XENSPLIT_RECURRING_TASK_TYPE,
-        "payload.group_id": groupId,
-        "payload.genesis_expense_id": expenseId,
-      });
-      if (series && updates.date !== undefined && new Date(updates.date).getTime() !== new Date(expense.date).getTime()) {
-        return res.status(400).json({ status: false, message: "Date is locked while recurring — cancel recurrence to change it" });
-      }
-      if (series && updates.on_hold === true) {
-        return res.status(400).json({ status: false, message: "Hold isn't available for recurring expenses — pause the schedule instead" });
-      }
-
-      const expenseBefore = expense.toObject();
-
-      if (updates.paid_by !== undefined) expense.paid_by = updates.paid_by;
-      if (updates.amount !== undefined) expense.amount = updates.amount;
-      if (updates.currency !== undefined) expense.currency = updates.currency;
-      if (updates.title !== undefined) expense.title = updates.title;
-      if (updates.notes !== undefined) expense.notes = updates.notes;
-      if (updates.category !== undefined) expense.category = updates.category || undefined;
-      if (updates.date !== undefined) expense.date = new Date(updates.date);
-      if (updates.split_type !== undefined) expense.split_type = updates.split_type;
-      if (updates.splits !== undefined) expense.splits = updates.splits;
-      if (updates.on_hold !== undefined) {
-        const isGroupCreator = group.created_by === userId;
-        if (!isGroupCreator && updates.on_hold === true && expense.on_hold !== true) {
-          return res.status(400).json({ status: false, message: "Cannot re-hold an expense that has already been active" });
+        if (!group.members.some((m: any) => m.toString() === userId)) {
+          return res.status(403).json({ status: false, message: "Not a member of this group" });
         }
-        expense.on_hold = updates.on_hold;
-      }
-      // Recalculate splits if needed
-      if (updates.split_type || updates.amount) {
-        const amount = expense.amount;
-        const split_type = expense.split_type;
 
-        expense.splits = resolveSplits(
+        const mongoose = require("mongoose");
+        const objectIds = memberIds.map((id: string) => new mongoose.Types.ObjectId(id));
+        const users = await User.find({ _id: { $in: objectIds } })
+          .select("_id")
+          .lean();
+        const newMemberIds: string[] = [];
+        for (const u of users) {
+          const uid = (u._id as any).toString();
+          if (!group.members.some((m: any) => m.toString() === uid)) {
+            group.members.push(uid);
+            newMemberIds.push(uid);
+          }
+        }
+
+        await group.save();
+        for (const memberId of newMemberIds) {
+          await logXenSplit(groupId, userId, "member_added", {
+            targetType: "member",
+            targetId: memberId,
+            meta: { user_id: memberId },
+          });
+        }
+        await group.populate("members", MEMBER_FIELDS);
+
+        const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+        SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
+        SocketManager.getInstance().notifyXenSplitGroupsUpdated(newMemberIds);
+
+        for (const memberId of newMemberIds) {
+          await notify(memberId, {
+            title: "Added to Group",
+            message: `You've been added to ${group.name}`,
+            link: `/internal/xensplit/groups/${groupId}/overview`,
+            icon: "person",
+          });
+        }
+
+        res.json({ status: true, message: "Members added", data: await serializeXenSplitGroup(group) });
+      } catch (error) {
+        console.error("Error adding members:", error);
+        res.status(500).json({ status: false, message: "Failed to add members" });
+      }
+    },
+  );
+
+  // DELETE /api/xensplit/groups/:groupId/members/:userId - Remove member (leave)
+  app.delete(
+    "/api/xensplit/groups/:groupId/members/:userId",
+    validateParams(xenSplitMemberParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId, userId: targetUserId } = req.params;
+
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
+
+        // Can only remove self or if you're the creator
+        if (targetUserId !== userId && group.created_by !== userId) {
+          return res.status(403).json({ status: false, message: "Cannot remove this member" });
+        }
+
+        // Check for outstanding balances
+        const groupForCalc = { ...group.toObject(), members: group.toObject().members.map((m: any) => m.toString()) };
+        const balances = calculateBalances(groupForCalc);
+        const userBalance = balances[targetUserId] || {};
+        const hasOutstanding = Object.values(userBalance).some((b: number) => Math.abs(b) > 0.01);
+        const isCreatorRemoving = group.created_by === userId && targetUserId !== userId;
+
+        // Block if member has outstanding balance and is leaving voluntarily (not being removed by creator)
+        if (hasOutstanding && targetUserId === userId && !isCreatorRemoving) {
+          return res.status(400).json({
+            status: false,
+            message: "You have an outstanding balance. Please settle up before leaving.",
+          });
+        }
+
+        // If creator is leaving, transfer ownership to next member
+        let inheritedOwnerId: string | null = null;
+        if (group.created_by === targetUserId) {
+          const remainingMembers = group.members.filter((m: any) => m.toString() !== targetUserId);
+          if (remainingMembers.length > 0) {
+            inheritedOwnerId = remainingMembers[0].toString();
+            group.created_by = inheritedOwnerId;
+          }
+        }
+
+        group.members = group.members.filter((m: any) => m.toString() !== targetUserId);
+        await group.save();
+        if (group.members.length > 0) {
+          await logXenSplit(groupId, userId, "member_removed", {
+            targetType: "member",
+            targetId: targetUserId,
+            meta: { user_id: targetUserId, left: targetUserId === userId },
+          });
+          if (inheritedOwnerId) {
+            await logXenSplit(groupId, userId, "ownership_transferred", {
+              targetType: "member",
+              targetId: inheritedOwnerId,
+              meta: { from: targetUserId, to: inheritedOwnerId, automatic: true },
+            });
+          }
+        }
+        await group.populate("members", MEMBER_FIELDS);
+
+        // Notify removed user if they were removed by someone else (not a voluntary leave)
+        if (targetUserId !== userId) {
+          await notify(targetUserId, {
+            title: "Removed from Group",
+            message: `You've been removed from ${group.name}`,
+            icon: "person",
+          });
+        }
+
+        // Delete group if no members left
+        if (group.members.length === 0) {
+          await XenSplit.findByIdAndDelete(groupId);
+          await ScheduledTask.deleteMany({ task_type: XENSPLIT_RECURRING_TASK_TYPE, "payload.group_id": groupId });
+          await deleteXenSplitLogs(groupId);
+          SocketManager.getInstance().notifyXenSplitGroupsUpdated([targetUserId]);
+          return res.json({ status: true, message: "Member removed and group deleted" });
+        }
+
+        const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+        SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
+        SocketManager.getInstance().notifyXenSplitGroupsUpdated([targetUserId]);
+
+        res.json({ status: true, message: "Member removed", data: await serializeXenSplitGroup(group) });
+      } catch (error) {
+        console.error("Error removing member:", error);
+        res.status(500).json({ status: false, message: "Failed to remove member" });
+      }
+    },
+  );
+
+  // POST /api/xensplit/groups/:groupId/expenses - Add expense
+  app.post(
+    "/api/xensplit/groups/:groupId/expenses",
+    validateParams(xenSplitIdParamSchema),
+    validate(createExpenseSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId } = req.params;
+        const { paid_by, amount, currency, title, notes, category, date, split_type, splits, on_hold, recurring } =
+          req.body;
+
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
+
+        if (!group.members.some((m: any) => m.toString() === userId)) {
+          return res.status(403).json({ status: false, message: "Not a member of this group" });
+        }
+
+        // Validate payer is a member
+        if (!group.members.some((m: any) => m.toString() === paid_by)) {
+          return res.status(400).json({ status: false, message: "Payer must be a group member" });
+        }
+
+        // Resolve splits
+        const resolvedSplits = resolveSplits(
           split_type,
           amount,
-          expense.splits || [],
+          splits || [],
           group.members.map((m: any) => m.toString()),
         );
-      }
 
-      // Recurring schedule updates (only meaningful on a genesis expense)
-      let resumed = false;
-      let recurringAction: "recurring_cancelled" | "recurring_paused" | "recurring_resumed" | "recurring_updated" | null = null;
-      let recurringChanges: ReturnType<typeof diffFields> = [];
-      if (updates.recurring && series) {
-        const r = updates.recurring;
-        if (r.cancel === true) {
-          await series.deleteOne();
-          recurringAction = "recurring_cancelled";
-        } else {
-          const seriesBefore = { end_date: series.end_date, max_occurrences: series.max_runs, active: series.enabled };
-          if (r.end_date !== undefined) series.end_date = r.end_date ? new Date(r.end_date) : undefined;
-          if (r.max_occurrences !== undefined) series.max_runs = r.max_occurrences ?? undefined;
-          if (r.active !== undefined) {
-            resumed = r.active === true && series.enabled !== true;
-            series.enabled = r.active;
-          }
-          // A tightened end date or count can retire the series outright —
-          // applyAdvance(_, 0) is the dispatcher's own retirement predicate
-          if (!applyAdvance(series, 0).enabled) {
-            series.enabled = false;
-            resumed = false;
-          }
-          await series.save();
-          recurringChanges = diffFields(seriesBefore, { end_date: series.end_date, max_occurrences: series.max_runs, active: series.enabled }, ["end_date", "max_occurrences", "active"]);
-          const activeChange = recurringChanges.find((c) => c.field === "active");
-          recurringAction = activeChange ? (activeChange.to ? "recurring_resumed" : "recurring_paused") : recurringChanges.length > 0 ? "recurring_updated" : null;
+        const expenseCurrency = currency || group.default_currency || "CAD";
+        const expense = {
+          paid_by,
+          created_by: userId,
+          amount,
+          currency: expenseCurrency,
+          title,
+          notes,
+          category: category || undefined,
+          date: date ? new Date(date) : new Date(),
+          split_type,
+          splits: resolvedSplits,
+          // Hold is per-expense state; a recurring series is stopped by pausing it
+          on_hold: recurring ? false : on_hold === true,
+          created_at: new Date(),
+        };
+
+        // Future-start recurring series: no expense yet — snapshot the body into a task
+        // whose handler births the genesis (with a pre-allocated id) when the start
+        // date arrives
+        if (recurring && expense.date > new Date()) {
+          await ScheduledTask.create({
+            task_type: XENSPLIT_RECURRING_TASK_TYPE,
+            enabled: true,
+            run_at: expense.date,
+            anchor_date: expense.date,
+            frequency: recurring.frequency,
+            end_date: recurring.end_date ? new Date(recurring.end_date) : undefined,
+            max_runs: recurring.max_occurrences,
+            run_count: 0,
+            catch_up: "all",
+            created_by: userId,
+            payload: {
+              group_id: groupId,
+              genesis_expense_id: new mongoose.Types.ObjectId().toString(),
+              pending_expense: expense,
+            },
+          });
+          await logXenSplit(groupId, userId, "recurring_scheduled", {
+            targetType: "recurring",
+            summary: title,
+            meta: {
+              amount,
+              currency: expenseCurrency,
+              paid_by,
+              frequency: recurring.frequency,
+              start_date: expense.date,
+            },
+          });
+          await group.populate("members", MEMBER_FIELDS);
+          const scheduledMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+          SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, scheduledMemberIds);
+          return res.json({
+            status: true,
+            message: "Recurring expense scheduled",
+            data: { group: await serializeXenSplitGroup(group), newExpenseId: null },
+          });
         }
-      }
 
-      await group.save();
-      const expenseChanges = diffFields(expenseBefore, expense.toObject(), EXPENSE_LOG_FIELDS);
-      if (expenseChanges.length > 0) {
-        await logXenSplit(groupId, userId, "expense_updated", {
-          targetType: "expense", targetId: expenseId, summary: expense.title,
-          meta: { amount: expense.amount, currency: expense.currency }, changes: expenseChanges,
+        group.expenses.push(expense as any);
+        const newExpense = group.expenses[group.expenses.length - 1];
+        await group.save();
+        await logXenSplit(groupId, userId, "expense_created", {
+          targetType: "expense",
+          targetId: newExpense._id,
+          summary: title,
+          meta: {
+            amount,
+            currency: expenseCurrency,
+            paid_by,
+            ...(recurring ? { frequency: recurring.frequency } : {}),
+          },
         });
-      }
-      if (recurringAction) {
-        await logXenSplit(groupId, userId, recurringAction, {
-          targetType: "recurring", targetId: series._id, summary: expense.title,
-          changes: recurringAction === "recurring_cancelled" ? undefined : recurringChanges,
-        });
-      }
 
-      // Resuming backfills the paused gap
-      let respGroup = group;
-      if (resumed) {
-        const generated = await dispatchTask(series);
-        if (generated > 0) respGroup = await XenSplit.findById(groupId);
-      }
-      await respGroup.populate("members", MEMBER_FIELDS);
-
-      const actor = (respGroup.members as any[]).find((m: any) => m._id.toString() === userId);
-      const actorName = actor?.username || "Someone";
-      const involvedIds = new Set<string>([
-        expense.paid_by?.toString(),
-        ...(expense.splits || []).map((s: any) => s.user_id.toString()),
-      ]);
-      for (const member of respGroup.members as any[]) {
-        const mid = member._id.toString();
-        if (mid !== userId && involvedIds.has(mid)) {
-          await notify(mid, { title: "Expense Updated", message: `${actorName} updated: ${expense.title}`, link: `/internal/xensplit/groups/${groupId}/expenses` });
+        // Backfill occurrences immediately when the series started in the past
+        let respGroup = group;
+        if (recurring) {
+          const task = await ScheduledTask.create({
+            task_type: XENSPLIT_RECURRING_TASK_TYPE,
+            enabled: true,
+            run_at: advanceDate(expense.date, recurring.frequency, 1),
+            anchor_date: expense.date,
+            frequency: recurring.frequency,
+            end_date: recurring.end_date ? new Date(recurring.end_date) : undefined,
+            max_runs: recurring.max_occurrences,
+            run_count: 1, // the genesis is occurrence 0
+            catch_up: "all",
+            created_by: userId,
+            payload: {
+              group_id: groupId,
+              genesis_expense_id: newExpense._id.toString(),
+            },
+          });
+          const generated = await dispatchTask(task);
+          if (generated > 0) respGroup = await XenSplit.findById(groupId);
         }
+        await respGroup.populate("members", MEMBER_FIELDS);
+
+        const actor = (respGroup.members as any[]).find((m: any) => m._id.toString() === userId);
+        const actorName = actor?.username || "Someone";
+        const involvedIds = new Set<string>([paid_by, ...resolvedSplits.map((s: any) => s.user_id.toString())]);
+        for (const member of respGroup.members as any[]) {
+          const mid = member._id.toString();
+          if (mid !== userId && involvedIds.has(mid)) {
+            await notify(mid, {
+              title: "New Expense",
+              message: `${actorName} added: ${title} (${amount} ${expenseCurrency})`,
+              link: `/internal/xensplit/groups/${groupId}/expenses`,
+            });
+          }
+        }
+
+        const memberIds = (respGroup.members as any[]).map((m: any) => m._id.toString());
+        SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
+
+        res.json({
+          status: true,
+          message: "Expense added",
+          data: { group: await serializeXenSplitGroup(respGroup), newExpenseId: newExpense._id },
+        });
+      } catch (error) {
+        console.error("Error adding expense:", error);
+        res.status(500).json({ status: false, message: "Failed to add expense" });
       }
+    },
+  );
 
-      const updatedMemberIds = (respGroup.members as any[]).map((m: any) => m._id.toString());
-      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, updatedMemberIds);
+  // PUT /api/xensplit/groups/:groupId/expenses/:expenseId - Update expense
+  app.put(
+    "/api/xensplit/groups/:groupId/expenses/:expenseId",
+    validateParams(xenSplitExpenseParamSchema),
+    validate(updateExpenseSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId, expenseId } = req.params;
 
-      res.json({ status: true, message: "Expense updated", data: await serializeXenSplitGroup(respGroup) });
-    } catch (error) {
-      console.error("Error updating expense:", error);
-      res.status(500).json({ status: false, message: "Failed to update expense" });
-    }
-  });
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
+
+        const expenseIndex = group.expenses.findIndex((e: any) => e._id.toString() === expenseId);
+        if (expenseIndex === -1) {
+          return res.status(404).json({ status: false, message: "Expense not found" });
+        }
+
+        const expense = group.expenses[expenseIndex];
+
+        // Only the expense creator or group owner may edit
+        if (expense.created_by && expense.created_by !== userId && group.created_by !== userId) {
+          return res.status(403).json({ status: false, message: "Not authorised to edit this expense" });
+        }
+
+        if (isDeleted(expense)) {
+          return res.status(404).json({ status: false, message: "Expense has been deleted" });
+        }
+
+        // Occurrences are clones of their genesis — only the genesis is editable
+        if (expense.recurring_id) {
+          return res.status(400).json({
+            status: false,
+            message: "This expense is part of a recurring series — edit the original recurring expense instead",
+          });
+        }
+
+        const updates = req.body;
+        const series = await ScheduledTask.findOne({
+          task_type: XENSPLIT_RECURRING_TASK_TYPE,
+          "payload.group_id": groupId,
+          "payload.genesis_expense_id": expenseId,
+        });
+        if (
+          series &&
+          updates.date !== undefined &&
+          new Date(updates.date).getTime() !== new Date(expense.date).getTime()
+        ) {
+          return res
+            .status(400)
+            .json({ status: false, message: "Date is locked while recurring — cancel recurrence to change it" });
+        }
+        if (series && updates.on_hold === true) {
+          return res.status(400).json({
+            status: false,
+            message: "Hold isn't available for recurring expenses — pause the schedule instead",
+          });
+        }
+
+        const expenseBefore = expense.toObject();
+
+        if (updates.paid_by !== undefined) expense.paid_by = updates.paid_by;
+        if (updates.amount !== undefined) expense.amount = updates.amount;
+        if (updates.currency !== undefined) expense.currency = updates.currency;
+        if (updates.title !== undefined) expense.title = updates.title;
+        if (updates.notes !== undefined) expense.notes = updates.notes;
+        if (updates.category !== undefined) expense.category = updates.category || undefined;
+        if (updates.date !== undefined) expense.date = new Date(updates.date);
+        if (updates.split_type !== undefined) expense.split_type = updates.split_type;
+        if (updates.splits !== undefined) expense.splits = updates.splits;
+        if (updates.on_hold !== undefined) {
+          const isGroupCreator = group.created_by === userId;
+          if (!isGroupCreator && updates.on_hold === true && expense.on_hold !== true) {
+            return res
+              .status(400)
+              .json({ status: false, message: "Cannot re-hold an expense that has already been active" });
+          }
+          expense.on_hold = updates.on_hold;
+        }
+        // Recalculate splits if needed
+        if (updates.split_type || updates.amount) {
+          const amount = expense.amount;
+          const split_type = expense.split_type;
+
+          expense.splits = resolveSplits(
+            split_type,
+            amount,
+            expense.splits || [],
+            group.members.map((m: any) => m.toString()),
+          );
+        }
+
+        // Recurring schedule updates (only meaningful on a genesis expense)
+        let resumed = false;
+        let recurringAction:
+          "recurring_cancelled" | "recurring_paused" | "recurring_resumed" | "recurring_updated" | null = null;
+        let recurringChanges: ReturnType<typeof diffFields> = [];
+        if (updates.recurring && series) {
+          const r = updates.recurring;
+          if (r.cancel === true) {
+            await series.deleteOne();
+            recurringAction = "recurring_cancelled";
+          } else {
+            const seriesBefore = {
+              end_date: series.end_date,
+              max_occurrences: series.max_runs,
+              active: series.enabled,
+            };
+            if (r.end_date !== undefined) series.end_date = r.end_date ? new Date(r.end_date) : undefined;
+            if (r.max_occurrences !== undefined) series.max_runs = r.max_occurrences ?? undefined;
+            if (r.active !== undefined) {
+              resumed = r.active === true && series.enabled !== true;
+              series.enabled = r.active;
+            }
+            // A tightened end date or count can retire the series outright —
+            // applyAdvance(_, 0) is the dispatcher's own retirement predicate
+            if (!applyAdvance(series, 0).enabled) {
+              series.enabled = false;
+              resumed = false;
+            }
+            await series.save();
+            recurringChanges = diffFields(
+              seriesBefore,
+              { end_date: series.end_date, max_occurrences: series.max_runs, active: series.enabled },
+              ["end_date", "max_occurrences", "active"],
+            );
+            const activeChange = recurringChanges.find((c) => c.field === "active");
+            recurringAction = activeChange
+              ? activeChange.to
+                ? "recurring_resumed"
+                : "recurring_paused"
+              : recurringChanges.length > 0
+                ? "recurring_updated"
+                : null;
+          }
+        }
+
+        await group.save();
+        const expenseChanges = diffFields(expenseBefore, expense.toObject(), EXPENSE_LOG_FIELDS);
+        if (expenseChanges.length > 0) {
+          await logXenSplit(groupId, userId, "expense_updated", {
+            targetType: "expense",
+            targetId: expenseId,
+            summary: expense.title,
+            meta: { amount: expense.amount, currency: expense.currency },
+            changes: expenseChanges,
+          });
+        }
+        if (recurringAction) {
+          await logXenSplit(groupId, userId, recurringAction, {
+            targetType: "recurring",
+            targetId: series._id,
+            summary: expense.title,
+            changes: recurringAction === "recurring_cancelled" ? undefined : recurringChanges,
+          });
+        }
+
+        // Resuming backfills the paused gap
+        let respGroup = group;
+        if (resumed) {
+          const generated = await dispatchTask(series);
+          if (generated > 0) respGroup = await XenSplit.findById(groupId);
+        }
+        await respGroup.populate("members", MEMBER_FIELDS);
+
+        const actor = (respGroup.members as any[]).find((m: any) => m._id.toString() === userId);
+        const actorName = actor?.username || "Someone";
+        const involvedIds = new Set<string>([
+          expense.paid_by?.toString(),
+          ...(expense.splits || []).map((s: any) => s.user_id.toString()),
+        ]);
+        for (const member of respGroup.members as any[]) {
+          const mid = member._id.toString();
+          if (mid !== userId && involvedIds.has(mid)) {
+            await notify(mid, {
+              title: "Expense Updated",
+              message: `${actorName} updated: ${expense.title}`,
+              link: `/internal/xensplit/groups/${groupId}/expenses`,
+            });
+          }
+        }
+
+        const updatedMemberIds = (respGroup.members as any[]).map((m: any) => m._id.toString());
+        SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, updatedMemberIds);
+
+        res.json({ status: true, message: "Expense updated", data: await serializeXenSplitGroup(respGroup) });
+      } catch (error) {
+        console.error("Error updating expense:", error);
+        res.status(500).json({ status: false, message: "Failed to update expense" });
+      }
+    },
+  );
 
   // DELETE /api/xensplit/groups/:groupId/expenses/:expenseId - Delete expense
-  app.delete("/api/xensplit/groups/:groupId/expenses/:expenseId", validateParams(xenSplitExpenseParamSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId, expenseId } = req.params;
+  app.delete(
+    "/api/xensplit/groups/:groupId/expenses/:expenseId",
+    validateParams(xenSplitExpenseParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId, expenseId } = req.params;
 
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
+
+        const expenseIndex = group.expenses.findIndex((e: any) => e._id.toString() === expenseId);
+        if (expenseIndex === -1) {
+          return res.status(404).json({ status: false, message: "Expense not found" });
+        }
+
+        const expense = group.expenses[expenseIndex];
+
+        // Only the expense creator or group owner may delete. Checked before anything is
+        // touched - an unauthorised caller must leave no trace.
+        if (expense.created_by && expense.created_by !== userId && group.created_by !== userId) {
+          return res.status(403).json({ status: false, message: "Not authorised to delete this expense" });
+        }
+
+        if (isDeleted(expense)) {
+          return res.status(409).json({ status: false, message: "Expense is already deleted" });
+        }
+
+        // Deleting a genesis expense cancels its recurring series (occurrences stay).
+        // This is NOT reversible by the restore route: the schedule is gone for good and
+        // restoring the expense brings back only the expense. The UI says so.
+        await ScheduledTask.deleteOne({
+          task_type: XENSPLIT_RECURRING_TASK_TYPE,
+          "payload.group_id": groupId,
+          "payload.genesis_expense_id": expenseId,
+        });
+
+        // Soft delete: the row stays, stamped. Receipt images stay in GCS too - destroying
+        // them would make the restore return a hollow expense.
+        expense.deleted_at = new Date();
+        expense.deleted_by = userId;
+        await group.save();
+        await logXenSplit(groupId, userId, "expense_deleted", {
+          targetType: "expense",
+          targetId: expenseId,
+          summary: expense.title,
+          meta: { amount: expense.amount, currency: expense.currency, paid_by: expense.paid_by },
+        });
+        await group.populate("members", MEMBER_FIELDS);
+
+        const deletedMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+        SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, deletedMemberIds);
+
+        res.json({ status: true, message: "Expense deleted", data: await serializeXenSplitGroup(group) });
+      } catch (error) {
+        console.error("Error deleting expense:", error);
+        res.status(500).json({ status: false, message: "Failed to delete expense" });
       }
-
-      const expenseIndex = group.expenses.findIndex((e: any) => e._id.toString() === expenseId);
-      if (expenseIndex === -1) {
-        return res.status(404).json({ status: false, message: "Expense not found" });
-      }
-
-      const expense = group.expenses[expenseIndex];
-
-      // Only the expense creator or group owner may delete. Checked before anything is
-      // touched - an unauthorised caller must leave no trace.
-      if (expense.created_by && expense.created_by !== userId && group.created_by !== userId) {
-        return res.status(403).json({ status: false, message: "Not authorised to delete this expense" });
-      }
-
-      if (isDeleted(expense)) {
-        return res.status(409).json({ status: false, message: "Expense is already deleted" });
-      }
-
-      // Deleting a genesis expense cancels its recurring series (occurrences stay).
-      // This is NOT reversible by the restore route: the schedule is gone for good and
-      // restoring the expense brings back only the expense. The UI says so.
-      await ScheduledTask.deleteOne({
-        task_type: XENSPLIT_RECURRING_TASK_TYPE,
-        "payload.group_id": groupId,
-        "payload.genesis_expense_id": expenseId,
-      });
-
-      // Soft delete: the row stays, stamped. Receipt images stay in GCS too - destroying
-      // them would make the restore return a hollow expense.
-      expense.deleted_at = new Date();
-      expense.deleted_by = userId;
-      await group.save();
-      await logXenSplit(groupId, userId, "expense_deleted", {
-        targetType: "expense", targetId: expenseId, summary: expense.title,
-        meta: { amount: expense.amount, currency: expense.currency, paid_by: expense.paid_by },
-      });
-      await group.populate("members", MEMBER_FIELDS);
-
-      const deletedMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
-      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, deletedMemberIds);
-
-      res.json({ status: true, message: "Expense deleted", data: await serializeXenSplitGroup(group) });
-    } catch (error) {
-      console.error("Error deleting expense:", error);
-      res.status(500).json({ status: false, message: "Failed to delete expense" });
-    }
-  });
+    },
+  );
 
   // DELETE /api/xensplit/groups/:groupId/recurring/:recurringId - Cancel a pending (not yet started) recurring series
-  app.delete("/api/xensplit/groups/:groupId/recurring/:recurringId", validateParams(xenSplitRecurringParamSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId, recurringId } = req.params;
+  app.delete(
+    "/api/xensplit/groups/:groupId/recurring/:recurringId",
+    validateParams(xenSplitRecurringParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId, recurringId } = req.params;
 
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
+
+        if (!group.members.some((m: any) => m.toString() === userId)) {
+          return res.status(403).json({ status: false, message: "Not a member of this group" });
+        }
+
+        const series = await ScheduledTask.findById(recurringId);
+        if (!series || series.task_type !== XENSPLIT_RECURRING_TASK_TYPE || series.payload?.group_id !== groupId) {
+          return res.status(404).json({ status: false, message: "Recurring series not found" });
+        }
+
+        // Only the series creator or group owner may cancel (a missing created_by
+        // does not bypass the check — the group owner still can)
+        if (series.created_by !== userId && group.created_by !== userId) {
+          return res.status(403).json({ status: false, message: "Not authorised to cancel this recurring expense" });
+        }
+
+        await series.deleteOne();
+        await logXenSplit(groupId, userId, "recurring_cancelled", {
+          targetType: "recurring",
+          targetId: recurringId,
+          summary: series.payload?.pending_expense?.title,
+        });
+        await group.populate("members", MEMBER_FIELDS);
+
+        const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
+        SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
+
+        res.json({ status: true, message: "Recurring expense cancelled", data: await serializeXenSplitGroup(group) });
+      } catch (error) {
+        console.error("Error cancelling recurring expense:", error);
+        res.status(500).json({ status: false, message: "Failed to cancel recurring expense" });
       }
-
-      if (!group.members.some((m: any) => m.toString() === userId)) {
-        return res.status(403).json({ status: false, message: "Not a member of this group" });
-      }
-
-      const series = await ScheduledTask.findById(recurringId);
-      if (!series || series.task_type !== XENSPLIT_RECURRING_TASK_TYPE || series.payload?.group_id !== groupId) {
-        return res.status(404).json({ status: false, message: "Recurring series not found" });
-      }
-
-      // Only the series creator or group owner may cancel (a missing created_by
-      // does not bypass the check — the group owner still can)
-      if (series.created_by !== userId && group.created_by !== userId) {
-        return res.status(403).json({ status: false, message: "Not authorised to cancel this recurring expense" });
-      }
-
-      await series.deleteOne();
-      await logXenSplit(groupId, userId, "recurring_cancelled", {
-        targetType: "recurring", targetId: recurringId, summary: series.payload?.pending_expense?.title,
-      });
-      await group.populate("members", MEMBER_FIELDS);
-
-      const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
-      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
-
-      res.json({ status: true, message: "Recurring expense cancelled", data: await serializeXenSplitGroup(group) });
-    } catch (error) {
-      console.error("Error cancelling recurring expense:", error);
-      res.status(500).json({ status: false, message: "Failed to cancel recurring expense" });
-    }
-  });
+    },
+  );
 
   // POST /api/xensplit/groups/:groupId/expenses/:expenseId/images - Upload expense images
-  app.post("/api/xensplit/groups/:groupId/expenses/:expenseId/images", validateParams(xenSplitExpenseParamSchema), uploadXenSplitImages.array("images", MAX_XENSPLIT_IMAGES_PER_EXPENSE), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId, expenseId } = req.params;
-      const files = req.files as Express.Multer.File[] | undefined;
+  app.post(
+    "/api/xensplit/groups/:groupId/expenses/:expenseId/images",
+    validateParams(xenSplitExpenseParamSchema),
+    uploadXenSplitImages.array("images", MAX_XENSPLIT_IMAGES_PER_EXPENSE),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId, expenseId } = req.params;
+        const files = req.files as Express.Multer.File[] | undefined;
 
-      if (!files || files.length === 0) {
-        return res.status(400).json({ status: false, message: "No images provided" });
+        if (!files || files.length === 0) {
+          return res.status(400).json({ status: false, message: "No images provided" });
+        }
+
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
+
+        if (!group.members.some((m: any) => m.toString() === userId)) {
+          return res.status(403).json({ status: false, message: "Not a member of this group" });
+        }
+
+        const expense = group.expenses.id(expenseId);
+        if (!expense) {
+          return res.status(404).json({ status: false, message: "Expense not found" });
+        }
+
+        if (isDeleted(expense)) {
+          return res.status(404).json({ status: false, message: "Expense has been deleted" });
+        }
+
+        if (!expense.images) {
+          expense.images = [];
+        }
+
+        if (expense.images.length + files.length > MAX_XENSPLIT_IMAGES_PER_EXPENSE) {
+          return res
+            .status(400)
+            .json({ status: false, message: `Cannot exceed ${MAX_XENSPLIT_IMAGES_PER_EXPENSE} images per expense` });
+        }
+
+        for (const file of files) {
+          const filename = generateUniqueFilename(file.originalname);
+          const gcsPath = `xensplit-images/${groupId}/${expenseId}/${filename}`;
+          await uploadToGCS(file.buffer, gcsPath, file.mimetype, true);
+          expense.images.push({ gcs_path: gcsPath });
+        }
+
+        await group.save();
+        await logXenSplit(groupId, userId, "expense_images_added", {
+          targetType: "expense",
+          targetId: expenseId,
+          summary: expense.title,
+          meta: { count: files.length },
+        });
+        await group.populate("members", MEMBER_FIELDS);
+
+        const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+        SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
+
+        res.json({ status: true, message: "Images uploaded", data: await serializeXenSplitGroup(group) });
+      } catch (error) {
+        console.error("Error uploading expense images:", error);
+        res.status(500).json({ status: false, message: "Failed to upload images" });
       }
-
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
-      }
-
-      if (!group.members.some((m: any) => m.toString() === userId)) {
-        return res.status(403).json({ status: false, message: "Not a member of this group" });
-      }
-
-      const expense = group.expenses.id(expenseId);
-      if (!expense) {
-        return res.status(404).json({ status: false, message: "Expense not found" });
-      }
-
-      if (isDeleted(expense)) {
-        return res.status(404).json({ status: false, message: "Expense has been deleted" });
-      }
-
-      if (!expense.images) {
-        expense.images = [];
-      }
-
-      if (expense.images.length + files.length > MAX_XENSPLIT_IMAGES_PER_EXPENSE) {
-        return res.status(400).json({ status: false, message: `Cannot exceed ${MAX_XENSPLIT_IMAGES_PER_EXPENSE} images per expense` });
-      }
-
-      for (const file of files) {
-        const filename = generateUniqueFilename(file.originalname);
-        const gcsPath = `xensplit-images/${groupId}/${expenseId}/${filename}`;
-        await uploadToGCS(file.buffer, gcsPath, file.mimetype, true);
-        expense.images.push({ gcs_path: gcsPath });
-      }
-
-      await group.save();
-      await logXenSplit(groupId, userId, "expense_images_added", { targetType: "expense", targetId: expenseId, summary: expense.title, meta: { count: files.length } });
-      await group.populate("members", MEMBER_FIELDS);
-
-      const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
-      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
-
-      res.json({ status: true, message: "Images uploaded", data: await serializeXenSplitGroup(group) });
-    } catch (error) {
-      console.error("Error uploading expense images:", error);
-      res.status(500).json({ status: false, message: "Failed to upload images" });
-    }
-  });
+    },
+  );
 
   // DELETE /api/xensplit/groups/:groupId/expenses/:expenseId/images/:imageId - Delete an expense image
-  app.delete("/api/xensplit/groups/:groupId/expenses/:expenseId/images/:imageId", validateParams(xenSplitExpenseImageParamSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId, expenseId, imageId } = req.params;
+  app.delete(
+    "/api/xensplit/groups/:groupId/expenses/:expenseId/images/:imageId",
+    validateParams(xenSplitExpenseImageParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId, expenseId, imageId } = req.params;
 
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
+
+        if (!group.members.some((m: any) => m.toString() === userId)) {
+          return res.status(403).json({ status: false, message: "Not a member of this group" });
+        }
+
+        const expense = group.expenses.id(expenseId);
+        if (!expense) {
+          return res.status(404).json({ status: false, message: "Expense not found" });
+        }
+
+        if (isDeleted(expense)) {
+          return res.status(404).json({ status: false, message: "Expense has been deleted" });
+        }
+
+        const imageIndex = expense.images.findIndex((img: any) => img._id.toString() === imageId);
+        if (imageIndex === -1) {
+          return res.status(404).json({ status: false, message: "Image not found" });
+        }
+
+        const image = expense.images[imageIndex];
+        await deleteFromGCS(image.gcs_path, true).catch(() => {});
+        expense.images.splice(imageIndex, 1);
+        await group.save();
+        await logXenSplit(groupId, userId, "expense_image_removed", {
+          targetType: "expense",
+          targetId: expenseId,
+          summary: expense.title,
+        });
+        await group.populate("members", MEMBER_FIELDS);
+
+        const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
+        SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
+
+        res.json({ status: true, message: "Image deleted", data: await serializeXenSplitGroup(group) });
+      } catch (error) {
+        console.error("Error deleting expense image:", error);
+        res.status(500).json({ status: false, message: "Failed to delete image" });
       }
-
-      if (!group.members.some((m: any) => m.toString() === userId)) {
-        return res.status(403).json({ status: false, message: "Not a member of this group" });
-      }
-
-      const expense = group.expenses.id(expenseId);
-      if (!expense) {
-        return res.status(404).json({ status: false, message: "Expense not found" });
-      }
-
-      if (isDeleted(expense)) {
-        return res.status(404).json({ status: false, message: "Expense has been deleted" });
-      }
-
-      const imageIndex = expense.images.findIndex((img: any) => img._id.toString() === imageId);
-      if (imageIndex === -1) {
-        return res.status(404).json({ status: false, message: "Image not found" });
-      }
-
-      const image = expense.images[imageIndex];
-      await deleteFromGCS(image.gcs_path, true).catch(() => { });
-      expense.images.splice(imageIndex, 1);
-      await group.save();
-      await logXenSplit(groupId, userId, "expense_image_removed", { targetType: "expense", targetId: expenseId, summary: expense.title });
-      await group.populate("members", MEMBER_FIELDS);
-
-      const allMemberIds = (group.members as any[]).map((m: any) => m._id.toString());
-      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
-
-      res.json({ status: true, message: "Image deleted", data: await serializeXenSplitGroup(group) });
-    } catch (error) {
-      console.error("Error deleting expense image:", error);
-      res.status(500).json({ status: false, message: "Failed to delete image" });
-    }
-  });
+    },
+  );
 
   // GET /api/xensplit/groups/:groupId/expenses/:expenseId/image-urls - Get signed URLs for expense images
-  app.get("/api/xensplit/groups/:groupId/expenses/:expenseId/image-urls", validateParams(xenSplitExpenseParamSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId, expenseId } = req.params;
+  app.get(
+    "/api/xensplit/groups/:groupId/expenses/:expenseId/image-urls",
+    validateParams(xenSplitExpenseParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId, expenseId } = req.params;
 
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
+
+        if (!group.members.some((m: any) => m.toString() === userId)) {
+          return res.status(403).json({ status: false, message: "Not a member of this group" });
+        }
+
+        const expense = group.expenses.id(expenseId);
+        if (!expense) {
+          return res.status(404).json({ status: false, message: "Expense not found" });
+        }
+
+        if (!expense.images || expense.images.length === 0) {
+          return res.json({ status: true, data: [] });
+        }
+
+        const signedUrls = await Promise.all(
+          expense.images.map(async (img: any) => ({
+            _id: img._id.toString(),
+            signedUrl: await generateSignedUrl(img.gcs_path, 15),
+          })),
+        );
+
+        res.json({ status: true, data: signedUrls });
+      } catch (error) {
+        console.error("Error generating signed URLs:", error);
+        res.status(500).json({ status: false, message: "Failed to generate image URLs" });
       }
-
-      if (!group.members.some((m: any) => m.toString() === userId)) {
-        return res.status(403).json({ status: false, message: "Not a member of this group" });
-      }
-
-      const expense = group.expenses.id(expenseId);
-      if (!expense) {
-        return res.status(404).json({ status: false, message: "Expense not found" });
-      }
-
-      if (!expense.images || expense.images.length === 0) {
-        return res.json({ status: true, data: [] });
-      }
-
-      const signedUrls = await Promise.all(
-        expense.images.map(async (img: any) => ({
-          _id: img._id.toString(),
-          signedUrl: await generateSignedUrl(img.gcs_path, 15),
-        }))
-      );
-
-      res.json({ status: true, data: signedUrls });
-    } catch (error) {
-      console.error("Error generating signed URLs:", error);
-      res.status(500).json({ status: false, message: "Failed to generate image URLs" });
-    }
-  });
+    },
+  );
 
   // GET /api/xensplit/exchange-rate - Live exchange rate proxy (exchangerate-api.com), cached for a
   // few hours since rates barely move within a day and the upstream API has usage limits.
@@ -983,353 +1182,406 @@ module.exports = function (app: any) {
   });
 
   // GET /api/xensplit/groups/:groupId/balances - Get balances
-  app.get("/api/xensplit/groups/:groupId/balances", validateParams(xenSplitIdParamSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId } = req.params;
+  app.get(
+    "/api/xensplit/groups/:groupId/balances",
+    validateParams(xenSplitIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId } = req.params;
 
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
-      }
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
 
-      if (!group.members.some((m: any) => m.toString() === userId)) {
-        return res.status(403).json({ status: false, message: "Not a member of this group" });
-      }
+        if (!group.members.some((m: any) => m.toString() === userId)) {
+          return res.status(403).json({ status: false, message: "Not a member of this group" });
+        }
 
-      await group.populate("members", MEMBER_FIELDS);
-      const populatedMembers: any[] = group.members;
-      const userMap: any = {};
-      populatedMembers.forEach((m: any) => { userMap[m._id.toString()] = m; });
+        await group.populate("members", MEMBER_FIELDS);
+        const populatedMembers: any[] = group.members;
+        const userMap: any = {};
+        populatedMembers.forEach((m: any) => {
+          userMap[m._id.toString()] = m;
+        });
 
-      const groupObj = group.toObject();
-      const groupForCalc = { ...groupObj, members: populatedMembers.map((m: any) => m._id.toString()) };
-      const balances = calculateBalances(groupForCalc);
-      const settlements = calculateMinimumTransfers(balances);
+        const groupObj = group.toObject();
+        const groupForCalc = { ...groupObj, members: populatedMembers.map((m: any) => m._id.toString()) };
+        const balances = calculateBalances(groupForCalc);
+        const settlements = calculateMinimumTransfers(balances);
 
-      // Enrich with user details. The payer needs somewhere to send the money, so each
-      // side carries its e-transfer destination — picked out of the populated member
-      // document rather than spreading the whole thing.
-      const enrichedUser = (uid: string) => {
-        const m = userMap[uid];
-        if (!m) return { _id: uid, username: "Unknown", avatar: null, etransfer: null };
-        return {
-          _id: m._id,
-          username: m.username,
-          avatar: m.avatar || null,
-          etransfer: serializeEtransfer(m.etransfer),
+        // Enrich with user details. The payer needs somewhere to send the money, so each
+        // side carries its e-transfer destination — picked out of the populated member
+        // document rather than spreading the whole thing.
+        const enrichedUser = (uid: string) => {
+          const m = userMap[uid];
+          if (!m) return { _id: uid, username: "Unknown", avatar: null, etransfer: null };
+          return {
+            _id: m._id,
+            username: m.username,
+            avatar: m.avatar || null,
+            etransfer: serializeEtransfer(m.etransfer),
+          };
         };
-      };
 
-      const enrichedBalances: any = {};
-      for (const [uid, currencyBalances] of Object.entries(balances)) {
-        enrichedBalances[uid] = {
-          user: enrichedUser(uid),
-          balances: currencyBalances,
-        };
+        const enrichedBalances: any = {};
+        for (const [uid, currencyBalances] of Object.entries(balances)) {
+          enrichedBalances[uid] = {
+            user: enrichedUser(uid),
+            balances: currencyBalances,
+          };
+        }
+
+        const enrichedSettlements = settlements.map((s: any) => ({
+          ...s,
+          fromUser: enrichedUser(s.from),
+          toUser: enrichedUser(s.to),
+        }));
+
+        res.json({
+          status: true,
+          message: "Balances retrieved",
+          data: {
+            group: { _id: group._id, name: group.name },
+            balances: enrichedBalances,
+            settlements: enrichedSettlements,
+          },
+        });
+      } catch (error) {
+        console.error("Error fetching balances:", error);
+        res.status(500).json({ status: false, message: "Failed to fetch balances" });
       }
-
-      const enrichedSettlements = settlements.map((s: any) => ({
-        ...s,
-        fromUser: enrichedUser(s.from),
-        toUser: enrichedUser(s.to),
-      }));
-
-      res.json({
-        status: true,
-        message: "Balances retrieved",
-        data: {
-          group: { _id: group._id, name: group.name },
-          balances: enrichedBalances,
-          settlements: enrichedSettlements,
-        },
-      });
-    } catch (error) {
-      console.error("Error fetching balances:", error);
-      res.status(500).json({ status: false, message: "Failed to fetch balances" });
-    }
-  });
+    },
+  );
 
   // POST /api/xensplit/groups/:groupId/settle - Mark debt as settled
-  app.post("/api/xensplit/groups/:groupId/settle", validateParams(xenSplitIdParamSchema), validate(settleDebtSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId } = req.params;
-      const { from, to, amount, currency, note } = req.body;
+  app.post(
+    "/api/xensplit/groups/:groupId/settle",
+    validateParams(xenSplitIdParamSchema),
+    validate(settleDebtSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId } = req.params;
+        const { from, to, amount, currency, note } = req.body;
 
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
+
+        if (!group.members.some((m: any) => m.toString() === userId)) {
+          return res.status(403).json({ status: false, message: "Not a member of this group" });
+        }
+
+        // Only the debtor or creditor can settle
+        if (from !== userId && to !== userId) {
+          return res.status(403).json({ status: false, message: "Can only settle your own debts" });
+        }
+
+        group.settlements.push({
+          from,
+          to,
+          amount,
+          currency,
+          settled_at: new Date(),
+          ...(note ? { note } : {}),
+        });
+
+        await group.save();
+        const newSettlement = group.settlements[group.settlements.length - 1];
+        await logXenSplit(groupId, userId, "settlement_created", {
+          targetType: "settlement",
+          targetId: newSettlement._id,
+          meta: { from, to, amount, currency },
+        });
+        await group.populate("members", MEMBER_FIELDS);
+
+        const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
+        SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
+
+        const fromMember = (group.members as any[]).find((m: any) => m._id.toString() === from);
+        const fromName = fromMember?.username || "Someone";
+        await notify(to, {
+          title: "Settlement Received",
+          message: `${fromName} paid you ${amount} ${currency} in ${group.name}`,
+          link: `/internal/xensplit/groups/${groupId}/overview`,
+        });
+
+        res.json({ status: true, message: "Debt settled", data: await serializeXenSplitGroup(group) });
+      } catch (error) {
+        console.error("Error settling debt:", error);
+        res.status(500).json({ status: false, message: "Failed to settle debt" });
       }
-
-      if (!group.members.some((m: any) => m.toString() === userId)) {
-        return res.status(403).json({ status: false, message: "Not a member of this group" });
-      }
-
-      // Only the debtor or creditor can settle
-      if (from !== userId && to !== userId) {
-        return res.status(403).json({ status: false, message: "Can only settle your own debts" });
-      }
-
-      group.settlements.push({
-        from,
-        to,
-        amount,
-        currency,
-        settled_at: new Date(),
-        ...(note ? { note } : {}),
-      });
-
-      await group.save();
-      const newSettlement = group.settlements[group.settlements.length - 1];
-      await logXenSplit(groupId, userId, "settlement_created", { targetType: "settlement", targetId: newSettlement._id, meta: { from, to, amount, currency } });
-      await group.populate("members", MEMBER_FIELDS);
-
-      const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
-      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
-
-      const fromMember = (group.members as any[]).find((m: any) => m._id.toString() === from);
-      const fromName = fromMember?.username || "Someone";
-      await notify(to, { title: "Settlement Received", message: `${fromName} paid you ${amount} ${currency} in ${group.name}`, link: `/internal/xensplit/groups/${groupId}/overview` });
-
-      res.json({ status: true, message: "Debt settled", data: await serializeXenSplitGroup(group) });
-    } catch (error) {
-      console.error("Error settling debt:", error);
-      res.status(500).json({ status: false, message: "Failed to settle debt" });
-    }
-  });
+    },
+  );
 
   // DELETE /api/xensplit/groups/:groupId/settlements/:settlementId - Undo a settlement
-  app.delete("/api/xensplit/groups/:groupId/settlements/:settlementId", validateParams(xenSplitSettlementParamSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId, settlementId } = req.params;
+  app.delete(
+    "/api/xensplit/groups/:groupId/settlements/:settlementId",
+    validateParams(xenSplitSettlementParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId, settlementId } = req.params;
 
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
+
+        if (!group.members.some((m: any) => m.toString() === userId)) {
+          return res.status(403).json({ status: false, message: "Not a member of this group" });
+        }
+
+        const settlementIndex = group.settlements.findIndex((s: any) => s._id.toString() === settlementId);
+        if (settlementIndex === -1) {
+          return res.status(404).json({ status: false, message: "Settlement not found" });
+        }
+
+        const settlement = group.settlements[settlementIndex];
+        // Only the debtor, creditor, or group owner may undo a settlement
+        if (settlement.from !== userId && settlement.to !== userId && group.created_by !== userId) {
+          return res.status(403).json({ status: false, message: "Not authorised to undo this settlement" });
+        }
+
+        if (isDeleted(settlement)) {
+          return res.status(409).json({ status: false, message: "Settlement is already deleted" });
+        }
+
+        settlement.deleted_at = new Date();
+        settlement.deleted_by = userId;
+        await group.save();
+        await logXenSplit(groupId, userId, "settlement_deleted", {
+          targetType: "settlement",
+          targetId: settlementId,
+          meta: { from: settlement.from, to: settlement.to, amount: settlement.amount, currency: settlement.currency },
+        });
+        await group.populate("members", MEMBER_FIELDS);
+
+        const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
+        SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
+
+        res.json({ status: true, message: "Settlement undone", data: await serializeXenSplitGroup(group) });
+      } catch (error) {
+        console.error("Error undoing settlement:", error);
+        res.status(500).json({ status: false, message: "Failed to undo settlement" });
       }
-
-      if (!group.members.some((m: any) => m.toString() === userId)) {
-        return res.status(403).json({ status: false, message: "Not a member of this group" });
-      }
-
-      const settlementIndex = group.settlements.findIndex((s: any) => s._id.toString() === settlementId);
-      if (settlementIndex === -1) {
-        return res.status(404).json({ status: false, message: "Settlement not found" });
-      }
-
-      const settlement = group.settlements[settlementIndex];
-      // Only the debtor, creditor, or group owner may undo a settlement
-      if (settlement.from !== userId && settlement.to !== userId && group.created_by !== userId) {
-        return res.status(403).json({ status: false, message: "Not authorised to undo this settlement" });
-      }
-
-      if (isDeleted(settlement)) {
-        return res.status(409).json({ status: false, message: "Settlement is already deleted" });
-      }
-
-      settlement.deleted_at = new Date();
-      settlement.deleted_by = userId;
-      await group.save();
-      await logXenSplit(groupId, userId, "settlement_deleted", {
-        targetType: "settlement", targetId: settlementId,
-        meta: { from: settlement.from, to: settlement.to, amount: settlement.amount, currency: settlement.currency },
-      });
-      await group.populate("members", MEMBER_FIELDS);
-
-      const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
-      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
-
-      res.json({ status: true, message: "Settlement undone", data: await serializeXenSplitGroup(group) });
-    } catch (error) {
-      console.error("Error undoing settlement:", error);
-      res.status(500).json({ status: false, message: "Failed to undo settlement" });
-    }
-  });
+    },
+  );
 
   // POST /api/xensplit/groups/:groupId/exchanges - Record a currency exchange
-  app.post("/api/xensplit/groups/:groupId/exchanges", validateParams(xenSplitIdParamSchema), validate(createExchangeSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId } = req.params;
-      const { party_a, currency_a, amount_a, party_b, currency_b, rate, rate_from_currency, note, date } = req.body;
+  app.post(
+    "/api/xensplit/groups/:groupId/exchanges",
+    validateParams(xenSplitIdParamSchema),
+    validate(createExchangeSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId } = req.params;
+        const { party_a, currency_a, amount_a, party_b, currency_b, rate, rate_from_currency, note, date } = req.body;
 
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
+
+        if (!group.members.some((m: any) => m.toString() === userId)) {
+          return res.status(403).json({ status: false, message: "Not a member of this group" });
+        }
+
+        if (!group.members.some((m: any) => m.toString() === party_a)) {
+          return res.status(400).json({ status: false, message: "Party A must be a group member" });
+        }
+
+        if (!group.members.some((m: any) => m.toString() === party_b)) {
+          return res.status(400).json({ status: false, message: "Party B must be a group member" });
+        }
+
+        const amount_b = Number((amount_a * rate).toFixed(2));
+
+        group.exchanges = group.exchanges || [];
+        group.exchanges.push({
+          party_a,
+          currency_a,
+          amount_a,
+          party_b,
+          currency_b,
+          amount_b,
+          rate,
+          rate_from_currency: rate_from_currency ?? currency_a,
+          created_by: userId,
+          date: date ? new Date(date) : new Date(),
+          created_at: new Date(),
+          ...(note ? { note } : {}),
+        } as any);
+
+        await group.save();
+        const newExchange = group.exchanges[group.exchanges.length - 1];
+        await logXenSplit(groupId, userId, "exchange_created", {
+          targetType: "exchange",
+          targetId: newExchange._id,
+          meta: { party_a, amount_a, currency_a, party_b, amount_b, currency_b },
+        });
+        await group.populate("members", MEMBER_FIELDS);
+
+        const actor = (group.members as any[]).find((m: any) => m._id.toString() === userId);
+        const actorName = actor?.username || "Someone";
+        const notifyIds = new Set([party_a, party_b].filter((id) => id !== userId));
+        for (const mid of notifyIds) {
+          await notify(mid, {
+            title: "New Exchange",
+            message: `${actorName} recorded a currency exchange in ${group.name}`,
+            link: `/internal/xensplit/groups/${groupId}/expenses`,
+            icon: "swap_horiz",
+          });
+        }
+
+        const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
+        SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
+
+        res.json({ status: true, message: "Exchange recorded", data: await serializeXenSplitGroup(group) });
+      } catch (error) {
+        console.error("Error recording exchange:", error);
+        res.status(500).json({ status: false, message: "Failed to record exchange" });
       }
-
-      if (!group.members.some((m: any) => m.toString() === userId)) {
-        return res.status(403).json({ status: false, message: "Not a member of this group" });
-      }
-
-      if (!group.members.some((m: any) => m.toString() === party_a)) {
-        return res.status(400).json({ status: false, message: "Party A must be a group member" });
-      }
-
-      if (!group.members.some((m: any) => m.toString() === party_b)) {
-        return res.status(400).json({ status: false, message: "Party B must be a group member" });
-      }
-
-      const amount_b = Number((amount_a * rate).toFixed(2));
-
-      group.exchanges = group.exchanges || [];
-      group.exchanges.push({
-        party_a,
-        currency_a,
-        amount_a,
-        party_b,
-        currency_b,
-        amount_b,
-        rate,
-        rate_from_currency: rate_from_currency ?? currency_a,
-        created_by: userId,
-        date: date ? new Date(date) : new Date(),
-        created_at: new Date(),
-        ...(note ? { note } : {}),
-      } as any);
-
-      await group.save();
-      const newExchange = group.exchanges[group.exchanges.length - 1];
-      await logXenSplit(groupId, userId, "exchange_created", {
-        targetType: "exchange", targetId: newExchange._id,
-        meta: { party_a, amount_a, currency_a, party_b, amount_b, currency_b },
-      });
-      await group.populate("members", MEMBER_FIELDS);
-
-      const actor = (group.members as any[]).find((m: any) => m._id.toString() === userId);
-      const actorName = actor?.username || "Someone";
-      const notifyIds = new Set([party_a, party_b].filter((id) => id !== userId));
-      for (const mid of notifyIds) {
-        await notify(mid, { title: "New Exchange", message: `${actorName} recorded a currency exchange in ${group.name}`, link: `/internal/xensplit/groups/${groupId}/expenses`, icon: "swap_horiz" });
-      }
-
-      const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
-      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
-
-      res.json({ status: true, message: "Exchange recorded", data: await serializeXenSplitGroup(group) });
-    } catch (error) {
-      console.error("Error recording exchange:", error);
-      res.status(500).json({ status: false, message: "Failed to record exchange" });
-    }
-  });
+    },
+  );
 
   // DELETE /api/xensplit/groups/:groupId/exchanges/:exchangeId - Delete an exchange
-  app.delete("/api/xensplit/groups/:groupId/exchanges/:exchangeId", validateParams(xenSplitExchangeParamSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId, exchangeId } = req.params;
+  app.delete(
+    "/api/xensplit/groups/:groupId/exchanges/:exchangeId",
+    validateParams(xenSplitExchangeParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId, exchangeId } = req.params;
 
-      const group = await XenSplit.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
+        const group = await XenSplit.findById(groupId);
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
+
+        if (!group.members.some((m: any) => m.toString() === userId)) {
+          return res.status(403).json({ status: false, message: "Not a member of this group" });
+        }
+
+        const exchangeIndex = (group.exchanges || []).findIndex((ex: any) => ex._id.toString() === exchangeId);
+        if (exchangeIndex === -1) {
+          return res.status(404).json({ status: false, message: "Exchange not found" });
+        }
+
+        const exchange = group.exchanges[exchangeIndex];
+        // Only the creator, either party, or group owner may delete
+        if (
+          exchange.created_by !== userId &&
+          exchange.party_a !== userId &&
+          exchange.party_b !== userId &&
+          group.created_by !== userId
+        ) {
+          return res.status(403).json({ status: false, message: "Not authorised to delete this exchange" });
+        }
+
+        if (isDeleted(exchange)) {
+          return res.status(409).json({ status: false, message: "Exchange is already deleted" });
+        }
+
+        exchange.deleted_at = new Date();
+        exchange.deleted_by = userId;
+        await group.save();
+        await logXenSplit(groupId, userId, "exchange_deleted", {
+          targetType: "exchange",
+          targetId: exchangeId,
+          meta: exchangeLogMeta(exchange),
+        });
+        await group.populate("members", MEMBER_FIELDS);
+
+        const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
+        SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
+
+        res.json({ status: true, message: "Exchange deleted", data: await serializeXenSplitGroup(group) });
+      } catch (error) {
+        console.error("Error deleting exchange:", error);
+        res.status(500).json({ status: false, message: "Failed to delete exchange" });
       }
-
-      if (!group.members.some((m: any) => m.toString() === userId)) {
-        return res.status(403).json({ status: false, message: "Not a member of this group" });
-      }
-
-      const exchangeIndex = (group.exchanges || []).findIndex((ex: any) => ex._id.toString() === exchangeId);
-      if (exchangeIndex === -1) {
-        return res.status(404).json({ status: false, message: "Exchange not found" });
-      }
-
-      const exchange = group.exchanges[exchangeIndex];
-      // Only the creator, either party, or group owner may delete
-      if (exchange.created_by !== userId && exchange.party_a !== userId && exchange.party_b !== userId && group.created_by !== userId) {
-        return res.status(403).json({ status: false, message: "Not authorised to delete this exchange" });
-      }
-
-      if (isDeleted(exchange)) {
-        return res.status(409).json({ status: false, message: "Exchange is already deleted" });
-      }
-
-      exchange.deleted_at = new Date();
-      exchange.deleted_by = userId;
-      await group.save();
-      await logXenSplit(groupId, userId, "exchange_deleted", { targetType: "exchange", targetId: exchangeId, meta: exchangeLogMeta(exchange) });
-      await group.populate("members", MEMBER_FIELDS);
-
-      const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
-      SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
-
-      res.json({ status: true, message: "Exchange deleted", data: await serializeXenSplitGroup(group) });
-    } catch (error) {
-      console.error("Error deleting exchange:", error);
-      res.status(500).json({ status: false, message: "Failed to delete exchange" });
-    }
-  });
+    },
+  );
 
   // GET /api/xensplit/groups/:groupId/log - Activity log, newest first. Owner only.
   // Paged by log id: pass the last id of a page as ?before= to get the next one.
-  app.get("/api/xensplit/groups/:groupId/log", validateParams(xenSplitIdParamSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = (req.user as any)._id.toString();
-      const { groupId } = req.params;
+  app.get(
+    "/api/xensplit/groups/:groupId/log",
+    validateParams(xenSplitIdParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = (req.user as any)._id.toString();
+        const { groupId } = req.params;
 
-      const group = await XenSplit.findById(groupId).select("created_by");
-      if (!group) {
-        return res.status(404).json({ status: false, message: "Group not found" });
+        const group = await XenSplit.findById(groupId).select("created_by");
+        if (!group) {
+          return res.status(404).json({ status: false, message: "Group not found" });
+        }
+
+        if (group.created_by !== userId) {
+          return res.status(403).json({ status: false, message: "Only the group owner can view the activity log" });
+        }
+
+        const before = typeof req.query.before === "string" ? req.query.before : undefined;
+        if (before !== undefined && !/^[a-f0-9]{24}$/i.test(before)) {
+          return res.status(400).json({ status: false, message: "Invalid cursor" });
+        }
+        const limit = Math.min(Math.max(Number(req.query.limit) || LOG_PAGE_SIZE, 1), 100);
+
+        const query: any = { group_id: groupId };
+        if (before) query._id = { $lt: new mongoose.Types.ObjectId(before) };
+        // One extra row tells us whether another page exists
+        const rows = await XenSplitLog.find(query)
+          .sort({ _id: -1 })
+          .limit(limit + 1)
+          .lean();
+        const hasMore = rows.length > limit;
+        const page = hasMore ? rows.slice(0, limit) : rows;
+
+        // Resolve every user a row mentions, including members who have since left
+        const userIds = Array.from(new Set(page.flatMap((row: any) => collectLogUserIds(row))));
+        const users = await User.find({ _id: { $in: userIds } })
+          .select(MEMBER_FIELDS)
+          .lean();
+        const userMap: Record<string, { username: string; avatar: string | null }> = {};
+        for (const u of users as any[]) {
+          userMap[u._id.toString()] = { username: u.username, avatar: u.avatar || null };
+        }
+
+        const entries = page.map((row: any) => ({
+          _id: row._id.toString(),
+          actor_id: row.actor_id,
+          action: row.action,
+          target_type: row.target_type,
+          target_id: row.target_id,
+          summary: row.summary,
+          meta: row.meta,
+          changes: row.changes || [],
+          created_at: row.created_at,
+        }));
+
+        res.json({
+          status: true,
+          message: "Activity log retrieved",
+          data: { entries, users: userMap, nextBefore: hasMore ? entries[entries.length - 1]._id : null },
+        });
+      } catch (error) {
+        console.error("Error fetching activity log:", error);
+        res.status(500).json({ status: false, message: "Failed to fetch activity log" });
       }
-
-      if (group.created_by !== userId) {
-        return res.status(403).json({ status: false, message: "Only the group owner can view the activity log" });
-      }
-
-      const before = typeof req.query.before === "string" ? req.query.before : undefined;
-      if (before !== undefined && !/^[a-f0-9]{24}$/i.test(before)) {
-        return res.status(400).json({ status: false, message: "Invalid cursor" });
-      }
-      const limit = Math.min(Math.max(Number(req.query.limit) || LOG_PAGE_SIZE, 1), 100);
-
-      const query: any = { group_id: groupId };
-      if (before) query._id = { $lt: new mongoose.Types.ObjectId(before) };
-      // One extra row tells us whether another page exists
-      const rows = await XenSplitLog.find(query).sort({ _id: -1 }).limit(limit + 1).lean();
-      const hasMore = rows.length > limit;
-      const page = hasMore ? rows.slice(0, limit) : rows;
-
-      // Resolve every user a row mentions, including members who have since left
-      const userIds = Array.from(new Set(page.flatMap((row: any) => collectLogUserIds(row))));
-      const users = await User.find({ _id: { $in: userIds } }).select(MEMBER_FIELDS).lean();
-      const userMap: Record<string, { username: string; avatar: string | null }> = {};
-      for (const u of users as any[]) {
-        userMap[u._id.toString()] = { username: u.username, avatar: u.avatar || null };
-      }
-
-      const entries = page.map((row: any) => ({
-        _id: row._id.toString(),
-        actor_id: row.actor_id,
-        action: row.action,
-        target_type: row.target_type,
-        target_id: row.target_id,
-        summary: row.summary,
-        meta: row.meta,
-        changes: row.changes || [],
-        created_at: row.created_at,
-      }));
-
-      res.json({
-        status: true,
-        message: "Activity log retrieved",
-        data: { entries, users: userMap, nextBefore: hasMore ? entries[entries.length - 1]._id : null },
-      });
-    } catch (error) {
-      console.error("Error fetching activity log:", error);
-      res.status(500).json({ status: false, message: "Failed to fetch activity log" });
-    }
-  });
+    },
+  );
 
   // Restore a soft-deleted record. Group owner only: a deletion is a deliberate act by
   // someone with rights over the record, so putting it back - and with it everyone's
   // balances - is the owner's call. Deleting is broader (creator/party/owner); undoing
   // is not.
-  const restoreRecord = async (
-    req: Request,
-    res: Response,
-    kind: "expense" | "settlement" | "exchange",
-  ) => {
+  const restoreRecord = async (req: Request, res: Response, kind: "expense" | "settlement" | "exchange") => {
     const userId = (req.user as any)._id.toString();
     const { groupId } = req.params;
     const recordId = req.params.expenseId ?? req.params.settlementId ?? req.params.exchangeId;
@@ -1344,9 +1596,7 @@ module.exports = function (app: any) {
     }
 
     const collection: any[] =
-      kind === "expense" ? group.expenses :
-        kind === "settlement" ? group.settlements :
-          (group.exchanges || []);
+      kind === "expense" ? group.expenses : kind === "settlement" ? group.settlements : group.exchanges || [];
     const record = collection.find((r: any) => r._id.toString() === recordId);
     if (!record) {
       return res.status(404).json({ status: false, message: `${kind[0].toUpperCase()}${kind.slice(1)} not found` });
@@ -1364,45 +1614,63 @@ module.exports = function (app: any) {
       targetId: recordId,
       summary: kind === "expense" ? record.title : undefined,
       meta:
-        kind === "expense" ? { amount: record.amount, currency: record.currency, paid_by: record.paid_by } :
-          kind === "settlement" ? { from: record.from, to: record.to, amount: record.amount, currency: record.currency } :
-            exchangeLogMeta(record),
+        kind === "expense"
+          ? { amount: record.amount, currency: record.currency, paid_by: record.paid_by }
+          : kind === "settlement"
+            ? { from: record.from, to: record.to, amount: record.amount, currency: record.currency }
+            : exchangeLogMeta(record),
     });
     await group.populate("members", MEMBER_FIELDS);
 
     const memberIds = (group.members as any[]).map((m: any) => m._id.toString());
     SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, memberIds);
 
-    return res.json({ status: true, message: `${kind[0].toUpperCase()}${kind.slice(1)} restored`, data: await serializeXenSplitGroup(group) });
+    return res.json({
+      status: true,
+      message: `${kind[0].toUpperCase()}${kind.slice(1)} restored`,
+      data: await serializeXenSplitGroup(group),
+    });
   };
 
   // POST /api/xensplit/groups/:groupId/expenses/:expenseId/restore
-  app.post("/api/xensplit/groups/:groupId/expenses/:expenseId/restore", validateParams(xenSplitExpenseParamSchema), async (req: Request, res: Response) => {
-    try {
-      return await restoreRecord(req, res, "expense");
-    } catch (error) {
-      console.error("Error restoring expense:", error);
-      res.status(500).json({ status: false, message: "Failed to restore expense" });
-    }
-  });
+  app.post(
+    "/api/xensplit/groups/:groupId/expenses/:expenseId/restore",
+    validateParams(xenSplitExpenseParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        return await restoreRecord(req, res, "expense");
+      } catch (error) {
+        console.error("Error restoring expense:", error);
+        res.status(500).json({ status: false, message: "Failed to restore expense" });
+      }
+    },
+  );
 
   // POST /api/xensplit/groups/:groupId/settlements/:settlementId/restore
-  app.post("/api/xensplit/groups/:groupId/settlements/:settlementId/restore", validateParams(xenSplitSettlementParamSchema), async (req: Request, res: Response) => {
-    try {
-      return await restoreRecord(req, res, "settlement");
-    } catch (error) {
-      console.error("Error restoring settlement:", error);
-      res.status(500).json({ status: false, message: "Failed to restore settlement" });
-    }
-  });
+  app.post(
+    "/api/xensplit/groups/:groupId/settlements/:settlementId/restore",
+    validateParams(xenSplitSettlementParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        return await restoreRecord(req, res, "settlement");
+      } catch (error) {
+        console.error("Error restoring settlement:", error);
+        res.status(500).json({ status: false, message: "Failed to restore settlement" });
+      }
+    },
+  );
 
   // POST /api/xensplit/groups/:groupId/exchanges/:exchangeId/restore
-  app.post("/api/xensplit/groups/:groupId/exchanges/:exchangeId/restore", validateParams(xenSplitExchangeParamSchema), async (req: Request, res: Response) => {
-    try {
-      return await restoreRecord(req, res, "exchange");
-    } catch (error) {
-      console.error("Error restoring exchange:", error);
-      res.status(500).json({ status: false, message: "Failed to restore exchange" });
-    }
-  });
+  app.post(
+    "/api/xensplit/groups/:groupId/exchanges/:exchangeId/restore",
+    validateParams(xenSplitExchangeParamSchema),
+    async (req: Request, res: Response) => {
+      try {
+        return await restoreRecord(req, res, "exchange");
+      } catch (error) {
+        console.error("Error restoring exchange:", error);
+        res.status(500).json({ status: false, message: "Failed to restore exchange" });
+      }
+    },
+  );
 };

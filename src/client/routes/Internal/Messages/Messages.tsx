@@ -41,7 +41,8 @@ export default function Messages() {
   useTitle("Messages");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { conversations, isLoading, isError, error, refetch, createConversation, isCreatingConversation } = useUserMessages();
+  const { conversations, isLoading, isError, error, refetch, createConversation, isCreatingConversation } =
+    useUserMessages();
   const { profile, refetch: refetchProfile } = useUserProfile();
   const { socket } = useSocket();
   useSnackbar();
@@ -96,7 +97,7 @@ export default function Messages() {
         const newConv = updatedConversations?.find(
           (conv) =>
             participantIds.every((id) => conv.participants.includes(id)) &&
-            conv.participants.length === participantIds.length + 1
+            conv.participants.length === participantIds.length + 1,
         );
         if (newConv) {
           navigate(`/internal/messages/${newConv._id}`);
@@ -137,11 +138,7 @@ export default function Messages() {
             )}
 
             {isError && (
-              <ErrorDisplay
-                error={error ?? null}
-                title="Couldn't load your conversations"
-                onRetry={() => refetch()}
-              />
+              <ErrorDisplay error={error ?? null} title="Couldn't load your conversations" onRetry={() => refetch()} />
             )}
 
             {!isLoading && !isError && (
@@ -194,7 +191,10 @@ export default function Messages() {
                           primaryTypographyProps={{ component: "div" }}
                           secondaryTypographyProps={{ component: "div" }}
                           primary={
-                            <Box component="div" sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+                            <Box
+                              component="div"
+                              sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}
+                            >
                               <Typography
                                 variant="body1"
                                 sx={{
@@ -213,7 +213,16 @@ export default function Messages() {
                             </Box>
                           }
                           secondary={
-                            <Box component="div" sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mt: 0.5 }}>
+                            <Box
+                              component="div"
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: 1,
+                                mt: 0.5,
+                              }}
+                            >
                               <Typography variant="body2" color="text.secondary" noWrap sx={{ flex: 1, opacity: 0.95 }}>
                                 {conversation.lastMessage || "No messages yet"}
                               </Typography>
@@ -317,7 +326,15 @@ export default function Messages() {
             </Box>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => { setNewConversationOpen(false); setSelectedUsers([]); setSearchQuery(""); }}>Cancel</Button>
+            <Button
+              onClick={() => {
+                setNewConversationOpen(false);
+                setSelectedUsers([]);
+                setSearchQuery("");
+              }}
+            >
+              Cancel
+            </Button>
             <Button
               onClick={handleCreateConversation}
               variant="contained"

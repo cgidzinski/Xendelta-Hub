@@ -1,8 +1,5 @@
 import { alpha } from "@mui/material/styles";
-import {
-  Typography,
-  Box,
-} from "@mui/material";
+import { Typography, Box } from "@mui/material";
 import { PointsIcon } from "./icons/PointsIcon";
 import { POINTS_GOLD } from "../theme";
 
@@ -32,7 +29,10 @@ export default function PointsListItemSidebar({ points = 0, onNavigate }: Points
       }}
     >
       <PointsIcon sx={{ color: POINTS_GOLD, fontSize: 24 }} />
-      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "warning.main", lineHeight: 1, fontSize: "1.1rem" }}>
+      <Typography
+        variant="subtitle1"
+        sx={{ fontWeight: 700, color: "warning.main", lineHeight: 1, fontSize: "1.1rem" }}
+      >
         {points}
       </Typography>
     </Box>

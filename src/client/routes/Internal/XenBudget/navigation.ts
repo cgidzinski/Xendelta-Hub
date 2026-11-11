@@ -22,23 +22,23 @@ export const TAB_PATHS = ["overview", "items", "report", "settings"] as const;
  * here rather than only inside the Tab elements that render it.
  */
 export const TAB_LABELS: Record<string, string> = {
-    overview: "Overview",
-    items: "Items",
-    report: "Report",
-    settings: "Settings",
-    // Not a tab (see above), but still a place you can be, and a crumb should say so.
-    "piggy-banks": "Piggy banks",
+  overview: "Overview",
+  items: "Items",
+  report: "Report",
+  settings: "Settings",
+  // Not a tab (see above), but still a place you can be, and a crumb should say so.
+  "piggy-banks": "Piggy banks",
 };
 
 /** Settings sections, in the order they render. */
 export const SETTINGS_SECTIONS = [
-    { path: "general", label: "General" },
-    { path: "categories", label: "Categories" },
-    { path: "flags", label: "Flags" },
-    { path: "tagging", label: "Tagging" },
-    { path: "budgets", label: "Budgets" },
-    { path: "csv-maps", label: "CSV Maps" },
-    { path: "imports", label: "Imports" },
+  { path: "general", label: "General" },
+  { path: "categories", label: "Categories" },
+  { path: "flags", label: "Flags" },
+  { path: "tagging", label: "Tagging" },
+  { path: "budgets", label: "Budgets" },
+  { path: "csv-maps", label: "CSV Maps" },
+  { path: "imports", label: "Imports" },
 ] as const;
 
 /**
@@ -50,10 +50,10 @@ export const SETTINGS_SECTIONS = [
  * Returns MUI's `false` for "no tab", not -1.
  */
 export function activeIndex(pathname: string, paths: readonly string[]): number | false {
-    // react-router's location.pathname never carries a query or hash, but this is an
-    // exported helper — trimming them means passing a full URL by mistake degrades to the
-    // right answer instead of silently matching nothing.
-    const segments = pathname.split(/[?#]/)[0].split("/");
-    const index = paths.findIndex((p) => segments.includes(p));
-    return index === -1 ? false : index;
+  // react-router's location.pathname never carries a query or hash, but this is an
+  // exported helper — trimming them means passing a full URL by mistake degrades to the
+  // right answer instead of silently matching nothing.
+  const segments = pathname.split(/[?#]/)[0].split("/");
+  const index = paths.findIndex((p) => segments.includes(p));
+  return index === -1 ? false : index;
 }

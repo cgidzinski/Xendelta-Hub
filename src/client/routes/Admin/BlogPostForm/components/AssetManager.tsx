@@ -147,11 +147,7 @@ export default function AssetManager({
                               <Typography variant="body1" sx={{ fontWeight: 500 }}>
                                 {filename}
                               </Typography>
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => onRemove(asset.id)}
-                              >
+                              <IconButton size="small" color="error" onClick={() => onRemove(asset.id)}>
                                 <DeleteIcon fontSize="small" />
                               </IconButton>
                             </Box>
@@ -197,4 +193,3 @@ export default function AssetManager({
     </Dialog>
   );
 }
-

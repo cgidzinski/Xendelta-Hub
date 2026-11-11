@@ -46,7 +46,6 @@ import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { useAdminUsers, User, NotifyChannel } from "../../hooks/admin/useAdminUsers";
 import { formatFileSize } from "../../utils/fileUtils";
 
-
 const AVAILABLE_ROLES = ["admin", "user"];
 
 const ITEM_OPTIONS = [
@@ -98,7 +97,7 @@ export default function Users() {
       (user) =>
         user.username.toLowerCase().includes(query) ||
         user.email.toLowerCase().includes(query) ||
-        user.roles?.some((role) => role.toLowerCase().includes(query))
+        user.roles?.some((role) => role.toLowerCase().includes(query)),
     );
   }, [searchQuery, users]);
 
@@ -124,9 +123,7 @@ export default function Users() {
   };
 
   const toggleNotifyChannel = (channel: NotifyChannel) => {
-    setNotifyChannels((prev) =>
-      prev.includes(channel) ? prev.filter((c) => c !== channel) : [...prev, channel]
-    );
+    setNotifyChannels((prev) => (prev.includes(channel) ? prev.filter((c) => c !== channel) : [...prev, channel]));
   };
 
   const handleSendNotification = async () => {
@@ -165,7 +162,6 @@ export default function Users() {
     setActiveTab(0);
   };
 
-
   const handleSaveRoles = async () => {
     if (!selectedUser) return;
     updateUser(selectedUser._id, { roles: editingRoles })
@@ -184,14 +180,14 @@ export default function Users() {
   const parseQuotaInput = (input: string): number | null => {
     const trimmed = input.trim().toUpperCase();
     if (!trimmed) return null;
-    
+
     // Parse format like "5 GB", "1024 MB", etc.
     const match = trimmed.match(/^([\d.]+)\s*(B|KB|MB|GB|TB)?$/);
     if (!match) return null;
-    
+
     const value = parseFloat(match[1]);
     if (isNaN(value) || value < 0) return null;
-    
+
     const unit = match[2] || "B";
     const multipliers: { [key: string]: number } = {
       B: 1,
@@ -200,19 +196,19 @@ export default function Users() {
       GB: 1024 * 1024 * 1024,
       TB: 1024 * 1024 * 1024 * 1024,
     };
-    
+
     return Math.floor(value * (multipliers[unit] || 1));
   };
 
   const handleSaveQuota = async () => {
     if (!selectedUser) return;
-    
+
     const quotaBytes = parseQuotaInput(editingQuota);
     if (quotaBytes === null && editingQuota.trim() !== "") {
       enqueueSnackbar("Invalid quota format. Use format like '5 GB' or '1024 MB'", { variant: "error" });
       return;
     }
-    
+
     updateUser(selectedUser._id, { xenboxQuota: quotaBytes || 0 })
       .then(async () => {
         enqueueSnackbar("Quota updated successfully", { variant: "success" });
@@ -220,7 +216,7 @@ export default function Users() {
         const { data: updatedUsers } = await refetch();
         if (updatedUsers) {
           // Update selected user after refetch
-          const updatedUser = updatedUsers.find(u => u._id === selectedUser._id);
+          const updatedUser = updatedUsers.find((u) => u._id === selectedUser._id);
           if (updatedUser) {
             setSelectedUser(updatedUser);
             setEditingQuota(updatedUser.xenbox?.spaceAllowed ? formatFileSize(updatedUser.xenbox.spaceAllowed) : "");
@@ -231,7 +227,6 @@ export default function Users() {
         enqueueSnackbar(error.message || "Failed to update quota", { variant: "error" });
       });
   };
-
 
   const handleDeleteUser = async () => {
     if (!selectedUser) return;
@@ -252,7 +247,7 @@ export default function Users() {
       .then(() => {
         enqueueSnackbar("Avatar reset successfully", { variant: "success" });
         // Update selected user
-        const updatedUser = users.find(u => u._id === selectedUser._id);
+        const updatedUser = users.find((u) => u._id === selectedUser._id);
         if (updatedUser) {
           setSelectedUser({ ...updatedUser, avatar: undefined });
         }
@@ -286,7 +281,7 @@ export default function Users() {
         if (selectedUser) {
           setSelectedUser({
             ...selectedUser,
-            inventory: selectedUser.inventory?.filter(i => i.itemKey !== itemKey) || [],
+            inventory: selectedUser.inventory?.filter((i) => i.itemKey !== itemKey) || [],
           });
         }
       })
@@ -294,7 +289,6 @@ export default function Users() {
         enqueueSnackbar(error.message || "Failed to remove item", { variant: "error" });
       });
   };
-
 
   // You can edit anyone else's roles, but not your own: removing your own admin role would lock
   // you out of this page mid-session.
@@ -355,10 +349,7 @@ export default function Users() {
                     <TableRow key={user._id} hover onClick={() => handleUserClick(user)} sx={{ cursor: "pointer" }}>
                       <TableCell>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                          <Avatar
-                            src={user.avatar || undefined}
-                            sx={{ width: 40, height: 40, borderRadius: 1.5 }}
-                          >
+                          <Avatar src={user.avatar || undefined} sx={{ width: 40, height: 40, borderRadius: 1.5 }}>
                             {user.username?.charAt(0).toUpperCase()}
                           </Avatar>
                           <Typography variant="body1" sx={{ fontWeight: 500 }}>
@@ -416,10 +407,7 @@ export default function Users() {
           }}
         >
           <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 2, pb: 1 }}>
-            <Avatar
-              src={selectedUser?.avatar || undefined}
-              sx={{ width: 48, height: 48, fontSize: "1.25rem" }}
-            >
+            <Avatar src={selectedUser?.avatar || undefined} sx={{ width: 48, height: 48, fontSize: "1.25rem" }}>
               {selectedUser?.username?.charAt(0).toUpperCase()}
             </Avatar>
             <Box sx={{ flex: 1 }}>
@@ -457,13 +445,17 @@ export default function Users() {
               <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <Box sx={{ display: "flex", gap: 4 }}>
                   <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>Points</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                      Points
+                    </Typography>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: "primary.main" }}>
                       {selectedUser.points?.toLocaleString() || 0}
                     </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>Roles</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                      Roles
+                    </Typography>
                     <Box sx={{ display: "flex", gap: 0.5 }}>
                       {selectedUser.roles?.map((role) => (
                         <Chip
@@ -479,15 +471,23 @@ export default function Users() {
                 </Box>
                 {selectedUser.xenbox && (
                   <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>XenBox</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                      XenBox
+                    </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {formatFileSize(selectedUser.xenbox.spaceUsed)} / {formatFileSize(selectedUser.xenbox.spaceAllowed)}
-                      <Typography component="span" variant="caption" color="text.secondary"> ({selectedUser.xenbox.fileCount} files)</Typography>
+                      {formatFileSize(selectedUser.xenbox.spaceUsed)} /{" "}
+                      {formatFileSize(selectedUser.xenbox.spaceAllowed)}
+                      <Typography component="span" variant="caption" color="text.secondary">
+                        {" "}
+                        ({selectedUser.xenbox.fileCount} files)
+                      </Typography>
                     </Typography>
                   </Box>
                 )}
                 <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>User ID</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                    User ID
+                  </Typography>
                   <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
                     {selectedUser._id}
                   </Typography>
@@ -538,14 +538,31 @@ export default function Users() {
                 ) : (
                   <Box sx={{ display: "flex", flexDirection: "column", gap: 1, overflow: "auto", flex: 1 }}>
                     {selectedUser.inventory.map((item, index) => (
-                      <Box key={index} sx={{ display: "flex", alignItems: "center", gap: 2, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
+                      <Box
+                        key={index}
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 2,
+                          p: 1.5,
+                          border: "1px solid",
+                          borderColor: "divider",
+                          borderRadius: 1,
+                        }}
+                      >
                         <Avatar src={item.image} sx={{ width: 40, height: 40 }} variant="rounded" />
                         <Box sx={{ flex: 1 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{item.name}</Typography>
-                          <Typography variant="caption" color="text.secondary">{item.description}</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {item.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {item.description}
+                          </Typography>
                         </Box>
                         <Box sx={{ textAlign: "right" }}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>Received</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                            Received
+                          </Typography>
                           <Typography variant="caption">{new Date(item.purchasedAt).toLocaleDateString()}</Typography>
                         </Box>
                         {item.used && <Chip label="Used" size="small" color="default" />}
@@ -579,7 +596,11 @@ export default function Users() {
                     {AVAILABLE_ROLES.map((role) => (
                       <FormControlLabel
                         key={role}
-                        label={<Typography variant="body2" sx={{ textTransform: "capitalize" }}>{role}</Typography>}
+                        label={
+                          <Typography variant="body2" sx={{ textTransform: "capitalize" }}>
+                            {role}
+                          </Typography>
+                        }
                         control={
                           <Checkbox
                             size="small"
@@ -634,7 +655,11 @@ export default function Users() {
                       variant="contained"
                       size="small"
                       onClick={handleSaveQuota}
-                      disabled={isUpdatingUser || editingQuota === (selectedUser.xenbox?.spaceAllowed ? formatFileSize(selectedUser.xenbox.spaceAllowed) : "")}
+                      disabled={
+                        isUpdatingUser ||
+                        editingQuota ===
+                          (selectedUser.xenbox?.spaceAllowed ? formatFileSize(selectedUser.xenbox.spaceAllowed) : "")
+                      }
                     >
                       {isUpdatingUser ? "Saving..." : "Update"}
                     </Button>
@@ -649,7 +674,14 @@ export default function Users() {
                     <Typography
                       variant="body2"
                       color="text.secondary"
-                      sx={{ fontFamily: "monospace", fontSize: "0.75rem", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      sx={{
+                        fontFamily: "monospace",
+                        fontSize: "0.75rem",
+                        flex: 1,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
                       title={selectedUser.avatar}
                     >
                       {selectedUser.avatar || "No avatar set"}
@@ -688,8 +720,8 @@ export default function Users() {
             {activeTab === 3 && selectedUser && (
               <Box sx={{ display: "flex", flexDirection: "column", gap: 2, maxWidth: 480 }}>
                 <Typography variant="body2" color="text.secondary">
-                  Send a one-off notification to {selectedUser.username} on the channels below \u2014
-                  useful for testing delivery (in-app row, live socket update, email, push).
+                  Send a one-off notification to {selectedUser.username} on the channels below \u2014 useful for testing
+                  delivery (in-app row, live socket update, email, push).
                 </Typography>
 
                 <TextField
@@ -732,9 +764,7 @@ export default function Users() {
                             onChange={() => toggleNotifyChannel(channel)}
                           />
                         }
-                        label={
-                          { inapp: "In-app", socket: "Socket", email: "Email", push: "Push" }[channel]
-                        }
+                        label={{ inapp: "In-app", socket: "Socket", email: "Email", push: "Push" }[channel]}
                       />
                     ))}
                   </FormGroup>
@@ -746,10 +776,7 @@ export default function Users() {
                   startIcon={<SendIcon />}
                   onClick={handleSendNotification}
                   disabled={
-                    isSendingNotification ||
-                    !notifyTitle.trim() ||
-                    !notifyMessage.trim() ||
-                    notifyChannels.length === 0
+                    isSendingNotification || !notifyTitle.trim() || !notifyMessage.trim() || notifyChannels.length === 0
                   }
                   sx={{ alignSelf: "flex-start" }}
                 >
@@ -765,7 +792,8 @@ export default function Users() {
           <DialogTitle>Delete User</DialogTitle>
           <DialogContent>
             <Typography>
-              Are you sure you want to delete user <strong>{selectedUser?.username}</strong>? This action cannot be undone.
+              Are you sure you want to delete user <strong>{selectedUser?.username}</strong>? This action cannot be
+              undone.
             </Typography>
           </DialogContent>
           <DialogActions>

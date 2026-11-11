@@ -48,11 +48,7 @@ export function sortRecipes(recipes: RecipeSummary[], sort: RecipeSort): RecipeS
 }
 
 /** Filter then sort. Both are cheap and run over the already-fetched page. */
-export function applyRecipeFilters(
-  recipes: RecipeSummary[],
-  filter: RecipeFilter,
-  sort: RecipeSort,
-): RecipeSummary[] {
+export function applyRecipeFilters(recipes: RecipeSummary[], filter: RecipeFilter, sort: RecipeSort): RecipeSummary[] {
   return sortRecipes(
     recipes.filter((recipe) => matchesFilter(recipe, filter)),
     sort,

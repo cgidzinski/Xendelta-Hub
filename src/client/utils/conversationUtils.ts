@@ -4,15 +4,10 @@ import { ParticipantInfo } from "../types/ParticipantInfo";
 /**
  * Get display name for a conversation based on participants
  */
-export function getParticipantDisplay(
-  conversation: Conversation,
-  currentUserId?: string
-): string {
+export function getParticipantDisplay(conversation: Conversation, currentUserId?: string): string {
   if (!conversation.participantInfo) {
     // Fallback if participantInfo is not available
-    const otherParticipants = conversation.participants.filter(
-      (p) => p !== currentUserId
-    );
+    const otherParticipants = conversation.participants.filter((p) => p !== currentUserId);
     if (otherParticipants.length === 0) {
       return "You";
     }
@@ -22,9 +17,7 @@ export function getParticipantDisplay(
     return `${otherParticipants.length} participants`;
   }
 
-  const otherParticipants = conversation.participantInfo.filter(
-    (p) => p._id !== currentUserId
-  );
+  const otherParticipants = conversation.participantInfo.filter((p) => p._id !== currentUserId);
 
   if (otherParticipants.length === 0) {
     return "You";
@@ -43,7 +36,7 @@ export function getParticipantDisplay(
 export function getParticipantDisplayById(
   participantId: string,
   currentUserId?: string,
-  participantInfo?: ParticipantInfo[]
+  participantInfo?: ParticipantInfo[],
 ): string {
   if (participantId === currentUserId) return "You";
 

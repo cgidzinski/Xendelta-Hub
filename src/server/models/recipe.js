@@ -15,7 +15,7 @@ var paintSchema = new mongoose.Schema(
       default: "",
     },
   },
-  { _id: false }
+  { _id: false },
 );
 
 // STEP SCHEMA (embedded in Recipe)
@@ -28,7 +28,7 @@ var stepSchema = new mongoose.Schema(
     text: { type: String },
     paints: [paintSchema],
   },
-  { _id: false }
+  { _id: false },
 );
 
 // RECIPE SCHEMA

@@ -83,7 +83,7 @@ export default function Reset() {
     } else {
       setTokenValid(false);
     }
-    
+
     setIsLoading(false);
   };
 
@@ -155,7 +155,7 @@ export default function Reset() {
         setErrors({ general: "Failed to send reset email. Please try again later." });
       }
     }
-    
+
     setIsLoading(false);
   };
 
@@ -179,67 +179,67 @@ export default function Reset() {
               alignItems: "center",
             }}
           >
-          <Paper
-            elevation={0}
-            sx={{
-              padding: 4,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              width: "100%",
-              borderRadius: 2,
-              backgroundColor: "background.paper",
-              border: "1px solid",
-              borderColor: "divider",
-              marginBottom: 3,
-              position: "relative",
-              "&::before": {
-                content: '""',
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                height: "2px",
-                background: `linear-gradient(90deg, transparent, ${accent.cyan}, transparent)`,
-              },
-            }}
-          >
-            <Box
+            <Paper
+              elevation={0}
               sx={{
-                width: 64,
-                height: 64,
-                borderRadius: 2,
-                backgroundColor: "transparent",
-                border: "2px solid",
-                borderColor: "primary.main",
+                padding: 4,
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
-                justifyContent: "center",
-                color: "primary.main",
-                mb: 2,
+                width: "100%",
+                borderRadius: 2,
+                backgroundColor: "background.paper",
+                border: "1px solid",
+                borderColor: "divider",
+                marginBottom: 3,
+                position: "relative",
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: "2px",
+                  background: `linear-gradient(90deg, transparent, ${accent.cyan}, transparent)`,
+                },
               }}
             >
-              <CircularProgress sx={{ color: "primary.main" }} />
-            </Box>
-            <Typography
-              component="h1"
-              variant="h4"
-              fontWeight="bold"
-              sx={{
-                background: `linear-gradient(90deg, ${accent.cyan} 0%, ${accent.cyanMid} 50%, ${accent.blue} 100%)`,
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-              }}
-            >
-              Verifying Reset Link
-            </Typography>
-            <Typography variant="body1" sx={{ color: "text.secondary", mt: 1, textAlign: "center" }}>
-              Please wait while we verify your reset link...
-            </Typography>
-          </Paper>
-        </Box>
-      </Container>
+              <Box
+                sx={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 2,
+                  backgroundColor: "transparent",
+                  border: "2px solid",
+                  borderColor: "primary.main",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "primary.main",
+                  mb: 2,
+                }}
+              >
+                <CircularProgress sx={{ color: "primary.main" }} />
+              </Box>
+              <Typography
+                component="h1"
+                variant="h4"
+                fontWeight="bold"
+                sx={{
+                  background: `linear-gradient(90deg, ${accent.cyan} 0%, ${accent.cyanMid} 50%, ${accent.blue} 100%)`,
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                Verifying Reset Link
+              </Typography>
+              <Typography variant="body1" sx={{ color: "text.secondary", mt: 1, textAlign: "center" }}>
+                Please wait while we verify your reset link...
+              </Typography>
+            </Paper>
+          </Box>
+        </Container>
       </Box>
     );
   }
@@ -260,99 +260,99 @@ export default function Reset() {
               alignItems: "center",
             }}
           >
-          <Paper
-            elevation={0}
-            sx={{
-              padding: 4,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              width: "100%",
-              borderRadius: 2,
-              backgroundColor: "background.paper",
-              border: "1px solid",
-              borderColor: "error.main",
-              marginBottom: 3,
-              position: "relative",
-              "&::before": {
-                content: '""',
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                height: "2px",
-                background: "linear-gradient(90deg, transparent, #f44336, transparent)",
-              },
-            }}
-          >
-            <Box
+            <Paper
+              elevation={0}
               sx={{
-                width: 64,
-                height: 64,
-                borderRadius: 2,
-                backgroundColor: "transparent",
-                border: "2px solid",
-                borderColor: "error.main",
+                padding: 4,
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
-                justifyContent: "center",
-                color: "error.main",
-                mb: 2,
-                boxShadow: "0 0 15px rgba(244, 67, 54, 0.2)",
+                width: "100%",
+                borderRadius: 2,
+                backgroundColor: "background.paper",
+                border: "1px solid",
+                borderColor: "error.main",
+                marginBottom: 3,
+                position: "relative",
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: "2px",
+                  background: "linear-gradient(90deg, transparent, #f44336, transparent)",
+                },
               }}
             >
-              <ResetIcon sx={{ fontSize: 32 }} />
-            </Box>
-            <Typography component="h1" variant="h4" fontWeight="bold" color="error.main">
-              Invalid Reset Link
-            </Typography>
-            <Typography variant="body1" sx={{ color: "text.secondary", mt: 1, textAlign: "center" }}>
-              This reset link is invalid or has expired. Please request a new one.
-            </Typography>
-          </Paper>
-
-          <Card sx={{ width: "100%", maxWidth: 400 }}>
-            <CardContent sx={{ padding: 4 }}>
-              <Alert severity="error" sx={{ mb: 3 }}>
-                The reset link you clicked is invalid or has expired. Please request a new password reset.
-              </Alert>
-
-              <Box sx={{ textAlign: "center" }}>
-                <Button
-                  fullWidth
-                  variant="contained"
-                  onClick={() => navigate("/reset-password")}
-                  sx={{
-                    py: 1.5,
-                    fontSize: "1.1rem",
-                    fontWeight: 600,
-                    backgroundColor: "primary.main",
-                    "&:hover": {
-                      backgroundColor: "primary.dark",
-                    },
-                    mb: 2,
-                  }}
-                >
-                  Request New Reset Link
-                </Button>
-
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  onClick={handleBackToLogin}
-                  sx={{
-                    py: 1.5,
-                    fontSize: "1.1rem",
-                    fontWeight: "bold",
-                  }}
-                >
-                  Back to Login
-                </Button>
+              <Box
+                sx={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 2,
+                  backgroundColor: "transparent",
+                  border: "2px solid",
+                  borderColor: "error.main",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "error.main",
+                  mb: 2,
+                  boxShadow: "0 0 15px rgba(244, 67, 54, 0.2)",
+                }}
+              >
+                <ResetIcon sx={{ fontSize: 32 }} />
               </Box>
-            </CardContent>
-          </Card>
-        </Box>
-      </Container>
+              <Typography component="h1" variant="h4" fontWeight="bold" color="error.main">
+                Invalid Reset Link
+              </Typography>
+              <Typography variant="body1" sx={{ color: "text.secondary", mt: 1, textAlign: "center" }}>
+                This reset link is invalid or has expired. Please request a new one.
+              </Typography>
+            </Paper>
+
+            <Card sx={{ width: "100%", maxWidth: 400 }}>
+              <CardContent sx={{ padding: 4 }}>
+                <Alert severity="error" sx={{ mb: 3 }}>
+                  The reset link you clicked is invalid or has expired. Please request a new password reset.
+                </Alert>
+
+                <Box sx={{ textAlign: "center" }}>
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    onClick={() => navigate("/reset-password")}
+                    sx={{
+                      py: 1.5,
+                      fontSize: "1.1rem",
+                      fontWeight: 600,
+                      backgroundColor: "primary.main",
+                      "&:hover": {
+                        backgroundColor: "primary.dark",
+                      },
+                      mb: 2,
+                    }}
+                  >
+                    Request New Reset Link
+                  </Button>
+
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    onClick={handleBackToLogin}
+                    sx={{
+                      py: 1.5,
+                      fontSize: "1.1rem",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Back to Login
+                  </Button>
+                </Box>
+              </CardContent>
+            </Card>
+          </Box>
+        </Container>
       </Box>
     );
   }
@@ -372,95 +372,95 @@ export default function Reset() {
               alignItems: "center",
             }}
           >
-          <Paper
-            elevation={0}
-            sx={{
-              padding: 4,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              width: "100%",
-              borderRadius: 2,
-              backgroundColor: "background.paper",
-              border: "1px solid",
-              borderColor: "success.main",
-              marginBottom: 3,
-              position: "relative",
-              "&::before": {
-                content: '""',
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                height: "2px",
-                background: "linear-gradient(90deg, transparent, #4caf50, transparent)",
-              },
-            }}
-          >
-            <Box
+            <Paper
+              elevation={0}
               sx={{
-                width: 64,
-                height: 64,
-                borderRadius: 2,
-                backgroundColor: "transparent",
-                border: "2px solid",
-                borderColor: "success.main",
+                padding: 4,
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
-                justifyContent: "center",
-                color: "success.main",
-                mb: 2,
-                boxShadow: "0 0 15px rgba(76, 175, 80, 0.2)",
+                width: "100%",
+                borderRadius: 2,
+                backgroundColor: "background.paper",
+                border: "1px solid",
+                borderColor: "success.main",
+                marginBottom: 3,
+                position: "relative",
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: "2px",
+                  background: "linear-gradient(90deg, transparent, #4caf50, transparent)",
+                },
               }}
             >
-              <ResetIcon sx={{ fontSize: 32 }} />
-            </Box>
-            <Typography component="h1" variant="h4" fontWeight="bold" color="success.main">
-              {token ? "Password Reset Successfully" : "Check Your Email"}
-            </Typography>
-            <Typography variant="body1" sx={{ color: "text.secondary", mt: 1, textAlign: "center" }}>
-              {token
-                ? "Your password has been successfully reset. You can now log in with your new password."
-                : "We've sent password reset instructions to your email address"}
-            </Typography>
-          </Paper>
-
-          <Card sx={{ width: "100%", maxWidth: 400 }}>
-            <CardContent sx={{ padding: 4 }}>
-              <Alert severity="success" sx={{ mb: 3 }}>
-                {token
-                  ? "Password reset successfully! You can now log in with your new password."
-                  : "Password reset email sent successfully! Please check your inbox and follow the instructions to reset your password."}
-              </Alert>
-
-              <Box sx={{ textAlign: "center" }}>
-                {!token && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Didn't receive the email? Check your spam folder or try again.
-                  </Typography>
-                )}
-
-                <Button
-                  fullWidth
-                  variant="contained"
-                  onClick={handleBackToLogin}
-                  sx={{
-                    py: 1.5,
-                    fontSize: "1.1rem",
-                    fontWeight: 600,
-                    backgroundColor: "primary.main",
-                    "&:hover": {
-                      backgroundColor: "primary.dark",
-                    },
-                  }}
-                >
-                  Back to Login
-                </Button>
+              <Box
+                sx={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 2,
+                  backgroundColor: "transparent",
+                  border: "2px solid",
+                  borderColor: "success.main",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "success.main",
+                  mb: 2,
+                  boxShadow: "0 0 15px rgba(76, 175, 80, 0.2)",
+                }}
+              >
+                <ResetIcon sx={{ fontSize: 32 }} />
               </Box>
-            </CardContent>
-          </Card>
-        </Box>
-      </Container>
+              <Typography component="h1" variant="h4" fontWeight="bold" color="success.main">
+                {token ? "Password Reset Successfully" : "Check Your Email"}
+              </Typography>
+              <Typography variant="body1" sx={{ color: "text.secondary", mt: 1, textAlign: "center" }}>
+                {token
+                  ? "Your password has been successfully reset. You can now log in with your new password."
+                  : "We've sent password reset instructions to your email address"}
+              </Typography>
+            </Paper>
+
+            <Card sx={{ width: "100%", maxWidth: 400 }}>
+              <CardContent sx={{ padding: 4 }}>
+                <Alert severity="success" sx={{ mb: 3 }}>
+                  {token
+                    ? "Password reset successfully! You can now log in with your new password."
+                    : "Password reset email sent successfully! Please check your inbox and follow the instructions to reset your password."}
+                </Alert>
+
+                <Box sx={{ textAlign: "center" }}>
+                  {!token && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Didn't receive the email? Check your spam folder or try again.
+                    </Typography>
+                  )}
+
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    onClick={handleBackToLogin}
+                    sx={{
+                      py: 1.5,
+                      fontSize: "1.1rem",
+                      fontWeight: 600,
+                      backgroundColor: "primary.main",
+                      "&:hover": {
+                        backgroundColor: "primary.dark",
+                      },
+                    }}
+                  >
+                    Back to Login
+                  </Button>
+                </Box>
+              </CardContent>
+            </Card>
+          </Box>
+        </Container>
       </Box>
     );
   }

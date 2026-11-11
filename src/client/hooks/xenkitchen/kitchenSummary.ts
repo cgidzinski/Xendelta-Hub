@@ -1,9 +1,4 @@
-import {
-  COOK_METHOD_LABELS,
-  formatMinuteRange,
-  formatMinutes,
-  totalMinutes,
-} from "@shared/xenkitchen/kitchen";
+import { COOK_METHOD_LABELS, formatMinuteRange, formatMinutes, totalMinutes } from "@shared/xenkitchen/kitchen";
 import type { KitchenItem, KitchenMethod } from "./useKitchen";
 
 export function methodHeadline(m: KitchenMethod): string {
@@ -26,6 +21,7 @@ export function itemSummary(item: KitchenItem): string {
   if (item.servings) parts.push(`Serves ${item.servings}`);
   const t = formatMinutes(totalMinutes(item, "recipe"));
   if (t) parts.push(t);
-  if (!parts.length && item.ingredients.length) parts.push(`${item.ingredients.length} ingredient${item.ingredients.length === 1 ? "" : "s"}`);
+  if (!parts.length && item.ingredients.length)
+    parts.push(`${item.ingredients.length} ingredient${item.ingredients.length === 1 ? "" : "s"}`);
   return parts.join(" · ");
 }

@@ -5,83 +5,83 @@ const base = "/internal/xenbudget/books/68abc123";
 const sectionPaths = SETTINGS_SECTIONS.map((s) => s.path);
 
 describe("top-level tab matching", () => {
-    it("selects the tab for a plain tab URL", () => {
-        expect(activeIndex(`${base}/overview`, TAB_PATHS)).toBe(0);
-        expect(activeIndex(`${base}/items`, TAB_PATHS)).toBe(1);
-        expect(activeIndex(`${base}/report`, TAB_PATHS)).toBe(2);
-        expect(activeIndex(`${base}/settings`, TAB_PATHS)).toBe(3);
-    });
+  it("selects the tab for a plain tab URL", () => {
+    expect(activeIndex(`${base}/overview`, TAB_PATHS)).toBe(0);
+    expect(activeIndex(`${base}/items`, TAB_PATHS)).toBe(1);
+    expect(activeIndex(`${base}/report`, TAB_PATHS)).toBe(2);
+    expect(activeIndex(`${base}/settings`, TAB_PATHS)).toBe(3);
+  });
 
-    it("leaves every tab unselected on the piggy banks page, which is not a tab", () => {
-        // Reached from a button on the Overview, so the bar has nothing to highlight -
-        // and MUI wants `false` for that, not the -1 a bare findIndex would give.
-        expect(activeIndex(`${base}/piggy-banks`, TAB_PATHS)).toBe(false);
-    });
+  it("leaves every tab unselected on the piggy banks page, which is not a tab", () => {
+    // Reached from a button on the Overview, so the bar has nothing to highlight -
+    // and MUI wants `false` for that, not the -1 a bare findIndex would give.
+    expect(activeIndex(`${base}/piggy-banks`, TAB_PATHS)).toBe(false);
+  });
 
-    it("keeps Settings selected while inside any of its sections", () => {
-        // The regression this file exists for: a suffix match returns nothing here, and
-        // the tab bar renders with no tab highlighted.
-        for (const section of sectionPaths) {
-            expect(activeIndex(`${base}/settings/${section}`, TAB_PATHS)).toBe(3);
-        }
-    });
+  it("keeps Settings selected while inside any of its sections", () => {
+    // The regression this file exists for: a suffix match returns nothing here, and
+    // the tab bar renders with no tab highlighted.
+    for (const section of sectionPaths) {
+      expect(activeIndex(`${base}/settings/${section}`, TAB_PATHS)).toBe(3);
+    }
+  });
 
-    it("returns false rather than -1 for a path on no tab", () => {
-        // MUI's Tabs wants `false` for "nothing selected"; -1 logs a warning and misrenders.
-        expect(activeIndex("/internal/xenbudget/books", TAB_PATHS)).toBe(false);
-        expect(activeIndex("/internal/home", TAB_PATHS)).toBe(false);
-    });
+  it("returns false rather than -1 for a path on no tab", () => {
+    // MUI's Tabs wants `false` for "nothing selected"; -1 logs a warning and misrenders.
+    expect(activeIndex("/internal/xenbudget/books", TAB_PATHS)).toBe(false);
+    expect(activeIndex("/internal/home", TAB_PATHS)).toBe(false);
+  });
 
-    it("is not fooled by a book id or query string that contains a tab name", () => {
-        expect(activeIndex(`${base}/items?q=report`, TAB_PATHS)).toBe(1);
-        expect(activeIndex("/internal/xenbudget/books/settingsbook/items", TAB_PATHS)).toBe(1);
-    });
+  it("is not fooled by a book id or query string that contains a tab name", () => {
+    expect(activeIndex(`${base}/items?q=report`, TAB_PATHS)).toBe(1);
+    expect(activeIndex("/internal/xenbudget/books/settingsbook/items", TAB_PATHS)).toBe(1);
+  });
 });
 
 describe("settings section matching", () => {
-    it("selects the section it is on", () => {
-        sectionPaths.forEach((section, i) => {
-            expect(activeIndex(`${base}/settings/${section}`, sectionPaths)).toBe(i);
-        });
+  it("selects the section it is on", () => {
+    sectionPaths.forEach((section, i) => {
+      expect(activeIndex(`${base}/settings/${section}`, sectionPaths)).toBe(i);
     });
+  });
 
-    it("finds no section on bare /settings, so the caller can fall back to the first", () => {
-        expect(activeIndex(`${base}/settings`, sectionPaths)).toBe(false);
-    });
+  it("finds no section on bare /settings, so the caller can fall back to the first", () => {
+    expect(activeIndex(`${base}/settings`, sectionPaths)).toBe(false);
+  });
 });
 
 describe("the two lists must not collide", () => {
-    it("shares no name between a tab and a section", () => {
-        // A section called "items" would light up the Items tab instead of Settings —
-        // segment matching cannot tell the two apart.
-        const overlap = sectionPaths.filter((s) => (TAB_PATHS as readonly string[]).includes(s));
-        expect(overlap).toEqual([]);
-    });
+  it("shares no name between a tab and a section", () => {
+    // A section called "items" would light up the Items tab instead of Settings —
+    // segment matching cannot tell the two apart.
+    const overlap = sectionPaths.filter((s) => (TAB_PATHS as readonly string[]).includes(s));
+    expect(overlap).toEqual([]);
+  });
 
-    it("has no duplicates within either list", () => {
-        expect(new Set(TAB_PATHS).size).toBe(TAB_PATHS.length);
-        expect(new Set(sectionPaths).size).toBe(sectionPaths.length);
-    });
+  it("has no duplicates within either list", () => {
+    expect(new Set(TAB_PATHS).size).toBe(TAB_PATHS.length);
+    expect(new Set(sectionPaths).size).toBe(sectionPaths.length);
+  });
 });
 
 describe("breadcrumb labels", () => {
-    it("names every tab", () => {
-        // The breadcrumb looks a segment up in TAB_LABELS. A tab added to TAB_PATHS but
-        // not here renders an empty crumb rather than erroring - exactly the silent
-        // failure the rest of this file exists to catch.
-        for (const path of TAB_PATHS) {
-            expect(TAB_LABELS[path]).toBeTruthy();
-        }
-    });
+  it("names every tab", () => {
+    // The breadcrumb looks a segment up in TAB_LABELS. A tab added to TAB_PATHS but
+    // not here renders an empty crumb rather than erroring - exactly the silent
+    // failure the rest of this file exists to catch.
+    for (const path of TAB_PATHS) {
+      expect(TAB_LABELS[path]).toBeTruthy();
+    }
+  });
 
-    it("names piggy banks, which is a place you can be but not a tab", () => {
-        expect(TAB_LABELS["piggy-banks"]).toBeTruthy();
-    });
+  it("names piggy banks, which is a place you can be but not a tab", () => {
+    expect(TAB_LABELS["piggy-banks"]).toBeTruthy();
+  });
 
-    it("does not collide with a settings section name", () => {
-        // A label key matching a section would make the breadcrumb treat that section as
-        // a top-level tab and drop the Settings crumb.
-        const sections: readonly string[] = SETTINGS_SECTIONS.map((s) => s.path);
-        expect(Object.keys(TAB_LABELS).filter((k) => sections.includes(k))).toEqual([]);
-    });
+  it("does not collide with a settings section name", () => {
+    // A label key matching a section would make the breadcrumb treat that section as
+    // a top-level tab and drop the Settings crumb.
+    const sections: readonly string[] = SETTINGS_SECTIONS.map((s) => s.path);
+    expect(Object.keys(TAB_LABELS).filter((k) => sections.includes(k))).toEqual([]);
+  });
 });

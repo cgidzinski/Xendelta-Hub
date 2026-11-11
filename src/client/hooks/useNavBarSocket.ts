@@ -35,9 +35,7 @@ export function useNavBarSocket(options: UseNavBarSocketOptions = {}) {
 
       if (showSystemMessageNotifications) {
         const isSystemMessage =
-          data?.message.senderUsername === "System" ||
-          data?.message.isSystemMessage ||
-          data?.message.from === "system";
+          data?.message.senderUsername === "System" || data?.message.isSystemMessage || data?.message.from === "system";
 
         if (isSystemMessage) {
           const messagePreview = data?.message.message?.substring(0, 50) || "New system message";
@@ -77,4 +75,3 @@ export function useNavBarSocket(options: UseNavBarSocketOptions = {}) {
     };
   }, [socket, queryClient, refetchProfile, enqueueSnackbar, onNewNotification, showSystemMessageNotifications]);
 }
-

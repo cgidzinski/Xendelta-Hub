@@ -83,12 +83,7 @@ export default function RecipeCard({ recipe, onClick }: RecipeCardProps) {
             {recipe.description || "No description"}
           </Typography>
 
-          <Stack
-            direction="row"
-            alignItems="center"
-            spacing={1}
-            sx={{ mt: "auto", pt: 0.5, minWidth: 0 }}
-          >
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: "auto", pt: 0.5, minWidth: 0 }}>
             {author && (
               <>
                 <Avatar src={author.avatar} alt={author.username} sx={{ width: 20, height: 20, fontSize: 11 }}>

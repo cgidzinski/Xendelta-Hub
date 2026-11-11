@@ -5,7 +5,6 @@ import { ApiResponse } from "../../types/api";
 import { useSnackbar } from "notistack";
 import { userProfileKeys } from "./useUserProfile";
 
-
 interface BuyPointsItemResponse {
   status: boolean;
   message: string;
@@ -72,7 +71,11 @@ export const usePointsShopItems = () => {
     },
   });
 
-  const { mutateAsync: buyPointsItemMutation, isPending: isBuyingPointsItem, error: buyPointsItemError } = useMutation({
+  const {
+    mutateAsync: buyPointsItemMutation,
+    isPending: isBuyingPointsItem,
+    error: buyPointsItemError,
+  } = useMutation({
     mutationFn: buyPointsItem,
     onSuccess: (data) => {
       if (data.status) {
@@ -89,5 +92,14 @@ export const usePointsShopItems = () => {
     },
   });
 
-  return { pointsShopItems: pointsShopItems || [], isLoading, isError, error: error as Error | null, refetch, buyPointsItemMutation, isBuyingPointsItem, buyPointsItemError: buyPointsItemError as Error | null };
+  return {
+    pointsShopItems: pointsShopItems || [],
+    isLoading,
+    isError,
+    error: error as Error | null,
+    refetch,
+    buyPointsItemMutation,
+    isBuyingPointsItem,
+    buyPointsItemError: buyPointsItemError as Error | null,
+  };
 };

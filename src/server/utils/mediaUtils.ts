@@ -58,7 +58,7 @@ function detectFileTypeGeneric(file: Express.Multer.File): { contentType: string
 
   // Use the file's mimetype if available, otherwise detect from extension
   let contentType = file.mimetype || "application/octet-stream";
-  
+
   // Override with more specific types based on extension if mimetype is generic
   if (contentType === "application/octet-stream" || contentType === "application/x-msdownload") {
     if (extLower === "jpg" || extLower === "jpeg") {
@@ -93,7 +93,7 @@ async function processImage(
     fit: "inside" | "cover";
     quality: number;
     compressionLevel?: number;
-  }
+  },
 ): Promise<Buffer> {
   // For GIFs, preserve the original file (including animation)
   if (contentType === "image/gif") {
@@ -128,7 +128,7 @@ async function processImage(
  */
 export async function uploadBlogAsset(
   file: Express.Multer.File,
-  filename: string
+  filename: string,
 ): Promise<{ url: string; filename: string; mimeType: string; size: number }> {
   if (!file.buffer) {
     throw new Error("File buffer is missing");
@@ -143,7 +143,7 @@ export async function uploadBlogAsset(
 
   // Upload to public GCS bucket in blog-assets folder
   const gcsPath = `blog-assets/${finalFilename}`;
-  const publicUrl = await uploadToGCS(file.buffer, gcsPath, contentType) as string;
+  const publicUrl = (await uploadToGCS(file.buffer, gcsPath, contentType)) as string;
 
   return {
     url: publicUrl,
@@ -173,7 +173,7 @@ export function generateUniqueFilename(originalName: string): string {
  */
 export async function uploadRecipaintAsset(
   file: Express.Multer.File,
-  filename: string
+  filename: string,
 ): Promise<{ url: string; filename: string; mimeType: string; size: number }> {
   if (!file.buffer) {
     throw new Error("File buffer is missing");
@@ -240,7 +240,7 @@ export async function deleteRecipaintAssetByUrl(assetUrl: string): Promise<void>
  */
 export async function uploadAvatarFile(
   file: Express.Multer.File,
-  userId: string
+  userId: string,
 ): Promise<{ url: string; mimeType: string; size: number }> {
   if (!file.buffer) {
     throw new Error("File buffer is missing");
@@ -266,7 +266,7 @@ export async function uploadAvatarFile(
 
   // Upload to public GCS bucket with user_id as filename
   const gcsPath = `avatar/${userId}.${ext}`;
-  const publicUrl = await uploadToGCS(processedBuffer, gcsPath, contentType) as string;
+  const publicUrl = (await uploadToGCS(processedBuffer, gcsPath, contentType)) as string;
 
   return {
     url: publicUrl,
@@ -285,7 +285,7 @@ export async function uploadAvatarFile(
  */
 export async function uploadXenSplitGroupImageFile(
   file: Express.Multer.File,
-  groupId: string
+  groupId: string,
 ): Promise<{ url: string }> {
   if (!file.buffer) {
     throw new Error("File buffer is missing");
@@ -304,7 +304,7 @@ export async function uploadXenSplitGroupImageFile(
     .toBuffer();
 
   const gcsPath = `xensplit-group-images/${groupId}.jpg`;
-  const publicUrl = await uploadToGCS(processedBuffer, gcsPath, "image/jpeg") as string;
+  const publicUrl = (await uploadToGCS(processedBuffer, gcsPath, "image/jpeg")) as string;
 
   return { url: publicUrl };
 }

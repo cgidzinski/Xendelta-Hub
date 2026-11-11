@@ -128,7 +128,11 @@ export default function ImageGallery({ images, dense = false, onDelete }: ImageG
           },
         }}
       >
-        <IconButton onClick={handleClose} aria-label="Close" sx={{ position: "absolute", top: 16, right: 16, ...overlayButtonSx }}>
+        <IconButton
+          onClick={handleClose}
+          aria-label="Close"
+          sx={{ position: "absolute", top: 16, right: 16, ...overlayButtonSx }}
+        >
           <CloseIcon />
         </IconButton>
 

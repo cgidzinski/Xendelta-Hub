@@ -40,7 +40,7 @@ export async function getCollectionStats(db: Db): Promise<CollectionStat[]> {
     names.map(async (name) => ({
       name,
       count: await db.collection(name).estimatedDocumentCount(),
-    }))
+    })),
   );
 }
 
@@ -99,7 +99,10 @@ export async function streamExport(db: Db, destStream: NodeJS.WritableStream, me
 // collection first (deleteMany, not drop - drop would also remove indexes, which are only
 // recreated by Mongoose at app startup), then inserts the dump's documents via the native
 // driver (not Mongoose models) so document pre("save") hooks don't mutate restored data.
-export async function restoreFromGzipStream(db: Db, srcStream: NodeJS.ReadableStream): Promise<CollectionRestoreSummary[]> {
+export async function restoreFromGzipStream(
+  db: Db,
+  srcStream: NodeJS.ReadableStream,
+): Promise<CollectionRestoreSummary[]> {
   const existingNames = await listBackupCollections(db);
   const summaries = new Map<string, CollectionRestoreSummary>();
 

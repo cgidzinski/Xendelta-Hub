@@ -4,18 +4,8 @@
 // src/shared/xensplit/balances.ts so the client can run the identical math for
 // the Settlements page's rewind preview. Re-exported here so existing server
 // imports keep working.
-export {
-  calculateBalances,
-  calculateMinimumTransfers,
-} from "@shared/xensplit/balances";
-export type {
-  Transfer,
-  BalanceMap,
-  Expense,
-  Settlement,
-  Exchange,
-  XenSplitDocument,
-} from "@shared/xensplit/balances";
+export { calculateBalances, calculateMinimumTransfers } from "@shared/xensplit/balances";
+export type { Transfer, BalanceMap, Expense, Settlement, Exchange, XenSplitDocument } from "@shared/xensplit/balances";
 
 // Resolves the splits to store for an expense given its split_type. Mirrors the
 // pre-existing inline logic from the create/update expense route handlers:

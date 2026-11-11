@@ -20,17 +20,48 @@ export const KITCHEN_SORTS: KitchenSort[] = ["updated", "created", "title", "tim
 
 /** Keys of the icon set a category can use. The client maps each to an MUI icon. */
 export const CATEGORY_ICONS = [
-  "restaurant", "breakfast", "lunch", "dinner", "sides", "snack", "dessert", "baking",
-  "drink", "frozen", "soup", "salad", "pizza", "fish", "meat", "vegetarian", "kids", "party",
+  "restaurant",
+  "breakfast",
+  "lunch",
+  "dinner",
+  "sides",
+  "snack",
+  "dessert",
+  "baking",
+  "drink",
+  "frozen",
+  "soup",
+  "salad",
+  "pizza",
+  "fish",
+  "meat",
+  "vegetarian",
+  "kids",
+  "party",
 ] as const;
 export type CategoryIcon = (typeof CATEGORY_ICONS)[number];
 
 export const CATEGORY_COLORS = [
-  "#e57373", "#f06292", "#ba68c8", "#7986cb", "#4fc3f7", "#4db6ac",
-  "#81c784", "#dce775", "#ffb74d", "#ff8a65", "#a1887f", "#90a4ae",
+  "#e57373",
+  "#f06292",
+  "#ba68c8",
+  "#7986cb",
+  "#4fc3f7",
+  "#4db6ac",
+  "#81c784",
+  "#dce775",
+  "#ffb74d",
+  "#ff8a65",
+  "#a1887f",
+  "#90a4ae",
 ];
 
-export interface StarterCategory { name: string; icon: CategoryIcon; color: string; layout: KitchenLayout }
+export interface StarterCategory {
+  name: string;
+  icon: CategoryIcon;
+  color: string;
+  layout: KitchenLayout;
+}
 
 export const STARTER_CATEGORIES: StarterCategory[] = [
   { name: "Appetizers", icon: "party", color: "#ba68c8", layout: "recipe" },
@@ -60,9 +91,21 @@ export function normalizeTag(tag: string): string {
 // ---------- quantities ----------
 
 const UNICODE_FRACTIONS: Record<string, number> = {
-  "½": 1 / 2, "⅓": 1 / 3, "⅔": 2 / 3, "¼": 1 / 4, "¾": 3 / 4,
-  "⅕": 1 / 5, "⅖": 2 / 5, "⅗": 3 / 5, "⅘": 4 / 5, "⅙": 1 / 6, "⅚": 5 / 6,
-  "⅛": 1 / 8, "⅜": 3 / 8, "⅝": 5 / 8, "⅞": 7 / 8,
+  "½": 1 / 2,
+  "⅓": 1 / 3,
+  "⅔": 2 / 3,
+  "¼": 1 / 4,
+  "¾": 3 / 4,
+  "⅕": 1 / 5,
+  "⅖": 2 / 5,
+  "⅗": 3 / 5,
+  "⅘": 4 / 5,
+  "⅙": 1 / 6,
+  "⅚": 5 / 6,
+  "⅛": 1 / 8,
+  "⅜": 3 / 8,
+  "⅝": 5 / 8,
+  "⅞": 7 / 8,
 };
 
 /** Parse "1", "1.5", "1/2", "1 1/2", "1½", "½" into a number. Returns null if it isn't one. */
@@ -81,8 +124,15 @@ export function parseAmount(raw: string): number | null {
 }
 
 const NICE_FRACTIONS: Array<[number, string]> = [
-  [1 / 8, "⅛"], [1 / 4, "¼"], [1 / 3, "⅓"], [3 / 8, "⅜"], [1 / 2, "½"],
-  [5 / 8, "⅝"], [2 / 3, "⅔"], [3 / 4, "¾"], [7 / 8, "⅞"],
+  [1 / 8, "⅛"],
+  [1 / 4, "¼"],
+  [1 / 3, "⅓"],
+  [3 / 8, "⅜"],
+  [1 / 2, "½"],
+  [5 / 8, "⅝"],
+  [2 / 3, "⅔"],
+  [3 / 4, "¾"],
+  [7 / 8, "⅞"],
 ];
 
 /** Format a number as a cook would write it: 1.5 → "1½", 0.333 → "⅓", 2.4 → "2.4". */
@@ -118,29 +168,124 @@ export function scaleQuantity(quantity: string, factor: number): string {
 // ---------- pasted ingredient lines ----------
 
 const KNOWN_UNITS = [
-  "teaspoons", "teaspoon", "tsp", "tablespoons", "tablespoon", "tbsp", "tbs", "cups", "cup",
-  "ounces", "ounce", "oz", "pounds", "pound", "lbs", "lb", "grams", "gram", "g", "kilograms",
-  "kilogram", "kg", "milliliters", "millilitres", "milliliter", "millilitre", "ml", "liters",
-  "litres", "liter", "litre", "l", "pinch", "pinches", "dash", "dashes", "cloves", "clove",
-  "cans", "can", "packages", "package", "pkg", "slices", "slice", "sticks", "stick", "bunch",
-  "bunches", "handful", "handfuls", "sprigs", "sprig", "pieces", "piece", "quarts", "quart",
-  "qt", "pints", "pint", "pt", "fl oz", "stalks", "stalk", "heads", "head", "jars", "jar", "bags", "bag",
-  "boxes", "box", "bottles", "bottle", "sheets", "sheet", "leaves", "leaf", "drops", "drop", "scoops", "scoop",
-  "packets", "packet", "dozen", "knobs", "knob", "fillets", "fillet", "rashers", "rasher", "strips", "strip",
+  "teaspoons",
+  "teaspoon",
+  "tsp",
+  "tablespoons",
+  "tablespoon",
+  "tbsp",
+  "tbs",
+  "cups",
+  "cup",
+  "ounces",
+  "ounce",
+  "oz",
+  "pounds",
+  "pound",
+  "lbs",
+  "lb",
+  "grams",
+  "gram",
+  "g",
+  "kilograms",
+  "kilogram",
+  "kg",
+  "milliliters",
+  "millilitres",
+  "milliliter",
+  "millilitre",
+  "ml",
+  "liters",
+  "litres",
+  "liter",
+  "litre",
+  "l",
+  "pinch",
+  "pinches",
+  "dash",
+  "dashes",
+  "cloves",
+  "clove",
+  "cans",
+  "can",
+  "packages",
+  "package",
+  "pkg",
+  "slices",
+  "slice",
+  "sticks",
+  "stick",
+  "bunch",
+  "bunches",
+  "handful",
+  "handfuls",
+  "sprigs",
+  "sprig",
+  "pieces",
+  "piece",
+  "quarts",
+  "quart",
+  "qt",
+  "pints",
+  "pint",
+  "pt",
+  "fl oz",
+  "stalks",
+  "stalk",
+  "heads",
+  "head",
+  "jars",
+  "jar",
+  "bags",
+  "bag",
+  "boxes",
+  "box",
+  "bottles",
+  "bottle",
+  "sheets",
+  "sheet",
+  "leaves",
+  "leaf",
+  "drops",
+  "drop",
+  "scoops",
+  "scoop",
+  "packets",
+  "packet",
+  "dozen",
+  "knobs",
+  "knob",
+  "fillets",
+  "fillet",
+  "rashers",
+  "rasher",
+  "strips",
+  "strip",
 ];
 
-export interface ParsedIngredient { quantity: string; unit: string; name: string; note: string }
+export interface ParsedIngredient {
+  quantity: string;
+  unit: string;
+  name: string;
+  note: string;
+}
 
 /**
  * Split one pasted line like "1 1/2 cups flour, sifted" into quantity/unit/name/note.
  * Bullets and numbering are stripped. Anything it can't make sense of becomes the name.
  */
 export function parseIngredientLine(line: string): ParsedIngredient | null {
-  let s = (line || "").trim().replace(/^([-*•·▪◦]|\d+[.)])\s+/, "").trim();
+  let s = (line || "")
+    .trim()
+    .replace(/^([-*•·▪◦]|\d+[.)])\s+/, "")
+    .trim();
   if (!s) return null;
 
   let quantity = "";
-  const qty = /^((?:\d+\s+\d+\/\d+)|(?:\d+\/\d+)|(?:\d*[½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])|(?:\d+(?:[.,]\d+)?))(?:\s*[-–]\s*((?:\d+\/\d+)|(?:\d+(?:[.,]\d+)?)))?/.exec(s);
+  const qty =
+    /^((?:\d+\s+\d+\/\d+)|(?:\d+\/\d+)|(?:\d*[½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])|(?:\d+(?:[.,]\d+)?))(?:\s*[-–]\s*((?:\d+\/\d+)|(?:\d+(?:[.,]\d+)?)))?/.exec(
+      s,
+    );
   if (qty) {
     quantity = qty[2] ? `${qty[1]}-${qty[2]}` : qty[1];
     s = s.slice(qty[0].length).trim();
@@ -151,26 +296,42 @@ export function parseIngredientLine(line: string): ParsedIngredient | null {
   for (const u of [...KNOWN_UNITS].sort((a, b) => b.length - a.length)) {
     if (lower === u || lower.startsWith(`${u} `) || lower.startsWith(`${u}.`)) {
       unit = s.slice(0, u.length);
-      s = s.slice(u.length).replace(/^\.\s*/, "").trim();
+      s = s
+        .slice(u.length)
+        .replace(/^\.\s*/, "")
+        .trim();
       break;
     }
   }
   // "200g flour" — unit glued to the number.
-  if (!unit && quantity === "" ) {
+  if (!unit && quantity === "") {
     const glued = /^(\d+(?:[.,]\d+)?)(g|kg|ml|l|oz|lb)\b\s*/i.exec(s);
-    if (glued) { quantity = glued[1]; unit = glued[2]; s = s.slice(glued[0].length); }
+    if (glued) {
+      quantity = glued[1];
+      unit = glued[2];
+      s = s.slice(glued[0].length);
+    }
   }
   if (quantity && !unit) {
     const glued = /^(g|kg|ml|l|oz|lb)\b\s*/i.exec(s);
-    if (glued) { unit = glued[1]; s = s.slice(glued[0].length); }
+    if (glued) {
+      unit = glued[1];
+      s = s.slice(glued[0].length);
+    }
   }
   s = s.replace(/^of\s+/i, "");
 
   let note = "";
   const comma = s.indexOf(",");
-  if (comma > 0) { note = s.slice(comma + 1).trim(); s = s.slice(0, comma).trim(); }
+  if (comma > 0) {
+    note = s.slice(comma + 1).trim();
+    s = s.slice(0, comma).trim();
+  }
   const paren = /^(.*?)\s*\((.+)\)\s*$/.exec(s);
-  if (paren && paren[1]) { s = paren[1].trim(); note = note ? `${paren[2]}, ${note}` : paren[2]; }
+  if (paren && paren[1]) {
+    s = paren[1].trim();
+    note = note ? `${paren[2]}, ${note}` : paren[2];
+  }
 
   if (!s && !quantity) return null;
   return { quantity, unit, name: s, note };
@@ -239,10 +400,21 @@ export interface KitchenFilters {
 }
 
 export const EMPTY_FILTERS: KitchenFilters = {
-  q: "", layout: "", category: "", tags: [], ingredients: [], favorite: false, method: "", maxMinutes: null, sort: "updated",
+  q: "",
+  layout: "",
+  category: "",
+  tags: [],
+  ingredients: [],
+  favorite: false,
+  method: "",
+  maxMinutes: null,
+  sort: "updated",
 };
 
-interface ParamsLike { get(name: string): string | null; getAll(name: string): string[] }
+interface ParamsLike {
+  get(name: string): string | null;
+  getAll(name: string): string[];
+}
 
 export function filtersFromParams(p: ParamsLike, defaultSort: KitchenSort = "updated"): KitchenFilters {
   const method = p.get("method") || "";
@@ -279,5 +451,12 @@ export function filtersToParams(f: KitchenFilters, defaultSort: KitchenSort = "u
 
 /** Number of active filters (search and sort excluded), for the Filters button badge. */
 export function activeFilterCount(f: KitchenFilters): number {
-  return (f.layout ? 1 : 0) + f.tags.length + f.ingredients.length + (f.favorite ? 1 : 0) + (f.method ? 1 : 0) + (f.maxMinutes ? 1 : 0);
+  return (
+    (f.layout ? 1 : 0) +
+    f.tags.length +
+    f.ingredients.length +
+    (f.favorite ? 1 : 0) +
+    (f.method ? 1 : 0) +
+    (f.maxMinutes ? 1 : 0)
+  );
 }

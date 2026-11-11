@@ -35,7 +35,9 @@ async function connect() {
 async function runExport(outputPathArg?: string) {
   const db = await connect();
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
-  const outputPath = outputPathArg ? path.resolve(outputPathArg) : path.join(BACKUP_DIR, `xendelta-hub-backup-${timestamp()}.ndjson.gz`);
+  const outputPath = outputPathArg
+    ? path.resolve(outputPathArg)
+    : path.join(BACKUP_DIR, `xendelta-hub-backup-${timestamp()}.ndjson.gz`);
 
   const stats = await getCollectionStats(db);
   console.log(`Exporting ${stats.length} collections to ${outputPath}`);
@@ -51,7 +53,7 @@ async function confirmRestore(inputPath: string): Promise<boolean> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
     const answer = await rl.question(
-      `This will DELETE all data in every collection of the connected database and replace it with the contents of "${inputPath}".\nType "yes" to continue: `
+      `This will DELETE all data in every collection of the connected database and replace it with the contents of "${inputPath}".\nType "yes" to continue: `,
     );
     return answer.trim().toLowerCase() === "yes";
   } finally {
@@ -112,7 +114,7 @@ async function main() {
       console.log(
         "Usage:\n" +
           "  tsx scripts/db-backup.ts export [outputPath]\n" +
-          "  tsx scripts/db-backup.ts import <inputPath> [--yes] [--no-snapshot]"
+          "  tsx scripts/db-backup.ts import <inputPath> [--yes] [--no-snapshot]",
       );
       process.exit(1);
   }

@@ -1,7 +1,7 @@
-import React, { useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import { Box, CircularProgress, Typography, Container } from '@mui/material';
+import React, { useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
+import { Box, CircularProgress, Typography, Container } from "@mui/material";
 
 interface UnprotectedRouteProps {
   children: React.ReactNode;
@@ -16,10 +16,10 @@ const UnprotectedRoute: React.FC<UnprotectedRouteProps> = ({ children }) => {
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
       // For landing page, always redirect to internal
-      if (location.pathname === '/') {
-        navigate('/internal', { replace: true });
+      if (location.pathname === "/") {
+        navigate("/internal", { replace: true });
       } else {
-        const from = location.state?.from?.pathname || '/internal';
+        const from = location.state?.from?.pathname || "/internal";
         navigate(from, { replace: true });
       }
     }
@@ -32,11 +32,11 @@ const UnprotectedRoute: React.FC<UnprotectedRouteProps> = ({ children }) => {
         <Box
           sx={{
             marginTop: 8,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            minHeight: '100vh',
-            justifyContent: 'center',
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            minHeight: "100vh",
+            justifyContent: "center",
           }}
         >
           <CircularProgress size={40} />

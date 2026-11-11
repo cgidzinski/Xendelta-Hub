@@ -168,9 +168,7 @@ export default function RecipeDetail() {
         <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="xs" fullWidth>
           <DialogTitle>Delete recipe</DialogTitle>
           <DialogContent>
-            <Typography>
-              Delete "{recipe.title}"? Its steps and images go with it. This can't be undone.
-            </Typography>
+            <Typography>Delete "{recipe.title}"? Its steps and images go with it. This can't be undone.</Typography>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
@@ -203,12 +201,7 @@ export default function RecipeDetail() {
           // the span is what the Tooltip listens on.
           <Tooltip title={recipe.isPublic ? "Copy share link" : "Make the recipe public to share it"}>
             <span>
-              <IconButton
-                onClick={handleShare}
-                aria-label="Copy share link"
-                disabled={!recipe.isPublic}
-                size="small"
-              >
+              <IconButton onClick={handleShare} aria-label="Copy share link" disabled={!recipe.isPublic} size="small">
                 <ShareIcon fontSize="small" />
               </IconButton>
             </span>

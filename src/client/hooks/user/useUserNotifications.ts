@@ -48,12 +48,16 @@ const fetchUserNotifications = async (): Promise<Notification[]> => {
 };
 
 const markAllNotificationsAsRead = async (): Promise<Notification[]> => {
-  const response = await apiClient.put<ApiResponse<{ notifications: Notification[] }>>("/api/user/notifications/mark-read");
+  const response = await apiClient.put<ApiResponse<{ notifications: Notification[] }>>(
+    "/api/user/notifications/mark-read",
+  );
   return response.data.data!.notifications;
 };
 
 const markNotificationAsRead = async (notificationId: string): Promise<Notification> => {
-  const response = await apiClient.put<ApiResponse<{ notification: Notification }>>(`/api/user/notifications/${notificationId}/mark-read`);
+  const response = await apiClient.put<ApiResponse<{ notification: Notification }>>(
+    `/api/user/notifications/${notificationId}/mark-read`,
+  );
   return response.data.data!.notification;
 };
 
@@ -123,7 +127,7 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
         // All notifications marked as read
         queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
           if (!oldData) return oldData;
-          return oldData.map(notif => ({ ...notif, unread: false }));
+          return oldData.map((notif) => ({ ...notif, unread: false }));
         });
         queryClient.setQueryData(userProfileKeys.profile(), (oldProfileData: any) => {
           if (oldProfileData) {
@@ -138,12 +142,12 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
         // Single notification dismissed/deleted
         queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
           if (!oldData) return oldData;
-          return oldData.filter(notif => notif._id !== data.notificationId);
+          return oldData.filter((notif) => notif._id !== data.notificationId);
         });
 
         queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
           if (!oldData) return oldData;
-          const hasUnreadNotifications = oldData.some(notification => notification.unread);
+          const hasUnreadNotifications = oldData.some((notification) => notification.unread);
 
           queryClient.setQueryData(userProfileKeys.profile(), (oldProfileData: any) => {
             if (oldProfileData) {
@@ -161,15 +165,13 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
         // Single notification updated
         queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
           if (!oldData) return oldData;
-          return oldData.map(notif =>
-            notif._id === data.notificationId ? { ...notif, ...data.update } : notif
-          );
+          return oldData.map((notif) => (notif._id === data.notificationId ? { ...notif, ...data.update } : notif));
         });
 
         // Check if all notifications are now read
         queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
           if (!oldData) return oldData;
-          const hasUnreadNotifications = oldData.some(notification => notification.unread);
+          const hasUnreadNotifications = oldData.some((notification) => notification.unread);
 
           queryClient.setQueryData(userProfileKeys.profile(), (oldProfileData: any) => {
             if (oldProfileData) {
@@ -237,15 +239,15 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
       // Update the notifications cache with the updated notification
       queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
         if (!oldData) return oldData;
-        return oldData.map(notification =>
-          notification._id === updatedNotification._id ? updatedNotification : notification
+        return oldData.map((notification) =>
+          notification._id === updatedNotification._id ? updatedNotification : notification,
         );
       });
 
       // Check if all notifications are now read to update the user profile cache
       queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
         if (!oldData) return oldData;
-        const hasUnreadNotifications = oldData.some(notification => notification.unread);
+        const hasUnreadNotifications = oldData.some((notification) => notification.unread);
 
         queryClient.setQueryData(userProfileKeys.profile(), (oldProfileData: any) => {
           if (oldProfileData) {

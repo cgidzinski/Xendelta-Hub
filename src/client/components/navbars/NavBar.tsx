@@ -54,22 +54,22 @@ export default function Root() {
     })
     .filter(Boolean) as NavItem[];
 
-  const allAppNavItems: NavItem[] = APPS_REGISTRY
-    .filter((app) => !pinnedApps.includes(app.key))
-    .map((app) => buildAppNavItem(app, "app"));
+  const allAppNavItems: NavItem[] = APPS_REGISTRY.filter((app) => !pinnedApps.includes(app.key)).map((app) =>
+    buildAppNavItem(app, "app"),
+  );
 
   const pinnedSection: NavItem[] = pinnedNavItems.length
     ? [
-      {
-        key: "pinned-apps-header",
-        label: "Pinned Apps",
-        icon: null,
-        path: "",
-        isSelected: () => false,
-        type: "header" as const,
-      },
-      ...pinnedNavItems,
-    ]
+        {
+          key: "pinned-apps-header",
+          label: "Pinned Apps",
+          icon: null,
+          path: "",
+          isSelected: () => false,
+          type: "header" as const,
+        },
+        ...pinnedNavItems,
+      ]
     : [];
 
   const navItems: NavItem[] = [
@@ -96,28 +96,28 @@ export default function Root() {
     // },
     ...(pinnedNavItems.length > 0 || allAppNavItems.length > 0
       ? [
-        {
-          key: "apps-divider",
-          label: "",
-          icon: null,
-          path: "",
-          isSelected: () => false,
-          type: "divider" as const,
-        },
-      ]
+          {
+            key: "apps-divider",
+            label: "",
+            icon: null,
+            path: "",
+            isSelected: () => false,
+            type: "divider" as const,
+          },
+        ]
       : []),
     ...pinnedSection,
     ...(allAppNavItems.length > 0
       ? [
-        {
-          key: "apps-header",
-          label: "Apps",
-          icon: null,
-          path: "",
-          isSelected: () => false,
-          type: "header" as const,
-        },
-      ]
+          {
+            key: "apps-header",
+            label: "Apps",
+            icon: null,
+            path: "",
+            isSelected: () => false,
+            type: "header" as const,
+          },
+        ]
       : []),
   ];
 
@@ -143,9 +143,11 @@ export default function Root() {
             sx={{
               // On the light theme the bar is solid primary blue, where amber/dark tints vanish.
               color: (t) => (t.palette.mode === "dark" ? t.palette.warning.main : t.palette.common.white),
-              backgroundColor: (t) => alpha(t.palette.mode === "dark" ? t.palette.warning.main : t.palette.common.white, 0.15),
+              backgroundColor: (t) =>
+                alpha(t.palette.mode === "dark" ? t.palette.warning.main : t.palette.common.white, 0.15),
               "&:hover": {
-                backgroundColor: (t) => alpha(t.palette.mode === "dark" ? t.palette.warning.main : t.palette.common.white, 0.28),
+                backgroundColor: (t) =>
+                  alpha(t.palette.mode === "dark" ? t.palette.warning.main : t.palette.common.white, 0.28),
               },
             }}
           >

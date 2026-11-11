@@ -3,11 +3,14 @@ var Schema = mongoose.Schema;
 
 // A recipe book is the unit of sharing: items and categories belong to a book, and people
 // are members of it. Everything in a shared book is shared with everyone in it.
-var bookMemberSchema = new Schema({
-  user_id: { type: String, required: true },
-  role: { type: String, enum: ["owner", "editor", "viewer"], default: "editor" },
-  added_at: { type: Date, default: Date.now },
-}, { _id: false });
+var bookMemberSchema = new Schema(
+  {
+    user_id: { type: String, required: true },
+    role: { type: String, enum: ["owner", "editor", "viewer"], default: "editor" },
+    added_at: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
 
 var bookSchema = new Schema({
   name: { type: String, required: true, maxlength: 60 },

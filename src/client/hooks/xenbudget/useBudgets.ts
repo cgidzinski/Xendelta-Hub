@@ -7,8 +7,8 @@ import type { XenBudgetBook, BudgetInput, BudgetStatusResponse } from "./types";
 
 /** An explicit reporting window, as ISO strings. */
 export interface BudgetStatusRange {
-    from: string;
-    to: string;
+  from: string;
+  to: string;
 }
 
 /**
@@ -23,91 +23,89 @@ export interface BudgetStatusRange {
  * rather than at the call site: a per-period cap sitting next to a range's worth of spend
  * is the one mistake this hook exists to make impossible.
  */
-export function useXenBudgetStatus(
-    bookId: string, currency?: string, range?: BudgetStatusRange, history?: number,
-) {
-    const from = range?.from;
-    const to = range?.to;
-    const { data, isLoading, isError, error, refetch } = useQuery({
-        queryKey: ["xenbudget", "budget-status", bookId, currency, from, to, history],
-        queryFn: async () => {
-            const res = await apiClient.get(`/api/xenbudget/books/${bookId}/budget-status`, {
-                params: {
-                    ...(currency ? { currency } : {}),
-                    ...(from !== undefined && to !== undefined ? { from, to } : {}),
-                    ...(history ? { history } : {}),
-                },
-            });
-            return res.data.data as BudgetStatusResponse;
+export function useXenBudgetStatus(bookId: string, currency?: string, range?: BudgetStatusRange, history?: number) {
+  const from = range?.from;
+  const to = range?.to;
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ["xenbudget", "budget-status", bookId, currency, from, to, history],
+    queryFn: async () => {
+      const res = await apiClient.get(`/api/xenbudget/books/${bookId}/budget-status`, {
+        params: {
+          ...(currency ? { currency } : {}),
+          ...(from !== undefined && to !== undefined ? { from, to } : {}),
+          ...(history ? { history } : {}),
         },
-        enabled: !!bookId,
-        staleTime: 0,
-        placeholderData: (prev) => prev,
+      });
+      return res.data.data as BudgetStatusResponse;
+    },
+    enabled: !!bookId,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  });
+
+  const budgets = useMemo(() => {
+    const raw = data?.budgets ?? [];
+    // Stash each budget's own per-period amount and its monthly/quarterly/yearly
+    // equivalents BEFORE any range scaling, so the period identity stays correct on
+    // restated cards too.
+    const decorated = raw.map((b) => {
+      const normalized = normalizedAmounts(b.period, b.amount);
+      return {
+        ...b,
+        period_amount: b.amount,
+        weekly_amount: normalized.weekly,
+        monthly_amount: normalized.monthly,
+        quarterly_amount: normalized.quarterly,
+        yearly_amount: normalized.yearly,
+      };
     });
+    if (!range) return decorated;
+    const from = new Date(range.from);
+    const to = new Date(range.to);
+    return decorated.map((b) => scaleBudgetToRange(b, from, to));
+  }, [data, range?.from, range?.to]);
 
-    const budgets = useMemo(() => {
-        const raw = data?.budgets ?? [];
-        // Stash each budget's own per-period amount and its monthly/quarterly/yearly
-        // equivalents BEFORE any range scaling, so the period identity stays correct on
-        // restated cards too.
-        const decorated = raw.map((b) => {
-            const normalized = normalizedAmounts(b.period, b.amount);
-            return {
-                ...b,
-                period_amount: b.amount,
-                weekly_amount: normalized.weekly,
-                monthly_amount: normalized.monthly,
-                quarterly_amount: normalized.quarterly,
-                yearly_amount: normalized.yearly,
-            };
-        });
-        if (!range) return decorated;
-        const from = new Date(range.from);
-        const to = new Date(range.to);
-        return decorated.map((b) => scaleBudgetToRange(b, from, to));
-    }, [data, range?.from, range?.to]);
-
-    return { status: data, budgets, isLoading, isError, error, refetch };
+  return { status: data, budgets, isLoading, isError, error, refetch };
 }
 
 export function useXenBudgetBudgets(bookId: string) {
-    const queryClient = useQueryClient();
+  const queryClient = useQueryClient();
 
-    const invalidate = () => {
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
-        queryClient.invalidateQueries({ queryKey: ["xenbudget", "budget-status", bookId] });
-    };
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
+    queryClient.invalidateQueries({ queryKey: ["xenbudget", "budget-status", bookId] });
+  };
 
-    const createMutation = useMutation({
-        mutationFn: async (input: BudgetInput) => {
-            const res = await apiClient.post(`/api/xenbudget/books/${bookId}/budgets`, input);
-            return res.data.data as XenBudgetBook;
-        },
-        onSuccess: invalidate,
-    });
+  const createMutation = useMutation({
+    mutationFn: async (input: BudgetInput) => {
+      const res = await apiClient.post(`/api/xenbudget/books/${bookId}/budgets`, input);
+      return res.data.data as XenBudgetBook;
+    },
+    onSuccess: invalidate,
+  });
 
-    const updateMutation = useMutation({
-        mutationFn: async ({ budgetId, input }: { budgetId: string; input: BudgetInput }) => {
-            const res = await apiClient.put(`/api/xenbudget/books/${bookId}/budgets/${budgetId}`, input);
-            return res.data.data as XenBudgetBook;
-        },
-        onSuccess: invalidate,
-    });
+  const updateMutation = useMutation({
+    mutationFn: async ({ budgetId, input }: { budgetId: string; input: BudgetInput }) => {
+      const res = await apiClient.put(`/api/xenbudget/books/${bookId}/budgets/${budgetId}`, input);
+      return res.data.data as XenBudgetBook;
+    },
+    onSuccess: invalidate,
+  });
 
-    const deleteMutation = useMutation({
-        mutationFn: async (budgetId: string) => {
-            const res = await apiClient.delete(`/api/xenbudget/books/${bookId}/budgets/${budgetId}`);
-            return res.data.data as XenBudgetBook;
-        },
-        onSuccess: invalidate,
-    });
+  const deleteMutation = useMutation({
+    mutationFn: async (budgetId: string) => {
+      const res = await apiClient.delete(`/api/xenbudget/books/${bookId}/budgets/${budgetId}`);
+      return res.data.data as XenBudgetBook;
+    },
+    onSuccess: invalidate,
+  });
 
-    return {
-        createBudgetAsync: createMutation.mutateAsync,
-        isCreatingBudget: createMutation.isPending,
-        updateBudgetAsync: updateMutation.mutateAsync,
-        isUpdatingBudget: updateMutation.isPending,
-        deleteBudgetAsync: deleteMutation.mutateAsync,
-        isDeletingBudget: deleteMutation.isPending,
-    };
+  return {
+    createBudgetAsync: createMutation.mutateAsync,
+    isCreatingBudget: createMutation.isPending,
+    updateBudgetAsync: updateMutation.mutateAsync,
+    isUpdatingBudget: updateMutation.isPending,
+    deleteBudgetAsync: deleteMutation.mutateAsync,
+    isDeletingBudget: deleteMutation.isPending,
+  };
 }

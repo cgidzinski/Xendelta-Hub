@@ -53,9 +53,11 @@ export default function AdminNavBar() {
         <IconButton
           sx={{
             color: (t) => (t.palette.mode === "dark" ? t.palette.primary.main : t.palette.common.white),
-            backgroundColor: (t) => alpha(t.palette.mode === "dark" ? t.palette.primary.main : t.palette.common.white, 0.15),
+            backgroundColor: (t) =>
+              alpha(t.palette.mode === "dark" ? t.palette.primary.main : t.palette.common.white, 0.15),
             "&:hover": {
-              backgroundColor: (t) => alpha(t.palette.mode === "dark" ? t.palette.primary.main : t.palette.common.white, 0.28),
+              backgroundColor: (t) =>
+                alpha(t.palette.mode === "dark" ? t.palette.primary.main : t.palette.common.white, 0.28),
             },
           }}
         >

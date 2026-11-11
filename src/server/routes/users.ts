@@ -29,9 +29,7 @@ function etransferPayload(user: any) {
 module.exports = function (app: express.Application) {
   app.get("/api/user/profile", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = (req as AuthenticatedRequest).user!._id;
-    const user = await User.findOne({ _id: userId })
-      .populate("xenbox.files")
-      .exec();
+    const user = await User.findOne({ _id: userId }).populate("xenbox.files").exec();
 
     // Check if user has any unread messages in any conversation
     // user.conversations now contains metadata with unread flag
@@ -44,7 +42,9 @@ module.exports = function (app: express.Application) {
     const hasUnreadNotifications = unreadNotificationsCount > 0;
 
     // Check for new notifications since last checked
-    const lastChecked = user.notificationsLastCheckedAt ? user.notificationsLastCheckedAt.toISOString() : new Date(0).toISOString();
+    const lastChecked = user.notificationsLastCheckedAt
+      ? user.notificationsLastCheckedAt.toISOString()
+      : new Date(0).toISOString();
     const hasNewNotifications = await Notification.exists({ userId, time: { $gt: lastChecked } });
 
     // Calculate xenbox quota stats from populated files
@@ -172,7 +172,7 @@ module.exports = function (app: express.Application) {
           },
         },
       });
-    }
+    },
   );
 
   // Avatar upload endpoint
@@ -256,7 +256,7 @@ module.exports = function (app: express.Application) {
           avatar: url,
         },
       });
-    }
+    },
   );
 
   // Get user's linked authentication providers
@@ -420,7 +420,7 @@ module.exports = function (app: express.Application) {
           message: "Failed to unlink authentication provider",
         });
       }
-    }
+    },
   );
 
   // Add password to Google-only account
@@ -541,61 +541,69 @@ module.exports = function (app: express.Application) {
   });
 
   // Use inventory item
-  app.post("/api/user/inventory/:inventoryItemId/use", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const userId = (req as AuthenticatedRequest).user!._id;
-    const { inventoryItemId } = req.params;
-    const user = await User.findById(userId).exec();
+  app.post(
+    "/api/user/inventory/:inventoryItemId/use",
+    authenticateToken,
+    async function (req: express.Request, res: express.Response) {
+      const userId = (req as AuthenticatedRequest).user!._id;
+      const { inventoryItemId } = req.params;
+      const user = await User.findById(userId).exec();
 
-    const item = user.inventory.id(inventoryItemId);
-    if (!item) {
-      return res.status(404).json({
-        status: false,
-        message: "Item not found in inventory",
+      const item = user.inventory.id(inventoryItemId);
+      if (!item) {
+        return res.status(404).json({
+          status: false,
+          message: "Item not found in inventory",
+        });
+      }
+
+      if (item.used) {
+        return res.status(400).json({
+          status: false,
+          message: "Item already used",
+        });
+      }
+
+      const itemDef = ITEMS[item.itemKey as keyof typeof ITEMS];
+      if (itemDef) {
+        await itemDef.apply(user);
+      }
+
+      item.used = true;
+      item.usedAt = new Date();
+      await user.save();
+
+      return res.json({
+        status: true,
+        message: "Item used successfully",
       });
-    }
-
-    if (item.used) {
-      return res.status(400).json({
-        status: false,
-        message: "Item already used",
-      });
-    }
-
-    const itemDef = ITEMS[item.itemKey as keyof typeof ITEMS];
-    if (itemDef) {
-      await itemDef.apply(user);
-    }
-
-    item.used = true;
-    item.usedAt = new Date();
-    await user.save();
-
-    return res.json({
-      status: true,
-      message: "Item used successfully",
-    });
-  });
+    },
+  );
 
   // Trash inventory item
-  app.delete("/api/user/inventory/:inventoryItemId", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const userId = (req as AuthenticatedRequest).user!._id;
-    const { inventoryItemId } = req.params;
-    const user = await User.findById(userId).exec();
+  app.delete(
+    "/api/user/inventory/:inventoryItemId",
+    authenticateToken,
+    async function (req: express.Request, res: express.Response) {
+      const userId = (req as AuthenticatedRequest).user!._id;
+      const { inventoryItemId } = req.params;
+      const user = await User.findById(userId).exec();
 
-    const item = user.inventory.id(inventoryItemId);
-    if (!item) {
-      return res.status(404).json({
-        status: false,
-        message: "Item not found in inventory",
+      const item = user.inventory.id(inventoryItemId);
+      if (!item) {
+        return res.status(404).json({
+          status: false,
+          message: "Item not found in inventory",
+        });
+      }
+
+      user.inventory.pull({ _id: inventoryItemId });
+      await user.save();
+
+      return res.json({
+        status: true,
+        message: "Item trashed",
       });
-    }
-
-    user.inventory.pull({ _id: inventoryItemId });
-    await user.save();
-
-    return res.json({
-      status: true,
-      message: "Item trashed",
-    });
-  });
+    },
+  );
 };

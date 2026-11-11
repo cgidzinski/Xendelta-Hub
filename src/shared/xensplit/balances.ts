@@ -204,7 +204,8 @@ export function calculateMinimumTransfers(balances: BalanceMap): Transfer[] {
     creditors.sort((a, b) => b.amount - a.amount);
     debtors.sort((a, b) => b.amount - a.amount);
 
-    let i = 0, j = 0;
+    let i = 0,
+      j = 0;
     while (i < creditors.length && j < debtors.length) {
       const pay = Math.min(creditors[i].amount, debtors[j].amount);
       if (pay > 0.01) {

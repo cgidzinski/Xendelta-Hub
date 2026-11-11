@@ -27,14 +27,10 @@ function checkDismissed(): boolean {
 export function usePWAInstall(): UsePWAInstallReturn {
   const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null);
 
-  const isInstalled =
-    typeof window !== "undefined" &&
-    window.matchMedia("(display-mode: standalone)").matches;
+  const isInstalled = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
 
   const isIOS =
-    typeof navigator !== "undefined" &&
-    /iPad|iPhone|iPod/.test(navigator.userAgent) &&
-    !("MSStream" in window);
+    typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent) && !("MSStream" in window);
 
   const [isInstallable, setIsInstallable] = useState(false);
   const [isDismissed, setIsDismissed] = useState(() => checkDismissed());

@@ -40,7 +40,10 @@ describe("resolveShares", () => {
     const shares = resolveShares(
       "exact",
       100,
-      [{ user_id: A, amount: 70 }, { user_id: B, amount: 25 }],
+      [
+        { user_id: A, amount: 70 },
+        { user_id: B, amount: 25 },
+      ],
       [],
     );
     expect(shares.map((s) => s.amount)).toEqual([70, 30]);
@@ -51,7 +54,11 @@ describe("resolveShares", () => {
     const shares = resolveShares(
       "percent",
       90,
-      [{ user_id: A, percentage: 55.5 }, { user_id: B, percentage: 33.3 }, { user_id: C, percentage: 11.2 }],
+      [
+        { user_id: A, percentage: 55.5 },
+        { user_id: B, percentage: 33.3 },
+        { user_id: C, percentage: 11.2 },
+      ],
       [],
     );
     expect(sum(shares)).toBe(90);
@@ -61,7 +68,11 @@ describe("resolveShares", () => {
     const shares = resolveShares(
       "percent",
       10,
-      [{ user_id: A, percentage: 33.33 }, { user_id: B, percentage: 33.33 }, { user_id: C, percentage: 33.34 }],
+      [
+        { user_id: A, percentage: 33.33 },
+        { user_id: B, percentage: 33.33 },
+        { user_id: C, percentage: 33.34 },
+      ],
       [],
     );
     expect(sum(shares)).toBe(10);
@@ -90,16 +101,15 @@ describe("resolveCategories", () => {
   it("puts the rounding residual on the last category, exactly as it does for people", () => {
     // The per-category rollup sums these independently, so they must reconcile with the
     // item to the penny or the report stops adding up.
-    const cats = resolveCategories("equal", 10, [
-      { name: "A" }, { name: "B" }, { name: "C" },
-    ]);
+    const cats = resolveCategories("equal", 10, [{ name: "A" }, { name: "B" }, { name: "C" }]);
     expect(cats.map((c) => c.amount)).toEqual([3.33, 3.33, 3.34]);
     expect(sum(cats)).toBe(10);
   });
 
   it("honours exact amounts and absorbs the shortfall", () => {
     const cats = resolveCategories("exact", 100, [
-      { name: "A", amount: 70 }, { name: "B", amount: 25 },
+      { name: "A", amount: 70 },
+      { name: "B", amount: 25 },
     ]);
     expect(cats.map((c) => c.amount)).toEqual([70, 30]);
     expect(sum(cats)).toBe(100);
@@ -178,38 +188,22 @@ describe("budgetPeriodRange", () => {
 
 describe("seedPeriods", () => {
   it("emits every month in the range, including ones with no spending", () => {
-    const keys = seedPeriods(
-      new Date("2026-06-01T04:00:00.000Z"),
-      new Date("2026-09-15T12:00:00.000Z"),
-      "month",
-    );
+    const keys = seedPeriods(new Date("2026-06-01T04:00:00.000Z"), new Date("2026-09-15T12:00:00.000Z"), "month");
     expect(keys).toEqual(["2026-06", "2026-07", "2026-08", "2026-09"]);
   });
 
   it("emits days without duplicating any", () => {
-    const keys = seedPeriods(
-      new Date("2026-08-01T04:00:00.000Z"),
-      new Date("2026-08-04T12:00:00.000Z"),
-      "day",
-    );
+    const keys = seedPeriods(new Date("2026-08-01T04:00:00.000Z"), new Date("2026-08-04T12:00:00.000Z"), "day");
     expect(keys).toEqual(["2026-08-01", "2026-08-02", "2026-08-03", "2026-08-04"]);
   });
 
   it("collapses a week's days into one week key", () => {
-    const keys = seedPeriods(
-      new Date("2026-08-17T04:00:00.000Z"),
-      new Date("2026-08-30T12:00:00.000Z"),
-      "week",
-    );
+    const keys = seedPeriods(new Date("2026-08-17T04:00:00.000Z"), new Date("2026-08-30T12:00:00.000Z"), "week");
     expect(keys).toEqual(["2026-W34", "2026-W35"]);
   });
 
   it("buckets by the UTC day, so a date-only boundary starts a new period", () => {
-    const keys = seedPeriods(
-      new Date("2026-08-30T04:00:00.000Z"),
-      new Date("2026-09-01T02:00:00.000Z"),
-      "month",
-    );
+    const keys = seedPeriods(new Date("2026-08-30T04:00:00.000Z"), new Date("2026-09-01T02:00:00.000Z"), "month");
     expect(keys).toEqual(["2026-08", "2026-09"]);
   });
 
@@ -241,7 +235,7 @@ describe("isoWeekKey", () => {
   });
 
   it("starts the week on Monday", () => {
-    expect(isoWeekKey(2026, 8, 17)).toBe(isoWeekKey(2026, 8, 23));   // Mon..Sun
+    expect(isoWeekKey(2026, 8, 17)).toBe(isoWeekKey(2026, 8, 23)); // Mon..Sun
     expect(isoWeekKey(2026, 8, 24)).not.toBe(isoWeekKey(2026, 8, 23));
   });
 });
@@ -273,13 +267,10 @@ describe("roundMoney", () => {
 });
 
 describe("previousPeriodRanges", () => {
-  const iso = (r: { from: Date; to: Date }) =>
-    [r.from.toISOString().slice(0, 10), r.to.toISOString().slice(0, 10)];
+  const iso = (r: { from: Date; to: Date }) => [r.from.toISOString().slice(0, 10), r.to.toISOString().slice(0, 10)];
 
   it("walks back whole calendar months, oldest first", () => {
-    const ranges = previousPeriodRanges(
-      { period: "monthly" }, new Date("2026-08-14T00:00:00.000Z"), 3,
-    );
+    const ranges = previousPeriodRanges({ period: "monthly" }, new Date("2026-08-14T00:00:00.000Z"), 3);
     expect(ranges.map(iso)).toEqual([
       ["2026-06-01", "2026-07-01"],
       ["2026-07-01", "2026-08-01"],
@@ -288,16 +279,12 @@ describe("previousPeriodRanges", () => {
   });
 
   it("ends with the window `asOf` falls in, so the last column is the live one", () => {
-    const ranges = previousPeriodRanges(
-      { period: "monthly" }, new Date("2026-08-14T00:00:00.000Z"), 6,
-    );
+    const ranges = previousPeriodRanges({ period: "monthly" }, new Date("2026-08-14T00:00:00.000Z"), 6);
     expect(iso(ranges[ranges.length - 1])).toEqual(["2026-08-01", "2026-09-01"]);
   });
 
   it("crosses a year boundary without drifting", () => {
-    const ranges = previousPeriodRanges(
-      { period: "monthly" }, new Date("2026-01-20T00:00:00.000Z"), 3,
-    );
+    const ranges = previousPeriodRanges({ period: "monthly" }, new Date("2026-01-20T00:00:00.000Z"), 3);
     expect(ranges.map(iso)).toEqual([
       ["2025-11-01", "2025-12-01"],
       ["2025-12-01", "2026-01-01"],
@@ -306,9 +293,7 @@ describe("previousPeriodRanges", () => {
   });
 
   it("steps a quarterly budget three months at a time", () => {
-    const ranges = previousPeriodRanges(
-      { period: "quarterly" }, new Date("2026-08-14T00:00:00.000Z"), 3,
-    );
+    const ranges = previousPeriodRanges({ period: "quarterly" }, new Date("2026-08-14T00:00:00.000Z"), 3);
     expect(ranges.map(iso)).toEqual([
       ["2026-01-01", "2026-04-01"],
       ["2026-04-01", "2026-07-01"],
@@ -317,9 +302,7 @@ describe("previousPeriodRanges", () => {
   });
 
   it("steps a yearly budget a year at a time", () => {
-    const ranges = previousPeriodRanges(
-      { period: "yearly" }, new Date("2026-08-14T00:00:00.000Z"), 2,
-    );
+    const ranges = previousPeriodRanges({ period: "yearly" }, new Date("2026-08-14T00:00:00.000Z"), 2);
     expect(ranges.map(iso)).toEqual([
       ["2025-01-01", "2026-01-01"],
       ["2026-01-01", "2027-01-01"],
@@ -328,9 +311,7 @@ describe("previousPeriodRanges", () => {
 
   it("steps a weekly budget Monday to Monday", () => {
     // 2026-08-14 is a Friday; its ISO week starts Monday the 10th.
-    const ranges = previousPeriodRanges(
-      { period: "weekly" }, new Date("2026-08-14T00:00:00.000Z"), 3,
-    );
+    const ranges = previousPeriodRanges({ period: "weekly" }, new Date("2026-08-14T00:00:00.000Z"), 3);
     expect(ranges.map(iso)).toEqual([
       ["2026-07-27", "2026-08-03"],
       ["2026-08-03", "2026-08-10"],
@@ -346,10 +327,13 @@ describe("previousPeriodRanges", () => {
   });
 
   it("gives a one-off budget no history, since it has no repeating window", () => {
-    expect(previousPeriodRanges(
-      { period: "custom", start_date: "2026-01-01", end_date: "2026-03-01" },
-      new Date("2026-08-14T00:00:00.000Z"), 6,
-    )).toEqual([]);
+    expect(
+      previousPeriodRanges(
+        { period: "custom", start_date: "2026-01-01", end_date: "2026-03-01" },
+        new Date("2026-08-14T00:00:00.000Z"),
+        6,
+      ),
+    ).toEqual([]);
   });
 
   it("returns nothing for a count of zero, which is what makes history opt-in", () => {
@@ -358,9 +342,7 @@ describe("previousPeriodRanges", () => {
   });
 
   it("hands back exactly `count` windows, with no gaps between them", () => {
-    const ranges = previousPeriodRanges(
-      { period: "monthly" }, new Date("2026-08-14T00:00:00.000Z"), 12,
-    );
+    const ranges = previousPeriodRanges({ period: "monthly" }, new Date("2026-08-14T00:00:00.000Z"), 12);
     expect(ranges).toHaveLength(12);
     ranges.slice(1).forEach((r, i) => {
       expect(r.from.getTime()).toBe(ranges[i].to.getTime());

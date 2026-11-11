@@ -13,11 +13,7 @@ export default function HighlightsSection({ highlights }: HighlightsSectionProps
     <Box sx={{ py: { xs: 8, md: 12 }, position: "relative" }}>
       <Container maxWidth="lg">
         <Box sx={{ textAlign: "center", mb: 6 }}>
-          <Typography
-            variant="h3"
-            component="h2"
-            sx={{ fontWeight: 700, mb: 2, ...gradientTextSx(theme, "short") }}
-          >
+          <Typography variant="h3" component="h2" sx={{ fontWeight: 700, mb: 2, ...gradientTextSx(theme, "short") }}>
             Why Choose Xendelta Hub?
           </Typography>
           <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 600, mx: "auto" }}>
@@ -58,4 +54,3 @@ export default function HighlightsSection({ highlights }: HighlightsSectionProps
     </Box>
   );
 }
-

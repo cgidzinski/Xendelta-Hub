@@ -1,8 +1,6 @@
 import { useMemo } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
-import {
-    Avatar, Box, Button, Card, Link, MenuItem, Stack, TextField, Typography, useMediaQuery,
-} from "@mui/material";
+import { Avatar, Box, Button, Card, Link, MenuItem, Stack, TextField, Typography, useMediaQuery } from "@mui/material";
 import InsightsIcon from "@mui/icons-material/Insights";
 import SavingsIcon from "@mui/icons-material/Savings";
 import type { BookDetailContext } from "./BookDetail";
@@ -36,482 +34,520 @@ import EmptyState from "../../../components/ui/EmptyState";
 const MAX_SCORE_PIPS = 12;
 
 export default function BookOverview() {
-    const {
-        book, currency, onCurrencyChange, period, onPeriodChange,
-    } = useOutletContext<BookDetailContext>();
-    const navigate = useNavigate();
+  const { book, currency, onCurrencyChange, period, onPeriodChange } = useOutletContext<BookDetailContext>();
+  const navigate = useNavigate();
 
-    // The window is the book's, not this tab's — see BookDetail.
-    const { from, to, groupBy, label, bounded } = useMemo(() => resolvePeriod(period), [period]);
+  // The window is the book's, not this tab's — see BookDetail.
+  const { from, to, groupBy, label, bounded } = useMemo(() => resolvePeriod(period), [period]);
 
-    const { summary, isLoading, isError, error, refetch } = useXenBudgetSummary(book._id, {
-        currency, from: from.toISOString(), to: to.toISOString(), group_by: groupBy,
-    });
-    // Measured over the selected period, not each budget's own - picking "Year" showing
-    // this month's live bars would be answering a question nobody asked.
-    const budgetRange = useMemo(
-        () => ({ from: from.toISOString(), to: to.toISOString() }),
-        [from, to],
-    );
-    // Six of each budget's own periods for the margin strip in the expanded panel. Short
-    // rather than long here: the Overview polls this endpoint on every socket nudge, and
-    // history widens the server's scan - a year of it belongs on Report, which is where
-    // you go to look properly.
-    const { status: budgetStatusResponse, budgets: budgetStatus } = useXenBudgetStatus(
-        book._id, currency, budgetRange, 6,
-    );
-    const visibleBudgets = useMemo(
-        () => sortBudgets(budgetStatus),
-        [budgetStatus],
-    );
-    // Nearest to done first, so the strip leads with the bank about to land.
-    const activeBanks = useMemo(
-        () => sortPiggyBanks((book.piggy_banks ?? []).filter((g) => g.status === "active")),
-        [book.piggy_banks],
-    );
-    // Deliberately NOT scoped to the selected period: a subscription is a standing
-    // commitment, so "what do I pay every month" is the same answer whether you're looking
-    // at August or at the year. Detection needs a long run of history to see a cadence at
-    // all, which a one-month window would never contain.
-    const { recurring } = useXenBudgetRecurring(book._id, { currency });
-    // One rule dialog for the page, shared with the recurring rows' rule control.
-    const ruleEditor = useRuleEditor(book);
-    // Balanced columns: each card goes into the shortest column, and the result is locked
-    // so expanding a card only grows its own column - cards never reshuffle.
-    const isSm = useMediaQuery("(min-width:600px)");
-    const isMd = useMediaQuery("(min-width:900px)");
-    const isXl = useMediaQuery("(min-width:1536px)");
-    const columnCount = isXl ? 4 : isMd ? 3 : isSm ? 2 : 1;
-    const { columns: budgetColumns, measureRef } = useBalancedColumns(visibleBudgets, columnCount);
-    // Counts every limit past its cap, the shared one and each person's, so the header
-    // agrees with the red bars actually on screen rather than with the unfiltered book.
-    // Income targets are counted separately and the other way up: passing one is the point.
-    const overBudgetCount = visibleBudgets.reduce((sum, b) => sum + overCount(b), 0);
-    const targetsMetCount = visibleBudgets.reduce((sum, b) => sum + metCount(b), 0);
-    const asOf = budgetStatusResponse?.as_of ?? new Date().toISOString();
-    // Once the selected window has closed the live counts stop being the interesting
-    // number - "1 over" says nothing about the five that didn't go over. The score does.
-    const scores = verdictCounts(visibleBudgets, asOf);
-    // The figures were measured in whatever currency /budget-status used, which is not
-    // necessarily the one the summary settled on - label them with the one they're in.
-    const budgetCurrency = budgetStatusResponse?.currency ?? currency;
+  const { summary, isLoading, isError, error, refetch } = useXenBudgetSummary(book._id, {
+    currency,
+    from: from.toISOString(),
+    to: to.toISOString(),
+    group_by: groupBy,
+  });
+  // Measured over the selected period, not each budget's own - picking "Year" showing
+  // this month's live bars would be answering a question nobody asked.
+  const budgetRange = useMemo(() => ({ from: from.toISOString(), to: to.toISOString() }), [from, to]);
+  // Six of each budget's own periods for the margin strip in the expanded panel. Short
+  // rather than long here: the Overview polls this endpoint on every socket nudge, and
+  // history widens the server's scan - a year of it belongs on Report, which is where
+  // you go to look properly.
+  const { status: budgetStatusResponse, budgets: budgetStatus } = useXenBudgetStatus(
+    book._id,
+    currency,
+    budgetRange,
+    6,
+  );
+  const visibleBudgets = useMemo(() => sortBudgets(budgetStatus), [budgetStatus]);
+  // Nearest to done first, so the strip leads with the bank about to land.
+  const activeBanks = useMemo(
+    () => sortPiggyBanks((book.piggy_banks ?? []).filter((g) => g.status === "active")),
+    [book.piggy_banks],
+  );
+  // Deliberately NOT scoped to the selected period: a subscription is a standing
+  // commitment, so "what do I pay every month" is the same answer whether you're looking
+  // at August or at the year. Detection needs a long run of history to see a cadence at
+  // all, which a one-month window would never contain.
+  const { recurring } = useXenBudgetRecurring(book._id, { currency });
+  // One rule dialog for the page, shared with the recurring rows' rule control.
+  const ruleEditor = useRuleEditor(book);
+  // Balanced columns: each card goes into the shortest column, and the result is locked
+  // so expanding a card only grows its own column - cards never reshuffle.
+  const isSm = useMediaQuery("(min-width:600px)");
+  const isMd = useMediaQuery("(min-width:900px)");
+  const isXl = useMediaQuery("(min-width:1536px)");
+  const columnCount = isXl ? 4 : isMd ? 3 : isSm ? 2 : 1;
+  const { columns: budgetColumns, measureRef } = useBalancedColumns(visibleBudgets, columnCount);
+  // Counts every limit past its cap, the shared one and each person's, so the header
+  // agrees with the red bars actually on screen rather than with the unfiltered book.
+  // Income targets are counted separately and the other way up: passing one is the point.
+  const overBudgetCount = visibleBudgets.reduce((sum, b) => sum + overCount(b), 0);
+  const targetsMetCount = visibleBudgets.reduce((sum, b) => sum + metCount(b), 0);
+  const asOf = budgetStatusResponse?.as_of ?? new Date().toISOString();
+  // Once the selected window has closed the live counts stop being the interesting
+  // number - "1 over" says nothing about the five that didn't go over. The score does.
+  const scores = verdictCounts(visibleBudgets, asOf);
+  // The figures were measured in whatever currency /budget-status used, which is not
+  // necessarily the one the summary settled on - label them with the one they're in.
+  const budgetCurrency = budgetStatusResponse?.currency ?? currency;
 
-    // Where the book lands by the end of the selected window. The commitments feeding it
-    // are only the charges still TO COME — one already posted is inside the spend figure,
-    // and adding it again would inflate the projection by a month of subscriptions.
-    const projection = useMemo(() => {
-        if (!summary) return null;
-        // "All time" runs from the epoch to today, so there is no end to project towards —
-        // the figure would read "100% through All time" and restate the actuals. A
-        // projection only means something inside a window that actually closes.
-        if (!bounded) return null;
-        return projectBook({
-            periodFrom: from.toISOString(),
-            periodTo: to.toISOString(),
-            asOf: new Date().toISOString(),
-            expense: summary.totals.expense,
-            income: summary.totals.income,
-            committed: commitmentTotal(recurring?.series ?? [], new Date(), to),
-        });
-    }, [summary, recurring, from, to, bounded]);
-
-    // Net of anything that came back in. A category used for both directions - a shared
-    // bill paid then repaid, a card cleared and refunded - was reading its gross outgoings,
-    // so a category that had been settled in full still showed thousands against it.
-    //
-    // The gross pair is kept on the row and shown underneath, because the netted figure on
-    // its own can't be checked against a statement. Uncategorised has no `income` half by
-    // design (see the summary endpoint): an uncategorised paycheque isn't a refund.
-    const categoryRows = useMemo(() => {
-        if (!summary) return [];
-        const rows = summary.by_category.map((c) => ({
-            label: c.category,
-            category: c.category,
-            out: c.total,
-            returned: c.income,
-            total: c.total - c.income,
-        }));
-        if (summary.uncategorised.count > 0) {
-            rows.push({
-                label: "Uncategorised",
-                category: "",
-                out: summary.uncategorised.total,
-                returned: 0,
-                total: summary.uncategorised.total,
-            });
-        }
-        // The server sorts by gross; netting reorders them.
-        return rows.sort((a, b) => b.total - a.total);
-    }, [summary]);
-
-    // Denominator for each row's share: total net category spend, so the percentages agree
-    // with the netted figures shown on the rows and still add up to ~100 across the card.
-    const categoryNetTotal = useMemo(
-        () => categoryRows.reduce((sum, r) => sum + r.total, 0),
-        [categoryRows],
-    );
-
-    // Every member appears in the per-person card, defaulting to zero rather than being
-    // dropped when they have no share — the breakdown stays complete.
-    const personRows = useMemo(() => {
-        const byId = new Map(summary?.by_person.map((p) => [p.user_id, p]) ?? []);
-        return book.members
-            .map((m) => ({
-                user_id: m.user_id,
-                username: m.username,
-                avatar: m.avatar,
-                total: byId.get(m.user_id)?.total ?? 0,
-                income: byId.get(m.user_id)?.income ?? 0,
-            }));
-    }, [summary, book.members]);
-
-    if (isLoading && !summary) return <LoadingSpinner message="Adding it up..." />;
-    if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
+  // Where the book lands by the end of the selected window. The commitments feeding it
+  // are only the charges still TO COME — one already posted is inside the spend figure,
+  // and adding it again would inflate the projection by a month of subscriptions.
+  const projection = useMemo(() => {
     if (!summary) return null;
+    // "All time" runs from the epoch to today, so there is no end to project towards —
+    // the figure would read "100% through All time" and restate the actuals. A
+    // projection only means something inside a window that actually closes.
+    if (!bounded) return null;
+    return projectBook({
+      periodFrom: from.toISOString(),
+      periodTo: to.toISOString(),
+      asOf: new Date().toISOString(),
+      expense: summary.totals.expense,
+      income: summary.totals.income,
+      committed: commitmentTotal(recurring?.series ?? [], new Date(), to),
+    });
+  }, [summary, recurring, from, to, bounded]);
 
-    const { totals } = summary;
-    const biggestPersonTotal = Math.max(...personRows.map((p) => p.total + p.income), 0);
-    const nothingYet = totals.count === 0;
+  // Net of anything that came back in. A category used for both directions - a shared
+  // bill paid then repaid, a card cleared and refunded - was reading its gross outgoings,
+  // so a category that had been settled in full still showed thousands against it.
+  //
+  // The gross pair is kept on the row and shown underneath, because the netted figure on
+  // its own can't be checked against a statement. Uncategorised has no `income` half by
+  // design (see the summary endpoint): an uncategorised paycheque isn't a refund.
+  const categoryRows = useMemo(() => {
+    if (!summary) return [];
+    const rows = summary.by_category.map((c) => ({
+      label: c.category,
+      category: c.category,
+      out: c.total,
+      returned: c.income,
+      total: c.total - c.income,
+    }));
+    if (summary.uncategorised.count > 0) {
+      rows.push({
+        label: "Uncategorised",
+        category: "",
+        out: summary.uncategorised.total,
+        returned: 0,
+        total: summary.uncategorised.total,
+      });
+    }
+    // The server sorts by gross; netting reorders them.
+    return rows.sort((a, b) => b.total - a.total);
+  }, [summary]);
 
-    return (
-        <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <Box sx={{ pl: 2, pr: { xs: 2, sm: 3.5 }, pt: 2, pb: 1.5, flexShrink: 0 }}>
-                <Stack spacing={1}>
-                    {summary.currencies.length > 1 && (
-                        <TextField
-                            select size="small" value={summary.currency}
-                            onChange={(e) => onCurrencyChange(e.target.value)}
-                            sx={{ width: 110, alignSelf: "flex-end" }}
-                            slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
-                        >
-                            {summary.currencies.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-                        </TextField>
-                    )}
-                    {/* Banks on the left, the period on the right. Banks is somewhere you
+  // Denominator for each row's share: total net category spend, so the percentages agree
+  // with the netted figures shown on the rows and still add up to ~100 across the card.
+  const categoryNetTotal = useMemo(() => categoryRows.reduce((sum, r) => sum + r.total, 0), [categoryRows]);
+
+  // Every member appears in the per-person card, defaulting to zero rather than being
+  // dropped when they have no share — the breakdown stays complete.
+  const personRows = useMemo(() => {
+    const byId = new Map(summary?.by_person.map((p) => [p.user_id, p]) ?? []);
+    return book.members.map((m) => ({
+      user_id: m.user_id,
+      username: m.username,
+      avatar: m.avatar,
+      total: byId.get(m.user_id)?.total ?? 0,
+      income: byId.get(m.user_id)?.income ?? 0,
+    }));
+  }, [summary, book.members]);
+
+  if (isLoading && !summary) return <LoadingSpinner message="Adding it up..." />;
+  if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
+  if (!summary) return null;
+
+  const { totals } = summary;
+  const biggestPersonTotal = Math.max(...personRows.map((p) => p.total + p.income), 0);
+  const nothingYet = totals.count === 0;
+
+  return (
+    <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <Box sx={{ pl: 2, pr: { xs: 2, sm: 3.5 }, pt: 2, pb: 1.5, flexShrink: 0 }}>
+        <Stack spacing={1}>
+          {summary.currencies.length > 1 && (
+            <TextField
+              select
+              size="small"
+              value={summary.currency}
+              onChange={(e) => onCurrencyChange(e.target.value)}
+              sx={{ width: 110, alignSelf: "flex-end" }}
+              slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
+            >
+              {summary.currencies.map((c) => (
+                <MenuItem key={c} value={c}>
+                  {c}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+          {/* Banks on the left, the period on the right. Banks is somewhere you
                     GO — it is not scoped to the window this page is showing — so it sits
                     apart from the control that changes that window rather than beside it. */}
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                        <Button
-                            size="small" variant="contained" startIcon={<SavingsIcon />}
-                            onClick={() => navigate(`/internal/xenbudget/books/${book._id}/piggy-banks`)}
-                        >
-                            Piggy banks
-                        </Button>
-                        <Box sx={{ flexGrow: 1 }} />
-                        <TimePeriodFilter
-                            mode={period} onModeChange={onPeriodChange}
-                            quickPicks={summaryQuickPicks()}
-                        />
-                    </Stack>
-                </Stack>
-            </Box>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Button
+              size="small"
+              variant="contained"
+              startIcon={<SavingsIcon />}
+              onClick={() => navigate(`/internal/xenbudget/books/${book._id}/piggy-banks`)}
+            >
+              Piggy banks
+            </Button>
+            <Box sx={{ flexGrow: 1 }} />
+            <TimePeriodFilter mode={period} onModeChange={onPeriodChange} quickPicks={summaryQuickPicks()} />
+          </Stack>
+        </Stack>
+      </Box>
 
-            <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pl: 2, pr: { xs: 2, sm: 3.5 }, pb: 2 }}>
-                <TotalsSummary
-                    income={totals.income} expense={totals.expense} net={totals.net}
-                    currency={summary.currency} sx={{ mb: 2 }}
-                />
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pl: 2, pr: { xs: 2, sm: 3.5 }, pb: 2 }}>
+        <TotalsSummary
+          income={totals.income}
+          expense={totals.expense}
+          net={totals.net}
+          currency={summary.currency}
+          sx={{ mb: 2 }}
+        />
 
-                {!nothingYet && projection && (
-                    <ProjectionCard
-                        projection={projection}
-                        currency={summary.currency}
-                        periodLabel={label}
-                    />
-                )}
+        {!nothingYet && projection && (
+          <ProjectionCard projection={projection} currency={summary.currency} periodLabel={label} />
+        )}
 
-                <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
-                    <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>
-                        Breakdown
+        <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
+          <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>
+            Breakdown
+          </Typography>
+          <Stack spacing={1.5}>
+            {[...personRows]
+              .sort((a, b) => b.total + b.income - (a.total + a.income))
+              .map((person) => (
+                <Box key={person.user_id}>
+                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                    <Avatar src={person.avatar || undefined} sx={{ width: 22, height: 22, fontSize: 11 }}>
+                      {person.username[0]?.toUpperCase()}
+                    </Avatar>
+                    <Typography variant="body2" sx={{ flexGrow: 1 }} noWrap>
+                      {person.username}
                     </Typography>
-                    <Stack spacing={1.5}>
-                        {[...personRows]
-                            .sort((a, b) => (b.total + b.income) - (a.total + a.income))
-                            .map((person) => (
-                                <Box key={person.user_id}>
-                                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
-                                        <Avatar src={person.avatar || undefined} sx={{ width: 22, height: 22, fontSize: 11 }}>
-                                            {person.username[0]?.toUpperCase()}
-                                        </Avatar>
-                                        <Typography variant="body2" sx={{ flexGrow: 1 }} noWrap>
-                                            {person.username}
-                                        </Typography>
-                                        <Typography variant="caption" sx={{ color: INCOME_COLOR, fontWeight: 600 }}>
-                                            +{formatCurrency(person.income, summary.currency)}
-                                        </Typography>
-                                        <Typography variant="caption" sx={{ color: "error.main", fontWeight: 600 }}>
-                                            −{formatCurrency(person.total, summary.currency)}
-                                        </Typography>
-                                    </Stack>
-                                    <Box sx={{
-                                        display: "flex", height: 5, borderRadius: 1, overflow: "hidden",
-                                        bgcolor: (theme) => theme.palette.action.hover,
-                                    }}>
-                                        <Box sx={{
-                                            flexShrink: 0,
-                                            width: `${biggestPersonTotal > 0 ? (person.income / biggestPersonTotal) * 100 : 0}%`,
-                                            bgcolor: INCOME_COLOR,
-                                        }} />
-                                        <Box sx={{
-                                            flexShrink: 0,
-                                            width: `${biggestPersonTotal > 0 ? (person.total / biggestPersonTotal) * 100 : 0}%`,
-                                            bgcolor: "error.main",
-                                        }} />
-                                    </Box>
-                                </Box>
-                            ))}
-                    </Stack>
-                </Card>
+                    <Typography variant="caption" sx={{ color: INCOME_COLOR, fontWeight: 600 }}>
+                      +{formatCurrency(person.income, summary.currency)}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: "error.main", fontWeight: 600 }}>
+                      −{formatCurrency(person.total, summary.currency)}
+                    </Typography>
+                  </Stack>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      height: 5,
+                      borderRadius: 1,
+                      overflow: "hidden",
+                      bgcolor: (theme) => theme.palette.action.hover,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        flexShrink: 0,
+                        width: `${biggestPersonTotal > 0 ? (person.income / biggestPersonTotal) * 100 : 0}%`,
+                        bgcolor: INCOME_COLOR,
+                      }}
+                    />
+                    <Box
+                      sx={{
+                        flexShrink: 0,
+                        width: `${biggestPersonTotal > 0 ? (person.total / biggestPersonTotal) * 100 : 0}%`,
+                        bgcolor: "error.main",
+                      }}
+                    />
+                  </Box>
+                </Box>
+              ))}
+          </Stack>
+        </Card>
 
-                {visibleBudgets.length > 0 && (
-                    <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
-                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                            <Typography variant="caption" sx={sectionLabelSx}>Budgets</Typography>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                                {scores.judged > 0 ? (
-                                    <>
-                                        <Typography
-                                            variant="caption"
-                                            sx={{ color: scores.missed === 0 ? INCOME_COLOR : "text.secondary" }}
-                                        >
-                                            {scores.passed} of {scores.judged} passed
-                                        </Typography>
-                                        {/* The same score as shape, so the header isn't
+        {visibleBudgets.length > 0 && (
+          <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+              <Typography variant="caption" sx={sectionLabelSx}>
+                Budgets
+              </Typography>
+              <Stack direction="row" spacing={1} alignItems="center">
+                {scores.judged > 0 ? (
+                  <>
+                    <Typography variant="caption" sx={{ color: scores.missed === 0 ? INCOME_COLOR : "text.secondary" }}>
+                      {scores.passed} of {scores.judged} passed
+                    </Typography>
+                    {/* The same score as shape, so the header isn't
                                         carried by colour alone. Dropped past a dozen: a
                                         long row of pips stops being countable at a glance
                                         and starts crowding the section title. */}
-                                        {scores.judged <= MAX_SCORE_PIPS && (
-                                            <Stack direction="row" spacing={0.375}>
-                                                {Array.from({ length: scores.judged }, (_, i) => (
-                                                    <Box
-                                                        key={i}
-                                                        sx={{
-                                                            width: 8, height: 8, borderRadius: 0.5,
-                                                            bgcolor: i < scores.passed ? INCOME_COLOR : "error.main",
-                                                        }}
-                                                    />
-                                                ))}
-                                            </Stack>
-                                        )}
-                                    </>
-                                ) : (
-                                    <>
-                                        {targetsMetCount > 0 && (
-                                            <Typography variant="caption" sx={{ color: INCOME_COLOR }}>
-                                                {targetsMetCount} met
-                                            </Typography>
-                                        )}
-                                        {overBudgetCount > 0 && (
-                                            <Typography variant="caption" color="error.main">
-                                                {overBudgetCount} over
-                                            </Typography>
-                                        )}
-                                    </>
-                                )}
-                            </Stack>
-                        </Stack>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-                            Scaled to {label} — a monthly cap counts once per month covered.
-                        </Typography>
-                        {/* Fixed-column masonry: expanding a card only pushes the cards below
-                        it in its own column down - cards never jump to another column. */}
-                        <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
-                            {budgetColumns.map((col, i) => (
-                                <Stack key={i} spacing={1} sx={{ flex: 1, minWidth: 0 }}>
-                                    {col.map((budget) => (
-                                        <Box key={budget._id} ref={measureRef(budget._id)}>
-                                            <BudgetCard
-                                                budget={budget}
-                                                currency={budgetCurrency}
-                                                categoryRegistry={book.categories}
-                                                members={book.members}
-                                                asOf={asOf}
-                                                periodLabel={label}
-                                                onViewItems={(b) => navigate(
-                                                    `/internal/xenbudget/books/${book._id}/items`,
-                                                    {
-                                                        state: {
-                                                            budgetFilter: {
-                                                                categories: b.categories,
-                                                                from: b.period_from,
-                                                                to: b.period_to,
-                                                                period: b.period,
-                                                            }
-                                                        }
-                                                    },
-                                                )}
-                                            />
-                                        </Box>
-                                    ))}
-                                </Stack>
-                            ))}
-                        </Box>
-                    </Card>
+                    {scores.judged <= MAX_SCORE_PIPS && (
+                      <Stack direction="row" spacing={0.375}>
+                        {Array.from({ length: scores.judged }, (_, i) => (
+                          <Box
+                            key={i}
+                            sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: 0.5,
+                              bgcolor: i < scores.passed ? INCOME_COLOR : "error.main",
+                            }}
+                          />
+                        ))}
+                      </Stack>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {targetsMetCount > 0 && (
+                      <Typography variant="caption" sx={{ color: INCOME_COLOR }}>
+                        {targetsMetCount} met
+                      </Typography>
+                    )}
+                    {overBudgetCount > 0 && (
+                      <Typography variant="caption" color="error.main">
+                        {overBudgetCount} over
+                      </Typography>
+                    )}
+                  </>
                 )}
+              </Stack>
+            </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+              Scaled to {label} — a monthly cap counts once per month covered.
+            </Typography>
+            {/* Fixed-column masonry: expanding a card only pushes the cards below
+                        it in its own column down - cards never jump to another column. */}
+            <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+              {budgetColumns.map((col, i) => (
+                <Stack key={i} spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+                  {col.map((budget) => (
+                    <Box key={budget._id} ref={measureRef(budget._id)}>
+                      <BudgetCard
+                        budget={budget}
+                        currency={budgetCurrency}
+                        categoryRegistry={book.categories}
+                        members={book.members}
+                        asOf={asOf}
+                        periodLabel={label}
+                        onViewItems={(b) =>
+                          navigate(`/internal/xenbudget/books/${book._id}/items`, {
+                            state: {
+                              budgetFilter: {
+                                categories: b.categories,
+                                from: b.period_from,
+                                to: b.period_to,
+                                period: b.period,
+                              },
+                            },
+                          })
+                        }
+                      />
+                    </Box>
+                  ))}
+                </Stack>
+              ))}
+            </Box>
+          </Card>
+        )}
 
-                {activeBanks.length > 0 && (
-                    <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
-                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                            <Typography variant="caption" sx={sectionLabelSx}>Piggy banks</Typography>
-                            <Link
-                                component="button" variant="caption" underline="hover"
-                                onClick={() => navigate(`/internal/xenbudget/books/${book._id}/piggy-banks`)}
-                            >
-                                View all
-                            </Link>
-                        </Stack>
-                        {/* Not scoped to the selected period, and deliberately: a bank
+        {activeBanks.length > 0 && (
+          <Card variant="outlined" sx={{ ...cardSx, p: 1.75, mb: 2 }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+              <Typography variant="caption" sx={sectionLabelSx}>
+                Piggy banks
+              </Typography>
+              <Link
+                component="button"
+                variant="caption"
+                underline="hover"
+                onClick={() => navigate(`/internal/xenbudget/books/${book._id}/piggy-banks`)}
+              >
+                View all
+              </Link>
+            </Stack>
+            {/* Not scoped to the selected period, and deliberately: a bank
                         accumulates across every window, so "how close am I to the car?" has
                         the same answer whether August or the year is on screen. */}
-                        <Stack spacing={1.25}>
-                            {activeBanks.slice(0, 3).map((bank) => {
-                                const { percent, remaining } = bankProgress(bank.saved, bank.target_amount);
-                                return (
-                                    <Box key={bank._id}>
-                                        <Stack direction="row" alignItems="baseline" justifyContent="space-between" spacing={1} sx={{ mb: 0.5 }}>
-                                            <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>{bank.name}</Typography>
-                                            <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
-                                                {bankCaption(remaining, percent, (v) => formatCurrency(v, bank.currency))}
-                                            </Typography>
-                                        </Stack>
-                                        <BudgetBar
-                                            spent={Math.max(0, bank.saved)}
-                                            amount={bank.target_amount}
-                                            percent={percent}
-                                            over={bank.saved > bank.target_amount}
-                                            direction="floor"
-                                            color={INCOME_COLOR}
-                                            height={6}
-                                            label={`${bank.name}: ${formatCurrency(bank.saved, bank.currency)} of ${formatCurrency(bank.target_amount, bank.currency)} saved`}
-                                        />
-                                    </Box>
-                                );
-                            })}
-                            {activeBanks.length > 3 && (
-                                <Typography variant="caption" color="text.secondary">
-                                    {activeBanks.length - 3} more on the Banks tab.
-                                </Typography>
-                            )}
-                        </Stack>
-                    </Card>
-                )}
-
-                {recurring && recurring.series.length > 0 && (
-                    <RecurringCard
-                        series={recurring.series}
-                        monthlyCommitted={recurring.monthly_committed}
-                        currency={recurring.currency}
-                        categoryRegistry={book.categories}
-                        onViewItems={(s) => navigate(
-                            `/internal/xenbudget/books/${book._id}/items`,
-                            { state: { merchantSeed: { merchant: s.merchant } } },
-                        )}
-                        onMakeRule={(s) => ruleEditor.openForMerchant(s.merchant, s.categories)}
-                        onOpenRule={ruleEditor.openExistingRule}
-                        rules={book.rules}
+            <Stack spacing={1.25}>
+              {activeBanks.slice(0, 3).map((bank) => {
+                const { percent, remaining } = bankProgress(bank.saved, bank.target_amount);
+                return (
+                  <Box key={bank._id}>
+                    <Stack
+                      direction="row"
+                      alignItems="baseline"
+                      justifyContent="space-between"
+                      spacing={1}
+                      sx={{ mb: 0.5 }}
+                    >
+                      <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>
+                        {bank.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+                        {bankCaption(remaining, percent, (v) => formatCurrency(v, bank.currency))}
+                      </Typography>
+                    </Stack>
+                    <BudgetBar
+                      spent={Math.max(0, bank.saved)}
+                      amount={bank.target_amount}
+                      percent={percent}
+                      over={bank.saved > bank.target_amount}
+                      direction="floor"
+                      color={INCOME_COLOR}
+                      height={6}
+                      label={`${bank.name}: ${formatCurrency(bank.saved, bank.currency)} of ${formatCurrency(bank.target_amount, bank.currency)} saved`}
                     />
-                )}
+                  </Box>
+                );
+              })}
+              {activeBanks.length > 3 && (
+                <Typography variant="caption" color="text.secondary">
+                  {activeBanks.length - 3} more on the Banks tab.
+                </Typography>
+              )}
+            </Stack>
+          </Card>
+        )}
 
-                {nothingYet ? (
-                    <EmptyState
-                        icon={<InsightsIcon />}
-                        title={`Nothing in ${label} yet`}
-                        description="Add an item and the tally updates for everyone in the book."
-                    />
-                ) : (
-                    <Stack spacing={2}>
-                        {categoryRows.length > 0 && (
-                            <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
-                                <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>
-                                    Spending by category
-                                </Typography>
-                                {/* auto-fit, floor wrapped in min(...,100%) so it can never
+        {recurring && recurring.series.length > 0 && (
+          <RecurringCard
+            series={recurring.series}
+            monthlyCommitted={recurring.monthly_committed}
+            currency={recurring.currency}
+            categoryRegistry={book.categories}
+            onViewItems={(s) =>
+              navigate(`/internal/xenbudget/books/${book._id}/items`, {
+                state: { merchantSeed: { merchant: s.merchant } },
+              })
+            }
+            onMakeRule={(s) => ruleEditor.openForMerchant(s.merchant, s.categories)}
+            onOpenRule={ruleEditor.openExistingRule}
+            rules={book.rules}
+          />
+        )}
+
+        {nothingYet ? (
+          <EmptyState
+            icon={<InsightsIcon />}
+            title={`Nothing in ${label} yet`}
+            description="Add an item and the tally updates for everyone in the book."
+          />
+        ) : (
+          <Stack spacing={2}>
+            {categoryRows.length > 0 && (
+              <Card variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
+                <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1.5 }}>
+                  Spending by category
+                </Typography>
+                {/* auto-fit, floor wrapped in min(...,100%) so it can never
                                 exceed the container - a bare 320px (or even 200px, now that
                                 a row is just a chip and two figures) can still overflow a
                                 narrow phone otherwise. */}
-                                <Box sx={{
-                                    display: "grid",
-                                    gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
-                                    gap: 1,
-                                    alignItems: "start",
-                                }}>
-                                    {categoryRows.map((row) => {
-                                        // Share of total NET category spend, so the figure
-                                        // matches the netted amount shown beside it - a
-                                        // category that was spent then fully repaid drops
-                                        // toward 0% instead of still reading large off its
-                                        // gross outgoings.
-                                        const percent = categoryNetTotal > 0
-                                            ? Math.round((row.total / categoryNetTotal) * 100)
-                                            : 0;
-                                        return (
-                                            // Bordered rather than left to the grid gap alone: rows vary in height
-                                            // once one of them grows the out/in line below it, and an even gap
-                                            // between boxes of uneven height reads as no gap at all next to a
-                                            // taller neighbour - a border is what actually says where one ends.
-                                            <Box key={row.label} sx={{
-                                                minWidth: 0, p: 1, borderRadius: 1,
-                                                border: 1, borderColor: "divider",
-                                            }}>
-                                                <Stack
-                                                    direction="row" alignItems="center" justifyContent="space-between" spacing={1}
-                                                    sx={{ minWidth: 0 }}
-                                                >
-                                                    {/* minWidth: 0 overrides the flex default of "auto", which for a
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
+                    gap: 1,
+                    alignItems: "start",
+                  }}
+                >
+                  {categoryRows.map((row) => {
+                    // Share of total NET category spend, so the figure
+                    // matches the netted amount shown beside it - a
+                    // category that was spent then fully repaid drops
+                    // toward 0% instead of still reading large off its
+                    // gross outgoings.
+                    const percent = categoryNetTotal > 0 ? Math.round((row.total / categoryNetTotal) * 100) : 0;
+                    return (
+                      // Bordered rather than left to the grid gap alone: rows vary in height
+                      // once one of them grows the out/in line below it, and an even gap
+                      // between boxes of uneven height reads as no gap at all next to a
+                      // taller neighbour - a border is what actually says where one ends.
+                      <Box
+                        key={row.label}
+                        sx={{
+                          minWidth: 0,
+                          p: 1,
+                          borderRadius: 1,
+                          border: 1,
+                          borderColor: "divider",
+                        }}
+                      >
+                        <Stack
+                          direction="row"
+                          alignItems="center"
+                          justifyContent="space-between"
+                          spacing={1}
+                          sx={{ minWidth: 0 }}
+                        >
+                          {/* minWidth: 0 overrides the flex default of "auto", which for a
                                                     Chip (whose label never wraps) equals the full text width - without
                                                     it a long category name couldn't shrink at all, and its overflow
                                                     ran into the figure on the right instead of eliding. */}
-                                                    <Box sx={{ minWidth: 0, overflow: "hidden" }}>
-                                                        {row.category
-                                                            ? <CategoryChip name={row.category} registry={book.categories} sx={{ maxWidth: "100%" }} />
-                                                            : <Typography variant="caption" color="text.secondary" noWrap>Uncategorised</Typography>}
-                                                    </Box>
-                                                    <Typography variant="body2" noWrap sx={{ flexShrink: 0 }}>
-                                                        {formatCurrency(row.total, summary.currency)}
-                                                        <Typography component="span" variant="body2" color="text.secondary">
-                                                            {" · "}{percent}%
-                                                        </Typography>
-                                                    </Typography>
-                                                </Stack>
-                                                {/* Always shown, even when `returned` is 0 - every row keeping the
+                          <Box sx={{ minWidth: 0, overflow: "hidden" }}>
+                            {row.category ? (
+                              <CategoryChip name={row.category} registry={book.categories} sx={{ maxWidth: "100%" }} />
+                            ) : (
+                              <Typography variant="caption" color="text.secondary" noWrap>
+                                Uncategorised
+                              </Typography>
+                            )}
+                          </Box>
+                          <Typography variant="body2" noWrap sx={{ flexShrink: 0 }}>
+                            {formatCurrency(row.total, summary.currency)}
+                            <Typography component="span" variant="body2" color="text.secondary">
+                              {" · "}
+                              {percent}%
+                            </Typography>
+                          </Typography>
+                        </Stack>
+                        {/* Always shown, even when `returned` is 0 - every row keeping the
                                                 same shape is what makes the border above read as one category's
                                                 worth of information rather than a variable-height fragment, and a
                                                 zero here still answers a real question ("did anything come back").
                                                 A hairline top border rather than its own bordered box: the row
                                                 already has one, and nesting a second read as a box inside a box. */}
-                                                <Box sx={{
-                                                    mt: 0.75,
-                                                    pt: 0.5,
-                                                    borderTop: 1,
-                                                    borderColor: "divider",
-                                                    display: "flex", alignItems: "baseline", gap: 1,
-                                                }}>
-                                                    {/* Colour carries the direction instead of the word - "out"/
+                        <Box
+                          sx={{
+                            mt: 0.75,
+                            pt: 0.5,
+                            borderTop: 1,
+                            borderColor: "divider",
+                            display: "flex",
+                            alignItems: "baseline",
+                            gap: 1,
+                          }}
+                        >
+                          {/* Colour carries the direction instead of the word - "out"/
                                                     "back in" beside two dollar figures read as noise once you
                                                     already know which is which. Spread like a ledger: out at the
                                                     left edge, in flush with the total above it on the right, the
                                                     separator centered in whatever space is left between them. */}
-                                                    <Typography variant="caption" noWrap sx={{ color: "error.main", flexShrink: 0 }}>
-                                                        {formatCurrency(row.out, summary.currency)}
-                                                    </Typography>
-                                                    <Typography variant="caption" color="text.secondary" sx={{ flex: 1, textAlign: "center" }}>
-                                                        ·
-                                                    </Typography>
-                                                    <Typography variant="caption" noWrap sx={{ color: INCOME_COLOR, flexShrink: 0 }}>
-                                                        {formatCurrency(row.returned, summary.currency)}
-                                                    </Typography>
-                                                </Box>
-                                            </Box>
-                                        );
-                                    })}
-                                </Box>
-                            </Card>
-                        )}
-                    </Stack>
-                )}
-            </Box>
+                          <Typography variant="caption" noWrap sx={{ color: "error.main", flexShrink: 0 }}>
+                            {formatCurrency(row.out, summary.currency)}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ flex: 1, textAlign: "center" }}>
+                            ·
+                          </Typography>
+                          <Typography variant="caption" noWrap sx={{ color: INCOME_COLOR, flexShrink: 0 }}>
+                            {formatCurrency(row.returned, summary.currency)}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              </Card>
+            )}
+          </Stack>
+        )}
+      </Box>
 
-            {ruleEditor.dialog}
-        </Box>
-    );
+      {ruleEditor.dialog}
+    </Box>
+  );
 }

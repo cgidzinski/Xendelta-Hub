@@ -5,7 +5,6 @@ import { ApiResponse } from "../../types/api";
 import { enqueueSnackbar, useSnackbar } from "notistack";
 import { userProfileKeys } from "../user/useUserProfile";
 
-
 // Types
 export interface XenLink {
   _id?: string;

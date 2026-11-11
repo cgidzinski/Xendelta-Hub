@@ -30,9 +30,7 @@ export default function MessageBlock({
 }: MessageBlockProps) {
   const [avatarError, setAvatarError] = React.useState(false);
   const isSystemMessage = message.isSystemMessage || message.from === "system";
-  const avatarSrc = !isSystemMessage && getMessageSenderAvatar 
-    ? getMessageSenderAvatar(message)
-    : undefined;
+  const avatarSrc = !isSystemMessage && getMessageSenderAvatar ? getMessageSenderAvatar(message) : undefined;
 
   return (
     <Paper

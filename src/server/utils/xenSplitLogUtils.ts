@@ -1,14 +1,30 @@
 // Pure helpers for the XenSplit activity log - no model access, so they're unit-testable.
 
 export type XenSplitLogAction =
-  | "group_created" | "group_updated" | "group_image_updated" | "ownership_transferred"
-  | "member_added" | "member_removed"
-  | "expense_created" | "expense_updated" | "expense_deleted" | "expense_restored"
-  | "expense_images_added" | "expense_image_removed"
-  | "recurring_scheduled" | "recurring_generated" | "recurring_cancelled" | "recurring_paused"
-  | "recurring_resumed" | "recurring_updated"
-  | "settlement_created" | "settlement_deleted" | "settlement_restored"
-  | "exchange_created" | "exchange_deleted" | "exchange_restored";
+  | "group_created"
+  | "group_updated"
+  | "group_image_updated"
+  | "ownership_transferred"
+  | "member_added"
+  | "member_removed"
+  | "expense_created"
+  | "expense_updated"
+  | "expense_deleted"
+  | "expense_restored"
+  | "expense_images_added"
+  | "expense_image_removed"
+  | "recurring_scheduled"
+  | "recurring_generated"
+  | "recurring_cancelled"
+  | "recurring_paused"
+  | "recurring_resumed"
+  | "recurring_updated"
+  | "settlement_created"
+  | "settlement_deleted"
+  | "settlement_restored"
+  | "exchange_created"
+  | "exchange_deleted"
+  | "exchange_restored";
 
 export type XenSplitLogTargetType = "group" | "member" | "expense" | "settlement" | "exchange" | "recurring";
 
@@ -18,7 +34,18 @@ export interface XenSplitLogChange {
   to: unknown;
 }
 
-export const EXPENSE_LOG_FIELDS = ["title", "amount", "currency", "paid_by", "date", "category", "notes", "split_type", "splits", "on_hold"];
+export const EXPENSE_LOG_FIELDS = [
+  "title",
+  "amount",
+  "currency",
+  "paid_by",
+  "date",
+  "category",
+  "notes",
+  "split_type",
+  "splits",
+  "on_hold",
+];
 export const GROUP_LOG_FIELDS = ["name", "default_currency", "secondary_currencies"];
 
 // Reduces a field value to plain JSON so values read off a mongoose document compare
@@ -45,7 +72,11 @@ export function normaliseLogValue(value: unknown): unknown {
 }
 
 /** The fields whose values differ between two snapshots, as {field, from, to}. */
-export function diffFields(before: Record<string, any>, after: Record<string, any>, fields: string[]): XenSplitLogChange[] {
+export function diffFields(
+  before: Record<string, any>,
+  after: Record<string, any>,
+  fields: string[],
+): XenSplitLogChange[] {
   const changes: XenSplitLogChange[] = [];
   for (const field of fields) {
     const from = normaliseLogValue(before?.[field]);
@@ -59,7 +90,11 @@ const META_USER_KEYS = ["user_id", "from", "to", "paid_by", "party_a", "party_b"
 
 /** Every user id a log row refers to, so the endpoint can resolve names - including
  *  members who have since left the group. */
-export function collectLogUserIds(row: { actor_id?: string | null; meta?: any; changes?: XenSplitLogChange[] }): string[] {
+export function collectLogUserIds(row: {
+  actor_id?: string | null;
+  meta?: any;
+  changes?: XenSplitLogChange[];
+}): string[] {
   const ids = new Set<string>();
   const add = (v: unknown) => {
     if (typeof v === "string" && /^[a-f0-9]{24}$/i.test(v)) ids.add(v);

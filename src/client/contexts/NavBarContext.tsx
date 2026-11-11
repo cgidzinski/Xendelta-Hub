@@ -21,7 +21,7 @@ export const NavBarProvider = ({ children }: { children: React.ReactNode }) => {
     if (window.innerWidth <= 600) return false;
     return localStorage.getItem("isNavBarOpen") == "true";
   });
-  const [title, setTitle] = useState(""); 
+  const [title, setTitle] = useState("");
   const toggleNavBar = () => {
     setIsNavBarOpen((prevState) => {
       localStorage.setItem("isNavBarOpen", (!prevState).toString());

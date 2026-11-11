@@ -35,27 +35,18 @@ const entries = (merchant: string, description: string, n: number): CoverageEntr
 
 describe("coverageByMerchant", () => {
   it("reports a merchant every item of which a rule fires on", () => {
-    const coverage = coverageByMerchant(
-      entries("NETFLIX COM", "NETFLIX.COM 8829472", 8),
-      [rule("r1", "netflix")],
-    );
+    const coverage = coverageByMerchant(entries("NETFLIX COM", "NETFLIX.COM 8829472", 8), [rule("r1", "netflix")]);
     expect(coverage.get("NETFLIX COM")).toEqual({ matched: 8, total: 8, rule_ids: ["r1"] });
   });
 
   it("reports a merchant nothing fires on", () => {
-    const coverage = coverageByMerchant(
-      entries("SOBEYS", "SOBEYS #1120", 5),
-      [rule("r1", "netflix")],
-    );
+    const coverage = coverageByMerchant(entries("SOBEYS", "SOBEYS #1120", 5), [rule("r1", "netflix")]);
     expect(coverage.get("SOBEYS")).toEqual({ matched: 0, total: 5, rule_ids: [] });
   });
 
   it("counts partial coverage when a rule only fires on some items", () => {
     const coverage = coverageByMerchant(
-      [
-        ...entries("AMAZON CA", "AMAZON.CA*BIG", 2),
-        ...entries("AMAZON CA", "AMAZON.CA*SMALL", 3),
-      ],
+      [...entries("AMAZON CA", "AMAZON.CA*BIG", 2), ...entries("AMAZON CA", "AMAZON.CA*SMALL", 3)],
       [rule("r1", "BIG")],
     );
     expect(coverage.get("AMAZON CA")).toMatchObject({ matched: 2, total: 5, rule_ids: ["r1"] });
@@ -71,8 +62,9 @@ describe("coverageByMerchant", () => {
     const flagOnly = rule("r1", "netflix", {
       actions: { set_categories: [], add_flags: ["Needs review"] },
     });
-    expect(coverageByMerchant(entries("NETFLIX COM", "NETFLIX.COM", 3), [flagOnly]))
-      .toEqual(new Map([["NETFLIX COM", { matched: 3, total: 3, rule_ids: ["r1"] }]]));
+    expect(coverageByMerchant(entries("NETFLIX COM", "NETFLIX.COM", 3), [flagOnly])).toEqual(
+      new Map([["NETFLIX COM", { matched: 3, total: 3, rule_ids: ["r1"] }]]),
+    );
   });
 
   it("counts a skip rule, which a sweep turns into off-budget", () => {
@@ -86,32 +78,28 @@ describe("coverageByMerchant", () => {
     // A plain "does any rule match" loop would wrongly report both.
     const first = rule("r1", "netflix", { priority: 0, stop_on_match: true });
     const second = rule("r2", "netflix", { priority: 1 });
-    const coverage = coverageByMerchant(
-      entries("NETFLIX COM", "NETFLIX.COM", 4), [second, first],
-    );
+    const coverage = coverageByMerchant(entries("NETFLIX COM", "NETFLIX.COM", 4), [second, first]);
     expect(coverage.get("NETFLIX COM")).toEqual({ matched: 4, total: 4, rule_ids: ["r1"] });
   });
 
   it("ignores a disabled rule", () => {
-    const coverage = coverageByMerchant(
-      entries("NETFLIX COM", "NETFLIX.COM", 4),
-      [rule("r1", "netflix", { enabled: false })],
-    );
+    const coverage = coverageByMerchant(entries("NETFLIX COM", "NETFLIX.COM", 4), [
+      rule("r1", "netflix", { enabled: false }),
+    ]);
     // The items are still counted, but nothing fires on them.
     expect(coverage.get("NETFLIX COM")).toEqual({ matched: 0, total: 4, rule_ids: [] });
   });
 
   it("orders rule_ids by how many items each fired on", () => {
     const coverage = coverageByMerchant(
-      [
-        ...entries("SHOP", "SHOP ALPHA", 1),
-        ...entries("SHOP", "SHOP BETA", 4),
-      ],
+      [...entries("SHOP", "SHOP ALPHA", 1), ...entries("SHOP", "SHOP BETA", 4)],
       // "shop" fires on all five; "beta" on four. Most-hit first, so "shop" leads.
       [rule("broad", "shop"), rule("narrow", "beta")],
     );
     expect(coverage.get("SHOP")).toMatchObject({
-      matched: 5, total: 5, rule_ids: ["broad", "narrow"],
+      matched: 5,
+      total: 5,
+      rule_ids: ["broad", "narrow"],
     });
   });
 
@@ -124,10 +112,7 @@ describe("coverageByMerchant", () => {
       rule_categories: ["Entertainment"],
       applied_rule_ids: ["old-rule"],
     });
-    const coverage = coverageByMerchant(
-      [{ merchant: "NETFLIX COM", draft: renamed }],
-      [rule("r1", "NETFLIX.COM")],
-    );
+    const coverage = coverageByMerchant([{ merchant: "NETFLIX COM", draft: renamed }], [rule("r1", "NETFLIX.COM")]);
     expect(coverage.get("NETFLIX COM")).toEqual({ matched: 1, total: 1, rule_ids: ["r1"] });
   });
 
@@ -139,9 +124,7 @@ describe("coverageByMerchant", () => {
       rule_categories: ["Groceries"],
       categories: ["Groceries"],
     });
-    const coverage = coverageByMerchant(
-      [{ merchant: "SOBEYS", draft: stale }], [rule("r1", "netflix")],
-    );
+    const coverage = coverageByMerchant([{ merchant: "SOBEYS", draft: stale }], [rule("r1", "netflix")]);
     expect(coverage.get("SOBEYS")).toEqual({ matched: 0, total: 1, rule_ids: [] });
   });
 
@@ -162,7 +145,9 @@ describe("coverageByMerchant", () => {
     const offBudget = rule("r1", "netflix", {
       actions: { set_categories: [], add_flags: [FLAG_OFF_BUDGET] },
     });
-    expect(coverageByMerchant(entries("NETFLIX COM", "NETFLIX.COM", 2), [offBudget])
-      .get("NETFLIX COM")).toMatchObject({ matched: 2, rule_ids: ["r1"] });
+    expect(coverageByMerchant(entries("NETFLIX COM", "NETFLIX.COM", 2), [offBudget]).get("NETFLIX COM")).toMatchObject({
+      matched: 2,
+      rule_ids: ["r1"],
+    });
   });
 });

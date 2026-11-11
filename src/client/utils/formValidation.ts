@@ -32,10 +32,7 @@ export interface PasswordValidationOptions {
   requireSpecialChar?: boolean;
 }
 
-export const validatePassword = (
-  password: string,
-  options: PasswordValidationOptions = {}
-): string | undefined => {
+export const validatePassword = (password: string, options: PasswordValidationOptions = {}): string | undefined => {
   const {
     minLength = 6,
     requireUppercase = false,
@@ -72,10 +69,7 @@ export const validatePassword = (
 };
 
 // Password matching validation
-export const validatePasswordMatch = (
-  password: string,
-  confirmPassword: string
-): string | undefined => {
+export const validatePasswordMatch = (password: string, confirmPassword: string): string | undefined => {
   if (!confirmPassword?.trim()) {
     return "Please confirm your password";
   }

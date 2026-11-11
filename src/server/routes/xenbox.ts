@@ -129,22 +129,26 @@ module.exports = function (app: express.Application) {
   });
 
   // Get upload session status
-  app.get("/api/xenbox/status/:uploadId", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const uploadId = req.params.uploadId;
+  app.get(
+    "/api/xenbox/status/:uploadId",
+    authenticateToken,
+    async function (req: express.Request, res: express.Response) {
+      const uploadId = req.params.uploadId;
 
-    const status = getUploadSessionStatus(uploadId);
-    if (!status) {
-      return res.status(404).json({
-        status: false,
-        message: "Upload session not found",
+      const status = getUploadSessionStatus(uploadId);
+      if (!status) {
+        return res.status(404).json({
+          status: false,
+          message: "Upload session not found",
+        });
+      }
+
+      return res.json({
+        status: true,
+        data: status,
       });
-    }
-
-    return res.json({
-      status: true,
-      data: status,
-    });
-  });
+    },
+  );
 
   // Cancel/cleanup failed upload
   app.delete("/api/xenbox/:uploadId", authenticateToken, async function (req: express.Request, res: express.Response) {
@@ -199,93 +203,101 @@ module.exports = function (app: express.Application) {
   });
 
   // Get signed URL for xenbox file
-  app.get("/api/xenbox/files/:fileId/url", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const fileId = req.params.fileId;
-    const userId = (req as AuthenticatedRequest).user!._id.toString();
+  app.get(
+    "/api/xenbox/files/:fileId/url",
+    authenticateToken,
+    async function (req: express.Request, res: express.Response) {
+      const fileId = req.params.fileId;
+      const userId = (req as AuthenticatedRequest).user!._id.toString();
 
-    // Find file and verify ownership
-    const file = await XenBoxMedia.findById(fileId).exec();
-    if (!file) {
-      return res.status(404).json({
-        status: false,
-        message: "File not found",
+      // Find file and verify ownership
+      const file = await XenBoxMedia.findById(fileId).exec();
+      if (!file) {
+        return res.status(404).json({
+          status: false,
+          message: "File not found",
+        });
+      }
+
+      if (file.uploadedBy.toString() !== userId) {
+        return res.status(403).json({
+          status: false,
+          message: "Access denied",
+        });
+      }
+
+      // Generate signed URL
+      const gcsPath = `xenbox/${userId}/${file.filename}`;
+      const signedUrl = await generateSignedUrl(gcsPath, 15); // 15 minutes expiry
+
+      return res.json({
+        status: true,
+        data: { url: signedUrl },
       });
-    }
-
-    if (file.uploadedBy.toString() !== userId) {
-      return res.status(403).json({
-        status: false,
-        message: "Access denied",
-      });
-    }
-
-    // Generate signed URL
-    const gcsPath = `xenbox/${userId}/${file.filename}`;
-    const signedUrl = await generateSignedUrl(gcsPath, 15); // 15 minutes expiry
-
-    return res.json({
-      status: true,
-      data: { url: signedUrl },
-    });
-  });
+    },
+  );
 
   // Update file settings (password/expiry)
-  app.put("/api/xenbox/files/:fileId/settings", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const fileId = req.params.fileId;
-    const userId = (req as AuthenticatedRequest).user!._id.toString();
-    const { password, expiry } = req.body;
+  app.put(
+    "/api/xenbox/files/:fileId/settings",
+    authenticateToken,
+    async function (req: express.Request, res: express.Response) {
+      const fileId = req.params.fileId;
+      const userId = (req as AuthenticatedRequest).user!._id.toString();
+      const { password, expiry } = req.body;
 
-    // Find file and verify ownership
-    const file = await XenBoxMedia.findById(fileId).exec();
-    if (!file) {
-      return res.status(404).json({
-        status: false,
-        message: "File not found",
-      });
-    }
-
-    if (file.uploadedBy.toString() !== userId) {
-      return res.status(403).json({
-        status: false,
-        message: "Access denied",
-      });
-    }
-
-    // Update password if provided
-    if (password !== undefined) {
-      if (password === "" || password === null) {
-        // Remove password
-        file.password = undefined;
-      } else {
-        // Set new password (plain text)
-        file.password = password;
+      // Find file and verify ownership
+      const file = await XenBoxMedia.findById(fileId).exec();
+      if (!file) {
+        return res.status(404).json({
+          status: false,
+          message: "File not found",
+        });
       }
-    }
 
-    // Update expiry if provided
-    if (expiry !== undefined) {
-      if (expiry === "" || expiry === null) {
-        // Remove expiry
-        file.expiry = undefined;
-      } else {
-        // Set expiry date
-        file.expiry = new Date(expiry);
+      if (file.uploadedBy.toString() !== userId) {
+        return res.status(403).json({
+          status: false,
+          message: "Access denied",
+        });
       }
-    }
 
-    await file.save();
+      // Update password if provided
+      if (password !== undefined) {
+        if (password === "" || password === null) {
+          // Remove password
+          file.password = undefined;
+        } else {
+          // Set new password (plain text)
+          file.password = password;
+        }
+      }
 
-    return res.json({
-      status: true,
-      message: "File settings updated successfully",
-      data: {
-        hasPassword: !!file.password,
-        password: file.password || null, // Return plain text password
-        expiry: file.expiry ? file.expiry.toISOString() : null,
-        shareUrl: `${req.protocol}://${req.get("host")}/xenbox/${file.shareToken}`,
-      },
-    });
-  });
+      // Update expiry if provided
+      if (expiry !== undefined) {
+        if (expiry === "" || expiry === null) {
+          // Remove expiry
+          file.expiry = undefined;
+        } else {
+          // Set expiry date
+          file.expiry = new Date(expiry);
+        }
+      }
+
+      await file.save();
+
+      return res.json({
+        status: true,
+        message: "File settings updated successfully",
+        data: {
+          hasPassword: !!file.password,
+          password: file.password || null, // Return plain text password
+          expiry: file.expiry ? file.expiry.toISOString() : null,
+          shareUrl: `${req.protocol}://${req.get("host")}/xenbox/${file.shareToken}`,
+        },
+      });
+    },
+  );
 
   // Public file info endpoint (no authentication required)
   app.get("/api/xenbox/info/:shareToken", async function (req: express.Request, res: express.Response) {
@@ -394,37 +406,41 @@ module.exports = function (app: express.Application) {
   });
 
   // Delete xenbox file
-  app.delete("/api/xenbox/files/:fileId", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const fileId = req.params.fileId;
-    const userId = (req as AuthenticatedRequest).user!._id.toString();
+  app.delete(
+    "/api/xenbox/files/:fileId",
+    authenticateToken,
+    async function (req: express.Request, res: express.Response) {
+      const fileId = req.params.fileId;
+      const userId = (req as AuthenticatedRequest).user!._id.toString();
 
-    // Find file and verify ownership
-    const file = await XenBoxMedia.findById(fileId).exec();
-    if (!file) {
-      return res.status(404).json({
-        status: false,
-        message: "File not found",
+      // Find file and verify ownership
+      const file = await XenBoxMedia.findById(fileId).exec();
+      if (!file) {
+        return res.status(404).json({
+          status: false,
+          message: "File not found",
+        });
+      }
+
+      if (file.uploadedBy.toString() !== userId) {
+        return res.status(403).json({
+          status: false,
+          message: "Access denied",
+        });
+      }
+
+      // Delete from database (pre-delete hook will handle GCS deletion)
+      await XenBoxMedia.findByIdAndDelete(fileId);
+
+      // Remove from user's files array
+      await User.findByIdAndUpdate(userId, {
+        $pull: { "xenbox.files": fileId },
       });
-    }
 
-    if (file.uploadedBy.toString() !== userId) {
-      return res.status(403).json({
-        status: false,
-        message: "Access denied",
+      return res.json({
+        status: true,
+        message: "File deleted successfully",
       });
-    }
-
-    // Delete from database (pre-delete hook will handle GCS deletion)
-    await XenBoxMedia.findByIdAndDelete(fileId);
-
-    // Remove from user's files array
-    await User.findByIdAndUpdate(userId, {
-      $pull: { "xenbox.files": fileId },
-    });
-
-    return res.json({
-      status: true,
-      message: "File deleted successfully",
-    });
-  });
+    },
+  );
 };

@@ -1,6 +1,22 @@
 import { pageTitleSx } from "../../../components/ui/surfaceStyles";
 import PageContainer from "../../../components/ui/PageContainer";
-import { Box, Typography, Button, Card, CardActionArea, CardMedia, CardContent, Grid, Chip, Dialog, DialogContent, DialogActions, IconButton, Switch, FormControlLabel } from "@mui/material";
+import {
+  Box,
+  Typography,
+  Button,
+  Card,
+  CardActionArea,
+  CardMedia,
+  CardContent,
+  Grid,
+  Chip,
+  Dialog,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  Switch,
+  FormControlLabel,
+} from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -18,7 +34,7 @@ export default function Inventory() {
     return <LoadingSpinner />;
   }
 
-  const visibleItems = showUsed ? inventory : inventory.filter(item => !item.used);
+  const visibleItems = showUsed ? inventory : inventory.filter((item) => !item.used);
 
   return (
     <Box>
@@ -32,15 +48,9 @@ export default function Inventory() {
               Your purchased items
             </Typography>
           </Box>
-          {inventory.some(item => item.used) && (
+          {inventory.some((item) => item.used) && (
             <FormControlLabel
-              control={
-                <Switch
-                  checked={showUsed}
-                  onChange={(e) => setShowUsed(e.target.checked)}
-                  color="warning"
-                />
-              }
+              control={<Switch checked={showUsed} onChange={(e) => setShowUsed(e.target.checked)} color="warning" />}
               label="Show Used"
               labelPlacement="start"
               sx={{ mr: 0 }}
@@ -71,12 +81,14 @@ export default function Inventory() {
                     borderColor: "success.main",
                     opacity: item.used ? 0.8 : 1,
                     transition: "opacity 0.2s, transform 0.2s, box-shadow 0.2s, border-color 0.2s",
-                    "&:hover": item.used ? {
-                      borderColor: "success.light",
-                    } : {
-                      transform: "translateY(-4px)",
-                      boxShadow: 6,
-                    },
+                    "&:hover": item.used
+                      ? {
+                          borderColor: "success.light",
+                        }
+                      : {
+                          transform: "translateY(-4px)",
+                          boxShadow: 6,
+                        },
                   }}
                 >
                   {item.used && (
@@ -132,7 +144,7 @@ export default function Inventory() {
         maxWidth="sm"
         fullWidth
         PaperProps={{
-          sx: { borderRadius: 2 }
+          sx: { borderRadius: 2 },
         }}
       >
         {selectedItem && (
@@ -143,7 +155,11 @@ export default function Inventory() {
                 height="240"
                 image={selectedItem.image}
                 alt={selectedItem.name}
-                sx={{ borderTopLeftRadius: 8, borderTopRightRadius: 8, filter: selectedItem.used ? "grayscale(40%)" : "none" }}
+                sx={{
+                  borderTopLeftRadius: 8,
+                  borderTopRightRadius: 8,
+                  filter: selectedItem.used ? "grayscale(40%)" : "none",
+                }}
               />
               <IconButton
                 onClick={() => setSelectedItem(null)}
@@ -201,9 +217,7 @@ export default function Inventory() {
                   {isUsing ? "Redeeming..." : "Redeem"}
                 </Button>
               )}
-              {selectedItem.used && (
-                <Chip label="Redeemed" color="success" icon={<CheckCircleIcon />} />
-              )}
+              {selectedItem.used && <Chip label="Redeemed" color="success" icon={<CheckCircleIcon />} />}
             </DialogActions>
           </>
         )}

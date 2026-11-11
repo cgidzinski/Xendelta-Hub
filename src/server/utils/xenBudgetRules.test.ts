@@ -1,8 +1,15 @@
 import { describe, it, expect } from "vitest";
 import {
-  applyRules, ruleMatches, stripRuleEffects, safeRegexTest, MAX_REGEX_LENGTH,
-  normalizeFlagNames, withDerivedUncategorised,
-  type Rule, type DraftItem, type RuleCondition,
+  applyRules,
+  ruleMatches,
+  stripRuleEffects,
+  safeRegexTest,
+  MAX_REGEX_LENGTH,
+  normalizeFlagNames,
+  withDerivedUncategorised,
+  type Rule,
+  type DraftItem,
+  type RuleCondition,
 } from "./xenBudgetRules";
 import { FLAG_OFF_BUDGET, FLAG_UNCATEGORISED } from "../constants/xenbudget";
 
@@ -38,7 +45,9 @@ const cond = (c: RuleCondition): Rule["match"] => ({ mode: "all", conditions: [c
 
 describe("condition matching", () => {
   it("is case-insensitive by default", () => {
-    expect(ruleMatches(rule({ match: cond({ field: "description", op: "contains", value: "starbucks" }) }), draft())).toBe(true);
+    expect(
+      ruleMatches(rule({ match: cond({ field: "description", op: "contains", value: "starbucks" }) }), draft()),
+    ).toBe(true);
   });
 
   it("respects case_sensitive when asked", () => {
@@ -49,7 +58,8 @@ describe("condition matching", () => {
 
   it("handles every string operator", () => {
     const d = draft({ description: "STARBUCKS #1234" });
-    const check = (op: any, value: string) => ruleMatches(rule({ match: cond({ field: "description", op, value }) }), d);
+    const check = (op: any, value: string) =>
+      ruleMatches(rule({ match: cond({ field: "description", op, value }) }), d);
     expect(check("equals", "starbucks #1234")).toBe(true);
     expect(check("equals", "starbucks")).toBe(false);
     expect(check("starts_with", "star")).toBe(true);
@@ -69,7 +79,7 @@ describe("condition matching", () => {
     expect(check("lte", "500")).toBe(true);
     expect(check("equals", "500")).toBe(true);
     expect(check("between", "100", "600")).toBe(true);
-    expect(check("between", "600", "100")).toBe(true);   // order-insensitive
+    expect(check("between", "600", "100")).toBe(true); // order-insensitive
     expect(check("between", "600", "900")).toBe(false);
   });
 
@@ -80,9 +90,18 @@ describe("condition matching", () => {
 
   it("matches on flags, including empty", () => {
     expect(ruleMatches(rule({ match: cond({ field: "flags", op: "is_empty" }) }), draft())).toBe(true);
-    expect(ruleMatches(rule({ match: cond({ field: "flags", op: "is_empty" }) }), draft({ flags: ["food"] }))).toBe(false);
-    expect(ruleMatches(rule({ match: cond({ field: "flags", op: "contains", value: "FOOD" }) }), draft({ flags: ["food"] }))).toBe(true);
-    expect(ruleMatches(rule({ match: cond({ field: "flags", op: "not_contains", value: "car" }) }), draft({ flags: ["food"] }))).toBe(true);
+    expect(ruleMatches(rule({ match: cond({ field: "flags", op: "is_empty" }) }), draft({ flags: ["food"] }))).toBe(
+      false,
+    );
+    expect(
+      ruleMatches(rule({ match: cond({ field: "flags", op: "contains", value: "FOOD" }) }), draft({ flags: ["food"] })),
+    ).toBe(true);
+    expect(
+      ruleMatches(
+        rule({ match: cond({ field: "flags", op: "not_contains", value: "car" }) }),
+        draft({ flags: ["food"] }),
+      ),
+    ).toBe(true);
   });
 
   it("matches on category the same way it matches on flags", () => {
@@ -98,10 +117,15 @@ describe("condition matching", () => {
     expect(ruleMatches(rule({ match: cond({ field: "source", op: "equals", value: "csv" }) }), draft())).toBe(true);
     expect(ruleMatches(rule({ match: cond({ field: "date", op: "gte", value: "2026-08-01" }) }), draft())).toBe(true);
     expect(ruleMatches(rule({ match: cond({ field: "date", op: "lt", value: "2026-08-01" }) }), draft())).toBe(false);
-    expect(ruleMatches(rule({ match: cond({ field: "date", op: "between", value: "2026-08-01", value2: "2026-08-31" }) }), draft())).toBe(true);
+    expect(
+      ruleMatches(
+        rule({ match: cond({ field: "date", op: "between", value: "2026-08-01", value2: "2026-08-31" }) }),
+        draft(),
+      ),
+    ).toBe(true);
   });
 
-  it("requires all conditions in \"all\" mode and any in \"any\" mode", () => {
+  it('requires all conditions in "all" mode and any in "any" mode', () => {
     const conditions: RuleCondition[] = [
       { field: "description", op: "contains", value: "starbucks" },
       { field: "amount", op: "gt", value: "1000" },
@@ -122,7 +146,9 @@ describe("regex safety", () => {
   it("treats a malformed pattern as a non-match instead of throwing", () => {
     expect(() => safeRegexTest("([a-z", "i", "abc")).not.toThrow();
     expect(safeRegexTest("([a-z", "i", "abc")).toBe(false);
-    expect(ruleMatches(rule({ match: cond({ field: "description", op: "regex", value: "([unclosed" }) }), draft())).toBe(false);
+    expect(
+      ruleMatches(rule({ match: cond({ field: "description", op: "regex", value: "([unclosed" }) }), draft()),
+    ).toBe(false);
   });
 
   it("refuses a pattern longer than the cap", () => {
@@ -162,18 +188,19 @@ describe("actions", () => {
   it("sets categories, replacing rather than appending", () => {
     // "this is a grocery run" is a statement about what the purchase was, not one more
     // label to pile on top of whatever was there.
-    const { item } = applyRules(
-      draft({ categories: ["Misc"] }),
-      [rule({ actions: { set_categories: ["Groceries", "Household"] } })],
-    );
+    const { item } = applyRules(draft({ categories: ["Misc"] }), [
+      rule({ actions: { set_categories: ["Groceries", "Household"] } }),
+    ]);
     expect(item.categories).toEqual(["Groceries", "Household"]);
     expect(item.rule_categories).toEqual(["Groceries", "Household"]);
   });
 
   it("keeps categories and flags apart", () => {
-    const { item } = applyRules(draft(), [rule({
-      actions: { set_categories: ["Dining"], add_flags: ["check receipt"] },
-    })]);
+    const { item } = applyRules(draft(), [
+      rule({
+        actions: { set_categories: ["Dining"], add_flags: ["check receipt"] },
+      }),
+    ]);
     expect(item.categories).toEqual(["Dining"]);
     expect(item.flags).toEqual(["check receipt"]);
   });
@@ -191,7 +218,9 @@ describe("actions", () => {
   });
 
   it("marks an item off budget without destroying it", () => {
-    const { item, skipped } = applyRules(draft(), [rule({ name: "Internal transfers", actions: { add_flags: [FLAG_OFF_BUDGET] } })]);
+    const { item, skipped } = applyRules(draft(), [
+      rule({ name: "Internal transfers", actions: { add_flags: [FLAG_OFF_BUDGET] } }),
+    ]);
     expect(skipped).toBe(false);
     expect(item.flags).toContain(FLAG_OFF_BUDGET);
     expect(item.rule_flags).toContain(FLAG_OFF_BUDGET);
@@ -230,12 +259,14 @@ describe("ordering", () => {
   it("chains: a later rule sees what earlier rules changed", () => {
     const rules = [
       rule({
-        _id: "a", priority: 1,
+        _id: "a",
+        priority: 1,
         match: cond({ field: "description", op: "contains", value: "starbucks" }),
         actions: { add_flags: ["Coffee"] },
       }),
       rule({
-        _id: "b", priority: 2,
+        _id: "b",
+        priority: 2,
         match: cond({ field: "flags", op: "contains", value: "Coffee" }),
         actions: { add_flags: ["Discretionary"] },
       }),
@@ -249,12 +280,14 @@ describe("ordering", () => {
     // rule that renames the payee will stop later rules that match on the old text.
     const rules = [
       rule({
-        _id: "a", priority: 1,
+        _id: "a",
+        priority: 1,
         match: cond({ field: "description", op: "contains", value: "starbucks" }),
         actions: { set_description: "Coffee" },
       }),
       rule({
-        _id: "b", priority: 2,
+        _id: "b",
+        priority: 2,
         match: cond({ field: "description", op: "contains", value: "starbucks" }),
         actions: { add_flags: ["never applied"] },
       }),
@@ -293,7 +326,8 @@ describe("ordering", () => {
 
 describe("re-apply semantics", () => {
   const flagger = rule({
-    _id: "r1", name: "Coffee",
+    _id: "r1",
+    name: "Coffee",
     actions: { set_categories: ["Dining"], add_flags: ["check receipt"] },
   });
 
@@ -365,8 +399,7 @@ describe("normalizeFlagNames", () => {
   it("trims, drops empties and dedupes case-insensitively", () => {
     // Flags are matched BY NAME everywhere, so "Refund " and "refund" would otherwise
     // become two flags no single filter can select.
-    expect(normalizeFlagNames([" Refund ", "refund", "", "   ", "Check"]))
-      .toEqual(["Refund", "Check"]);
+    expect(normalizeFlagNames([" Refund ", "refund", "", "   ", "Check"])).toEqual(["Refund", "Check"]);
   });
 
   it("keeps the first spelling seen, rather than lowercasing the label", () => {
