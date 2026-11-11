@@ -25,6 +25,7 @@ import {
   xenSplitSettlementParamSchema,
   createExchangeSchema,
   xenSplitExchangeParamSchema,
+  xenSplitTransferOwnerSchema,
 } from "../utils/validation";
 import { calculateBalances, calculateMinimumTransfers, resolveSplits, asBalanceInput } from "../utils/xenSplitUtils";
 import { isDeleted } from "@shared/xensplit/softDelete";
@@ -312,6 +313,7 @@ module.exports = function (app: any) {
   app.post(
     "/api/xensplit/groups/:groupId/transfer",
     validateParams(xenSplitIdParamSchema),
+    validate(xenSplitTransferOwnerSchema),
     async (req: Request, res: Response) => {
       try {
         const userId = (req.user as any)._id.toString();

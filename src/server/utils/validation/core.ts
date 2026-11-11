@@ -1,11 +1,11 @@
 import { z } from "zod";
 import mongoose from "mongoose";
-import { VALIDATION_LIMITS } from "../constants";
+import { VALIDATION_LIMITS } from "../../constants";
 import { ALL_CURRENCIES } from "@shared/currencies";
 import { ETRANSFER_MAX, isValidEtransfer } from "@shared/etransfer";
 
 // Helper to validate MongoDB ObjectId
-const objectIdSchema = z
+export const objectIdSchema = z
   .string()
   .refine((val) => mongoose.Types.ObjectId.isValid(val), { message: "Invalid ObjectId format" });
 
@@ -194,6 +194,20 @@ export const validateParams = (schema: z.ZodSchema) => {
   };
 };
 
+// Validate the query string (?page=2&q=...). Query values arrive as strings, so schemas here
+// should use z.coerce for numbers and booleans.
+export const validateQuery = (schema: z.ZodSchema) => {
+  return (req: any, res: any, next: any) => {
+    const result = schema.safeParse(req.query);
+    if (result.success) return next();
+    return res.status(400).json({
+      status: false,
+      message: "Invalid query",
+      errors: result.error.issues.map((err: z.ZodIssue) => ({ path: err.path.join("."), message: err.message })),
+    });
+  };
+};
+
 // Schema for conversationId param
 export const conversationIdParamSchema = z.object({
   conversationId: objectIdSchema,
@@ -356,6 +370,9 @@ export const settleDebtSchema = z
 export const xenSplitIdParamSchema = z.object({
   groupId: objectIdSchema,
 });
+
+// Hand a group over to another member.
+export const xenSplitTransferOwnerSchema = z.object({ newOwnerId: objectIdSchema });
 
 export const xenSplitMemberParamSchema = z.object({
   groupId: objectIdSchema,
@@ -1034,4 +1051,10 @@ export const xenKitchenMoveSchema = z.object({
 export const xenKitchenBookItemParamSchema = z.object({
   token: z.string().regex(/^[A-Za-z0-9_-]{22}$/),
   itemId: objectIdSchema,
+});
+// The clone route serves both /public/:token/clone (one shared item) and
+// /public/book/:token/items/:itemId/clone (an item inside a shared book).
+export const xenKitchenPublicCloneParamSchema = z.object({
+  token: z.string().regex(/^[A-Za-z0-9_-]{22}$/),
+  itemId: objectIdSchema.optional(),
 });

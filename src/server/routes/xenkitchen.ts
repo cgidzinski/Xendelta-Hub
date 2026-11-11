@@ -30,6 +30,7 @@ import {
   xenKitchenMemberParamSchema,
   xenKitchenMoveSchema,
   xenKitchenBookItemParamSchema,
+  xenKitchenPublicCloneParamSchema,
 } from "../utils/validation";
 import {
   applyKitchenFilters,
@@ -358,6 +359,7 @@ module.exports = function (app: any) {
   app.post(
     ["/api/xenkitchen/public/:token/clone", "/api/xenkitchen/public/book/:token/items/:itemId/clone"],
     authenticateToken,
+    validateParams(xenKitchenPublicCloneParamSchema),
     validate(cloneSchema),
     handle(async (req, res) => {
       const uid = callerId(req);

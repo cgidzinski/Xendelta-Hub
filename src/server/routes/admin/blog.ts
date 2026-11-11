@@ -2,7 +2,15 @@ import express = require("express");
 import { BlogPost } from "../../models/blogPost";
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
-import { validate, createBlogPostSchema, updateBlogPostSchema } from "../../utils/validation";
+import {
+  adminBlogAssetQuerySchema,
+  adminBlogIdParamSchema,
+  createBlogPostSchema,
+  updateBlogPostSchema,
+  validate,
+  validateParams,
+  validateQuery,
+} from "../../utils/validation";
 import { ensureUniqueSlug } from "../../utils/slugUtils";
 import { uploadBlogAsset as multerUploadBlogAsset } from "../../config/multer";
 import { uploadBlogAsset, generateUniqueFilename } from "../../utils/mediaUtils";
@@ -120,6 +128,7 @@ module.exports = function (app: express.Application) {
     "/api/admin/blog/asset",
     authenticateToken,
     requireAdmin,
+    validateQuery(adminBlogAssetQuerySchema),
     async function (req: express.Request, res: express.Response) {
       const postId = req.query.postId as string;
       const assetUrl = req.query.assetUrl as string;
@@ -171,6 +180,7 @@ module.exports = function (app: express.Application) {
     "/api/admin/blog/:id",
     authenticateToken,
     requireAdmin,
+    validateParams(adminBlogIdParamSchema),
     validate(updateBlogPostSchema),
     async function (req: express.Request, res: express.Response) {
       const post = await BlogPost.findById(req.params.id).exec();
@@ -216,6 +226,7 @@ module.exports = function (app: express.Application) {
     "/api/admin/blog/:id",
     authenticateToken,
     requireAdmin,
+    validateParams(adminBlogIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const post = await BlogPost.findById(req.params.id).exec();
 

@@ -1,4 +1,12 @@
 import express = require("express");
+import {
+  adminGrantItemSchema,
+  adminUpdateUserSchema,
+  adminUserIdParamSchema,
+  adminUserItemParamSchema,
+  validate,
+  validateParams,
+} from "../../utils/validation";
 import { User } from "../../models/user";
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
@@ -52,6 +60,8 @@ module.exports = function (app: express.Application) {
     "/api/admin/users/:userId",
     authenticateToken,
     requireAdmin,
+    validateParams(adminUserIdParamSchema),
+    validate(adminUpdateUserSchema),
     async function (req: express.Request, res: express.Response) {
       const { userId } = req.params;
       const { roles, xenboxQuota } = req.body;
@@ -121,6 +131,7 @@ module.exports = function (app: express.Application) {
     "/api/admin/users/:userId/avatar/reset",
     authenticateToken,
     requireAdmin,
+    validateParams(adminUserIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const { userId } = req.params;
 
@@ -154,6 +165,7 @@ module.exports = function (app: express.Application) {
     "/api/admin/users/:userId",
     authenticateToken,
     requireAdmin,
+    validateParams(adminUserIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const { userId } = req.params;
 
@@ -186,6 +198,8 @@ module.exports = function (app: express.Application) {
     "/api/admin/users/:userId/give-item",
     authenticateToken,
     requireAdmin,
+    validateParams(adminUserIdParamSchema),
+    validate(adminGrantItemSchema),
     async function (req: express.Request, res: express.Response) {
       const { userId } = req.params;
       const { itemKey } = req.body;
@@ -262,6 +276,7 @@ module.exports = function (app: express.Application) {
     "/api/admin/users/:userId/inventory/:itemKey",
     authenticateToken,
     requireAdmin,
+    validateParams(adminUserItemParamSchema),
     async function (req: express.Request, res: express.Response) {
       const { userId, itemKey } = req.params;
 
