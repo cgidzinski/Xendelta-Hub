@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { startTestApp, type TestApp } from "./testing/testApp";
 import * as budgetRoster from "../../migrations/1794428701239-budget-book-roster";
 import * as splitRoster from "../../migrations/1794428927038-split-group-roster";
+import * as dropRecurring from "../../migrations/1794430096576-split-drop-legacy-recurring";
 
 let t: TestApp;
 beforeAll(async () => {
@@ -62,5 +63,23 @@ describe("split group roster migration", () => {
 
     await splitRoster.down(conn);
     expect((await groups.findOne({ _id: insertedId }))!.roster).toBeUndefined();
+  });
+});
+
+describe("split drop legacy recurring migration", () => {
+  it("removes empty legacy arrays and never touches a non-empty one", async () => {
+    const groups = mongoose.connection.collection("xensplits");
+    const empty = await groups.insertOne({ name: "e", created_by: "x", members: [], recurring_expenses: [] });
+    const full = await groups.insertOne({
+      name: "f",
+      created_by: "x",
+      members: [],
+      recurring_expenses: [{ frequency: "daily" }],
+    });
+
+    await dropRecurring.up(mongoose.connection);
+
+    expect(await groups.findOne({ _id: empty.insertedId })).not.toHaveProperty("recurring_expenses");
+    expect((await groups.findOne({ _id: full.insertedId }))!.recurring_expenses).toHaveLength(1);
   });
 });

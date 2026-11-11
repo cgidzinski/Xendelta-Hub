@@ -56,7 +56,7 @@ export function taskToRecurringSeries(task: any): any {
 
 /**
  * Group response payload: member transform + recurring series hydrated from
- * ScheduledTask (the embedded recurring_expenses array is deprecated).
+ * ScheduledTask. The group no longer stores a series list of its own.
  * The group must already be populate("members", MEMBER_FIELDS)-ed.
  */
 export async function serializeXenSplitGroup(group: any): Promise<any> {
