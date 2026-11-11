@@ -1,3 +1,4 @@
+import PageContainer from "../../../components/ui/PageContainer";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Badge, Box, Button, Chip, Container, Fab, IconButton, InputAdornment, Menu, MenuItem, Paper, Skeleton, Slide, Stack,
@@ -183,7 +184,7 @@ export default function XenKitchen() {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 3, mb: 12 }}>
+    <PageContainer>
       <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ mb: 2 }}>
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <BookSwitcher books={books} value={book} onChange={selectBook} />
@@ -368,6 +369,6 @@ export default function XenKitchen() {
         defaultBookId={currentBook && canEditBook(currentBook.my_role) ? currentBook._id : null}
         onSaved={(item, created) => { if (created) navigate(`/internal/xenkitchen/${item._id}`); }}
       />
-    </Container>
+    </PageContainer>
   );
 }

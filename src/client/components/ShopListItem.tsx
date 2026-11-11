@@ -1,3 +1,4 @@
+import { alpha } from "@mui/material/styles";
 import {
   Typography,
   Box,
@@ -27,7 +28,7 @@ export default function PointsListItemSidebar({ points = 0, onNavigate }: Points
         borderColor: "warning.main",
         backgroundColor: "transparent",
         cursor: "pointer",
-        "&:hover": { backgroundColor: "rgba(255, 193, 7, 0.1)" },
+        "&:hover": { backgroundColor: (t) => alpha(t.palette.warning.main, 0.1) },
       }}
     >
       <PointsIcon sx={{ color: POINTS_GOLD, fontSize: 24 }} />

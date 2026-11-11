@@ -122,7 +122,7 @@ function Gallery({ item, accent }: { item: KitchenItem; accent: string }) {
                 />
                 {i === 1 && images.length > 3 && (
                   <Box onClick={() => setOpen(2)} sx={{
-                    position: "absolute", inset: 0, borderRadius: 3, bgcolor: "rgba(0,0,0,0.5)", color: "#fff",
+                    position: "absolute", inset: 0, borderRadius: 3, bgcolor: "rgba(0,0,0,0.5)", color: "common.white",
                     display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontWeight: 700, fontSize: 20,
                   }}>
                     +{images.length - 3}
@@ -155,13 +155,13 @@ export function Lightbox({ urls, index, onChange }: { urls: string[]; index: num
       {index !== null && (
         <Box sx={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
           <Box component="img" src={urls[index]} alt="" sx={{ maxWidth: "100%", maxHeight: "85vh", objectFit: "contain" }} />
-          <IconButton aria-label="Close" onClick={() => onChange(null)} sx={{ position: "absolute", top: 8, right: 8, color: "#fff", bgcolor: "rgba(0,0,0,0.4)" }}>
+          <IconButton aria-label="Close" onClick={() => onChange(null)} sx={{ position: "absolute", top: 8, right: 8, color: "common.white", bgcolor: "rgba(0,0,0,0.4)" }}>
             <CloseIcon />
           </IconButton>
           {urls.length > 1 && (
             <>
-              <IconButton aria-label="Previous" onClick={() => go(-1)} sx={{ position: "absolute", left: 8, color: "#fff", bgcolor: "rgba(0,0,0,0.4)" }}><ChevronLeftIcon /></IconButton>
-              <IconButton aria-label="Next" onClick={() => go(1)} sx={{ position: "absolute", right: 8, color: "#fff", bgcolor: "rgba(0,0,0,0.4)" }}><ChevronRightIcon /></IconButton>
+              <IconButton aria-label="Previous" onClick={() => go(-1)} sx={{ position: "absolute", left: 8, color: "common.white", bgcolor: "rgba(0,0,0,0.4)" }}><ChevronLeftIcon /></IconButton>
+              <IconButton aria-label="Next" onClick={() => go(1)} sx={{ position: "absolute", right: 8, color: "common.white", bgcolor: "rgba(0,0,0,0.4)" }}><ChevronRightIcon /></IconButton>
             </>
           )}
         </Box>
@@ -301,7 +301,7 @@ function StepRow({ step, index, accent, big, done, onToggle }: {
         sx={{
           flexShrink: 0, width: big ? 40 : 32, height: big ? 40 : 32, borderRadius: "50%", cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800,
-          bgcolor: done ? accent : alpha(accent, 0.15), color: done ? "#fff" : "text.primary",
+          bgcolor: done ? accent : alpha(accent, 0.15), color: done ? "common.white" : "text.primary",
         }}
       >
         {done ? "✓" : index + 1}
@@ -358,7 +358,7 @@ function StepTimer({ minutes, accent }: { minutes: number; accent: string }) {
       label={endAt ? (finished ? "Done! Tap to restart" : `${mm}:${ss} · tap to stop`) : `Start ${formatMinutes(minutes)} timer`}
       sx={{
         mt: 1, fontVariantNumeric: "tabular-nums",
-        ...(endAt ? { bgcolor: finished ? "success.main" : alpha(accent, 0.25), color: finished ? "#fff" : undefined } : {}),
+        ...(endAt ? { bgcolor: finished ? "success.main" : alpha(accent, 0.25), color: finished ? "common.white" : undefined } : {}),
       }}
     />
   );

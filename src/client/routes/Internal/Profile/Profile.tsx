@@ -1,3 +1,4 @@
+import PageContainer from "../../../components/ui/PageContainer";
 import { useEffect, useState } from "react";
 import {
   Box,
@@ -202,7 +203,7 @@ export default function Profile() {
 
   return (
     <Box sx={{ position: "relative" }}>
-      <Container maxWidth="md" sx={{ mt: { xs: 2, sm: 4 } }}>
+      <PageContainer width="narrow">
         {/* Page header */}
         <Box sx={{ mb: { xs: 2, sm: 3 } }}>
           <Typography variant="h5" component="h1" sx={{ fontWeight: 700, letterSpacing: "-0.02em" }}>
@@ -471,7 +472,7 @@ export default function Profile() {
             </Grid>
           </Grid>
         )}
-      </Container>
+      </PageContainer>
     </Box>
   );
 }

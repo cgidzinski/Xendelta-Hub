@@ -97,7 +97,7 @@ export default function ItemCard({
         aria-label={item.favorite ? "Unfavorite" : "Favorite"}
         onClick={onToggleFavorite}
         size="small"
-        sx={{ position: "absolute", right: 6, bottom: 12, color: item.favorite ? "#f9a825" : "text.disabled" }}
+        sx={{ position: "absolute", right: 6, bottom: 12, color: item.favorite ? "warning.main" : "text.disabled" }}
       >
         {item.favorite ? <StarIcon /> : <StarBorderIcon />}
       </IconButton>}

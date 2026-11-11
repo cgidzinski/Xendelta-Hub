@@ -39,7 +39,7 @@ import { formatCurrency } from "./currency";
 import { STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
 import { toCsv, downloadCsv } from "../../../utils/csvMapping";
 import {
-    INCOME_COLOR, MAGNITUDE_COLOR,
+    INCOME_COLOR, MAGNITUDE_COLOR, CHART_COLORS, NEUTRAL_COLOR,
 } from "../../../components/ui/chartColors";
 import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
 import EmptyState from "../../../components/ui/EmptyState";
@@ -79,11 +79,11 @@ const CATEGORY_WIDTH = 132;
 const MAX_STACK_SERIES = 8;
 // The neutral half of the budget-vs-actual pairing: the cap is the backdrop the spend is
 // read against, so it stays quiet and lets the spend bar carry the colour.
-const BUDGETED_COLOR = "#6b6b64";
+const BUDGETED_COLOR = NEUTRAL_COLOR;
 // Needs vs wants: two validated palette hues, deliberately not the income/expense pairing —
 // a need isn't a credit and a want isn't a debit.
-const NEED_COLOR = "#3987e5";
-const WANT_COLOR = "#c98500";
+const NEED_COLOR = CHART_COLORS[0];
+const WANT_COLOR = CHART_COLORS[3];
 
 export default function BookReport() {
     const {

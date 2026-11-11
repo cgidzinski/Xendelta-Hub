@@ -55,3 +55,6 @@ export function colorForLabel(label: string): string {
     }
     return CHART_COLORS[Math.abs(hash) % CHART_COLORS.length];
 }
+
+/** Quiet neutral for backdrops (e.g. a budget cap behind the spend bar). */
+export const NEUTRAL_COLOR = "#6b6b64";

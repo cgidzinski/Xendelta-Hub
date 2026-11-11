@@ -483,22 +483,22 @@ function PhotoStrip({ photos, newFiles, accent, canAdd, onAdd, onRemovePhoto, on
             <Box component="img" src={p.url} alt="" sx={{ ...tile, objectFit: "cover", display: "block" }} />
             {i === 0 && (
               <Chip size="small" icon={<StarIcon sx={{ fontSize: 14 }} />} label="Cover"
-                sx={{ position: "absolute", left: 4, bottom: 4, height: 22, bgcolor: "rgba(0,0,0,0.6)", color: "#fff", "& .MuiChip-icon": { color: "#ffd54f" } }} />
+                sx={{ position: "absolute", left: 4, bottom: 4, height: 22, bgcolor: "rgba(0,0,0,0.6)", color: "common.white", "& .MuiChip-icon": { color: "warning.light" } }} />
             )}
             {!p.existing && (
-              <Chip size="small" label="New" sx={{ position: "absolute", left: 4, top: 4, height: 20, bgcolor: accent, color: "#fff" }} />
+              <Chip size="small" label="New" sx={{ position: "absolute", left: 4, top: 4, height: 20, bgcolor: accent, color: "common.white" }} />
             )}
             <Stack direction="row" sx={{ position: "absolute", right: 2, top: 2 }}>
               {p.existing && i !== 0 && (
                 <Tooltip title="Make cover">
-                  <IconButton size="small" onClick={() => onCoverPhoto(p.key)} sx={{ bgcolor: "rgba(0,0,0,0.5)", color: "#fff", "&:hover": { bgcolor: "rgba(0,0,0,0.7)" }, mr: 0.5 }}>
+                  <IconButton size="small" onClick={() => onCoverPhoto(p.key)} sx={{ bgcolor: "rgba(0,0,0,0.5)", color: "common.white", "&:hover": { bgcolor: "rgba(0,0,0,0.7)" }, mr: 0.5 }}>
                     <StarIcon sx={{ fontSize: 16 }} />
                   </IconButton>
                 </Tooltip>
               )}
               <Tooltip title="Remove">
                 <IconButton size="small" onClick={() => (p.existing ? onRemovePhoto(p.key) : onRemoveNew(p.key))}
-                  sx={{ bgcolor: "rgba(0,0,0,0.5)", color: "#fff", "&:hover": { bgcolor: "rgba(0,0,0,0.7)" } }}>
+                  sx={{ bgcolor: "rgba(0,0,0,0.5)", color: "common.white", "&:hover": { bgcolor: "rgba(0,0,0,0.7)" } }}>
                   <CloseIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </Tooltip>

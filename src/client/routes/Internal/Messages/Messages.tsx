@@ -158,18 +158,18 @@ export default function Messages() {
                         sx={{
                           position: "relative",
                           "&:hover": {
-                            backgroundColor: "rgba(255, 255, 255, 0.1)",
+                            backgroundColor: "action.selected",
                             cursor: "pointer",
                             transform: "translateX(4px)",
                             transition: "all 0.2s ease",
                           },
-                          backgroundColor: "rgba(255, 255, 255, 0.05)",
+                          backgroundColor: "action.hover",
                           py: 1.5,
                           px: 2,
                           mb: 0.5,
                           borderRadius: 4,
                           border: "1px solid",
-                          borderColor: "rgba(255, 255, 255, 0.1)",
+                          borderColor: "divider",
                         }}
                       >
                         {conversation.unread && (

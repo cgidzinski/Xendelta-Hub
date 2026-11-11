@@ -1,3 +1,4 @@
+import PageContainer from "../../../components/ui/PageContainer";
 import { Box, Container, Typography } from "@mui/material";
 import { useTitle } from "../../../hooks/useTitle";
 import CompactHomeHeader from "./components/CompactHomeHeader";
@@ -37,13 +38,13 @@ export default function Home() {
 
   return (
     <Box>
-      <Container maxWidth="xl" sx={{ mt: 3 }}>
+      <PageContainer width="wide">
         <CompactHomeHeader />
         <PinnedAppsSection
           pinnedApps={resolvePinnedApps(profile.pinnedApps)}
           appDetails={appDetails}
         />
-      </Container>
+      </PageContainer>
     </Box>
   );
 }
