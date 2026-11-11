@@ -1,3 +1,4 @@
+import SectionLabel from "../../../components/ui/SectionLabel";
 import { useState, useRef, useMemo, useEffect } from "react";
 import { formatCurrency, getGroupCurrencies } from "../../../utils/currencyUtils";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1061,9 +1062,9 @@ export default function GroupDetail() {
                 {e.splits && e.splits.length > 0 && (
                   <>
                     <Divider sx={{ my: 1.5 }} />
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1 }}>
+                    <SectionLabel sx={{ color: "text.secondary", mb: 1 }}>
                       Split
-                    </Typography>
+                    </SectionLabel>
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
                       {e.splits.map((split) => {
                         const member = group.members.find((m) => m.user_id === split.user_id);
@@ -1089,9 +1090,9 @@ export default function GroupDetail() {
                 {e.images && e.images.length > 0 && (
                   <>
                     <Divider sx={{ my: 1.5 }} />
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1 }}>
+                    <SectionLabel sx={{ color: "text.secondary", mb: 1 }}>
                       Photos
-                    </Typography>
+                    </SectionLabel>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
                       {e.images.map((img) => {
                         const urlEntry = viewImageUrls.find((u) => u._id === img._id);

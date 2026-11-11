@@ -1,3 +1,4 @@
+import SectionLabel from "../../../components/ui/SectionLabel";
 import { useState, useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Box, Typography, Button, IconButton } from "@mui/material";
@@ -186,9 +187,9 @@ export default function GroupAnalytics() {
             {/* Rate ticker — the group's most-used currency pair, shown both directions */}
             {tickerPair && (
                 <Box sx={{ ...xsCardSx, display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2, flexShrink: 0 }}>
-                    <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, letterSpacing: 0.5, textTransform: "uppercase" }}>
+                    <SectionLabel sx={{ mb: 0 }}>
                         {tickerPair.from}/{tickerPair.to}
-                    </Typography>
+                    </SectionLabel>
                     {rateQuery.data ? (
                         <Box sx={{ textAlign: "right" }}>
                             <Typography variant="body2" sx={{ fontWeight: 700 }}>
@@ -224,13 +225,9 @@ export default function GroupAnalytics() {
                     { label: "Largest expense", value: formatCurrency(stats.largest, selectedCurrency) },
                 ].map((card) => (
                     <Box key={card.label} sx={{ bgcolor: "action.hover", borderRadius: 2, p: 2, minWidth: 0 }}>
-                        <Typography
-                            variant="caption"
-                            color="text.disabled"
-                            sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 0.5 }}
-                        >
+                        <SectionLabel sx={{ mb: 0.5 }}>
                             {card.label}
-                        </Typography>
+                        </SectionLabel>
                         <Typography variant="body1" sx={{ fontWeight: 700, lineHeight: 1.3 }} noWrap>
                             {card.value}
                         </Typography>
@@ -249,9 +246,9 @@ export default function GroupAnalytics() {
 
             {/* Who paid most */}
             <Box sx={{ bgcolor: "action.hover", borderRadius: 2, p: 2, mb: 2 }}>
-                <Typography variant="caption" color="text.disabled" sx={{ display: "block", mb: 1, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                <SectionLabel sx={{ mb: 1 }}>
                     Who paid most
-                </Typography>
+                </SectionLabel>
                 <ResponsiveContainer width="100%" height={200}>
                     <PieChart>
                         <Pie data={memberSpendData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={75} label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine={false}>
@@ -266,9 +263,9 @@ export default function GroupAnalytics() {
 
             {/* Spending by category */}
             <Box sx={{ bgcolor: "action.hover", borderRadius: 2, p: 2, mb: 2 }}>
-                <Typography variant="caption" color="text.disabled" sx={{ display: "block", mb: 1, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                <SectionLabel sx={{ mb: 1 }}>
                     Spending by category
-                </Typography>
+                </SectionLabel>
                 <ResponsiveContainer width="100%" height={Math.max(120, categorySpendData.length * 38)}>
                     <BarChart data={categorySpendData} layout="vertical" margin={{ top: 0, right: 16, left: 8, bottom: 0 }}>
                         <XAxis type="number" tick={{ fontSize: 10 }} />
@@ -285,9 +282,9 @@ export default function GroupAnalytics() {
 
             {/* Monthly spend */}
             <Box sx={{ bgcolor: "action.hover", borderRadius: 2, p: 2, mb: 3 }}>
-                <Typography variant="caption" color="text.disabled" sx={{ display: "block", mb: 1, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                <SectionLabel sx={{ mb: 1 }}>
                     Monthly spend (last 12 months)
-                </Typography>
+                </SectionLabel>
                 <ResponsiveContainer width="100%" height={180}>
                     <BarChart data={monthlySpendData} margin={{ top: 0, right: 8, left: -16, bottom: 0 }}>
                         <XAxis dataKey="month" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
