@@ -20,7 +20,7 @@ Flat, outlined surfaces on one brand blue. Surfaces are separated by a 1px borde
 
 ## Rules
 - Colours come from the theme (`primary.main`, `text.secondary`, `alpha(theme.palette.x, n)`). No hex or `rgba()`
-  literals in pages. Exceptions: canvas/board drawing (XenCasino), third-party brand marks
+  literals in pages. Exceptions: third-party brand marks
   (`AuthButton`), the files listed in `designLint.test.ts`.
 - Cards are outlined, never raised. Do not pass `elevation` to `Paper`/`Card`; menus and snackbars keep theirs.
 - One page title per page, via `PageHeader` (h5, `component="h1"`).
