@@ -1,3 +1,5 @@
+import { formatMoney, currencySymbol } from "@shared/money";
+
 // The list itself lives in shared/ so the server validates against the same one.
 export { ALL_CURRENCIES, DEFAULT_CURRENCY } from "@shared/currencies";
 
@@ -59,15 +61,14 @@ export function formatRate(
   return `1 ${currencyA} = ${parseFloat(rate.toFixed(6))} ${currencyB}`;
 }
 
+// XenSplit shows the country on dollar currencies (CA$12.50) because a group can mix dollars.
+// XenBudget has its own narrow-symbol wrapper in routes/Internal/XenBudget/currency.ts.
 export function formatCurrency(amount: number, currency: string): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
+  return formatMoney(amount, currency);
 }
 
 export function getCurrencySymbol(currency: string): string {
-  return (
-    new Intl.NumberFormat("en-US", { style: "currency", currency }).formatToParts(0).find((p) => p.type === "currency")
-      ?.value ?? currency
-  );
+  return currencySymbol(currency);
 }
 
 export function withoutCurrency(currencies: string[], excluded: string): string[] {

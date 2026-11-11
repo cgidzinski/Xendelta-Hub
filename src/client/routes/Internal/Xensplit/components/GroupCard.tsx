@@ -1,3 +1,4 @@
+import { formatMoney } from "@shared/money";
 import { useNavigate } from "react-router-dom";
 import { Card, CardActionArea, CardContent, Typography, Box, Avatar, AvatarGroup, Chip } from "@mui/material";
 import GroupAvatar from "./GroupAvatar";
@@ -43,7 +44,7 @@ export function GroupCard({ group, userId }: GroupCardProps) {
   const isSettledUp = nonZeroEntries.length === 0;
 
   const formatBalance = (currency: string, amount: number) => {
-    const formatted = new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Math.abs(amount));
+    const formatted = formatMoney(Math.abs(amount), currency);
     return amount > 0 ? (
       <Typography
         key={currency}

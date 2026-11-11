@@ -1,3 +1,4 @@
+import { formatMoney } from "@shared/money";
 import UploadProgress from "../../../../components/ui/UploadProgress";
 import React, { useEffect, useRef } from "react";
 import PWAImageCapture from "../../../../pwa/components/PWAImageCapture";
@@ -495,10 +496,7 @@ export default function ExpenseForm({
               {splitType === "equal" ? (
                 numAmount > 0 && (
                   <Typography variant="caption" color="text.secondary">
-                    {new Intl.NumberFormat(undefined, { style: "currency", currency }).format(
-                      numAmount / selectedParticipants.length,
-                    )}{" "}
-                    each
+                    {formatMoney(numAmount / selectedParticipants.length, currency, { locale: null })} each
                   </Typography>
                 )
               ) : (

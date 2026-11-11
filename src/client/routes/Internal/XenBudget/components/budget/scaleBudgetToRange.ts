@@ -1,7 +1,8 @@
 import type { BudgetStatus } from "../../../../../hooks/xenbudget/types";
+import { roundMoney } from "@shared/money";
 import { periodsInRange } from "./budgetForRange";
 
-const round = (v: number) => Math.round(v * 100) / 100;
+const round = (v: number) => roundMoney(v);
 
 /**
  * A budget's limits restated for an arbitrary reporting range.

@@ -1,3 +1,4 @@
+import { roundMoney } from "@shared/money";
 // Turning a parsed CSV into XenBudget items.
 //
 // Kept pure and free of React so it can be unit-tested, which matters more here than
@@ -261,7 +262,7 @@ export function applyMapping(rows: CsvRow[], config: MappingConfig): MappingResu
       index,
       // Negative means money out, whatever the file's own convention was.
       type: signedAmount < 0 ? "expense" : "income",
-      amount: Math.round(Math.abs(signedAmount) * 100) / 100,
+      amount: roundMoney(Math.abs(signedAmount)),
       date: date.toISOString(),
       description: description.slice(0, 500),
       notes: memoText ? memoText.slice(0, 1000) : undefined,
