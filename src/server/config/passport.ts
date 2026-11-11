@@ -7,12 +7,17 @@ const { User } = require('../models/user');
 import { getJwtSecret } from './env';
 
 // Check for required environment variables
-if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-  console.warn('⚠️  WARNING: Google OAuth credentials not found. Google login will not work.');
-}
-
-if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) {
-  console.warn('⚠️  WARNING: GitHub OAuth credentials not found. GitHub login will not work.');
+// A missing provider only disables that login button, so this warns rather than fails. Tests
+// (and the deploy's test step) never have these set, so stay quiet there.
+if (process.env.NODE_ENV !== 'test') {
+  const providers: Array<[string, string, string | undefined, string | undefined]> = [
+    ['Google', 'GOOGLE', process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET],
+    ['GitHub', 'GITHUB', process.env.GITHUB_CLIENT_ID, process.env.GITHUB_CLIENT_SECRET],
+    ['Discord', 'DISCORD', process.env.DISCORD_CLIENT_ID, process.env.DISCORD_CLIENT_SECRET],
+  ];
+  for (const [name, , id, secret] of providers) {
+    if (!id || !secret) console.warn(`⚠️  WARNING: ${name} OAuth credentials not found. ${name} login will not work.`);
+  }
 }
 
 // JWT Strategy Configuration
