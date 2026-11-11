@@ -43,6 +43,7 @@
     "express-rate-limit": "^8.7.4",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
+    "mongodb": "~6.20.0",
     "mongoose": "^8.24.8",
     "multer": "^2.5.0",
     "notistack": "^3.0.2",
