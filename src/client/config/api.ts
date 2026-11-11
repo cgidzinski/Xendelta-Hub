@@ -43,6 +43,14 @@ export function reportApiError(error: unknown): void {
 /**
  * Create axios instance with request interceptor for authentication
  */
+/**
+ * Ordinary requests must fail fast (a hung one should reject, not hang its caller), but an upload
+ * of several phone photos legitimately takes longer than that on a mobile connection. The server
+ * may be mid-way through storing them when a short client timeout fires, so the user is told it
+ * failed while it was still succeeding. Bodies sent as FormData get this ceiling instead.
+ */
+export const UPLOAD_TIMEOUT_MS = 10 * 60 * 1000;
+
 const createAxiosInstance = (): AxiosInstance => {
   const instance = axios.create({
     baseURL: "", // Use relative URLs, Vite proxy handles routing
@@ -62,6 +70,7 @@ const createAxiosInstance = (): AxiosInstance => {
       // Handle FormData - don't set Content-Type for FormData
       // Browser needs to set boundary automatically
       if (config.data instanceof FormData) {
+        config.timeout = Math.max(config.timeout ?? 0, UPLOAD_TIMEOUT_MS);
         // Remove Content-Type header to let browser set it with boundary
         if (config.headers) {
           delete config.headers["Content-Type"];

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { apiClient, UPLOAD_TIMEOUT_MS } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 import { XenBoxFile, XenBoxFileListResponse } from "../../types/XenBoxFile";
 
@@ -93,12 +93,17 @@ const uploadChunkApi = async (
   totalChunks: number,
   chunkData: string,
 ): Promise<ChunkUploadResponse> => {
-  const response = await apiClient.post<ApiResponse<ChunkUploadResponse>>("/api/xenbox/chunk", {
-    uploadId,
-    chunkIndex,
-    totalChunks,
-    chunkData,
-  });
+  const response = await apiClient.post<ApiResponse<ChunkUploadResponse>>(
+    "/api/xenbox/chunk",
+    {
+      uploadId,
+      chunkIndex,
+      totalChunks,
+      chunkData,
+    },
+    // A chunk is ~13 MB of base64: it needs the upload timeout, not the 20 s default.
+    { timeout: UPLOAD_TIMEOUT_MS },
+  );
   return response.data.data!;
 };
 

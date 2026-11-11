@@ -41,6 +41,9 @@ plus `npm audit --omit=dev --audit-level=high`.
   in order), `shared.ts` (helpers used by more than one section) and one file per area (`books`, `labels`, `rules`,
   `backup`, `importCsv`, `budgets`, `piggyBanks`, `summary`, `items`). Each exports `register<Area>Routes(app)`.
   Registration order matters in Express (a literal path must come before a `:param` path), so keep it in `index.ts`.
+- **Uploads** (client): the shared axios client times ordinary requests out at 20 s, but any FormData body gets
+  `UPLOAD_TIMEOUT_MS` (10 min) automatically. For progress, use `useUploadProgress()` and pass its
+  `onUploadProgress` to the request, then render `<UploadProgress percent={percent} />` (`components/ui`).
 - Changes to a *populated* document are not saved by saving its parent. Update the referenced model directly.
 
 ## Environment

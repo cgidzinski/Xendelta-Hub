@@ -1037,12 +1037,24 @@ module.exports = function (app: any) {
             .json({ status: false, message: `Cannot exceed ${MAX_XENSPLIT_IMAGES_PER_EXPENSE} images per expense` });
         }
 
-        for (const file of files) {
-          const filename = generateUniqueFilename(file.originalname);
-          const gcsPath = `xensplit-images/${groupId}/${expenseId}/${filename}`;
-          await uploadToGCS(file.buffer, gcsPath, file.mimetype, true);
-          expense.images.push({ gcs_path: gcsPath });
+        // Upload to storage in parallel: a request with several phone photos used to upload them
+        // one after another, which on a slow connection ran past the client's patience even though
+        // the server was still working. If any one fails, remove the ones that made it so a retry
+        // doesn't leave orphans behind, and save nothing.
+        const gcsPaths = files.map(
+          (file) => `xensplit-images/${groupId}/${expenseId}/${generateUniqueFilename(file.originalname)}`,
+        );
+        const results = await Promise.allSettled(
+          files.map((file, i) => uploadToGCS(file.buffer, gcsPaths[i], file.mimetype, true)),
+        );
+        if (results.some((r) => r.status === "rejected")) {
+          await Promise.allSettled(
+            gcsPaths.filter((_, i) => results[i].status === "fulfilled").map((p) => deleteFromGCS(p, true)),
+          );
+          const failure = results.find((r) => r.status === "rejected") as PromiseRejectedResult;
+          throw failure.reason;
         }
+        for (const gcsPath of gcsPaths) expense.images.push({ gcs_path: gcsPath });
 
         await group.save();
         await logXenSplit(groupId, userId, "expense_images_added", {
