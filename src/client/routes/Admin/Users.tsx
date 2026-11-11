@@ -43,7 +43,7 @@ import { useSnackbar } from "notistack";
 import ListSkeleton from "../../components/ui/ListSkeleton";
 import { useTitle } from "../../hooks/useTitle";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
-import { useAdminUsers, User, NotifyChannel } from "../../hooks/admin/useAdminUsers";
+import { useAdminUsers, AdminUser, NotifyChannel } from "../../hooks/admin/useAdminUsers";
 import { formatFileSize } from "../../utils/fileUtils";
 
 const AVAILABLE_ROLES = ["admin", "user"];
@@ -76,7 +76,7 @@ export default function Users() {
     refetch,
   } = useAdminUsers();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [editingRoles, setEditingRoles] = useState<string[]>([]);
   const [editingQuota, setEditingQuota] = useState<string>("");
@@ -111,7 +111,7 @@ export default function Users() {
     }
   };
 
-  const handleUserClick = (user: User) => {
+  const handleUserClick = (user: AdminUser) => {
     setSelectedUser(user);
     setEditingRoles(user.roles || []);
     setEditingQuota(user.xenbox?.spaceAllowed ? formatFileSize(user.xenbox.spaceAllowed) : "");

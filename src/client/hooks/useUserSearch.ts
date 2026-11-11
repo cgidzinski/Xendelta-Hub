@@ -1,12 +1,9 @@
 import { useState, useEffect } from "react";
+import type { PublicUser } from "../types/user";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../config/api";
 
-export interface SearchedUser {
-  _id: string;
-  username: string;
-  avatar: string | null;
-}
+export type SearchedUser = PublicUser;
 
 export function useUserSearch(query: string) {
   const [debouncedQuery, setDebouncedQuery] = useState(query);

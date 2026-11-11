@@ -3,7 +3,7 @@ import { apiClient, api } from "../../config/api";
 import { userProfileKeys } from "../user/useUserProfile";
 
 // Types
-export interface User {
+export interface AdminUser {
   _id: string;
   username: string;
   email: string;
@@ -27,7 +27,7 @@ export interface User {
 }
 
 interface UsersResponse {
-  users: User[];
+  users: AdminUser[];
 }
 
 // Query keys
@@ -37,7 +37,7 @@ export const adminUsersKeys = {
 };
 
 // API functions
-const fetchUsers = async (): Promise<User[]> => {
+const fetchUsers = async (): Promise<AdminUser[]> => {
   return (await api.get<UsersResponse>("/api/admin/users")).users;
 };
 

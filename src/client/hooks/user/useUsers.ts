@@ -1,16 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
+import type { PublicUser } from "../../types/user";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../config/api";
 
 // Types
-export interface User {
-  _id: string;
-  username: string;
-  avatar?: string;
-}
-
 interface UsersResponse {
-  users: User[];
+  users: PublicUser[];
 }
 
 // Query keys
@@ -20,7 +15,7 @@ export const usersKeys = {
 };
 
 // API functions
-const fetchUsers = async (): Promise<User[]> => {
+const fetchUsers = async (): Promise<PublicUser[]> => {
   return (await api.get<UsersResponse>("/api/users")).users;
 };
 
