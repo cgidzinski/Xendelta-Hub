@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
+import { tokenStore } from "../config/tokenStore";
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "./AuthContext";
 
@@ -30,7 +31,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const token = localStorage.getItem("token");
+    const token = tokenStore.get();
     if (!token) return;
 
     // Disconnect existing socket if any (prevent duplicates during hot reload)

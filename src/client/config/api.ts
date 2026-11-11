@@ -4,6 +4,7 @@
  */
 
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
+import { tokenStore } from "./tokenStore";
 import { Bugsnag } from "./bugsnag";
 
 /**
@@ -60,7 +61,7 @@ const createAxiosInstance = (): AxiosInstance => {
   // Request interceptor to add auth token
   instance.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-      const token = localStorage.getItem("token");
+      const token = tokenStore.get();
 
       // Add Authorization header if token exists
       if (token && config.headers) {
@@ -102,7 +103,7 @@ const createAxiosInstance = (): AxiosInstance => {
 
         if (status === 401) {
           // Unauthorized - clear token and redirect. Routine token-expiry flow, not a bug.
-          localStorage.removeItem("token");
+          tokenStore.clear();
           throw makeApiError("Unauthorized - please log in again", error, status);
         } else if (status === 403) {
           throw makeApiError(data?.message || "You are not authorized to perform this action", error, status);

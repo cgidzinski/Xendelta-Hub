@@ -1,4 +1,6 @@
+import { useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { tokenStore } from "../../config/tokenStore";
 import { apiClient } from "../../config/api";
 
 // Types
@@ -52,7 +54,7 @@ export const authKeys = {
 
 // API functions
 const checkAuthStatus = async (): Promise<AuthUser | null> => {
-  const token = localStorage.getItem("token");
+  const token = tokenStore.get();
   if (!token) {
     return null;
   }
@@ -65,7 +67,7 @@ const checkAuthStatus = async (): Promise<AuthUser | null> => {
   if (data.status && data.user) {
     // Save new token if provided (automatic refresh)
     if (data.token) {
-      localStorage.setItem("token", data.token);
+      tokenStore.set(data.token);
     }
     // Convert user from API format (may have _id) to AuthUser format (id)
     const user = data.user;
@@ -92,7 +94,7 @@ const loginUser = async (email: string, password: string): Promise<LoginResponse
   const data = response.data;
 
   if (data.status && data.token && data.user) {
-    localStorage.setItem("token", data.token);
+    tokenStore.set(data.token);
   }
 
   return data;
@@ -104,7 +106,7 @@ const signupUser = async (signupData: SignupData): Promise<SignupResponse> => {
   const data = response.data;
 
   if (data.status && data.token && data.user) {
-    localStorage.setItem("token", data.token);
+    tokenStore.set(data.token);
   }
 
   return data;
@@ -223,22 +225,36 @@ export const useAuthHook = () => {
     },
   });
 
-  const logout = () => {
-    localStorage.removeItem("token");
+  // Whatever clears the token (the logout button, a 401 from any request, a sign-out in another
+  // tab) lands here, so the signed-in state, the cached data and the socket always follow it.
+  const resetSession = useCallback(() => {
     // Set auth status to null first (this updates isAuthenticated to false)
     queryClient.setQueryData(authKeys.status(), null);
     // Remove all queries except auth to clear cached user data
-    const allQueries = queryClient.getQueryCache().getAll();
     const authKey = authKeys.status();
-    allQueries.forEach((query) => {
-      // Compare query keys - if it's not the auth query, remove it
-      if (JSON.stringify(query.queryKey) !== JSON.stringify(authKey)) {
-        queryClient.removeQueries({ queryKey: query.queryKey });
-      }
-    });
+    queryClient
+      .getQueryCache()
+      .getAll()
+      .forEach((query) => {
+        if (JSON.stringify(query.queryKey) !== JSON.stringify(authKey)) {
+          queryClient.removeQueries({ queryKey: query.queryKey });
+        }
+      });
     // Force a refetch/invalidation of the auth query to ensure re-render
-    // But since there's no token, it will return null
+    // But since there is no token, it will return null
     queryClient.invalidateQueries({ queryKey: authKeys.status() });
+  }, [queryClient]);
+
+  useEffect(
+    () =>
+      tokenStore.subscribe((token) => {
+        if (token === null) resetSession();
+      }),
+    [resetSession],
+  );
+
+  const logout = () => {
+    tokenStore.clear();
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {
