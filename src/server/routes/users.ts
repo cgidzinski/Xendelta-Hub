@@ -281,6 +281,7 @@ module.exports = function (app: express.Application) {
       if (!fullUser) {
         return res.json({
           success: false,
+          status: false,
           message: "User not found",
         });
       }
@@ -289,6 +290,7 @@ module.exports = function (app: express.Application) {
 
       return res.json({
         success: true,
+        status: true,
         providers: activeProviders,
         canUnlinkLocal: activeProviders.length > 1 || !fullUser.hasAuthProvider("local"),
       });
@@ -296,6 +298,7 @@ module.exports = function (app: express.Application) {
       console.error("Get auth providers error:", error);
       return res.json({
         success: false,
+        status: false,
         message: "Failed to get authentication providers",
       });
     }
@@ -312,12 +315,14 @@ module.exports = function (app: express.Application) {
       if (fullUser.hasAuthProvider("google")) {
         return res.json({
           success: false,
+          status: false,
           message: "Google account is already linked",
         });
       }
 
       return res.json({
         success: true,
+        status: true,
         message: "Redirect to Google OAuth for account linking",
         redirectUrl: `/api/auth/google?state=link&userId=${user._id}`,
       });
@@ -325,6 +330,7 @@ module.exports = function (app: express.Application) {
       console.error("Link Google account error:", error);
       return res.json({
         success: false,
+        status: false,
         message: "Failed to initiate Google account linking",
       });
     }
@@ -341,12 +347,14 @@ module.exports = function (app: express.Application) {
       if (fullUser.hasAuthProvider("github")) {
         return res.json({
           success: false,
+          status: false,
           message: "GitHub account is already linked",
         });
       }
 
       return res.json({
         success: true,
+        status: true,
         message: "Redirect to GitHub OAuth for account linking",
         redirectUrl: `/api/auth/github?state=link&userId=${user._id}`,
       });
@@ -354,6 +362,7 @@ module.exports = function (app: express.Application) {
       console.error("Link GitHub account error:", error);
       return res.json({
         success: false,
+        status: false,
         message: "Failed to initiate GitHub account linking",
       });
     }
@@ -370,12 +379,14 @@ module.exports = function (app: express.Application) {
       if (fullUser.hasAuthProvider("discord")) {
         return res.json({
           success: false,
+          status: false,
           message: "Discord account is already linked",
         });
       }
 
       return res.json({
         success: true,
+        status: true,
         message: "Redirect to Discord OAuth for account linking",
         redirectUrl: `/api/auth/discord?state=link&userId=${user._id}`,
       });
@@ -383,6 +394,7 @@ module.exports = function (app: express.Application) {
       console.error("Link Discord account error:", error);
       return res.json({
         success: false,
+        status: false,
         message: "Failed to initiate Discord account linking",
       });
     }
@@ -401,6 +413,7 @@ module.exports = function (app: express.Application) {
         if (!provider) {
           return res.json({
             success: false,
+            status: false,
             message: "Provider is required",
           });
         }
@@ -411,6 +424,7 @@ module.exports = function (app: express.Application) {
         if (!fullUser.hasAuthProvider(provider)) {
           return res.json({
             success: false,
+            status: false,
             message: `${provider} account is not linked`,
           });
         }
@@ -420,6 +434,7 @@ module.exports = function (app: express.Application) {
         if (activeProviders.length <= 1) {
           return res.json({
             success: false,
+            status: false,
             message: "Cannot unlink the only authentication method. Please add another method first.",
           });
         }
@@ -428,6 +443,7 @@ module.exports = function (app: express.Application) {
 
         return res.json({
           success: true,
+          status: true,
           message: `${provider} account unlinked successfully`,
           providers: fullUser.getActiveProviders(),
         });
@@ -435,6 +451,7 @@ module.exports = function (app: express.Application) {
         console.error("Unlink provider error:", error);
         return res.json({
           success: false,
+          status: false,
           message: "Failed to unlink authentication provider",
         });
       }
@@ -454,6 +471,7 @@ module.exports = function (app: express.Application) {
         if (!password) {
           return res.json({
             success: false,
+            status: false,
             message: "Password is required",
           });
         }
@@ -464,6 +482,7 @@ module.exports = function (app: express.Application) {
         if (fullUser.password) {
           return res.json({
             success: false,
+            status: false,
             message: "Account already has a password",
           });
         }
@@ -473,6 +492,7 @@ module.exports = function (app: express.Application) {
 
         return res.json({
           success: true,
+          status: true,
           message: "Password added successfully. You can now sign in with email and password.",
           providers: fullUser.getActiveProviders(),
         });
@@ -480,6 +500,7 @@ module.exports = function (app: express.Application) {
         console.error("Add password error:", error);
         return res.json({
           success: false,
+          status: false,
           message: "Failed to add password",
         });
       }
