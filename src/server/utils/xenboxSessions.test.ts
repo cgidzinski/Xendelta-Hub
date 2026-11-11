@@ -27,10 +27,10 @@ vi.mock("https", () => {
 });
 
 let t: TestApp;
-let utils: typeof import("./xenboxUtils");
+let utils: typeof import("./xenboxUtils.js");
 beforeAll(async () => {
   t = await startTestApp([() => import("../routes/xenbox.js")]);
-  utils = await import("./xenboxUtils");
+  utils = await import("./xenboxUtils.js");
 }, 180_000);
 afterAll(async () => {
   await t?.stop();
