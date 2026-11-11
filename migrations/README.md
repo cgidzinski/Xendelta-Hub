@@ -34,3 +34,15 @@ each environment migrates its own database. Applied migrations are tracked in th
 - **Boot** — `runPendingMigrations()` in `src/server/infrastructure/migrations.ts` runs
   pending migrations once on the Mongo `connected` event, before the scheduler. This is
   a safety net for local dev and missed deploy steps; a failure is logged, not fatal.
+
+## Read this before starting a server against a real database
+
+**Starting the app runs pending migrations**, on whatever database `MONGODB_URI` points at (the
+boot safety net above). So `npm run dev` or `tsx src/server/server.ts` with a `.env` that points
+at staging or production will migrate that database as soon as the server connects. Before you
+write or test a data migration:
+
+- Rehearse it on a copy: `npm run db:export`, restore into a scratch database, point `MONGODB_URI`
+  there, then `npm run db:migrate`.
+- Check how big the data really is first: `npm run db:stats` (read-only, safe on production).
+- Never run a branch containing an unmerged migration against a shared database.
