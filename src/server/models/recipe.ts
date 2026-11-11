@@ -1,10 +1,9 @@
-var mongoose = require("mongoose");
-var Schema = mongoose.Schema;
+import mongoose, { Schema, type InferSchemaType } from "mongoose";
 
 // PAINT SCHEMA (embedded in a step)
 // The paint list drives the swatches on each step, the recipe's "Paints used" panel and
 // search-by-paint. PAINT_TYPES is shared with the client so both ends agree on the enum.
-var paintSchema = new mongoose.Schema(
+const paintSchema = new Schema(
   {
     brand: { type: String, default: "" }, // e.g., "Citadel"
     name: { type: String, default: "" }, // e.g., "Nuln Oil"
@@ -19,7 +18,7 @@ var paintSchema = new mongoose.Schema(
 );
 
 // STEP SCHEMA (embedded in Recipe)
-var stepSchema = new mongoose.Schema(
+const stepSchema = new Schema(
   {
     index: { type: Number, required: true },
     stepName: { type: String }, // Name of the step
@@ -32,7 +31,7 @@ var stepSchema = new mongoose.Schema(
 );
 
 // RECIPE SCHEMA
-var recipeSchema = new mongoose.Schema({
+const recipeSchema = new Schema({
   showcase: [{ type: String }], // Array of public GCS URLs
   title: { type: String, required: true },
   description: { type: String },
@@ -54,10 +53,12 @@ recipeSchema.index({ "steps.paints.name": 1 });
 
 // Update dateUpdated before saving
 recipeSchema.pre("save", function (next) {
-  this.dateUpdated = Date.now();
+  this.dateUpdated = new Date();
   next();
 });
 
-var Recipe = mongoose.model("Recipe", recipeSchema);
+export type RecipeAttrs = InferSchemaType<typeof recipeSchema>;
 
-module.exports = { Recipe };
+const Recipe = mongoose.model("Recipe", recipeSchema);
+
+export { Recipe };

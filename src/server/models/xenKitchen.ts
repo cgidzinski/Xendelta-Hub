@@ -1,9 +1,8 @@
-var mongoose = require("mongoose");
-var Schema = mongoose.Schema;
+import mongoose, { Schema, type InferSchemaType } from "mongoose";
 
 // A recipe book is the unit of sharing: items and categories belong to a book, and people
 // are members of it. Everything in a shared book is shared with everyone in it.
-var bookMemberSchema = new Schema(
+const bookMemberSchema = new Schema(
   {
     user_id: { type: String, required: true },
     role: { type: String, enum: ["owner", "editor", "viewer"], default: "editor" },
@@ -12,7 +11,7 @@ var bookMemberSchema = new Schema(
   { _id: false },
 );
 
-var bookSchema = new Schema({
+const bookSchema = new Schema({
   name: { type: String, required: true, maxlength: 60 },
   description: { type: String, default: "", maxlength: 500 },
   icon: { type: String, default: "restaurant", maxlength: 30 },
@@ -34,7 +33,7 @@ bookSchema.index({ "share.token": 1 }, { unique: true, sparse: true });
 
 // A category decides which fields its items show. "recipe" is ingredients + steps;
 // "instructions" is the heating directions off a box (oven/microwave/air fryer...).
-var categorySchema = new Schema({
+const categorySchema = new Schema({
   book_id: { type: Schema.Types.ObjectId, ref: "XenKitchenBook", required: true },
   name: { type: String, required: true, maxlength: 40 },
   icon: { type: String, default: "restaurant", maxlength: 30 },
@@ -46,12 +45,12 @@ var categorySchema = new Schema({
 
 categorySchema.index({ book_id: 1, order: 1 });
 
-var imageSchema = new Schema({
+const imageSchema = new Schema({
   gcs_path: { type: String, required: true },
   url: { type: String, required: true },
 });
 
-var ingredientSchema = new Schema({
+const ingredientSchema = new Schema({
   name: { type: String, default: "", maxlength: 120 },
   // Lowercased/trimmed name, so suggestions and "contains ingredient" filters ignore case.
   name_key: { type: String, default: "", maxlength: 120 },
@@ -61,12 +60,12 @@ var ingredientSchema = new Schema({
   section: { type: String, default: "", maxlength: 60 },
 });
 
-var stepSchema = new Schema({
+const stepSchema = new Schema({
   text: { type: String, default: "", maxlength: 2000 },
   timer_minutes: { type: Number, min: 0, max: 1440, default: null },
 });
 
-var methodSchema = new Schema({
+const methodSchema = new Schema({
   method: {
     type: String,
     enum: ["oven", "microwave", "air_fryer", "stovetop", "grill", "other"],
@@ -84,7 +83,7 @@ var methodSchema = new Schema({
 
 // One item schema for everything. Fields that the category's layout doesn't show are
 // kept, so moving an item to another category and back loses nothing.
-var itemSchema = new Schema({
+const itemSchema = new Schema({
   book_id: { type: Schema.Types.ObjectId, ref: "XenKitchenBook", required: true },
   // Who added / last changed it, shown as "added by". The item belongs to the book, not to them.
   created_by: { type: String, default: null },
@@ -126,8 +125,12 @@ itemSchema.pre("save", function (next) {
   next();
 });
 
+export type XenKitchenBookAttrs = InferSchemaType<typeof bookSchema>;
+export type XenKitchenCategoryAttrs = InferSchemaType<typeof categorySchema>;
+export type XenKitchenItemAttrs = InferSchemaType<typeof itemSchema>;
+
 const XenKitchenBook = mongoose.model("XenKitchenBook", bookSchema);
 const XenKitchenCategory = mongoose.model("XenKitchenCategory", categorySchema);
 const XenKitchenItem = mongoose.model("XenKitchenItem", itemSchema);
 
-module.exports = { XenKitchenBook, XenKitchenCategory, XenKitchenItem };
+export { XenKitchenBook, XenKitchenCategory, XenKitchenItem };

@@ -7,13 +7,13 @@ export type BudgetPeriod = "weekly" | "monthly" | "quarterly" | "yearly" | "cust
 export interface Share {
   user_id: string;
   amount: number;
-  percentage?: number;
+  percentage?: number | null;
 }
 
 export interface CategoryWeight {
   name: string;
   amount: number;
-  percentage?: number;
+  percentage?: number | null;
 }
 
 export interface BudgetLike {
@@ -39,7 +39,7 @@ interface WeightedPart {
 export interface ResolvedPart {
   key: string;
   amount: number;
-  percentage?: number;
+  percentage?: number | null;
 }
 
 /**

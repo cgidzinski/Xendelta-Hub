@@ -1,5 +1,5 @@
 import express = require("express");
-const { BlogPost } = require("../../models/blogPost");
+import { BlogPost } from "../../models/blogPost";
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
 import { validate, createBlogPostSchema, updateBlogPostSchema } from "../../utils/validation";

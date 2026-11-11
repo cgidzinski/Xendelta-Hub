@@ -1,16 +1,15 @@
-var mongoose = require("mongoose");
-var bcrypt = require("bcryptjs");
-var Schema = mongoose.Schema;
+import mongoose, { Schema, type HydratedDocument, type InferSchemaType, type Model } from "mongoose";
+import bcrypt from "bcryptjs";
 
 // User-specific conversation metadata (references Conversation collection)
-var userConversationMetadataSchema = new mongoose.Schema({
+const userConversationMetadataSchema = new Schema({
   conversationId: { type: Schema.Types.ObjectId, ref: "Conversation", required: true },
   unread: { type: Boolean, default: true }, // true if user has unread messages in this conversation
   lastReadAt: { type: Date }, // timestamp of last read
 });
 
 // AUTHENTICATION PROVIDER SCHEMA
-var authProviderSchema = new mongoose.Schema({
+const authProviderSchema = new Schema({
   provider: { type: String, required: true }, // 'local', 'google', 'facebook', etc.
   providerId: { type: String }, // Google ID, Facebook ID, etc.
   email: { type: String }, // Email from this provider
@@ -19,7 +18,7 @@ var authProviderSchema = new mongoose.Schema({
 });
 
 // INVENTORY ITEM SCHEMA
-var inventoryItemSchema = new mongoose.Schema({
+const inventoryItemSchema = new Schema({
   itemKey: { type: String, required: true },
   name: { type: String },
   description: { type: String },
@@ -31,7 +30,7 @@ var inventoryItemSchema = new mongoose.Schema({
 });
 
 //USER
-var userSchema = new mongoose.Schema({
+const userSchema = new Schema({
   name: { type: String },
   username: { type: String },
   email: { type: String, lowercase: true, trim: true, unique: true, sparse: true, index: true },
@@ -74,51 +73,80 @@ var userSchema = new mongoose.Schema({
     email: { type: Boolean, default: true },
   },
 });
-userSchema.methods.generateHash = function (password) {
+export type UserAttrs = InferSchemaType<typeof userSchema>;
+export type UserConversationMetadata = UserAttrs["conversations"][number];
+type AuthProviderEntry = UserAttrs["authProviders"][number];
+export type UserDocument = HydratedDocument<UserAttrs, UserMethods>;
+
+/** Instance methods, attached below with userSchema.method(). */
+export interface UserMethods {
+  generateHash(password: string): string;
+  validPassword(password: string): boolean;
+  addAuthProvider(
+    provider: string,
+    providerId: string | null | undefined,
+    email: string | null | undefined,
+  ): Promise<UserDocument>;
+  removeAuthProvider(provider: string): Promise<UserDocument>;
+  hasAuthProvider(provider: string): boolean;
+  getActiveProviders(): AuthProviderEntry[];
+}
+
+userSchema.method("generateHash", function (this: UserDocument, password: string) {
   // Cost 12 for new hashes; existing cost-8 hashes from the old library still verify.
   return bcrypt.hashSync(password, 12);
-};
-userSchema.methods.validPassword = function (password) {
-  return bcrypt.compareSync(password, this.password);
-};
+});
+userSchema.method("validPassword", function (this: UserDocument, password: string) {
+  return bcrypt.compareSync(password, this.password as string);
+});
 
 // Helper methods for authentication providers
-userSchema.methods.addAuthProvider = function (provider, providerId, email) {
-  // Check if provider already exists
-  const existingProvider = this.authProviders.find((p) => p.provider === provider);
-  if (existingProvider) {
-    existingProvider.providerId = providerId;
-    existingProvider.email = email;
-    existingProvider.isActive = true;
-    existingProvider.linkedAt = new Date();
-  } else {
-    this.authProviders.push({
-      provider: provider,
-      providerId: providerId,
-      email: email,
-      linkedAt: new Date(),
-      isActive: true,
-    });
-  }
-  return this.save();
-};
+userSchema.method(
+  "addAuthProvider",
+  function (
+    this: UserDocument,
+    provider: string,
+    providerId: string | null | undefined,
+    email: string | null | undefined,
+  ) {
+    // Check if provider already exists
+    const existingProvider = this.authProviders.find((p) => p.provider === provider);
+    if (existingProvider) {
+      existingProvider.providerId = providerId;
+      existingProvider.email = email;
+      existingProvider.isActive = true;
+      existingProvider.linkedAt = new Date();
+    } else {
+      this.authProviders.push({
+        provider: provider,
+        providerId: providerId,
+        email: email,
+        linkedAt: new Date(),
+        isActive: true,
+      });
+    }
+    return this.save();
+  },
+);
 
-userSchema.methods.removeAuthProvider = function (provider) {
+userSchema.method("removeAuthProvider", function (this: UserDocument, provider: string) {
   const providerIndex = this.authProviders.findIndex((p) => p.provider === provider);
   if (providerIndex !== -1) {
     this.authProviders[providerIndex].isActive = false;
     return this.save();
   }
   return Promise.resolve(this);
-};
+});
 
-userSchema.methods.hasAuthProvider = function (provider) {
+userSchema.method("hasAuthProvider", function (this: UserDocument, provider: string) {
   return this.authProviders.some((p) => p.provider === provider && p.isActive);
-};
+});
 
-userSchema.methods.getActiveProviders = function () {
+userSchema.method("getActiveProviders", function (this: UserDocument) {
   return this.authProviders.filter((p) => p.isActive);
-};
-var User = mongoose.model("User", userSchema);
+});
+
+// The inferred model type does not know about the methods attached above, so state it once here.
+const User = mongoose.model("User", userSchema) as unknown as Model<UserAttrs, object, UserMethods>;
 //
-module.exports = { User };
+export { User };

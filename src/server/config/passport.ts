@@ -3,7 +3,7 @@ import { Strategy as JwtStrategy, ExtractJwt } from "passport-jwt";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { Strategy as GitHubStrategy } from "passport-github2";
 import { Strategy as DiscordStrategy } from "passport-discord";
-const { User } = require("../models/user");
+import { User } from "../models/user";
 import { getJwtSecret } from "./env";
 
 // Check for required environment variables

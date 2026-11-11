@@ -1,10 +1,9 @@
-var mongoose = require("mongoose");
-var Schema = mongoose.Schema;
+import mongoose, { Schema, type InferSchemaType } from "mongoose";
 
 // One person's relationship to a routine: the owner is always a member, sharers are
 // added by the owner. Per-routine reminder options live here (mute, heads-up, activity) so
 // each person decides for themselves; delivery channels are per user (XenRoutineSettings).
-var memberSchema = new Schema(
+const memberSchema = new Schema(
   {
     user_id: { type: String, required: true },
     role: { type: String, enum: ["owner", "sharer"], default: "sharer" },
@@ -21,7 +20,7 @@ var memberSchema = new Schema(
   { _id: false },
 );
 
-var historySchema = new Schema(
+const historySchema = new Schema(
   {
     action: { type: String, enum: ["done", "postponed"], required: true },
     at: { type: Date, default: Date.now },
@@ -36,7 +35,7 @@ var historySchema = new Schema(
   { _id: false },
 );
 
-var xenRoutineSchema = new Schema({
+const xenRoutineSchema = new Schema({
   owner_id: { type: String, required: true },
   name: { type: String, required: true, maxlength: 100 },
   category: { type: String, default: "", maxlength: 50 },
@@ -62,4 +61,6 @@ var xenRoutineSchema = new Schema({
 xenRoutineSchema.index({ enabled: 1, due_at: 1 });
 xenRoutineSchema.index({ "members.user_id": 1 });
 
-module.exports = mongoose.model("XenRoutine", xenRoutineSchema);
+export type XenRoutineAttrs = InferSchemaType<typeof xenRoutineSchema>;
+
+export const XenRoutine = mongoose.model("XenRoutine", xenRoutineSchema);

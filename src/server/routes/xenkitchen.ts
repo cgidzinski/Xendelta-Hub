@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from "express";
+import { publicBucket } from "../config/gcs";
 import sharp from "sharp";
 import crypto from "crypto";
 import { z } from "zod";
-const { XenKitchenBook, XenKitchenCategory, XenKitchenItem } = require("../models/xenKitchen");
-const { User } = require("../models/user");
+import { XenKitchenBook, XenKitchenCategory, XenKitchenItem } from "../models/xenKitchen";
+import { User } from "../models/user";
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 import { uploadXenKitchenImages } from "../config/multer";
@@ -242,7 +243,6 @@ async function cloneItem(src: any, bookId: any, uid: string, categoryId: any, ti
     created_by: uid,
     updated_by: uid,
   });
-  const { publicBucket } = require("../config/gcs");
   for (const img of src.images || []) {
     const name = img.gcs_path.split("/").pop();
     const dest = `xenkitchen/${bookId}/${copy._id}/${Date.now()}-${crypto.randomBytes(4).toString("hex")}-${name}`;
@@ -490,7 +490,7 @@ module.exports = function (app: any) {
       if (!book) return;
       const result = changeRole(book.toObject(), uid, String(req.params.userId), req.body.role);
       if (!result.ok) return fail(res, result.code, result.message);
-      book.members = result.members;
+      book.set("members", result.members);
       // Handed to someone else, it's no longer the old owner's starter book; clearing the
       // marker lets them get a fresh one if they later leave and have none.
       if (req.body.role === "owner") book.default_for = undefined;
@@ -510,7 +510,7 @@ module.exports = function (app: any) {
       const target = String(req.params.userId);
       const result = removeMember(book.toObject(), uid, target);
       if (!result.ok) return fail(res, result.code, result.message);
-      book.members = result.members;
+      book.set("members", result.members);
       await book.save();
       // Their stars on this book's items go with them.
       await XenKitchenItem.updateMany({ book_id: book._id }, { $pull: { favorited_by: target } }).exec();
@@ -847,8 +847,9 @@ module.exports = function (app: any) {
       item.set({ ...itemFieldsFromBody(body), updated_by: uid });
       if (body.image_order) {
         const rank = new Map(body.image_order.map((id, i) => [id, i]));
-        item.images = [...item.images].sort(
-          (a: any, b: any) => (rank.get(String(a._id)) ?? 99) - (rank.get(String(b._id)) ?? 99),
+        item.set(
+          "images",
+          [...item.images].sort((a: any, b: any) => (rank.get(String(a._id)) ?? 99) - (rank.get(String(b._id)) ?? 99)),
         );
       }
       await item.save();
@@ -947,7 +948,7 @@ module.exports = function (app: any) {
       if (!target) return;
       const { item } = loaded;
       if (String(item.book_id) !== String(target._id)) {
-        item.category_id = await targetCategory(item, target._id, req.body.category_id);
+        item.set("category_id", await targetCategory(item, target._id, req.body.category_id));
         item.book_id = target._id;
         // Stars belong to people; keep only those of people who can see the new book.
         const members = new Set(target.members.map((m: any) => m.user_id));

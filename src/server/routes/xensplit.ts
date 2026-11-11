@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
-const XenSplit = require("../models/xenSplit");
-const { User } = require("../models/user");
+import { AppError } from "../utils/http";
+import { XenSplit } from "../models/xenSplit";
+import { User } from "../models/user";
 import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { uploadXenSplitImages } from "../config/multer";
@@ -25,10 +26,10 @@ import {
   createExchangeSchema,
   xenSplitExchangeParamSchema,
 } from "../utils/validation";
-import { calculateBalances, calculateMinimumTransfers, resolveSplits } from "../utils/xenSplitUtils";
+import { calculateBalances, calculateMinimumTransfers, resolveSplits, asBalanceInput } from "../utils/xenSplitUtils";
 import { isDeleted } from "@shared/xensplit/softDelete";
 import { notify } from "../utils/notificationUtils";
-import { advanceDate, applyAdvance } from "../utils/scheduleUtils";
+import { advanceDate, applyAdvance, type TaskScheduleState } from "../utils/scheduleUtils";
 import { dispatchTask } from "../infrastructure/TaskDispatcher";
 import { XENSPLIT_RECURRING_TASK_TYPE } from "../utils/xensplitRecurringHandler";
 import {
@@ -40,8 +41,8 @@ import {
 import { logXenSplit, deleteXenSplitLogs } from "../utils/xenSplitLog";
 import { diffFields, collectLogUserIds, EXPENSE_LOG_FIELDS, GROUP_LOG_FIELDS } from "../utils/xenSplitLogUtils";
 const mongoose = require("mongoose");
-const ScheduledTask = require("../models/scheduledTask");
-const XenSplitLog = require("../models/xenSplitLog");
+import { ScheduledTask } from "../models/scheduledTask";
+import { XenSplitLog } from "../models/xenSplitLog";
 
 function sanitizeSecondaryCurrencies(primary: string, secondaries: string[]): string[] {
   return Array.from(new Set(secondaries.filter((c: string) => c !== primary)));
@@ -444,7 +445,10 @@ module.exports = function (app: any) {
         }
 
         // Check for outstanding balances
-        const groupForCalc = { ...group.toObject(), members: group.toObject().members.map((m: any) => m.toString()) };
+        const groupForCalc = asBalanceInput(
+          group.toObject(),
+          group.toObject().members.map((m: any) => m.toString()),
+        );
         const balances = calculateBalances(groupForCalc);
         const userBalance = balances[targetUserId] || {};
         const hasOutstanding = Object.values(userBalance).some((b: number) => Math.abs(b) > 0.01);
@@ -644,7 +648,7 @@ module.exports = function (app: any) {
             },
           });
           const generated = await dispatchTask(task);
-          if (generated > 0) respGroup = await XenSplit.findById(groupId);
+          if (generated > 0) respGroup = (await XenSplit.findById(groupId)) ?? respGroup;
         }
         await respGroup.populate("members", MEMBER_FIELDS);
 
@@ -722,6 +726,7 @@ module.exports = function (app: any) {
           "payload.group_id": groupId,
           "payload.genesis_expense_id": expenseId,
         });
+        if (!series) throw new AppError(404, "ScheduledTask not found");
         if (
           series &&
           updates.date !== undefined &&
@@ -763,11 +768,14 @@ module.exports = function (app: any) {
           const amount = expense.amount;
           const split_type = expense.split_type;
 
-          expense.splits = resolveSplits(
-            split_type,
-            amount,
-            expense.splits || [],
-            group.members.map((m: any) => m.toString()),
+          expense.set(
+            "splits",
+            resolveSplits(
+              split_type,
+              amount,
+              expense.splits || [],
+              group.members.map((m: any) => m.toString()),
+            ),
           );
         }
 
@@ -795,7 +803,7 @@ module.exports = function (app: any) {
             }
             // A tightened end date or count can retire the series outright —
             // applyAdvance(_, 0) is the dispatcher's own retirement predicate
-            if (!applyAdvance(series, 0).enabled) {
+            if (!applyAdvance(series as unknown as TaskScheduleState, 0).enabled) {
               series.enabled = false;
               resumed = false;
             }
@@ -840,7 +848,7 @@ module.exports = function (app: any) {
         let respGroup = group;
         if (resumed) {
           const generated = await dispatchTask(series);
-          if (generated > 0) respGroup = await XenSplit.findById(groupId);
+          if (generated > 0) respGroup = (await XenSplit.findById(groupId)) ?? respGroup;
         }
         await respGroup.populate("members", MEMBER_FIELDS);
 
@@ -1018,7 +1026,7 @@ module.exports = function (app: any) {
         }
 
         if (!expense.images) {
-          expense.images = [];
+          expense.set("images", []);
         }
 
         if (expense.images.length + files.length > MAX_XENSPLIT_IMAGES_PER_EXPENSE) {
@@ -1207,7 +1215,10 @@ module.exports = function (app: any) {
         });
 
         const groupObj = group.toObject();
-        const groupForCalc = { ...groupObj, members: populatedMembers.map((m: any) => m._id.toString()) };
+        const groupForCalc = asBalanceInput(
+          groupObj,
+          populatedMembers.map((m: any) => m._id.toString()),
+        );
         const balances = calculateBalances(groupForCalc);
         const settlements = calculateMinimumTransfers(balances);
 

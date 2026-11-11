@@ -1,9 +1,8 @@
-var mongoose = require("mongoose");
-var Schema = mongoose.Schema;
-var { deleteFromGCS } = require("../utils/gcsUtils");
+import mongoose, { Schema, type InferSchemaType } from "mongoose";
+import { deleteFromGCS } from "../utils/gcsUtils";
 
 // MEDIA SCHEMA
-var mediaSchema = new mongoose.Schema({
+const mediaSchema = new Schema({
   location: { type: String, required: true }, // Folder location (e.g., "blog", "avatar")
   filename: { type: String, required: true, unique: true, index: true }, // Filename with extension (e.g., "image-1234567890.jpg")
   type: {
@@ -29,6 +28,8 @@ mediaSchema.pre(["findOneAndDelete", "deleteOne"], async function () {
   }
 });
 
-var Media = mongoose.model("Media", mediaSchema);
+export type MediaAttrs = InferSchemaType<typeof mediaSchema>;
 
-module.exports = { Media };
+const Media = mongoose.model("Media", mediaSchema);
+
+export { Media };

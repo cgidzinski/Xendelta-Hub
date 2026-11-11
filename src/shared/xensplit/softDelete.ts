@@ -13,7 +13,7 @@
 export interface SoftDeletable {
   /** Date on the server, an ISO string once serialized to the client; null/absent means live. */
   deleted_at?: Date | string | null;
-  deleted_by?: string;
+  deleted_by?: string | null;
 }
 
 /** Records written before soft deletion existed have no field at all, which reads as live. */

@@ -1,6 +1,6 @@
 import express = require("express");
-const Notification = require("../models/notification");
-const { User } = require("../models/user");
+import { Notification } from "../models/notification";
+import { User } from "../models/user";
 import { authenticateToken } from "../middleware/auth";
 import { requireAdmin } from "../middleware/admin";
 import { SocketManager } from "../infrastructure/SocketManager";

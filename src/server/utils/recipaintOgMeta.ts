@@ -1,5 +1,5 @@
 import type express from "express";
-const { Recipe } = require("../models/recipe");
+import { Recipe } from "../models/recipe";
 
 // Open Graph crawlers (Discord, Slack, iMessage, Twitter) do not run JavaScript, so a
 // shared /recipaint/:id link previews as nothing unless the tags are already in the HTML

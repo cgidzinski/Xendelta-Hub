@@ -1,8 +1,2 @@
-/**
- * User conversation metadata stored in User document
- */
-export interface UserConversationMetadata {
-  conversationId: string;
-  unread: boolean;
-  lastReadAt?: Date;
-}
+// Derived from the User model, so it cannot drift from what is actually stored.
+export type { UserConversationMetadata } from "../models/user";

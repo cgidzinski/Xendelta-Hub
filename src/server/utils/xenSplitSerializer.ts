@@ -1,4 +1,4 @@
-const ScheduledTask = require("../models/scheduledTask");
+import { ScheduledTask } from "../models/scheduledTask";
 import { XENSPLIT_RECURRING_TASK_TYPE } from "./xensplitRecurringHandler";
 import { DEFAULT_CURRENCY } from "@shared/currencies";
 

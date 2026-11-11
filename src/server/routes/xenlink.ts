@@ -1,8 +1,8 @@
 import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types";
-const { User } = require("../models/user");
-const { XenLink } = require("../models/xenlink");
+import { User } from "../models/user";
+import { XenLink } from "../models/xenlink";
 module.exports = function (app: express.Application) {
   app.get("/api/xenlink/list", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = (req as AuthenticatedRequest).user!._id.toString();
@@ -46,24 +46,23 @@ module.exports = function (app: express.Application) {
   app.put("/api/xenlink", authenticateToken, async function (req: express.Request, res: express.Response) {
     const link = req.body;
     const userId = (req as AuthenticatedRequest).user!._id.toString();
-    const user = await User.findById(userId).populate("xenlink").exec();
+    const user = await User.findById(userId).exec();
     if (!user) {
       return res.status(404).json({
         status: false,
         message: "User not found",
       });
     }
-    const xenlink = user.xenlink.find((l: any) => l._id.toString() === link._id);
-    if (!xenlink) {
+    const owned = user.xenlink.some((id) => id.toString() === link._id);
+    if (!owned) {
       return res.status(404).json({
         status: false,
         message: "Link not found",
       });
     }
-    xenlink.name = link.name;
-    xenlink.url = link.url;
-    xenlink.updatedAt = new Date();
-    await user.save();
+    // Update the XenLink document itself: changes made to a populated copy are not written
+    // back by user.save(), so editing a link through the user silently did nothing.
+    await XenLink.updateOne({ _id: link._id }, { name: link.name, url: link.url, updatedAt: new Date() });
     return res.json({
       status: true,
       message: "Link updated successfully",
@@ -88,7 +87,10 @@ module.exports = function (app: express.Application) {
       });
     }
     await XenLink.findByIdAndDelete(linkId);
-    user.xenlink.pull(linkId);
+    user.set(
+      "xenlink",
+      user.xenlink.filter((id) => id.toString() !== linkId),
+    );
     await user.save();
     return res.json({
       status: true,

@@ -1,7 +1,6 @@
-var mongoose = require("mongoose");
-var Schema = mongoose.Schema;
+import mongoose, { Schema, type InferSchemaType } from "mongoose";
 
-var scheduledTaskSchema = new Schema({
+const scheduledTaskSchema = new Schema({
   task_type: { type: String, required: true },
   enabled: { type: Boolean, default: true },
   // Next due date. Invariant (recurring): run_at === advanceDate(anchor_date, frequency, run_count).
@@ -29,4 +28,6 @@ var scheduledTaskSchema = new Schema({
 scheduledTaskSchema.index({ enabled: 1, run_at: 1 }); // dispatcher tick query
 scheduledTaskSchema.index({ task_type: 1, "payload.group_id": 1 }); // xensplit serializer/route lookups
 
-module.exports = mongoose.model("ScheduledTask", scheduledTaskSchema);
+export type ScheduledTaskAttrs = InferSchemaType<typeof scheduledTaskSchema>;
+
+export const ScheduledTask = mongoose.model("ScheduledTask", scheduledTaskSchema);

@@ -8,8 +8,8 @@ import https from "https";
 import { privateBucket } from "../config/gcs";
 import { formatFileSize } from "./fileUtils";
 import { randomToken } from "./tokens";
-const { XenBoxMedia } = require("../models/xenboxMedia");
-const { User } = require("../models/user");
+import { XenBoxMedia } from "../models/xenboxMedia";
+import { User } from "../models/user";
 
 // Upload session interface
 interface UploadSession {

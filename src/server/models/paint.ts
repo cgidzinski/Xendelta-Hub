@@ -1,5 +1,4 @@
-var mongoose = require("mongoose");
-var Schema = mongoose.Schema;
+import mongoose, { Schema, type InferSchemaType } from "mongoose";
 
 // A paint the user owns.
 //
@@ -7,7 +6,7 @@ var Schema = mongoose.Schema;
 // (brand/name/hex/type) so a public or cloned recipe still renders its swatches for someone
 // who does not own those paints; this collection answers "what do I have on the shelf?".
 // The two are matched by brand+name, not by reference.
-var paintSchema = new mongoose.Schema({
+const paintSchema = new Schema({
   owner: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
   brand: { type: String, default: "" },
   name: { type: String, required: true },
@@ -42,10 +41,12 @@ paintSchema.index({ owner: 1, brand: 1, name: 1 });
 paintSchema.index({ owner: 1, catalogueKey: 1 });
 
 paintSchema.pre("save", function (next) {
-  this.updatedAt = Date.now();
+  this.updatedAt = new Date();
   next();
 });
 
-var Paint = mongoose.model("Paint", paintSchema);
+export type PaintAttrs = InferSchemaType<typeof paintSchema>;
 
-module.exports = { Paint };
+const Paint = mongoose.model("Paint", paintSchema);
+
+export { Paint };

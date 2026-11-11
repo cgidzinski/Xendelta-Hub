@@ -1,4 +1,4 @@
-const { BlogPost } = require("../models/blogPost");
+import { BlogPost } from "../models/blogPost";
 
 export async function ensureUniqueSlug(slug: string, excludeId: string | null = null): Promise<string> {
   let uniqueSlug = slug;

@@ -3,7 +3,7 @@ import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types";
 import { isSameId } from "../utils/objectId";
 import { normalizePaintInput } from "@shared/recipaint/paints";
-const { Paint } = require("../models/paint");
+import { Paint } from "../models/paint";
 const mongoose = require("mongoose");
 const {
   Types: { ObjectId },
