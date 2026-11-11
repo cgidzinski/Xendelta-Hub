@@ -15,7 +15,7 @@ Flat, outlined surfaces on one brand blue. Surfaces are separated by a 1px borde
 
 ## Components (`components/ui/`)
 `PageContainer` > `PageHeader` > content. `SectionCard` / `SectionLabel` for grouped content,
-`StatTile` for big numbers, `EmptyState` / `ListSkeleton` for empty and loading,
+`EmptyState` / `ListSkeleton` for empty and loading,
 `ResponsiveDialog` for dialogs (full screen on phones), `Banner` for fixed status strips.
 
 ## Rules

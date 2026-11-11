@@ -24,11 +24,15 @@ const base = (over: Partial<RoutineLike> = {}): RoutineLike => ({
 
 describe("addInterval", () => {
   it("adds each unit", () => {
-    const d = new Date("2026-01-10T12:00:00Z");
-    expect(addInterval(d, { every: 10, unit: "days" }).toISOString()).toBe("2026-01-20T12:00:00.000Z");
-    expect(addInterval(d, { every: 2, unit: "weeks" }).toISOString()).toBe("2026-01-24T12:00:00.000Z");
-    expect(addInterval(d, { every: 6, unit: "months" }).toISOString()).toBe("2026-07-10T12:00:00.000Z");
-    expect(addInterval(d, { every: 1, unit: "years" }).toISOString()).toBe("2027-01-10T12:00:00.000Z");
+    // addInterval does calendar arithmetic in local time (date-fns), so a wall-clock time is
+    // preserved across DST. Build expectations from local components, not UTC strings, or
+    // this fails in any timezone that observes DST.
+    const d = new Date(2026, 0, 10, 12);
+    const at = (y: number, m: number, day: number) => new Date(y, m, day, 12).getTime();
+    expect(addInterval(d, { every: 10, unit: "days" }).getTime()).toBe(at(2026, 0, 20));
+    expect(addInterval(d, { every: 2, unit: "weeks" }).getTime()).toBe(at(2026, 0, 24));
+    expect(addInterval(d, { every: 6, unit: "months" }).getTime()).toBe(at(2026, 6, 10));
+    expect(addInterval(d, { every: 1, unit: "years" }).getTime()).toBe(at(2027, 0, 10));
   });
   it("clamps month-end", () => {
     const d = new Date(2026, 0, 31);
