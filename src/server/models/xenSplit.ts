@@ -1,7 +1,6 @@
-var mongoose = require("mongoose");
-var Schema = mongoose.Schema;
+import mongoose, { Schema, type InferSchemaType } from "mongoose";
 
-var splitSchema = new Schema(
+const splitSchema = new Schema(
   {
     user_id: { type: String, required: true },
     amount_owed: { type: Number },
@@ -10,14 +9,14 @@ var splitSchema = new Schema(
   { _id: false },
 );
 
-var expenseImageSchema = new Schema(
+const expenseImageSchema = new Schema(
   {
     gcs_path: { type: String, required: true },
   },
   { _id: true },
 );
 
-var expenseSchema = new Schema(
+const expenseSchema = new Schema(
   {
     paid_by: { type: String, required: true },
     created_by: { type: String },
@@ -51,7 +50,7 @@ var expenseSchema = new Schema(
 // migration can read old embedded data; remove once all environments have
 // booted past the migration. The old recurring_expenses.next_run_at Mongo
 // index can be dropped manually.
-var recurringExpenseSchema = new Schema(
+const recurringExpenseSchema = new Schema(
   {
     // Genesis expense this series clones from; null until a future-start series births it
     genesis_expense_id: { type: Schema.Types.ObjectId },
@@ -77,7 +76,7 @@ var recurringExpenseSchema = new Schema(
   { _id: true },
 );
 
-var settlementSchema = new Schema(
+const settlementSchema = new Schema(
   {
     from: { type: String, required: true },
     to: { type: String, required: true },
@@ -93,7 +92,7 @@ var settlementSchema = new Schema(
   { _id: true },
 );
 
-var exchangeSchema = new Schema(
+const exchangeSchema = new Schema(
   {
     party_a: { type: String, required: true },
     currency_a: { type: String, required: true },
@@ -115,7 +114,7 @@ var exchangeSchema = new Schema(
   { _id: true },
 );
 
-var xenSplitSchema = new Schema({
+const xenSplitSchema = new Schema({
   name: { type: String, required: true, maxlength: 100 },
   default_currency: { type: String, default: "CAD" },
   secondary_currencies: { type: [String], default: [] },
@@ -129,4 +128,6 @@ var xenSplitSchema = new Schema({
   recurring_expenses: [recurringExpenseSchema], // DEPRECATED — see note above
 });
 
-module.exports = mongoose.model("XenSplit", xenSplitSchema);
+export type XenSplitAttrs = InferSchemaType<typeof xenSplitSchema>;
+
+export const XenSplit = mongoose.model("XenSplit", xenSplitSchema);

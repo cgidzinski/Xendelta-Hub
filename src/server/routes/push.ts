@@ -1,5 +1,5 @@
 import express = require("express");
-const PushSubscription = require("../models/pushSubscription");
+import { PushSubscription } from "../models/pushSubscription";
 import { authenticateToken } from "../middleware/auth";
 import { validate, pushSubscribeSchema, pushUnsubscribeSchema } from "../utils/validation";
 import { getVapidPublicKey } from "../utils/pushUtils";

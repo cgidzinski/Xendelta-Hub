@@ -1,5 +1,5 @@
 import webpush from "web-push";
-const PushSubscription = require("../models/pushSubscription");
+import { PushSubscription } from "../models/pushSubscription";
 
 // Web Push (VAPID) delivery. Every browser hardcodes its own push service — Chrome/Android
 // route through FCM, Safari/iOS through Apple, Firefox through Mozilla — and the endpoint

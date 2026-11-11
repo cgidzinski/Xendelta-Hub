@@ -1,6 +1,6 @@
 import { Server as SocketIOServer, Socket } from "socket.io";
 import jwt from "jsonwebtoken";
-const { User } = require("../models/user");
+import { User } from "../models/user";
 import { getJwtSecret } from "../config/env";
 import { Message } from "../types/Message";
 
@@ -28,13 +28,15 @@ interface ConversationSummary {
   updatedAt?: Date;
 }
 
+// What goes over the socket: a notification record (a Mongoose document or a plain object).
 interface Notification {
-  _id?: string;
-  title: string;
-  message: string;
-  time: string;
-  icon?: string;
-  unread: boolean;
+  _id?: unknown;
+  title?: string | null;
+  message?: string | null;
+  time?: string | null;
+  icon?: string | null;
+  link?: string | null;
+  unread?: boolean;
 }
 
 export class SocketManager {
@@ -76,7 +78,7 @@ export class SocketManager {
         }
 
         socket.userId = user._id.toString();
-        socket.username = user.username;
+        socket.username = user.username ?? undefined;
         next();
       } catch (error) {
         return next(new Error("Authentication error: Invalid token"));
@@ -161,7 +163,11 @@ export class SocketManager {
   }
 
   // Send new message to conversation participants
-  sendNewMessage(conversationId: string, message: Message & { senderUsername?: string }, participants: string[]) {
+  sendNewMessage(
+    conversationId: string,
+    message: Message & { senderUsername?: string | null },
+    participants: string[],
+  ) {
     const conversationRoom = `conversation:${conversationId}`;
     const roomSockets = this.io.sockets.adapter.rooms.get(conversationRoom);
 
@@ -202,7 +208,7 @@ export class SocketManager {
   // Notify participants about conversation update (e.g., new participant)
   notifyConversationUpdate(
     conversationId: string,
-    update: { participants?: string[]; name?: string; deleted?: boolean },
+    update: { participants?: string[]; name?: string | null; deleted?: boolean },
   ) {
     this.io.to(`conversation:${conversationId}`).emit("conversation:update", {
       conversationId,

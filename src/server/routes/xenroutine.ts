@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
-const XenRoutine = require("../models/xenRoutine");
-const XenRoutineSettings = require("../models/xenRoutineSettings");
-const { User } = require("../models/user");
+import { XenRoutine } from "../models/xenRoutine";
+import { XenRoutineSettings } from "../models/xenRoutineSettings";
+import { User } from "../models/user";
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 import {
@@ -27,6 +27,7 @@ import {
   doneAheadIndices,
   DEFAULT_REMIND_HOUR,
   effectiveTimezone,
+  type RoutineLike,
 } from "../utils/xenRoutine";
 import { sendActivityNotices } from "../utils/xenRoutineReminders";
 
@@ -188,7 +189,7 @@ module.exports = function (app: any) {
         if (!routine) return;
         const b = req.body;
         for (const k of ["name", "category", "notes", "interval", "enabled", "remind_again_days"]) {
-          if (b[k] !== undefined) routine[k] = b[k];
+          if (b[k] !== undefined) routine.set(k, b[k]);
         }
         if (b.due_at !== undefined) {
           routine.due_at = new Date(b.due_at);
@@ -233,7 +234,7 @@ module.exports = function (app: any) {
         if (req.body.expected_due_at && new Date(req.body.expected_due_at).getTime() !== routine.due_at.getTime()) {
           return fail(res, 409, "This routine changed. Refresh and try again.");
         }
-        const patch = applyComplete(routine.toObject(), {
+        const patch = applyComplete(routine.toObject() as unknown as RoutineLike, {
           by: callerId(req),
           now: new Date(),
           doneAt: req.body.done_at ? new Date(req.body.done_at) : undefined,
@@ -263,7 +264,7 @@ module.exports = function (app: any) {
         const now = new Date();
         const until = req.body.until ? new Date(req.body.until) : undefined;
         if (until && until.getTime() <= now.getTime()) return fail(res, 400, "Pick a date in the future");
-        const patch = applyPostpone(routine.toObject(), {
+        const patch = applyPostpone(routine.toObject() as unknown as RoutineLike, {
           by: callerId(req),
           now,
           days: req.body.days,
@@ -351,7 +352,10 @@ module.exports = function (app: any) {
         const target = req.params.userId as string;
         if (target === routine.owner_id) return fail(res, 400, "The owner cannot be removed");
         if (!canEdit(routine, uid) && target !== uid) return fail(res, 403, "Only the owner can remove others");
-        routine.members = routine.members.filter((m: any) => m.user_id !== target);
+        routine.set(
+          "members",
+          routine.members.filter((m: any) => m.user_id !== target),
+        );
         await routine.save();
         const stillIn = routine.members.some((m: any) => m.user_id === uid);
         return res.json({

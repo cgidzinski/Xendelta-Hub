@@ -1,7 +1,6 @@
-var mongoose = require("mongoose");
-var Schema = mongoose.Schema;
+import mongoose, { Schema, type InferSchemaType } from "mongoose";
 
-var notificationSchema = new mongoose.Schema({
+const notificationSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   title: { type: String },
   message: { type: String },
@@ -13,4 +12,6 @@ var notificationSchema = new mongoose.Schema({
 
 notificationSchema.index({ userId: 1, time: -1 });
 
-module.exports = mongoose.model("Notification", notificationSchema);
+export type NotificationAttrs = InferSchemaType<typeof notificationSchema>;
+
+export const Notification = mongoose.model("Notification", notificationSchema);

@@ -20,8 +20,8 @@ vi.mock("./emailUtils", () => ({
 
 import { notify, DEFAULT_CHANNELS } from "./notificationUtils";
 import { SocketManager } from "../infrastructure/SocketManager";
-const Notification = require("../models/notification");
-const { User } = require("../models/user");
+import { Notification } from "../models/notification";
+import { User } from "../models/user";
 
 const USER_ID = "507f1f77bcf86cd799439011";
 

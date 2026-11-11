@@ -1,5 +1,4 @@
-var mongoose = require("mongoose");
-var Schema = mongoose.Schema;
+import mongoose, { Schema, type InferSchemaType } from "mongoose";
 
 // Which steps of a recipe a given user has ticked off.
 //
@@ -7,7 +6,7 @@ var Schema = mongoose.Schema;
 // can be painting from the same public recipe at once. Steps are referenced by index, so
 // reordering or deleting steps in the editor can shift what a saved tick refers to - the
 // reader clamps to the current step count rather than trusting stale indexes.
-var recipeProgressSchema = new mongoose.Schema({
+const recipeProgressSchema = new Schema({
   user: { type: Schema.Types.ObjectId, ref: "User", required: true },
   recipe: { type: Schema.Types.ObjectId, ref: "Recipe", required: true },
   completedSteps: [{ type: Number }],
@@ -17,6 +16,8 @@ var recipeProgressSchema = new mongoose.Schema({
 // One row per user per recipe; the upsert in the route relies on this.
 recipeProgressSchema.index({ user: 1, recipe: 1 }, { unique: true });
 
-var RecipeProgress = mongoose.model("RecipeProgress", recipeProgressSchema);
+export type RecipeProgressAttrs = InferSchemaType<typeof recipeProgressSchema>;
 
-module.exports = { RecipeProgress };
+const RecipeProgress = mongoose.model("RecipeProgress", recipeProgressSchema);
+
+export { RecipeProgress };

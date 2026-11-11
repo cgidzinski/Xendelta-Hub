@@ -3,9 +3,9 @@ import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types";
 import { ShopItem } from "../types/shopItem";
 const mongoose = require("mongoose");
-const { User } = require("../models/user");
-const { SHOP_ITEMS } = require("../constants/shopItems");
-const { ITEMS } = require("../constants/items");
+import { User } from "../models/user";
+import { SHOP_ITEMS } from "../constants/shopItems";
+import { ITEMS } from "../constants/items";
 
 module.exports = function (app: express.Application) {
   //Get points shop items

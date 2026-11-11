@@ -1,6 +1,6 @@
-const XenRoutine = require("../models/xenRoutine");
-const XenRoutineSettings = require("../models/xenRoutineSettings");
-const { User } = require("../models/user");
+import { XenRoutine } from "../models/xenRoutine";
+import { XenRoutineSettings } from "../models/xenRoutineSettings";
+import { User } from "../models/user";
 import { notify } from "./notificationUtils";
 import {
   activityRecipients,
@@ -60,7 +60,7 @@ export async function runRoutineReminders(now: Date = new Date()): Promise<void>
   const pendingByUser = new Map<string, Pending[]>();
 
   for (const doc of routines) {
-    const routine = doc.toObject() as RoutineLike & { name: string };
+    const routine = doc.toObject() as unknown as RoutineLike & { name: string };
     for (const member of routine.members as RoutineMember[]) {
       const s = settingsByUser.get(member.user_id);
       const settings = {

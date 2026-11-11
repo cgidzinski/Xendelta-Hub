@@ -23,6 +23,17 @@ plus `npm audit --omit=dev --audit-level=high`.
 - Shared client/server code lives in `src/shared` and is imported as `@shared/...` (no `../../../shared`).
 - Server integration tests use `src/server/testing/testApp.ts` (real routes and models, in-memory MongoDB).
 
+## Server conventions
+- **Models are TypeScript** (`src/server/models/*.ts`): named exports (`import { User } from "../models/user"`),
+  schema-inferred types (`UserAttrs`, `XenSplitAttrs`, ...), and `UserDocument` for hydrated documents. Don't
+  `require()` models; do not hand-write interfaces that mirror a schema, derive them with `InferSchemaType`.
+- To replace an array field on a document use `doc.set("field", value)` (assigning a plain array to a
+  `DocumentArray` does not type-check and is easy to get wrong).
+- Throw `AppError(status, message)` from `utils/http.ts` instead of building a 4xx body by hand; the global
+  `errorHandler` answers it as `{ status: false, message }`. `loadCaller(req)` returns the authenticated user's
+  document or a 401, and `callerId(req)` their id.
+- Changes to a *populated* document are not saved by saving its parent. Update the referenced model directly.
+
 ## Environment
 Copy `.env.example` to `.env`. The server refuses to start without `MONGODB_URI` and `JWT_SECRET`.
 Deployment and server setup: `docs/home-server-setup.md`. Deploys run checks, then build, then `db:migrate`.

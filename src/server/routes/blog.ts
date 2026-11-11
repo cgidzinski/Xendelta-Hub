@@ -1,5 +1,5 @@
 import express = require("express");
-const { BlogPost } = require("../models/blogPost");
+import { BlogPost } from "../models/blogPost";
 
 module.exports = function (app: express.Application) {
   app.get("/api/blog", async function (req: express.Request, res: express.Response) {

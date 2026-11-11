@@ -1,4 +1,4 @@
-const ScheduledTask = require("../models/scheduledTask");
+import { ScheduledTask } from "../models/scheduledTask";
 import { computeDueDates, applyAdvance } from "../utils/scheduleUtils";
 
 export interface TaskRunResult {

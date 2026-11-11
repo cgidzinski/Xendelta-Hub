@@ -1,7 +1,6 @@
 // The route modules load each other with extensionless CommonJS require() of .ts files, which
 // only tsx (what production runs under) can resolve. Register its hook before anything loads.
 import "tsx/cjs";
-import { createRequire } from "module";
 import express from "express";
 import mongoose from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
@@ -35,11 +34,9 @@ export async function startTestApp(routes: Array<() => Promise<any>>): Promise<T
 
   // Routes push realtime events through the SocketManager singleton, which production wires
   // up at boot. Give the same (CommonJS-loaded) instance a silent stand-in for Socket.IO.
-  // Route files mix `import` and `require()`, which land in two separate module registries
-  // under vitest, so stub both copies of the singleton.
+  // Routes push realtime events through the SocketManager singleton, which production wires up
+  // at boot. Give it a silent stand-in for Socket.IO.
   const silentIo = { to: () => ({ emit: () => undefined }), emit: () => undefined };
-  const cjs = createRequire(__filename);
-  (cjs("../infrastructure/SocketManager").SocketManager.getInstance() as any).io = silentIo;
   ((await import("../infrastructure/SocketManager.js")).SocketManager.getInstance() as any).io = silentIo;
 
   const app = express();

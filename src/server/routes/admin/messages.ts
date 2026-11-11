@@ -1,6 +1,6 @@
 import express = require("express");
-const { User } = require("../../models/user");
-const Conversation = require("../../models/conversation");
+import { User } from "../../models/user";
+import { Conversation } from "../../models/conversation";
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
 import { SocketManager } from "../../infrastructure/SocketManager";
@@ -36,7 +36,7 @@ module.exports = function (app: express.Application) {
       for (const user of allUsers) {
         if (user.conversations && user.conversations.length > 0) {
           // Remove all conversation metadata
-          user.conversations = [];
+          user.set("conversations", []);
           user.markModified("conversations");
           await user.save();
         }

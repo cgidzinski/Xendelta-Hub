@@ -1,5 +1,5 @@
-const Notification = require("../models/notification");
-const { User } = require("../models/user");
+import { Notification } from "../models/notification";
+import { User } from "../models/user";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { sendPushToUser } from "./pushUtils";
 import { sendNotificationEmail } from "./emailUtils";

@@ -1,10 +1,9 @@
-var mongoose = require("mongoose");
-var Schema = mongoose.Schema;
-var { randomToken } = require("../utils/tokens");
-var { deleteFromGCS } = require("../utils/gcsUtils");
+import mongoose, { Schema, type HydratedDocument, type InferSchemaType, type Model } from "mongoose";
+import { randomToken } from "../utils/tokens";
+import { deleteFromGCS } from "../utils/gcsUtils";
 
 // MEDIA SCHEMA
-var xenboxMediaSchema = new mongoose.Schema({
+const xenboxMediaSchema = new Schema({
   location: { type: String, required: true }, // Folder location (e.g., "blog", "avatar")
   filename: { type: String, required: true }, // Filename with extension (e.g., "image-1234567890.jpg")
   mimeType: { type: String, required: true }, // MIME type (e.g., "image/jpeg", "application/pdf")
@@ -25,16 +24,23 @@ xenboxMediaSchema.pre("save", function (next) {
   next();
 });
 
+export type XenBoxMediaAttrs = InferSchemaType<typeof xenboxMediaSchema>;
+export interface XenBoxMediaMethods {
+  validPassword(password: string): boolean;
+  isExpired(): boolean;
+}
+export type XenBoxMediaDocument = HydratedDocument<XenBoxMediaAttrs, XenBoxMediaMethods>;
+
 // Method for password verification (plain text comparison)
-xenboxMediaSchema.methods.validPassword = function (password) {
+xenboxMediaSchema.method("validPassword", function (this: XenBoxMediaDocument, password: string) {
   if (!this.password) return true; // No password set, allow access
   return this.password === password; // Plain text comparison
-};
+});
 
-xenboxMediaSchema.methods.isExpired = function () {
+xenboxMediaSchema.method("isExpired", function (this: XenBoxMediaDocument) {
   if (!this.expiry) return false; // No expiry set, not expired
   return new Date() > this.expiry;
-};
+});
 
 // Pre-delete hook: Delete from GCS when Media document is deleted
 // This handles findOneAndDelete, findByIdAndDelete, deleteOne, etc.
@@ -49,6 +55,10 @@ xenboxMediaSchema.pre(["findOneAndDelete", "deleteOne"], async function () {
   }
 });
 
-var XenBoxMedia = mongoose.model("XenBoxMedia", xenboxMediaSchema);
+const XenBoxMedia = mongoose.model("XenBoxMedia", xenboxMediaSchema) as unknown as Model<
+  XenBoxMediaAttrs,
+  object,
+  XenBoxMediaMethods
+>;
 
-module.exports = { XenBoxMedia };
+export { XenBoxMedia };

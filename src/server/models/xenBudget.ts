@@ -1,5 +1,4 @@
-var mongoose = require("mongoose");
-var Schema = mongoose.Schema;
+import mongoose, { Schema, type InferSchemaType } from "mongoose";
 
 // XenBudget stores its line items in a SEPARATE top-level collection rather than
 // embedding them in the book (the way XenSplit embeds expenses in a group). A book fed
@@ -17,7 +16,7 @@ var Schema = mongoose.Schema;
 //                and one purchase can split across several by weight.
 //   flags      - what needs ATTENTION ("check receipt"). Unweighted: a flag applies or it
 //                doesn't. These replaced the old flagged/flag_reason pair.
-var labelSchema = new Schema(
+const labelSchema = new Schema(
   {
     name: { type: String, required: true, maxlength: 50 },
     color: { type: String, maxlength: 32 },
@@ -35,7 +34,7 @@ var labelSchema = new Schema(
 // window, which is the whole point of nesting them: a household limit and the personal
 // limits under it are always measured over the same items and the same dates, so their
 // bars can be read against each other.
-var subBudgetSchema = new Schema(
+const subBudgetSchema = new Schema(
   {
     person_id: { type: String, required: true },
     amount: { type: Number, required: true },
@@ -43,7 +42,7 @@ var subBudgetSchema = new Schema(
   { _id: true },
 );
 
-var budgetSchema = new Schema(
+const budgetSchema = new Schema(
   {
     categories: { type: [String], default: [] }, // empty = every category
     // What this budget watches, which is also what decides which way its amount points:
@@ -86,7 +85,7 @@ var budgetSchema = new Schema(
 // negative takes it back out - rather than an amount plus a direction flag, so the balance
 // is a plain sum and a withdrawal can never be read as a deposit by a caller that forgot to
 // check the flag.
-var piggyBankContributionSchema = new Schema(
+const piggyBankContributionSchema = new Schema(
   {
     amount: { type: Number, required: true },
     date: { type: Date, default: Date.now },
@@ -107,7 +106,7 @@ var piggyBankContributionSchema = new Schema(
 // of it into "New telescope", and that $50 books as a Hobbies expense, because that is the
 // budget line it came from. The ledger is what makes the balance accumulate across periods,
 // which a budget - measured fresh each period - can never do.
-var piggyBankSchema = new Schema(
+const piggyBankSchema = new Schema(
   {
     name: { type: String, required: true, maxlength: 100 },
     description: { type: String, maxlength: 500 },
@@ -132,7 +131,7 @@ var piggyBankSchema = new Schema(
   { _id: true },
 );
 
-var ruleConditionSchema = new Schema(
+const ruleConditionSchema = new Schema(
   {
     field: {
       type: String,
@@ -164,7 +163,7 @@ var ruleConditionSchema = new Schema(
   { _id: false },
 );
 
-var ruleActionsSchema = new Schema(
+const ruleActionsSchema = new Schema(
   {
     // What the purchase was. Assigned an even split, so one category means 100%.
     set_categories: { type: [String], default: [] },
@@ -200,7 +199,7 @@ var ruleActionsSchema = new Schema(
   { _id: false },
 );
 
-var ruleSchema = new Schema(
+const ruleSchema = new Schema(
   {
     name: { type: String, required: true, maxlength: 100 },
     enabled: { type: Boolean, default: true },
@@ -218,7 +217,7 @@ var ruleSchema = new Schema(
 
 // A remembered column mapping for one CSV source ("Chase Visa"), so a repeat import
 // is one click instead of re-mapping every header.
-var importPresetSchema = new Schema(
+const importPresetSchema = new Schema(
   {
     name: { type: String, required: true, maxlength: 100 },
     column_map: {
@@ -250,7 +249,7 @@ var importPresetSchema = new Schema(
 // created, so this only gives that id a name and a date - which is the whole point: a
 // bad file has to be findable and removable weeks later, not only in the wizard that
 // just closed.
-var importBatchSchema = new Schema(
+const importBatchSchema = new Schema(
   {
     source_label: { type: String, maxlength: 100 }, // "Chase Visa" - which card
     filename: { type: String, maxlength: 200 },
@@ -264,7 +263,7 @@ var importBatchSchema = new Schema(
 
 // --- Book -------------------------------------------------------------------
 
-var bookSchema = new Schema({
+const bookSchema = new Schema({
   name: { type: String, required: true, maxlength: 100 },
   default_currency: { type: String, default: "CAD" },
   // The owner / main admin: the only one who may add or remove members, transfer the
@@ -290,7 +289,7 @@ bookSchema.index({ members: 1 });
 
 // Resolved per-person amounts, not just a person list - this is what makes per-person
 // budgets reconcile with the book total. Populated by resolveShares().
-var shareSchema = new Schema(
+const shareSchema = new Schema(
   {
     user_id: { type: String, required: true },
     amount: { type: Number },
@@ -303,7 +302,7 @@ var shareSchema = new Schema(
 // what lets the per-category rollup sum to the item's amount. Summing the item's full
 // amount once per category - which is what the old `tags` array did - double-counts every
 // item carrying more than one.
-var itemCategorySchema = new Schema(
+const itemCategorySchema = new Schema(
   {
     name: { type: String, required: true, maxlength: 50 },
     amount: { type: Number },
@@ -314,14 +313,14 @@ var itemCategorySchema = new Schema(
 
 // Receipt photos. Like XenSplit's expense images: only the GCS path is stored, and the
 // client resolves display URLs on demand via short-lived signed URLs.
-var itemImageSchema = new Schema(
+const itemImageSchema = new Schema(
   {
     gcs_path: { type: String, required: true },
   },
   { _id: true },
 );
 
-var itemSchema = new Schema({
+const itemSchema = new Schema({
   book_id: { type: Schema.Types.ObjectId, ref: "XenBudgetBook", required: true },
   type: { type: String, enum: ["expense", "income"], default: "expense" },
   // Always positive; `type` carries the sign.
@@ -374,7 +373,10 @@ itemSchema.index({ book_id: 1, amount: 1 });
 // this index for the case-insensitive name sort and will fall back to an in-memory sort.
 itemSchema.index({ book_id: 1, description: 1 }, { collation: { locale: "en", strength: 2 } });
 
-var XenBudgetBook = mongoose.model("XenBudgetBook", bookSchema);
-var XenBudgetItem = mongoose.model("XenBudgetItem", itemSchema);
+export type XenBudgetBookAttrs = InferSchemaType<typeof bookSchema>;
+export type XenBudgetItemAttrs = InferSchemaType<typeof itemSchema>;
 
-module.exports = { XenBudgetBook, XenBudgetItem };
+const XenBudgetBook = mongoose.model("XenBudgetBook", bookSchema);
+const XenBudgetItem = mongoose.model("XenBudgetItem", itemSchema);
+
+export { XenBudgetBook, XenBudgetItem };

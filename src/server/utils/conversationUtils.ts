@@ -40,14 +40,16 @@ export function getLastMessageInfo(conversation: ConversationDocument): {
  * Generate default conversation name from participant usernames
  * Includes all participants including the current user
  */
-export function generateDefaultConversationName(participantInfo: Array<{ _id: string; username: string }>): string {
+export function generateDefaultConversationName(
+  participantInfo: Array<{ _id: string; username?: string | null }>,
+): string {
   if (participantInfo.length === 0) {
     return "Chat";
   }
 
   if (participantInfo.length === 1) {
-    return participantInfo[0].username;
+    return participantInfo[0].username ?? "Chat";
   }
 
-  return participantInfo.map((p) => p.username).join(", ");
+  return participantInfo.map((p) => p.username ?? "Unknown").join(", ");
 }

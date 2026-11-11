@@ -1,6 +1,7 @@
 import express = require("express");
-const { User } = require("../models/user");
-const Notification = require("../models/notification");
+import { loadCaller } from "../utils/http";
+import { User } from "../models/user";
+import { Notification } from "../models/notification";
 import { authenticateToken } from "../middleware/auth";
 import { generateToken } from "../utils/tokenUtils";
 import { sendPasswordResetEmail } from "../utils/emailUtils";
@@ -15,7 +16,6 @@ import {
   resetPasswordSchema,
 } from "../utils/validation";
 import { randomToken, hashToken } from "../utils/tokens";
-import { AuthenticatedRequest } from "../types";
 
 // A recovery link is good for one hour. Keep in step with the wording in utils/emailUtils.ts.
 export const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
@@ -23,7 +23,7 @@ export const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 module.exports = function (app: express.Application) {
   // Role verification endpoint - returns user's roles from database
   app.get("/api/auth/roles/verify", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+    const user = await loadCaller(req);
 
     if (!user) {
       return res.status(404).json({
@@ -42,7 +42,7 @@ module.exports = function (app: express.Application) {
   });
 
   app.post("/api/auth/verify", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+    const user = await loadCaller(req);
 
     if (user) {
       // Generate new token for automatic refresh
@@ -177,16 +177,16 @@ module.exports = function (app: express.Application) {
 
         // Save the token and expiry to the user
         // Only the hash is stored; the raw token exists only in the emailed link.
-        user.resetPassword.token = hashToken(resetToken);
-        user.resetPassword.expires = resetTokenExpiry;
+        user.set("resetPassword.token", hashToken(resetToken));
+        user.set("resetPassword.expires", resetTokenExpiry);
         await user.save();
 
         const baseUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || "3000"}`;
-        const resetUrl = `${baseUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+        const resetUrl = `${baseUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(email.toLowerCase())}`;
 
         const emailResult = await sendPasswordResetEmail({
-          username: user.username,
-          email: user.email,
+          username: user.username ?? "",
+          email: email.toLowerCase(),
           resetUrl: resetUrl,
         });
 
@@ -297,8 +297,8 @@ module.exports = function (app: express.Application) {
 
       // Update password and clear reset token
       user.password = user.generateHash(newPassword);
-      user.resetPassword.token = undefined;
-      user.resetPassword.expires = undefined;
+      user.set("resetPassword.token", undefined);
+      user.set("resetPassword.expires", undefined);
       // Without this the new password and the cleared token were only ever set in memory.
       await user.save();
 

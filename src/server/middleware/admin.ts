@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-const { User } = require("../models/user");
+import { User } from "../models/user";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 
 // Admin middleware - checks if user has admin role

@@ -1,7 +1,8 @@
 import express = require("express");
-const { User } = require("../models/user");
-const Notification = require("../models/notification");
-const { ITEMS } = require("../constants/items");
+import { loadCaller, AppError } from "../utils/http";
+import { User } from "../models/user";
+import { Notification } from "../models/notification";
+import { ITEMS } from "../constants/items";
 import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { uploadAvatarFile } from "../utils/mediaUtils";
@@ -30,6 +31,7 @@ module.exports = function (app: express.Application) {
   app.get("/api/user/profile", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = (req as AuthenticatedRequest).user!._id;
     const user = await User.findOne({ _id: userId }).populate("xenbox.files").exec();
+    if (!user) throw new AppError(404, "User not found");
 
     // Check if user has any unread messages in any conversation
     // user.conversations now contains metadata with unread flag
@@ -91,6 +93,7 @@ module.exports = function (app: express.Application) {
       // announce itself as "Profile updated" in the notification centre.
       const changed: string[] = [];
       const user = await User.findOne({ _id: userId }).exec();
+      if (!user) throw new AppError(404, "User not found");
 
       if (timezone !== undefined) {
         // "" clears the preference, putting the user back on their browser's zone.
@@ -181,7 +184,7 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     upload.single("avatar"),
     async function (req: express.Request, res: express.Response) {
-      const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+      const user = await loadCaller(req);
 
       if (!req.file) {
         return res.status(400).json({
@@ -295,6 +298,7 @@ module.exports = function (app: express.Application) {
 
       // Check if Google is already linked
       const fullUser = await User.findById(user._id).exec();
+      if (!fullUser) throw new AppError(404, "User not found");
       if (fullUser.hasAuthProvider("google")) {
         return res.json({
           success: false,
@@ -323,6 +327,7 @@ module.exports = function (app: express.Application) {
 
       // Check if GitHub is already linked
       const fullUser = await User.findById(user._id).exec();
+      if (!fullUser) throw new AppError(404, "User not found");
       if (fullUser.hasAuthProvider("github")) {
         return res.json({
           success: false,
@@ -351,6 +356,7 @@ module.exports = function (app: express.Application) {
 
       // Check if Discord is already linked
       const fullUser = await User.findById(user._id).exec();
+      if (!fullUser) throw new AppError(404, "User not found");
       if (fullUser.hasAuthProvider("discord")) {
         return res.json({
           success: false,
@@ -389,6 +395,7 @@ module.exports = function (app: express.Application) {
         }
 
         const fullUser = await User.findById(user._id).exec();
+        if (!fullUser) throw new AppError(404, "User not found");
 
         if (!fullUser.hasAuthProvider(provider)) {
           return res.json({
@@ -437,6 +444,7 @@ module.exports = function (app: express.Application) {
       }
 
       const fullUser = await User.findById(user._id).exec();
+      if (!fullUser) throw new AppError(404, "User not found");
 
       if (fullUser.password) {
         return res.json({
@@ -446,7 +454,7 @@ module.exports = function (app: express.Application) {
       }
 
       fullUser.password = fullUser.generateHash(password);
-      await fullUser.addAuthProvider("local", null, fullUser.email);
+      await fullUser.addAuthProvider("local", undefined, fullUser.email);
 
       return res.json({
         success: true,
@@ -511,6 +519,7 @@ module.exports = function (app: express.Application) {
   app.get("/api/user/pinned-apps", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = (req as AuthenticatedRequest).user!._id;
     const user = await User.findById(userId).exec();
+    if (!user) throw new AppError(404, "User not found");
     return res.json({
       status: true,
       data: { pinnedApps: user.pinnedApps || [] },
@@ -522,6 +531,7 @@ module.exports = function (app: express.Application) {
     const userId = (req as AuthenticatedRequest).user!._id;
     const { pinnedApps } = req.body;
     const user = await User.findById(userId).exec();
+    if (!user) throw new AppError(404, "User not found");
     user.pinnedApps = pinnedApps || [];
     await user.save();
     return res.json({
@@ -534,6 +544,7 @@ module.exports = function (app: express.Application) {
   app.get("/api/user/inventory", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = (req as AuthenticatedRequest).user!._id;
     const user = await User.findById(userId).exec();
+    if (!user) throw new AppError(404, "User not found");
     return res.json({
       status: true,
       data: { inventory: user.inventory || [] },
@@ -548,6 +559,7 @@ module.exports = function (app: express.Application) {
       const userId = (req as AuthenticatedRequest).user!._id;
       const { inventoryItemId } = req.params;
       const user = await User.findById(userId).exec();
+      if (!user) throw new AppError(404, "User not found");
 
       const item = user.inventory.id(inventoryItemId);
       if (!item) {
@@ -565,7 +577,8 @@ module.exports = function (app: express.Application) {
       }
 
       const itemDef = ITEMS[item.itemKey as keyof typeof ITEMS];
-      if (itemDef) {
+      // Not every item has an effect to apply (apply is optional on the item definition).
+      if (itemDef?.apply) {
         await itemDef.apply(user);
       }
 
@@ -588,6 +601,7 @@ module.exports = function (app: express.Application) {
       const userId = (req as AuthenticatedRequest).user!._id;
       const { inventoryItemId } = req.params;
       const user = await User.findById(userId).exec();
+      if (!user) throw new AppError(404, "User not found");
 
       const item = user.inventory.id(inventoryItemId);
       if (!item) {

@@ -1,4 +1,4 @@
-const XenSplitLog = require("../models/xenSplitLog");
+import { XenSplitLog } from "../models/xenSplitLog";
 import type { XenSplitLogAction, XenSplitLogChange, XenSplitLogTargetType } from "./xenSplitLogUtils";
 
 export interface XenSplitLogEntry {

@@ -1,8 +1,7 @@
-var mongoose = require("mongoose");
-var Schema = mongoose.Schema;
+import mongoose, { Schema, type InferSchemaType } from "mongoose";
 
 // XENLINK SCHEMA
-var xenlinkSchema = new mongoose.Schema({
+const xenlinkSchema = new Schema({
   name: { type: String, required: true },
   url: { type: String, required: true },
   slug: { type: String, unique: true, index: true },
@@ -13,7 +12,7 @@ var xenlinkSchema = new mongoose.Schema({
 xenlinkSchema.pre("save", async function (next) {
   if (!this.slug) {
     // Get the count of existing documents
-    const count = await this.constructor.countDocuments();
+    const count = await (this.constructor as mongoose.Model<unknown>).countDocuments();
 
     // Convert count to base62 (alphanumeric) for shorter strings
     this.slug = toBase62(count + 1);
@@ -21,7 +20,7 @@ xenlinkSchema.pre("save", async function (next) {
   next();
 });
 
-function toBase62(num) {
+function toBase62(num: number): string {
   const chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   let result = "";
 
@@ -33,6 +32,8 @@ function toBase62(num) {
   return result || "0";
 }
 
-var XenLink = mongoose.model("XenLink", xenlinkSchema);
+export type XenLinkAttrs = InferSchemaType<typeof xenlinkSchema>;
 
-module.exports = { XenLink };
+const XenLink = mongoose.model("XenLink", xenlinkSchema);
+
+export { XenLink };

@@ -1,6 +1,7 @@
 import express = require("express");
-const { User } = require("../models/user");
-const Conversation = require("../models/conversation");
+import { loadCaller } from "../utils/http";
+import { User } from "../models/user";
+import { Conversation } from "../models/conversation";
 import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
 import {
@@ -14,13 +15,13 @@ import {
   messageIdParamSchema,
   participantIdParamSchema,
 } from "../utils/validation";
-import { UserConversationMetadata, Message, ConversationDocument, AuthenticatedRequest } from "../types";
+import { UserConversationMetadata, ConversationDocument } from "../types";
 import { getLastMessageInfo, generateDefaultConversationName } from "../utils/conversationUtils";
 
 module.exports = function (app: express.Application) {
   // Get all conversations for the authenticated user
   app.get("/api/user/messages", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+    const user = await loadCaller(req);
 
     // Get conversation IDs from user's conversation metadata
     const userConversationIds = (user.conversations || []).map((uc: UserConversationMetadata) => uc.conversationId);
@@ -95,7 +96,7 @@ module.exports = function (app: express.Application) {
     validateParams(conversationIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const { conversationId } = req.params;
-      const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+      const user = await loadCaller(req);
 
       // Find conversation in separate collection
       const conversation = await Conversation.findOne({ _id: conversationId }).exec();
@@ -138,7 +139,7 @@ module.exports = function (app: express.Application) {
 
       // Add username to each message
       const messagesWithUsernames = await Promise.all(
-        (conversation.messages || []).map(async (msg: Message) => {
+        (conversation.messages || []).map(async (msg) => {
           if (msg.from === user._id.toString()) {
             return {
               ...(msg.toObject ? msg.toObject() : msg),
@@ -190,7 +191,7 @@ module.exports = function (app: express.Application) {
     validate(createConversationSchema),
     async function (req: express.Request, res: express.Response) {
       const { participants, message } = req.body;
-      const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+      const user = await loadCaller(req);
 
       if (!participants || !Array.isArray(participants) || participants.length === 0) {
         return res.status(400).json({
@@ -241,7 +242,7 @@ module.exports = function (app: express.Application) {
         const participantUser = await User.findOne({ _id: participantId }).exec();
         if (participantUser) {
           if (!participantUser.conversations) {
-            participantUser.conversations = [];
+            participantUser.set("conversations", []);
           }
           // Add conversation reference with user-specific metadata
           participantUser.conversations.push({
@@ -298,7 +299,7 @@ module.exports = function (app: express.Application) {
     async function (req: express.Request, res: express.Response) {
       const { conversationId } = req.params;
       const { message, parentMessageId } = req.body;
-      const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+      const user = await loadCaller(req);
 
       if (!message) {
         return res.status(400).json({
@@ -335,7 +336,7 @@ module.exports = function (app: express.Application) {
 
       // Add message to conversation
       if (!conversation.messages) {
-        conversation.messages = [];
+        conversation.set("messages", []);
       }
       conversation.messages.push(newMessage);
       conversation.updatedAt = new Date();
@@ -392,7 +393,7 @@ module.exports = function (app: express.Application) {
     async function (req: express.Request, res: express.Response) {
       const { conversationId, messageId } = req.params;
       const { message } = req.body;
-      const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+      const user = await loadCaller(req);
 
       if (!message) {
         return res.status(400).json({
@@ -420,7 +421,7 @@ module.exports = function (app: express.Application) {
       }
 
       // Verify parent message exists
-      const parentMessage = conversation.messages?.find((msg: Message) => msg._id.toString() === messageId);
+      const parentMessage = conversation.messages?.find((msg) => msg._id.toString() === messageId);
       if (!parentMessage) {
         return res.status(404).json({
           status: false,
@@ -438,7 +439,7 @@ module.exports = function (app: express.Application) {
 
       // Add reply to conversation
       if (!conversation.messages) {
-        conversation.messages = [];
+        conversation.set("messages", []);
       }
       conversation.messages.push(replyMessage);
       conversation.updatedAt = new Date();
@@ -493,7 +494,7 @@ module.exports = function (app: express.Application) {
     validateParams(conversationIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const { conversationId } = req.params;
-      const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+      const user = await loadCaller(req);
 
       // Find conversation in separate collection
       const conversation = await Conversation.findOne({ _id: conversationId }).exec();
@@ -525,7 +526,7 @@ module.exports = function (app: express.Application) {
       } else {
         // Add conversation metadata if it doesn't exist
         if (!user.conversations) {
-          user.conversations = [];
+          user.set("conversations", []);
         }
         user.conversations.push({
           conversationId: conversation._id,
@@ -556,7 +557,7 @@ module.exports = function (app: express.Application) {
     validateParams(messageIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const { conversationId, messageId } = req.params;
-      const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+      const user = await loadCaller(req);
 
       // Find conversation in separate collection
       const conversation = await Conversation.findOne({ _id: conversationId }).exec();
@@ -576,7 +577,7 @@ module.exports = function (app: express.Application) {
         });
       }
 
-      const messageIndex = conversation.messages?.findIndex((msg: Message) => msg._id.toString() === messageId);
+      const messageIndex = conversation.messages?.findIndex((msg) => msg._id.toString() === messageId);
 
       if (messageIndex === undefined || messageIndex === -1) {
         return res.status(404).json({
@@ -621,7 +622,7 @@ module.exports = function (app: express.Application) {
     async function (req: express.Request, res: express.Response) {
       const { conversationId } = req.params;
       const { participantIds } = req.body;
-      const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+      const user = await loadCaller(req);
 
       if (!participantIds || !Array.isArray(participantIds) || participantIds.length === 0) {
         return res.status(400).json({
@@ -678,7 +679,7 @@ module.exports = function (app: express.Application) {
         const participantUser = await User.findOne({ _id: participantId }).exec();
         if (participantUser) {
           if (!participantUser.conversations) {
-            participantUser.conversations = [];
+            participantUser.set("conversations", []);
           }
 
           // Check if conversation metadata already exists for this participant
@@ -722,7 +723,7 @@ module.exports = function (app: express.Application) {
     validateParams(participantIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const { conversationId, participantId } = req.params;
-      const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+      const user = await loadCaller(req);
 
       // Find conversation in separate collection
       const conversation = await Conversation.findOne({ _id: conversationId }).exec();
@@ -795,7 +796,7 @@ module.exports = function (app: express.Application) {
     async function (req: express.Request, res: express.Response) {
       const { conversationId } = req.params;
       const { name } = req.body;
-      const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+      const user = await loadCaller(req);
 
       // Find conversation in separate collection
       const conversation = await Conversation.findOne({ _id: conversationId }).exec();
@@ -844,7 +845,7 @@ module.exports = function (app: express.Application) {
     validateParams(conversationIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const { conversationId } = req.params;
-      const user = await User.findOne({ _id: (req as AuthenticatedRequest).user!._id }).exec();
+      const user = await loadCaller(req);
 
       // Find conversation in separate collection
       const conversation = await Conversation.findOne({ _id: conversationId }).exec();

@@ -1,4 +1,4 @@
-const XenSplit = require("../models/xenSplit");
+import { XenSplit } from "../models/xenSplit";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { notify } from "./notificationUtils";
 import { registerTaskHandler, TaskRunResult } from "../infrastructure/TaskDispatcher";
@@ -77,6 +77,9 @@ async function generate(task: any, dueDates: Date[]): Promise<TaskRunResult> {
     // Birth already happened but a crash prevented the task advance — clean up the snapshot
     task.payload = { ...task.payload, pending_expense: undefined };
   }
+
+  // Past the branches above the genesis exists and is live; say so for the type checker.
+  if (!source) return { processed: 0, disable: true };
 
   // Dedup on (recurring_id, date): due dates are deterministic, so replaying any
   // prefix after a crash between the group save and the task advance is a no-op.

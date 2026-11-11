@@ -1,8 +1,7 @@
-var mongoose = require("mongoose");
-var Schema = mongoose.Schema;
+import mongoose, { Schema, type HydratedDocument, type InferSchemaType } from "mongoose";
 
 // MESSAGE SCHEMA (within conversation/group)
-var messageSchema = new mongoose.Schema({
+const messageSchema = new Schema({
   from: { type: String }, // user ID
   message: { type: String },
   time: { type: Date, default: () => new Date() },
@@ -10,7 +9,7 @@ var messageSchema = new mongoose.Schema({
 });
 
 // CONVERSATION/GROUP SCHEMA
-var conversationSchema = new mongoose.Schema({
+const conversationSchema = new Schema({
   participants: [{ type: String }], // array of user IDs
   name: { type: String }, // optional group name
   createdBy: { type: String }, // user ID of the conversation creator
@@ -18,4 +17,8 @@ var conversationSchema = new mongoose.Schema({
   messages: [messageSchema], // array of messages in this conversation/group
 });
 
-module.exports = mongoose.model("Conversation", conversationSchema);
+export type ConversationAttrs = InferSchemaType<typeof conversationSchema>;
+export type ConversationMessage = ConversationAttrs["messages"][number];
+export type ConversationDocument = HydratedDocument<ConversationAttrs>;
+
+export const Conversation = mongoose.model("Conversation", conversationSchema);

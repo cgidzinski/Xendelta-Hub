@@ -1,12 +1,12 @@
 import express = require("express");
-const { User } = require("../../models/user");
+import { User } from "../../models/user";
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
 import { AuthenticatedRequest } from "../../types";
 
-const { ITEMS } = require("../../constants/items");
-const Notification = require("../../models/notification");
-const { SocketManager } = require("../../infrastructure/SocketManager");
+import { ITEMS } from "../../constants/items";
+import { Notification } from "../../models/notification";
+import { SocketManager } from "../../infrastructure/SocketManager";
 
 module.exports = function (app: express.Application) {
   app.get(

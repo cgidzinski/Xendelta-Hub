@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
-const { XenBudgetBook, XenBudgetItem } = require("../models/xenBudget");
-const { User } = require("../models/user");
+import { XenBudgetBook, XenBudgetItem } from "../models/xenBudget";
+import { User } from "../models/user";
 import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
 import {
@@ -1587,20 +1587,20 @@ module.exports = function (app: any) {
           changes.push(diff);
           if (!dryRun) {
             // Rules name categories; the weights (even or percentage) are derived here.
-            item.categories = draftCategoryWeights(after, item.amount);
+            item.set("categories", draftCategoryWeights(after, item.amount));
             item.category_split_type = after.category_split_type ?? "equal";
             item.rule_categories = after.rule_categories;
             item.flags = after.flags;
             item.rule_flags = after.rule_flags;
-            item.applied_rule_ids = after.applied_rule_ids;
+            item.set("applied_rule_ids", after.applied_rule_ids);
             item.description = after.description;
             item.original_description = after.original_description;
             item.type = after.type;
             if (after.people && after.people.length > 0) {
               try {
                 const resolved = buildRuleShares(after, book);
-                item.share_type = resolved.share_type;
-                item.shares = resolved.shares;
+                item.set("share_type", resolved.share_type);
+                item.set("shares", resolved.shares);
               } catch {
                 // A rule naming someone who has since left the book shouldn't fail the
                 // whole sweep; leave that item's existing shares alone.
@@ -3690,7 +3690,7 @@ module.exports = function (app: any) {
               ? body.categories
               : item.categories.map((c: any) => ({ name: c.name, amount: c.amount, percentage: c.percentage }));
           item.category_split_type = body.category_split_type || item.category_split_type || "equal";
-          item.categories = resolveCategories(item.category_split_type, item.amount, requested);
+          item.set("categories", resolveCategories(item.category_split_type, item.amount, requested));
         }
         // Both directions, after the categories are settled: a hand-categorised item is no
         // longer the importer's "nothing matched" case, and one whose last category was
@@ -3713,8 +3713,8 @@ module.exports = function (app: any) {
               },
               book,
             );
-            item.share_type = resolved.share_type;
-            item.shares = resolved.shares;
+            item.set("share_type", resolved.share_type);
+            item.set("shares", resolved.shares);
           } catch (e: any) {
             return res.status(400).json({ status: false, message: e.message });
           }
@@ -3771,7 +3771,7 @@ module.exports = function (app: any) {
           return res.status(400).json({ status: false, message: "No images provided" });
         }
 
-        if (!item.images) item.images = [];
+        if (!item.images) item.set("images", []);
         if (item.images.length + files.length > MAX_XENBUDGET_IMAGES_PER_ITEM) {
           return res
             .status(400)

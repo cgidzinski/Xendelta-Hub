@@ -13,6 +13,7 @@ const { SocketManager } = require("./infrastructure/SocketManager.js");
 const Mongo = require("./infrastructure/MongoDB.js");
 
 require("./config/passport");
+import { errorHandler } from "./utils/http";
 
 const { Server: SocketIOServer } = require("socket.io");
 
@@ -209,13 +210,7 @@ app.use(
 if (Bugsnag.getPlugin("express")) {
   app.use(Bugsnag.getPlugin("express").errorHandler);
 }
-app.use((err: any, _req: any, res: any, _next: any) => {
-  console.error(">>> Unhandled error:", err);
-  const status = err.status || err.statusCode || 500;
-  res.status(status).json({
-    message: process.env.NODE_ENV === "production" ? "Internal server error" : err.message,
-  });
-});
+app.use(errorHandler);
 
 // Graceful shutdown: stop taking work, let in-flight requests finish, close sockets and
 // the database, then exit. pm2 sends SIGINT on restart and SIGTERM on stop.

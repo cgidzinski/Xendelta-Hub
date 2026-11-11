@@ -1,8 +1,7 @@
-var mongoose = require("mongoose");
-var Schema = mongoose.Schema;
+import mongoose, { Schema, type InferSchemaType } from "mongoose";
 
 // BLOG POST SCHEMA
-var blogPostSchema = new mongoose.Schema({
+const blogPostSchema = new Schema({
   title: { type: String, required: true },
   slug: { type: String, required: true, unique: true, index: true },
   markdown: { type: String, required: true },
@@ -20,10 +19,12 @@ var blogPostSchema = new mongoose.Schema({
 
 // Update updatedAt before saving
 blogPostSchema.pre("save", function (next) {
-  this.updatedAt = Date.now();
+  this.updatedAt = new Date();
   next();
 });
 
-var BlogPost = mongoose.model("BlogPost", blogPostSchema);
+export type BlogPostAttrs = InferSchemaType<typeof blogPostSchema>;
 
-module.exports = { BlogPost };
+const BlogPost = mongoose.model("BlogPost", blogPostSchema);
+
+export { BlogPost };

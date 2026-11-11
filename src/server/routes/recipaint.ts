@@ -5,8 +5,8 @@ import { uploadRecipaintAsset, generateUniqueFilename, deleteRecipaintAssetByUrl
 import { AuthenticatedRequest } from "../types";
 import { sanitizeCompletedSteps } from "@shared/recipaint/progress";
 import { isSameId } from "../utils/objectId";
-const { Recipe } = require("../models/recipe");
-const { RecipeProgress } = require("../models/recipeProgress");
+import { Recipe } from "../models/recipe";
+import { RecipeProgress } from "../models/recipeProgress";
 const mongoose = require("mongoose");
 const {
   Types: { ObjectId },

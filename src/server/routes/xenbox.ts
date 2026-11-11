@@ -1,4 +1,5 @@
 import express = require("express");
+import { AppError } from "../utils/http";
 import { authenticateToken } from "../middleware/auth";
 import {
   initiateChunkedUpload,
@@ -11,8 +12,8 @@ import {
 import { generateSignedUrl } from "../utils/gcsUtils";
 import { privateBucket } from "../config/gcs";
 import { AuthenticatedRequest } from "../types";
-const { XenBoxMedia } = require("../models/xenboxMedia");
-const { User } = require("../models/user");
+import { XenBoxMedia } from "../models/xenboxMedia";
+import { User } from "../models/user";
 
 module.exports = function (app: express.Application) {
   // Initiate chunked upload
@@ -219,7 +220,7 @@ module.exports = function (app: express.Application) {
         });
       }
 
-      if (file.uploadedBy.toString() !== userId) {
+      if (file.uploadedBy?.toString() !== userId) {
         return res.status(403).json({
           status: false,
           message: "Access denied",
@@ -255,7 +256,7 @@ module.exports = function (app: express.Application) {
         });
       }
 
-      if (file.uploadedBy.toString() !== userId) {
+      if (file.uploadedBy?.toString() !== userId) {
         return res.status(403).json({
           status: false,
           message: "Access denied",
@@ -379,6 +380,7 @@ module.exports = function (app: express.Application) {
     }
 
     // File is valid, stream it from GCS
+    if (!file.uploadedBy) throw new AppError(404, "File not found");
     const userId = file.uploadedBy.toString();
     const gcsPath = `xenbox/${userId}/${file.filename}`;
     const gcsFile = privateBucket.file(gcsPath);
@@ -395,7 +397,7 @@ module.exports = function (app: express.Application) {
     // Set headers for file download
     res.setHeader("Content-Type", file.mimeType);
     res.setHeader("Content-Disposition", `attachment; filename="${file.filename}"`);
-    res.setHeader("Content-Length", file.size);
+    if (file.size != null) res.setHeader("Content-Length", file.size);
     // Add expiry info to headers if available
     if (file.expiry) {
       res.setHeader("X-File-Expiry", file.expiry.toISOString());
@@ -422,7 +424,7 @@ module.exports = function (app: express.Application) {
         });
       }
 
-      if (file.uploadedBy.toString() !== userId) {
+      if (file.uploadedBy?.toString() !== userId) {
         return res.status(403).json({
           status: false,
           message: "Access denied",

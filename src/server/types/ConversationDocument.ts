@@ -1,13 +1,2 @@
-import { Message } from "./Message";
-
-/**
- * Conversation document interface
- */
-export interface ConversationDocument {
-  _id: string;
-  participants: string[];
-  name?: string;
-  createdBy?: string;
-  updatedAt: Date;
-  messages?: Message[];
-}
+// Derived from the Conversation model, so it cannot drift from what is actually stored.
+export type { ConversationDocument } from "../models/conversation";

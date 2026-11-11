@@ -4,6 +4,7 @@
 // src/shared/xensplit/balances.ts so the client can run the identical math for
 // the Settlements page's rewind preview. Re-exported here so existing server
 // imports keep working.
+import type { XenSplitDocument } from "@shared/xensplit/balances";
 export { calculateBalances, calculateMinimumTransfers } from "@shared/xensplit/balances";
 export type { Transfer, BalanceMap, Expense, Settlement, Exchange, XenSplitDocument } from "@shared/xensplit/balances";
 
@@ -17,9 +18,10 @@ export type { Transfer, BalanceMap, Expense, Settlement, Exchange, XenSplitDocum
 export function resolveSplits(
   splitType: "equal" | "exact" | "percent",
   amount: number,
-  splits: { user_id: string; amount_owed?: number; percentage?: number }[],
+  // Stored splits may hold null for the optional fields; null and undefined both mean "absent" here.
+  splits: { user_id: string; amount_owed?: number | null; percentage?: number | null }[],
   allMemberIds: string[],
-): { user_id: string; amount_owed: number; percentage?: number }[] {
+): { user_id: string; amount_owed: number; percentage?: number | null }[] {
   if (splitType === "equal") {
     const participants = splits.length > 0 ? splits.map((s) => s.user_id) : allMemberIds;
     const perPerson = amount / participants.length;
@@ -50,4 +52,14 @@ export function resolveSplits(
     resolved[resolved.length - 1].amount_owed += exactDiff;
   }
   return resolved;
+}
+
+/**
+ * A group document in the shape the balance engine takes. The schema allows `null` for optional
+ * split fields where the engine's (client-shared) types say `undefined`; stored data only ever
+ * has the field or nothing, so the two read identically. One documented cast, here, instead of
+ * one per route.
+ */
+export function asBalanceInput(group: object, members: string[]): XenSplitDocument {
+  return { ...group, members } as unknown as XenSplitDocument;
 }
