@@ -1,4 +1,5 @@
 import type { XenSplit, XenSplitExpense, DirectDebt, BreakdownLine } from "../hooks/xensplit/types";
+import { roundMoneyExact } from "@shared/money";
 
 // Share of an expense owed by a single participant. Mirrors the server math in
 // src/server/utils/xenSplitUtils.ts (equal = amount / splits.length, otherwise
@@ -65,8 +66,8 @@ export function computeDirectDebts(group: XenSplit, currency: string): DirectDeb
       const a = ids[i];
       const b = ids[j];
       const net = (owe[a]?.[b] ?? 0) - (owe[b]?.[a] ?? 0);
-      if (net > 0.01) debts.push({ from: a, to: b, amount: Number(net.toFixed(2)), currency });
-      else if (net < -0.01) debts.push({ from: b, to: a, amount: Number((-net).toFixed(2)), currency });
+      if (net > 0.01) debts.push({ from: a, to: b, amount: roundMoneyExact(net), currency });
+      else if (net < -0.01) debts.push({ from: b, to: a, amount: roundMoneyExact(-net), currency });
     }
   }
   return debts;
@@ -94,7 +95,7 @@ export function computeBalanceBreakdown(group: XenSplit, userId: string, currenc
           kind: "paid",
           label: `Paid for "${expense.title}"`,
           hint: "Covered the others' shares",
-          amount: Number(credit.toFixed(2)),
+          amount: roundMoneyExact(credit),
           date: expense.date,
         });
       }
@@ -103,7 +104,7 @@ export function computeBalanceBreakdown(group: XenSplit, userId: string, currenc
         kind: "share",
         label: `Share of "${expense.title}"`,
         hint: `${nameOf(expense.paid_by)} paid — this share is owed to them`,
-        amount: -Number(myShare.toFixed(2)),
+        amount: -roundMoneyExact(myShare),
         date: expense.date,
       });
     }
@@ -117,7 +118,7 @@ export function computeBalanceBreakdown(group: XenSplit, userId: string, currenc
         kind: "settlement",
         label: `Paid ${nameOf(s.to)} back`,
         hint: "A settlement that cancelled out a debt",
-        amount: Number(s.amount.toFixed(2)),
+        amount: roundMoneyExact(s.amount),
         date: s.settled_at,
       });
     } else if (s.to === userId) {
@@ -126,7 +127,7 @@ export function computeBalanceBreakdown(group: XenSplit, userId: string, currenc
         kind: "settlement",
         label: `${nameOf(s.from)} paid them back`,
         hint: "A settlement that cancelled out a debt",
-        amount: -Number(s.amount.toFixed(2)),
+        amount: -roundMoneyExact(s.amount),
         date: s.settled_at,
       });
     }
@@ -144,7 +145,7 @@ export function computeBalanceBreakdown(group: XenSplit, userId: string, currenc
           kind: "exchange",
           label: `Exchange with ${nameOf(ex.party_b)}`,
           hint: `Owes ${nameOf(ex.party_b)} ${ex.amount_a} ${ex.currency_a}`,
-          amount: -Number(ex.amount_a.toFixed(2)),
+          amount: -roundMoneyExact(ex.amount_a),
           date: ex.date,
         });
       } else if (ex.party_b === userId) {
@@ -153,7 +154,7 @@ export function computeBalanceBreakdown(group: XenSplit, userId: string, currenc
           kind: "exchange",
           label: `Exchange with ${nameOf(ex.party_a)}`,
           hint: `${nameOf(ex.party_a)} owes them ${ex.amount_a} ${ex.currency_a}`,
-          amount: Number(ex.amount_a.toFixed(2)),
+          amount: roundMoneyExact(ex.amount_a),
           date: ex.date,
         });
       }
@@ -166,7 +167,7 @@ export function computeBalanceBreakdown(group: XenSplit, userId: string, currenc
           kind: "exchange",
           label: `Exchange with ${nameOf(ex.party_a)}`,
           hint: `Owes ${nameOf(ex.party_a)} ${ex.amount_b} ${ex.currency_b}`,
-          amount: -Number(ex.amount_b.toFixed(2)),
+          amount: -roundMoneyExact(ex.amount_b),
           date: ex.date,
         });
       } else if (ex.party_a === userId) {
@@ -175,7 +176,7 @@ export function computeBalanceBreakdown(group: XenSplit, userId: string, currenc
           kind: "exchange",
           label: `Exchange with ${nameOf(ex.party_b)}`,
           hint: `${nameOf(ex.party_b)} owes them ${ex.amount_b} ${ex.currency_b}`,
-          amount: Number(ex.amount_b.toFixed(2)),
+          amount: roundMoneyExact(ex.amount_b),
           date: ex.date,
         });
       }

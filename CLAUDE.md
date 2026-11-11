@@ -21,6 +21,10 @@ plus `npm audit --omit=dev --audit-level=high`.
   **Never drop the 4th parameter of an Express error handler** (`(err, req, res, next)`): Express detects error
   handlers by arity, and `server.ts` has a test pinning it.
 - Shared client/server code lives in `src/shared` and is imported as `@shared/...` (no `../../../shared`).
+- **Money** lives in `src/shared/money.ts`. Round with `roundMoney` and display with `formatMoney`
+  (`{ symbol: "narrow" }` for XenBudget's bare `$`). `roundMoneyExact` (`toFixed`) exists only for the XenSplit
+  balance engine: it differs from `roundMoney` on some half-cents, and changing it would shift existing balances.
+  `moneyConventions.test.ts` fails on a hand-written `Math.round(x * 100) / 100` or `new Intl.NumberFormat`.
 - Server integration tests use `src/server/testing/testApp.ts` (real routes and models, in-memory MongoDB).
 
 ## Server conventions

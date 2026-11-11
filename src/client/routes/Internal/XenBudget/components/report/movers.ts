@@ -1,4 +1,5 @@
 import type { SummaryCategoryPeriod } from "../../../../../hooks/xenbudget/types";
+import { roundMoney } from "@shared/money";
 
 /**
  * What changed between the last two periods on the report.
@@ -76,7 +77,7 @@ export function buildMovers(
 
   const movers: Mover[] = [];
   for (const [category, { previous, current }] of totals) {
-    const delta = Math.round((current - previous) * 100) / 100;
+    const delta = roundMoney(current - previous);
     if (Math.abs(delta) < floor) continue;
     movers.push({
       category,

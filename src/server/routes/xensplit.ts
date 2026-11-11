@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { roundMoneyExact } from "@shared/money";
 import { AppError } from "../utils/http";
 import { XenSplit } from "../models/xenSplit";
 import { User } from "../models/user";
@@ -1424,7 +1425,7 @@ module.exports = function (app: any) {
           return res.status(400).json({ status: false, message: "Party B must be a group member" });
         }
 
-        const amount_b = Number((amount_a * rate).toFixed(2));
+        const amount_b = roundMoneyExact(amount_a * rate);
 
         group.exchanges = group.exchanges || [];
         group.exchanges.push({

@@ -1,4 +1,5 @@
 import { budgetPace } from "./budgetPace";
+import { roundMoney } from "@shared/money";
 
 /**
  * Where the whole book lands by the end of the period.
@@ -72,6 +73,6 @@ export function projectBook({
     // invents money that may never arrive. Being conservative on what comes in and
     // aggressive on what goes out is the right bias for a budget.
     income,
-    projectedNet: Math.round((income - projectedExpense) * 100) / 100,
+    projectedNet: roundMoney(income - projectedExpense),
   };
 }

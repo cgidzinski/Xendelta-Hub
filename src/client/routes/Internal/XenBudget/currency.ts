@@ -1,22 +1,14 @@
+import { formatMoney, currencySymbol } from "@shared/money";
+
 // XenBudget-local currency formatting.
 //
-// XenBudget shows amounts with just the currency symbol ($, ¥, €, £, ₹, R$ …),
-// rather than the letter-coded prefix that `Intl.NumberFormat`'s default "symbol"
-// display emits (CA$, US$, A$ …). Xensplit keeps the shared `formatCurrency` /
-// `getCurrencySymbol` from utils/currencyUtils unchanged, so this module is
-// deliberately scoped to XenBudget only.
+// XenBudget shows amounts with just the currency symbol ($, ¥, €, £, ₹, R$ ...), rather than the
+// country-prefixed form (CA$, US$, A$ ...) that XenSplit uses because its groups can mix dollars.
+// A book has a single currency, so the bare symbol is unambiguous.
 export function formatCurrency(amount: number, currency: string): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    currencyDisplay: "narrowSymbol",
-  }).format(amount);
+  return formatMoney(amount, currency, { symbol: "narrow" });
 }
 
 export function getCurrencySymbol(currency: string): string {
-  return (
-    new Intl.NumberFormat("en-US", { style: "currency", currency, currencyDisplay: "narrowSymbol" })
-      .formatToParts(0)
-      .find((p) => p.type === "currency")?.value ?? currency
-  );
+  return currencySymbol(currency, "narrow");
 }
