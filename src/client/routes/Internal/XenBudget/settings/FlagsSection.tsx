@@ -1,7 +1,7 @@
 import { useOutletContext } from "react-router-dom";
 import { Box, Stack, Typography } from "@mui/material";
 import type { BookDetailContext } from "../BookDetail";
-import SectionCard from "./SectionCard";
+import SectionCard from "../../../../components/ui/SectionCard";
 import LabelManager from "../components/LabelManager";
 import { FlagChip } from "../components/LabelChip";
 

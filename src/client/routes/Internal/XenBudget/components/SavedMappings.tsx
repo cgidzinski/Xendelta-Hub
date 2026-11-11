@@ -1,3 +1,4 @@
+import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 import { useState } from "react";
 import {
     Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
@@ -113,19 +114,14 @@ export default function SavedMappings() {
             {/* Full-screen on a phone like the import wizard, the other place this same
             MapStep is hosted - it adapts itself to a narrow width, but only if it's given
             one. The delete confirm below stays a small centred dialog. */}
-            <Dialog
-                open={!!editing} onClose={() => setEditing(null)} fullWidth maxWidth="md"
-                fullScreen={isMobile}
-                slotProps={{ paper: { sx: { borderRadius: isMobile ? 0 : 2 } } }}
+            <ResponsiveDialog
+                open={!!editing} onClose={() => setEditing(null)} maxWidth="md"
+                title="Edit mapping"
+                actions={
+                    <Button variant="contained" disabled={!editing?.name.trim()} onClick={saveEdit}>Save</Button>
+                }
             >
-                <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    Edit mapping
-                    <IconButton size="small" onClick={() => setEditing(null)} aria-label="Close">
-                        <CloseIcon />
-                    </IconButton>
-                </DialogTitle>
-                <DialogContent>
-                    {editing && (
+                {editing && (
                         <Stack spacing={2} sx={{ pt: 1 }}>
                             <TextField
                                 autoFocus fullWidth size="small" label="Name" value={editing.name}
@@ -151,12 +147,8 @@ export default function SavedMappings() {
                                 onDateToChange={() => { }}
                             />
                         </Stack>
-                    )}
-                </DialogContent>
-                <DialogActions>
-                    <Button variant="contained" disabled={!editing?.name.trim()} onClick={saveEdit}>Save</Button>
-                </DialogActions>
-            </Dialog>
+                )}
+            </ResponsiveDialog>
 
             <Dialog open={!!deleting} onClose={() => setDeleting(null)}>
                 <DialogTitle>Delete this mapping?</DialogTitle>

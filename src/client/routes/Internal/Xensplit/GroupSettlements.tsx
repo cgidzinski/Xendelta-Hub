@@ -1,3 +1,5 @@
+import EmptyState from "../../../components/ui/EmptyState";
+import SectionLabel from "../../../components/ui/SectionLabel";
 import { Fragment, useMemo, useState } from "react";
 import { useOutletContext, useNavigate, useParams } from "react-router-dom";
 import { Box, Typography, Button, Avatar, Divider, ToggleButtonGroup, ToggleButton, IconButton, Tooltip } from "@mui/material";
@@ -146,9 +148,7 @@ export default function GroupSettlements() {
                     New Settlement
                 </Button>
 
-                <Box sx={{ textAlign: "center", py: 4 }}>
-                    <Typography variant="body1" color="text.secondary">No settlements yet</Typography>
-                </Box>
+                <EmptyState title="No settlements yet" sx={{ py: 4 }} />
 
                 <CreateSettlementDialog
                     open={createOpen}
@@ -234,9 +234,9 @@ export default function GroupSettlements() {
             {/* Pending */}
             {pendingSettlements.length > 0 && (
                 <>
-                    <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1.5 }}>
+                    <SectionLabel sx={{ mb: 1.5 }}>
                         {isRewound ? `Pending as of ${settledOnLabel(rewoundSettlement!.settled_at)}` : "Pending"}
-                    </Typography>
+                    </SectionLabel>
                     {displayedPending.length === 0 ? (
                         <Box sx={{ textAlign: "center", py: 3, mb: completedSettlements.length > 0 ? 2 : 0 }}>
                             <Typography variant="body2" color="text.secondary">All settled up</Typography>
@@ -278,9 +278,9 @@ export default function GroupSettlements() {
                 <>
                     <Divider sx={{ my: 2 }} />
                     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: showHistory ? 1.5 : 0 }}>
-                        <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                        <SectionLabel sx={{ mb: 0 }}>
                             History
-                        </Typography>
+                        </SectionLabel>
                         <Button size="small" variant="outlined" onClick={() => setShowHistory(v => !v)} sx={{ borderRadius: 2, fontWeight: 600, fontSize: "0.75rem", py: 0.25, px: 1.5 }}>
                             {showHistory ? "Hide" : "Show"}
                         </Button>
@@ -297,13 +297,9 @@ export default function GroupSettlements() {
                                     {/* Day header. Full-width so the cards stay direct children of
                                         the grid — their subgrid columns inherit from it, and an
                                         intermediate wrapper would let each day size its own. */}
-                                    <Typography
-                                        variant="caption"
-                                        color="text.disabled"
-                                        sx={{ gridColumn: "1 / -1", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1, ml: 0.25, mt: groupIdx === 0 ? 0 : 1.5 }}
-                                    >
+                                    <SectionLabel sx={{ gridColumn: "1 / -1", mb: 1, ml: 0.25, mt: groupIdx === 0 ? 0 : 1.5 }}>
                                         {dateGroup.label}
-                                    </Typography>
+                                    </SectionLabel>
                                     {dateGroup.items.map((s, idx) => {
                                         const fromMember = getMember(s.from);
                                         const toMember = getMember(s.to);

@@ -1,3 +1,4 @@
+import EmptyState from "../../../../components/ui/EmptyState";
 import { Box, Typography, Chip, Skeleton } from "@mui/material";
 import { useRecipaint } from "../../../../hooks/recipaint/useRecipaint";
 
@@ -22,7 +23,7 @@ export default function RecipaintCardBody() {
                 </Typography>
             </Box>
             {recent.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">No recipes yet.</Typography>
+                <EmptyState description="No recipes yet." sx={{ py: 1 }} />
             ) : (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
                     {recent.map((r) => (

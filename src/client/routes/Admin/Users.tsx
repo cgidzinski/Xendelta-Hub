@@ -1,3 +1,4 @@
+import PageContainer from "../../components/ui/PageContainer";
 import { useState, useMemo } from "react";
 import {
   Box,
@@ -301,17 +302,17 @@ export default function Users() {
 
   if (isLoading) {
     return (
-      <Container maxWidth="lg">
+      <PageContainer>
         <Box sx={{ py: 4 }}>
           <ListSkeleton rows={8} height={52} gap={1} />
         </Box>
-      </Container>
+      </PageContainer>
     );
   }
 
   return (
     <Box>
-      <Container maxWidth="lg">
+      <PageContainer>
         <Box sx={{ mb: 4 }}>
           <Typography variant="h4" component="h1" sx={{ fontWeight: 700, mb: 2 }}>
             Users
@@ -732,7 +733,7 @@ export default function Users() {
             </Button>
           </DialogActions>
         </Dialog>
-      </Container>
+      </PageContainer>
     </Box>
   );
 }

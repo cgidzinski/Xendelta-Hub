@@ -1,3 +1,5 @@
+import PageContainer from "../../../components/ui/PageContainer";
+import PageHeader from "../../../components/ui/PageHeader";
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -102,15 +104,15 @@ export default function XenBox() {
     : true;
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ mb: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
-          XenBox
-        </Typography>
-        <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={handleOpenUploadDialog}>
-          Upload
-        </Button>
-      </Box>
+    <PageContainer>
+      <PageHeader
+        title="XenBox"
+        actions={
+          <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={handleOpenUploadDialog}>
+            Upload
+          </Button>
+        }
+      />
 
       {/* Quota Display */}
       {profile?.xenbox && (
@@ -211,6 +213,6 @@ export default function XenBox() {
       />
 
       <FileList files={files} isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} />
-    </Container>
+    </PageContainer>
   );
 }

@@ -225,7 +225,6 @@ export default function ItemForm({
     return (
         <Dialog
             open={open} onClose={onClose} fullWidth maxWidth="sm" fullScreen={isMobile}
-            slotProps={{ paper: { sx: { borderRadius: isMobile ? 0 : 2 } } }}
         >
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 3, pt: 2 }}>
                 <DialogTitle sx={{ fontWeight: 700, p: 0 }}>{item ? "Edit item" : "Add item"}</DialogTitle>

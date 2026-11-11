@@ -48,7 +48,7 @@ export function AppearancePicker({ icon, color, onChange }: { icon: string; colo
           <CategoryIconView icon={icon} sx={{ color }} />
         </IconButton>
       </Tooltip>
-      <Popover open={!!anchor} anchorEl={anchor} onClose={() => setAnchor(null)} slotProps={{ paper: { sx: { p: 2, width: 288, borderRadius: 3 } } }}>
+      <Popover open={!!anchor} anchorEl={anchor} onClose={() => setAnchor(null)} slotProps={{ paper: { sx: { p: 2, width: 288, borderRadius: 2 } } }}>
         <Typography variant="caption" color="text.secondary">Icon</Typography>
         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 0.5, mt: 0.5, mb: 1.5 }}>
           {CATEGORY_ICONS.map((i) => (

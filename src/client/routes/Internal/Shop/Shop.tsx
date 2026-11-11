@@ -1,3 +1,5 @@
+import PageContainer from "../../../components/ui/PageContainer";
+import PageHeader from "../../../components/ui/PageHeader";
 import { Box, Card, CardActionArea, CardActions, CardContent, CardMedia, Container, DialogActions, DialogContent, Typography, Button, Dialog, Grid, Chip, IconButton, Divider } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { PointsShopItem, usePointsShopItems } from "../../../hooks/user/usePoints";
@@ -6,6 +8,7 @@ import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { useState } from "react";
 import { PointsIcon } from "../../../components/icons/PointsIcon";
+import { POINTS_GOLD } from "../../../theme";
 
 const CATEGORIES = ["All", "Roles", "Items", "Perks"];
 
@@ -37,11 +40,11 @@ export default function Shop() {
 
     return (
         <Box>
-            <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+            <PageContainer>
                 {/* Points Header */}
                 <Box sx={{ mb: 4, textAlign: "center" }}>
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, mb: 1 }}>
-                        <PointsIcon sx={{ fontSize: 40, color: "#FFD700" }} />
+                        <PointsIcon sx={{ fontSize: 40, color: POINTS_GOLD }} />
                         <Typography variant="h3" component="h1" sx={{ fontWeight: 700 }}>
                             {profile?.points ?? 0}
                         </Typography>
@@ -203,7 +206,7 @@ export default function Shop() {
                                     Item Price
                                 </Typography>
                                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                                    <PointsIcon sx={{ fontSize: 18, color: "#FFD700" }} />
+                                    <PointsIcon sx={{ fontSize: 18, color: POINTS_GOLD }} />
                                     <Typography variant="h6" sx={{ fontWeight: 700, color: "warning.main" }}>
                                         {selectedItem?.price}
                                     </Typography>
@@ -215,7 +218,7 @@ export default function Shop() {
                                     After Purchase
                                 </Typography>
                                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                                    <PointsIcon sx={{ fontSize: 18, color: "#FFD700" }} />
+                                    <PointsIcon sx={{ fontSize: 18, color: POINTS_GOLD }} />
                                     <Typography variant="h6" sx={{ fontWeight: 700, color: (profile?.points ?? 0) >= (selectedItem?.price ?? 0) ? "success.main" : "error.main" }}>
                                         {(profile?.points ?? 0) - (selectedItem?.price ?? 0)}
                                     </Typography>
@@ -227,7 +230,7 @@ export default function Shop() {
                                     Your Balance
                                 </Typography>
                                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                                    <PointsIcon sx={{ fontSize: 18, color: "#FFD700" }} />
+                                    <PointsIcon sx={{ fontSize: 18, color: POINTS_GOLD }} />
                                     <Typography variant="h6" sx={{ fontWeight: 700 }}>
                                         {profile?.points ?? 0}
                                     </Typography>
@@ -261,7 +264,7 @@ export default function Shop() {
                         </Button>
                     </DialogActions>
                 </Dialog>
-            </Container>
+            </PageContainer>
         </Box>
     );
 }

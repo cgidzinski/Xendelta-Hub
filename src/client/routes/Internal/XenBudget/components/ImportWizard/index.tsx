@@ -506,7 +506,6 @@ export default function ImportWizard({ open, onClose, book }: ImportWizardProps)
     return (
         <Dialog
             open={open} onClose={onClose} fullWidth maxWidth="md" fullScreen={isMobile}
-            slotProps={{ paper: { sx: { borderRadius: isMobile ? 0 : 2 } } }}
         >
             <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 Import a CSV

@@ -1,3 +1,5 @@
+import PageContainer from "../../../components/ui/PageContainer";
+import PageHeader from "../../../components/ui/PageHeader";
 import { useMemo, useState } from "react";
 import {
   Container,
@@ -70,22 +72,22 @@ export default function XenBox() {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ mb: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
-          XenLink
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<LinkIcon />}
-          onClick={() => {
-            setSelectedLink(emptyXenLink);
-            setEditLinkDialogOpen(true);
-          }}
-        >
-          New Link
-        </Button>
-      </Box>
+    <PageContainer>
+      <PageHeader
+        title="XenLink"
+        actions={
+          <Button
+            variant="contained"
+            startIcon={<LinkIcon />}
+            onClick={() => {
+              setSelectedLink(emptyXenLink);
+              setEditLinkDialogOpen(true);
+            }}
+          >
+            New Link
+          </Button>
+        }
+      />
 
       <Dialog open={EditLinkDialogOpen} onClose={handleCloseEditLinkDialog} maxWidth="sm" fullWidth>
         <DialogTitle>
@@ -199,6 +201,6 @@ export default function XenBox() {
         error={error}
         onRetry={() => refetch()}
       />
-    </Container>
+    </PageContainer>
   );
 }

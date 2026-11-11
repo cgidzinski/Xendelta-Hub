@@ -1,3 +1,5 @@
+import DetailHeader from "../../../components/ui/DetailHeader";
+import SectionLabel from "../../../components/ui/SectionLabel";
 import { useState, useRef, useMemo, useEffect } from "react";
 import { formatCurrency, getGroupCurrencies } from "../../../utils/currencyUtils";
 import { useQueryClient } from "@tanstack/react-query";
@@ -614,14 +616,11 @@ export default function GroupDetail() {
         }
       >
         {/* Header */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.5, sm: 1 }, mb: { xs: 2, sm: 3 }, flexShrink: 0 }}>
-          <IconButton
-            onClick={() => navigate(activeTab === false ? `/internal/xensplit/groups/${groupId}/overview` : "/internal/xensplit/groups")}
-            size="small"
-          >
-            <ArrowBackIcon />
-          </IconButton>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexGrow: 1, minWidth: 0 }}>
+        <DetailHeader
+          title={group.name}
+          backLabel={activeTab === false ? "Back to group" : "All groups"}
+          onBack={() => navigate(activeTab === false ? `/internal/xensplit/groups/${groupId}/overview` : "/internal/xensplit/groups")}
+          leading={
             <GroupAvatar
               name={group.name}
               imageUrl={group.image_url}
@@ -629,48 +628,51 @@ export default function GroupDetail() {
               borderRadius={1.5}
               fontSize={{ xs: "0.9rem", sm: "1.1rem" }}
             />
-            <Box sx={{ minWidth: 0 }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }} noWrap>
-                {group.name}
-              </Typography>
-              <Box sx={{ display: "flex", alignItems: "center", mt: 0.25 }}>
-                <AvatarGroup
-                  max={4}
-                  sx={{ "& .MuiAvatar-root": { width: 20, height: 20, fontSize: 9, border: "1.5px solid", borderColor: "background.paper" } }}
-                >
-                  {group.members.map((m) => (
-                    <Avatar key={m.user_id} src={m.avatar || undefined}>
-                      {m.username[0]?.toUpperCase()}
-                    </Avatar>
-                  ))}
-                </AvatarGroup>
-              </Box>
+          }
+          subtitle={
+            <Box sx={{ display: "flex", alignItems: "center", mt: 0.25 }}>
+              <AvatarGroup
+                max={4}
+                sx={{ "& .MuiAvatar-root": { width: 20, height: 20, fontSize: 9, border: "1.5px solid", borderColor: "background.paper" } }}
+              >
+                {group.members.map((m) => (
+                  <Avatar key={m.user_id} src={m.avatar || undefined}>
+                    {m.username[0]?.toUpperCase()}
+                  </Avatar>
+                ))}
+              </AvatarGroup>
             </Box>
-          </Box>
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<AddIcon />}
-            onClick={openAddExpenseModal}
-            sx={{ display: activeTab === false ? "none" : { xs: "none", md: "inline-flex" }, flexShrink: 0 }}
-          >
-            New Expense
-          </Button>
-          <IconButton
-            onClick={() => navigate(`/internal/xensplit/groups/${groupId}/analytics`)}
-            size="small"
-            sx={{ flexShrink: 0, display: activeTab === false ? "none" : "inline-flex" }}
-          >
-            <AnalyticsIcon />
-          </IconButton>
-          <IconButton
-            onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settings`)}
-            size="small"
-            sx={{ flexShrink: 0, display: activeTab === false ? "none" : "inline-flex" }}
-          >
-            <SettingsIcon />
-          </IconButton>
-        </Box>
+          }
+          actions={
+            <>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<AddIcon />}
+                onClick={openAddExpenseModal}
+                sx={{ display: activeTab === false ? "none" : { xs: "none", md: "inline-flex" }, flexShrink: 0 }}
+              >
+                New Expense
+              </Button>
+              <IconButton
+                onClick={() => navigate(`/internal/xensplit/groups/${groupId}/analytics`)}
+                size="small"
+                aria-label="Analytics"
+                sx={{ flexShrink: 0, display: activeTab === false ? "none" : "inline-flex" }}
+              >
+                <AnalyticsIcon />
+              </IconButton>
+              <IconButton
+                onClick={() => navigate(`/internal/xensplit/groups/${groupId}/settings`)}
+                size="small"
+                aria-label="Settings"
+                sx={{ flexShrink: 0, display: activeTab === false ? "none" : "inline-flex" }}
+              >
+                <SettingsIcon />
+              </IconButton>
+            </>
+          }
+        />
 
         {/* Tabs */}
         {activeTab !== false && (
@@ -749,7 +751,6 @@ export default function GroupDetail() {
         maxWidth="xs"
         open={showAddMemberModal}
         onClose={() => setShowAddMemberModal(false)}
-        PaperProps={{ sx: { borderRadius: 2 } }}
       >
         <DialogTitle sx={{ fontWeight: 700 }}>Add Members</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -782,7 +783,6 @@ export default function GroupDetail() {
         maxWidth="sm"
         open={showConfirmDialog}
         onClose={() => setShowConfirmDialog(false)}
-        PaperProps={{ sx: { borderRadius: 2 } }}
       >
         <DialogTitle sx={{ fontWeight: 700 }}>Confirm</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -804,7 +804,6 @@ export default function GroupDetail() {
         fullScreen={isMobile}
         open={showAddExpenseModal}
         onClose={(_, reason) => { if (reason !== "backdropClick") { setShowAddExpenseModal(false); setAddImages([]); } }}
-        PaperProps={{ sx: { borderRadius: isMobile ? 0 : 2 } }}
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
           <DialogTitle sx={{ fontWeight: 700, p: 0 }}>New Expense</DialogTitle>
@@ -867,7 +866,6 @@ export default function GroupDetail() {
         fullScreen={isMobile}
         open={showEditExpenseModal}
         onClose={() => { setShowEditExpenseModal(false); setEditImages([]); }}
-        PaperProps={{ sx: { borderRadius: isMobile ? 0 : 2 } }}
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -978,7 +976,6 @@ export default function GroupDetail() {
         maxWidth="xs"
         open={showViewExpenseModal}
         onClose={() => setShowViewExpenseModal(false)}
-        PaperProps={{ sx: { borderRadius: 3 } }}
       >
         {viewExpenseItem && (() => {
           const e = viewExpenseItem;
@@ -1066,9 +1063,9 @@ export default function GroupDetail() {
                 {e.splits && e.splits.length > 0 && (
                   <>
                     <Divider sx={{ my: 1.5 }} />
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1 }}>
+                    <SectionLabel sx={{ color: "text.secondary", mb: 1 }}>
                       Split
-                    </Typography>
+                    </SectionLabel>
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
                       {e.splits.map((split) => {
                         const member = group.members.find((m) => m.user_id === split.user_id);
@@ -1094,9 +1091,9 @@ export default function GroupDetail() {
                 {e.images && e.images.length > 0 && (
                   <>
                     <Divider sx={{ my: 1.5 }} />
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1 }}>
+                    <SectionLabel sx={{ color: "text.secondary", mb: 1 }}>
                       Photos
-                    </Typography>
+                    </SectionLabel>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
                       {e.images.map((img) => {
                         const urlEntry = viewImageUrls.find((u) => u._id === img._id);

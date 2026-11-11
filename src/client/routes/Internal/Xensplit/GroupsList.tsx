@@ -1,4 +1,5 @@
-﻿import { useState } from "react";
+﻿import PageContainer from "../../../components/ui/PageContainer";
+import { useState } from "react";
 import {
   Box,
   Container,
@@ -68,16 +69,16 @@ export default function GroupsList() {
 
   if (isLoading) {
     return (
-      <Container maxWidth="lg" sx={{ mt: { xs: 2, sm: 4 }, mb: 4, px: { xs: 1.5, sm: 3 } }}>
+      <PageContainer>
         <ListSkeleton rows={4} height={88} />
-      </Container>
+      </PageContainer>
     );
   }
   if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
 
   return (
     <Box>
-      <Container maxWidth="lg" sx={{ mt: { xs: 2, sm: 4 }, mb: 4, px: { xs: 1.5, sm: 3 } }}>
+      <PageContainer>
         {/* Header */}
         <Box
           sx={{
@@ -161,14 +162,13 @@ export default function GroupsList() {
             ))}
           </Grid>
         )}
-      </Container>
+      </PageContainer>
 
       <Dialog
         fullWidth
         maxWidth="sm"
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        PaperProps={{ sx: { borderRadius: 2 } }}
       >
         <Box sx={{ position: "relative" }}>
           <IconButton

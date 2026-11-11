@@ -1,3 +1,6 @@
+import { pageTitleSx } from "../../../components/ui/surfaceStyles";
+import PageContainer from "../../../components/ui/PageContainer";
+import PageHeader from "../../../components/ui/PageHeader";
 import { Box, Container, Typography, Button, Card, CardActionArea, CardMedia, CardContent, Grid, Chip, Dialog, DialogContent, DialogActions, IconButton, Switch, FormControlLabel } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -20,13 +23,13 @@ export default function Inventory() {
 
   return (
     <Box>
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <PageContainer>
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 4 }}>
           <Box>
-            <Typography variant="h4" component="h1" sx={{ fontWeight: 700, mb: 1 }}>
+            <Typography variant="h5" component="h1" sx={pageTitleSx}>
               Inventory
             </Typography>
-            <Typography variant="body1" color="text.secondary">
+            <Typography variant="body2" color="text.secondary">
               Your purchased items
             </Typography>
           </Box>
@@ -121,7 +124,7 @@ export default function Inventory() {
             ))}
           </Grid>
         )}
-      </Container>
+      </PageContainer>
 
       {/* Item Detail Modal */}
       <Dialog

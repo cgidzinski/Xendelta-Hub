@@ -1,3 +1,5 @@
+import PageContainer from "../../../components/ui/PageContainer";
+import PageHeader from "../../../components/ui/PageHeader";
 import { useEffect, useState } from "react";
 import { Box, Button, Container, Fab, IconButton, Stack, Tab, Tabs, Tooltip, Typography } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -67,19 +69,22 @@ export default function XenRoutine() {
     };
 
     return (
-        <Container maxWidth="md" sx={{ mt: 3, mb: 10 }}>
-            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                <Typography variant="h5" sx={{ fontWeight: 700 }}>XenRoutine</Typography>
-                <Stack direction="row" spacing={1} alignItems="center">
-                    <Tooltip title="Reminder settings">
-                        <IconButton aria-label="Reminder settings" onClick={() => setSettingsOpen(true)}><SettingsIcon /></IconButton>
-                    </Tooltip>
-                    <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}
-                        sx={{ display: { xs: "none", sm: "inline-flex" } }}>
-                        New routine
-                    </Button>
-                </Stack>
-            </Stack>
+        <PageContainer width="narrow">
+            <PageHeader
+                title="XenRoutine"
+                mb={1}
+                actions={
+                    <>
+                        <Tooltip title="Reminder settings">
+                            <IconButton aria-label="Reminder settings" onClick={() => setSettingsOpen(true)}><SettingsIcon /></IconButton>
+                        </Tooltip>
+                        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}
+                            sx={{ display: { xs: "none", sm: "inline-flex" } }}>
+                            New routine
+                        </Button>
+                    </>
+                }
+            />
 
             <Tabs value={current} onChange={(_, v) => navigate(v)} sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}>
                 {TABS.map((t) => <Tab key={t.value} value={t.value} label={t.label} />)}
@@ -96,6 +101,6 @@ export default function XenRoutine() {
 
             <ReminderSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
             <RoutineDialog open={dialogOpen} routine={editing} onClose={() => setDialogOpen(false)} onSubmit={submit} />
-        </Container>
+        </PageContainer>
     );
 }

@@ -1,3 +1,4 @@
+import PageContainer from "../../components/ui/PageContainer";
 import { useState, useEffect } from "react";
 import {
   Box,
@@ -278,16 +279,16 @@ export default function BlogPostForm() {
 
   if (id && isLoadingPosts) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
+      <PageContainer>
         <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "400px" }}>
           <CircularProgress />
         </Box>
-      </Container>
+      </PageContainer>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4 }}>
+    <PageContainer>
       <Box sx={{ mb: 4, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
           <IconButton onClick={() => navigate("/admin/blog")}>
@@ -417,6 +418,6 @@ export default function BlogPostForm() {
         published={published}
         postId={id}
       />
-    </Container>
+    </PageContainer>
   );
 }

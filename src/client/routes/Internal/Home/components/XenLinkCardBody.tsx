@@ -1,3 +1,4 @@
+import EmptyState from "../../../../components/ui/EmptyState";
 import { Box, Typography, Skeleton } from "@mui/material";
 import { useXenLink } from "../../../../hooks/xenlink/useXenlink";
 
@@ -18,7 +19,7 @@ export default function XenLinkCardBody() {
                 </Typography>
             </Box>
             {recent.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">No links yet.</Typography>
+                <EmptyState description="No links yet." sx={{ py: 1 }} />
             ) : (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
                     {recent.map((l) => (

@@ -46,7 +46,7 @@ export default function FilterPanel({ anchor, open, onClose, filters, onChange }
   return (
     <Popover open={open} anchorEl={anchor} onClose={onClose}
       anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }}
-      slotProps={{ paper: { sx: { width: 380, mt: 1, borderRadius: 3 } } }}>
+      slotProps={{ paper: { sx: { width: 380, mt: 1, borderRadius: 2 } } }}>
       {body}
     </Popover>
   );

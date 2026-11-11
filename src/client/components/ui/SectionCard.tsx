@@ -1,6 +1,6 @@
 import { Card, Stack, Typography } from "@mui/material";
 import type { ReactNode } from "react";
-import { cardSx, sectionLabelSx } from "../../../../components/ui/surfaceStyles";
+import { cardSx, sectionLabelSx } from "./surfaceStyles";
 
 interface SectionCardProps {
     title: string;

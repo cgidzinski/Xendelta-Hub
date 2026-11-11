@@ -14,7 +14,7 @@ import { useSnackbar } from "notistack";
 import type { BookDetailContext } from "../BookDetail";
 import type { XenBudgetRule } from "../../../../hooks/xenbudget/types";
 import { useXenBudgetRules } from "../../../../hooks/xenbudget/useRules";
-import SectionCard from "./SectionCard";
+import SectionCard from "../../../../components/ui/SectionCard";
 import RuleForm from "../components/RuleForm";
 import ReapplyRulesDialog from "../components/ReapplyRulesDialog";
 import { CategoryChip, FlagChip } from "../components/LabelChip";

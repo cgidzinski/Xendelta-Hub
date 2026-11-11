@@ -1,3 +1,5 @@
+import PageContainer from "../../../components/ui/PageContainer";
+import PageHeader from "../../../components/ui/PageHeader";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -94,10 +96,12 @@ export default function Recipaint() {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
-        <Typography variant="h6">Recipaint</Typography>
-        <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+    <PageContainer>
+      <PageHeader
+        title="Recipaint"
+        mb={2}
+        actions={
+        <>
           <Tooltip title="My paints">
             <IconButton
               aria-label="My paints"
@@ -117,8 +121,9 @@ export default function Recipaint() {
           >
             New recipe
           </Button>
-        </Stack>
-      </Stack>
+        </>
+        }
+      />
 
       <TextField
         fullWidth
@@ -234,6 +239,6 @@ export default function Recipaint() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+    </PageContainer>
   );
 }

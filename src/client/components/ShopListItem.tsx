@@ -1,8 +1,10 @@
+import { alpha } from "@mui/material/styles";
 import {
   Typography,
   Box,
 } from "@mui/material";
 import { PointsIcon } from "./icons/PointsIcon";
+import { POINTS_GOLD } from "../theme";
 
 interface PointsListItemProps {
   points?: number;
@@ -26,10 +28,10 @@ export default function PointsListItemSidebar({ points = 0, onNavigate }: Points
         borderColor: "warning.main",
         backgroundColor: "transparent",
         cursor: "pointer",
-        "&:hover": { backgroundColor: "rgba(255, 193, 7, 0.1)" },
+        "&:hover": { backgroundColor: (t) => alpha(t.palette.warning.main, 0.1) },
       }}
     >
-      <PointsIcon sx={{ color: "#FFD700", fontSize: 24 }} />
+      <PointsIcon sx={{ color: POINTS_GOLD, fontSize: 24 }} />
       <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "warning.main", lineHeight: 1, fontSize: "1.1rem" }}>
         {points}
       </Typography>

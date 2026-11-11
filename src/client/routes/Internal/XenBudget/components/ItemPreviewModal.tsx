@@ -60,7 +60,6 @@ export default function ItemPreviewModal({ open, onClose, book, item, onEdit, on
     return (
         <Dialog
             fullWidth maxWidth="sm" fullScreen={isMobile} open={open} onClose={onClose}
-            slotProps={{ paper: { sx: { borderRadius: isMobile ? 0 : 2 } } }}
         >
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2, gap: 1 }}>
                 <DialogTitle sx={{ fontWeight: 700, p: 0 }}>Item</DialogTitle>

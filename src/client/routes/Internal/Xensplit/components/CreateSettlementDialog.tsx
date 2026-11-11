@@ -96,7 +96,7 @@ export default function CreateSettlementDialog({ open, onClose, members, current
     };
 
     return (
-        <Dialog fullWidth maxWidth="xs" fullScreen={isMobile} open={open} onClose={onClose} PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3 } }}>
+        <Dialog fullWidth maxWidth="xs" fullScreen={isMobile} open={open} onClose={onClose}>
             <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
                 <IconButton onClick={onClose} size="small" sx={{ position: "absolute", top: 12, right: 12 }}>
                     <CloseIcon fontSize="small" />

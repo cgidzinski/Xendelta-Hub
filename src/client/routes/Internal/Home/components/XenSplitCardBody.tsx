@@ -1,3 +1,4 @@
+import EmptyState from "../../../../components/ui/EmptyState";
 import { Box, Typography, Skeleton } from "@mui/material";
 import { useXenSplits } from "../../../../hooks/xensplit/useGroups";
 import { useAuth } from "../../../../contexts/AuthContext";
@@ -18,7 +19,7 @@ export default function XenSplitCardBody() {
     return (
         <Box>
             {recent.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">No groups yet.</Typography>
+                <EmptyState description="No groups yet." sx={{ py: 1 }} />
             ) : (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                     {recent.map((group) => (

@@ -1,3 +1,5 @@
+import EmptyState from "../../../components/ui/EmptyState";
+import SectionLabel from "../../../components/ui/SectionLabel";
 import { useState, useMemo } from "react";
 import { useOutletContext, useParams } from "react-router-dom";
 import { Box, Typography, TextField, InputAdornment, ToggleButtonGroup, ToggleButton, Avatar, IconButton, alpha } from "@mui/material";
@@ -316,21 +318,16 @@ export default function GroupExpenses() {
                     </Box>
                 )}
                 {sortedItems.length === 0 ? (
-                    <Box sx={{ textAlign: "center", py: heldVisible.length > 0 ? 3 : 6 }}>
-                        <Typography variant="body1" color="text.secondary">
-                            {search.trim() || dateFilter !== "all" || hasActiveFilters ? "No expenses match your filters" : "No expenses yet"}
-                        </Typography>
-                    </Box>
+                    <EmptyState
+                        title={search.trim() || dateFilter !== "all" || hasActiveFilters ? "No expenses match your filters" : "No expenses yet"}
+                        sx={{ py: heldVisible.length > 0 ? 3 : 6 }}
+                    />
                 ) : (
                     groupedItems.map((dateGroup) => (
                         <Box key={dateGroup.key} sx={{ mb: 2.5 }}>
-                            <Typography
-                                variant="caption"
-                                color="text.disabled"
-                                sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1, ml: 0.25 }}
-                            >
+                            <SectionLabel sx={{ mb: 1, ml: 0.25 }}>
                                 {dateGroup.label}
-                            </Typography>
+                            </SectionLabel>
                             <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                                 {dateGroup.items.map((row) => (
                                     <ExpenseListItem

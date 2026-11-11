@@ -139,7 +139,7 @@ export default function ExchangeListItem({
             </Box>
 
             {/* Detail/delete dialog */}
-            <Dialog fullWidth maxWidth="xs" open={open} onClose={() => setOpen(false)} PaperProps={{ sx: { borderRadius: 3 } }}>
+            <Dialog fullWidth maxWidth="xs" open={open} onClose={() => setOpen(false)}>
                 <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
                     <IconButton onClick={() => setOpen(false)} size="small" sx={{ position: "absolute", top: 12, right: 12 }}>
                         <CloseIcon fontSize="small" />

@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Box } from "@mui/material";
 import { TrendingUp, Security, Speed, Group } from "@mui/icons-material";
 import LandingHeader from "../../../components/LandingHeader";
@@ -9,16 +8,6 @@ import CTASection from "./components/CTASection";
 import Footer from "./components/Footer";
 
 export default function Landing() {
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePosition({ x: e.clientX, y: e.clientY });
-    };
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, []);
-
   const stats = [
     { value: "10K+", label: "Active Fake Users", icon: <Group /> },
     { value: "99.9%", label: "Uptime, sometimes", icon: <Speed /> },
@@ -45,7 +34,7 @@ export default function Landing() {
       }}
     >
       <LandingHeader />
-      <HeroSection mousePosition={mousePosition} />
+      <HeroSection />
       <StatsSection stats={stats} />
       <HighlightsSection highlights={highlights} />
       <CTASection />

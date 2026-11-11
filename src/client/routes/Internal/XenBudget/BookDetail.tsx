@@ -1,3 +1,4 @@
+import DetailHeader from "../../../components/ui/DetailHeader";
 import { useState } from "react";
 import { Box, Button, IconButton, Stack, Tab, Tabs, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
@@ -158,39 +159,41 @@ export default function BookDetail() {
 
     return (
         <Box sx={{ height: { xs: "calc(100dvh - 56px)", sm: "calc(100dvh - 64px)" }, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            <Box sx={{ borderBottom: 1, borderColor: "divider", flexShrink: 0 }}>
-                {!isMobile && <BookBreadcrumbs bookId={bookId} bookName={book.name} />}
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, pt: isMobile ? 1.5 : 0.5, pb: 1 }}>
-                    <Tooltip title="All books">
-                        <IconButton size="small" onClick={() => navigate("/internal/xenbudget/books")}>
-                            <ArrowBackIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
-                    <Typography variant="h6" noWrap sx={{ flexGrow: 1, minWidth: 0 }}>{book.name}</Typography>
-                    <Button
-                        size="small" variant="contained" startIcon={<AddIcon />}
-                        onClick={outletContext.onAddItem}
+            <DetailHeader
+                bordered
+                title={book.name}
+                backLabel="All books"
+                onBack={() => navigate("/internal/xenbudget/books")}
+                breadcrumbs={!isMobile && <BookBreadcrumbs bookId={bookId} bookName={book.name} />}
+                actions={
+                    <>
+                        <Button
+                            size="small" variant="contained" startIcon={<AddIcon />}
+                            onClick={outletContext.onAddItem}
+                        >
+                            New
+                        </Button>
+                        <Button
+                            size="small" variant="outlined" startIcon={<UploadFileIcon />}
+                            onClick={() => setImportOpen(true)}
+                        >
+                            Import
+                        </Button>
+                    </>
+                }
+                tabs={
+                    <Tabs
+                        value={activeTab}
+                        onChange={(_, v) => navigate(`/internal/xenbudget/books/${bookId}/${TAB_PATHS[v]}`)}
+                        variant="fullWidth"
                     >
-                        New
-                    </Button>
-                    <Button
-                        size="small" variant="outlined" startIcon={<UploadFileIcon />}
-                        onClick={() => setImportOpen(true)}
-                    >
-                        Import
-                    </Button>
-                </Stack>
-                <Tabs
-                    value={activeTab}
-                    onChange={(_, v) => navigate(`/internal/xenbudget/books/${bookId}/${TAB_PATHS[v]}`)}
-                    variant="fullWidth"
-                >
-                    <Tab icon={<InsightsIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Overview"} aria-label="Overview" />
-                    <Tab icon={<ReceiptLongIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Items"} aria-label="Items" />
-                    <Tab icon={<BarChartIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Report"} aria-label="Report" />
-                    <Tab icon={<SettingsIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Settings"} aria-label="Settings" />
-                </Tabs>
-            </Box>
+                        <Tab icon={<InsightsIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Overview"} aria-label="Overview" />
+                        <Tab icon={<ReceiptLongIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Items"} aria-label="Items" />
+                        <Tab icon={<BarChartIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Report"} aria-label="Report" />
+                        <Tab icon={<SettingsIcon sx={{ fontSize: 20 }} />} label={isMobile ? undefined : "Settings"} aria-label="Settings" />
+                    </Tabs>
+                }
+            />
 
             {/* A hard maxWidth draws a line where padding suddenly appears - nothing on a
             1400px window, a fixed gutter the moment it crosses 1600. Scaling the side

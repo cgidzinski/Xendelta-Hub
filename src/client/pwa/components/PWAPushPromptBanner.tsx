@@ -1,6 +1,7 @@
-import { Paper, Box, Typography, Button, IconButton, Slide } from "@mui/material";
+import { Box, Typography, Button, IconButton, Slide } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
+import Banner from "../../components/ui/Banner";
 import { usePushPromptBanner } from "../hooks/usePushPromptBanner";
 
 export default function PWAPushPromptBanner() {
@@ -8,22 +9,7 @@ export default function PWAPushPromptBanner() {
 
   return (
     <Slide direction="up" in={visible} mountOnEnter unmountOnExit>
-      <Paper
-        elevation={8}
-        sx={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 1300,
-          borderTop: "1px solid",
-          borderColor: "divider",
-          borderRadius: 0,
-          px: 2,
-          py: 1.5,
-        }}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, maxWidth: 600, mx: "auto" }}>
+      <Banner zIndex={1300}>
           <NotificationsActiveIcon sx={{ color: "primary.main", flexShrink: 0 }} />
 
           <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -42,8 +28,7 @@ export default function PWAPushPromptBanner() {
           <IconButton size="small" onClick={dismiss} aria-label="Dismiss notification prompt">
             <CloseIcon fontSize="small" />
           </IconButton>
-        </Box>
-      </Paper>
+      </Banner>
     </Slide>
   );
 }

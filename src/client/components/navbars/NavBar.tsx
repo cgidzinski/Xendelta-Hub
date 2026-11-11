@@ -1,3 +1,4 @@
+import { alpha } from "@mui/material/styles";
 import HomeIcon from "@mui/icons-material/Home";
 import ArticleIcon from "@mui/icons-material/Article";
 import SecurityIcon from "@mui/icons-material/Security";
@@ -143,10 +144,11 @@ export default function Root() {
         <Link to="/admin" style={{ color: "inherit", display: "flex", marginLeft: 4 }}>
           <IconButton
             sx={{
-              color: "warning.main",
-              backgroundColor: "rgba(255, 193, 7, 0.1)",
+              // On the light theme the bar is solid primary blue, where amber/dark tints vanish.
+              color: (t) => (t.palette.mode === "dark" ? t.palette.warning.main : t.palette.common.white),
+              backgroundColor: (t) => alpha(t.palette.mode === "dark" ? t.palette.warning.main : t.palette.common.white, 0.15),
               "&:hover": {
-                backgroundColor: "rgba(255, 193, 7, 0.2)",
+                backgroundColor: (t) => alpha(t.palette.mode === "dark" ? t.palette.warning.main : t.palette.common.white, 0.28),
               },
             }}
           >

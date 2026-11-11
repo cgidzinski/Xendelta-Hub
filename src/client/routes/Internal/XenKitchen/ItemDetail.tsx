@@ -1,3 +1,4 @@
+import PageContainer from "../../../components/ui/PageContainer";
 import { useState } from "react";
 import {
   Box, Button, Container, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, ListItemIcon, ListItemText, Menu,
@@ -96,7 +97,7 @@ export default function ItemDetail() {
   const changedBy = item?.updated_by && item.updated_by !== item.created_by ? item.updated_by : null;
 
   return (
-    <Container maxWidth="md" sx={{ mt: 2, mb: 8 }}>
+    <PageContainer width="narrow">
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1, "@media print": { display: "none" } }}>
         <Button startIcon={<ArrowBackIcon />} color="inherit" onClick={back}>Kitchen</Button>
         {item?.book && (
@@ -122,7 +123,7 @@ export default function ItemDetail() {
             actions={
               <Box sx={{ display: "flex", gap: 0.5, "@media print": { display: "none" } }}>
                 <Tooltip title={item.favorite ? "Unfavorite" : "Favorite (just for you)"}>
-                  <IconButton onClick={() => favorite.mutate({ id: item._id, on: !item.favorite })} sx={{ color: item.favorite ? "#f9a825" : undefined }}>
+                  <IconButton onClick={() => favorite.mutate({ id: item._id, on: !item.favorite })} sx={{ color: item.favorite ? "warning.main" : undefined }}>
                     {item.favorite ? <StarIcon /> : <StarBorderIcon />}
                   </IconButton>
                 </Tooltip>
@@ -174,6 +175,6 @@ export default function ItemDetail() {
           {editable && <ShareDialog open={sharing} onClose={() => setSharing(false)} item={item} />}
         </>
       )}
-    </Container>
+    </PageContainer>
   );
 }

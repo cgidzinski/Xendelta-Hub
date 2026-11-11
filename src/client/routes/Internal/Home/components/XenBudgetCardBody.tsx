@@ -1,3 +1,4 @@
+import EmptyState from "../../../../components/ui/EmptyState";
 import { Avatar, AvatarGroup, Box, Chip, Divider, Skeleton, Stack, Tooltip, Typography } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useXenBudgetBooks } from "../../../../hooks/xenbudget/useBooks";
@@ -58,7 +59,7 @@ export default function XenBudgetCardBody() {
         return <Skeleton variant="rectangular" height={96} sx={{ borderRadius: 2 }} />;
     }
     if (!book) {
-        return <Typography variant="body2" color="text.secondary">No books yet.</Typography>;
+        return <EmptyState description="No books yet." sx={{ py: 1 }} />;
     }
 
     const currency = summary?.currency || book.default_currency;

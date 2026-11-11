@@ -281,7 +281,6 @@ export default function RuleForm({
             <Dialog
                 open={open} onClose={onClose} fullWidth maxWidth="sm"
                 fullScreen={isMobile}
-                slotProps={{ paper: { sx: { borderRadius: isMobile ? 0 : 2 } } }}
             >
                 <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     {rule ? "Edit rule" : "New rule"}

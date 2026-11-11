@@ -1,3 +1,4 @@
+import SectionLabel from "../../../components/ui/SectionLabel";
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Box, Typography, Avatar, IconButton, ToggleButtonGroup, ToggleButton, Divider, SwipeableDrawer } from "@mui/material";
@@ -315,9 +316,9 @@ function EdgeDetail({
                 </Typography>
             ) : (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
-                    <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                    <SectionLabel sx={{ mb: 0 }}>
                         From shared expenses
-                    </Typography>
+                    </SectionLabel>
                     {sharedExpenses.map((e) => {
                         const split = e.splits.find((s) => s.user_id === (e.paid_by === edge.from ? edge.to : edge.from));
                         const share = split?.amount_owed !== undefined

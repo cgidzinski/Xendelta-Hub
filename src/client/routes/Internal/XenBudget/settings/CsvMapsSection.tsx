@@ -1,5 +1,5 @@
 import { Stack } from "@mui/material";
-import SectionCard from "./SectionCard";
+import SectionCard from "../../../../components/ui/SectionCard";
 import SavedMappings from "../components/SavedMappings";
 
 /**

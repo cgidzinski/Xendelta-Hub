@@ -1,3 +1,6 @@
+import { pageTitleSx } from "../../../components/ui/surfaceStyles";
+import PageContainer from "../../../components/ui/PageContainer";
+import PageHeader from "../../../components/ui/PageHeader";
 import { useState, useEffect, useMemo } from "react";
 import {
   Box,
@@ -108,14 +111,14 @@ export default function Messages() {
 
   return (
     <Box>
-      <Container maxWidth="xl" sx={{ mt: 4 }}>
+      <PageContainer width="wide">
         {/* Header */}
         <Box sx={{ mb: 4, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <Box>
-            <Typography variant="h3" component="h1" gutterBottom>
+            <Typography variant="h5" component="h1" sx={pageTitleSx}>
               Messages
             </Typography>
-            <Typography variant="h6" color="text.secondary">
+            <Typography variant="body2" color="text.secondary">
               Manage your conversations and messages
             </Typography>
           </Box>
@@ -155,18 +158,18 @@ export default function Messages() {
                         sx={{
                           position: "relative",
                           "&:hover": {
-                            backgroundColor: "rgba(255, 255, 255, 0.1)",
+                            backgroundColor: "action.selected",
                             cursor: "pointer",
                             transform: "translateX(4px)",
                             transition: "all 0.2s ease",
                           },
-                          backgroundColor: "rgba(255, 255, 255, 0.05)",
+                          backgroundColor: "action.hover",
                           py: 1.5,
                           px: 2,
                           mb: 0.5,
                           borderRadius: 4,
                           border: "1px solid",
-                          borderColor: "rgba(255, 255, 255, 0.1)",
+                          borderColor: "divider",
                         }}
                       >
                         {conversation.unread && (
@@ -328,7 +331,7 @@ export default function Messages() {
             </Button>
           </DialogActions>
         </Dialog>
-      </Container>
+      </PageContainer>
     </Box>
   );
 }

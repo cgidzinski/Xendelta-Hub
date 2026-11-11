@@ -1,3 +1,4 @@
+import EmptyState from "../../../../components/ui/EmptyState";
 import { Box, Skeleton, Typography } from "@mui/material";
 import { useRoutines } from "../../../../hooks/xenroutine/useRoutines";
 
@@ -20,7 +21,7 @@ export default function XenRoutineCardBody() {
                 <Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>{soon.length}</Box> due soon
             </Typography>
             {active.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">No routines yet.</Typography>
+                <EmptyState description="No routines yet." sx={{ py: 1 }} />
             ) : next.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">All caught up.</Typography>
             ) : (

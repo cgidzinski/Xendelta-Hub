@@ -1,3 +1,5 @@
+import EmptyState from "../../../components/ui/EmptyState";
+import SectionLabel from "../../../components/ui/SectionLabel";
 import { useMemo, useState } from "react";
 import { useOutletContext, useNavigate, useParams } from "react-router-dom";
 import { Box, Typography, Button, Switch, Avatar, ToggleButtonGroup, ToggleButton } from "@mui/material";
@@ -326,24 +328,16 @@ export default function GroupOverview() {
                 {filteredFeed.length > 0 ? (
                     groupedFeed.map((dateGroup) => (
                         <Box key={dateGroup.key} sx={{ mb: 2.5 }}>
-                            <Typography
-                                variant="caption"
-                                color="text.disabled"
-                                sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1, ml: 0.25 }}
-                            >
+                            <SectionLabel sx={{ mb: 1, ml: 0.25 }}>
                                 {dateGroup.label}
-                            </Typography>
+                            </SectionLabel>
                             <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                                 {dateGroup.items.map((item, idx) => renderItem(item, idx, dateGroup.key))}
                             </Box>
                         </Box>
                     ))
                 ) : (
-                    <Box sx={{ textAlign: "center", py: 6 }}>
-                        <Typography variant="body1" color="text.secondary">
-                            {myActivityOnly ? "No activity involving you" : "No activity yet"}
-                        </Typography>
-                    </Box>
+                    <EmptyState title={myActivityOnly ? "No activity involving you" : "No activity yet"} sx={{ py: 6 }} />
                 )}
             </Box>
 
